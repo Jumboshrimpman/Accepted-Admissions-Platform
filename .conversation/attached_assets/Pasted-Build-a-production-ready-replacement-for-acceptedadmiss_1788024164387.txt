@@ -1,0 +1,697 @@
+Build a production-ready replacement for acceptedadmissions.org using Replit. This project should combine:
+1. A redesigned public Accepted Admissions website
+2. A private student, tutor, and administrator portal
+3. A reusable curriculum and assignment system
+4. Booking and payment for independent consultations
+5. Taito’s Fall 2026 SAT and IELTS program
+IMPORTANT WORKFLOW
+Start in Plan Mode.
+Before writing code:
+1. Review this entire specification.
+2. Inspect acceptedadmissions.org as a visual and content reference.
+3. Inspect any HTML files I attach from the existing curriculum pages.
+4. Propose the architecture, database schema, routes, implementation phases, and migration plan.
+5. Identify anything that needs an API key, account connection, or final content decision.
+6. Wait for my approval before implementing.
+Build the MVP in phases. Prioritize having Taito’s working private dashboard and Fall 2026 curriculum ready before rebuilding every public page.
+BUSINESS CONTEXT
+Accepted Admissions is a small tutoring, college admissions, test preparation, editing, and private campus tour business.
+The current website is built on Wix and costs approximately $400 per year. Curriculum pages are currently created manually as separate HTML pages. The replacement should make new courses and sessions easy to create from an administrator dashboard without editing code.
+The existing domain is:
+acceptedadmissions.org
+Do not change DNS or disconnect Wix during development. Initially deploy the new application on its Replit development URL or a subdomain such as:
+portal.acceptedadmissions.org
+Provide domain-connection instructions later, but do not make irreversible domain changes.
+Connect the Replit project to GitHub early so the code and data structure remain portable.
+TECHNICAL APPROACH
+Use the simplest reliable full-stack TypeScript/JavaScript architecture supported well on Replit.
+Preferred components:
+* TypeScript
+* Responsive React-based frontend
+* Server-side API and authorization
+* PostgreSQL database
+* Replit-managed Clerk authentication, if currently available
+* Replit Secrets for credentials
+* Replit deployment and custom-domain support
+* GitHub repository connection
+If a preferred tool is unavailable, explain the best Replit-native alternative before changing the architecture.
+Do not depend on browser localStorage as the primary database. Student responses, progress, notes, scores, and tutor feedback must persist across devices.
+VISUAL DESIGN
+Use the current Accepted Admissions website and attached curriculum HTML as design references, but improve consistency and usability.
+Preserve recognizable elements of the existing curriculum design:
+* Dark navy background
+* Blue and purple gradients
+* Rounded cards
+* Clear session headers
+* Timers
+* Notes areas
+* Practice-question cards
+* Homework sections
+* Responsive mobile layout
+The public website should feel credible, polished, modern, personalized, and education-focused. Avoid making it look like a generic AI-generated SaaS template.
+Create reusable design tokens for:
+* Colors
+* Typography
+* Buttons
+* Cards
+* Form fields
+* Status labels
+* Alerts
+* Navigation
+* Spacing
+* Mobile breakpoints
+PUBLIC WEBSITE
+Rebuild the following public content types:
+* Home
+* Services
+* Individual service pages
+* Our Team
+* Past Success
+* Campus Tours
+* Blog archive
+* Individual blog posts
+* Consultations
+* Contact
+* Login
+Replace the publicly visible “T.G.” navigation item with a generic “Student Login” or “Portal” link. No client name or initials should appear in public navigation.
+HOME PAGE
+Recreate and improve the main sections from the existing site:
+* Accepted Admissions introduction
+* College admissions, law school, SAT, IELTS, tutoring, editing, and campus-tour services
+* Main calls to action
+* Application advising
+* Major and school list advising
+* Essay editing
+* Campus tours
+* Company story
+* Newsletter signup
+* Contact form
+* Footer
+Do not automatically retain the outdated claim that Accepted Admissions is simply “a group of college students.” Create editable homepage copy in the administrator dashboard.
+TEAM PAGE
+Create a CMS-style team collection containing:
+* Name
+* Role
+* Short biography
+* Education
+* Specialties
+* Headshot
+* LinkedIn URL
+* Display order
+* Published status
+Current team records include:
+* Rosanna Kataja
+* Xavier Morales
+* Eunice Chon
+* Sophia Lamas
+* Aurelia Finch
+* Nika Raiffe
+* Kya Brooks
+* Michael Pecorara
+* Kyle Englander
+* Daniel Salgado-Alvarez
+* Sama Noori
+Important corrections:
+* Eunice Chon is now the SAT tutor.
+* Nika Raiffe is the English and IELTS tutor.
+* Do not preserve duplicated or incorrect headshots and LinkedIn links from the Wix page.
+* Treat imported biographies as drafts because some information may be outdated.
+* Do not invent new credentials or biographies.
+PAST SUCCESS PAGE
+Create editable collections for:
+* Testimonials
+* Student outcome descriptions
+* School logos
+* Logo alt text
+* Display order
+* Publication status
+Do not invent acceptances, testimonials, or performance claims.
+SERVICES
+Migrate these existing service categories into an editable services collection:
+* Private Campus Tours
+* Law School Application Advising
+* SAT Tutoring
+* Math Tutoring
+* Student Professional Development
+* College Advising
+* Free Introductory Consultation
+* 24–72 Hour Editing
+Each service record should have:
+* Title
+* Slug
+* Short description
+* Full description
+* Duration
+* Price or “Contact for Pricing”
+* Service type
+* Online/in-person status
+* Booking URL
+* Featured status
+* Published status
+Do not hardcode prices throughout the application.
+The current Wix site contains conflicting prices between the service directory and individual service descriptions. Import existing prices only as draft values requiring administrator confirmation. There must be one central price field per service so future price changes update everywhere.
+Create one centralized Terms, Cancellation, and Privacy section rather than repeating the same long terms on every service page.
+Do not publish a residential street address or personal phone number unless the administrator explicitly confirms that it should remain public.
+Make the public contact email configurable because the current site inconsistently uses admin@acceptedadmissions.org and info@acceptedadmissions.org.
+CONSULTATION BOOKING AND PAYMENT
+Allow new independent clients to book and pay for consultations.
+For the first version:
+* Use a Cal.com booking page or embed.
+* Configure it through a CALCOM_URL environment variable or site setting.
+* Allow Cal.com and Stripe to handle booking and card payment.
+* Do not build a custom credit-card form.
+* Do not store card information.
+* Show a confirmation state after the user returns from booking.
+* Store a consultation inquiry record only when appropriate.
+* If Cal.com has not been configured, show an administrator-editable consultation request form instead.
+Taito currently pays through Wise. Do not replace or integrate his Wise payment arrangement in the MVP.
+The current site has approximately 15 older posts, mainly from 2024. Import them as draft or archived content for review rather than automatically presenting dated “2024–2025” advice as current.
+Do not preserve the current public comment/rating system unless it can be moderated. It is acceptable to omit public comments in the MVP.
+PUBLIC FORMS
+Create functional database-backed forms for:
+* Newsletter subscriptions
+* General contact requests
+* Consultation requests
+* Campus-tour inquiries
+Include:
+* Validation
+* Spam protection
+* Consent checkbox when required
+* Success and error states
+* Administrator status management
+* CSV export
+* Created date
+* Internal notes
+Do not promise a response “within the hour” unless the administrator chooses to keep that language.
+AUTHENTICATION AND ROLES
+Use invite-only or administrator-assigned accounts.
+Roles:
+* Administrator
+* Tutor
+* Student
+Users must never choose their own role during registration.
+Administrator permissions:
+* Manage users and roles
+* Invite students and tutors
+* Create and edit courses
+* Assign tutors and students
+* Create, duplicate, reorder, publish, and archive sessions
+* Manage curriculum
+* Manage questions and answer keys
+* View all results and reports
+* Manage public website content
+* Manage inquiries
+* Configure Meet, Drive, Cal.com, and other links
+Tutor permissions:
+* View only assigned courses and students
+* View answer keys
+* Review student attempts
+* View predictions and timing
+* Add feedback and private notes
+* Create or edit assigned curriculum
+* Approve AI-generated questions
+* Upload transcripts
+* Generate, edit, and publish session reports
+Student permissions:
+* View only their own assigned courses
+* Complete assigned homework
+* View their own results and explanations
+* See tutor feedback
+* View published session reports
+* Access approved Meet and Drive links
+* Never see tutor-only notes, raw transcripts, unpublished reports, or other students
+Enforce permissions on the server, not only by hiding interface elements.
+PRIVATE PORTAL STRUCTURE
+Use dynamic database-backed routes such as:
+/portal /portal/courses/:courseId /portal/courses/:courseId/sessions/:sessionId /portal/assignments/:assignmentId /portal/attempts/:attemptId /portal/reports/:reportId /admin /tutor
+Do not create a separate hardcoded URL and code file for every curriculum session.
+The current Wix site has approximately 58 separate curriculum URLs across:
+* Winter 2025
+* Spring 2026
+* Summer 2026
+* Fall 2026
+* Spring 2027
+Replace them with courses, sessions, assignments, and content blocks stored in the database.
+Support migration of three existing curriculum styles:
+1. Simple roadmap pages
+2. Fillable worksheet pages
+3. Interactive pages with timers, notes, practice questions, and homework
+Create a JSON or CSV import format, plus an administrator editor, so historical content can be migrated without manually creating code files.
+If an existing Wix curriculum URL is missing or returns 404, create the relevant course/session record only when specified. Do not claim that missing content was successfully migrated.
+TAITO’S PRIVATE DASHBOARD
+“T.G.” refers to Taito.
+Do not expose his name in public navigation or a public URL. He should access his records after logging in.
+Create a personalized student dashboard containing:
+* Welcome message
+* Current program
+* Upcoming session
+* Fall 2026 schedule
+* Previous terms
+* Assigned tutors
+* SAT and IELTS goals
+* Pre-session homework
+* Homework status
+* Recent scores
+* Skills requiring review
+* Tutor feedback
+* Published session reports
+* Google Meet button
+* Google Drive button
+Continue using the existing Google Meet link. Do not build video calling.
+Continue using the existing Google Drive folder. Do not replace Google Drive.
+Store the links as private course or student settings so they can be changed without editing code.
+Otter.ai will continue joining the Google Meet and recording/transcribing sessions.
+Taito’s tutoring time is:
+* 9:00–10:00 p.m. Japan Standard Time
+* 8:00–9:00 a.m. U.S. Eastern Time before the November daylight-saving change
+* 7:00–8:00 a.m. U.S. Eastern Time after the November daylight-saving change
+Store session dates and times with proper IANA time zones rather than hardcoded UTC offsets. Remember the student is in JST while the tutor in EST but let each side change their timezone if needed.
+ASSIGNED TUTORS
+* SAT: Eunice Chon
+* English/IELTS: Nika Raiffe
+* Administrator: Sama Noori
+FALL 2026 SCHEDULE
+Seed these sessions:
+1. October 2, 2026 — SAT
+2. October 9, 2026 — SAT
+3. October 16, 2026 — SAT
+4. October 23, 2026 — IELTS
+5. October 30, 2026 — SAT
+6. November 6, 2026 — SAT
+7. November 13, 2026 — IELTS
+8. November 20, 2026 — SAT
+9. November 27, 2026 — SAT
+10. December 4, 2026 — IELTS
+11. December 11, 2026 — SAT
+12. December 18, 2026 — SAT
+Every session should support:
+* Date and subject
+* Assigned tutor
+* Google Meet link
+* Google Drive link
+* Pre-session homework
+* Live lesson plan
+* Tutor-only instructions
+* Student notes
+* Tutor notes
+* Student responses and results
+* Targeted review questions
+* Post-session report
+* Following homework
+* Draft/published/completed status
+CURRICULUM EDITOR
+Create reusable content blocks including:
+* Heading
+* Rich text
+* Callout
+* Objectives
+* Session timeline
+* Tutor-only instructions
+* Student notes
+* Formula
+* Strategy
+* External link
+* Multiple-choice question
+* Numeric-response question
+* Long-response question
+* Writing response
+* Checklist
+* Homework
+* Timer
+* File link
+* Divider
+The administrator and assigned tutor should be able to add, edit, remove, duplicate, and reorder these blocks without coding.
+FALL 2026 SAT DIRECTION
+Summer 2026 mainly introduced Taito to SAT question types and used short drills.
+Fall 2026 should shift toward:
+* Timed application
+* Pre-session mini-sections
+* Error diagnosis
+* Review of incorrect answers
+* Skill-based follow-up practice
+* Hard extension questions
+* Pacing
+* Test-taking strategy
+* Progress tracking
+Keep the general live-session structure editable, with a default of:
+* Approximately 10–15 minutes of focused SAT math review or drill
+* Approximately 45–50 minutes of SAT Reading and Writing instruction and review
+The October 2 session should begin with a review of summer progress.
+Create this editable draft progression:
+* October 2: Summer review, baseline timed Reading and Writing mini-section, and goal setting
+* October 9: Standard English Conventions and prediction-first practice
+* October 16: Information and Ideas, evidence, inference, and data interpretation
+* October 30: Craft and Structure, vocabulary in context, purpose, and text structure
+* November 6: Expression of Ideas, transitions, rhetorical synthesis, and organization
+* November 20: Advanced evidence, paired information, and difficult synthesis questions
+* November 27: Mixed timed Reading and Writing module with pacing analysis
+* December 11: Hard mixed SAT practice based on accumulated errors
+* December 18: Cumulative assessment, error-pattern review, and next-term plan
+These are editable starting points, not permanently hardcoded descriptions.
+PRE-SESSION SAT HOMEWORK
+Before every SAT session, assign Taito a take-home SAT mini-section inside the website.
+Each assignment should support:
+* Configurable instructions
+* Configurable time
+* Configurable number of questions
+* Reading and Writing questions
+* Math questions
+* Skill tags
+* Question-type tags
+* Difficulty
+* Assignment deadline
+* Draft/published status
+* One or more attempts, configurable by tutor
+* Autosave
+* Submission confirmation
+SAT skill taxonomy should support:
+Reading and Writing:
+* Information and Ideas
+* Craft and Structure
+* Expression of Ideas
+* Standard English Conventions
+Math:
+* Algebra
+* Advanced Math
+* Problem-Solving and Data Analysis
+* Geometry and Trigonometry
+Use original SAT-style questions. Do not reproduce official College Board questions or passages unless you give credit or cite your sources.
+TIMED HOMEWORK EXPERIENCE
+Show instructions and a “Start Test” button before revealing the assignment.
+When the student starts:
+* Record the server-side start time.
+* Start the active timer.
+* Reveal questions.
+* Autosave responses to the database.
+* Track active time.
+* Track pause count and total paused time.
+* Track time per question when practical.
+Allow the student to pause.
+While paused:
+* Stop the active timer.
+* Completely hide or unmount question text, passages, images, answer choices, and responses.
+* Show only a neutral paused screen and “Resume Test” button.
+* Prevent navigation through questions.
+* Record the pause and resume times on the server.
+When resumed:
+* Reveal the assignment again.
+* Continue the active timer.
+Explain that hiding questions during a pause cannot technically prevent screenshots, another device, or outside materials.
+Do not reveal correctness during the attempt.
+Stop the timer when the student submits all questions. Require confirmation before final submission.
+A page refresh or accidental disconnect must not erase answers. Calculate timing from server records rather than trusting only a browser timer.
+PREDICTION-FIRST ENGLISH QUESTIONS
+Add a configurable “Prediction First” mode for SAT Reading and Writing multiple-choice questions.
+When enabled:
+1. Show the passage and question without answer choices.
+2. Require the student to predict the answer in their own words.
+3. Allow the student to enter “IDK” when unsure.
+4. Save and lock the prediction.
+5. Reveal the answer choices.
+6. Allow the student to select a final answer.
+The prediction:
+* Is not scored
+* Is saved
+* Cannot be edited after choices are revealed
+* Is visible to the tutor
+* Appears in the attempt review
+* Can be compared with the final answer
+Allow the tutor to turn this mode on or off for each question.
+GRADING AND EXPLANATIONS
+Grade supported multiple-choice and numeric-response questions on the server after submission.
+Never put unpublished answer keys in the client bundle or send them to the browser before submission.
+After submission, the student should see:
+* Score
+* Correct and incorrect answers
+* Active time
+* Skill breakdown
+* Correct answer for every question
+* Explanation for every question, even if answered correctly
+* The student’s prediction
+* The student’s final answer
+* Questions flagged for review
+* Tutor feedback when published
+The tutor should see:
+* Every response
+* Prediction
+* Final answer
+* Correct answer
+* Explanation
+* Correct/incorrect status
+* Skill
+* Question type
+* Difficulty
+* Time spent
+* Automatically flagged errors
+* Student-flagged questions
+* Tutor notes
+* Reviewed/not-reviewed status
+Incorrect answers should automatically enter a “Review During Next Session” queue.
+TARGETED FOLLOW-UP QUESTIONS
+For incorrect answers:
+1. Identify the tested skill and likely misconception.
+2. Look for a reviewed follow-up question in the internal question bank.
+3. If none exists and an OpenAI API key is configured, generate an original draft question testing the same underlying skill.
+4. Generate a proposed answer and explanation.
+5. Mark it as AI-generated and draft.
+6. Require tutor review and approval before showing it to the student.
+Do not simply change names or numbers in a copyrighted question. Create a genuinely original question based on the abstract skill.
+If the student gets every question correct, select hard, reviewed extension questions from the same skills. If no reviewed question exists, generate draft extension questions for tutor approval.
+The tutor’s live-session screen should automatically assemble:
+* Incorrect homework questions
+* Predictions
+* Final responses
+* Likely misconceptions
+* Tutor notes
+* Approved similar questions
+* Hard extension questions when appropriate
+QUESTION BANK
+Create a reusable question bank containing:
+* Subject
+* Domain
+* Skill
+* Question type
+* Difficulty
+* Passage or stimulus
+* Question
+* Answer choices
+* Correct answer
+* Explanation
+* Source type
+* Author
+* AI-generated status
+* Review status
+* Related question IDs
+* Date created
+* Date updated
+Allowed content:
+* Original Accepted Admissions questions
+* Properly licensed material
+* Links or reference IDs to official resources
+Do not populate the database by copying College Board or IELTS copyrighted questions from the internet.
+IELTS CURRICULUM
+Create editable draft curriculum for:
+* October 23
+* November 13
+* December 4
+Use the previous Reading/Writing and Listening/Speaking structure as a starting point.
+Suggested progression:
+* October 23: Integrated diagnostic covering reading, writing, listening, and speaking
+* November 13: Coherence, evidence, listening for detail, and structured speaking
+* December 4: Timed mini-mock, writing revision, speaking feedback, and next-term priorities
+IELTS homework may include:
+* Timed reading
+* Original or properly licensed listening material
+* Writing planning
+* Writing responses
+* Vocabulary
+* Grammar
+* Speaking preparation
+Automatically grade only objective question types. Writing and speaking should use tutor-reviewed rubrics. AI may assist with draft feedback, but it must not be presented as an official IELTS score.
+POST-SESSION TRANSCRIPTS AND REPORTS
+Keep the existing workflow:
+1. Session occurs on Google Meet.
+2. Otter.ai joins and creates a recording/transcript.
+3. Transcript is used to create a final student report.
+4. Existing Google Drive remains available.
+For the MVP:
+* Allow tutor/admin to paste transcript text.
+* Allow TXT, DOCX, or PDF transcript upload.
+* Allow an Otter conversation URL.
+* Allow a Google Drive recording/transcript URL.
+* Store raw transcripts as tutor/admin-only.
+* Do not automatically show raw transcripts to the student.
+* Add a “Generate Draft Report” button.
+Use the OpenAI API through a server-side OPENAI_API_KEY secret to create a structured draft containing:
+* Session overview
+* Skills covered
+* Student strengths
+* Areas of difficulty
+* Homework reviewed
+* Misconceptions
+* Progress toward SAT or IELTS goals
+* Assigned homework
+* Recommended next steps
+* Tutor or parent follow-up
+The report must remain a draft until reviewed by the tutor or administrator.
+Report statuses:
+* Transcript not added
+* Transcript added
+* Draft generated
+* Tutor review required
+* Published
+* Archived
+After publication, the student can view, print, or save the report as a PDF. Include a copy button so the final report can also be placed in the existing Google Drive folder.
+Do not build direct Otter API/webhook automation in the MVP. Keep the transcript-ingestion service modular so Otter automation can be added later if the Otter plan supports it.
+If OPENAI_API_KEY is absent, disable AI generation gracefully while preserving manual report creation and question-bank workflows.
+DATA MODEL
+At minimum, plan models for:
+* Users
+* Profiles
+* Roles
+* Students
+* Tutors
+* Courses
+* Course memberships
+* Sessions
+* Curriculum blocks
+* Question bank
+* Answer choices
+* Skill tags
+* Assignments
+* Assignment questions
+* Attempts
+* Responses
+* Predictions
+* Timer events
+* Scores
+* Review queue
+* Generated question variants
+* Tutor feedback
+* Student notes
+* Tutor notes
+* Transcripts
+* Reports
+* Completion records
+* Team members
+* Services
+* Tour packages
+* Testimonials
+* School logos
+* Blog posts
+* Contact inquiries
+* Consultation inquiries
+* Campus-tour inquiries
+* Newsletter subscribers
+* Site settings
+* Audit logs
+Use sensible relational design. Avoid storing the entire application in one unstructured JSON object, although flexible JSON fields may be used for individual curriculum-block configuration.
+ADMIN EXPERIENCE
+The administrator must be able to:
+* Create a course from a template
+* Duplicate a course or term
+* Create and duplicate sessions
+* Reorder sessions
+* Assign tutors and students
+* Publish or unpublish content
+* Create assignments
+* Manage questions
+* Preview the student experience
+* View student results
+* View error patterns
+* Review generated questions
+* Manage reports
+* Manage public pages
+* Manage team profiles
+* Manage services and prices
+* Manage blog posts
+* Manage inquiries
+* Export relevant data
+Provide confirmations before destructive actions. Prefer archive over permanent deletion.
+MIGRATION
+Do not attempt to export Wix source code as the new application.
+Instead:
+* Rebuild public pages using reusable components and CMS data.
+* Migrate text and images into editable records.
+* Convert curriculum pages into courses, sessions, and blocks.
+* Provide a JSON/CSV import template.
+* Allow an administrator to paste or import previous curriculum content.
+* Preserve useful historical courses.
+* Mark outdated content for review.
+* Create a redirect map for important public Wix URLs.
+* Preserve public slugs where practical for SEO.
+* Do not redirect protected client URLs to publicly identifiable client pages.
+QUALITY AND ACCESSIBILITY
+Include:
+* Mobile-responsive design
+* Keyboard navigation
+* Accessible labels
+* Sufficient color contrast
+* Alt text
+* Form validation
+* Loading states
+* Empty states
+* Error states
+* 404 page
+* SEO metadata
+* Open Graph metadata
+* Sitemap
+* Robots configuration
+* Secure cookies
+* Rate limiting for public forms
+* Server-side authorization
+* Input sanitization
+* Audit logging for sensitive changes
+ACCEPTANCE TESTS
+The MVP is not complete until these tests pass:
+1. Taito can sign in without a Replit account.
+2. Taito sees only his own course.
+3. Eunice sees her assigned SAT course and Taito’s SAT results.
+4. Nika sees her assigned IELTS course and relevant results.
+5. Tutors cannot access unrelated courses.
+6. Answer keys are unavailable before submission.
+7. A homework attempt survives refresh and another-device login.
+8. The timer records active and paused time correctly.
+9. Pausing removes questions from the visible page.
+10. Prediction First hides choices until a prediction or “IDK” is locked.
+11. Submission produces a score and explanations.
+12. Wrong answers appear in the tutor review queue.
+13. Follow-up questions require tutor approval.
+14. A perfect attempt produces hard extension practice.
+15. Raw transcripts remain tutor/admin-only.
+16. Reports remain private until published.
+17. The Meet and Drive links work from the private dashboard.
+18. Public forms create manageable database records.
+19. Cal.com booking works when CALCOM_URL is configured.
+20. The application works on desktop and mobile.
+21. No official copyrighted test questions are copied into the application.
+22. No private client name appears in public navigation or public URLs.
+IMPLEMENTATION ORDER
+Phase 1 — Required before Taito’s October 2 session:
+1. Authentication and roles
+2. Taito’s dashboard
+3. Fall 2026 course and schedule
+4. Google Meet and Drive links
+5. Reusable curriculum/session system
+6. Homework mini-sections
+7. Timing, pausing, autosave, and submission
+8. Prediction First
+9. Server-side grading
+10. Student and tutor results
+11. Error-review queue
+12. Seed Fall SAT and IELTS curriculum
+Phase 2:
+1. Question bank
+2. Tutor-approved AI-generated variants
+3. Transcript upload
+4. Draft report generation
+5. Published student reports
+6. IELTS rubrics and feedback
+Phase 3:
+1. Public website migration
+2. Team, services, results, and blog CMS
+3. Consultation booking and payment
+4. Campus-tour inquiry system
+5. Contact and newsletter forms
+6. Domain migration and redirects
+Do not try to build everything simultaneously. Present the revised plan and schema first. After approval, implement Phase 1 as the first working milestone.
