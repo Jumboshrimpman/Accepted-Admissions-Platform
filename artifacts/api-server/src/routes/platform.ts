@@ -2,7 +2,15 @@ import { getAuth } from "@clerk/express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  AttachQuestionToAssignmentBody,
+  AttachQuestionToAssignmentParams,
+  AttachQuestionToAssignmentResponse,
+  CreateContentSourceBody,
+  CreateContentSourceResponse,
   CreateCurriculumBlockBody,
+  GeneratePracticeQuestionsBody,
+  GeneratePracticeQuestionsParams,
+  GeneratePracticeQuestionsResponse,
   CreateCurriculumBlockParams,
   CreateCurriculumBlockResponse,
   GetAssignmentParams,
@@ -18,7 +26,16 @@ import {
   ListAssignmentsQueryParams,
   ListAssignmentsResponse,
   ListCoursesResponse,
+  ListContentSourcesQueryParams,
+  ListContentSourcesResponse,
+  ListQuestionBankQueryParams,
+  ListQuestionBankResponse,
   ListReviewQueueResponse,
+  ListSessionArtifactsParams,
+  ListSessionArtifactsResponse,
+  UpdateQuestionBankItemBody,
+  UpdateQuestionBankItemParams,
+  UpdateQuestionBankItemResponse,
   PauseAttemptParams,
   PauseAttemptResponse,
   ResumeAttemptParams,
@@ -37,8 +54,12 @@ import {
   UpdateReviewQueueItemBody,
   UpdateReviewQueueItemParams,
   UpdateReviewQueueItemResponse,
+  UpsertSessionArtifactBody,
+  UpsertSessionArtifactParams,
+  UpsertSessionArtifactResponse,
 } from "@workspace/api-zod";
 import {
+  contentSourcesTable,
   assignmentQuestionsTable,
   assignmentsTable,
   attemptsTable,
@@ -50,6 +71,7 @@ import {
   questionsTable,
   responsesTable,
   reviewQueueTable,
+  sessionArtifactsTable,
   sessionsTable,
   timerEventsTable,
   usersTable,
@@ -1277,6 +1299,596 @@ router.patch(
       metadata: { status: updated.status },
     });
     res.json(UpdateCurriculumBlockResponse.parse(updated));
+  },
+);
+
+function contentSourceShape(source: typeof contentSourcesTable.$inferSelect) {
+  return {
+    id: source.id,
+    courseId: source.courseId,
+    title: source.title,
+    sourceKind: source.sourceKind,
+    sourceUrl: source.sourceUrl,
+    originalFilename: source.originalFilename,
+    authorizationNote: source.authorizationNote,
+    provenance: source.provenance,
+    status: source.status,
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+  };
+}
+
+function questionBankShape(question: typeof questionsTable.$inferSelect) {
+  return {
+    id: question.id,
+    subject: question.subject,
+    domain: question.domain,
+    skill: question.skill,
+    questionType: question.questionType,
+    difficulty: question.difficulty,
+    stimulus: question.stimulus,
+    prompt: question.prompt,
+    choices: question.choices,
+    correctAnswer: question.correctAnswer,
+    explanation: question.explanation,
+    sourceType: question.sourceType,
+    sourceId: question.sourceId,
+    reviewStatus: question.reviewStatus,
+    tags: question.tags,
+    generationMethod: question.generationMethod,
+    rejectionReason: question.rejectionReason,
+    reviewedAt: question.reviewedAt,
+    createdAt: question.createdAt,
+  };
+}
+
+function sourceConcepts(text: string, focus: string): string[] {
+  const stopWords = new Set([
+    "about",
+    "after",
+    "again",
+    "because",
+    "before",
+    "being",
+    "between",
+    "could",
+    "every",
+    "first",
+    "from",
+    "have",
+    "into",
+    "lesson",
+    "more",
+    "other",
+    "should",
+    "their",
+    "there",
+    "these",
+    "they",
+    "this",
+    "through",
+    "using",
+    "were",
+    "which",
+    "while",
+    "with",
+    "would",
+  ]);
+  const counts = new Map<string, number>();
+  const words = text
+    .replace(/<[^>]+>/g, " ")
+    .toLowerCase()
+    .match(/[a-z][a-z'-]{3,}/g) ?? [];
+  for (const word of words) {
+    if (stopWords.has(word)) continue;
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+  const extracted = [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([word]) => word)
+    .slice(0, 16);
+  return [
+    ...new Set([
+      ...focus.toLowerCase().match(/[a-z][a-z'-]{3,}/g) ?? [],
+      ...extracted,
+    ]),
+  ];
+}
+
+router.get(
+  "/content-sources",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const query = ListContentSourcesQueryParams.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({ error: query.error.message });
+      return;
+    }
+    if (!(await visibleCourseIds(req.appUser!)).includes(query.data.courseId)) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const sources = await db
+      .select()
+      .from(contentSourcesTable)
+      .where(eq(contentSourcesTable.courseId, query.data.courseId))
+      .orderBy(desc(contentSourcesTable.createdAt));
+    res.json(
+      ListContentSourcesResponse.parse(sources.map(contentSourceShape)),
+    );
+  },
+);
+
+router.post(
+  "/content-sources",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateContentSourceBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    if (!(await visibleCourseIds(req.appUser!)).includes(body.data.courseId)) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    if (!body.data.sourceUrl && !body.data.extractedText) {
+      res.status(400).json({
+        error: "Provide a source URL or authorized extracted text",
+      });
+      return;
+    }
+    const [source] = await db
+      .insert(contentSourcesTable)
+      .values({
+        courseId: body.data.courseId,
+        importedBy: req.appUser!.id,
+        title: body.data.title.trim(),
+        sourceKind: body.data.sourceKind,
+        sourceUrl: body.data.sourceUrl ?? null,
+        originalFilename: body.data.originalFilename ?? null,
+        authorizationNote: body.data.authorizationNote.trim(),
+        extractedText: body.data.extractedText ?? null,
+        provenance: {
+          ...(body.data.provenance ?? {}),
+          importedAt: new Date().toISOString(),
+          importedByRole: req.appUser!.role,
+        },
+      })
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "content_source.imported",
+      entityType: "content_source",
+      entityId: source!.id,
+      metadata: {
+        courseId: source!.courseId,
+        sourceKind: source!.sourceKind,
+      },
+    });
+    res
+      .status(201)
+      .json(CreateContentSourceResponse.parse(contentSourceShape(source!)));
+  },
+);
+
+router.post(
+  "/content-sources/:sourceId/generate",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = GeneratePracticeQuestionsParams.safeParse(req.params);
+    const body = GeneratePracticeQuestionsBody.safeParse(req.body);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const [record] = await db
+      .select({ source: contentSourcesTable, course: coursesTable })
+      .from(contentSourcesTable)
+      .innerJoin(coursesTable, eq(coursesTable.id, contentSourcesTable.courseId))
+      .where(eq(contentSourcesTable.id, params.data.sourceId));
+    if (
+      !record ||
+      !(await visibleCourseIds(req.appUser!)).includes(record.source.courseId)
+    ) {
+      res.status(404).json({ error: "Content source not found" });
+      return;
+    }
+
+    if (!record.source.extractedText?.trim() || record.source.extractedText.trim().length < 40) {
+      res.status(400).json({
+        error:
+          "Authorized extracted text is required before practice can be generated",
+      });
+      return;
+    }
+
+    // Extract concepts, never sentences or answer keys. Drafts use newly written
+    // scenarios so the source informs the practice without being reproduced.
+    const focus = body.data.focus.trim().replace(/\s+/g, " ");
+    const count = body.data.count ?? 3;
+    const concepts = sourceConcepts(record.source.extractedText, focus);
+    if (concepts.length < 2) {
+      res.status(400).json({
+        error: "The extracted text does not contain enough distinct concepts",
+      });
+      return;
+    }
+    const templates = [
+      {
+        prompt: (primary: string, secondary: string) =>
+          `Which plan best helps the student explain the relationship between ${primary} and ${secondary}?`,
+        choices: [
+          "State a specific relationship and test it against a new example.",
+          "List both terms without explaining how they connect.",
+          "Replace both terms with a broader unsupported claim.",
+          "Ignore the relationship and summarize an unrelated detail.",
+        ],
+        correctAnswer: "a",
+        explanation:
+          "A specific relationship tested with a new example demonstrates transferable understanding without copying the source.",
+      },
+      {
+        prompt: (primary: string, secondary: string) =>
+          `A student is comparing ${primary} and ${secondary}. Which revision produces the clearest evidence-based distinction?`,
+        choices: [
+          "Treat the two concepts as identical without support.",
+          "Name a relevant difference and explain why it matters in a new case.",
+          "Choose whichever concept appears first.",
+          "Add a conclusion that neither concept supports.",
+        ],
+        correctAnswer: "b",
+        explanation:
+          "Naming and applying a relevant distinction shows accurate analysis while keeping the example original.",
+      },
+      {
+        prompt: (primary: string, secondary: string) =>
+          `Which question would best check whether a learner can transfer ideas about ${primary} and ${secondary} to unfamiliar material?`,
+        choices: [
+          "Can the learner repeat a sentence from the source?",
+          "Can the learner identify which word appeared more often?",
+          "Can the learner apply the relationship to a new scenario and justify it?",
+          "Can the learner recall the source title?",
+        ],
+        correctAnswer: "c",
+        explanation:
+          "Transfer requires applying the underlying relationship to a new context and supporting the choice.",
+      },
+      {
+        prompt: (primary: string, secondary: string) =>
+          `Which response best synthesizes the lesson's treatment of ${primary} and ${secondary}?`,
+        choices: [
+          "A copied sentence with no interpretation.",
+          "A claim based only on personal preference.",
+          "A summary of one term that omits the other.",
+          "An original claim that connects both concepts and stays within the available support.",
+        ],
+        correctAnswer: "d",
+        explanation:
+          "A synthesis must connect both concepts in an original, supportable claim.",
+      },
+    ];
+    const created = await db
+      .insert(questionsTable)
+      .values(
+        Array.from({ length: count }, (_, index) => {
+          const primary = concepts[(index * 2) % concepts.length]!;
+          const secondary = concepts[(index * 2 + 1) % concepts.length]!;
+          const template = templates[index % templates.length]!;
+          return {
+            subject: record.course.subject,
+            domain: "Source-guided practice",
+            skill: focus,
+            questionType: "multiple_choice",
+            difficulty: body.data.difficulty ?? "medium",
+            stimulus:
+              `In a new learning scenario, a student must connect the concepts of ${primary} and ${secondary} without relying on memorized wording.`,
+            prompt: template.prompt(primary, secondary),
+            choices: template.choices.map((text, choiceIndex) => ({
+              id: String.fromCharCode(97 + choiceIndex),
+              label: String.fromCharCode(65 + choiceIndex),
+              text,
+            })),
+            correctAnswer: template.correctAnswer,
+            explanation: template.explanation,
+            sourceType: "authorized-source-derived",
+            sourceId: record.source.id,
+            reviewStatus: "draft",
+            tags: [focus.toLowerCase(), primary, secondary],
+            generationMethod: "source-aware-generator",
+          };
+        }),
+      )
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "practice_questions.generated",
+      entityType: "content_source",
+      entityId: record.source.id,
+      metadata: { count: created.length, reviewStatus: "draft" },
+    });
+    res
+      .status(201)
+      .json(
+        GeneratePracticeQuestionsResponse.parse(created.map(questionBankShape)),
+      );
+  },
+);
+
+router.get(
+  "/question-bank",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const query = ListQuestionBankQueryParams.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({ error: query.error.message });
+      return;
+    }
+    if (!(await visibleCourseIds(req.appUser!)).includes(query.data.courseId)) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+    const conditions = [eq(contentSourcesTable.courseId, query.data.courseId)];
+    if (query.data.reviewStatus) {
+      conditions.push(eq(questionsTable.reviewStatus, query.data.reviewStatus));
+    }
+    const rows = await db
+      .select({ question: questionsTable })
+      .from(questionsTable)
+      .innerJoin(
+        contentSourcesTable,
+        eq(contentSourcesTable.id, questionsTable.sourceId),
+      )
+      .where(and(...conditions))
+      .orderBy(desc(questionsTable.createdAt));
+    res.json(
+      ListQuestionBankResponse.parse(
+        rows.map(({ question }) => questionBankShape(question)),
+      ),
+    );
+  },
+);
+
+router.patch(
+  "/question-bank/:questionId",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateQuestionBankItemParams.safeParse(req.params);
+    const body = UpdateQuestionBankItemBody.safeParse(req.body);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const [visibleQuestion] = await db
+      .select({ question: questionsTable, courseId: contentSourcesTable.courseId })
+      .from(questionsTable)
+      .innerJoin(
+        contentSourcesTable,
+        eq(contentSourcesTable.id, questionsTable.sourceId),
+      )
+      .where(eq(questionsTable.id, params.data.questionId));
+    if (
+      !visibleQuestion ||
+      !(await visibleCourseIds(req.appUser!)).includes(visibleQuestion.courseId)
+    ) {
+      res.status(404).json({ error: "Question not found" });
+      return;
+    }
+    if (
+      body.data.reviewStatus === "rejected" &&
+      !body.data.rejectionReason?.trim()
+    ) {
+      res.status(400).json({ error: "A rejection reason is required" });
+      return;
+    }
+    const isReviewed =
+      body.data.reviewStatus === "approved" ||
+      body.data.reviewStatus === "rejected";
+    const [updated] = await db
+      .update(questionsTable)
+      .set({
+        ...body.data,
+        rejectionReason:
+          body.data.reviewStatus === "approved"
+            ? null
+            : body.data.rejectionReason,
+        reviewedBy: isReviewed ? req.appUser!.id : null,
+        reviewedAt: isReviewed ? new Date() : null,
+      })
+      .where(eq(questionsTable.id, params.data.questionId))
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "practice_question.reviewed",
+      entityType: "question",
+      entityId: updated!.id,
+      metadata: { reviewStatus: updated!.reviewStatus },
+    });
+    res.json(
+      UpdateQuestionBankItemResponse.parse(questionBankShape(updated!)),
+    );
+  },
+);
+
+router.post(
+  "/assignments/:assignmentId/questions",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = AttachQuestionToAssignmentParams.safeParse(req.params);
+    const body = AttachQuestionToAssignmentBody.safeParse(req.body);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const [assignment] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.id, params.data.assignmentId));
+    const [questionRecord] = await db
+      .select({ question: questionsTable, courseId: contentSourcesTable.courseId })
+      .from(questionsTable)
+      .innerJoin(
+        contentSourcesTable,
+        eq(contentSourcesTable.id, questionsTable.sourceId),
+      )
+      .where(eq(questionsTable.id, body.data.questionId));
+    if (
+      !assignment ||
+      !questionRecord ||
+      assignment.courseId !== questionRecord.courseId ||
+      !(await visibleCourseIds(req.appUser!)).includes(assignment.courseId)
+    ) {
+      res.status(404).json({ error: "Assignment or question not found" });
+      return;
+    }
+    if (questionRecord.question.reviewStatus !== "approved") {
+      res.status(400).json({
+        error: "Only tutor-approved questions can be attached to assignments",
+      });
+      return;
+    }
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assignmentQuestionsTable)
+      .where(eq(assignmentQuestionsTable.assignmentId, assignment.id));
+    await db
+      .insert(assignmentQuestionsTable)
+      .values({
+        assignmentId: assignment.id,
+        questionId: questionRecord.question.id,
+        position: body.data.position ?? Number(count),
+        predictionFirst: body.data.predictionFirst ?? false,
+      })
+      .onConflictDoNothing();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "practice_question.attached",
+      entityType: "assignment",
+      entityId: assignment.id,
+      metadata: { questionId: questionRecord.question.id },
+    });
+    res
+      .status(201)
+      .json(
+        AttachQuestionToAssignmentResponse.parse(
+          questionBankShape(questionRecord.question),
+        ),
+      );
+  },
+);
+
+router.get(
+  "/sessions/:sessionId/artifacts",
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = ListSessionArtifactsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, params.data.sessionId));
+    if (
+      !session ||
+      !(await visibleCourseIds(req.appUser!)).includes(session.courseId)
+    ) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const artifacts = await db
+      .select()
+      .from(sessionArtifactsTable)
+      .where(eq(sessionArtifactsTable.sessionId, session.id))
+      .orderBy(asc(sessionArtifactsTable.kind));
+    const visible =
+      req.appUser!.role === "student"
+        ? artifacts.filter(
+            (artifact) =>
+              artifact.kind === "report" &&
+              artifact.visibility === "course" &&
+              artifact.status === "published",
+          )
+        : artifacts;
+    res.json(ListSessionArtifactsResponse.parse(visible));
+  },
+);
+
+router.put(
+  "/sessions/:sessionId/artifacts",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpsertSessionArtifactParams.safeParse(req.params);
+    const body = UpsertSessionArtifactBody.safeParse(req.body);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, params.data.sessionId));
+    if (
+      !session ||
+      !(await visibleCourseIds(req.appUser!)).includes(session.courseId)
+    ) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const isPublishedReport =
+      body.data.kind === "report" && body.data.status === "published";
+    const values = {
+      sessionId: session.id,
+      createdBy: req.appUser!.id,
+      kind: body.data.kind,
+      content: body.data.content.trim(),
+      visibility: isPublishedReport ? "course" : "tutor",
+      status: isPublishedReport ? "published" : "draft",
+      updatedAt: new Date(),
+    };
+    const [saved] = await db
+      .insert(sessionArtifactsTable)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [sessionArtifactsTable.sessionId, sessionArtifactsTable.kind],
+        set: {
+          content: values.content,
+          visibility: values.visibility,
+          status: values.status,
+          updatedAt: values.updatedAt,
+        },
+      })
+      .returning();
+    if (isPublishedReport) {
+      await db
+        .update(sessionsTable)
+        .set({ hasReport: true })
+        .where(eq(sessionsTable.id, session.id));
+    }
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: `session_${body.data.kind}.saved`,
+      entityType: "session",
+      entityId: session.id,
+      metadata: { visibility: values.visibility },
+    });
+    res.json(UpsertSessionArtifactResponse.parse(saved));
   },
 );
 

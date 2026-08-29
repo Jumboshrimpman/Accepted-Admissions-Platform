@@ -392,6 +392,173 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /content-sources:
+    get:
+      operationId: listContentSources
+      tags: [content]
+      summary: List authorized lesson sources visible to tutors
+      parameters:
+        - name: courseId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Imported lesson sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContentSource" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createContentSource
+      tags: [content]
+      summary: Register an authorized PDF, HTML, or text lesson source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContentSourceInput" }
+      responses:
+        "201":
+          description: Imported source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContentSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /content-sources/{sourceId}/generate:
+    post:
+      operationId: generatePracticeQuestions
+      tags: [content]
+      summary: Generate original draft questions from an authorized source
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GenerateQuestionsInput" }
+      responses:
+        "201":
+          description: Draft questions awaiting tutor review
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/QuestionBankItem" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /question-bank:
+    get:
+      operationId: listQuestionBank
+      tags: [content]
+      summary: List tutor-visible reusable practice questions
+      parameters:
+        - name: courseId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: reviewStatus
+          in: query
+          schema: { type: string, enum: [draft, approved, rejected] }
+      responses:
+        "200":
+          description: Question bank
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/QuestionBankItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /question-bank/{questionId}:
+    patch:
+      operationId: updateQuestionBankItem
+      tags: [content]
+      summary: Edit, tag, approve, or reject a reusable question
+      parameters:
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionBankUpdate" }
+      responses:
+        "200":
+          description: Updated question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionBankItem" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /assignments/{assignmentId}/questions:
+    post:
+      operationId: attachQuestionToAssignment
+      tags: [content]
+      summary: Attach an approved question to an assignment
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttachQuestionInput" }
+      responses:
+        "201":
+          description: Attached question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionBankItem" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /sessions/{sessionId}/artifacts:
+    get:
+      operationId: listSessionArtifacts
+      tags: [session-notes]
+      summary: List authorized transcript and post-session report artifacts
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Session artifacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SessionArtifact" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: upsertSessionArtifact
+      tags: [session-notes]
+      summary: Store or update a transcript or post-session report
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SessionArtifactInput" }
+      responses:
+        "200":
+          description: Saved artifact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionArtifact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   parameters:
     CourseId:
@@ -424,6 +591,16 @@ components:
       in: path
       required: true
       schema: { type: string }
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema: { type: string }
+    QuestionId:
+      name: questionId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     Unauthorized:
       description: Authentication required
@@ -433,6 +610,12 @@ components:
             $ref: "#/components/schemas/Error"
     Forbidden:
       description: Insufficient permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequest:
+      description: Invalid request
       content:
         application/json:
           schema:
@@ -725,6 +908,129 @@ components:
       properties:
         status: { type: string, enum: [open, reviewed, archived] }
         tutorNote: { type: ["string", "null"], maxLength: 5000 }
+    ContentSource:
+      type: object
+      required: [id, courseId, title, sourceKind, authorizationNote, provenance, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        title: { type: string }
+        sourceKind: { type: string, enum: [pdf, html, text] }
+        sourceUrl: { type: ["string", "null"] }
+        originalFilename: { type: ["string", "null"] }
+        authorizationNote: { type: string }
+        provenance:
+          type: object
+          additionalProperties: true
+        status: { type: string, enum: [imported, archived] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ContentSourceInput:
+      type: object
+      required: [courseId, title, sourceKind, authorizationNote]
+      properties:
+        courseId: { type: string }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        sourceKind: { type: string, enum: [pdf, html, text] }
+        sourceUrl: { type: ["string", "null"] }
+        originalFilename: { type: ["string", "null"], maxLength: 255 }
+        authorizationNote: { type: string, minLength: 5, maxLength: 2000 }
+        extractedText: { type: ["string", "null"], maxLength: 50000 }
+        provenance:
+          type: object
+          additionalProperties: true
+    GenerateQuestionsInput:
+      type: object
+      required: [focus]
+      properties:
+        focus: { type: string, minLength: 3, maxLength: 500 }
+        count: { type: number, minimum: 1, maximum: 10 }
+        difficulty: { type: string, enum: [foundational, medium, hard] }
+    QuestionBankItem:
+      type: object
+      required: [id, subject, domain, skill, questionType, difficulty, prompt, choices, correctAnswer, explanation, sourceType, reviewStatus, tags, generationMethod, createdAt]
+      properties:
+        id: { type: string }
+        subject: { type: string }
+        domain: { type: string }
+        skill: { type: string }
+        questionType: { type: string }
+        difficulty: { type: string, enum: [foundational, medium, hard] }
+        stimulus: { type: ["string", "null"] }
+        prompt: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        correctAnswer: { type: string }
+        explanation: { type: string }
+        sourceType: { type: string }
+        sourceId: { type: ["string", "null"] }
+        reviewStatus: { type: string, enum: [draft, approved, rejected] }
+        tags:
+          type: array
+          items: { type: string }
+        generationMethod: { type: string }
+        rejectionReason: { type: ["string", "null"] }
+        reviewedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    QuestionBankUpdate:
+      type: object
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        domain: { type: string, minLength: 1, maxLength: 200 }
+        skill: { type: string, minLength: 1, maxLength: 200 }
+        difficulty: { type: string, enum: [foundational, medium, hard] }
+        stimulus: { type: ["string", "null"], maxLength: 5000 }
+        prompt: { type: string, minLength: 1, maxLength: 5000 }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        correctAnswer: { type: string, minLength: 1 }
+        explanation: { type: string, minLength: 1, maxLength: 5000 }
+        tags:
+          type: array
+          items: { type: string, maxLength: 80 }
+        reviewStatus: { type: string, enum: [draft, approved, rejected] }
+        rejectionReason: { type: ["string", "null"], maxLength: 2000 }
+    AttachQuestionInput:
+      type: object
+      required: [questionId]
+      properties:
+        questionId: { type: string }
+        position: { type: number, minimum: 0 }
+        predictionFirst: { type: boolean }
+    SessionArtifact:
+      type: object
+      required: [id, sessionId, kind, content, visibility, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        kind: { type: string, enum: [transcript, report] }
+        content: { type: string }
+        visibility: { type: string, enum: [course, tutor] }
+        status: { type: string, enum: [draft, published] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SessionArtifactInput:
+      type: object
+      required: [kind, content]
+      properties:
+        kind: { type: string, enum: [transcript, report] }
+        content: { type: string, minLength: 1, maxLength: 30000 }
+        visibility: { type: string, enum: [course, tutor] }
+        status: { type: string, enum: [draft, published] }
     Dashboard:
       type: object
       required: [user, courses, upcomingSessions, assignments, recentScores, reviewSkills]

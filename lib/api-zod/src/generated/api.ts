@@ -574,3 +574,316 @@ export const UpdateReviewQueueItemResponse = zod.object({
 })
 
 
+/**
+ * @summary List authorized lesson sources visible to tutors
+ */
+export const ListContentSourcesQueryParams = zod.object({
+  "courseId": zod.coerce.string()
+})
+
+export const ListContentSourcesResponseItem = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "sourceKind": zod.enum(['pdf', 'html', 'text']),
+  "sourceUrl": zod.string().nullish(),
+  "originalFilename": zod.string().nullish(),
+  "authorizationNote": zod.string(),
+  "provenance": zod.record(zod.string(), zod.unknown()),
+  "status": zod.enum(['imported', 'archived']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListContentSourcesResponse = zod.array(ListContentSourcesResponseItem)
+
+
+/**
+ * @summary Register an authorized PDF, HTML, or text lesson source
+ */
+export const createContentSourceBodyTitleMax = 200;
+
+export const createContentSourceBodyOriginalFilenameMax = 255;
+
+export const createContentSourceBodyAuthorizationNoteMin = 5;
+export const createContentSourceBodyAuthorizationNoteMax = 2000;
+
+export const createContentSourceBodyExtractedTextMax = 50000;
+
+
+
+export const CreateContentSourceBody = zod.object({
+  "courseId": zod.string(),
+  "title": zod.string().min(1).max(createContentSourceBodyTitleMax),
+  "sourceKind": zod.enum(['pdf', 'html', 'text']),
+  "sourceUrl": zod.string().nullish(),
+  "originalFilename": zod.string().max(createContentSourceBodyOriginalFilenameMax).nullish(),
+  "authorizationNote": zod.string().min(createContentSourceBodyAuthorizationNoteMin).max(createContentSourceBodyAuthorizationNoteMax),
+  "extractedText": zod.string().max(createContentSourceBodyExtractedTextMax).nullish(),
+  "provenance": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+export const CreateContentSourceResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "title": zod.string(),
+  "sourceKind": zod.enum(['pdf', 'html', 'text']),
+  "sourceUrl": zod.string().nullish(),
+  "originalFilename": zod.string().nullish(),
+  "authorizationNote": zod.string(),
+  "provenance": zod.record(zod.string(), zod.unknown()),
+  "status": zod.enum(['imported', 'archived']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Generate original draft questions from an authorized source
+ */
+export const GeneratePracticeQuestionsParams = zod.object({
+  "sourceId": zod.coerce.string()
+})
+
+export const generatePracticeQuestionsBodyFocusMin = 3;
+export const generatePracticeQuestionsBodyFocusMax = 500;
+
+export const generatePracticeQuestionsBodyCountMax = 10;
+
+
+
+export const GeneratePracticeQuestionsBody = zod.object({
+  "focus": zod.string().min(generatePracticeQuestionsBodyFocusMin).max(generatePracticeQuestionsBodyFocusMax),
+  "count": zod.number().min(1).max(generatePracticeQuestionsBodyCountMax).optional(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']).optional()
+})
+
+export const GeneratePracticeQuestionsResponseItem = zod.object({
+  "id": zod.string(),
+  "subject": zod.string(),
+  "domain": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "stimulus": zod.string().nullish(),
+  "prompt": zod.string(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.string().nullish(),
+  "reviewStatus": zod.enum(['draft', 'approved', 'rejected']),
+  "tags": zod.array(zod.string()),
+  "generationMethod": zod.string(),
+  "rejectionReason": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const GeneratePracticeQuestionsResponse = zod.array(GeneratePracticeQuestionsResponseItem)
+
+
+/**
+ * @summary List tutor-visible reusable practice questions
+ */
+export const ListQuestionBankQueryParams = zod.object({
+  "courseId": zod.coerce.string(),
+  "reviewStatus": zod.enum(['draft', 'approved', 'rejected']).optional()
+})
+
+export const ListQuestionBankResponseItem = zod.object({
+  "id": zod.string(),
+  "subject": zod.string(),
+  "domain": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "stimulus": zod.string().nullish(),
+  "prompt": zod.string(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.string().nullish(),
+  "reviewStatus": zod.enum(['draft', 'approved', 'rejected']),
+  "tags": zod.array(zod.string()),
+  "generationMethod": zod.string(),
+  "rejectionReason": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListQuestionBankResponse = zod.array(ListQuestionBankResponseItem)
+
+
+/**
+ * @summary Edit, tag, approve, or reject a reusable question
+ */
+export const UpdateQuestionBankItemParams = zod.object({
+  "questionId": zod.coerce.string()
+})
+
+export const updateQuestionBankItemBodySubjectMax = 200;
+
+export const updateQuestionBankItemBodyDomainMax = 200;
+
+export const updateQuestionBankItemBodySkillMax = 200;
+
+export const updateQuestionBankItemBodyStimulusMax = 5000;
+
+export const updateQuestionBankItemBodyPromptMax = 5000;
+
+
+export const updateQuestionBankItemBodyExplanationMax = 5000;
+
+export const updateQuestionBankItemBodyTagsItemMax = 80;
+
+export const updateQuestionBankItemBodyRejectionReasonMax = 2000;
+
+
+
+export const UpdateQuestionBankItemBody = zod.object({
+  "subject": zod.string().min(1).max(updateQuestionBankItemBodySubjectMax).optional(),
+  "domain": zod.string().min(1).max(updateQuestionBankItemBodyDomainMax).optional(),
+  "skill": zod.string().min(1).max(updateQuestionBankItemBodySkillMax).optional(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']).optional(),
+  "stimulus": zod.string().max(updateQuestionBankItemBodyStimulusMax).nullish(),
+  "prompt": zod.string().min(1).max(updateQuestionBankItemBodyPromptMax).optional(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "correctAnswer": zod.string().min(1).optional(),
+  "explanation": zod.string().min(1).max(updateQuestionBankItemBodyExplanationMax).optional(),
+  "tags": zod.array(zod.string().max(updateQuestionBankItemBodyTagsItemMax)).optional(),
+  "reviewStatus": zod.enum(['draft', 'approved', 'rejected']).optional(),
+  "rejectionReason": zod.string().max(updateQuestionBankItemBodyRejectionReasonMax).nullish()
+})
+
+export const UpdateQuestionBankItemResponse = zod.object({
+  "id": zod.string(),
+  "subject": zod.string(),
+  "domain": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "stimulus": zod.string().nullish(),
+  "prompt": zod.string(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.string().nullish(),
+  "reviewStatus": zod.enum(['draft', 'approved', 'rejected']),
+  "tags": zod.array(zod.string()),
+  "generationMethod": zod.string(),
+  "rejectionReason": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Attach an approved question to an assignment
+ */
+export const AttachQuestionToAssignmentParams = zod.object({
+  "assignmentId": zod.coerce.string()
+})
+
+export const attachQuestionToAssignmentBodyPositionMin = 0;
+
+
+
+export const AttachQuestionToAssignmentBody = zod.object({
+  "questionId": zod.string(),
+  "position": zod.number().min(attachQuestionToAssignmentBodyPositionMin).optional(),
+  "predictionFirst": zod.boolean().optional()
+})
+
+export const AttachQuestionToAssignmentResponse = zod.object({
+  "id": zod.string(),
+  "subject": zod.string(),
+  "domain": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "stimulus": zod.string().nullish(),
+  "prompt": zod.string(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "sourceId": zod.string().nullish(),
+  "reviewStatus": zod.enum(['draft', 'approved', 'rejected']),
+  "tags": zod.array(zod.string()),
+  "generationMethod": zod.string(),
+  "rejectionReason": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List authorized transcript and post-session report artifacts
+ */
+export const ListSessionArtifactsParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const ListSessionArtifactsResponseItem = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "kind": zod.enum(['transcript', 'report']),
+  "content": zod.string(),
+  "visibility": zod.enum(['course', 'tutor']),
+  "status": zod.enum(['draft', 'published']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListSessionArtifactsResponse = zod.array(ListSessionArtifactsResponseItem)
+
+
+/**
+ * @summary Store or update a transcript or post-session report
+ */
+export const UpsertSessionArtifactParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const upsertSessionArtifactBodyContentMax = 30000;
+
+
+
+export const UpsertSessionArtifactBody = zod.object({
+  "kind": zod.enum(['transcript', 'report']),
+  "content": zod.string().min(1).max(upsertSessionArtifactBodyContentMax),
+  "visibility": zod.enum(['course', 'tutor']).optional(),
+  "status": zod.enum(['draft', 'published']).optional()
+})
+
+export const UpsertSessionArtifactResponse = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "kind": zod.enum(['transcript', 'report']),
+  "content": zod.string(),
+  "visibility": zod.enum(['course', 'tutor']),
+  "status": zod.enum(['draft', 'published']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+

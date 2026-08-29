@@ -463,6 +463,299 @@ export interface ReviewQueueUpdate {
   tutorNote?: string | null;
 }
 
+export type ContentSourceSourceKind = typeof ContentSourceSourceKind[keyof typeof ContentSourceSourceKind];
+
+
+export const ContentSourceSourceKind = {
+  pdf: 'pdf',
+  html: 'html',
+  text: 'text',
+} as const;
+
+export type ContentSourceProvenance = { [key: string]: unknown };
+
+export type ContentSourceStatus = typeof ContentSourceStatus[keyof typeof ContentSourceStatus];
+
+
+export const ContentSourceStatus = {
+  imported: 'imported',
+  archived: 'archived',
+} as const;
+
+export interface ContentSource {
+  id: string;
+  courseId: string;
+  title: string;
+  sourceKind: ContentSourceSourceKind;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  originalFilename?: string | null;
+  authorizationNote: string;
+  provenance: ContentSourceProvenance;
+  status: ContentSourceStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ContentSourceInputSourceKind = typeof ContentSourceInputSourceKind[keyof typeof ContentSourceInputSourceKind];
+
+
+export const ContentSourceInputSourceKind = {
+  pdf: 'pdf',
+  html: 'html',
+  text: 'text',
+} as const;
+
+export type ContentSourceInputProvenance = { [key: string]: unknown };
+
+export interface ContentSourceInput {
+  courseId: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  sourceKind: ContentSourceInputSourceKind;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  originalFilename?: string | null;
+  /**
+     * @minLength 5
+     * @maxLength 2000
+     */
+  authorizationNote: string;
+  /**
+     * @maxLength 50000
+     * @nullable
+     */
+  extractedText?: string | null;
+  provenance?: ContentSourceInputProvenance;
+}
+
+export type GenerateQuestionsInputDifficulty = typeof GenerateQuestionsInputDifficulty[keyof typeof GenerateQuestionsInputDifficulty];
+
+
+export const GenerateQuestionsInputDifficulty = {
+  foundational: 'foundational',
+  medium: 'medium',
+  hard: 'hard',
+} as const;
+
+export interface GenerateQuestionsInput {
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  focus: string;
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  count?: number;
+  difficulty?: GenerateQuestionsInputDifficulty;
+}
+
+export type QuestionBankItemDifficulty = typeof QuestionBankItemDifficulty[keyof typeof QuestionBankItemDifficulty];
+
+
+export const QuestionBankItemDifficulty = {
+  foundational: 'foundational',
+  medium: 'medium',
+  hard: 'hard',
+} as const;
+
+export type QuestionBankItemChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export type QuestionBankItemReviewStatus = typeof QuestionBankItemReviewStatus[keyof typeof QuestionBankItemReviewStatus];
+
+
+export const QuestionBankItemReviewStatus = {
+  draft: 'draft',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface QuestionBankItem {
+  id: string;
+  subject: string;
+  domain: string;
+  skill: string;
+  questionType: string;
+  difficulty: QuestionBankItemDifficulty;
+  /** @nullable */
+  stimulus?: string | null;
+  prompt: string;
+  choices: QuestionBankItemChoicesItem[];
+  correctAnswer: string;
+  explanation: string;
+  sourceType: string;
+  /** @nullable */
+  sourceId?: string | null;
+  reviewStatus: QuestionBankItemReviewStatus;
+  tags: string[];
+  generationMethod: string;
+  /** @nullable */
+  rejectionReason?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export type QuestionBankUpdateDifficulty = typeof QuestionBankUpdateDifficulty[keyof typeof QuestionBankUpdateDifficulty];
+
+
+export const QuestionBankUpdateDifficulty = {
+  foundational: 'foundational',
+  medium: 'medium',
+  hard: 'hard',
+} as const;
+
+export type QuestionBankUpdateChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export type QuestionBankUpdateReviewStatus = typeof QuestionBankUpdateReviewStatus[keyof typeof QuestionBankUpdateReviewStatus];
+
+
+export const QuestionBankUpdateReviewStatus = {
+  draft: 'draft',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface QuestionBankUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  subject?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  domain?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  skill?: string;
+  difficulty?: QuestionBankUpdateDifficulty;
+  /**
+     * @maxLength 5000
+     * @nullable
+     */
+  stimulus?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  prompt?: string;
+  choices?: QuestionBankUpdateChoicesItem[];
+  /** @minLength 1 */
+  correctAnswer?: string;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  explanation?: string;
+  /** @items.maxLength 80 */
+  tags?: string[];
+  reviewStatus?: QuestionBankUpdateReviewStatus;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  rejectionReason?: string | null;
+}
+
+export interface AttachQuestionInput {
+  questionId: string;
+  /** @minimum 0 */
+  position?: number;
+  predictionFirst?: boolean;
+}
+
+export type SessionArtifactKind = typeof SessionArtifactKind[keyof typeof SessionArtifactKind];
+
+
+export const SessionArtifactKind = {
+  transcript: 'transcript',
+  report: 'report',
+} as const;
+
+export type SessionArtifactVisibility = typeof SessionArtifactVisibility[keyof typeof SessionArtifactVisibility];
+
+
+export const SessionArtifactVisibility = {
+  course: 'course',
+  tutor: 'tutor',
+} as const;
+
+export type SessionArtifactStatus = typeof SessionArtifactStatus[keyof typeof SessionArtifactStatus];
+
+
+export const SessionArtifactStatus = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export interface SessionArtifact {
+  id: string;
+  sessionId: string;
+  kind: SessionArtifactKind;
+  content: string;
+  visibility: SessionArtifactVisibility;
+  status: SessionArtifactStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SessionArtifactInputKind = typeof SessionArtifactInputKind[keyof typeof SessionArtifactInputKind];
+
+
+export const SessionArtifactInputKind = {
+  transcript: 'transcript',
+  report: 'report',
+} as const;
+
+export type SessionArtifactInputVisibility = typeof SessionArtifactInputVisibility[keyof typeof SessionArtifactInputVisibility];
+
+
+export const SessionArtifactInputVisibility = {
+  course: 'course',
+  tutor: 'tutor',
+} as const;
+
+export type SessionArtifactInputStatus = typeof SessionArtifactInputStatus[keyof typeof SessionArtifactInputStatus];
+
+
+export const SessionArtifactInputStatus = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export interface SessionArtifactInput {
+  kind: SessionArtifactInputKind;
+  /**
+     * @minLength 1
+     * @maxLength 30000
+     */
+  content: string;
+  visibility?: SessionArtifactInputVisibility;
+  status?: SessionArtifactInputStatus;
+}
+
 export type DashboardRecentScoresItem = {
   label: string;
   score: number;
@@ -490,6 +783,11 @@ export type UnauthorizedResponse = Error;
 export type ForbiddenResponse = Error;
 
 /**
+ * Invalid request
+ */
+export type BadRequestResponse = Error;
+
+/**
  * Record not found
  */
 export type NotFoundResponse = Error;
@@ -507,5 +805,23 @@ export const ListAssignmentsStatus = {
   published: 'published',
   completed: 'completed',
   archived: 'archived',
+} as const;
+
+export type ListContentSourcesParams = {
+courseId: string;
+};
+
+export type ListQuestionBankParams = {
+courseId: string;
+reviewStatus?: ListQuestionBankReviewStatus;
+};
+
+export type ListQuestionBankReviewStatus = typeof ListQuestionBankReviewStatus[keyof typeof ListQuestionBankReviewStatus];
+
+
+export const ListQuestionBankReviewStatus = {
+  draft: 'draft',
+  approved: 'approved',
+  rejected: 'rejected',
 } as const;
 

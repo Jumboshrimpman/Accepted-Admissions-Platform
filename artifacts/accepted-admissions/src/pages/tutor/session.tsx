@@ -1,26 +1,267 @@
-import { useState } from "react";
-import { useParams, Link } from "wouter";
-import { useGetSession, useCreateCurriculumBlock, useUpdateCurriculumBlock, getGetSessionQueryKey } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
+import { Link, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  getGetSessionQueryKey,
+  getListContentSourcesQueryKey,
+  getListQuestionBankQueryKey,
+  getListSessionArtifactsQueryKey,
+  type QuestionBankItem,
+  useAttachQuestionToAssignment,
+  useCreateContentSource,
+  useCreateCurriculumBlock,
+  useGeneratePracticeQuestions,
+  useGetSession,
+  useListContentSources,
+  useListQuestionBank,
+  useListSessionArtifacts,
+  useUpdateQuestionBankItem,
+  useUpsertSessionArtifact,
+} from "@workspace/api-client-react";
 import { format, parseISO } from "date-fns";
-import { ChevronRight, Plus, GripVertical, Save, Edit3 } from "lucide-react";
+import {
+  BookOpenCheck,
+  CheckCircle2,
+  ChevronRight,
+  FileInput,
+  FileText,
+  GripVertical,
+  Plus,
+  Save,
+  Sparkles,
+  XCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+
+function QuestionReviewCard({
+  question,
+  assignments,
+  onChanged,
+}: {
+  question: QuestionBankItem;
+  assignments: Array<{ id: string; title: string }>;
+  onChanged: () => void;
+}) {
+  const updateQuestion = useUpdateQuestionBankItem();
+  const attachQuestion = useAttachQuestionToAssignment();
+  const [prompt, setPrompt] = useState(question.prompt);
+  const [skill, setSkill] = useState(question.skill);
+  const [explanation, setExplanation] = useState(question.explanation);
+  const [tags, setTags] = useState(question.tags.join(", "));
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [attachedAssignmentIds, setAttachedAssignmentIds] = useState<string[]>([]);
+
+  const save = (reviewStatus = question.reviewStatus) => {
+    updateQuestion.mutate(
+      {
+        questionId: question.id,
+        data: {
+          prompt,
+          skill,
+          explanation,
+          tags: tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+          reviewStatus,
+          rejectionReason:
+            reviewStatus === "rejected" ? rejectionReason : null,
+        },
+      },
+      { onSuccess: onChanged },
+    );
+  };
+
+  return (
+    <Card className="border-border/70">
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">{question.skill}</CardTitle>
+          <Badge
+            variant={question.reviewStatus === "approved" ? "default" : "outline"}
+          >
+            {question.reviewStatus}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-2">
+          <Label>Prompt</Label>
+          <Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-2">
+            <Label>Skill</Label>
+            <Input value={skill} onChange={(event) => setSkill(event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label>Tags</Label>
+            <Input value={tags} onChange={(event) => setTags(event.target.value)} />
+          </div>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3 text-sm">
+          <p className="mb-2 font-medium">Answer choices</p>
+          <ul className="space-y-1 text-muted-foreground">
+            {question.choices.map((choice) => (
+              <li key={choice.id}>
+                {choice.label}. {choice.text}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs font-medium">
+            Correct answer: {question.correctAnswer.toUpperCase()}
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <Label>Explanation</Label>
+          <Textarea
+            value={explanation}
+            onChange={(event) => setExplanation(event.target.value)}
+          />
+        </div>
+        {question.reviewStatus !== "approved" && (
+          <div className="grid gap-2">
+            <Label>Rejection reason</Label>
+            <Input
+              value={rejectionReason}
+              onChange={(event) => setRejectionReason(event.target.value)}
+              placeholder="Required only when rejecting"
+            />
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => save()}
+            disabled={updateQuestion.isPending}
+          >
+            <Save className="mr-2 h-4 w-4" /> Save edits
+          </Button>
+          <Button
+            onClick={() => save("approved")}
+            disabled={updateQuestion.isPending}
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => save("rejected")}
+            disabled={!rejectionReason.trim() || updateQuestion.isPending}
+          >
+            <XCircle className="mr-2 h-4 w-4" /> Reject
+          </Button>
+        </div>
+        {question.reviewStatus === "approved" && assignments.length > 0 && (
+          <div className="border-t pt-3">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Reuse in this session
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {assignments.map((assignment) => (
+                <Button
+                  key={assignment.id}
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    attachQuestion.isPending ||
+                    attachedAssignmentIds.includes(assignment.id)
+                  }
+                  onClick={() =>
+                    attachQuestion.mutate(
+                      {
+                        assignmentId: assignment.id,
+                        data: { questionId: question.id },
+                      },
+                      {
+                        onSuccess: () =>
+                          setAttachedAssignmentIds((current) => [
+                            ...current,
+                            assignment.id,
+                          ]),
+                      },
+                    )
+                  }
+                >
+                  {attachedAssignmentIds.includes(assignment.id)
+                    ? `Added to ${assignment.title}`
+                    : `Add to ${assignment.title}`}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function TutorSession() {
   const params = useParams();
   const sessionId = params.sessionId as string;
   const queryClient = useQueryClient();
-  
-  const { data: session, isLoading, error } = useGetSession(sessionId, { query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) } });
+  const { data: session, isLoading, error } = useGetSession(sessionId, {
+    query: {
+      enabled: Boolean(sessionId),
+      queryKey: getGetSessionQueryKey(sessionId),
+    },
+  });
+  const courseId = session?.courseId ?? "";
+  const sourceParams = { courseId };
+  const questionParams = { courseId };
+  const { data: sources = [] } = useListContentSources(sourceParams, {
+    query: {
+      enabled: Boolean(courseId),
+      queryKey: getListContentSourcesQueryKey(sourceParams),
+    },
+  });
+  const { data: questions = [] } = useListQuestionBank(questionParams, {
+    query: {
+      enabled: Boolean(courseId),
+      queryKey: getListQuestionBankQueryKey(questionParams),
+    },
+  });
+  const { data: artifacts = [] } = useListSessionArtifacts(sessionId, {
+    query: {
+      enabled: Boolean(sessionId),
+      queryKey: getListSessionArtifactsQueryKey(sessionId),
+    },
+  });
   const createBlock = useCreateCurriculumBlock();
-  const updateBlock = useUpdateCurriculumBlock();
+  const createSource = useCreateContentSource();
+  const generateQuestions = useGeneratePracticeQuestions();
+  const saveArtifact = useUpsertSessionArtifact();
 
   const [addingBlock, setAddingBlock] = useState(false);
   const [newBlockText, setNewBlockText] = useState("");
+  const [sourceTitle, setSourceTitle] = useState("");
+  const [sourceKind, setSourceKind] = useState<"pdf" | "html" | "text">("text");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceText, setSourceText] = useState("");
+  const [authorizationNote, setAuthorizationNote] = useState("");
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [focus, setFocus] = useState("");
+  const [transcript, setTranscript] = useState("");
+  const [report, setReport] = useState("");
+
+  useEffect(() => {
+    if (!selectedSourceId && sources[0]) setSelectedSourceId(sources[0].id);
+  }, [selectedSourceId, sources]);
+
+  useEffect(() => {
+    setTranscript(
+      artifacts.find((artifact) => artifact.kind === "transcript")?.content ?? "",
+    );
+    setReport(
+      artifacts.find((artifact) => artifact.kind === "report")?.content ?? "",
+    );
+  }, [artifacts]);
 
   if (isLoading) {
     return (
@@ -34,113 +275,388 @@ export default function TutorSession() {
 
   if (error || !session) return <div>Session not found</div>;
 
-  const handleAddHeading = () => {
-    if (!newBlockText) return;
-    createBlock.mutate({
-      sessionId,
-      data: {
-        kind: 'heading',
-        visibility: 'student',
-        config: { text: newBlockText },
-        position: session.blocks.length
-      }
-    }, {
-      onSuccess: () => {
-        setAddingBlock(false);
-        setNewBlockText("");
-        queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
-      }
+  const refreshSources = () =>
+    queryClient.invalidateQueries({
+      queryKey: getListContentSourcesQueryKey(sourceParams),
     });
+  const refreshQuestions = () =>
+    queryClient.invalidateQueries({
+      queryKey: getListQuestionBankQueryKey(questionParams),
+    });
+  const refreshArtifacts = () =>
+    queryClient.invalidateQueries({
+      queryKey: getListSessionArtifactsQueryKey(sessionId),
+    });
+
+  const handleAddHeading = () => {
+    if (!newBlockText.trim()) return;
+    createBlock.mutate(
+      {
+        sessionId,
+        data: {
+          kind: "heading",
+          visibility: "student",
+          config: { text: newBlockText },
+          position: session.blocks.length,
+        },
+      },
+      {
+        onSuccess: () => {
+          setAddingBlock(false);
+          setNewBlockText("");
+          queryClient.invalidateQueries({
+            queryKey: getGetSessionQueryKey(sessionId),
+          });
+        },
+      },
+    );
+  };
+
+  const handleImportSource = () => {
+    if (!sourceTitle.trim() || !authorizationNote.trim()) return;
+    createSource.mutate(
+      {
+        data: {
+          courseId,
+          title: sourceTitle,
+          sourceKind,
+          sourceUrl: sourceUrl || null,
+          extractedText: sourceText || null,
+          authorizationNote,
+          provenance: { sessionId },
+        },
+      },
+      {
+        onSuccess: (source) => {
+          setSelectedSourceId(source.id);
+          setSourceTitle("");
+          setSourceUrl("");
+          setSourceText("");
+          setAuthorizationNote("");
+          refreshSources();
+        },
+      },
+    );
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in pb-20">
+    <div className="mx-auto max-w-5xl space-y-8 pb-20 animate-in fade-in">
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Link href="/tutor" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+        <div className="mb-4 flex items-center gap-2">
+          <Link href="/tutor" className="text-sm text-muted-foreground hover:text-primary">
             Dashboard
           </Link>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <Link href={`/tutor/courses/${session.courseId}`} className="text-sm text-muted-foreground hover:text-primary transition-colors">
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <Link
+            href={`/tutor/courses/${session.courseId}`}
+            className="text-sm text-muted-foreground hover:text-primary"
+          >
             Course
           </Link>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Edit Session</span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Manage session</span>
         </div>
-        
-        <div className="flex justify-between items-start">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight mb-2">{session.title}</h1>
-            <p className="text-muted-foreground">{format(parseISO(session.dateTime), "EEEE, MMMM d, yyyy 'at' h:mm a")}</p>
+            <h1 className="mb-2 text-3xl font-bold tracking-tight">{session.title}</h1>
+            <p className="text-muted-foreground">
+              {format(parseISO(session.dateTime), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+            </p>
           </div>
-          <Badge variant="outline" className="text-sm">{session.status}</Badge>
+          <Badge variant="outline">{session.status}</Badge>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b pb-2">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Edit3 className="w-5 h-5 text-primary" />
-            Curriculum Builder
-          </h2>
-          <Button size="sm" onClick={() => setAddingBlock(true)} disabled={addingBlock} className="bg-primary text-primary-foreground">
-            <Plus className="w-4 h-4 mr-2" /> Add Block
-          </Button>
-        </div>
-        
-        <div className="space-y-4">
-          {session.blocks.length > 0 ? (
-            session.blocks.map(block => (
-              <Card key={block.id} className="border border-border/50 group">
-                <CardContent className="p-4 flex gap-4">
-                  <div className="cursor-grab text-muted-foreground/30 hover:text-foreground mt-1">
-                    <GripVertical className="w-5 h-5" />
+      <Tabs defaultValue="practice" className="space-y-6">
+        <TabsList className="grid h-auto w-full grid-cols-3">
+          <TabsTrigger value="practice">Practice studio</TabsTrigger>
+          <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
+          <TabsTrigger value="records">Session records</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="practice" className="space-y-6">
+          <Card className="border-accent/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileInput className="h-5 w-5 text-accent" />
+                Import authorized source
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Register provenance for PDF, HTML, or text you are authorized to use.
+                Source text stays in the tutor workspace and is never returned in
+                student assignment responses.
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-[1fr_150px]">
+                <div className="grid gap-2">
+                  <Label>Source title</Label>
+                  <Input
+                    value={sourceTitle}
+                    onChange={(event) => setSourceTitle(event.target.value)}
+                    placeholder="Lesson notes — evidence and inference"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Format</Label>
+                  <select
+                    value={sourceKind}
+                    onChange={(event) =>
+                      setSourceKind(event.target.value as "pdf" | "html" | "text")
+                    }
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="text">Text</option>
+                    <option value="pdf">PDF</option>
+                    <option value="html">HTML</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label>Source URL (optional)</Label>
+                <Input
+                  value={sourceUrl}
+                  onChange={(event) => setSourceUrl(event.target.value)}
+                  placeholder="https://…"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Authorized extracted text (optional when a URL is supplied)</Label>
+                <Textarea
+                  value={sourceText}
+                  onChange={(event) => setSourceText(event.target.value)}
+                  placeholder="Paste text extracted from material you are permitted to use."
+                  className="min-h-28"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Authorization and provenance note</Label>
+                <Textarea
+                  value={authorizationNote}
+                  onChange={(event) => setAuthorizationNote(event.target.value)}
+                  placeholder="Example: Tutor-created handout, owned by Accepted Admissions."
+                />
+              </div>
+              <Button
+                className="w-fit"
+                onClick={handleImportSource}
+                disabled={
+                  createSource.isPending ||
+                  !sourceTitle.trim() ||
+                  !authorizationNote.trim() ||
+                  (!sourceUrl.trim() && !sourceText.trim())
+                }
+              >
+                {createSource.isPending ? "Importing…" : "Import source"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-accent" />
+                Generate original practice drafts
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Generation uses your learning objective, not copied source passages.
+                Every item remains a draft until a tutor approves it.
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-[220px_1fr_auto]">
+              <select
+                value={selectedSourceId}
+                onChange={(event) => setSelectedSourceId(event.target.value)}
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">Select a source</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.title}
+                  </option>
+                ))}
+              </select>
+              <Input
+                value={focus}
+                onChange={(event) => setFocus(event.target.value)}
+                placeholder="Learning objective, e.g. distinguish evidence from inference"
+              />
+              <Button
+                disabled={
+                  !selectedSourceId ||
+                  focus.trim().length < 3 ||
+                  generateQuestions.isPending
+                }
+                onClick={() =>
+                  generateQuestions.mutate(
+                    {
+                      sourceId: selectedSourceId,
+                      data: { focus, count: 3, difficulty: "medium" },
+                    },
+                    { onSuccess: refreshQuestions },
+                  )
+                }
+              >
+                {generateQuestions.isPending ? "Generating…" : "Create drafts"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <section className="space-y-4">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h2 className="flex items-center gap-2 text-2xl font-bold">
+                <BookOpenCheck className="h-5 w-5 text-primary" />
+                Tutor review
+              </h2>
+              <Badge variant="secondary">{questions.length} reusable items</Badge>
+            </div>
+            {questions.length > 0 ? (
+              questions.map((question) => (
+                <QuestionReviewCard
+                  key={question.id}
+                  question={question}
+                  assignments={session.assignments}
+                  onChanged={refreshQuestions}
+                />
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+                Import a source and create drafts to begin the tutor review queue.
+              </div>
+            )}
+          </section>
+        </TabsContent>
+
+        <TabsContent value="curriculum" className="space-y-4">
+          <div className="flex items-center justify-between border-b pb-2">
+            <h2 className="text-2xl font-bold">Curriculum builder</h2>
+            <Button size="sm" onClick={() => setAddingBlock(true)} disabled={addingBlock}>
+              <Plus className="mr-2 h-4 w-4" /> Add block
+            </Button>
+          </div>
+          {session.blocks.map((block) => (
+            <Card key={block.id}>
+              <CardContent className="flex gap-4 p-4">
+                <GripVertical className="mt-1 h-5 w-5 text-muted-foreground/40" />
+                <div className="flex-1">
+                  <div className="mb-2 flex justify-between">
+                    <Badge variant="secondary">{block.kind}</Badge>
+                    <Badge variant="outline">{block.visibility}</Badge>
                   </div>
-                  <div className="flex-1 space-y-2">
-                    <div className="flex justify-between items-start">
-                      <Badge variant="secondary" className="text-xs uppercase tracking-wider">{block.kind}</Badge>
-                      <Badge variant="outline" className="text-[10px]">{block.visibility}</Badge>
-                    </div>
-                    {block.kind === 'heading' && (
-                      <h3 className="text-lg font-bold">{String(block.config.text || '')}</h3>
-                    )}
-                    {block.kind === 'rich_text' && (
-                      <div className="text-muted-foreground line-clamp-2 text-sm whitespace-pre-wrap">{String(block.config.html || '')}</div>
-                    )}
-                    {block.kind !== 'heading' && block.kind !== 'rich_text' && (
-                      <p className="text-sm text-muted-foreground italic">Config: {JSON.stringify(block.config)}</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <div className="text-center py-12 border border-dashed rounded-xl bg-muted/10 text-muted-foreground">
-              No curriculum blocks yet. Start building!
+                  <p className="text-sm text-muted-foreground">
+                    {block.kind === "heading"
+                      ? String(block.config.text ?? "")
+                      : JSON.stringify(block.config)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {session.blocks.length === 0 && (
+            <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+              No curriculum blocks yet.
             </div>
           )}
-
           {addingBlock && (
-            <Card className="border-accent shadow-md">
-              <CardContent className="p-4 space-y-4">
-                <h3 className="font-semibold text-accent">New Heading Block</h3>
-                <Textarea 
-                  placeholder="Enter heading text..." 
+            <Card className="border-accent">
+              <CardContent className="space-y-4 p-4">
+                <Textarea
                   value={newBlockText}
-                  onChange={e => setNewBlockText(e.target.value)}
-                  className="resize-none"
+                  onChange={(event) => setNewBlockText(event.target.value)}
+                  placeholder="Heading text"
                 />
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setAddingBlock(false)}>Cancel</Button>
-                  <Button onClick={handleAddHeading} disabled={!newBlockText || createBlock.isPending} className="bg-accent text-white hover:bg-accent/90">
-                    <Save className="w-4 h-4 mr-2" /> {createBlock.isPending ? "Saving..." : "Save Block"}
+                  <Button variant="ghost" onClick={() => setAddingBlock(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleAddHeading}
+                    disabled={!newBlockText.trim() || createBlock.isPending}
+                  >
+                    <Save className="mr-2 h-4 w-4" /> Save block
                   </Button>
                 </div>
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="records" className="grid gap-6 md:grid-cols-2">
+          {(
+            [
+              ["transcript", "Transcript", transcript, setTranscript],
+              ["report", "Post-session report", report, setReport],
+            ] as const
+          ).map(([kind, title, content, setContent]) => (
+            <Card key={kind}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  {title}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Course visibility is enforced by membership on the server.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  className="min-h-64"
+                  placeholder={`Write the ${title.toLowerCase()}…`}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={kind === "report" ? "outline" : "default"}
+                    disabled={!content.trim() || saveArtifact.isPending}
+                    onClick={() =>
+                      saveArtifact.mutate(
+                        {
+                          sessionId,
+                          data: {
+                            kind,
+                            content,
+                            visibility: "tutor",
+                            status: "draft",
+                          },
+                        },
+                        { onSuccess: refreshArtifacts },
+                      )
+                    }
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {kind === "transcript"
+                      ? "Save private transcript"
+                      : "Save private draft"}
+                  </Button>
+                  {kind === "report" && (
+                    <Button
+                      disabled={!content.trim() || saveArtifact.isPending}
+                      onClick={() =>
+                        saveArtifact.mutate(
+                          {
+                            sessionId,
+                            data: {
+                              kind: "report",
+                              content,
+                              visibility: "course",
+                              status: "published",
+                            },
+                          },
+                          { onSuccess: refreshArtifacts },
+                        )
+                      }
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Publish to course
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

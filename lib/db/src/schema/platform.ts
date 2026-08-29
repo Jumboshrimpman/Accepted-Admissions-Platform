@@ -129,8 +129,30 @@ export const questionsTable = pgTable("questions", {
   correctAnswer: text("correct_answer").notNull(),
   explanation: text("explanation").notNull(),
   sourceType: text("source_type").notNull().default("original"),
+  sourceId: uuid("source_id").references(() => contentSourcesTable.id),
   reviewStatus: text("review_status").notNull().default("reviewed"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  generationMethod: text("generation_method").notNull().default("tutor-authored"),
+  reviewedBy: uuid("reviewed_by").references(() => usersTable.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const contentSourcesTable = pgTable("content_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  courseId: uuid("course_id").notNull().references(() => coursesTable.id),
+  importedBy: uuid("imported_by").notNull().references(() => usersTable.id),
+  title: text("title").notNull(),
+  sourceKind: text("source_kind").notNull(),
+  sourceUrl: text("source_url"),
+  originalFilename: text("original_filename"),
+  authorizationNote: text("authorization_note").notNull(),
+  extractedText: text("extracted_text"),
+  provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull().default({}),
+  status: text("status").notNull().default("imported"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const assignmentQuestionsTable = pgTable(
@@ -200,6 +222,24 @@ export const reviewQueueTable = pgTable("review_queue_items", {
   tutorNote: text("tutor_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const sessionArtifactsTable = pgTable(
+  "session_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => sessionsTable.id),
+    createdBy: uuid("created_by").notNull().references(() => usersTable.id),
+    kind: text("kind").notNull(),
+    content: text("content").notNull(),
+    visibility: text("visibility").notNull().default("tutor"),
+    status: text("status").notNull().default("draft"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("session_artifact_kind_unique_idx").on(table.sessionId, table.kind),
+  ],
+);
 
 export const auditLogsTable = pgTable("audit_logs", {
   id: uuid("id").primaryKey().defaultRandom(),

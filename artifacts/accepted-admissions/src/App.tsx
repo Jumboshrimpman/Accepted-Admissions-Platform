@@ -43,6 +43,39 @@ function Router() {
           </div>
         </Route>
 
+        <Route path="/portal/courses/:courseId">
+          <SignedIn>
+            <Shell>
+              <PortalCourse />
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/sign-in" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/portal/courses/:courseId/sessions/:sessionId">
+          <SignedIn>
+            <Shell>
+              <PortalSession />
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/sign-in" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/portal/assignments/:assignmentId">
+          <SignedIn>
+            <Shell>
+              <PortalAssignment />
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/sign-in" />
+          </SignedOut>
+        </Route>
+
         <Route path="/portal*">
           <SignedIn>
             <Shell>
@@ -53,6 +86,28 @@ function Router() {
                 <Route path="/portal/assignments/:assignmentId" component={PortalAssignment} />
                 <Route component={NotFound} />
               </Switch>
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/sign-in" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/tutor/courses/:courseId">
+          <SignedIn>
+            <Shell>
+              <TutorCourse />
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/sign-in" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/tutor/sessions/:sessionId">
+          <SignedIn>
+            <Shell>
+              <TutorSession />
             </Shell>
           </SignedIn>
           <SignedOut>

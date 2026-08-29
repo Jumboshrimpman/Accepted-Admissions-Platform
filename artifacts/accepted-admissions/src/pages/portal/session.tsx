@@ -1,5 +1,10 @@
 import { useParams, Link } from "wouter";
-import { useGetSession, getGetSessionQueryKey } from "@workspace/api-client-react";
+import {
+  useGetSession,
+  getGetSessionQueryKey,
+  getListSessionArtifactsQueryKey,
+  useListSessionArtifacts,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +66,12 @@ export default function PortalSession() {
   const courseId = params.courseId as string;
   const sessionId = params.sessionId as string;
   const { data: session, isLoading, error } = useGetSession(sessionId, { query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) } });
+  const { data: artifacts = [] } = useListSessionArtifacts(sessionId, {
+    query: {
+      enabled: Boolean(sessionId),
+      queryKey: getListSessionArtifactsQueryKey(sessionId),
+    },
+  });
 
   if (isLoading) {
     return (
@@ -168,6 +179,23 @@ export default function PortalSession() {
               </CardContent>
             </Card>
           )}
+
+          {artifacts.map((artifact) => (
+            <Card key={artifact.id} className="bg-secondary/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">
+                  {artifact.kind === "report"
+                    ? "Post-session report"
+                    : "Session transcript"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {artifact.content}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     </div>

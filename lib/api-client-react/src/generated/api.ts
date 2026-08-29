@@ -22,11 +22,15 @@ import type {
 import type {
   AssignmentDetail,
   AssignmentSummary,
+  AttachQuestionInput,
   Attempt,
   AttemptResponse,
   AttemptResponseInput,
   AttemptResult,
   AttemptSubmission,
+  BadRequestResponse,
+  ContentSource,
+  ContentSourceInput,
   Course,
   CourseDetail,
   CurrentUser,
@@ -36,11 +40,18 @@ import type {
   Dashboard,
   Error,
   ForbiddenResponse,
+  GenerateQuestionsInput,
   HealthStatus,
   ListAssignmentsParams,
+  ListContentSourcesParams,
+  ListQuestionBankParams,
   NotFoundResponse,
+  QuestionBankItem,
+  QuestionBankUpdate,
   ReviewQueueItem,
   ReviewQueueUpdate,
+  SessionArtifact,
+  SessionArtifactInput,
   SessionDetail,
   UnauthorizedResponse
 } from './api.schemas';
@@ -1421,5 +1432,609 @@ export const useUpdateReviewQueueItem = <TError = ErrorType<UnauthorizedResponse
         TContext
       > => {
       return useMutation(getUpdateReviewQueueItemMutationOptions(options));
+    }
+
+export const getListContentSourcesUrl = (params: ListContentSourcesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/content-sources?${stringifiedParams}` : `/api/content-sources`
+}
+
+/**
+ * @summary List authorized lesson sources visible to tutors
+ */
+export const listContentSources = async (params: ListContentSourcesParams, options?: Parameters<typeof customFetch>[1]): Promise<ContentSource[]> => {
+
+  return customFetch<ContentSource[]>(getListContentSourcesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContentSourcesQueryKey = (params?: ListContentSourcesParams,) => {
+    return [
+    `/api/content-sources`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListContentSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listContentSources>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params: ListContentSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContentSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContentSourcesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContentSources>>> = ({ signal }) => listContentSources(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContentSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContentSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listContentSources>>>
+export type ListContentSourcesQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List authorized lesson sources visible to tutors
+ */
+
+export function useListContentSources<TData = Awaited<ReturnType<typeof listContentSources>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params: ListContentSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContentSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContentSourcesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContentSourceUrl = () => {
+
+
+
+
+  return `/api/content-sources`
+}
+
+/**
+ * @summary Register an authorized PDF, HTML, or text lesson source
+ */
+export const createContentSource = async (contentSourceInput: ContentSourceInput, options?: Parameters<typeof customFetch>[1]): Promise<ContentSource> => {
+
+  return customFetch<ContentSource>(getCreateContentSourceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(contentSourceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContentSourceMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContentSource>>, TError,{data: BodyType<ContentSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContentSource>>, TError,{data: BodyType<ContentSourceInput>}, TContext> => {
+
+const mutationKey = ['createContentSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContentSource>>, {data: BodyType<ContentSourceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContentSource(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContentSourceMutationResult = NonNullable<Awaited<ReturnType<typeof createContentSource>>>
+    export type CreateContentSourceMutationBody = BodyType<ContentSourceInput>
+    export type CreateContentSourceMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+
+    /**
+ * @summary Register an authorized PDF, HTML, or text lesson source
+ */
+export const useCreateContentSource = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContentSource>>, TError,{data: BodyType<ContentSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContentSource>>,
+        TError,
+        {data: BodyType<ContentSourceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateContentSourceMutationOptions(options));
+    }
+
+export const getGeneratePracticeQuestionsUrl = (sourceId: string,) => {
+
+
+
+
+  return `/api/content-sources/${sourceId}/generate`
+}
+
+/**
+ * @summary Generate original draft questions from an authorized source
+ */
+export const generatePracticeQuestions = async (sourceId: string,
+    generateQuestionsInput: GenerateQuestionsInput, options?: Parameters<typeof customFetch>[1]): Promise<QuestionBankItem[]> => {
+
+  return customFetch<QuestionBankItem[]>(getGeneratePracticeQuestionsUrl(sourceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(generateQuestionsInput)
+  }
+);}
+
+
+
+
+
+export const getGeneratePracticeQuestionsMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePracticeQuestions>>, TError,{sourceId: string;data: BodyType<GenerateQuestionsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generatePracticeQuestions>>, TError,{sourceId: string;data: BodyType<GenerateQuestionsInput>}, TContext> => {
+
+const mutationKey = ['generatePracticeQuestions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generatePracticeQuestions>>, {sourceId: string;data: BodyType<GenerateQuestionsInput>}> = (props) => {
+          const {sourceId,data} = props ?? {};
+
+          return  generatePracticeQuestions(sourceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GeneratePracticeQuestionsMutationResult = NonNullable<Awaited<ReturnType<typeof generatePracticeQuestions>>>
+    export type GeneratePracticeQuestionsMutationBody = BodyType<GenerateQuestionsInput>
+    export type GeneratePracticeQuestionsMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Generate original draft questions from an authorized source
+ */
+export const useGeneratePracticeQuestions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePracticeQuestions>>, TError,{sourceId: string;data: BodyType<GenerateQuestionsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generatePracticeQuestions>>,
+        TError,
+        {sourceId: string;data: BodyType<GenerateQuestionsInput>},
+        TContext
+      > => {
+      return useMutation(getGeneratePracticeQuestionsMutationOptions(options));
+    }
+
+export const getListQuestionBankUrl = (params: ListQuestionBankParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/question-bank?${stringifiedParams}` : `/api/question-bank`
+}
+
+/**
+ * @summary List tutor-visible reusable practice questions
+ */
+export const listQuestionBank = async (params: ListQuestionBankParams, options?: Parameters<typeof customFetch>[1]): Promise<QuestionBankItem[]> => {
+
+  return customFetch<QuestionBankItem[]>(getListQuestionBankUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListQuestionBankQueryKey = (params?: ListQuestionBankParams,) => {
+    return [
+    `/api/question-bank`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListQuestionBankQueryOptions = <TData = Awaited<ReturnType<typeof listQuestionBank>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params: ListQuestionBankParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listQuestionBank>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListQuestionBankQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listQuestionBank>>> = ({ signal }) => listQuestionBank(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listQuestionBank>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListQuestionBankQueryResult = NonNullable<Awaited<ReturnType<typeof listQuestionBank>>>
+export type ListQuestionBankQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List tutor-visible reusable practice questions
+ */
+
+export function useListQuestionBank<TData = Awaited<ReturnType<typeof listQuestionBank>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params: ListQuestionBankParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listQuestionBank>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListQuestionBankQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateQuestionBankItemUrl = (questionId: string,) => {
+
+
+
+
+  return `/api/question-bank/${questionId}`
+}
+
+/**
+ * @summary Edit, tag, approve, or reject a reusable question
+ */
+export const updateQuestionBankItem = async (questionId: string,
+    questionBankUpdate: QuestionBankUpdate, options?: Parameters<typeof customFetch>[1]): Promise<QuestionBankItem> => {
+
+  return customFetch<QuestionBankItem>(getUpdateQuestionBankItemUrl(questionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(questionBankUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateQuestionBankItemMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQuestionBankItem>>, TError,{questionId: string;data: BodyType<QuestionBankUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateQuestionBankItem>>, TError,{questionId: string;data: BodyType<QuestionBankUpdate>}, TContext> => {
+
+const mutationKey = ['updateQuestionBankItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateQuestionBankItem>>, {questionId: string;data: BodyType<QuestionBankUpdate>}> = (props) => {
+          const {questionId,data} = props ?? {};
+
+          return  updateQuestionBankItem(questionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateQuestionBankItemMutationResult = NonNullable<Awaited<ReturnType<typeof updateQuestionBankItem>>>
+    export type UpdateQuestionBankItemMutationBody = BodyType<QuestionBankUpdate>
+    export type UpdateQuestionBankItemMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Edit, tag, approve, or reject a reusable question
+ */
+export const useUpdateQuestionBankItem = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQuestionBankItem>>, TError,{questionId: string;data: BodyType<QuestionBankUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateQuestionBankItem>>,
+        TError,
+        {questionId: string;data: BodyType<QuestionBankUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateQuestionBankItemMutationOptions(options));
+    }
+
+export const getAttachQuestionToAssignmentUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/assignments/${assignmentId}/questions`
+}
+
+/**
+ * @summary Attach an approved question to an assignment
+ */
+export const attachQuestionToAssignment = async (assignmentId: string,
+    attachQuestionInput: AttachQuestionInput, options?: Parameters<typeof customFetch>[1]): Promise<QuestionBankItem> => {
+
+  return customFetch<QuestionBankItem>(getAttachQuestionToAssignmentUrl(assignmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attachQuestionInput)
+  }
+);}
+
+
+
+
+
+export const getAttachQuestionToAssignmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachQuestionToAssignment>>, TError,{assignmentId: string;data: BodyType<AttachQuestionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof attachQuestionToAssignment>>, TError,{assignmentId: string;data: BodyType<AttachQuestionInput>}, TContext> => {
+
+const mutationKey = ['attachQuestionToAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof attachQuestionToAssignment>>, {assignmentId: string;data: BodyType<AttachQuestionInput>}> = (props) => {
+          const {assignmentId,data} = props ?? {};
+
+          return  attachQuestionToAssignment(assignmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AttachQuestionToAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof attachQuestionToAssignment>>>
+    export type AttachQuestionToAssignmentMutationBody = BodyType<AttachQuestionInput>
+    export type AttachQuestionToAssignmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Attach an approved question to an assignment
+ */
+export const useAttachQuestionToAssignment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachQuestionToAssignment>>, TError,{assignmentId: string;data: BodyType<AttachQuestionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof attachQuestionToAssignment>>,
+        TError,
+        {assignmentId: string;data: BodyType<AttachQuestionInput>},
+        TContext
+      > => {
+      return useMutation(getAttachQuestionToAssignmentMutationOptions(options));
+    }
+
+export const getListSessionArtifactsUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/artifacts`
+}
+
+/**
+ * @summary List authorized transcript and post-session report artifacts
+ */
+export const listSessionArtifacts = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<SessionArtifact[]> => {
+
+  return customFetch<SessionArtifact[]>(getListSessionArtifactsUrl(sessionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSessionArtifactsQueryKey = (sessionId: string,) => {
+    return [
+    `/api/sessions/${sessionId}/artifacts`
+    ] as const;
+    }
+
+
+export const getListSessionArtifactsQueryOptions = <TData = Awaited<ReturnType<typeof listSessionArtifacts>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(sessionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessionArtifacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSessionArtifactsQueryKey(sessionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSessionArtifacts>>> = ({ signal }) => listSessionArtifacts(sessionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: sessionId !== null && sessionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSessionArtifacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSessionArtifactsQueryResult = NonNullable<Awaited<ReturnType<typeof listSessionArtifacts>>>
+export type ListSessionArtifactsQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+/**
+ * @summary List authorized transcript and post-session report artifacts
+ */
+
+export function useListSessionArtifacts<TData = Awaited<ReturnType<typeof listSessionArtifacts>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ sessionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSessionArtifacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSessionArtifactsQueryOptions(sessionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertSessionArtifactUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/artifacts`
+}
+
+/**
+ * @summary Store or update a transcript or post-session report
+ */
+export const upsertSessionArtifact = async (sessionId: string,
+    sessionArtifactInput: SessionArtifactInput, options?: Parameters<typeof customFetch>[1]): Promise<SessionArtifact> => {
+
+  return customFetch<SessionArtifact>(getUpsertSessionArtifactUrl(sessionId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sessionArtifactInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertSessionArtifactMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSessionArtifact>>, TError,{sessionId: string;data: BodyType<SessionArtifactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertSessionArtifact>>, TError,{sessionId: string;data: BodyType<SessionArtifactInput>}, TContext> => {
+
+const mutationKey = ['upsertSessionArtifact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertSessionArtifact>>, {sessionId: string;data: BodyType<SessionArtifactInput>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  upsertSessionArtifact(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertSessionArtifactMutationResult = NonNullable<Awaited<ReturnType<typeof upsertSessionArtifact>>>
+    export type UpsertSessionArtifactMutationBody = BodyType<SessionArtifactInput>
+    export type UpsertSessionArtifactMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Store or update a transcript or post-session report
+ */
+export const useUpsertSessionArtifact = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertSessionArtifact>>, TError,{sessionId: string;data: BodyType<SessionArtifactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertSessionArtifact>>,
+        TError,
+        {sessionId: string;data: BodyType<SessionArtifactInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertSessionArtifactMutationOptions(options));
     }
 
