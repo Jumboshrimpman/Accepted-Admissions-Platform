@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Accepted Admissions learning platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authenticated profile operations
+  - name: portal
+    description: Student and tutor portal reads
+  - name: curriculum
+    description: Curriculum authoring and session content
+  - name: assignments
+    description: Homework assignment and attempt operations
+  - name: review
+    description: Tutor review and feedback operations
 paths:
   /healthz:
     get:
@@ -24,7 +34,415 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the signed-in application user
+      responses:
+        "200":
+          description: Current user and role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [portal]
+      summary: Get the signed-in user's dashboard
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /courses:
+    get:
+      operationId: listCourses
+      tags: [portal]
+      summary: List courses visible to the signed-in user
+      responses:
+        "200":
+          description: Visible courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /courses/{courseId}:
+    get:
+      operationId: getCourse
+      tags: [portal]
+      summary: Get a visible course and its sessions
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      responses:
+        "200":
+          description: Course detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /sessions/{sessionId}:
+    get:
+      operationId: getSession
+      tags: [portal]
+      summary: Get a session visible to the signed-in user
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /sessions/{sessionId}/blocks:
+    post:
+      operationId: createCurriculumBlock
+      tags: [curriculum]
+      summary: Add a block to an editable session
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CurriculumBlockInput"
+      responses:
+        "201":
+          description: Created block
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurriculumBlock"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /blocks/{blockId}:
+    patch:
+      operationId: updateCurriculumBlock
+      tags: [curriculum]
+      summary: Update a curriculum block
+      parameters:
+        - $ref: "#/components/parameters/BlockId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CurriculumBlockUpdate"
+      responses:
+        "200":
+          description: Updated block
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurriculumBlock"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /assignments:
+    get:
+      operationId: listAssignments
+      tags: [assignments]
+      summary: List assignments visible to the signed-in user
+      parameters:
+        - name: courseId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, published, completed, archived]
+      responses:
+        "200":
+          description: Visible assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssignmentSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /assignments/{assignmentId}:
+    get:
+      operationId: getAssignment
+      tags: [assignments]
+      summary: Get assignment instructions and safe question content
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          description: Assignment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /assignments/{assignmentId}/attempts:
+    post:
+      operationId: startAttempt
+      tags: [assignments]
+      summary: Start or resume the current attempt
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "201":
+          description: Active attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attempt"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Attempt limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /attempts/{attemptId}:
+    get:
+      operationId: getAttempt
+      tags: [assignments]
+      summary: Get the current attempt state
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      responses:
+        "200":
+          description: Attempt state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attempt"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /attempts/{attemptId}/responses:
+    put:
+      operationId: saveAttemptResponse
+      tags: [assignments]
+      summary: Autosave a response or Prediction First prediction
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttemptResponseInput"
+      responses:
+        "200":
+          description: Saved response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttemptResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Attempt is paused, submitted, or prediction is locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /attempts/{attemptId}/pause:
+    post:
+      operationId: pauseAttempt
+      tags: [assignments]
+      summary: Pause an active attempt
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      responses:
+        "200":
+          description: Paused attempt state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attempt"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Attempt is not active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /attempts/{attemptId}/resume:
+    post:
+      operationId: resumeAttempt
+      tags: [assignments]
+      summary: Resume a paused attempt
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      responses:
+        "200":
+          description: Active attempt state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attempt"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Attempt is not paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /attempts/{attemptId}/submit:
+    post:
+      operationId: submitAttempt
+      tags: [assignments]
+      summary: Submit and grade an attempt
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttemptSubmission"
+      responses:
+        "200":
+          description: Graded attempt result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttemptResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Attempt cannot be submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /review-queue:
+    get:
+      operationId: listReviewQueue
+      tags: [review]
+      summary: List assigned tutor review items
+      responses:
+        "200":
+          description: Review queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReviewQueueItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /review-queue/{itemId}:
+    patch:
+      operationId: updateReviewQueueItem
+      tags: [review]
+      summary: Add tutor review notes or resolve a review item
+      parameters:
+        - $ref: "#/components/parameters/ReviewItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewQueueUpdate"
+      responses:
+        "200":
+          description: Updated review item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewQueueItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
+  parameters:
+    CourseId:
+      name: courseId
+      in: path
+      required: true
+      schema: { type: string }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string }
+    BlockId:
+      name: blockId
+      in: path
+      required: true
+      schema: { type: string }
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema: { type: string }
+    AttemptId:
+      name: attemptId
+      in: path
+      required: true
+      schema: { type: string }
+    ReviewItemId:
+      name: itemId
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Insufficient permission
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Record not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +451,305 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Role:
+      type: string
+      enum: [administrator, tutor, student]
+    CurrentUser:
+      type: object
+      required: [id, displayName, email, role]
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        avatarUrl: { type: ["string", "null"] }
+    Tutor:
+      type: object
+      required: [id, name, specialty]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        specialty: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+    Course:
+      type: object
+      required: [id, title, subject, term, status, sessionCount]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        subject: { type: string }
+        term: { type: string }
+        status: { type: string, enum: [draft, active, completed, archived] }
+        sessionCount: { type: number }
+        completedSessionCount: { type: number }
+        tutors:
+          type: array
+          items: { $ref: "#/components/schemas/Tutor" }
+    Session:
+      type: object
+      required: [id, courseId, dateTime, timezone, subject, title, status]
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        dateTime: { type: string, format: date-time }
+        timezone: { type: string }
+        subject: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [draft, published, completed, archived] }
+        tutor:
+          oneOf:
+            - $ref: "#/components/schemas/Tutor"
+            - type: "null"
+        hasHomework: { type: boolean }
+        hasReport: { type: boolean }
+    CourseDetail:
+      allOf:
+        - $ref: "#/components/schemas/Course"
+        - type: object
+          required: [sessions]
+          properties:
+            meetUrl: { type: ["string", "null"] }
+            driveUrl: { type: ["string", "null"] }
+            goalSummary: { type: ["string", "null"] }
+            sessions:
+              type: array
+              items: { $ref: "#/components/schemas/Session" }
+    CurriculumBlock:
+      type: object
+      required: [id, sessionId, kind, position, visibility, status, config]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        kind:
+          type: string
+          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
+        position: { type: number }
+        visibility: { type: string, enum: [student, tutor, both] }
+        status: { type: string, enum: [draft, published, archived] }
+        config:
+          type: object
+          additionalProperties: true
+    CurriculumBlockInput:
+      type: object
+      required: [kind, visibility, config]
+      properties:
+        kind:
+          type: string
+          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
+        visibility: { type: string, enum: [student, tutor, both] }
+        position: { type: number, minimum: 0 }
+        config:
+          type: object
+          additionalProperties: true
+    CurriculumBlockUpdate:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
+        visibility: { type: string, enum: [student, tutor, both] }
+        position: { type: number, minimum: 0 }
+        status: { type: string, enum: [draft, published, archived] }
+        config:
+          type: object
+          additionalProperties: true
+    SessionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Session"
+        - type: object
+          required: [blocks, assignments]
+          properties:
+            blocks:
+              type: array
+              items: { $ref: "#/components/schemas/CurriculumBlock" }
+            assignments:
+              type: array
+              items: { $ref: "#/components/schemas/AssignmentSummary" }
+            studentNotes: { type: ["string", "null"] }
+            tutorNotes: { type: ["string", "null"] }
+            postSessionReportId: { type: ["string", "null"] }
+    AssignmentSummary:
+      type: object
+      required: [id, title, subject, status, questionCount, timeLimitMinutes, attemptCount, maxAttempts]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        subject: { type: string }
+        status: { type: string, enum: [draft, published, completed, archived] }
+        deadline: { type: ["string", "null"], format: date-time }
+        questionCount: { type: number }
+        timeLimitMinutes: { type: number }
+        attemptCount: { type: number }
+        maxAttempts: { type: number }
+        latestScore: { type: ["number", "null"] }
+    AssignmentQuestion:
+      type: object
+      required: [id, position, subject, questionType, prompt, skill, difficulty, predictionFirst]
+      properties:
+        id: { type: string }
+        position: { type: number }
+        subject: { type: string }
+        questionType: { type: string }
+        prompt: { type: string }
+        stimulus: { type: ["string", "null"] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        skill: { type: string }
+        difficulty: { type: string, enum: [foundational, medium, hard] }
+        predictionFirst: { type: boolean }
+    AssignmentDetail:
+      allOf:
+        - $ref: "#/components/schemas/AssignmentSummary"
+        - type: object
+          required: [instructions, questions]
+          properties:
+            instructions: { type: string }
+            questions:
+              type: array
+              items: { $ref: "#/components/schemas/AssignmentQuestion" }
+    AttemptResponse:
+      type: object
+      required: [questionId, prediction, predictionLocked, finalAnswer, flagged]
+      properties:
+        questionId: { type: string }
+        prediction: { type: ["string", "null"] }
+        predictionLocked: { type: boolean }
+        finalAnswer: { type: ["string", "null"] }
+        flagged: { type: boolean }
+        savedAt: { type: string, format: date-time }
+    AttemptResponseInput:
+      type: object
+      required: [questionId]
+      properties:
+        questionId: { type: string }
+        prediction: { type: ["string", "null"], maxLength: 2000 }
+        lockPrediction: { type: boolean }
+        finalAnswer: { type: ["string", "null"], maxLength: 2000 }
+        flagged: { type: boolean }
+        timeSpentSeconds: { type: number, minimum: 0 }
+    TimerEvent:
+      type: object
+      required: [type, at]
+      properties:
+        type: { type: string, enum: [started, paused, resumed, submitted] }
+        at: { type: string, format: date-time }
+    Attempt:
+      type: object
+      required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, responses]
+      properties:
+        id: { type: string }
+        assignmentId: { type: string }
+        status: { type: string, enum: [active, paused, submitted, expired] }
+        startedAt: { type: string, format: date-time }
+        activeSeconds: { type: number }
+        pausedSeconds: { type: number }
+        pauseCount: { type: number }
+        responses:
+          type: array
+          items: { $ref: "#/components/schemas/AttemptResponse" }
+        timerEvents:
+          type: array
+          items: { $ref: "#/components/schemas/TimerEvent" }
+    AttemptSubmission:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { type: boolean }
+    ScoreBreakdown:
+      type: object
+      required: [skill, correct, total]
+      properties:
+        skill: { type: string }
+        correct: { type: number }
+        total: { type: number }
+        accuracy: { type: number }
+    AttemptResultItem:
+      type: object
+      required: [questionId, correct, finalAnswer, correctAnswer, explanation, skill, flagged]
+      properties:
+        questionId: { type: string }
+        correct: { type: boolean }
+        prediction: { type: ["string", "null"] }
+        finalAnswer: { type: ["string", "null"] }
+        correctAnswer: { type: string }
+        explanation: { type: string }
+        skill: { type: string }
+        questionType: { type: string }
+        difficulty: { type: string }
+        timeSpentSeconds: { type: number }
+        flagged: { type: boolean }
+    AttemptResult:
+      type: object
+      required: [attemptId, score, correctCount, totalCount, activeSeconds, pausedSeconds, breakdown, items]
+      properties:
+        attemptId: { type: string }
+        score: { type: number }
+        correctCount: { type: number }
+        totalCount: { type: number }
+        activeSeconds: { type: number }
+        pausedSeconds: { type: number }
+        breakdown:
+          type: array
+          items: { $ref: "#/components/schemas/ScoreBreakdown" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AttemptResultItem" }
+    ReviewQueueItem:
+      type: object
+      required: [id, attemptId, questionId, studentName, skill, reason, status]
+      properties:
+        id: { type: string }
+        attemptId: { type: string }
+        questionId: { type: string }
+        studentName: { type: string }
+        skill: { type: string }
+        reason: { type: string }
+        prediction: { type: ["string", "null"] }
+        finalAnswer: { type: ["string", "null"] }
+        status: { type: string, enum: [open, reviewed, archived] }
+        tutorNote: { type: ["string", "null"] }
+    ReviewQueueUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [open, reviewed, archived] }
+        tutorNote: { type: ["string", "null"], maxLength: 5000 }
+    Dashboard:
+      type: object
+      required: [user, courses, upcomingSessions, assignments, recentScores, reviewSkills]
+      properties:
+        user: { $ref: "#/components/schemas/CurrentUser" }
+        welcomeMessage: { type: string }
+        courses:
+          type: array
+          items: { $ref: "#/components/schemas/Course" }
+        upcomingSessions:
+          type: array
+          items: { $ref: "#/components/schemas/Session" }
+        assignments:
+          type: array
+          items: { $ref: "#/components/schemas/AssignmentSummary" }
+        recentScores:
+          type: array
+          items:
+            type: object
+            required: [label, score, date]
+            properties:
+              label: { type: string }
+              score: { type: number }
+              date: { type: string, format: date-time }
+        reviewSkills:
+          type: array
+          items: { type: string }
 

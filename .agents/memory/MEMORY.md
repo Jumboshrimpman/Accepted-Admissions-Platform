@@ -1,0 +1,1 @@
+- [OpenAPI and Zod generator compatibility](openapi-zod-compatibility.md) — use number/plain-string fields while Orval 8 outputs target workspace Zod 3.
