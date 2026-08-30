@@ -1,9 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { createCalendarOAuthState, decryptCalendarToken, encryptCalendarToken, readCalendarOAuthState } from "./google-calendar.ts";
+import {
+  createCalendarOAuthState,
+  decryptCalendarToken,
+  encryptCalendarToken,
+  GOOGLE_CALENDAR_SCOPES,
+  readCalendarOAuthState,
+} from "./google-calendar.ts";
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
+
+test("requests the configured least-privilege Google Calendar scopes", () => {
+  assert.deepEqual(GOOGLE_CALENDAR_SCOPES, [
+    "openid",
+    "email",
+    "https://www.googleapis.com/auth/calendar.events.freebusy",
+    "https://www.googleapis.com/auth/calendar.events.owned",
+  ]);
+});
 
 test("OAuth state is signed and scoped to the tutor profile and initiating app user", () => {
   const state = createCalendarOAuthState("tutor-profile-xavier", "app-user-xavier");
