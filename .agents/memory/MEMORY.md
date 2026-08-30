@@ -1,2 +1,3 @@
 - [OpenAPI and Zod generator compatibility](openapi-zod-compatibility.md) — use number/plain-string fields while Orval 8 outputs target workspace Zod 3.
 - [Stripe financial integrity](stripe-financial-integrity.md) — settle before crediting, enforce DB uniqueness, lock cumulative refunds, and isolate invoice items.
+- [Merged migration reconciliation](merged-migration-reconciliation.md) — task merges can leave development schema ahead of Drizzle history; preserve idempotent reconciliation migrations.

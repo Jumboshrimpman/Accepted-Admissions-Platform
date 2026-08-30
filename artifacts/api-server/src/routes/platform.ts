@@ -360,7 +360,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
     .insert(tutorProfilesTable)
     .values([
       {
-        email: "xaver.rmz6@gmail.com",
+        email: "xsfam6@gmail.com",
         name: "Xavier Morales",
         title: "SAT Tutor",
         subjects: ["SAT"],
