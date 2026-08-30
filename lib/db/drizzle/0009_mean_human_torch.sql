@@ -1,5 +1,5 @@
-ALTER TABLE "tutor_profiles" ADD COLUMN "photo_alt_text" text;--> statement-breakpoint
-ALTER TABLE "tutor_profiles" ADD COLUMN "public_approved" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "tutor_profiles" ADD COLUMN IF NOT EXISTS "photo_alt_text" text;--> statement-breakpoint
+ALTER TABLE "tutor_profiles" ADD COLUMN IF NOT EXISTS "public_approved" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 UPDATE "tutor_profiles"
 SET
   "title" = 'SAT & Math Tutor',
