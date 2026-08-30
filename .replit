@@ -21,3 +21,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+ACCEPTED_ADMIN_CLERK_USER_IDS = "user_3IeI2jfhEoX5XMz1XgXMSkELmTs"
