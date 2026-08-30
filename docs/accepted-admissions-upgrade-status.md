@@ -24,7 +24,7 @@
 
 The following are intentionally not labeled live:
 
-- Google Calendar: disconnected. The schema and provider boundary are ready, but OAuth credentials and tutor authorization are not configured.
+- Google Calendar: workspace development OAuth credentials and callback are configured. Any provisioned non-viewer account can connect its own calendar; only booking-eligible tutor profiles affect student availability. Live availability or booking still requires a successful Google consent and end-to-end test.
 - Stripe: connector attached. Hosted payment flows are implemented; the deployment webhook signing secret must be configured before signed events can be accepted.
 - Hosted payment redirects use `APP_ORIGIN` in production; configure it to the canonical HTTPS application origin before deployment.
 - Email: not configured. Client requests are stored, but acknowledgements are not sent by an external provider.
@@ -36,6 +36,7 @@ The following are intentionally not labeled live:
 - Provide approved tutor headshots, biographies, titles, and LinkedIn redirects.
 - Provide approved Past Success copy, testimonials, attribution/anonymity choices, logos, and image alt text.
 - Configure the Stripe webhook signing secret through Replit Secrets and complete a test-mode Checkout/invoice/refund pass before accepting live payments.
+- Xavier’s development account is provisioned under `xsfam6@gmail.com`; he must complete Google consent from `/tutor` for the live provider check. Eunice’s invitation, allowlisting, and Google consent are explicitly deferred by owner direction.
 - Define final cancellation, credit-restoration, invoice, refund, and privacy-policy rules.
 
 ## Verification completed
@@ -45,6 +46,8 @@ The following are intentionally not labeled live:
 - Accepted Admissions production build passed.
 - API server build passed.
 - Booking availability, time-zone, buffer, OAuth signing/encryption, and event-payload tests passed.
+- Google OAuth configuration resolves to the workspace callback with offline consent and only free/busy plus calendar-event scopes.
+- The callback rejects incomplete authorization, calendar routes reject unauthenticated requests, and the running API health check returned HTTP 200.
 - Public product, tutor, and SAT content endpoints returned HTTP 200.
 - Invalid client-request input returned HTTP 400.
 - Unauthenticated credit access returned HTTP 401.

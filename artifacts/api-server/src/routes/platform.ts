@@ -1,5 +1,5 @@
-import { getAuth } from "@clerk/express";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { clerkClient, getAuth } from "@clerk/express";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
@@ -624,6 +624,31 @@ async function syncConfiguredAccess(
   }
 }
 
+async function clerkIdentity(
+  auth: ReturnType<typeof getAuth>,
+  clerkUserId: string,
+  appUser?: AppUser,
+): Promise<{ email?: string; displayName?: string }> {
+  let email = claimString(auth.sessionClaims, "email");
+  let displayName =
+    claimString(auth.sessionClaims, "name") ??
+    claimString(auth.sessionClaims, "firstName");
+  const needsVerifiedIdentity =
+    !email ||
+    appUser?.email.endsWith("@users.accepted.local") === true;
+  if (needsVerifiedIdentity || !displayName) {
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    email = email ?? clerkUser.primaryEmailAddress?.emailAddress;
+    displayName =
+      displayName ??
+      clerkUser.fullName ??
+      clerkUser.firstName ??
+      clerkUser.username ??
+      undefined;
+  }
+  return { email, displayName };
+}
+
 async function requireAppUser(
   req: AuthedRequest,
   res: Response,
@@ -659,13 +684,24 @@ async function requireAppUser(
     });
     return;
   }
+  let identity: { email?: string; displayName?: string } | undefined;
+  if (!appUser || appUser.role === "tutor" || !claimString(auth.sessionClaims, "email")) {
+    try {
+      identity = await clerkIdentity(auth, clerkUserId, appUser);
+    } catch {
+      res.status(502).json({
+        code: "IDENTITY_LOOKUP_FAILED",
+        error: "The signed-in account could not be verified right now.",
+      });
+      return;
+    }
+  }
   if (!appUser) {
     const email =
-      claimString(auth.sessionClaims, "email") ??
+      identity?.email ??
       `${clerkUserId.replace(/[^a-zA-Z0-9_-]/g, "")}@users.accepted.local`;
     const displayName =
-      claimString(auth.sessionClaims, "name") ??
-      claimString(auth.sessionClaims, "firstName") ??
+      identity?.displayName ??
       "Accepted Admissions user";
     const [pendingUser] = await db
       .select()
@@ -706,6 +742,16 @@ async function requireAppUser(
       entityId: appUser.id,
       metadata: { role: configured.role, subject: configured.subject },
     });
+  } else if (identity?.email && appUser.email !== identity.email) {
+    [appUser] = await db
+      .update(usersTable)
+      .set({
+        email: identity.email,
+        ...(identity.displayName ? { displayName: identity.displayName } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, appUser.id))
+      .returning();
   }
   if (appUser.role !== configured.role) {
     await db.insert(auditLogsTable).values({
@@ -736,6 +782,74 @@ function ensureRole(
     }
     next();
   };
+}
+
+async function resolveCalendarProfileForUser(
+  user: AppUser,
+  requestedProfileId?: string,
+  createIfMissing = false,
+): Promise<typeof tutorProfilesTable.$inferSelect | undefined> {
+  const [linkedProfile] = await db
+    .select()
+    .from(tutorProfilesTable)
+    .where(
+      requestedProfileId
+        ? eq(tutorProfilesTable.id, requestedProfileId)
+        : eq(tutorProfilesTable.userId, user.id),
+    )
+    .limit(1);
+  if (requestedProfileId || linkedProfile) return linkedProfile;
+
+  const [unlinkedProfile] = await db
+    .select()
+    .from(tutorProfilesTable)
+    .where(
+      and(
+        eq(tutorProfilesTable.email, user.email),
+        isNull(tutorProfilesTable.userId),
+      ),
+    )
+    .limit(1);
+  if (unlinkedProfile) {
+    const [claimedProfile] = await db
+      .update(tutorProfilesTable)
+      .set({
+        userId: user.id,
+        bookingEligible: user.role === "tutor",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(tutorProfilesTable.id, unlinkedProfile.id),
+          isNull(tutorProfilesTable.userId),
+        ),
+      )
+      .returning();
+    return claimedProfile;
+  }
+  if (!createIfMissing) return undefined;
+
+  const [createdProfile] = await db
+    .insert(tutorProfilesTable)
+    .values({
+      userId: user.id,
+      email: user.email,
+      name: user.displayName,
+      title: "Calendar account",
+      subjects: [],
+      bookingEligible: user.role === "tutor",
+      calendarStatus: "disconnected",
+    })
+    .onConflictDoNothing({ target: tutorProfilesTable.email })
+    .returning();
+  if (createdProfile) return createdProfile;
+
+  const [racedProfile] = await db
+    .select()
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, user.id))
+    .limit(1);
+  return racedProfile;
 }
 
 async function visibleCourseIds(user: AppUser): Promise<string[]> {
@@ -1321,7 +1435,10 @@ function sendBookingError(error: unknown, res: Response): void {
   res.status(500).json({ error: "Booking service temporarily unavailable" });
 }
 
-router.get("/calendar/oauth/callback", async (req, res): Promise<void> => {
+router.get(
+  "/calendar/oauth/callback",
+  requireAppUser,
+  async (req: AuthedRequest, res): Promise<void> => {
   const state = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
   if (!state || !code) {
@@ -1334,7 +1451,33 @@ router.get("/calendar/oauth/callback", async (req, res): Promise<void> => {
       res.status(400).send("Calendar authorization expired. Please try again.");
       return;
     }
+    if (stateData.appUserId !== req.appUser!.id) {
+      res.status(403).send("Calendar authorization belongs to a different signed-in account.");
+      return;
+    }
+    const [profile] = await db
+      .select({
+        id: tutorProfilesTable.id,
+        userId: tutorProfilesTable.userId,
+        email: tutorProfilesTable.email,
+      })
+      .from(tutorProfilesTable)
+      .where(
+        and(
+          eq(tutorProfilesTable.id, stateData.tutorProfileId),
+          eq(tutorProfilesTable.userId, req.appUser!.id),
+        ),
+      )
+      .limit(1);
+    if (!profile) {
+      res.status(403).send("Calendar authorization target is no longer available.");
+      return;
+    }
     const tokens = await exchangeGoogleCode(code);
+    if (tokens.email.toLowerCase() !== profile.email.toLowerCase()) {
+      res.status(403).send("Choose the Google account that matches your signed-in portal account.");
+      return;
+    }
     const [existing] = await db
       .select({ id: calendarConnectionsTable.id })
       .from(calendarConnectionsTable)
@@ -1367,11 +1510,24 @@ router.get("/calendar/oauth/callback", async (req, res): Promise<void> => {
       .update(tutorProfilesTable)
       .set({ calendarStatus: "connected", updatedAt: new Date() })
       .where(eq(tutorProfilesTable.id, stateData.tutorProfileId));
-    res.redirect("/tutor?calendar=connected");
+    const [owner] = await db
+      .select({ role: usersTable.role })
+      .from(tutorProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
+      .where(eq(tutorProfilesTable.id, stateData.tutorProfileId))
+      .limit(1);
+    const returnPath =
+      owner?.role === "administrator"
+        ? "/admin"
+        : owner?.role === "tutor"
+          ? "/tutor"
+          : "/portal";
+    res.redirect(`${returnPath}?calendar=connected`);
   } catch {
     res.status(502).send("Google Calendar authorization failed. Please try again.");
   }
-});
+  },
+);
 
 router.get("/public/products", async (_req, res): Promise<void> => {
   await ensurePublicPlatformData();
@@ -1528,8 +1684,9 @@ router.use((req: AuthedRequest, res: Response, next: () => void) => {
 
 router.get(
   "/calendar/connections",
-  ensureRole(["tutor", "administrator"]),
+  ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    const tutorProfile = await resolveCalendarProfileForUser(req.appUser!);
     const rows = await db
       .select({
         id: calendarConnectionsTable.id,
@@ -1544,9 +1701,9 @@ router.get(
         eq(tutorProfilesTable.id, calendarConnectionsTable.tutorProfileId),
       )
       .where(
-        req.appUser!.role === "administrator"
-          ? undefined
-          : eq(tutorProfilesTable.userId, req.appUser!.id),
+        tutorProfile
+          ? eq(calendarConnectionsTable.tutorProfileId, tutorProfile.id)
+          : sql`false`,
       );
     res.json(rows);
   },
@@ -1554,20 +1711,16 @@ router.get(
 
 router.get(
   "/calendar/connect",
-  ensureRole(["tutor", "administrator"]),
+  ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const requestedProfileId =
       typeof req.query.tutorProfileId === "string" ? req.query.tutorProfileId : undefined;
-    const [profile] = await db
-      .select()
-      .from(tutorProfilesTable)
-      .where(
-        requestedProfileId
-          ? eq(tutorProfilesTable.id, requestedProfileId)
-          : eq(tutorProfilesTable.userId, req.appUser!.id),
-      )
-      .limit(1);
-    if (!profile || (req.appUser!.role !== "administrator" && profile.userId !== req.appUser!.id)) {
+    const profile = await resolveCalendarProfileForUser(
+      req.appUser!,
+      requestedProfileId,
+      true,
+    );
+    if (!profile || profile.userId !== req.appUser!.id) {
       res.status(404).json({ code: "TUTOR_NOT_FOUND", error: "Tutor profile not found." });
       return;
     }
@@ -1578,13 +1731,19 @@ router.get(
       });
       return;
     }
-    res.json({ authorizationUrl: googleCalendarAuthorizationUrl(profile.id) });
+    res.json({
+      authorizationUrl: googleCalendarAuthorizationUrl(
+        profile.id,
+        req.appUser!.id,
+        profile.email,
+      ),
+    });
   },
 );
 
 router.delete(
   "/calendar/connections/:tutorProfileId",
-  ensureRole(["tutor", "administrator"]),
+  ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const tutorProfileId =
       typeof req.params.tutorProfileId === "string" ? req.params.tutorProfileId : "";
@@ -1593,7 +1752,7 @@ router.delete(
       .from(tutorProfilesTable)
       .where(eq(tutorProfilesTable.id, tutorProfileId))
       .limit(1);
-    if (!profile || (req.appUser!.role !== "administrator" && profile.userId !== req.appUser!.id)) {
+    if (!profile || profile.userId !== req.appUser!.id) {
       res.status(404).json({ code: "TUTOR_NOT_FOUND", error: "Tutor profile not found." });
       return;
     }

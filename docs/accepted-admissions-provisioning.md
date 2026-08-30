@@ -14,6 +14,7 @@ Set the following environment variables as comma-separated Clerk user IDs:
 The intended roster is:
 
 - Taito Goto — `taito0525@gmail.com` — student/client
+- Xavier Morales — `xsfam6@gmail.com` — SAT tutor
 - Eunice Chon — `eunice_chon@berkeley.edu` — SAT tutor
 - Nika Raiffe — `nika.raiffe@gmail.com` — English/IELTS tutor
 - `admin@acceptedadmissions.org` — master administrator

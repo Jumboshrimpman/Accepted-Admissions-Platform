@@ -1,10 +1,10 @@
 ---
-name: Merged migration reconciliation
-description: Why merged Drizzle migrations may need to tolerate schema objects already present in development.
+name: Migration ledger drift
+description: Why Drizzle migrations may need to tolerate schema objects that already exist.
 ---
 
-After isolated task merges, the development database can already contain the merged schema while `drizzle.__drizzle_migrations` still lacks the corresponding main-workspace migration entries. Keep reconciliation migrations idempotent when they cover those pre-existing objects.
+Keep reconciliation migrations idempotent when the database schema may be ahead of the recorded migration ledger.
 
-**Why:** Calendar and payment task merges left columns, tables, and indexes present while the main migration ledger stopped before those migrations. Strict `ADD COLUMN` and `CREATE TABLE` statements prevented the API from starting.
+**Why:** Branch integration or interrupted migration bookkeeping can leave columns, tables, or indexes present without their expected ledger entries. Strict creation statements then prevent startup.
 
-**How to apply:** Before changing or reverting idempotent migration statements, compare the migration ledger with `information_schema`. For merged additions, retain `IF NOT EXISTS` and conditional constraint creation so both clean databases and schema-ahead development databases migrate safely.
+**How to apply:** Compare the migration ledger with `information_schema`; use `IF NOT EXISTS` and conditional constraint creation when both clean and schema-ahead databases must migrate safely.

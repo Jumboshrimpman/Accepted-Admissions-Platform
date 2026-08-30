@@ -139,7 +139,7 @@ export default function PortalDashboard() {
 
       {dashboard.user.role === "student" && <BookingCard />}
       {(dashboard.user.role === "student" || dashboard.user.role === "viewer") && <FinancialCard />}
-      {dashboard.user.role === "tutor" && <CalendarConnectionCard />}
+      {dashboard.user.role !== "viewer" && <CalendarConnectionCard />}
 
       {/* Courses */}
       <div className="space-y-4">

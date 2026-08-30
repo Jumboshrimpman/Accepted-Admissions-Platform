@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -11,6 +11,26 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "build-without-preview-settings"
+
+[[workflows.workflow]]
+name = "build-without-preview-settings"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run check:build-without-preview-settings"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -18,3 +38,13 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+ACCEPTED_ADMIN_CLERK_USER_IDS = "user_3IeGScwZqzQA1VYEwiOijPa3U98"
+ACCEPTED_SAT_TUTOR_CLERK_USER_IDS = "user_3IeYrIF9NB1KiaOwOvG62zbchRS"
+GOOGLE_CALENDAR_REDIRECT_URI = "https://37b01121-5efe-48c5-a064-3ce0cacd0f14-00-3qm3oiov7es7q-nnvlb9ic.reed.replit.dev/api/calendar/oauth/callback"

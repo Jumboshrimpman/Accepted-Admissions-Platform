@@ -9,8 +9,10 @@ ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "cancellation_reason" text;--> s
 ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
 DO $$ BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
+    SELECT 1
+    FROM pg_constraint
     WHERE conname = 'sessions_client_user_id_users_id_fk'
+      AND conrelid = 'public.sessions'::regclass
   ) THEN
     ALTER TABLE "sessions"
       ADD CONSTRAINT "sessions_client_user_id_users_id_fk"

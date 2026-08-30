@@ -56,10 +56,10 @@ export function CalendarConnectionCard() {
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarCheck2 className="h-5 w-5 text-primary" />
-              Tutoring calendar
+              Google Calendar
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-              Connect Google Calendar so students only see times when you are free. Private event details never leave the server.
+              Connect this account's Google Calendar using the same email as your portal sign-in. Availability checks use free/busy data only, and private event details never leave the server.
             </CardDescription>
           </div>
           <Badge variant={connected ? "default" : "secondary"} className="w-fit rounded-full px-3 py-1">
@@ -84,8 +84,8 @@ export function CalendarConnectionCard() {
             <div className="flex items-start gap-3">
               <Link2Off className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
               <div className="text-sm">
-                <p className="font-medium">Connect before accepting bookings</p>
-                <p className="mt-1 text-muted-foreground">Students will see a disconnected state until your Google Calendar is linked.</p>
+              <p className="font-medium">Connect your calendar</p>
+              <p className="mt-1 text-muted-foreground">Your calendar stays private while the app checks availability.</p>
               </div>
             </div>
             <Button className="rounded-full" onClick={connect}>

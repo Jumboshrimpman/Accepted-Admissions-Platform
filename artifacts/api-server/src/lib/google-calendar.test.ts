@@ -5,9 +5,12 @@ import { createCalendarOAuthState, decryptCalendarToken, encryptCalendarToken, r
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
 
-test("OAuth state is signed and scoped to the tutor profile", () => {
-  const state = createCalendarOAuthState("tutor-profile-xavier");
-  assert.deepEqual(readCalendarOAuthState(state), { tutorProfileId: "tutor-profile-xavier" });
+test("OAuth state is signed and scoped to the tutor profile and initiating app user", () => {
+  const state = createCalendarOAuthState("tutor-profile-xavier", "app-user-xavier");
+  assert.deepEqual(readCalendarOAuthState(state), {
+    tutorProfileId: "tutor-profile-xavier",
+    appUserId: "app-user-xavier",
+  });
 
   const [payload, signature] = state.split(".");
   assert.equal(readCalendarOAuthState(`${payload}.tampered`), null);

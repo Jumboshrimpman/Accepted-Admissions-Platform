@@ -1,6 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 
 export const GOOGLE_CALENDAR_SCOPES = [
+  "openid",
+  "email",
   "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/calendar.events",
 ];
@@ -43,22 +45,26 @@ export function getGoogleCalendarConfig(): GoogleCalendarConfig | null {
   return { clientId, clientSecret, redirectUri };
 }
 
-export function createCalendarOAuthState(tutorProfileId: string): string {
-  const payload = `${tutorProfileId}.${Date.now() + 10 * 60 * 1000}`;
+export function createCalendarOAuthState(tutorProfileId: string, appUserId: string): string {
+  const payload = `${tutorProfileId}.${appUserId}.${Date.now() + 10 * 60 * 1000}.${base64Url(randomBytes(16))}`;
   const signature = createHmac("sha256", signingKey()).update(payload).digest();
   return `${base64Url(payload)}.${base64Url(signature)}`;
 }
 
-export function readCalendarOAuthState(state: string): { tutorProfileId: string } | null {
+export function readCalendarOAuthState(
+  state: string,
+): { tutorProfileId: string; appUserId: string } | null {
   const [encodedPayload, encodedSignature] = state.split(".");
   if (!encodedPayload || !encodedSignature) return null;
   const payload = fromBase64Url(encodedPayload).toString("utf8");
   const expected = createHmac("sha256", signingKey()).update(payload).digest();
   const received = fromBase64Url(encodedSignature);
   if (received.length !== expected.length || !received.equals(expected)) return null;
-  const [tutorProfileId, expiresAt] = payload.split(".");
-  if (!tutorProfileId || !expiresAt || Number(expiresAt) < Date.now()) return null;
-  return { tutorProfileId };
+  const [tutorProfileId, appUserId, expiresAt, nonce] = payload.split(".");
+  if (!tutorProfileId || !appUserId || !expiresAt || !nonce || Number(expiresAt) < Date.now()) {
+    return null;
+  }
+  return { tutorProfileId, appUserId };
 }
 
 export function encryptCalendarToken(value: string): string {
@@ -78,7 +84,11 @@ export function decryptCalendarToken(value: string): string {
   );
 }
 
-export function googleCalendarAuthorizationUrl(tutorProfileId: string): string {
+export function googleCalendarAuthorizationUrl(
+  tutorProfileId: string,
+  appUserId: string,
+  loginHint?: string,
+): string {
   const config = getGoogleCalendarConfig();
   if (!config) throw new Error("Google Calendar OAuth is not configured");
   const params = new URLSearchParams({
@@ -86,10 +96,11 @@ export function googleCalendarAuthorizationUrl(tutorProfileId: string): string {
     redirect_uri: config.redirectUri,
     response_type: "code",
     access_type: "offline",
-    prompt: "consent",
+    prompt: "consent select_account",
     scope: GOOGLE_CALENDAR_SCOPES.join(" "),
-    state: createCalendarOAuthState(tutorProfileId),
+    state: createCalendarOAuthState(tutorProfileId, appUserId),
   });
+  if (loginHint) params.set("login_hint", loginHint);
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
@@ -97,6 +108,8 @@ export async function exchangeGoogleCode(code: string): Promise<{
   accessToken: string;
   refreshToken?: string;
   expiresIn?: number;
+  googleAccountId: string;
+  email: string;
 }> {
   const config = getGoogleCalendarConfig();
   if (!config) throw new Error("Google Calendar OAuth is not configured");
@@ -116,12 +129,38 @@ export async function exchangeGoogleCode(code: string): Promise<{
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
+    id_token?: string;
   };
   if (!data.access_token) throw new Error("Google token response did not include an access token");
+  if (!data.id_token) throw new Error("Google token response did not include an identity token");
+  const identityResponse = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(data.id_token)}`,
+  );
+  if (!identityResponse.ok) {
+    throw new Error(`Google identity verification failed (${identityResponse.status})`);
+  }
+  const identity = (await identityResponse.json()) as {
+    aud?: string;
+    iss?: string;
+    sub?: string;
+    email?: string;
+    email_verified?: string;
+  };
+  if (
+    identity.aud !== config.clientId ||
+    !["accounts.google.com", "https://accounts.google.com"].includes(identity.iss ?? "") ||
+    !identity.sub ||
+    !identity.email ||
+    identity.email_verified !== "true"
+  ) {
+    throw new Error("Google identity response was invalid");
+  }
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     expiresIn: data.expires_in,
+    googleAccountId: identity.sub,
+    email: identity.email,
   };
 }
 
