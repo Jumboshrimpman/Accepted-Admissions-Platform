@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { UserButton, useUser, useClerk } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
+import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,9 +34,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             This account has not been provisioned for the Accepted Admissions
             portal. Please use your invited account or contact an administrator.
           </p>
-          <Link href="/login">
-            <Button className="mt-6 rounded-full">Return to sign in</Button>
-          </Link>
+          <SignInRecoveryButton />
         </div>
       </div>
     );

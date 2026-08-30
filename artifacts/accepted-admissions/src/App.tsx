@@ -6,14 +6,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   Route,
   Switch,
-  Link,
   useLocation,
   Router as WouterRouter,
   Redirect,
 } from 'wouter';
 import { ClerkProvider, SignedIn, SignedOut, SignIn } from '@clerk/clerk-react';
 import { useGetCurrentUser } from '@workspace/api-client-react';
-import { Button } from '@/components/ui/button';
 
 // Pages
 import NotFound from '@/pages/not-found';
@@ -27,6 +25,7 @@ import TutorCourse from '@/pages/tutor/course';
 import TutorSession from '@/pages/tutor/session';
 import AdminDashboard from '@/pages/admin/dashboard';
 import { Shell } from '@/components/shell';
+import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 
 // Ensure you have this environment variable available
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder';
@@ -235,9 +234,7 @@ function AccessMessage({ forbidden }: { forbidden: boolean }) {
             ? "This account is not assigned to the requested role or portal area."
             : "Sign in with your invited Accepted Admissions account to continue."}
         </p>
-        <Link href="/login">
-          <Button className="mt-6 rounded-full">Return to sign in</Button>
-        </Link>
+        <SignInRecoveryButton />
       </div>
     </div>
   );
