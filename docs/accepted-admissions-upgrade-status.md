@@ -19,6 +19,7 @@
 - Added independently scoped Google Calendar OAuth and tutor controls for Xavier Morales and Eunice Chon; booking exposes only free/busy-derived slots and explicit disconnected states.
 - Added Stripe-hosted SAT Checkout and invoice creation, raw-body webhook signature verification, event idempotency, payment/refund status tracking, and exactly-once credit fulfillment.
 - Added account-scoped client financial history plus administrator controls for hosted invoices, offline payments, invoice states, and audited credit adjustments.
+- Added role-specific portal email provisioning using Clerk’s server-verified primary email. Existing Clerk ID lists remain supported as explicit compatibility overrides, while conflicting email roles fail closed.
 
 ## External services
 
@@ -32,7 +33,7 @@ The following are intentionally not labeled live:
 
 ## Owner input still required
 
-- Confirm and invite the intended development or production Clerk accounts before adding their Clerk IDs to allowlists. Existing invitation work remains separately gated.
+- Confirm and invite intended development or production Clerk accounts before adding their addresses to the role-specific `ACCEPTED_*_EMAILS` lists. Development and production Clerk user stores remain separate, but a newly issued Clerk ID can reclaim the same provisioned local account through its verified email.
 - Provide approved tutor headshots, biographies, titles, and LinkedIn redirects.
 - Provide approved Past Success copy, testimonials, attribution/anonymity choices, logos, and image alt text.
 - Configure the Stripe webhook signing secret through Replit Secrets and complete a test-mode Checkout/invoice/refund pass before accepting live payments.

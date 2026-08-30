@@ -3,3 +3,4 @@
 - [Migration ledger drift](merged-migration-reconciliation.md) — schema objects can exist before their migration ledger entries; keep reconciliation DDL idempotent.
 - [Clerk identity claims](clerk-identity-claims.md) — development sessions may omit email claims; resolve the verified email server-side before account linking.
 - [OAuth from Replit previews](oauth-preview-navigation.md) — launch provider authorization as a top-level navigation; embedded preview iframes can trigger provider 403 pages.
+- [Email ACL identity freshness](email-acl-identity-freshness.md) — authorize email allowlists from Clerk’s current verified primary address, never a persisted local email.

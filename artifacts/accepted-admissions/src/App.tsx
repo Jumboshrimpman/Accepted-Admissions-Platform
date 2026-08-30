@@ -16,7 +16,10 @@ import {
 } from 'wouter';
 import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
-import { useGetCurrentUser } from '@workspace/api-client-react';
+import {
+  getGetCurrentUserQueryKey,
+  useGetCurrentUser,
+} from '@workspace/api-client-react';
 
 // Pages
 import NotFound from '@/pages/not-found';
@@ -250,7 +253,9 @@ function Router() {
 }
 
 function PortalEntry() {
-  const { data: user, isLoading, error } = useGetCurrentUser();
+  const { data: user, isLoading, error } = useGetCurrentUser({
+    query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
+  });
   if (isLoading) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground">
@@ -273,7 +278,9 @@ function RoleBoundary({
   roles: Array<"administrator" | "tutor" | "student" | "viewer">;
   children: ReactNode;
 }) {
-  const { data: user, isLoading, error } = useGetCurrentUser();
+  const { data: user, isLoading, error } = useGetCurrentUser({
+    query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
+  });
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">

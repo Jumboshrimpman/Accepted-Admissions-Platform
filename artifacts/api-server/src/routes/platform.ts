@@ -86,6 +86,12 @@ import {
   UpsertSessionArtifactResponse,
 } from "@workspace/api-zod";
 import {
+  configuredAccess,
+  normalizeProvisionedEmail,
+  type ConfiguredAccess,
+  verifiedPrimaryEmail,
+} from "../lib/access-config";
+import {
   contentSourcesTable,
   assignmentQuestionsTable,
   assignmentsTable,
@@ -124,41 +130,6 @@ function claimString(claims: unknown, key: string): string | undefined {
   if (!claims || typeof claims !== "object") return undefined;
   const value = (claims as Record<string, unknown>)[key];
   return typeof value === "string" ? value : undefined;
-}
-
-function envIdSet(name: string): Set<string> {
-  return new Set(
-    (process.env[name] ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-  );
-}
-
-type ConfiguredAccess = {
-  role: AppUser["role"];
-  subject: string;
-};
-
-function configuredAccess(clerkUserId: string): ConfiguredAccess | null {
-  const adminIds = envIdSet("ACCEPTED_ADMIN_CLERK_USER_IDS");
-  const satTutorIds = envIdSet("ACCEPTED_SAT_TUTOR_CLERK_USER_IDS");
-  const englishTutorIds = envIdSet("ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS");
-  const tutorIds = envIdSet("ACCEPTED_TUTOR_CLERK_USER_IDS");
-  const studentIds = envIdSet("ACCEPTED_STUDENT_CLERK_USER_IDS");
-  const viewerIds = envIdSet("ACCEPTED_VIEWER_CLERK_USER_IDS");
-
-  if (adminIds.has(clerkUserId)) return { role: "administrator", subject: "all" };
-  if (satTutorIds.has(clerkUserId)) return { role: "tutor", subject: "SAT" };
-  if (englishTutorIds.has(clerkUserId)) {
-    return { role: "tutor", subject: "IELTS" };
-  }
-  if (tutorIds.has(clerkUserId)) return { role: "tutor", subject: "all" };
-  if (studentIds.has(clerkUserId)) return { role: "student", subject: "all" };
-  if (viewerIds.has(clerkUserId)) {
-    return { role: "viewer", subject: "student:taito0525@gmail.com" };
-  }
-  return null;
 }
 
 function subjectFamily(subject: string): string {
@@ -628,17 +599,23 @@ async function clerkIdentity(
   auth: ReturnType<typeof getAuth>,
   clerkUserId: string,
   appUser?: AppUser,
+  requireVerifiedEmail = false,
 ): Promise<{ email?: string; displayName?: string }> {
   let email = claimString(auth.sessionClaims, "email");
   let displayName =
     claimString(auth.sessionClaims, "name") ??
     claimString(auth.sessionClaims, "firstName");
   const needsVerifiedIdentity =
+    requireVerifiedEmail ||
     !email ||
     appUser?.email.endsWith("@users.accepted.local") === true;
   if (needsVerifiedIdentity || !displayName) {
     const clerkUser = await clerkClient.users.getUser(clerkUserId);
-    email = email ?? clerkUser.primaryEmailAddress?.emailAddress;
+    email =
+      (requireVerifiedEmail
+        ? verifiedPrimaryEmail(clerkUser)
+        : clerkUser.primaryEmailAddress?.emailAddress) ??
+      (requireVerifiedEmail ? undefined : email);
     displayName =
       displayName ??
       clerkUser.fullName ??
@@ -667,7 +644,55 @@ async function requireAppUser(
     .from(usersTable)
     .where(eq(usersTable.clerkUserId, clerkUserId))
     .limit(1);
-  const configured = configuredAccess(clerkUserId);
+  const initialAccess = configuredAccess(clerkUserId);
+  let configured = initialAccess.access;
+  let configurationConflict = initialAccess.conflict;
+  let identity: { email?: string; displayName?: string } | undefined;
+  if (!configured) {
+    try {
+      identity = await clerkIdentity(auth, clerkUserId, appUser, true);
+      const emailAccess = configuredAccess(
+        clerkUserId,
+        identity.email ? normalizeProvisionedEmail(identity.email) : undefined,
+      );
+      configured = emailAccess.access;
+      configurationConflict = emailAccess.conflict;
+    } catch {
+      res.status(502).json({
+        code: "IDENTITY_LOOKUP_FAILED",
+        error: "The signed-in account could not be verified right now.",
+      });
+      return;
+    }
+  }
+  if (configurationConflict) {
+    if (appUser) {
+      await db.insert(auditLogsTable).values({
+        actorUserId: appUser.id,
+        action: "access.denied",
+        entityType: "portal",
+        entityId: req.path,
+        metadata: {
+          method: req.method,
+          reason: "conflicting_email_provisioning",
+        },
+      });
+    }
+    req.log?.error(
+      {
+        clerkUserId,
+        email: identity?.email
+          ? normalizeProvisionedEmail(identity.email)
+          : undefined,
+      },
+      "Conflicting portal email provisioning",
+    );
+    res.status(503).json({
+      code: "PORTAL_ACCESS_CONFIGURATION_ERROR",
+      error: "Portal access configuration is invalid; contact an administrator",
+    });
+    return;
+  }
   if (!configured) {
     if (appUser) {
       await db.insert(auditLogsTable).values({
@@ -684,8 +709,12 @@ async function requireAppUser(
     });
     return;
   }
-  let identity: { email?: string; displayName?: string } | undefined;
-  if (!appUser || appUser.role === "tutor" || !claimString(auth.sessionClaims, "email")) {
+  if (
+    !identity &&
+    (!appUser ||
+      appUser.role === "tutor" ||
+      !claimString(auth.sessionClaims, "email"))
+  ) {
     try {
       identity = await clerkIdentity(auth, clerkUserId, appUser);
     } catch {
@@ -698,22 +727,17 @@ async function requireAppUser(
   }
   if (!appUser) {
     const email =
-      identity?.email ??
+      (identity?.email
+        ? normalizeProvisionedEmail(identity.email)
+        : undefined) ??
       `${clerkUserId.replace(/[^a-zA-Z0-9_-]/g, "")}@users.accepted.local`;
-    const displayName =
-      identity?.displayName ??
-      "Accepted Admissions user";
-    const [pendingUser] = await db
+    const displayName = identity?.displayName ?? "Accepted Admissions user";
+    const [existingUser] = await db
       .select()
       .from(usersTable)
-      .where(
-        and(
-          eq(usersTable.email, email),
-          sql`${usersTable.clerkUserId} like 'pending:%'`,
-        ),
-      )
+      .where(eq(usersTable.email, email))
       .limit(1);
-    if (pendingUser) {
+    if (existingUser) {
       [appUser] = await db
         .update(usersTable)
         .set({
@@ -722,7 +746,7 @@ async function requireAppUser(
           role: configured.role,
           updatedAt: new Date(),
         })
-        .where(eq(usersTable.id, pendingUser.id))
+        .where(eq(usersTable.id, existingUser.id))
         .returning();
     } else {
       [appUser] = await db
@@ -742,11 +766,14 @@ async function requireAppUser(
       entityId: appUser.id,
       metadata: { role: configured.role, subject: configured.subject },
     });
-  } else if (identity?.email && appUser.email !== identity.email) {
+  } else if (
+    identity?.email &&
+    appUser.email !== normalizeProvisionedEmail(identity.email)
+  ) {
     [appUser] = await db
       .update(usersTable)
       .set({
-        email: identity.email,
+        email: normalizeProvisionedEmail(identity.email),
         ...(identity.displayName ? { displayName: identity.displayName } : {}),
         updatedAt: new Date(),
       })
@@ -763,7 +790,8 @@ async function requireAppUser(
     });
     res.status(403).json({
       code: "ROLE_PROVISIONING_MISMATCH",
-      error: "Portal role provisioning is out of sync; contact an administrator",
+      error:
+        "Portal role provisioning is out of sync; contact an administrator",
     });
     return;
   }

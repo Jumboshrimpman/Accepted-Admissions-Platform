@@ -10,14 +10,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, BookOpen, LayoutDashboard, Settings } from "lucide-react";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import {
+  getGetCurrentUserQueryKey,
+  useGetCurrentUser,
+} from "@workspace/api-client-react";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
   
-  const { data: apiUser, isLoading, error } = useGetCurrentUser();
+  const { data: apiUser, isLoading, error } = useGetCurrentUser({
+    query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
+  });
 
   if (isLoading) {
     return (
