@@ -1,0 +1,110 @@
+# #6 — Provision Secure Role-Based Portal Access
+
+## What & Why
+
+Create a secure, persistent entry point for the private Taito learning experience as part of Phase 1. The portal must give the student, each assigned tutor, and the master administrator separate, appropriately scoped views.
+
+Use invitation-based Clerk accounts and browser-managed Clerk sessions. Do not use a shared password as authorization for private records.
+
+The initial roster is:
+
+* Taito Goto — `taito0525@gmail.com` — student/client
+* Eunice Chon — `eunice_chon@berkeley.edu` — SAT tutor
+* Nika Raiffe — `nika.raiffe@gmail.com` — English/IELTS tutor
+* `admin@acceptedadmissions.org` — master administrator
+
+Do not send invitations until the owner confirms that these are the intended production email addresses.
+
+Do not store, reproduce, log, or migrate any shared password previously supplied in chat. If the owner wants the legacy `/t-g` URL preserved temporarily, it may function only as a redirect to the secure login flow. It must never authenticate a user or expose private information.
+
+## Done Looks Like
+
+* `/portal` is the canonical authenticated portal entry point.
+* `/login` is supported as a convenient sign-in alias.
+* `/t-g` is only a temporary redirect to `/portal` or `/login`. It is not Taito-branded and never renders private content.
+* Unauthenticated visitors are directed to sign in before any private data is requested or displayed.
+* Taito can accept an email invitation, sign in without a Replit account, and return to an active browser session without repeatedly entering credentials, subject to Clerk’s configured session policy.
+* Taito sees only his own Fall 2026 SAT and IELTS program, sessions, assignments, attempts, progress, tutor feedback, and published reports.
+* Eunice sees only her assigned SAT workspace, SAT curriculum, and assigned SAT student records.
+* Nika sees only her assigned English/IELTS workspace, curriculum, and assigned English/IELTS student records.
+* The master administrator can access all users, roles, courses, memberships, curriculum, results, review queues, reports, and audit information.
+* Public signup cannot create or assign a student, tutor, or administrator role.
+* Roles, course memberships, subject assignments, and tutor assignments are stored in PostgreSQL and cannot be selected or changed by the user.
+* Authorization is deny-by-default and enforced server-side for every protected page, API route, query, and mutation.
+* Direct URL and API requests receive clear unauthenticated or forbidden responses without leaking whether unrelated private records exist.
+* Answer keys, tutor-only notes, raw transcripts, unpublished reports, and other students’ records remain inaccessible to unauthorized users.
+* Two test identities cannot read or modify one another’s students, courses, assignments, attempts, answer keys, reports, or tutor notes.
+* Provisioning, role changes, membership changes, and denied sensitive actions are recorded in audit logs.
+* Clerk configuration and production onboarding steps are documented for the owner.
+
+## Security Requirements
+
+* Use Clerk identity IDs as the external authentication reference.
+* Store application roles and course/subject memberships in PostgreSQL.
+* Do not infer authorization solely from an email address, client-selected role, URL, or hidden interface element.
+* Do not store authentication tokens in `localStorage`.
+* Use Clerk’s browser session and secure cookie behavior.
+* Validate the authenticated identity on the server before accessing protected data.
+* Verify both the user’s role and the relevant course, student, subject, or tutor assignment for each request.
+* Prevent client-provided user IDs, course IDs, or student IDs from overriding the authenticated user’s permitted scope.
+* Do not include private records or answer keys in public page data, initial HTML, client bundles, logs, or unauthorized error responses.
+* If Clerk or its required credentials are unavailable, stop and explain the required configuration before substituting another authentication system.
+
+## Out of Scope
+
+* Consultation booking, payments, and the remaining public-site migration covered by Task #3.
+* Automated lesson-material generation and source-file ingestion covered by Task #2.
+* Using the former shared password as a second authentication system.
+* Sending production invitations before the owner confirms the listed email addresses.
+* Changing DNS, disconnecting Wix, or moving the primary domain.
+* Creating public pages or URLs containing Taito’s name or initials.
+
+## Steps
+
+1. **Secure entry routes** — Make `/portal` canonical, support `/login`, and make `/t-g` a temporary redirect only. Never render private data before authentication and authorization succeed.
+
+2. **Database-backed provisioning** — Create administrator-controlled provisioning for the four listed identities. Record roles, course memberships, subject assignments, and tutor assignments in PostgreSQL. Prepare Clerk invitations without sending them.
+
+3. **Role-specific workspaces** — Refine the student, SAT tutor, English/IELTS tutor, and administrator interfaces so each role receives appropriate navigation, information, and permitted actions.
+
+4. **Server-side isolation** — Apply reusable authorization checks to every relevant page, API route, query, and mutation. Enforce identity, role, course, student, subject, and tutor-assignment boundaries.
+
+5. **Auditability** — Record sensitive provisioning, role, membership, and authorization changes without logging passwords, session tokens, or unnecessary private student content.
+
+6. **Verification** — Test the four roster roles plus at least two unassigned identities. Test normal browser navigation, direct URLs, altered identifiers, and direct API requests.
+
+7. **Owner onboarding** — Document the production Clerk configuration, email confirmation, invitation, first-login, role-assignment, access-revocation, and troubleshooting process.
+
+## Required Verification
+
+Before marking the task complete, demonstrate that:
+
+1. A logged-out visitor cannot retrieve private portal data.
+2. An authenticated but unassigned account receives no private access.
+3. Taito can access only his own student records.
+4. Eunice can access only assigned SAT records and materials.
+5. Nika can access only assigned English/IELTS records and materials.
+6. Neither tutor can access the other tutor’s restricted subject workspace unless separately assigned.
+7. Tutors cannot access unrelated students or courses.
+8. Taito cannot access answer keys before submission, tutor-only notes, raw transcripts, or unpublished reports.
+9. Client-side ID manipulation does not bypass server authorization.
+10. Public signup cannot self-assign a privileged role.
+11. `/t-g` contains no private or client-identifying content and redirects correctly.
+12. No production invitation has been sent without owner confirmation.
+13. Relevant automated authorization tests pass.
+14. The owner receives a concise provisioning and onboarding checklist.
+
+## Relevant Files
+
+* `artifacts/accepted-admissions/src/App.tsx`
+* `artifacts/accepted-admissions/src/pages/landing.tsx`
+* `artifacts/accepted-admissions/src/components/shell.tsx`
+* `artifacts/api-server/src/routes/platform.ts`
+* `lib/api-spec/openapi.yaml`
+* `lib/api-client-react/src/custom-fetch.ts`
+* `lib/db/src/schema/platform.ts`
+* `docs/accepted-admissions-provisioning.md`
+
+## Dependencies
+
+This task depends only on the existing Accepted Admissions platform foundation. It must not depend on completion of Task #3’s public website, consultation booking, or payment work.
