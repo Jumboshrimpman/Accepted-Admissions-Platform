@@ -393,6 +393,7 @@ async function requireAppUser(
       });
     }
     res.status(403).json({
+      code: "IDENTITY_NOT_PROVISIONED",
       error: "Portal access has not been provisioned for this account",
     });
     return;
@@ -431,6 +432,7 @@ async function requireAppUser(
       metadata: { method: req.method, reason: "role_provisioning_mismatch" },
     });
     res.status(403).json({
+      code: "ROLE_PROVISIONING_MISMATCH",
       error: "Portal role provisioning is out of sync; contact an administrator",
     });
     return;

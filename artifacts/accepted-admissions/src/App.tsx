@@ -31,6 +31,7 @@ import TutorSession from '@/pages/tutor/session';
 import AdminDashboard from '@/pages/admin/dashboard';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
+import { ProvisioningReference } from '@/components/provisioning-reference';
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -286,6 +287,7 @@ function AccessMessage({ forbidden }: { forbidden: boolean }) {
             ? "This account is not assigned to the requested role or portal area."
             : "Sign in with your invited Accepted Admissions account to continue."}
         </p>
+        {forbidden ? <ProvisioningReference /> : null}
         <SignInRecoveryButton />
       </div>
     </div>

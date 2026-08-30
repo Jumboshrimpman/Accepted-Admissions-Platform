@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
+import { ProvisioningReference } from "@/components/provisioning-reference";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,14 +27,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
     );
   }
   if (error || !apiUser) {
+    const status = (error as { status?: number } | null)?.status;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
           <h1 className="text-2xl font-bold">Portal access unavailable</h1>
           <p className="mt-3 text-muted-foreground">
-            This account has not been provisioned for the Accepted Admissions
-            portal. Please use your invited account or contact an administrator.
+            {status === 403
+              ? "Your Clerk sign-in succeeded, but this development account is not on the portal access list."
+              : "We could not confirm portal access. Please sign in again or contact an administrator."}
           </p>
+          {status === 403 ? <ProvisioningReference /> : null}
           <SignInRecoveryButton />
         </div>
       </div>
