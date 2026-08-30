@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 import { BookingCard } from "@/pages/portal/booking-card";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
+import { FinancialCard } from "@/pages/portal/financial-card";
 
 export default function PortalDashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
@@ -137,6 +138,7 @@ export default function PortalDashboard() {
       </div>
 
       {dashboard.user.role === "student" && <BookingCard />}
+      {(dashboard.user.role === "student" || dashboard.user.role === "viewer") && <FinancialCard />}
       {dashboard.user.role === "tutor" && <CalendarConnectionCard />}
 
       {/* Courses */}

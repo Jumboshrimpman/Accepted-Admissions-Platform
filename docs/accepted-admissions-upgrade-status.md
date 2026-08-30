@@ -17,13 +17,16 @@
 - Removed the old enrollment status message from the application and replaced it with the neutral “SAT and IELTS program · Fall 2026” label.
 - Added prepaid SAT booking for eligible tutors, including server-validated availability, atomic credit reservation, provider event IDs, cancellation with credit restoration, and rescheduling.
 - Added independently scoped Google Calendar OAuth and tutor controls for Xavier Morales and Eunice Chon; booking exposes only free/busy-derived slots and explicit disconnected states.
+- Added Stripe-hosted SAT Checkout and invoice creation, raw-body webhook signature verification, event idempotency, payment/refund status tracking, and exactly-once credit fulfillment.
+- Added account-scoped client financial history plus administrator controls for hosted invoices, offline payments, invoice states, and audited credit adjustments.
 
 ## External services
 
 The following are intentionally not labeled live:
 
 - Google Calendar: disconnected. The schema and provider boundary are ready, but OAuth credentials and tutor authorization are not configured.
-- Stripe: not configured. No Checkout session or webhook processing is claimed.
+- Stripe: connector attached. Hosted payment flows are implemented; the deployment webhook signing secret must be configured before signed events can be accepted.
+- Hosted payment redirects use `APP_ORIGIN` in production; configure it to the canonical HTTPS application origin before deployment.
 - Email: not configured. Client requests are stored, but acknowledgements are not sent by an external provider.
 - Otter.ai: disconnected. Manual meeting-record links are supported by the schema; transcripts are not imported or exposed.
 
@@ -32,7 +35,7 @@ The following are intentionally not labeled live:
 - Confirm and invite the intended development or production Clerk accounts before adding their Clerk IDs to allowlists. Existing invitation work remains separately gated.
 - Provide approved tutor headshots, biographies, titles, and LinkedIn redirects.
 - Provide approved Past Success copy, testimonials, attribution/anonymity choices, logos, and image alt text.
-- Configure provider credentials through Replit Secrets and complete end-to-end Google Calendar, Stripe, and email tests before enabling those workflows.
+- Configure the Stripe webhook signing secret through Replit Secrets and complete a test-mode Checkout/invoice/refund pass before accepting live payments.
 - Define final cancellation, credit-restoration, invoice, refund, and privacy-policy rules.
 
 ## Verification completed

@@ -64,6 +64,132 @@ paths:
                 $ref: "#/components/schemas/AdminOverview"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /financials:
+    get:
+      operationId: getFinancials
+      tags: [portal]
+      summary: Get invoices, payments, and credits visible to the signed-in client
+      responses:
+        "200":
+          description: Account-scoped financial records
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinancialSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /payments/checkout:
+    post:
+      operationId: createPaymentCheckout
+      tags: [portal]
+      summary: Create a Stripe-hosted Checkout session for an SAT product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CheckoutInput" }
+      responses:
+        "201":
+          description: Hosted Checkout session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckoutSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/financials:
+    get:
+      operationId: getAdminFinancials
+      tags: [administration]
+      summary: List all client invoices, payments, and credit adjustments
+      responses:
+        "200":
+          description: Administrator financial records and form options
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFinancials" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/invoices:
+    post:
+      operationId: createHostedInvoice
+      tags: [administration]
+      summary: Create and send a Stripe-hosted invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostedInvoiceInput" }
+      responses:
+        "201":
+          description: Hosted invoice
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvoiceRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/invoices/{invoiceId}:
+    patch:
+      operationId: updateInvoice
+      tags: [administration]
+      summary: Update an administratively managed invoice state
+      parameters:
+        - $ref: "#/components/parameters/InvoiceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InvoiceUpdate" }
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvoiceRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/payments/offline:
+    post:
+      operationId: createOfflinePayment
+      tags: [administration]
+      summary: Record a verified offline SAT payment and fulfill its credits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OfflinePaymentInput" }
+      responses:
+        "201":
+          description: Paid offline payment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/credit-adjustments:
+    post:
+      operationId: createCreditAdjustment
+      tags: [administration]
+      summary: Add an audited client credit or debit adjustment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreditAdjustmentInput" }
+      responses:
+        "201":
+          description: Credit ledger adjustment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreditLedgerEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /dashboard:
     get:
       operationId: getDashboard
@@ -776,6 +902,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    InvoiceId:
+      name: invoiceId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     Unauthorized:
       description: Authentication required
@@ -821,6 +952,150 @@ components:
       properties:
         error: { type: string }
         code: { type: string }
+    FinancialStatus:
+      type: string
+      enum: [pending, sent, overdue, paid, failed, canceled, refunded, partially_refunded]
+    SatProduct:
+      type: object
+      required: [id, slug, name, description, durationHours, totalPriceCents, effectiveHourlyRateCents]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        durationHours: { type: number }
+        totalPriceCents: { type: number }
+        effectiveHourlyRateCents: { type: number }
+    InvoiceRecord:
+      type: object
+      required: [id, status, provider, description, subtotalCents, discountCents, totalCents, createdAt]
+      properties:
+        id: { type: string }
+        clientUserId: { type: ["string", "null"] }
+        clientName: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/FinancialStatus" }
+        provider: { type: string }
+        providerInvoiceId: { type: ["string", "null"] }
+        description: { type: string }
+        subtotalCents: { type: number }
+        discountCents: { type: number }
+        totalCents: { type: number }
+        hostedInvoiceUrl: { type: ["string", "null"] }
+        dueAt: { type: ["string", "null"], format: date-time }
+        paidAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    PaymentRecord:
+      type: object
+      required: [id, amountCents, refundedAmountCents, status, method, createdAt]
+      properties:
+        id: { type: string }
+        clientUserId: { type: ["string", "null"] }
+        clientName: { type: ["string", "null"] }
+        invoiceId: { type: ["string", "null"] }
+        productId: { type: ["string", "null"] }
+        productName: { type: ["string", "null"] }
+        amountCents: { type: number }
+        refundedAmountCents: { type: number }
+        status: { $ref: "#/components/schemas/FinancialStatus" }
+        method: { type: string }
+        failureReason: { type: ["string", "null"] }
+        paidAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    CreditLedgerEntry:
+      type: object
+      required: [id, entryType, hours, createdAt]
+      properties:
+        id: { type: string }
+        clientUserId: { type: string }
+        clientName: { type: ["string", "null"] }
+        entryType: { type: string }
+        hours: { type: number }
+        note: { type: ["string", "null"] }
+        productId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    FinancialSummary:
+      type: object
+      required: [readOnly, providerStatus, remainingHours, invoices, payments, credits]
+      properties:
+        readOnly: { type: boolean }
+        providerStatus: { type: string }
+        remainingHours: { type: number }
+        invoices:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceRecord" }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentRecord" }
+        credits:
+          type: array
+          items: { $ref: "#/components/schemas/CreditLedgerEntry" }
+    CheckoutInput:
+      type: object
+      required: [productId]
+      properties:
+        productId: { type: string }
+    CheckoutSession:
+      type: object
+      required: [paymentId, invoiceId, status, url]
+      properties:
+        paymentId: { type: string }
+        invoiceId: { type: string }
+        status: { type: string, enum: [pending] }
+        url: { type: string }
+    FinancialClient:
+      type: object
+      required: [id, displayName, email]
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+    AdminFinancials:
+      type: object
+      required: [clients, products, invoices, payments, credits]
+      properties:
+        clients:
+          type: array
+          items: { $ref: "#/components/schemas/FinancialClient" }
+        products:
+          type: array
+          items: { $ref: "#/components/schemas/SatProduct" }
+        invoices:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceRecord" }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentRecord" }
+        credits:
+          type: array
+          items: { $ref: "#/components/schemas/CreditLedgerEntry" }
+    HostedInvoiceInput:
+      type: object
+      required: [clientUserId, productId]
+      properties:
+        clientUserId: { type: string }
+        productId: { type: string }
+        daysUntilDue: { type: number, minimum: 1, maximum: 90, default: 7 }
+    OfflinePaymentInput:
+      type: object
+      required: [clientUserId, productId]
+      properties:
+        clientUserId: { type: string }
+        productId: { type: string }
+        note: { type: string, maxLength: 2000 }
+    CreditAdjustmentInput:
+      type: object
+      required: [clientUserId, hours, note]
+      properties:
+        clientUserId: { type: string }
+        hours: { type: number, minimum: -100, maximum: 100 }
+        note: { type: string, minLength: 3, maxLength: 2000 }
+    InvoiceUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, sent, overdue, failed, canceled]
     BookingTutor:
       type: object
       required: [id, name, title, subjects, calendarStatus, providerStatus]

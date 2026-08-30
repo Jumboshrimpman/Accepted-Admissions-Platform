@@ -14,6 +14,177 @@ export interface Error {
   code?: string;
 }
 
+export type FinancialStatus = typeof FinancialStatus[keyof typeof FinancialStatus];
+
+
+export const FinancialStatus = {
+  pending: 'pending',
+  sent: 'sent',
+  overdue: 'overdue',
+  paid: 'paid',
+  failed: 'failed',
+  canceled: 'canceled',
+  refunded: 'refunded',
+  partially_refunded: 'partially_refunded',
+} as const;
+
+export interface SatProduct {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  durationHours: number;
+  totalPriceCents: number;
+  effectiveHourlyRateCents: number;
+}
+
+export interface InvoiceRecord {
+  id: string;
+  /** @nullable */
+  clientUserId?: string | null;
+  /** @nullable */
+  clientName?: string | null;
+  status: FinancialStatus;
+  provider: string;
+  /** @nullable */
+  providerInvoiceId?: string | null;
+  description: string;
+  subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  /** @nullable */
+  hostedInvoiceUrl?: string | null;
+  /** @nullable */
+  dueAt?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  /** @nullable */
+  clientUserId?: string | null;
+  /** @nullable */
+  clientName?: string | null;
+  /** @nullable */
+  invoiceId?: string | null;
+  /** @nullable */
+  productId?: string | null;
+  /** @nullable */
+  productName?: string | null;
+  amountCents: number;
+  refundedAmountCents: number;
+  status: FinancialStatus;
+  method: string;
+  /** @nullable */
+  failureReason?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface CreditLedgerEntry {
+  id: string;
+  clientUserId?: string;
+  /** @nullable */
+  clientName?: string | null;
+  entryType: string;
+  hours: number;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  productId?: string | null;
+  createdAt: string;
+}
+
+export interface FinancialSummary {
+  readOnly: boolean;
+  providerStatus: string;
+  remainingHours: number;
+  invoices: InvoiceRecord[];
+  payments: PaymentRecord[];
+  credits: CreditLedgerEntry[];
+}
+
+export interface CheckoutInput {
+  productId: string;
+}
+
+export type CheckoutSessionStatus = typeof CheckoutSessionStatus[keyof typeof CheckoutSessionStatus];
+
+
+export const CheckoutSessionStatus = {
+  pending: 'pending',
+} as const;
+
+export interface CheckoutSession {
+  paymentId: string;
+  invoiceId: string;
+  status: CheckoutSessionStatus;
+  url: string;
+}
+
+export interface FinancialClient {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
+export interface AdminFinancials {
+  clients: FinancialClient[];
+  products: SatProduct[];
+  invoices: InvoiceRecord[];
+  payments: PaymentRecord[];
+  credits: CreditLedgerEntry[];
+}
+
+export interface HostedInvoiceInput {
+  clientUserId: string;
+  productId: string;
+  /**
+     * @minimum 1
+     * @maximum 90
+     */
+  daysUntilDue?: number;
+}
+
+export interface OfflinePaymentInput {
+  clientUserId: string;
+  productId: string;
+  /** @maxLength 2000 */
+  note?: string;
+}
+
+export interface CreditAdjustmentInput {
+  clientUserId: string;
+  /**
+     * @minimum -100
+     * @maximum 100
+     */
+  hours: number;
+  /**
+     * @minLength 3
+     * @maxLength 2000
+     */
+  note: string;
+}
+
+export type InvoiceUpdateStatus = typeof InvoiceUpdateStatus[keyof typeof InvoiceUpdateStatus];
+
+
+export const InvoiceUpdateStatus = {
+  pending: 'pending',
+  sent: 'sent',
+  overdue: 'overdue',
+  failed: 'failed',
+  canceled: 'canceled',
+} as const;
+
+export interface InvoiceUpdate {
+  status: InvoiceUpdateStatus;
+}
+
 export type BookingTutorProviderStatus = typeof BookingTutorProviderStatus[keyof typeof BookingTutorProviderStatus];
 
 

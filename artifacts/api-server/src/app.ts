@@ -9,6 +9,11 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { processStripeWebhook } from "./lib/payment-service";
+import {
+  verifyStripeSignature,
+  webhookEventFromPayload,
+} from "./lib/stripe-client";
 
 const app: Express = express();
 
@@ -32,6 +37,29 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res): Promise<void> => {
+    const signature = req.header("stripe-signature");
+    if (!signature) {
+      res.status(400).json({ error: "Missing Stripe signature" });
+      return;
+    }
+    try {
+      if (!Buffer.isBuffer(req.body)) {
+        res.status(400).json({ error: "Stripe webhook body must be raw bytes" });
+        return;
+      }
+      verifyStripeSignature(req.body, signature);
+      await processStripeWebhook(webhookEventFromPayload(req.body));
+      res.status(200).json({ received: true });
+    } catch (error) {
+      req.log?.warn({ err: error }, "Stripe webhook rejected or failed");
+      res.status(400).json({ error: "Stripe webhook could not be verified" });
+    }
+  },
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(

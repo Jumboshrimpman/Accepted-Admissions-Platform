@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/react";
+import { useCreatePaymentCheckout } from "@workspace/api-client-react";
 import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -18,9 +20,14 @@ type Product = {
 };
 
 export default function SatOfferings() {
+  const { isSignedIn } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [checkoutProductId, setCheckoutProductId] = useState("");
+  const [checkoutMessage, setCheckoutMessage] = useState("");
+  const checkout = useCreatePaymentCheckout();
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   useEffect(() => {
     fetch(publicApiPath("/api/public/products"))
@@ -32,6 +39,28 @@ export default function SatOfferings() {
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  const startCheckout = (productId: string) => {
+    setCheckoutMessage("");
+    if (!isSignedIn) {
+      window.location.assign(`${basePath}/login`);
+      return;
+    }
+    setCheckoutProductId(productId);
+    checkout.mutate(
+      { data: { productId } },
+      {
+        onSuccess: (session) => window.location.assign(session.url),
+        onError: (checkoutError) => {
+          const message =
+            (checkoutError as { data?: { error?: string } } | null)?.data?.error ??
+            "Secure Checkout is temporarily unavailable.";
+          setCheckoutMessage(message);
+          setCheckoutProductId("");
+        },
+      },
+    );
+  };
 
   return (
     <PublicSiteShell eyebrow="Fall 2026 · SAT and IELTS program">
@@ -112,12 +141,28 @@ export default function SatOfferings() {
                       <span className="ml-2 text-sm text-muted-foreground">total</span>
                       <p className="mt-1 text-sm font-medium text-accent">${(product.effectiveHourlyRateCents / 100).toLocaleString()}/hour effective rate</p>
                     </div>
-                    <Link href="/client-request"><Button variant={index === 1 ? "default" : "outline"} className="w-full rounded-full">Request information</Button></Link>
+                     <Button
+                       variant={index === 1 ? "default" : "outline"}
+                       className="w-full rounded-full"
+                       onClick={() => startCheckout(product.id)}
+                       disabled={checkout.isPending}
+                     >
+                       {checkout.isPending && checkoutProductId === product.id
+                         ? "Opening secure Checkout…"
+                         : isSignedIn
+                           ? "Buy securely"
+                           : "Sign in to purchase"}
+                     </Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
+           {checkoutMessage && (
+             <p className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive" role="alert">
+               {checkoutMessage}
+             </p>
+           )}
         </section>
 
         <section className="border-y bg-card">

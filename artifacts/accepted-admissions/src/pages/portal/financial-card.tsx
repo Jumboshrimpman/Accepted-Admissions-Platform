@@ -1,0 +1,127 @@
+import { format, parseISO } from "date-fns";
+import { ExternalLink, ReceiptText, WalletCards } from "lucide-react";
+import { getGetFinancialsQueryKey, useGetFinancials } from "@workspace/api-client-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function money(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+}
+
+function statusLabel(status: string): string {
+  return status.replaceAll("_", " ");
+}
+
+export function FinancialCard() {
+  const query = useGetFinancials({
+    query: {
+      queryKey: getGetFinancialsQueryKey(),
+      staleTime: 10_000,
+      refetchInterval: 30_000,
+    },
+  });
+
+  if (query.isLoading) return <Skeleton className="h-72 rounded-2xl" />;
+  if (!query.data) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          Financial records are temporarily unavailable.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { invoices, payments, remainingHours, readOnly } = query.data;
+  return (
+    <Card className="border-primary/15 shadow-lg shadow-primary/5">
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <WalletCards className="h-5 w-5 text-primary" />
+              Payments, invoices & credits
+            </CardTitle>
+            <CardDescription className="mt-2">
+              Stripe payment pages handle card details. This portal shows only verified account records.
+            </CardDescription>
+          </div>
+          <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
+            {remainingHours} hour{remainingHours === 1 ? "" : "s"} available
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {!readOnly && (
+          <Button asChild className="rounded-full">
+            <a href="/sat">Purchase SAT hours</a>
+          </Button>
+        )}
+        <div>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Recent payments
+          </h3>
+          {payments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {payments.slice(0, 5).map((payment) => (
+                <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
+                  <div>
+                    <p className="font-medium">{payment.productName ?? "SAT tutoring payment"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(parseISO(payment.createdAt), "MMM d, yyyy")} · {payment.method.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">{money(payment.amountCents)}</p>
+                    <Badge variant="outline" className="capitalize">{statusLabel(payment.status)}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <ReceiptText className="h-4 w-4" /> Invoices
+          </h3>
+          {invoices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No invoices recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {invoices.slice(0, 5).map((invoice) => (
+                <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
+                  <div>
+                    <p className="font-medium">{invoice.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {invoice.dueAt ? `Due ${format(parseISO(invoice.dueAt), "MMM d, yyyy")}` : "No due date"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="font-semibold">{money(invoice.totalCents)}</p>
+                      <Badge variant="outline" className="capitalize">{statusLabel(invoice.status)}</Badge>
+                    </div>
+                    {invoice.hostedInvoiceUrl && (
+                      <Button asChild size="icon" variant="ghost" aria-label="Open hosted invoice">
+                        <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

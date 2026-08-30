@@ -72,6 +72,254 @@ export const GetAdminOverviewResponse = zod.object({
 
 
 /**
+ * @summary Get invoices, payments, and credits visible to the signed-in client
+ */
+export const GetFinancialsResponse = zod.object({
+  "readOnly": zod.boolean(),
+  "providerStatus": zod.string(),
+  "remainingHours": zod.number(),
+  "invoices": zod.array(zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "provider": zod.string(),
+  "providerInvoiceId": zod.string().nullish(),
+  "description": zod.string(),
+  "subtotalCents": zod.number(),
+  "discountCents": zod.number(),
+  "totalCents": zod.number(),
+  "hostedInvoiceUrl": zod.string().nullish(),
+  "dueAt": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "payments": zod.array(zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "invoiceId": zod.string().nullish(),
+  "productId": zod.string().nullish(),
+  "productName": zod.string().nullish(),
+  "amountCents": zod.number(),
+  "refundedAmountCents": zod.number(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "method": zod.string(),
+  "failureReason": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "credits": zod.array(zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().optional(),
+  "clientName": zod.string().nullish(),
+  "entryType": zod.string(),
+  "hours": zod.number(),
+  "note": zod.string().nullish(),
+  "productId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a Stripe-hosted Checkout session for an SAT product
+ */
+export const CreatePaymentCheckoutBody = zod.object({
+  "productId": zod.string()
+})
+
+export const CreatePaymentCheckoutResponse = zod.object({
+  "paymentId": zod.string(),
+  "invoiceId": zod.string(),
+  "status": zod.enum(['pending']),
+  "url": zod.string()
+})
+
+
+/**
+ * @summary List all client invoices, payments, and credit adjustments
+ */
+export const GetAdminFinancialsResponse = zod.object({
+  "clients": zod.array(zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string()
+})),
+  "products": zod.array(zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "durationHours": zod.number(),
+  "totalPriceCents": zod.number(),
+  "effectiveHourlyRateCents": zod.number()
+})),
+  "invoices": zod.array(zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "provider": zod.string(),
+  "providerInvoiceId": zod.string().nullish(),
+  "description": zod.string(),
+  "subtotalCents": zod.number(),
+  "discountCents": zod.number(),
+  "totalCents": zod.number(),
+  "hostedInvoiceUrl": zod.string().nullish(),
+  "dueAt": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "payments": zod.array(zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "invoiceId": zod.string().nullish(),
+  "productId": zod.string().nullish(),
+  "productName": zod.string().nullish(),
+  "amountCents": zod.number(),
+  "refundedAmountCents": zod.number(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "method": zod.string(),
+  "failureReason": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "credits": zod.array(zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().optional(),
+  "clientName": zod.string().nullish(),
+  "entryType": zod.string(),
+  "hours": zod.number(),
+  "note": zod.string().nullish(),
+  "productId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create and send a Stripe-hosted invoice
+ */
+export const createHostedInvoiceBodyDaysUntilDueDefault = 7;
+export const createHostedInvoiceBodyDaysUntilDueMax = 90;
+
+
+
+export const CreateHostedInvoiceBody = zod.object({
+  "clientUserId": zod.string(),
+  "productId": zod.string(),
+  "daysUntilDue": zod.number().min(1).max(createHostedInvoiceBodyDaysUntilDueMax).default(createHostedInvoiceBodyDaysUntilDueDefault)
+})
+
+export const CreateHostedInvoiceResponse = zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "provider": zod.string(),
+  "providerInvoiceId": zod.string().nullish(),
+  "description": zod.string(),
+  "subtotalCents": zod.number(),
+  "discountCents": zod.number(),
+  "totalCents": zod.number(),
+  "hostedInvoiceUrl": zod.string().nullish(),
+  "dueAt": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an administratively managed invoice state
+ */
+export const UpdateInvoiceParams = zod.object({
+  "invoiceId": zod.coerce.string()
+})
+
+export const UpdateInvoiceBody = zod.object({
+  "status": zod.enum(['pending', 'sent', 'overdue', 'failed', 'canceled'])
+})
+
+export const UpdateInvoiceResponse = zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "provider": zod.string(),
+  "providerInvoiceId": zod.string().nullish(),
+  "description": zod.string(),
+  "subtotalCents": zod.number(),
+  "discountCents": zod.number(),
+  "totalCents": zod.number(),
+  "hostedInvoiceUrl": zod.string().nullish(),
+  "dueAt": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Record a verified offline SAT payment and fulfill its credits
+ */
+export const createOfflinePaymentBodyNoteMax = 2000;
+
+
+
+export const CreateOfflinePaymentBody = zod.object({
+  "clientUserId": zod.string(),
+  "productId": zod.string(),
+  "note": zod.string().max(createOfflinePaymentBodyNoteMax).optional()
+})
+
+export const CreateOfflinePaymentResponse = zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "clientName": zod.string().nullish(),
+  "invoiceId": zod.string().nullish(),
+  "productId": zod.string().nullish(),
+  "productName": zod.string().nullish(),
+  "amountCents": zod.number(),
+  "refundedAmountCents": zod.number(),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "method": zod.string(),
+  "failureReason": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Add an audited client credit or debit adjustment
+ */
+export const createCreditAdjustmentBodyHoursMin = -100;
+export const createCreditAdjustmentBodyHoursMax = 100;
+
+export const createCreditAdjustmentBodyNoteMin = 3;
+export const createCreditAdjustmentBodyNoteMax = 2000;
+
+
+
+export const CreateCreditAdjustmentBody = zod.object({
+  "clientUserId": zod.string(),
+  "hours": zod.number().min(createCreditAdjustmentBodyHoursMin).max(createCreditAdjustmentBodyHoursMax),
+  "note": zod.string().min(createCreditAdjustmentBodyNoteMin).max(createCreditAdjustmentBodyNoteMax)
+})
+
+export const CreateCreditAdjustmentResponse = zod.object({
+  "id": zod.string(),
+  "clientUserId": zod.string().optional(),
+  "clientName": zod.string().nullish(),
+  "entryType": zod.string(),
+  "hours": zod.number(),
+  "note": zod.string().nullish(),
+  "productId": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get the signed-in user's dashboard
  */
 export const GetDashboardResponse = zod.object({

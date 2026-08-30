@@ -43,6 +43,20 @@
       "when": 1788121428663,
       "tag": "0005_rainy_wolf_cub",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788122470051,
+      "tag": "0006_curvy_supreme_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788124422503,
+      "tag": "0007_cuddly_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

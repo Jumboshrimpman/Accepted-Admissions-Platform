@@ -1,6 +1,7 @@
 import { getAuth } from "@clerk/express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import {
   createGoogleEvent,
   decryptCalendarToken,
@@ -21,6 +22,12 @@ import {
   type AvailabilityRule,
   type BusyWindow,
 } from "../lib/booking";
+import {
+  createCheckoutSession,
+  createHostedInvoice,
+  stripeErrorMessage,
+  voidHostedInvoice,
+} from "../lib/payment-service";
 import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
@@ -161,6 +168,15 @@ function subjectFamily(subject: string): string {
     return "ielts";
   }
   return normalized;
+}
+
+function publicAppOrigin(): string {
+  const configured = process.env.APP_ORIGIN?.trim().replace(/\/$/, "");
+  if (configured) return configured;
+  if (process.env.NODE_ENV !== "production" && process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  throw new Error("APP_ORIGIN must be configured for hosted payment redirects");
 }
 
 async function ensureSeedData(): Promise<string> {
@@ -1966,6 +1982,503 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
   }
 });
 
+async function financialSummary(clientUserId: string) {
+  const [invoiceRows, paymentRows, entries] = await Promise.all([
+    db
+      .select()
+      .from(invoicesTable)
+      .where(eq(invoicesTable.clientUserId, clientUserId))
+      .orderBy(desc(invoicesTable.createdAt)),
+    db
+      .select({
+        id: paymentsTable.id,
+        invoiceId: paymentsTable.invoiceId,
+        productId: paymentsTable.productId,
+        productName: satProductsTable.name,
+        amountCents: paymentsTable.amountCents,
+        refundedAmountCents: paymentsTable.refundedAmountCents,
+        status: paymentsTable.status,
+        method: paymentsTable.method,
+        failureReason: paymentsTable.failureReason,
+        paidAt: paymentsTable.paidAt,
+        createdAt: paymentsTable.createdAt,
+      })
+      .from(paymentsTable)
+      .leftJoin(satProductsTable, eq(satProductsTable.id, paymentsTable.productId))
+      .where(eq(paymentsTable.clientUserId, clientUserId))
+      .orderBy(desc(paymentsTable.createdAt)),
+    db
+      .select({
+        id: creditLedgerTable.id,
+        clientUserId: creditLedgerTable.clientUserId,
+        entryType: creditLedgerTable.entryType,
+        hours: creditLedgerTable.hours,
+        note: creditLedgerTable.note,
+        productId: creditLedgerTable.productId,
+        createdAt: creditLedgerTable.createdAt,
+      })
+      .from(creditLedgerTable)
+      .where(eq(creditLedgerTable.clientUserId, clientUserId))
+      .orderBy(desc(creditLedgerTable.createdAt)),
+  ]);
+  const remainingHours = entries.reduce((total, entry) => {
+    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
+    return total + (positive ? entry.hours : -entry.hours);
+  }, 0);
+  return {
+    remainingHours,
+    invoices: invoiceRows.map((invoice) => ({
+      id: invoice.id,
+      status: invoice.status,
+      provider: invoice.provider,
+      providerInvoiceId: invoice.providerInvoiceId,
+      description: invoice.description,
+      subtotalCents: invoice.subtotalCents,
+      discountCents: invoice.discountCents,
+      totalCents: invoice.totalCents,
+      hostedInvoiceUrl: invoice.hostedInvoiceUrl,
+      dueAt: invoice.dueAt,
+      paidAt: invoice.paidAt,
+      createdAt: invoice.createdAt,
+    })),
+    payments: paymentRows,
+    credits: entries,
+  };
+}
+
+router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
+  const subjectUserId = await dataSubjectUserId(req.appUser!);
+  const summary = await financialSummary(subjectUserId);
+  res.json({
+    ...summary,
+    readOnly: req.appUser!.role === "viewer",
+    providerStatus: process.env.STRIPE_WEBHOOK_SECRET
+      ? "connected"
+      : "connected_webhook_setup_required",
+  });
+});
+
+router.post(
+  "/payments/checkout",
+  ensureRole(["student"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const productId = stringField((req.body ?? {}) as Record<string, unknown>, "productId");
+    const [product] = await db
+      .select()
+      .from(satProductsTable)
+      .where(and(eq(satProductsTable.id, productId), eq(satProductsTable.active, true)))
+      .limit(1);
+    if (!product) {
+      res.status(404).json({ error: "SAT product not found" });
+      return;
+    }
+    const [invoice, payment] = await db.transaction(async (tx) => {
+      const [createdInvoice] = await tx
+        .insert(invoicesTable)
+        .values({
+          clientUserId: req.appUser!.id,
+          status: "pending",
+          provider: "stripe_checkout",
+          description: product.name,
+          subtotalCents: product.totalPriceCents,
+          totalCents: product.totalPriceCents,
+        })
+        .returning();
+      const [createdPayment] = await tx
+        .insert(paymentsTable)
+        .values({
+          clientUserId: req.appUser!.id,
+          invoiceId: createdInvoice!.id,
+          productId: product.id,
+          amountCents: product.totalPriceCents,
+          status: "pending",
+          method: "stripe_checkout",
+        })
+        .returning();
+      return [createdInvoice!, createdPayment!];
+    });
+    try {
+      const origin = publicAppOrigin();
+      const checkout = await createCheckoutSession({
+        user: req.appUser!,
+        product,
+        invoiceId: invoice.id,
+        paymentId: payment.id,
+        successUrl: `${origin}/portal?payment=success`,
+        cancelUrl: `${origin}/sat?payment=canceled`,
+      });
+      await db
+        .update(paymentsTable)
+        .set({
+          providerCheckoutSessionId: checkout.id,
+          providerPaymentIntentId: checkout.paymentIntentId,
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentsTable.id, payment.id));
+      res.status(201).json({
+        paymentId: payment.id,
+        invoiceId: invoice.id,
+        status: "pending",
+        url: checkout.url,
+      });
+    } catch (error) {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(paymentsTable)
+          .set({
+            status: "failed",
+            failureReason: stripeErrorMessage(error),
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentsTable.id, payment.id));
+        await tx
+          .update(invoicesTable)
+          .set({ status: "failed" })
+          .where(eq(invoicesTable.id, invoice.id));
+      });
+      res.status(502).json({ error: stripeErrorMessage(error) });
+    }
+  },
+);
+
+router.get(
+  "/admin/financials",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    const [clients, products, invoices, payments, credits] = await Promise.all([
+      db
+        .select({
+          id: usersTable.id,
+          displayName: usersTable.displayName,
+          email: usersTable.email,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.role, "student"))
+        .orderBy(asc(usersTable.displayName)),
+      db
+        .select({
+          id: satProductsTable.id,
+          slug: satProductsTable.slug,
+          name: satProductsTable.name,
+          description: satProductsTable.description,
+          durationHours: satProductsTable.durationHours,
+          totalPriceCents: satProductsTable.totalPriceCents,
+          effectiveHourlyRateCents: satProductsTable.effectiveHourlyRateCents,
+        })
+        .from(satProductsTable)
+        .where(eq(satProductsTable.active, true))
+        .orderBy(asc(satProductsTable.durationHours)),
+      db
+        .select({
+          id: invoicesTable.id,
+          clientUserId: invoicesTable.clientUserId,
+          clientName: usersTable.displayName,
+          status: invoicesTable.status,
+          provider: invoicesTable.provider,
+          providerInvoiceId: invoicesTable.providerInvoiceId,
+          description: invoicesTable.description,
+          subtotalCents: invoicesTable.subtotalCents,
+          discountCents: invoicesTable.discountCents,
+          totalCents: invoicesTable.totalCents,
+          hostedInvoiceUrl: invoicesTable.hostedInvoiceUrl,
+          dueAt: invoicesTable.dueAt,
+          paidAt: invoicesTable.paidAt,
+          createdAt: invoicesTable.createdAt,
+        })
+        .from(invoicesTable)
+        .leftJoin(usersTable, eq(usersTable.id, invoicesTable.clientUserId))
+        .orderBy(desc(invoicesTable.createdAt)),
+      db
+        .select({
+          id: paymentsTable.id,
+          clientUserId: paymentsTable.clientUserId,
+          clientName: usersTable.displayName,
+          invoiceId: paymentsTable.invoiceId,
+          productId: paymentsTable.productId,
+          productName: satProductsTable.name,
+          amountCents: paymentsTable.amountCents,
+          refundedAmountCents: paymentsTable.refundedAmountCents,
+          status: paymentsTable.status,
+          method: paymentsTable.method,
+          failureReason: paymentsTable.failureReason,
+          paidAt: paymentsTable.paidAt,
+          createdAt: paymentsTable.createdAt,
+        })
+        .from(paymentsTable)
+        .leftJoin(usersTable, eq(usersTable.id, paymentsTable.clientUserId))
+        .leftJoin(satProductsTable, eq(satProductsTable.id, paymentsTable.productId))
+        .orderBy(desc(paymentsTable.createdAt)),
+      db
+        .select({
+          id: creditLedgerTable.id,
+          clientUserId: creditLedgerTable.clientUserId,
+          clientName: usersTable.displayName,
+          entryType: creditLedgerTable.entryType,
+          hours: creditLedgerTable.hours,
+          note: creditLedgerTable.note,
+          createdAt: creditLedgerTable.createdAt,
+        })
+        .from(creditLedgerTable)
+        .innerJoin(usersTable, eq(usersTable.id, creditLedgerTable.clientUserId))
+        .orderBy(desc(creditLedgerTable.createdAt))
+        .limit(100),
+    ]);
+    res.json({ clients, products, invoices, payments, credits });
+  },
+);
+
+router.post(
+  "/admin/invoices",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const clientUserId = stringField(body, "clientUserId");
+    const productId = stringField(body, "productId");
+    const rawDays = typeof body.daysUntilDue === "number" ? body.daysUntilDue : 7;
+    const daysUntilDue = Math.max(1, Math.min(90, Math.round(rawDays)));
+    const [[client], [product]] = await Promise.all([
+      db.select().from(usersTable).where(eq(usersTable.id, clientUserId)).limit(1),
+      db
+        .select()
+        .from(satProductsTable)
+        .where(and(eq(satProductsTable.id, productId), eq(satProductsTable.active, true)))
+        .limit(1),
+    ]);
+    if (!client || client.role !== "student" || !product) {
+      res.status(404).json({ error: "Client or SAT product not found" });
+      return;
+    }
+    const [invoice, payment] = await db.transaction(async (tx) => {
+      const [createdInvoice] = await tx
+        .insert(invoicesTable)
+        .values({
+          clientUserId: client.id,
+          status: "pending",
+          provider: "stripe_invoice",
+          description: product.name,
+          subtotalCents: product.totalPriceCents,
+          totalCents: product.totalPriceCents,
+        })
+        .returning();
+      const [createdPayment] = await tx
+        .insert(paymentsTable)
+        .values({
+          clientUserId: client.id,
+          invoiceId: createdInvoice!.id,
+          productId: product.id,
+          amountCents: product.totalPriceCents,
+          status: "pending",
+          method: "stripe_invoice",
+        })
+        .returning();
+      return [createdInvoice!, createdPayment!];
+    });
+    try {
+      const hosted = await createHostedInvoice({
+        user: client,
+        product,
+        invoiceId: invoice.id,
+        paymentId: payment.id,
+        daysUntilDue,
+      });
+      const [updated] = await db
+        .update(invoicesTable)
+        .set({
+          status: "sent",
+          providerInvoiceId: hosted.id,
+          hostedInvoiceUrl: hosted.hostedInvoiceUrl,
+          dueAt: hosted.dueAt,
+        })
+        .where(eq(invoicesTable.id, invoice.id))
+        .returning();
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "invoice.hosted_created",
+        entityType: "invoice",
+        entityId: invoice.id,
+        metadata: { clientUserId: client.id, productId: product.id },
+      });
+      res.status(201).json(updated);
+    } catch (error) {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(invoicesTable)
+          .set({ status: "failed" })
+          .where(eq(invoicesTable.id, invoice.id));
+        await tx
+          .update(paymentsTable)
+          .set({
+            status: "failed",
+            failureReason: stripeErrorMessage(error),
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentsTable.id, payment.id));
+      });
+      res.status(502).json({ error: stripeErrorMessage(error) });
+    }
+  },
+);
+
+router.post(
+  "/admin/payments/offline",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const clientUserId = stringField(body, "clientUserId");
+    const productId = stringField(body, "productId");
+    const note = stringField(body, "note");
+    const [[client], [product]] = await Promise.all([
+      db.select().from(usersTable).where(eq(usersTable.id, clientUserId)).limit(1),
+      db.select().from(satProductsTable).where(eq(satProductsTable.id, productId)).limit(1),
+    ]);
+    if (!client || client.role !== "student" || !product) {
+      res.status(404).json({ error: "Client or SAT product not found" });
+      return;
+    }
+    const payment = await db.transaction(async (tx) => {
+      const now = new Date();
+      const [invoice] = await tx
+        .insert(invoicesTable)
+        .values({
+          clientUserId: client.id,
+          status: "paid",
+          provider: "offline",
+          description: product.name,
+          subtotalCents: product.totalPriceCents,
+          totalCents: product.totalPriceCents,
+          paidAt: now,
+        })
+        .returning();
+      const [createdPayment] = await tx
+        .insert(paymentsTable)
+        .values({
+          clientUserId: client.id,
+          invoiceId: invoice!.id,
+          productId: product.id,
+          amountCents: product.totalPriceCents,
+          status: "paid",
+          method: "offline",
+          internalNote: note || "Offline payment recorded by administrator",
+          paidAt: now,
+        })
+        .returning();
+      await tx.insert(creditLedgerTable).values({
+        clientUserId: client.id,
+        productId: product.id,
+        entryType: "original",
+        hours: product.durationHours,
+        referenceType: "payment",
+        referenceId: createdPayment!.id,
+        fulfillmentKey: `payment:${createdPayment!.id}`,
+        note: `${product.name} offline payment`,
+        createdBy: req.appUser!.id,
+      });
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "payment.offline_recorded",
+        entityType: "payment",
+        entityId: createdPayment!.id,
+        metadata: { clientUserId: client.id, productId: product.id },
+      });
+      return createdPayment!;
+    });
+    res.status(201).json(payment);
+  },
+);
+
+router.post(
+  "/admin/credit-adjustments",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const clientUserId = stringField(body, "clientUserId");
+    const hours = typeof body.hours === "number" ? body.hours : Number.NaN;
+    const note = stringField(body, "note");
+    if (!Number.isFinite(hours) || hours === 0 || Math.abs(hours) > 100 || note.length < 3) {
+      res.status(400).json({ error: "Enter a non-zero adjustment up to 100 hours and a note" });
+      return;
+    }
+    const [client] = await db
+      .select({ id: usersTable.id, role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.id, clientUserId))
+      .limit(1);
+    if (!client || client.role !== "student") {
+      res.status(404).json({ error: "Client not found" });
+      return;
+    }
+    const [entry] = await db
+      .insert(creditLedgerTable)
+      .values({
+        clientUserId: client.id,
+        entryType: hours > 0 ? "adjustment_credit" : "adjustment_debit",
+        hours: Math.abs(hours),
+        referenceType: "admin_adjustment",
+        referenceId: randomUUID(),
+        note,
+        createdBy: req.appUser!.id,
+      })
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "credit.adjusted",
+      entityType: "credit_ledger",
+      entityId: entry!.id,
+      metadata: { clientUserId: client.id, hours },
+    });
+    res.status(201).json(entry);
+  },
+);
+
+router.patch(
+  "/admin/invoices/:invoiceId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const invoiceId = typeof req.params.invoiceId === "string" ? req.params.invoiceId : "";
+    const status = stringField((req.body ?? {}) as Record<string, unknown>, "status");
+    if (!["pending", "sent", "overdue", "failed", "canceled"].includes(status)) {
+      res.status(400).json({ error: "Invalid invoice status" });
+      return;
+    }
+    const [updated] = await db
+      .select()
+      .from(invoicesTable)
+      .where(eq(invoicesTable.id, invoiceId))
+      .limit(1);
+    const invoice = updated;
+    if (!invoice) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    if (
+      status === "canceled" &&
+      invoice.provider === "stripe_invoice" &&
+      invoice.providerInvoiceId &&
+      !["paid", "refunded", "partially_refunded", "canceled"].includes(invoice.status)
+    ) {
+      try {
+        await voidHostedInvoice(invoice.providerInvoiceId, invoice.id);
+      } catch (error) {
+        res.status(502).json({ error: stripeErrorMessage(error) });
+        return;
+      }
+    }
+    const [saved] = await db
+      .update(invoicesTable)
+      .set({ status })
+      .where(eq(invoicesTable.id, invoiceId))
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "invoice.status_updated",
+      entityType: "invoice",
+      entityId: saved!.id,
+      metadata: { status },
+    });
+    res.json(saved);
+  },
+);
+
 router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
   const subjectUserId = await dataSubjectUserId(req.appUser!);
   const entries = await db
@@ -1989,7 +2502,9 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
     remainingHours,
     entries,
     providerStatus: {
-      payments: "not configured",
+      payments: process.env.STRIPE_WEBHOOK_SECRET
+        ? "connected"
+        : "connected · webhook setup required",
       calendar: "disconnected",
       email: "not configured",
     },
@@ -2106,7 +2621,9 @@ router.get(
         grossProfitCents: Number(platform[7][0]?.amount ?? 0),
         providerStatus: {
           calendar: "disconnected",
-          payments: "not configured",
+          payments: process.env.STRIPE_WEBHOOK_SECRET
+            ? "connected"
+            : "connected · webhook setup required",
           email: "not configured",
           otter: "disconnected",
         },

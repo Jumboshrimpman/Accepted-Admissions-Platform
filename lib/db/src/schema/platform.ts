@@ -37,6 +37,7 @@ export const usersTable = pgTable(
     clerkUserId: text("clerk_user_id").notNull(),
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
     role: roleEnum("role").notNull().default("student"),
     timezone: text("timezone").notNull().default("America/New_York"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -339,6 +340,8 @@ export const satProductsTable = pgTable(
     durationHours: numeric("duration_hours", { mode: "number" }).notNull(),
     totalPriceCents: numeric("total_price_cents", { mode: "number" }).notNull(),
     effectiveHourlyRateCents: numeric("effective_hourly_rate_cents", { mode: "number" }).notNull(),
+    stripeProductId: text("stripe_product_id"),
+    stripePriceId: text("stripe_price_id"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -356,6 +359,7 @@ export const invoicesTable = pgTable("invoices", {
   subtotalCents: numeric("subtotal_cents", { mode: "number" }).notNull(),
   discountCents: numeric("discount_cents", { mode: "number" }).notNull().default(0),
   totalCents: numeric("total_cents", { mode: "number" }).notNull(),
+  hostedInvoiceUrl: text("hosted_invoice_url"),
   dueAt: timestamp("due_at", { withTimezone: true }),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -372,28 +376,54 @@ export const paymentsTable = pgTable(
     status: text("status").notNull().default("pending"),
     method: text("method").notNull().default("stripe"),
     providerEventId: text("provider_event_id"),
+    providerPaymentIntentId: text("provider_payment_intent_id"),
+    providerCheckoutSessionId: text("provider_checkout_session_id"),
+    refundedAmountCents: numeric("refunded_amount_cents", { mode: "number" }).notNull().default(0),
+    failureReason: text("failure_reason"),
     internalNote: text("internal_note"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("payment_provider_event_idx").on(table.providerEventId),
   ],
 );
 
-export const creditLedgerTable = pgTable("credit_ledger", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  clientUserId: uuid("client_user_id").notNull().references(() => usersTable.id),
-  productId: uuid("product_id").references(() => satProductsTable.id),
-  sessionId: uuid("session_id").references(() => sessionsTable.id),
-  entryType: text("entry_type").notNull(),
-  hours: numeric("hours", { mode: "number" }).notNull(),
-  referenceType: text("reference_type"),
-  referenceId: text("reference_id"),
-  note: text("note"),
-  createdBy: uuid("created_by").references(() => usersTable.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const stripeWebhookEventsTable = pgTable(
+  "stripe_webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    providerEventId: text("provider_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("stripe_webhook_event_provider_id_idx").on(table.providerEventId),
+  ],
+);
+
+export const creditLedgerTable = pgTable(
+  "credit_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientUserId: uuid("client_user_id").notNull().references(() => usersTable.id),
+    productId: uuid("product_id").references(() => satProductsTable.id),
+    sessionId: uuid("session_id").references(() => sessionsTable.id),
+    entryType: text("entry_type").notNull(),
+    hours: numeric("hours", { mode: "number" }).notNull(),
+    referenceType: text("reference_type"),
+    referenceId: text("reference_id"),
+    fulfillmentKey: text("fulfillment_key"),
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => usersTable.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("credit_ledger_fulfillment_key_idx").on(table.fulfillmentKey),
+  ],
+);
 
 export const clientRequestsTable = pgTable("client_requests", {
   id: uuid("id").primaryKey().defaultRandom(),

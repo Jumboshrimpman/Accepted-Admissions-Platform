@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminFinancials,
   AdminOverview,
   AssignmentDetail,
   AssignmentSummary,
@@ -37,26 +38,36 @@ import type {
   BookingTutor,
   CalendarConnection,
   CancelBookingInput,
+  CheckoutInput,
+  CheckoutSession,
   ContentSource,
   ContentSourceInput,
   Course,
   CourseDetail,
+  CreditAdjustmentInput,
+  CreditLedgerEntry,
   CurrentUser,
   CurriculumBlock,
   CurriculumBlockInput,
   CurriculumBlockUpdate,
   Dashboard,
   Error,
+  FinancialSummary,
   ForbiddenResponse,
   GenerateQuestionsInput,
   GetBookingAvailabilityParams,
   GetCalendarConnectUrl200,
   GetCalendarConnectUrlParams,
   HealthStatus,
+  HostedInvoiceInput,
+  InvoiceRecord,
+  InvoiceUpdate,
   ListAssignmentsParams,
   ListContentSourcesParams,
   ListQuestionBankParams,
   NotFoundResponse,
+  OfflinePaymentInput,
+  PaymentRecord,
   QuestionBankItem,
   QuestionBankUpdate,
   RescheduleBookingInput,
@@ -326,6 +337,516 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
 
 
 
+
+export const getGetFinancialsUrl = () => {
+
+
+
+
+  return `/api/financials`
+}
+
+/**
+ * @summary Get invoices, payments, and credits visible to the signed-in client
+ */
+export const getFinancials = async ( options?: Parameters<typeof customFetch>[1]): Promise<FinancialSummary> => {
+
+  return customFetch<FinancialSummary>(getGetFinancialsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFinancialsQueryKey = () => {
+    return [
+    `/api/financials`
+    ] as const;
+    }
+
+
+export const getGetFinancialsQueryOptions = <TData = Awaited<ReturnType<typeof getFinancials>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFinancials>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFinancialsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFinancials>>> = ({ signal }) => getFinancials({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFinancials>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFinancialsQueryResult = NonNullable<Awaited<ReturnType<typeof getFinancials>>>
+export type GetFinancialsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Get invoices, payments, and credits visible to the signed-in client
+ */
+
+export function useGetFinancials<TData = Awaited<ReturnType<typeof getFinancials>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFinancials>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFinancialsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePaymentCheckoutUrl = () => {
+
+
+
+
+  return `/api/payments/checkout`
+}
+
+/**
+ * @summary Create a Stripe-hosted Checkout session for an SAT product
+ */
+export const createPaymentCheckout = async (checkoutInput: CheckoutInput, options?: Parameters<typeof customFetch>[1]): Promise<CheckoutSession> => {
+
+  return customFetch<CheckoutSession>(getCreatePaymentCheckoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(checkoutInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePaymentCheckoutMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaymentCheckout>>, TError,{data: BodyType<CheckoutInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPaymentCheckout>>, TError,{data: BodyType<CheckoutInput>}, TContext> => {
+
+const mutationKey = ['createPaymentCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPaymentCheckout>>, {data: BodyType<CheckoutInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPaymentCheckout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePaymentCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof createPaymentCheckout>>>
+    export type CreatePaymentCheckoutMutationBody = BodyType<CheckoutInput>
+    export type CreatePaymentCheckoutMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Create a Stripe-hosted Checkout session for an SAT product
+ */
+export const useCreatePaymentCheckout = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaymentCheckout>>, TError,{data: BodyType<CheckoutInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPaymentCheckout>>,
+        TError,
+        {data: BodyType<CheckoutInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePaymentCheckoutMutationOptions(options));
+    }
+
+export const getGetAdminFinancialsUrl = () => {
+
+
+
+
+  return `/api/admin/financials`
+}
+
+/**
+ * @summary List all client invoices, payments, and credit adjustments
+ */
+export const getAdminFinancials = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminFinancials> => {
+
+  return customFetch<AdminFinancials>(getGetAdminFinancialsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminFinancialsQueryKey = () => {
+    return [
+    `/api/admin/financials`
+    ] as const;
+    }
+
+
+export const getGetAdminFinancialsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminFinancials>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFinancials>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminFinancialsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminFinancials>>> = ({ signal }) => getAdminFinancials({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminFinancials>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminFinancialsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminFinancials>>>
+export type GetAdminFinancialsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List all client invoices, payments, and credit adjustments
+ */
+
+export function useGetAdminFinancials<TData = Awaited<ReturnType<typeof getAdminFinancials>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminFinancials>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminFinancialsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateHostedInvoiceUrl = () => {
+
+
+
+
+  return `/api/admin/invoices`
+}
+
+/**
+ * @summary Create and send a Stripe-hosted invoice
+ */
+export const createHostedInvoice = async (hostedInvoiceInput: HostedInvoiceInput, options?: Parameters<typeof customFetch>[1]): Promise<InvoiceRecord> => {
+
+  return customFetch<InvoiceRecord>(getCreateHostedInvoiceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(hostedInvoiceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateHostedInvoiceMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createHostedInvoice>>, TError,{data: BodyType<HostedInvoiceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createHostedInvoice>>, TError,{data: BodyType<HostedInvoiceInput>}, TContext> => {
+
+const mutationKey = ['createHostedInvoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createHostedInvoice>>, {data: BodyType<HostedInvoiceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createHostedInvoice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateHostedInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof createHostedInvoice>>>
+    export type CreateHostedInvoiceMutationBody = BodyType<HostedInvoiceInput>
+    export type CreateHostedInvoiceMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Create and send a Stripe-hosted invoice
+ */
+export const useCreateHostedInvoice = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createHostedInvoice>>, TError,{data: BodyType<HostedInvoiceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createHostedInvoice>>,
+        TError,
+        {data: BodyType<HostedInvoiceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateHostedInvoiceMutationOptions(options));
+    }
+
+export const getUpdateInvoiceUrl = (invoiceId: string,) => {
+
+
+
+
+  return `/api/admin/invoices/${invoiceId}`
+}
+
+/**
+ * @summary Update an administratively managed invoice state
+ */
+export const updateInvoice = async (invoiceId: string,
+    invoiceUpdate: InvoiceUpdate, options?: Parameters<typeof customFetch>[1]): Promise<InvoiceRecord> => {
+
+  return customFetch<InvoiceRecord>(getUpdateInvoiceUrl(invoiceId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(invoiceUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateInvoiceMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInvoice>>, TError,{invoiceId: string;data: BodyType<InvoiceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInvoice>>, TError,{invoiceId: string;data: BodyType<InvoiceUpdate>}, TContext> => {
+
+const mutationKey = ['updateInvoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInvoice>>, {invoiceId: string;data: BodyType<InvoiceUpdate>}> = (props) => {
+          const {invoiceId,data} = props ?? {};
+
+          return  updateInvoice(invoiceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof updateInvoice>>>
+    export type UpdateInvoiceMutationBody = BodyType<InvoiceUpdate>
+    export type UpdateInvoiceMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Update an administratively managed invoice state
+ */
+export const useUpdateInvoice = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInvoice>>, TError,{invoiceId: string;data: BodyType<InvoiceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInvoice>>,
+        TError,
+        {invoiceId: string;data: BodyType<InvoiceUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateInvoiceMutationOptions(options));
+    }
+
+export const getCreateOfflinePaymentUrl = () => {
+
+
+
+
+  return `/api/admin/payments/offline`
+}
+
+/**
+ * @summary Record a verified offline SAT payment and fulfill its credits
+ */
+export const createOfflinePayment = async (offlinePaymentInput: OfflinePaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<PaymentRecord> => {
+
+  return customFetch<PaymentRecord>(getCreateOfflinePaymentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(offlinePaymentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateOfflinePaymentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOfflinePayment>>, TError,{data: BodyType<OfflinePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOfflinePayment>>, TError,{data: BodyType<OfflinePaymentInput>}, TContext> => {
+
+const mutationKey = ['createOfflinePayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOfflinePayment>>, {data: BodyType<OfflinePaymentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createOfflinePayment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOfflinePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof createOfflinePayment>>>
+    export type CreateOfflinePaymentMutationBody = BodyType<OfflinePaymentInput>
+    export type CreateOfflinePaymentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Record a verified offline SAT payment and fulfill its credits
+ */
+export const useCreateOfflinePayment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOfflinePayment>>, TError,{data: BodyType<OfflinePaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createOfflinePayment>>,
+        TError,
+        {data: BodyType<OfflinePaymentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateOfflinePaymentMutationOptions(options));
+    }
+
+export const getCreateCreditAdjustmentUrl = () => {
+
+
+
+
+  return `/api/admin/credit-adjustments`
+}
+
+/**
+ * @summary Add an audited client credit or debit adjustment
+ */
+export const createCreditAdjustment = async (creditAdjustmentInput: CreditAdjustmentInput, options?: Parameters<typeof customFetch>[1]): Promise<CreditLedgerEntry> => {
+
+  return customFetch<CreditLedgerEntry>(getCreateCreditAdjustmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(creditAdjustmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCreditAdjustmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCreditAdjustment>>, TError,{data: BodyType<CreditAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCreditAdjustment>>, TError,{data: BodyType<CreditAdjustmentInput>}, TContext> => {
+
+const mutationKey = ['createCreditAdjustment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCreditAdjustment>>, {data: BodyType<CreditAdjustmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCreditAdjustment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCreditAdjustmentMutationResult = NonNullable<Awaited<ReturnType<typeof createCreditAdjustment>>>
+    export type CreateCreditAdjustmentMutationBody = BodyType<CreditAdjustmentInput>
+    export type CreateCreditAdjustmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+
+    /**
+ * @summary Add an audited client credit or debit adjustment
+ */
+export const useCreateCreditAdjustment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCreditAdjustment>>, TError,{data: BodyType<CreditAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCreditAdjustment>>,
+        TError,
+        {data: BodyType<CreditAdjustmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCreditAdjustmentMutationOptions(options));
+    }
 
 export const getGetDashboardUrl = () => {
 
