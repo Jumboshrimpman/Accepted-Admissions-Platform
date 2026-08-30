@@ -15,6 +15,8 @@
 - Added administrator operational and financial snapshot fields, including a clearly labeled gross profit calculation and provider readiness states.
 - Added the visible “Back to Home” link on the portal sign-in screen.
 - Removed the old enrollment status message from the application and replaced it with the neutral “SAT and IELTS program · Fall 2026” label.
+- Added prepaid SAT booking for eligible tutors, including server-validated availability, atomic credit reservation, provider event IDs, cancellation with credit restoration, and rescheduling.
+- Added independently scoped Google Calendar OAuth and tutor controls for Xavier Morales and Eunice Chon; booking exposes only free/busy-derived slots and explicit disconnected states.
 
 ## External services
 
@@ -39,6 +41,7 @@ The following are intentionally not labeled live:
 - Full workspace typecheck passed.
 - Accepted Admissions production build passed.
 - API server build passed.
+- Booking availability, time-zone, buffer, OAuth signing/encryption, and event-payload tests passed.
 - Public product, tutor, and SAT content endpoints returned HTTP 200.
 - Invalid client-request input returned HTTP 400.
 - Unauthenticated credit access returned HTTP 401.

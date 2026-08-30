@@ -36,6 +36,13 @@
       "when": 1788120527125,
       "tag": "0004_daffy_vance_astro",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788121428663,
+      "tag": "0005_rainy_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

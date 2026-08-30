@@ -78,6 +78,165 @@ paths:
                 $ref: "#/components/schemas/Dashboard"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /booking/tutors:
+    get:
+      operationId: listBookingTutors
+      tags: [portal]
+      summary: List eligible SAT tutors for prepaid-hour booking
+      responses:
+        "200":
+          description: Eligible tutors and provider connection states
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BookingTutor" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /booking/availability:
+    get:
+      operationId: getBookingAvailability
+      tags: [portal]
+      summary: Get server-validated available tutoring times
+      parameters:
+        - name: tutorProfileId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: durationMinutes
+          in: query
+          schema: { type: number, default: 60 }
+      responses:
+        "200":
+          description: Available times without private event details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookingAvailability" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /booking/sessions:
+    get:
+      operationId: listBookingSessions
+      tags: [portal]
+      summary: List the signed-in student's booked sessions
+      responses:
+        "200":
+          description: Booked sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BookingSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createBookingSession
+      tags: [portal]
+      summary: Atomically reserve a prepaid tutoring hour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookingInput" }
+      responses:
+        "201":
+          description: Confirmed booking
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookingSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/BookingConflict" }
+  /booking/sessions/{sessionId}/cancel:
+    post:
+      operationId: cancelBookingSession
+      tags: [portal]
+      summary: Cancel a booking and restore its credit
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        content:
+          application/json:
+             schema: { $ref: "#/components/schemas/CancelBookingInput" }
+      responses:
+        "200":
+          description: Cancelled booking
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookingSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /booking/sessions/{sessionId}/reschedule:
+    post:
+      operationId: rescheduleBookingSession
+      tags: [portal]
+      summary: Move a booking to another validated available time
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+             schema: { $ref: "#/components/schemas/RescheduleBookingInput" }
+      responses:
+        "200":
+          description: Rescheduled booking
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookingSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/BookingConflict" }
+  /calendar/connections:
+    get:
+      operationId: listCalendarConnections
+      tags: [administration]
+      summary: List calendar connection state for the signed-in tutor
+      responses:
+        "200":
+          description: Calendar connection state
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CalendarConnection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /calendar/connect:
+    get:
+      operationId: getCalendarConnectUrl
+      tags: [administration]
+      summary: Start Google Calendar OAuth for a tutor profile
+      parameters:
+        - name: tutorProfileId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OAuth authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl]
+                properties:
+                  authorizationUrl: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /calendar/connections/{tutorProfileId}:
+    delete:
+      operationId: disconnectCalendar
+      tags: [administration]
+      summary: Disconnect a tutor's Google Calendar
+      parameters:
+        - name: tutorProfileId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Calendar disconnected }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /courses:
     get:
       operationId: listCourses
@@ -630,6 +789,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    BookingConflict:
+      description: Booking cannot be completed because a credit, slot, or provider is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     BadRequest:
       description: Invalid request
       content:
@@ -655,6 +820,79 @@ components:
       required: [error]
       properties:
         error: { type: string }
+        code: { type: string }
+    BookingTutor:
+      type: object
+      required: [id, name, title, subjects, calendarStatus, providerStatus]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        title: { type: string }
+        photoUrl: { type: ["string", "null"] }
+        biography: { type: ["string", "null"] }
+        subjects:
+          type: array
+          items: { type: string }
+        calendarStatus: { type: string }
+        providerStatus: { type: string, enum: [connected, disconnected] }
+    BookingAvailability:
+      type: object
+      required: [tutor, providerStatus, slots]
+      properties:
+        tutor:
+          type: object
+          required: [id, name, title, timezone]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            title: { type: string }
+            timezone: { type: string }
+        providerStatus: { type: string, enum: [connected, disconnected] }
+        slots:
+          type: array
+          items: { type: string, format: date-time }
+    BookingSession:
+      type: object
+      required: [id, courseId, tutorProfileId, tutorName, dateTime, timezone, subject, title, durationMinutes, bookingStatus]
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        tutorProfileId: { type: ["string", "null"] }
+        tutorName: { type: ["string", "null"] }
+        dateTime: { type: string, format: date-time }
+        timezone: { type: string }
+        subject: { type: string }
+        title: { type: string }
+        durationMinutes: { type: number }
+        bookingStatus: { type: string, enum: [confirmed, rescheduled, cancelled] }
+        providerEventId: { type: ["string", "null"] }
+        providerEventUrl: { type: ["string", "null"] }
+        cancellationReason: { type: ["string", "null"] }
+    BookingInput:
+      type: object
+      required: [tutorProfileId, startTime]
+      properties:
+        tutorProfileId: { type: string }
+        startTime: { type: string, format: date-time }
+        durationMinutes: { type: number, default: 60 }
+    CancelBookingInput:
+      type: object
+      properties:
+        reason: { type: string }
+    RescheduleBookingInput:
+      type: object
+      required: [startTime]
+      properties:
+        startTime: { type: string, format: date-time }
+    CalendarConnection:
+      type: object
+      required: [id, tutorProfileId, provider, status]
+      properties:
+        id: { type: string }
+        tutorProfileId: { type: string }
+        provider: { type: string }
+        status: { type: string }
+        connectedAt: { type: ["string", "null"], format: date-time }
     Role:
       type: string
       enum: [administrator, tutor, student, viewer]

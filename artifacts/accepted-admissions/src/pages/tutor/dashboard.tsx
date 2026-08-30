@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen, Users, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 
 export default function TutorDashboard() {
   const queryClient = useQueryClient();
@@ -125,6 +126,7 @@ export default function TutorDashboard() {
           </CardContent>
         </Card>
       </div>
+      <CalendarConnectionCard />
     </div>
   );
 }

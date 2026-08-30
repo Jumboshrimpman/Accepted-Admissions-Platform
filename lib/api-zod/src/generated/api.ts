@@ -137,6 +137,186 @@ export const GetDashboardResponse = zod.object({
 
 
 /**
+ * @summary List eligible SAT tutors for prepaid-hour booking
+ */
+export const ListBookingTutorsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "title": zod.string(),
+  "photoUrl": zod.string().nullish(),
+  "biography": zod.string().nullish(),
+  "subjects": zod.array(zod.string()),
+  "calendarStatus": zod.string(),
+  "providerStatus": zod.enum(['connected', 'disconnected'])
+})
+export const ListBookingTutorsResponse = zod.array(ListBookingTutorsResponseItem)
+
+
+/**
+ * @summary Get server-validated available tutoring times
+ */
+export const getBookingAvailabilityQueryDurationMinutesDefault = 60;
+
+export const GetBookingAvailabilityQueryParams = zod.object({
+  "tutorProfileId": zod.coerce.string(),
+  "from": zod.date(),
+  "to": zod.date(),
+  "durationMinutes": zod.coerce.number().default(getBookingAvailabilityQueryDurationMinutesDefault)
+})
+
+export const GetBookingAvailabilityResponse = zod.object({
+  "tutor": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "title": zod.string(),
+  "timezone": zod.string()
+}),
+  "providerStatus": zod.enum(['connected', 'disconnected']),
+  "slots": zod.array(zod.coerce.date())
+})
+
+
+/**
+ * @summary List the signed-in student's booked sessions
+ */
+export const ListBookingSessionsResponseItem = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "tutorProfileId": zod.string().nullable(),
+  "tutorName": zod.string().nullable(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
+  "providerEventId": zod.string().nullish(),
+  "providerEventUrl": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish()
+})
+export const ListBookingSessionsResponse = zod.array(ListBookingSessionsResponseItem)
+
+
+/**
+ * @summary Atomically reserve a prepaid tutoring hour
+ */
+export const createBookingSessionBodyDurationMinutesDefault = 60;
+
+export const CreateBookingSessionBody = zod.object({
+  "tutorProfileId": zod.string(),
+  "startTime": zod.coerce.date(),
+  "durationMinutes": zod.number().default(createBookingSessionBodyDurationMinutesDefault)
+})
+
+export const CreateBookingSessionResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "tutorProfileId": zod.string().nullable(),
+  "tutorName": zod.string().nullable(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
+  "providerEventId": zod.string().nullish(),
+  "providerEventUrl": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish()
+})
+
+
+/**
+ * @summary Cancel a booking and restore its credit
+ */
+export const CancelBookingSessionParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const CancelBookingSessionBody = zod.object({
+  "reason": zod.string().optional()
+})
+
+export const CancelBookingSessionResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "tutorProfileId": zod.string().nullable(),
+  "tutorName": zod.string().nullable(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
+  "providerEventId": zod.string().nullish(),
+  "providerEventUrl": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish()
+})
+
+
+/**
+ * @summary Move a booking to another validated available time
+ */
+export const RescheduleBookingSessionParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const RescheduleBookingSessionBody = zod.object({
+  "startTime": zod.coerce.date()
+})
+
+export const RescheduleBookingSessionResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "tutorProfileId": zod.string().nullable(),
+  "tutorName": zod.string().nullable(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
+  "providerEventId": zod.string().nullish(),
+  "providerEventUrl": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish()
+})
+
+
+/**
+ * @summary List calendar connection state for the signed-in tutor
+ */
+export const ListCalendarConnectionsResponseItem = zod.object({
+  "id": zod.string(),
+  "tutorProfileId": zod.string(),
+  "provider": zod.string(),
+  "status": zod.string(),
+  "connectedAt": zod.coerce.date().nullish()
+})
+export const ListCalendarConnectionsResponse = zod.array(ListCalendarConnectionsResponseItem)
+
+
+/**
+ * @summary Start Google Calendar OAuth for a tutor profile
+ */
+export const GetCalendarConnectUrlQueryParams = zod.object({
+  "tutorProfileId": zod.coerce.string().optional()
+})
+
+export const GetCalendarConnectUrlResponse = zod.object({
+  "authorizationUrl": zod.string()
+})
+
+
+/**
+ * @summary Disconnect a tutor's Google Calendar
+ */
+export const DisconnectCalendarParams = zod.object({
+  "tutorProfileId": zod.coerce.string()
+})
+
+export const DisconnectCalendarResponse = zod.void()
+
+
+/**
  * @summary List courses visible to the signed-in user
  */
 export const ListCoursesResponseItem = zod.object({

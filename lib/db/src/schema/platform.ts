@@ -98,15 +98,23 @@ export const tutorAssignmentsTable = pgTable(
 export const sessionsTable = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   courseId: uuid("course_id").notNull().references(() => coursesTable.id),
+  clientUserId: uuid("client_user_id").references(() => usersTable.id),
   tutorUserId: uuid("tutor_user_id").references(() => usersTable.id),
   dateTime: timestamp("date_time", { withTimezone: true }).notNull(),
   timezone: text("timezone").notNull(),
   subject: text("subject").notNull(),
   title: text("title").notNull(),
   status: contentStatusEnum("status").notNull().default("draft"),
+  durationMinutes: numeric("duration_minutes", { mode: "number" }).notNull().default(60),
+  bookingStatus: text("booking_status").notNull().default("confirmed"),
+  providerEventId: text("provider_event_id"),
+  providerEventUrl: text("provider_event_url"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancellationReason: text("cancellation_reason"),
   hasHomework: boolean("has_homework").notNull().default(false),
   hasReport: boolean("has_report").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const curriculumBlocksTable = pgTable("curriculum_blocks", {
@@ -440,6 +448,7 @@ export const calendarConnectionsTable = pgTable("calendar_connections", {
   calendarId: text("calendar_id"),
   encryptedAccessToken: text("encrypted_access_token"),
   encryptedRefreshToken: text("encrypted_refresh_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
   connectedAt: timestamp("connected_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

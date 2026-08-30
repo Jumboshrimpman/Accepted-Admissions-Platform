@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { BookOpen, Calendar, Clock, ArrowRight, Target, Brain, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
+import { BookingCard } from "@/pages/portal/booking-card";
+import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 
 export default function PortalDashboard() {
   const { data: dashboard, isLoading, error } = useGetDashboard();
@@ -133,6 +135,9 @@ export default function PortalDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {dashboard.user.role === "student" && <BookingCard />}
+      {dashboard.user.role === "tutor" && <CalendarConnectionCard />}
 
       {/* Courses */}
       <div className="space-y-4">

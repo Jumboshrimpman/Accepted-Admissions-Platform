@@ -2,6 +2,26 @@ import { getAuth } from "@clerk/express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  createGoogleEvent,
+  decryptCalendarToken,
+  deleteGoogleEvent,
+  encryptCalendarToken,
+  exchangeGoogleCode,
+  getGoogleCalendarConfig,
+  googleCalendarAuthorizationUrl,
+  listGoogleBusyWindows,
+  readCalendarOAuthState,
+  refreshGoogleAccessToken,
+  updateGoogleEvent,
+} from "../lib/google-calendar";
+import {
+  calendarEventPayload,
+  generateAvailableSlots,
+  overlapsBusyWindow,
+  type AvailabilityRule,
+  type BusyWindow,
+} from "../lib/booking";
+import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
   AttachQuestionToAssignmentResponse,
@@ -329,7 +349,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT Tutor",
         subjects: ["SAT"],
         calendarStatus: "disconnected",
-        bookingEligible: false,
+        bookingEligible: true,
       },
       {
         email: "eunice_chon@berkeley.edu",
@@ -337,7 +357,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT Tutor",
         subjects: ["SAT"],
         calendarStatus: "disconnected",
-        bookingEligible: false,
+        bookingEligible: true,
       },
     ])
     .onConflictDoNothing();
@@ -428,6 +448,43 @@ async function ensureUpgradeSeedData(): Promise<void> {
     }
   }
 
+  const seededTutors = await db
+    .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
+    .from(tutorProfilesTable)
+    .where(inArray(tutorProfilesTable.name, ["Xavier Morales", "Eunice Chon"]));
+  for (const tutor of seededTutors) {
+    const [rule] = await db
+      .select({ id: availabilityRulesTable.id })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, tutor.id))
+      .limit(1);
+    if (!rule) {
+      await db.insert(availabilityRulesTable).values({
+        tutorProfileId: tutor.id,
+        timezone: "America/New_York",
+        weeklyHours:
+          tutor.name === "Xavier Morales"
+            ? {
+                "1": [{ start: "09:00", end: "17:00" }],
+                "2": [{ start: "09:00", end: "17:00" }],
+                "3": [{ start: "09:00", end: "17:00" }],
+                "4": [{ start: "09:00", end: "17:00" }],
+                "5": [{ start: "09:00", end: "17:00" }],
+              }
+            : {
+                "1": [{ start: "10:00", end: "18:00" }],
+                "2": [{ start: "10:00", end: "18:00" }],
+                "3": [{ start: "10:00", end: "18:00" }],
+                "4": [{ start: "10:00", end: "18:00" }],
+                "5": [{ start: "10:00", end: "18:00" }],
+              },
+        bookingNoticeMinutes: 1440,
+        bufferMinutes: 15,
+        blackoutDates: [],
+      });
+    }
+  }
+
   await db
     .insert(publicContentTable)
     .values([
@@ -506,6 +563,12 @@ async function syncConfiguredAccess(
       target: [courseMembershipsTable.courseId, courseMembershipsTable.userId],
       set: { membershipRole: access.role, subject: access.subject },
     });
+  if (access.role === "tutor") {
+    await db
+      .update(tutorProfilesTable)
+      .set({ userId: user.id, bookingEligible: true, updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.email, user.email));
+  }
 
   const students = await db
     .select({ id: usersTable.id })
@@ -1033,6 +1096,267 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
+class BookingError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function asDate(value: unknown): Date {
+  if (typeof value !== "string") throw new BookingError(400, "INVALID_TIME", "A valid start time is required.");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new BookingError(400, "INVALID_TIME", "A valid start time is required.");
+  }
+  return date;
+}
+
+function durationFromBody(value: unknown): number {
+  const duration = value === undefined ? 60 : Number(value);
+  if (!Number.isInteger(duration) || duration < 30 || duration > 180 || duration % 30 !== 0) {
+    throw new BookingError(400, "INVALID_DURATION", "Duration must be a 30-minute increment between 30 and 180 minutes.");
+  }
+  return duration;
+}
+
+async function calendarAccess(tutorProfileId: string) {
+  const [connection] = await db
+    .select()
+    .from(calendarConnectionsTable)
+    .where(
+      and(
+        eq(calendarConnectionsTable.tutorProfileId, tutorProfileId),
+        eq(calendarConnectionsTable.provider, "google"),
+        eq(calendarConnectionsTable.status, "connected"),
+      ),
+    )
+    .limit(1);
+  if (!connection?.encryptedAccessToken || !connection.calendarId) return null;
+  try {
+    let accessToken = decryptCalendarToken(connection.encryptedAccessToken);
+    if (connection.accessTokenExpiresAt && connection.accessTokenExpiresAt <= new Date()) {
+      if (!connection.encryptedRefreshToken) return null;
+      const refreshed = await refreshGoogleAccessToken(
+        decryptCalendarToken(connection.encryptedRefreshToken),
+      );
+      accessToken = refreshed.accessToken;
+      await db
+        .update(calendarConnectionsTable)
+        .set({
+          encryptedAccessToken: encryptCalendarToken(accessToken),
+          accessTokenExpiresAt: refreshed.expiresIn
+            ? new Date(Date.now() + refreshed.expiresIn * 1000)
+            : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(calendarConnectionsTable.id, connection.id));
+    }
+    return { connection, accessToken };
+  } catch {
+    await db
+      .update(calendarConnectionsTable)
+      .set({ status: "disconnected", updatedAt: new Date() })
+      .where(eq(calendarConnectionsTable.id, connection.id));
+    await db
+      .update(tutorProfilesTable)
+      .set({ calendarStatus: "disconnected", updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.id, tutorProfileId));
+    return null;
+  }
+}
+
+async function bookingTutor(tutorProfileId: string) {
+  const [tutor] = await db
+    .select()
+    .from(tutorProfilesTable)
+    .where(
+      and(
+        eq(tutorProfilesTable.id, tutorProfileId),
+        eq(tutorProfilesTable.active, true),
+        eq(tutorProfilesTable.bookingEligible, true),
+      ),
+    )
+    .limit(1);
+  if (!tutor) throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
+  const [rule] = await db
+    .select()
+    .from(availabilityRulesTable)
+    .where(eq(availabilityRulesTable.tutorProfileId, tutorProfileId))
+    .limit(1);
+  if (!rule) throw new BookingError(409, "AVAILABILITY_NOT_CONFIGURED", "This tutor has not configured availability.");
+  return { tutor, rule };
+}
+
+async function slotsForTutor(
+  tutorProfileId: string,
+  from: Date,
+  to: Date,
+  durationMinutes: number,
+) {
+  if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
+    throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
+  }
+  const { tutor, rule } = await bookingTutor(tutorProfileId);
+  const access = await calendarAccess(tutorProfileId);
+  if (!access) {
+    return { tutor, rule, access: null, slots: [] as string[] };
+  }
+  let busyWindows: BusyWindow[];
+  try {
+    busyWindows = await listGoogleBusyWindows(
+      access.accessToken,
+      access.connection.calendarId!,
+      from,
+      to,
+    );
+  } catch {
+    await db
+      .update(calendarConnectionsTable)
+      .set({ status: "disconnected", updatedAt: new Date() })
+      .where(eq(calendarConnectionsTable.id, access.connection.id));
+    await db
+      .update(tutorProfilesTable)
+      .set({ calendarStatus: "disconnected", updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.id, tutorProfileId));
+    return { tutor, rule, access: null, slots: [] as string[] };
+  }
+  const [bookedSessions] = await Promise.all([
+    db
+      .select({
+        dateTime: sessionsTable.dateTime,
+        durationMinutes: sessionsTable.durationMinutes,
+      })
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.tutorUserId, tutor.userId ?? ""),
+          inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
+          sql`${sessionsTable.dateTime} < ${to}`,
+          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
+        ),
+      ),
+  ]);
+  const bookedWindows: BusyWindow[] = bookedSessions.map((session) => ({
+    start: session.dateTime.toISOString(),
+    end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
+  }));
+  const availabilityRule: AvailabilityRule = {
+    timezone: rule.timezone,
+    weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
+    bookingNoticeMinutes: rule.bookingNoticeMinutes,
+    bufferMinutes: rule.bufferMinutes,
+    blackoutDates: rule.blackoutDates,
+  };
+  return {
+    tutor,
+    rule,
+    access,
+    slots: generateAvailableSlots(
+      availabilityRule,
+      from,
+      to,
+      durationMinutes,
+      busyWindows,
+      bookedWindows,
+    ),
+  };
+}
+
+async function studentCourseForBooking(userId: string): Promise<{ id: string; subject: string }> {
+  const memberships = await db
+    .select({ id: courseMembershipsTable.courseId, subject: courseMembershipsTable.subject })
+    .from(courseMembershipsTable)
+    .where(
+      and(
+        eq(courseMembershipsTable.userId, userId),
+        eq(courseMembershipsTable.membershipRole, "student"),
+      ),
+    );
+  const membership = memberships.find((item) => subjectFamily(item.subject) === "sat" || item.subject === "all");
+  if (!membership) throw new BookingError(409, "SAT_MEMBERSHIP_REQUIRED", "An active SAT student membership is required to book.");
+  return { id: membership.id, subject: membership.subject === "all" ? "SAT" : membership.subject };
+}
+
+async function sessionForActor(sessionId: string, user: AppUser) {
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, sessionId))
+    .limit(1);
+  if (!session || !session.clientUserId) throw new BookingError(404, "SESSION_NOT_FOUND", "Booking session not found.");
+  const subjectUserId = await dataSubjectUserId(user);
+  const allowed =
+    user.role === "administrator" ||
+    session.clientUserId === subjectUserId ||
+    (user.role === "tutor" && session.tutorUserId === user.id);
+  if (!allowed) throw new BookingError(404, "SESSION_NOT_FOUND", "Booking session not found.");
+  return session;
+}
+
+function sendBookingError(error: unknown, res: Response): void {
+  if (error instanceof BookingError) {
+    res.status(error.status).json({ code: error.code, error: error.message });
+    return;
+  }
+  res.status(500).json({ error: "Booking service temporarily unavailable" });
+}
+
+router.get("/calendar/oauth/callback", async (req, res): Promise<void> => {
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  if (!state || !code) {
+    res.status(400).send("Calendar authorization was not completed.");
+    return;
+  }
+  try {
+    const stateData = readCalendarOAuthState(state);
+    if (!stateData) {
+      res.status(400).send("Calendar authorization expired. Please try again.");
+      return;
+    }
+    const tokens = await exchangeGoogleCode(code);
+    const [existing] = await db
+      .select({ id: calendarConnectionsTable.id })
+      .from(calendarConnectionsTable)
+      .where(
+        and(
+          eq(calendarConnectionsTable.tutorProfileId, stateData.tutorProfileId),
+          eq(calendarConnectionsTable.provider, "google"),
+        ),
+      )
+      .limit(1);
+    const values = {
+      status: "connected",
+      calendarId: "primary",
+      encryptedAccessToken: encryptCalendarToken(tokens.accessToken),
+      encryptedRefreshToken: tokens.refreshToken ? encryptCalendarToken(tokens.refreshToken) : undefined,
+      accessTokenExpiresAt: tokens.expiresIn ? new Date(Date.now() + tokens.expiresIn * 1000) : null,
+      connectedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (existing) {
+      await db.update(calendarConnectionsTable).set(values).where(eq(calendarConnectionsTable.id, existing.id));
+    } else {
+      await db.insert(calendarConnectionsTable).values({
+        tutorProfileId: stateData.tutorProfileId,
+        provider: "google",
+        ...values,
+      });
+    }
+    await db
+      .update(tutorProfilesTable)
+      .set({ calendarStatus: "connected", updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.id, stateData.tutorProfileId));
+    res.redirect("/tutor?calendar=connected");
+  } catch {
+    res.status(502).send("Google Calendar authorization failed. Please try again.");
+  }
+});
+
 router.get("/public/products", async (_req, res): Promise<void> => {
   await ensurePublicPlatformData();
   const products = await db
@@ -1184,6 +1508,462 @@ router.use((req: AuthedRequest, res: Response, next: () => void) => {
     return;
   }
   next();
+});
+
+router.get(
+  "/calendar/connections",
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const rows = await db
+      .select({
+        id: calendarConnectionsTable.id,
+        tutorProfileId: calendarConnectionsTable.tutorProfileId,
+        provider: calendarConnectionsTable.provider,
+        status: calendarConnectionsTable.status,
+        connectedAt: calendarConnectionsTable.connectedAt,
+      })
+      .from(calendarConnectionsTable)
+      .innerJoin(
+        tutorProfilesTable,
+        eq(tutorProfilesTable.id, calendarConnectionsTable.tutorProfileId),
+      )
+      .where(
+        req.appUser!.role === "administrator"
+          ? undefined
+          : eq(tutorProfilesTable.userId, req.appUser!.id),
+      );
+    res.json(rows);
+  },
+);
+
+router.get(
+  "/calendar/connect",
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const requestedProfileId =
+      typeof req.query.tutorProfileId === "string" ? req.query.tutorProfileId : undefined;
+    const [profile] = await db
+      .select()
+      .from(tutorProfilesTable)
+      .where(
+        requestedProfileId
+          ? eq(tutorProfilesTable.id, requestedProfileId)
+          : eq(tutorProfilesTable.userId, req.appUser!.id),
+      )
+      .limit(1);
+    if (!profile || (req.appUser!.role !== "administrator" && profile.userId !== req.appUser!.id)) {
+      res.status(404).json({ code: "TUTOR_NOT_FOUND", error: "Tutor profile not found." });
+      return;
+    }
+    if (!getGoogleCalendarConfig()) {
+      res.status(503).json({
+        code: "CALENDAR_NOT_CONFIGURED",
+        error: "Google Calendar OAuth is not configured for this workspace.",
+      });
+      return;
+    }
+    res.json({ authorizationUrl: googleCalendarAuthorizationUrl(profile.id) });
+  },
+);
+
+router.delete(
+  "/calendar/connections/:tutorProfileId",
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorProfileId =
+      typeof req.params.tutorProfileId === "string" ? req.params.tutorProfileId : "";
+    const [profile] = await db
+      .select({ id: tutorProfilesTable.id, userId: tutorProfilesTable.userId })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.id, tutorProfileId))
+      .limit(1);
+    if (!profile || (req.appUser!.role !== "administrator" && profile.userId !== req.appUser!.id)) {
+      res.status(404).json({ code: "TUTOR_NOT_FOUND", error: "Tutor profile not found." });
+      return;
+    }
+    await db
+      .update(calendarConnectionsTable)
+      .set({
+        status: "disconnected",
+        encryptedAccessToken: null,
+        encryptedRefreshToken: null,
+        accessTokenExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(calendarConnectionsTable.tutorProfileId, profile.id),
+          eq(calendarConnectionsTable.provider, "google"),
+        ),
+      );
+    await db
+      .update(tutorProfilesTable)
+      .set({ calendarStatus: "disconnected", updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.id, profile.id));
+    res.status(204).send();
+  },
+);
+
+router.get("/booking/tutors", async (_req: AuthedRequest, res): Promise<void> => {
+  await ensureUpgradeSeedData();
+  const tutors = await db
+    .select({
+      id: tutorProfilesTable.id,
+      name: tutorProfilesTable.name,
+      title: tutorProfilesTable.title,
+      photoUrl: tutorProfilesTable.photoUrl,
+      biography: tutorProfilesTable.biography,
+      subjects: tutorProfilesTable.subjects,
+      calendarStatus: tutorProfilesTable.calendarStatus,
+    })
+    .from(tutorProfilesTable)
+    .where(
+      and(
+        eq(tutorProfilesTable.active, true),
+        eq(tutorProfilesTable.bookingEligible, true),
+      ),
+    )
+    .orderBy(asc(tutorProfilesTable.name));
+  res.json(
+    tutors.map((tutor) => ({
+      ...tutor,
+      providerStatus: tutor.calendarStatus === "connected" ? "connected" : "disconnected",
+    })),
+  );
+});
+
+router.get("/booking/availability", async (req: AuthedRequest, res): Promise<void> => {
+  try {
+    const tutorProfileId =
+      typeof req.query.tutorProfileId === "string" ? req.query.tutorProfileId : "";
+    const from = asDate(req.query.from);
+    const to = asDate(req.query.to);
+    const durationMinutes = durationFromBody(req.query.durationMinutes);
+    if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
+    const result = await slotsForTutor(tutorProfileId, from, to, durationMinutes);
+    res.json({
+      tutor: {
+        id: result.tutor.id,
+        name: result.tutor.name,
+        title: result.tutor.title,
+        timezone: result.rule.timezone,
+      },
+      providerStatus: result.access ? "connected" : "disconnected",
+      slots: result.slots,
+    });
+  } catch (error) {
+    sendBookingError(error, res);
+  }
+});
+
+router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> => {
+  const subjectUserId = await dataSubjectUserId(req.appUser!);
+  const sessions = await db
+    .select({
+      id: sessionsTable.id,
+      courseId: sessionsTable.courseId,
+      tutorProfileId: tutorProfilesTable.id,
+      tutorName: tutorProfilesTable.name,
+      dateTime: sessionsTable.dateTime,
+      timezone: sessionsTable.timezone,
+      subject: sessionsTable.subject,
+      title: sessionsTable.title,
+      durationMinutes: sessionsTable.durationMinutes,
+      bookingStatus: sessionsTable.bookingStatus,
+      providerEventId: sessionsTable.providerEventId,
+      providerEventUrl: sessionsTable.providerEventUrl,
+      cancellationReason: sessionsTable.cancellationReason,
+    })
+    .from(sessionsTable)
+    .leftJoin(tutorProfilesTable, eq(tutorProfilesTable.userId, sessionsTable.tutorUserId))
+    .where(eq(sessionsTable.clientUserId, subjectUserId))
+    .orderBy(asc(sessionsTable.dateTime));
+  res.json(sessions);
+});
+
+router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> => {
+  try {
+    if (req.appUser!.role !== "student") {
+      throw new BookingError(403, "STUDENT_ONLY", "Only a student can reserve a prepaid session.");
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const tutorProfileId = stringField(body, "tutorProfileId");
+    const start = asDate(body.startTime);
+    const durationMinutes = durationFromBody(body.durationMinutes);
+    if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
+    const { tutor, rule, access, slots } = await slotsForTutor(
+      tutorProfileId,
+      new Date(start.getTime() - 1),
+      new Date(start.getTime() + durationMinutes * 60_000 + 1),
+      durationMinutes,
+    );
+    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+    if (!slots.includes(start.toISOString())) {
+      throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
+    }
+    const course = await studentCourseForBooking(req.appUser!.id);
+    const created = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`booking:${tutorProfileId}:${start.toISOString()}`}))`,
+      );
+      const [conflict] = await tx
+        .select({ id: sessionsTable.id })
+        .from(sessionsTable)
+        .where(
+          and(
+            eq(sessionsTable.tutorUserId, tutor.userId ?? ""),
+            inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
+            sql`${sessionsTable.dateTime} < ${start}`,
+            sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${start}`,
+          ),
+        )
+        .limit(1);
+      if (conflict) throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
+      let liveBusyWindows: BusyWindow[];
+      try {
+        liveBusyWindows = await listGoogleBusyWindows(
+          access.accessToken,
+          access.connection.calendarId!,
+          start,
+          new Date(start.getTime() + durationMinutes * 60_000),
+        );
+      } catch {
+        throw new BookingError(
+          503,
+          "CALENDAR_UNAVAILABLE",
+          "The tutor calendar could not be checked. Your credit was not used.",
+        );
+      }
+      if (
+        overlapsBusyWindow(
+          start,
+          new Date(start.getTime() + durationMinutes * 60_000),
+          liveBusyWindows,
+          rule.bufferMinutes,
+        )
+      ) {
+        throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
+      }
+      await tx.execute(
+        sql`select id from credit_ledger where client_user_id = ${req.appUser!.id} for update`,
+      );
+      const entries = await tx
+        .select({ entryType: creditLedgerTable.entryType, hours: creditLedgerTable.hours })
+        .from(creditLedgerTable)
+        .where(eq(creditLedgerTable.clientUserId, req.appUser!.id));
+      const remainingHours = entries.reduce(
+        (total, entry) =>
+          total +
+          (["original", "restored", "adjustment_credit"].includes(entry.entryType)
+            ? entry.hours
+            : -entry.hours),
+        0,
+      );
+      if (remainingHours < durationMinutes / 60) {
+        throw new BookingError(409, "INSUFFICIENT_CREDIT", "You do not have enough prepaid hours for this session.");
+      }
+      const [session] = await tx
+        .insert(sessionsTable)
+        .values({
+          courseId: course.id,
+          clientUserId: req.appUser!.id,
+          tutorUserId: tutor.userId,
+          dateTime: start,
+          timezone: rule.timezone,
+          subject: "SAT",
+          title: `SAT session with ${tutor.name}`,
+          status: "published",
+          durationMinutes,
+          bookingStatus: "confirmed",
+        })
+        .returning();
+      await tx.insert(creditLedgerTable).values({
+        clientUserId: req.appUser!.id,
+        productId: null,
+        sessionId: session!.id,
+        entryType: "debit",
+        hours: durationMinutes / 60,
+        referenceType: "session",
+        referenceId: session!.id,
+        note: `Reserved SAT session with ${tutor.name}`,
+      });
+      return session!;
+    });
+    try {
+      const event = await createGoogleEvent(
+        access.accessToken,
+        access.connection.calendarId!,
+        calendarEventPayload(
+          created.title,
+          start,
+          durationMinutes,
+          rule.timezone,
+          req.appUser!.email,
+        ),
+      );
+      const [updated] = await db
+        .update(sessionsTable)
+        .set({
+          providerEventId: event.id ?? null,
+          providerEventUrl: event.htmlLink ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(sessionsTable.id, created.id))
+        .returning();
+      res.status(201).json(updated ?? created);
+    } catch {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(sessionsTable)
+          .set({
+            bookingStatus: "cancelled",
+            cancelledAt: new Date(),
+            cancellationReason: "Calendar event could not be created",
+            updatedAt: new Date(),
+          })
+          .where(eq(sessionsTable.id, created.id));
+        await tx.insert(creditLedgerTable).values({
+          clientUserId: req.appUser!.id,
+          sessionId: created.id,
+          entryType: "restored",
+          hours: durationMinutes / 60,
+          referenceType: "session",
+          referenceId: created.id,
+          note: "Restored after calendar event creation failed",
+        });
+      });
+      throw new BookingError(503, "CALENDAR_UNAVAILABLE", "The tutor calendar could not be updated. Your credit was not used.");
+    }
+  } catch (error) {
+    sendBookingError(error, res);
+  }
+});
+
+router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, res): Promise<void> => {
+  try {
+    const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId : "";
+    const session = await sessionForActor(sessionId, req.appUser!);
+    if (session.bookingStatus === "cancelled") {
+      res.json(session);
+      return;
+    }
+    if (session.dateTime <= new Date()) {
+      throw new BookingError(409, "SESSION_STARTED", "A session that has started cannot be cancelled.");
+    }
+    if (session.providerEventId && session.tutorUserId) {
+      const profile = await db
+        .select({ id: tutorProfilesTable.id })
+        .from(tutorProfilesTable)
+        .where(eq(tutorProfilesTable.userId, session.tutorUserId))
+        .limit(1);
+      const access = profile[0] ? await calendarAccess(profile[0].id) : null;
+      if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+      await deleteGoogleEvent(access.accessToken, access.connection.calendarId!, session.providerEventId);
+    }
+    const reason = stringField((req.body ?? {}) as Record<string, unknown>, "reason") || "Cancelled by client";
+    const [updated] = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from sessions where id = ${session.id} for update`);
+      const [current] = await tx
+        .select()
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, session.id));
+      if (!current || current.bookingStatus === "cancelled") return [current];
+      const [saved] = await tx
+        .update(sessionsTable)
+        .set({
+          bookingStatus: "cancelled",
+          cancelledAt: new Date(),
+          cancellationReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(eq(sessionsTable.id, session.id))
+        .returning();
+      await tx.insert(creditLedgerTable).values({
+        clientUserId: current.clientUserId!,
+        sessionId: current.id,
+        entryType: "restored",
+        hours: current.durationMinutes / 60,
+        referenceType: "session",
+        referenceId: current.id,
+        note: "Credit restored after session cancellation",
+      });
+      return [saved];
+    });
+    res.json(updated);
+  } catch (error) {
+    sendBookingError(error, res);
+  }
+});
+
+router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest, res): Promise<void> => {
+  try {
+    const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId : "";
+    const session = await sessionForActor(sessionId, req.appUser!);
+    if (session.bookingStatus === "cancelled") {
+      throw new BookingError(409, "SESSION_CANCELLED", "A cancelled session cannot be rescheduled.");
+    }
+    const start = asDate((req.body ?? {}).startTime);
+    if (start <= new Date()) throw new BookingError(400, "INVALID_TIME", "Choose a future time.");
+    const profile = session.tutorUserId
+      ? (await db
+          .select()
+          .from(tutorProfilesTable)
+          .where(eq(tutorProfilesTable.userId, session.tutorUserId))
+          .limit(1))[0]
+      : undefined;
+    if (!profile) throw new BookingError(409, "TUTOR_NOT_FOUND", "This session has no bookable tutor.");
+    const { rule, access, slots } = await slotsForTutor(
+      profile.id,
+      new Date(start.getTime() - 1),
+      new Date(start.getTime() + session.durationMinutes * 60_000 + 1),
+      session.durationMinutes,
+    );
+    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    if (!slots.includes(start.toISOString())) {
+      throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
+    }
+    const previousStart = session.dateTime;
+    const event = session.providerEventId
+      ? await updateGoogleEvent(
+          access.accessToken,
+          access.connection.calendarId!,
+          session.providerEventId,
+          calendarEventPayload(
+            session.title,
+            start,
+            session.durationMinutes,
+            rule.timezone,
+            (await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, session.clientUserId!)).limit(1))[0]?.email ?? "",
+          ),
+        )
+      : null;
+    const [updated] = await db
+      .update(sessionsTable)
+      .set({
+        dateTime: start,
+        timezone: rule.timezone,
+        bookingStatus: "rescheduled",
+        providerEventId: event?.id ?? session.providerEventId,
+        providerEventUrl: event?.htmlLink ?? session.providerEventUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(sessionsTable.id, session.id))
+      .returning();
+    if (!updated) {
+      if (session.providerEventId) {
+        await updateGoogleEvent(
+          access.accessToken,
+          access.connection.calendarId!,
+          session.providerEventId,
+          calendarEventPayload(session.title, previousStart, session.durationMinutes, session.timezone, ""),
+        );
+      }
+      throw new BookingError(500, "RESCHEDULE_FAILED", "The session could not be rescheduled.");
+    }
+    res.json(updated);
+  } catch (error) {
+    sendBookingError(error, res);
+  }
 });
 
 router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {

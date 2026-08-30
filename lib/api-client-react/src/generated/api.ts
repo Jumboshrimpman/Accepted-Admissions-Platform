@@ -30,6 +30,13 @@ import type {
   AttemptResult,
   AttemptSubmission,
   BadRequestResponse,
+  BookingAvailability,
+  BookingConflictResponse,
+  BookingInput,
+  BookingSession,
+  BookingTutor,
+  CalendarConnection,
+  CancelBookingInput,
   ContentSource,
   ContentSourceInput,
   Course,
@@ -42,6 +49,9 @@ import type {
   Error,
   ForbiddenResponse,
   GenerateQuestionsInput,
+  GetBookingAvailabilityParams,
+  GetCalendarConnectUrl200,
+  GetCalendarConnectUrlParams,
   HealthStatus,
   ListAssignmentsParams,
   ListContentSourcesParams,
@@ -49,6 +59,7 @@ import type {
   NotFoundResponse,
   QuestionBankItem,
   QuestionBankUpdate,
+  RescheduleBookingInput,
   ReviewQueueItem,
   ReviewQueueUpdate,
   SessionArtifact,
@@ -392,6 +403,691 @@ export function useGetDashboard<TData = Awaited<ReturnType<typeof getDashboard>>
 
 
 
+
+export const getListBookingTutorsUrl = () => {
+
+
+
+
+  return `/api/booking/tutors`
+}
+
+/**
+ * @summary List eligible SAT tutors for prepaid-hour booking
+ */
+export const listBookingTutors = async ( options?: Parameters<typeof customFetch>[1]): Promise<BookingTutor[]> => {
+
+  return customFetch<BookingTutor[]>(getListBookingTutorsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBookingTutorsQueryKey = () => {
+    return [
+    `/api/booking/tutors`
+    ] as const;
+    }
+
+
+export const getListBookingTutorsQueryOptions = <TData = Awaited<ReturnType<typeof listBookingTutors>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBookingTutors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBookingTutorsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBookingTutors>>> = ({ signal }) => listBookingTutors({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBookingTutors>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBookingTutorsQueryResult = NonNullable<Awaited<ReturnType<typeof listBookingTutors>>>
+export type ListBookingTutorsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List eligible SAT tutors for prepaid-hour booking
+ */
+
+export function useListBookingTutors<TData = Awaited<ReturnType<typeof listBookingTutors>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBookingTutors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBookingTutorsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetBookingAvailabilityUrl = (params: GetBookingAvailabilityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/booking/availability?${stringifiedParams}` : `/api/booking/availability`
+}
+
+/**
+ * @summary Get server-validated available tutoring times
+ */
+export const getBookingAvailability = async (params: GetBookingAvailabilityParams, options?: Parameters<typeof customFetch>[1]): Promise<BookingAvailability> => {
+
+  return customFetch<BookingAvailability>(getGetBookingAvailabilityUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBookingAvailabilityQueryKey = (params?: GetBookingAvailabilityParams,) => {
+    return [
+    `/api/booking/availability`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetBookingAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getBookingAvailability>>, TError = ErrorType<UnauthorizedResponse>>(params: GetBookingAvailabilityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBookingAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBookingAvailabilityQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBookingAvailability>>> = ({ signal }) => getBookingAvailability(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBookingAvailability>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBookingAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getBookingAvailability>>>
+export type GetBookingAvailabilityQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Get server-validated available tutoring times
+ */
+
+export function useGetBookingAvailability<TData = Awaited<ReturnType<typeof getBookingAvailability>>, TError = ErrorType<UnauthorizedResponse>>(
+ params: GetBookingAvailabilityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBookingAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBookingAvailabilityQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListBookingSessionsUrl = () => {
+
+
+
+
+  return `/api/booking/sessions`
+}
+
+/**
+ * @summary List the signed-in student's booked sessions
+ */
+export const listBookingSessions = async ( options?: Parameters<typeof customFetch>[1]): Promise<BookingSession[]> => {
+
+  return customFetch<BookingSession[]>(getListBookingSessionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBookingSessionsQueryKey = () => {
+    return [
+    `/api/booking/sessions`
+    ] as const;
+    }
+
+
+export const getListBookingSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listBookingSessions>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBookingSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBookingSessionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBookingSessions>>> = ({ signal }) => listBookingSessions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBookingSessions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBookingSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof listBookingSessions>>>
+export type ListBookingSessionsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List the signed-in student's booked sessions
+ */
+
+export function useListBookingSessions<TData = Awaited<ReturnType<typeof listBookingSessions>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBookingSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBookingSessionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBookingSessionUrl = () => {
+
+
+
+
+  return `/api/booking/sessions`
+}
+
+/**
+ * @summary Atomically reserve a prepaid tutoring hour
+ */
+export const createBookingSession = async (bookingInput: BookingInput, options?: Parameters<typeof customFetch>[1]): Promise<BookingSession> => {
+
+  return customFetch<BookingSession>(getCreateBookingSessionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bookingInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBookingSessionMutationOptions = <TError = ErrorType<UnauthorizedResponse | BookingConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBookingSession>>, TError,{data: BodyType<BookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBookingSession>>, TError,{data: BodyType<BookingInput>}, TContext> => {
+
+const mutationKey = ['createBookingSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBookingSession>>, {data: BodyType<BookingInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBookingSession(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBookingSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createBookingSession>>>
+    export type CreateBookingSessionMutationBody = BodyType<BookingInput>
+    export type CreateBookingSessionMutationError = ErrorType<UnauthorizedResponse | BookingConflictResponse>
+
+    /**
+ * @summary Atomically reserve a prepaid tutoring hour
+ */
+export const useCreateBookingSession = <TError = ErrorType<UnauthorizedResponse | BookingConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBookingSession>>, TError,{data: BodyType<BookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBookingSession>>,
+        TError,
+        {data: BodyType<BookingInput>},
+        TContext
+      > => {
+      return useMutation(getCreateBookingSessionMutationOptions(options));
+    }
+
+export const getCancelBookingSessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/booking/sessions/${sessionId}/cancel`
+}
+
+/**
+ * @summary Cancel a booking and restore its credit
+ */
+export const cancelBookingSession = async (sessionId: string,
+    cancelBookingInput?: CancelBookingInput, options?: Parameters<typeof customFetch>[1]): Promise<BookingSession> => {
+
+  return customFetch<BookingSession>(getCancelBookingSessionUrl(sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cancelBookingInput)
+  }
+);}
+
+
+
+
+
+export const getCancelBookingSessionMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelBookingSession>>, TError,{sessionId: string;data?: BodyType<CancelBookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelBookingSession>>, TError,{sessionId: string;data?: BodyType<CancelBookingInput>}, TContext> => {
+
+const mutationKey = ['cancelBookingSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelBookingSession>>, {sessionId: string;data?: BodyType<CancelBookingInput>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  cancelBookingSession(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelBookingSessionMutationResult = NonNullable<Awaited<ReturnType<typeof cancelBookingSession>>>
+    export type CancelBookingSessionMutationBody = BodyType<CancelBookingInput> | undefined
+    export type CancelBookingSessionMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+    /**
+ * @summary Cancel a booking and restore its credit
+ */
+export const useCancelBookingSession = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelBookingSession>>, TError,{sessionId: string;data?: BodyType<CancelBookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelBookingSession>>,
+        TError,
+        {sessionId: string;data?: BodyType<CancelBookingInput>},
+        TContext
+      > => {
+      return useMutation(getCancelBookingSessionMutationOptions(options));
+    }
+
+export const getRescheduleBookingSessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/booking/sessions/${sessionId}/reschedule`
+}
+
+/**
+ * @summary Move a booking to another validated available time
+ */
+export const rescheduleBookingSession = async (sessionId: string,
+    rescheduleBookingInput: RescheduleBookingInput, options?: Parameters<typeof customFetch>[1]): Promise<BookingSession> => {
+
+  return customFetch<BookingSession>(getRescheduleBookingSessionUrl(sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rescheduleBookingInput)
+  }
+);}
+
+
+
+
+
+export const getRescheduleBookingSessionMutationOptions = <TError = ErrorType<UnauthorizedResponse | BookingConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescheduleBookingSession>>, TError,{sessionId: string;data: BodyType<RescheduleBookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rescheduleBookingSession>>, TError,{sessionId: string;data: BodyType<RescheduleBookingInput>}, TContext> => {
+
+const mutationKey = ['rescheduleBookingSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rescheduleBookingSession>>, {sessionId: string;data: BodyType<RescheduleBookingInput>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  rescheduleBookingSession(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RescheduleBookingSessionMutationResult = NonNullable<Awaited<ReturnType<typeof rescheduleBookingSession>>>
+    export type RescheduleBookingSessionMutationBody = BodyType<RescheduleBookingInput>
+    export type RescheduleBookingSessionMutationError = ErrorType<UnauthorizedResponse | BookingConflictResponse>
+
+    /**
+ * @summary Move a booking to another validated available time
+ */
+export const useRescheduleBookingSession = <TError = ErrorType<UnauthorizedResponse | BookingConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescheduleBookingSession>>, TError,{sessionId: string;data: BodyType<RescheduleBookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rescheduleBookingSession>>,
+        TError,
+        {sessionId: string;data: BodyType<RescheduleBookingInput>},
+        TContext
+      > => {
+      return useMutation(getRescheduleBookingSessionMutationOptions(options));
+    }
+
+export const getListCalendarConnectionsUrl = () => {
+
+
+
+
+  return `/api/calendar/connections`
+}
+
+/**
+ * @summary List calendar connection state for the signed-in tutor
+ */
+export const listCalendarConnections = async ( options?: Parameters<typeof customFetch>[1]): Promise<CalendarConnection[]> => {
+
+  return customFetch<CalendarConnection[]>(getListCalendarConnectionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCalendarConnectionsQueryKey = () => {
+    return [
+    `/api/calendar/connections`
+    ] as const;
+    }
+
+
+export const getListCalendarConnectionsQueryOptions = <TData = Awaited<ReturnType<typeof listCalendarConnections>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCalendarConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCalendarConnectionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCalendarConnections>>> = ({ signal }) => listCalendarConnections({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCalendarConnections>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCalendarConnectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCalendarConnections>>>
+export type ListCalendarConnectionsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List calendar connection state for the signed-in tutor
+ */
+
+export function useListCalendarConnections<TData = Awaited<ReturnType<typeof listCalendarConnections>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCalendarConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCalendarConnectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCalendarConnectUrlUrl = (params?: GetCalendarConnectUrlParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/calendar/connect?${stringifiedParams}` : `/api/calendar/connect`
+}
+
+/**
+ * @summary Start Google Calendar OAuth for a tutor profile
+ */
+export const getCalendarConnectUrl = async (params?: GetCalendarConnectUrlParams, options?: Parameters<typeof customFetch>[1]): Promise<GetCalendarConnectUrl200> => {
+
+  return customFetch<GetCalendarConnectUrl200>(getGetCalendarConnectUrlUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCalendarConnectUrlQueryKey = (params?: GetCalendarConnectUrlParams,) => {
+    return [
+    `/api/calendar/connect`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCalendarConnectUrlQueryOptions = <TData = Awaited<ReturnType<typeof getCalendarConnectUrl>>, TError = ErrorType<UnauthorizedResponse>>(params?: GetCalendarConnectUrlParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarConnectUrl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCalendarConnectUrlQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendarConnectUrl>>> = ({ signal }) => getCalendarConnectUrl(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCalendarConnectUrl>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCalendarConnectUrlQueryResult = NonNullable<Awaited<ReturnType<typeof getCalendarConnectUrl>>>
+export type GetCalendarConnectUrlQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Start Google Calendar OAuth for a tutor profile
+ */
+
+export function useGetCalendarConnectUrl<TData = Awaited<ReturnType<typeof getCalendarConnectUrl>>, TError = ErrorType<UnauthorizedResponse>>(
+ params?: GetCalendarConnectUrlParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendarConnectUrl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCalendarConnectUrlQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDisconnectCalendarUrl = (tutorProfileId: string,) => {
+
+
+
+
+  return `/api/calendar/connections/${tutorProfileId}`
+}
+
+/**
+ * @summary Disconnect a tutor's Google Calendar
+ */
+export const disconnectCalendar = async (tutorProfileId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDisconnectCalendarUrl(tutorProfileId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisconnectCalendarMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectCalendar>>, TError,{tutorProfileId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectCalendar>>, TError,{tutorProfileId: string}, TContext> => {
+
+const mutationKey = ['disconnectCalendar'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectCalendar>>, {tutorProfileId: string}> = (props) => {
+          const {tutorProfileId} = props ?? {};
+
+          return  disconnectCalendar(tutorProfileId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectCalendarMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectCalendar>>>
+
+    export type DisconnectCalendarMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
+ * @summary Disconnect a tutor's Google Calendar
+ */
+export const useDisconnectCalendar = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectCalendar>>, TError,{tutorProfileId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectCalendar>>,
+        TError,
+        {tutorProfileId: string},
+        TContext
+      > => {
+      return useMutation(getDisconnectCalendarMutationOptions(options));
+    }
 
 export const getListCoursesUrl = () => {
 

@@ -11,6 +11,102 @@ export interface HealthStatus {
 
 export interface Error {
   error: string;
+  code?: string;
+}
+
+export type BookingTutorProviderStatus = typeof BookingTutorProviderStatus[keyof typeof BookingTutorProviderStatus];
+
+
+export const BookingTutorProviderStatus = {
+  connected: 'connected',
+  disconnected: 'disconnected',
+} as const;
+
+export interface BookingTutor {
+  id: string;
+  name: string;
+  title: string;
+  /** @nullable */
+  photoUrl?: string | null;
+  /** @nullable */
+  biography?: string | null;
+  subjects: string[];
+  calendarStatus: string;
+  providerStatus: BookingTutorProviderStatus;
+}
+
+export type BookingAvailabilityTutor = {
+  id: string;
+  name: string;
+  title: string;
+  timezone: string;
+};
+
+export type BookingAvailabilityProviderStatus = typeof BookingAvailabilityProviderStatus[keyof typeof BookingAvailabilityProviderStatus];
+
+
+export const BookingAvailabilityProviderStatus = {
+  connected: 'connected',
+  disconnected: 'disconnected',
+} as const;
+
+export interface BookingAvailability {
+  tutor: BookingAvailabilityTutor;
+  providerStatus: BookingAvailabilityProviderStatus;
+  slots: string[];
+}
+
+export type BookingSessionBookingStatus = typeof BookingSessionBookingStatus[keyof typeof BookingSessionBookingStatus];
+
+
+export const BookingSessionBookingStatus = {
+  confirmed: 'confirmed',
+  rescheduled: 'rescheduled',
+  cancelled: 'cancelled',
+} as const;
+
+export interface BookingSession {
+  id: string;
+  courseId: string;
+  /** @nullable */
+  tutorProfileId: string | null;
+  /** @nullable */
+  tutorName: string | null;
+  dateTime: string;
+  timezone: string;
+  subject: string;
+  title: string;
+  durationMinutes: number;
+  bookingStatus: BookingSessionBookingStatus;
+  /** @nullable */
+  providerEventId?: string | null;
+  /** @nullable */
+  providerEventUrl?: string | null;
+  /** @nullable */
+  cancellationReason?: string | null;
+}
+
+export interface BookingInput {
+  tutorProfileId: string;
+  startTime: string;
+  durationMinutes?: number;
+}
+
+export interface CancelBookingInput {
+  reason?: string;
+}
+
+export interface RescheduleBookingInput {
+  startTime: string;
+}
+
+export interface CalendarConnection {
+  id: string;
+  tutorProfileId: string;
+  provider: string;
+  status: string;
+  /** @nullable */
+  connectedAt?: string | null;
 }
 
 export type Role = typeof Role[keyof typeof Role];
@@ -835,6 +931,11 @@ export type UnauthorizedResponse = Error;
 export type ForbiddenResponse = Error;
 
 /**
+ * Booking cannot be completed because a credit, slot, or provider is unavailable
+ */
+export type BookingConflictResponse = Error;
+
+/**
  * Invalid request
  */
 export type BadRequestResponse = Error;
@@ -843,6 +944,21 @@ export type BadRequestResponse = Error;
  * Record not found
  */
 export type NotFoundResponse = Error;
+
+export type GetBookingAvailabilityParams = {
+tutorProfileId: string;
+from: string;
+to: string;
+durationMinutes?: number;
+};
+
+export type GetCalendarConnectUrlParams = {
+tutorProfileId?: string;
+};
+
+export type GetCalendarConnectUrl200 = {
+  authorizationUrl: string;
+};
 
 export type ListAssignmentsParams = {
 courseId?: string;
