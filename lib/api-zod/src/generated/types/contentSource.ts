@@ -12,6 +12,7 @@ import type { ContentSourceStatus } from './contentSourceStatus';
 export interface ContentSource {
   id: string;
   courseId: string;
+  subject: string;
   title: string;
   sourceKind: ContentSourceSourceKind;
   /** @nullable */

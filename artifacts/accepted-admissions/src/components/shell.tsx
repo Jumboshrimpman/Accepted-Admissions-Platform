@@ -15,16 +15,40 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   
-  // Using the API user to know the role, though we might not have it yet if loading
-  const { data: apiUser } = useGetCurrentUser();
+  const { data: apiUser, isLoading, error } = useGetCurrentUser();
 
-  const role = apiUser?.role || "student";
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Checking portal access…
+      </div>
+    );
+  }
+  if (error || !apiUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-bold">Portal access unavailable</h1>
+          <p className="mt-3 text-muted-foreground">
+            This account has not been provisioned for the Accepted Admissions
+            portal. Please use your invited account or contact an administrator.
+          </p>
+          <Link href="/login">
+            <Button className="mt-6 rounded-full">Return to sign in</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const role = apiUser.role;
 
   const getLinks = () => {
     switch(role) {
       case "tutor":
         return [
           { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/portal", label: "Client preview", icon: BookOpen },
         ];
       case "administrator":
         return [

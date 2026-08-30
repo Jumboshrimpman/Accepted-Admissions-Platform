@@ -66,10 +66,31 @@ export const courseMembershipsTable = pgTable(
     courseId: uuid("course_id").notNull().references(() => coursesTable.id),
     userId: uuid("user_id").notNull().references(() => usersTable.id),
     membershipRole: roleEnum("membership_role").notNull(),
+    subject: text("subject").notNull().default("all"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("course_member_unique_idx").on(table.courseId, table.userId),
+  ],
+);
+
+export const tutorAssignmentsTable = pgTable(
+  "tutor_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id").notNull().references(() => coursesTable.id),
+    tutorUserId: uuid("tutor_user_id").notNull().references(() => usersTable.id),
+    studentUserId: uuid("student_user_id").notNull().references(() => usersTable.id),
+    subject: text("subject").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("tutor_assignment_unique_idx").on(
+      table.courseId,
+      table.tutorUserId,
+      table.studentUserId,
+      table.subject,
+    ),
   ],
 );
 
@@ -143,6 +164,7 @@ export const contentSourcesTable = pgTable("content_sources", {
   id: uuid("id").primaryKey().defaultRandom(),
   courseId: uuid("course_id").notNull().references(() => coursesTable.id),
   importedBy: uuid("imported_by").notNull().references(() => usersTable.id),
+  subject: text("subject").notNull().default("all"),
   title: text("title").notNull(),
   sourceKind: text("source_kind").notNull(),
   sourceUrl: text("source_url"),

@@ -20,6 +20,8 @@ tags:
     description: Homework assignment and attempt operations
   - name: review
     description: Tutor review and feedback operations
+  - name: administration
+    description: Administrator-only access and audit operations
 paths:
   /healthz:
     get:
@@ -48,6 +50,20 @@ paths:
                 $ref: "#/components/schemas/CurrentUser"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [administration]
+      summary: Get administrator-only access and audit information
+      responses:
+        "200":
+          description: Provisioned users, memberships, tutor assignments, and audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOverview"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /dashboard:
     get:
       operationId: getDashboard
@@ -651,6 +667,61 @@ components:
         email: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         avatarUrl: { type: ["string", "null"] }
+    AdminOverview:
+      type: object
+      required: [users, memberships, assignments, audit]
+      properties:
+        users:
+          type: array
+          items:
+            type: object
+            required: [id, clerkUserId, email, displayName, role, createdAt]
+            properties:
+              id: { type: string }
+              clerkUserId: { type: string }
+              email: { type: string }
+              displayName: { type: string }
+              role: { $ref: "#/components/schemas/Role" }
+              createdAt: { type: string, format: date-time }
+        memberships:
+          type: array
+          items:
+            type: object
+            required: [id, courseId, courseTitle, userId, userName, membershipRole, subject]
+            properties:
+              id: { type: string }
+              courseId: { type: string }
+              courseTitle: { type: string }
+              userId: { type: string }
+              userName: { type: string }
+              membershipRole: { $ref: "#/components/schemas/Role" }
+              subject: { type: string }
+        assignments:
+          type: array
+          items:
+            type: object
+            required: [id, courseId, courseTitle, tutorUserId, tutorName, studentUserId, studentName, subject]
+            properties:
+              id: { type: string }
+              courseId: { type: string }
+              courseTitle: { type: string }
+              tutorUserId: { type: string }
+              tutorName: { type: string }
+              studentUserId: { type: string }
+              studentName: { type: string }
+              subject: { type: string }
+        audit:
+          type: array
+          items:
+            type: object
+            required: [id, action, entityType, entityId, metadata, createdAt]
+            properties:
+              id: { type: string }
+              action: { type: string }
+              entityType: { type: string }
+              entityId: { type: string }
+              metadata: { type: object, additionalProperties: true }
+              createdAt: { type: string, format: date-time }
     Tutor:
       type: object
       required: [id, name, specialty]
@@ -910,10 +981,11 @@ components:
         tutorNote: { type: ["string", "null"], maxLength: 5000 }
     ContentSource:
       type: object
-      required: [id, courseId, title, sourceKind, authorizationNote, provenance, status, createdAt, updatedAt]
+      required: [id, courseId, subject, title, sourceKind, authorizationNote, provenance, status, createdAt, updatedAt]
       properties:
         id: { type: string }
         courseId: { type: string }
+        subject: { type: string }
         title: { type: string }
         sourceKind: { type: string, enum: [pdf, html, text] }
         sourceUrl: { type: ["string", "null"] }
@@ -930,6 +1002,7 @@ components:
       required: [courseId, title, sourceKind, authorizationNote]
       properties:
         courseId: { type: string }
+        subject: { type: string, maxLength: 200 }
         title: { type: string, minLength: 1, maxLength: 200 }
         sourceKind: { type: string, enum: [pdf, html, text] }
         sourceUrl: { type: ["string", "null"] }

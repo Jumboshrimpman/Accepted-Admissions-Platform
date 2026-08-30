@@ -74,6 +74,7 @@ import {
   sessionArtifactsTable,
   sessionsTable,
   timerEventsTable,
+  tutorAssignmentsTable,
   usersTable,
   type AppUser,
 } from "@workspace/db";
@@ -95,6 +96,37 @@ function envIdSet(name: string): Set<string> {
       .map((value) => value.trim())
       .filter(Boolean),
   );
+}
+
+type ConfiguredAccess = {
+  role: AppUser["role"];
+  subject: string;
+};
+
+function configuredAccess(clerkUserId: string): ConfiguredAccess | null {
+  const adminIds = envIdSet("ACCEPTED_ADMIN_CLERK_USER_IDS");
+  const satTutorIds = envIdSet("ACCEPTED_SAT_TUTOR_CLERK_USER_IDS");
+  const englishTutorIds = envIdSet("ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS");
+  const tutorIds = envIdSet("ACCEPTED_TUTOR_CLERK_USER_IDS");
+  const studentIds = envIdSet("ACCEPTED_STUDENT_CLERK_USER_IDS");
+
+  if (adminIds.has(clerkUserId)) return { role: "administrator", subject: "all" };
+  if (satTutorIds.has(clerkUserId)) return { role: "tutor", subject: "SAT" };
+  if (englishTutorIds.has(clerkUserId)) {
+    return { role: "tutor", subject: "IELTS" };
+  }
+  if (tutorIds.has(clerkUserId)) return { role: "tutor", subject: "all" };
+  if (studentIds.has(clerkUserId)) return { role: "student", subject: "all" };
+  return null;
+}
+
+function subjectFamily(subject: string): string {
+  const normalized = subject.trim().toLowerCase();
+  if (normalized.startsWith("sat")) return "sat";
+  if (normalized.startsWith("ielts") || normalized.startsWith("english")) {
+    return "ielts";
+  }
+  return normalized;
 }
 
 async function ensureSeedData(): Promise<string> {
@@ -273,6 +305,64 @@ async function ensureSeedData(): Promise<string> {
   return course.id;
 }
 
+async function syncConfiguredAccess(
+  user: AppUser,
+  access: ConfiguredAccess,
+): Promise<void> {
+  if (access.role === "administrator") return;
+
+  const courseId = await ensureSeedData();
+  await db
+    .insert(courseMembershipsTable)
+    .values({
+      courseId,
+      userId: user.id,
+      membershipRole: access.role,
+      subject: access.subject,
+    })
+    .onConflictDoUpdate({
+      target: [courseMembershipsTable.courseId, courseMembershipsTable.userId],
+      set: { membershipRole: access.role, subject: access.subject },
+    });
+
+  const students = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .innerJoin(
+      courseMembershipsTable,
+      and(
+        eq(courseMembershipsTable.userId, usersTable.id),
+        eq(courseMembershipsTable.courseId, courseId),
+        eq(courseMembershipsTable.membershipRole, "student"),
+      ),
+    );
+  const tutors = await db
+    .select({
+      userId: courseMembershipsTable.userId,
+      subject: courseMembershipsTable.subject,
+    })
+    .from(courseMembershipsTable)
+    .where(
+      and(
+        eq(courseMembershipsTable.courseId, courseId),
+        eq(courseMembershipsTable.membershipRole, "tutor"),
+      ),
+    );
+  for (const tutor of tutors) {
+    for (const student of students) {
+      await db
+        .insert(tutorAssignmentsTable)
+        .values({
+          courseId,
+          tutorUserId: tutor.userId,
+          studentUserId: student.id,
+          subject: tutor.subject,
+        })
+        .onConflictDoNothing();
+    }
+  }
+}
+
 async function requireAppUser(
   req: AuthedRequest,
   res: Response,
@@ -291,6 +381,22 @@ async function requireAppUser(
     .from(usersTable)
     .where(eq(usersTable.clerkUserId, clerkUserId))
     .limit(1);
+  const configured = configuredAccess(clerkUserId);
+  if (!configured) {
+    if (appUser) {
+      await db.insert(auditLogsTable).values({
+        actorUserId: appUser.id,
+        action: "access.denied",
+        entityType: "portal",
+        entityId: req.path,
+        metadata: { method: req.method, reason: "identity_not_provisioned" },
+      });
+    }
+    res.status(403).json({
+      error: "Portal access has not been provisioned for this account",
+    });
+    return;
+  }
   if (!appUser) {
     const email =
       claimString(auth.sessionClaims, "email") ??
@@ -298,33 +404,38 @@ async function requireAppUser(
     const displayName =
       claimString(auth.sessionClaims, "name") ??
       claimString(auth.sessionClaims, "firstName") ??
-      "Accepted Admissions Student";
-    const adminIds = envIdSet("ACCEPTED_ADMIN_CLERK_USER_IDS");
-    const tutorIds = envIdSet("ACCEPTED_TUTOR_CLERK_USER_IDS");
-    const studentIds = envIdSet("ACCEPTED_STUDENT_CLERK_USER_IDS");
-    const role: AppUser["role"] = adminIds.has(clerkUserId)
-      ? "administrator"
-      : tutorIds.has(clerkUserId)
-        ? "tutor"
-        : "student";
+      "Accepted Admissions user";
     [appUser] = await db
       .insert(usersTable)
-      .values({ clerkUserId, email, displayName, role })
+      .values({
+        clerkUserId,
+        email,
+        displayName,
+        role: configured.role,
+      })
       .returning();
-    const courseId = await ensureSeedData();
-    // Development auto-enrolls preview users. Production membership is explicit:
-    // only identities listed in the role-specific environment allowlists enroll.
-    if (
-      process.env.NODE_ENV === "development" ||
-      tutorIds.has(clerkUserId) ||
-      studentIds.has(clerkUserId)
-    ) {
-      await db
-        .insert(courseMembershipsTable)
-        .values({ courseId, userId: appUser.id, membershipRole: role })
-        .onConflictDoNothing();
-    }
+    await db.insert(auditLogsTable).values({
+      actorUserId: appUser.id,
+      action: "access.provisioned",
+      entityType: "user",
+      entityId: appUser.id,
+      metadata: { role: configured.role, subject: configured.subject },
+    });
   }
+  if (appUser.role !== configured.role) {
+    await db.insert(auditLogsTable).values({
+      actorUserId: appUser.id,
+      action: "access.denied",
+      entityType: "portal",
+      entityId: req.path,
+      metadata: { method: req.method, reason: "role_provisioning_mismatch" },
+    });
+    res.status(403).json({
+      error: "Portal role provisioning is out of sync; contact an administrator",
+    });
+    return;
+  }
+  await syncConfiguredAccess(appUser, configured);
   req.appUser = appUser;
   next();
 }
@@ -351,8 +462,86 @@ async function visibleCourseIds(user: AppUser): Promise<string[]> {
     await db
       .select({ id: courseMembershipsTable.courseId })
       .from(courseMembershipsTable)
-      .where(eq(courseMembershipsTable.userId, user.id))
+      .where(
+        and(
+          eq(courseMembershipsTable.userId, user.id),
+          eq(courseMembershipsTable.membershipRole, user.role),
+        ),
+      )
   ).map((row) => row.id);
+}
+
+async function canAccessCourse(
+  user: AppUser,
+  courseId: string,
+  subject?: string,
+): Promise<boolean> {
+  if (user.role === "administrator") return true;
+  const [membership] = await db
+    .select()
+    .from(courseMembershipsTable)
+    .where(
+      and(
+        eq(courseMembershipsTable.courseId, courseId),
+        eq(courseMembershipsTable.userId, user.id),
+        eq(courseMembershipsTable.membershipRole, user.role),
+      ),
+    )
+    .limit(1);
+  if (!membership) return false;
+  return (
+    !subject ||
+    membership.subject === "all" ||
+    subjectFamily(membership.subject) === subjectFamily(subject)
+  );
+}
+
+async function courseSubjectForUser(
+  user: AppUser,
+  courseId: string,
+): Promise<string> {
+  if (user.role === "administrator") return "all";
+  const [membership] = await db
+    .select({ subject: courseMembershipsTable.subject })
+    .from(courseMembershipsTable)
+    .where(
+      and(
+        eq(courseMembershipsTable.courseId, courseId),
+        eq(courseMembershipsTable.userId, user.id),
+        eq(courseMembershipsTable.membershipRole, user.role),
+      ),
+    )
+    .limit(1);
+  return membership?.subject ?? "";
+}
+
+async function canAccessStudent(
+  user: AppUser,
+  courseId: string,
+  studentUserId: string,
+  subject?: string,
+): Promise<boolean> {
+  if (user.role === "administrator") return true;
+  if (user.role === "student") return user.id === studentUserId;
+  const conditions = [
+    eq(tutorAssignmentsTable.courseId, courseId),
+    eq(tutorAssignmentsTable.tutorUserId, user.id),
+    eq(tutorAssignmentsTable.studentUserId, studentUserId),
+  ];
+  if (subject) {
+    conditions.push(
+      sql`(
+        lower(${tutorAssignmentsTable.subject}) = 'all'
+        OR lower(${tutorAssignmentsTable.subject}) LIKE ${subjectFamily(subject) + "%"}
+      )`,
+    );
+  }
+  const [assignment] = await db
+    .select({ id: tutorAssignmentsTable.id })
+    .from(tutorAssignmentsTable)
+    .where(and(...conditions))
+    .limit(1);
+  return Boolean(assignment);
 }
 
 function tutorShape(user: AppUser | null) {
@@ -365,7 +554,7 @@ function tutorShape(user: AppUser | null) {
   };
 }
 
-async function courseShape(courseId: string) {
+async function courseShape(courseId: string, user?: AppUser) {
   const [course] = await db
     .select()
     .from(coursesTable)
@@ -376,8 +565,29 @@ async function courseShape(courseId: string) {
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.courseId, course.id));
+  const membership = user && user.role !== "administrator"
+    ? (
+        await db
+          .select({ subject: courseMembershipsTable.subject })
+          .from(courseMembershipsTable)
+          .where(
+            and(
+              eq(courseMembershipsTable.courseId, course.id),
+              eq(courseMembershipsTable.userId, user.id),
+              eq(courseMembershipsTable.membershipRole, user.role),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : null;
+  const sessionsForUser = membership && membership.subject !== "all"
+    ? courseSessions.filter(
+        (session) =>
+          subjectFamily(session.subject) === subjectFamily(membership.subject),
+      )
+    : courseSessions;
   const tutorMemberships = await db
-    .select({ user: usersTable })
+    .select({ user: usersTable, subject: courseMembershipsTable.subject })
     .from(courseMembershipsTable)
     .innerJoin(usersTable, eq(usersTable.id, courseMembershipsTable.userId))
     .where(
@@ -386,16 +596,24 @@ async function courseShape(courseId: string) {
         eq(courseMembershipsTable.membershipRole, "tutor"),
       ),
     );
+  const visibleTutorMemberships =
+    user?.role === "tutor" && membership && membership.subject !== "all"
+      ? tutorMemberships.filter(
+          ({ user: tutor, subject: tutorSubject }) =>
+            tutor.id === user.id ||
+            subjectFamily(membership.subject) === subjectFamily(tutorSubject),
+        )
+      : tutorMemberships;
   return {
     id: course.id,
     title: course.title,
     subject: course.subject,
     term: course.term,
     status: course.status,
-    sessionCount: courseSessions.length,
-    completedSessionCount: courseSessions.filter((s) => s.status === "completed")
+    sessionCount: sessionsForUser.length,
+    completedSessionCount: sessionsForUser.filter((s) => s.status === "completed")
       .length,
-    tutors: tutorMemberships.map(({ user }) => tutorShape(user)!),
+    tutors: visibleTutorMemberships.map(({ user }) => tutorShape(user)!),
   };
 }
 
@@ -488,6 +706,7 @@ async function canAccessAttempt(user: AppUser, attemptId: string) {
     .select({
       attempt: attemptsTable,
       courseId: assignmentsTable.courseId,
+      subject: assignmentsTable.subject,
     })
     .from(attemptsTable)
     .innerJoin(
@@ -499,7 +718,19 @@ async function canAccessAttempt(user: AppUser, attemptId: string) {
   if (user.role === "student") {
     return record.attempt.userId === user.id ? record : null;
   }
-  return (await visibleCourseIds(user)).includes(record.courseId) ? record : null;
+  if (!(await canAccessCourse(user, record.courseId, record.subject))) return null;
+  if (
+    user.role === "tutor" &&
+    !(await canAccessStudent(
+      user,
+      record.courseId,
+      record.attempt.userId,
+      record.subject,
+    ))
+  ) {
+    return null;
+  }
+  return record;
 }
 
 async function enforceTimeLimit(attemptId: string) {
@@ -529,6 +760,75 @@ async function enforceTimeLimit(attemptId: string) {
 
 router.use(requireAppUser);
 
+router.get(
+  "/admin/overview",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    await ensureSeedData();
+    const [users, memberships, assignments, audit] = await Promise.all([
+      db
+        .select({
+          id: usersTable.id,
+          clerkUserId: usersTable.clerkUserId,
+          email: usersTable.email,
+          displayName: usersTable.displayName,
+          role: usersTable.role,
+          createdAt: usersTable.createdAt,
+        })
+        .from(usersTable)
+        .orderBy(asc(usersTable.displayName)),
+      db
+        .select({
+          id: courseMembershipsTable.id,
+          courseId: courseMembershipsTable.courseId,
+          courseTitle: coursesTable.title,
+          userId: courseMembershipsTable.userId,
+          userName: usersTable.displayName,
+          membershipRole: courseMembershipsTable.membershipRole,
+          subject: courseMembershipsTable.subject,
+        })
+        .from(courseMembershipsTable)
+        .innerJoin(coursesTable, eq(coursesTable.id, courseMembershipsTable.courseId))
+        .innerJoin(usersTable, eq(usersTable.id, courseMembershipsTable.userId))
+        .orderBy(asc(coursesTable.title), asc(usersTable.displayName)),
+      db
+        .select({
+          id: tutorAssignmentsTable.id,
+          courseId: tutorAssignmentsTable.courseId,
+          courseTitle: coursesTable.title,
+          tutorUserId: tutorAssignmentsTable.tutorUserId,
+          studentUserId: tutorAssignmentsTable.studentUserId,
+          subject: tutorAssignmentsTable.subject,
+        })
+        .from(tutorAssignmentsTable)
+        .innerJoin(coursesTable, eq(coursesTable.id, tutorAssignmentsTable.courseId)),
+      db
+        .select({
+          id: auditLogsTable.id,
+          action: auditLogsTable.action,
+          entityType: auditLogsTable.entityType,
+          entityId: auditLogsTable.entityId,
+          metadata: auditLogsTable.metadata,
+          createdAt: auditLogsTable.createdAt,
+        })
+        .from(auditLogsTable)
+        .orderBy(desc(auditLogsTable.createdAt))
+        .limit(100),
+    ]);
+    const userById = new Map(users.map((user) => [user.id, user]));
+    res.json({
+      users,
+      memberships,
+      assignments: assignments.map((assignment) => ({
+        ...assignment,
+        tutorName: userById.get(assignment.tutorUserId)?.displayName ?? "Unknown tutor",
+        studentName: userById.get(assignment.studentUserId)?.displayName ?? "Unknown student",
+      })),
+      audit,
+    });
+  },
+);
+
 router.get("/me", async (req: AuthedRequest, res): Promise<void> => {
   const user = req.appUser!;
   res.json(
@@ -545,7 +845,7 @@ router.get("/me", async (req: AuthedRequest, res): Promise<void> => {
 router.get("/courses", async (req: AuthedRequest, res): Promise<void> => {
   await ensureSeedData();
   const ids = await visibleCourseIds(req.appUser!);
-  const courses = await Promise.all(ids.map(courseShape));
+  const courses = await Promise.all(ids.map((id) => courseShape(id, req.appUser!)));
   res.json(ListCoursesResponse.parse(courses.filter(Boolean)));
 });
 
@@ -555,28 +855,40 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const ids = await visibleCourseIds(req.appUser!);
-  if (!ids.includes(params.data.courseId)) {
+  if (!(await canAccessCourse(req.appUser!, params.data.courseId))) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  const base = await courseShape(params.data.courseId);
+  const base = await courseShape(params.data.courseId, req.appUser!);
   const [course] = await db
     .select()
     .from(coursesTable)
     .where(eq(coursesTable.id, params.data.courseId));
+  if (!base || !course) {
+    res.status(404).json({ error: "Course not found" });
+    return;
+  }
   const courseSessions = await db
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.courseId, params.data.courseId))
     .orderBy(asc(sessionsTable.dateTime));
+  const resolvedSessions = (
+    await Promise.all(
+      courseSessions.map(async (session) =>
+        (await canAccessCourse(req.appUser!, session.courseId, session.subject))
+          ? session
+          : null,
+      ),
+    )
+  ).filter((session): session is (typeof courseSessions)[number] => Boolean(session));
   res.json(
     GetCourseResponse.parse({
       ...base,
       meetUrl: course?.meetUrl ?? null,
       driveUrl: course?.driveUrl ?? null,
       goalSummary: course?.goalSummary ?? null,
-      sessions: courseSessions.map((session) => ({
+      sessions: resolvedSessions.map((session) => ({
         ...session,
         tutor: null,
       })),
@@ -588,7 +900,9 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
   await ensureSeedData();
   const user = req.appUser!;
   const ids = await visibleCourseIds(user);
-  const courses = (await Promise.all(ids.map(courseShape))).filter(Boolean);
+  const courses = (
+    await Promise.all(ids.map((id) => courseShape(id, user)))
+  ).filter(Boolean);
   const upcomingSessions =
     ids.length === 0
       ? []
@@ -597,7 +911,17 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
           .from(sessionsTable)
           .where(inArray(sessionsTable.courseId, ids))
           .orderBy(asc(sessionsTable.dateTime))
-          .limit(4);
+          .limit(12);
+  const scopedUpcomingSessions = (
+    await Promise.all(
+      upcomingSessions
+        .map(async (session) =>
+          (await canAccessCourse(user, session.courseId, session.subject))
+            ? session
+            : null,
+        ),
+    )
+  ).filter(Boolean).slice(0, 4);
   const assignments =
     ids.length === 0
       ? []
@@ -606,7 +930,19 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
           .from(assignmentsTable)
           .where(inArray(assignmentsTable.courseId, ids))
           .orderBy(asc(assignmentsTable.deadline));
-  const assignmentIds = assignments.map((item) => item.id);
+  const scopedAssignments = (
+    await Promise.all(
+      assignments.map(async (assignment) =>
+        (await canAccessCourse(user, assignment.courseId, assignment.subject))
+          ? assignment
+          : null,
+      ),
+    )
+  ).filter(
+    (assignment): assignment is (typeof assignments)[number] =>
+      Boolean(assignment),
+  );
+  const assignmentIds = scopedAssignments.map((item) => item.id);
   const counts =
     assignmentIds.length === 0
       ? []
@@ -623,7 +959,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
     .from(attemptsTable)
     .where(eq(attemptsTable.userId, user.id))
     .orderBy(desc(attemptsTable.startedAt));
-  const assignmentSummaries = assignments.map((assignment) => ({
+  const assignmentSummaries = scopedAssignments.map((assignment) => ({
     id: assignment.id,
     title: assignment.title,
     subject: assignment.subject,
@@ -651,7 +987,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
       },
       welcomeMessage: "Your Fall program is ready. Keep building on each session.",
       courses,
-      upcomingSessions: upcomingSessions.map((session) => ({
+      upcomingSessions: scopedUpcomingSessions.map((session) => ({
         ...session,
         tutor: null,
       })),
@@ -679,7 +1015,10 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.id, params.data.sessionId));
-  if (!session || !(await visibleCourseIds(req.appUser!)).includes(session.courseId)) {
+  if (
+    !session ||
+    !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
+  ) {
     res.status(404).json({ error: "Session not found" });
     return;
   }
@@ -721,7 +1060,7 @@ async function assignmentSummariesForUser(
   sessionId?: string,
 ) {
   const ids = await visibleCourseIds(user);
-  if (courseId && !ids.includes(courseId)) return [];
+  if (courseId && !(await canAccessCourse(user, courseId))) return [];
   const conditions = [
     inArray(assignmentsTable.courseId, courseId ? [courseId] : ids),
   ];
@@ -734,8 +1073,19 @@ async function assignmentSummariesForUser(
           .from(assignmentsTable)
           .where(and(...conditions))
           .orderBy(asc(assignmentsTable.deadline));
+  const scopedRows = (
+    await Promise.all(
+      rows.map(async (assignment) =>
+        (await canAccessCourse(user, assignment.courseId, assignment.subject))
+          ? assignment
+          : null,
+      ),
+    )
+  ).filter(
+    (assignment): assignment is (typeof rows)[number] => Boolean(assignment),
+  );
   return Promise.all(
-    rows.map(async (assignment) => {
+    scopedRows.map(async (assignment) => {
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(assignmentQuestionsTable)
@@ -796,7 +1146,11 @@ router.get(
       .where(eq(assignmentsTable.id, params.data.assignmentId));
     if (
       !assignment ||
-      !(await visibleCourseIds(req.appUser!)).includes(assignment.courseId)
+      !(await canAccessCourse(
+        req.appUser!,
+        assignment.courseId,
+        assignment.subject,
+      ))
     ) {
       res.status(404).json({ error: "Assignment not found" });
       return;
@@ -876,7 +1230,11 @@ router.post(
       .where(eq(assignmentsTable.id, params.data.assignmentId));
     if (
       !assignment ||
-      !(await visibleCourseIds(req.appUser!)).includes(assignment.courseId)
+      !(await canAccessCourse(
+        req.appUser!,
+        assignment.courseId,
+        assignment.subject,
+      ))
     ) {
       res.status(404).json({ error: "Assignment not found" });
       return;
@@ -1233,7 +1591,7 @@ router.post(
       .where(eq(sessionsTable.id, params.data.sessionId));
     if (
       !session ||
-      !(await visibleCourseIds(req.appUser!)).includes(session.courseId)
+      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
     ) {
       res.status(404).json({ error: "Session not found" });
       return;
@@ -1268,7 +1626,11 @@ router.patch(
       return;
     }
     const [visibleBlock] = await db
-      .select({ id: curriculumBlocksTable.id, courseId: sessionsTable.courseId })
+      .select({
+        id: curriculumBlocksTable.id,
+        courseId: sessionsTable.courseId,
+        subject: sessionsTable.subject,
+      })
       .from(curriculumBlocksTable)
       .innerJoin(
         sessionsTable,
@@ -1277,7 +1639,11 @@ router.patch(
       .where(eq(curriculumBlocksTable.id, params.data.blockId));
     if (
       !visibleBlock ||
-      !(await visibleCourseIds(req.appUser!)).includes(visibleBlock.courseId)
+      !(await canAccessCourse(
+        req.appUser!,
+        visibleBlock.courseId,
+        visibleBlock.subject,
+      ))
     ) {
       res.status(404).json({ error: "Block not found" });
       return;
@@ -1306,6 +1672,7 @@ function contentSourceShape(source: typeof contentSourcesTable.$inferSelect) {
   return {
     id: source.id,
     courseId: source.courseId,
+    subject: source.subject,
     title: source.title,
     sourceKind: source.sourceKind,
     sourceUrl: source.sourceUrl,
@@ -1404,7 +1771,7 @@ router.get(
       res.status(400).json({ error: query.error.message });
       return;
     }
-    if (!(await visibleCourseIds(req.appUser!)).includes(query.data.courseId)) {
+    if (!(await canAccessCourse(req.appUser!, query.data.courseId))) {
       res.status(404).json({ error: "Course not found" });
       return;
     }
@@ -1413,9 +1780,23 @@ router.get(
       .from(contentSourcesTable)
       .where(eq(contentSourcesTable.courseId, query.data.courseId))
       .orderBy(desc(contentSourcesTable.createdAt));
-    res.json(
-      ListContentSourcesResponse.parse(sources.map(contentSourceShape)),
+    const visibleSources = (
+      await Promise.all(
+        sources.map(async (source) =>
+          req.appUser!.role === "administrator" ||
+          (await canAccessCourse(
+            req.appUser!,
+            source.courseId,
+            source.subject,
+          ))
+            ? source
+            : null,
+        ),
+      )
+    ).filter(
+      (source): source is (typeof sources)[number] => Boolean(source),
     );
+    res.json(ListContentSourcesResponse.parse(visibleSources.map(contentSourceShape)));
   },
 );
 
@@ -1428,7 +1809,17 @@ router.post(
       res.status(400).json({ error: body.error.message });
       return;
     }
-    if (!(await visibleCourseIds(req.appUser!)).includes(body.data.courseId)) {
+    const subject =
+      req.appUser!.role === "tutor"
+        ? await courseSubjectForUser(req.appUser!, body.data.courseId)
+        : "all";
+    if (
+      !(await canAccessCourse(
+        req.appUser!,
+        body.data.courseId,
+        subject || undefined,
+      ))
+    ) {
       res.status(404).json({ error: "Course not found" });
       return;
     }
@@ -1443,6 +1834,7 @@ router.post(
       .values({
         courseId: body.data.courseId,
         importedBy: req.appUser!.id,
+        subject: subject || "all",
         title: body.data.title.trim(),
         sourceKind: body.data.sourceKind,
         sourceUrl: body.data.sourceUrl ?? null,
@@ -1493,7 +1885,11 @@ router.post(
       .where(eq(contentSourcesTable.id, params.data.sourceId));
     if (
       !record ||
-      !(await visibleCourseIds(req.appUser!)).includes(record.source.courseId)
+      !(await canAccessCourse(
+        req.appUser!,
+        record.source.courseId,
+        record.source.subject,
+      ))
     ) {
       res.status(404).json({ error: "Content source not found" });
       return;
@@ -1580,7 +1976,9 @@ router.post(
           const secondary = concepts[(index * 2 + 1) % concepts.length]!;
           const template = templates[index % templates.length]!;
           return {
-            subject: record.course.subject,
+            subject: record.source.subject === "all"
+              ? record.course.subject
+              : record.source.subject,
             domain: "Source-guided practice",
             skill: focus,
             questionType: "multiple_choice",
@@ -1628,7 +2026,7 @@ router.get(
       res.status(400).json({ error: query.error.message });
       return;
     }
-    if (!(await visibleCourseIds(req.appUser!)).includes(query.data.courseId)) {
+    if (!(await canAccessCourse(req.appUser!, query.data.courseId))) {
       res.status(404).json({ error: "Course not found" });
       return;
     }
@@ -1645,11 +2043,22 @@ router.get(
       )
       .where(and(...conditions))
       .orderBy(desc(questionsTable.createdAt));
-    res.json(
-      ListQuestionBankResponse.parse(
-        rows.map(({ question }) => questionBankShape(question)),
-      ),
+    const visibleRows = (
+      await Promise.all(
+        rows.map(async ({ question }) =>
+          (await canAccessCourse(
+            req.appUser!,
+            query.data.courseId,
+            question.subject,
+          ))
+            ? question
+            : null,
+        ),
+      )
+    ).filter((question): question is (typeof rows)[number]["question"] =>
+      Boolean(question),
     );
+    res.json(ListQuestionBankResponse.parse(visibleRows.map(questionBankShape)));
   },
 );
 
@@ -1668,7 +2077,11 @@ router.patch(
       return;
     }
     const [visibleQuestion] = await db
-      .select({ question: questionsTable, courseId: contentSourcesTable.courseId })
+      .select({
+        question: questionsTable,
+        courseId: contentSourcesTable.courseId,
+        subject: contentSourcesTable.subject,
+      })
       .from(questionsTable)
       .innerJoin(
         contentSourcesTable,
@@ -1677,7 +2090,11 @@ router.patch(
       .where(eq(questionsTable.id, params.data.questionId));
     if (
       !visibleQuestion ||
-      !(await visibleCourseIds(req.appUser!)).includes(visibleQuestion.courseId)
+      !(await canAccessCourse(
+        req.appUser!,
+        visibleQuestion.courseId,
+      visibleQuestion.question.subject || visibleQuestion.subject,
+      ))
     ) {
       res.status(404).json({ error: "Question not found" });
       return;
@@ -1748,7 +2165,16 @@ router.post(
       !assignment ||
       !questionRecord ||
       assignment.courseId !== questionRecord.courseId ||
-      !(await visibleCourseIds(req.appUser!)).includes(assignment.courseId)
+      !(await canAccessCourse(
+        req.appUser!,
+        assignment.courseId,
+        assignment.subject,
+      )) ||
+      !(await canAccessCourse(
+        req.appUser!,
+        questionRecord.courseId,
+        questionRecord.question.subject,
+      ))
     ) {
       res.status(404).json({ error: "Assignment or question not found" });
       return;
@@ -1803,7 +2229,7 @@ router.get(
       .where(eq(sessionsTable.id, params.data.sessionId));
     if (
       !session ||
-      !(await visibleCourseIds(req.appUser!)).includes(session.courseId)
+      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
     ) {
       res.status(404).json({ error: "Session not found" });
       return;
@@ -1846,7 +2272,7 @@ router.put(
       .where(eq(sessionsTable.id, params.data.sessionId));
     if (
       !session ||
-      !(await visibleCourseIds(req.appUser!)).includes(session.courseId)
+      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
     ) {
       res.status(404).json({ error: "Session not found" });
       return;
@@ -1904,6 +2330,7 @@ router.get(
       .select({
         item: reviewQueueTable,
         student: usersTable,
+        assignment: assignmentsTable,
         response: responsesTable,
       })
       .from(reviewQueueTable)
@@ -1922,9 +2349,23 @@ router.get(
       )
       .where(inArray(assignmentsTable.courseId, courseIds))
       .orderBy(desc(reviewQueueTable.createdAt));
+    const visibleRows = (
+      await Promise.all(
+        rows.map(async (row) =>
+          (await canAccessStudent(
+            req.appUser!,
+            row.assignment.courseId,
+            row.item.studentUserId,
+            row.assignment.subject,
+          ))
+            ? row
+            : null,
+        ),
+      )
+    ).filter((row): row is (typeof rows)[number] => Boolean(row));
     res.json(
       ListReviewQueueResponse.parse(
-        rows.map(({ item, student, response }) => ({
+        visibleRows.map(({ item, student, response }) => ({
           id: item.id,
           attemptId: item.attemptId,
           questionId: item.questionId,
@@ -1956,7 +2397,12 @@ router.patch(
       return;
     }
     const [visibleItem] = await db
-      .select({ id: reviewQueueTable.id, courseId: assignmentsTable.courseId })
+      .select({
+        id: reviewQueueTable.id,
+        courseId: assignmentsTable.courseId,
+        subject: assignmentsTable.subject,
+        studentUserId: reviewQueueTable.studentUserId,
+      })
       .from(reviewQueueTable)
       .innerJoin(attemptsTable, eq(attemptsTable.id, reviewQueueTable.attemptId))
       .innerJoin(
@@ -1966,7 +2412,12 @@ router.patch(
       .where(eq(reviewQueueTable.id, params.data.itemId));
     if (
       !visibleItem ||
-      !(await visibleCourseIds(req.appUser!)).includes(visibleItem.courseId)
+      !(await canAccessStudent(
+        req.appUser!,
+        visibleItem.courseId,
+        visibleItem.studentUserId,
+        visibleItem.subject,
+      ))
     ) {
       res.status(404).json({ error: "Review item not found" });
       return;

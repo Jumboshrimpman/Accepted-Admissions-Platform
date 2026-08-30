@@ -10,6 +10,8 @@ import type { ContentSourceInputSourceKind } from './contentSourceInputSourceKin
 
 export interface ContentSourceInput {
   courseId: string;
+  /** @maxLength 200 */
+  subject?: string;
   /**
      * @minLength 1
      * @maxLength 200

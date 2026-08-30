@@ -31,6 +31,54 @@ export interface CurrentUser {
   avatarUrl?: string | null;
 }
 
+export type AdminOverviewUsersItem = {
+  id: string;
+  clerkUserId: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  createdAt: string;
+};
+
+export type AdminOverviewMembershipsItem = {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  userId: string;
+  userName: string;
+  membershipRole: Role;
+  subject: string;
+};
+
+export type AdminOverviewAssignmentsItem = {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  tutorUserId: string;
+  tutorName: string;
+  studentUserId: string;
+  studentName: string;
+  subject: string;
+};
+
+export type AdminOverviewAuditItemMetadata = { [key: string]: unknown };
+
+export type AdminOverviewAuditItem = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: AdminOverviewAuditItemMetadata;
+  createdAt: string;
+};
+
+export interface AdminOverview {
+  users: AdminOverviewUsersItem[];
+  memberships: AdminOverviewMembershipsItem[];
+  assignments: AdminOverviewAssignmentsItem[];
+  audit: AdminOverviewAuditItem[];
+}
+
 export interface Tutor {
   id: string;
   name: string;
@@ -485,6 +533,7 @@ export const ContentSourceStatus = {
 export interface ContentSource {
   id: string;
   courseId: string;
+  subject: string;
   title: string;
   sourceKind: ContentSourceSourceKind;
   /** @nullable */
@@ -511,6 +560,8 @@ export type ContentSourceInputProvenance = { [key: string]: unknown };
 
 export interface ContentSourceInput {
   courseId: string;
+  /** @maxLength 200 */
+  subject?: string;
   /**
      * @minLength 1
      * @maxLength 200

@@ -1,4 +1,4 @@
-import { useListCourses } from "@workspace/api-client-react";
+import { useGetAdminOverview, useListCourses } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { BarChart3, Users, BookOpen, Layers } from "lucide-react";
 
 export default function AdminDashboard() {
   const { data: courses, isLoading } = useListCourses();
+  const { data: overview, isLoading: overviewLoading } = useGetAdminOverview();
 
   if (isLoading) {
     return (
@@ -123,6 +124,94 @@ export default function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Access provisioning</CardTitle>
+            <CardDescription>
+              Database-backed users, roles, memberships, and tutor assignments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {overviewLoading ? (
+              <Skeleton className="h-32 w-full" />
+            ) : (
+              <div className="space-y-3">
+                {overview?.users.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between gap-4 rounded-lg border p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{user.displayName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                    <Badge variant="outline" className="capitalize">{user.role}</Badge>
+                  </div>
+                ))}
+                {!overview?.users.length && (
+                  <p className="text-sm text-muted-foreground">
+                    No provisioned users have signed in yet.
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Memberships & audit</CardTitle>
+            <CardDescription>
+              Review subject boundaries and recent sensitive actions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              {overview?.memberships.map((membership) => (
+                <div key={membership.id} className="flex justify-between gap-3 text-sm">
+                  <span>{membership.userName} · {membership.courseTitle}</span>
+                  <Badge variant="secondary">{membership.subject}</Badge>
+                </div>
+              ))}
+              {!overview?.memberships.length && (
+                <p className="text-sm text-muted-foreground">No memberships recorded.</p>
+              )}
+            </div>
+            <div className="border-t pt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Tutor assignments
+              </p>
+              {overview?.assignments.map((assignment) => (
+                <div key={assignment.id} className="flex justify-between gap-3 py-1 text-sm">
+                  <span>{assignment.tutorName} → {assignment.studentName}</span>
+                  <Badge variant="secondary">{assignment.subject}</Badge>
+                </div>
+              ))}
+              {!overview?.assignments.length && (
+                <p className="text-sm text-muted-foreground">No tutor assignments recorded.</p>
+              )}
+            </div>
+            <div className="border-t pt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Recent audit events
+              </p>
+              {overview?.audit.slice(0, 5).map((event) => (
+                <div key={event.id} className="flex justify-between gap-3 py-1 text-sm">
+                  <span>{event.action}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(event.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+              {!overview?.audit.length && (
+                <p className="text-sm text-muted-foreground">No audit events yet.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

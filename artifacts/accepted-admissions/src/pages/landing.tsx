@@ -15,10 +15,10 @@ export default function Landing() {
         </div>
         <div className="flex items-center gap-4">
           <SignedOut>
-            <Link href="/sign-in">
+            <Link href="/login">
               <Button variant="ghost" className="font-medium">Sign In</Button>
             </Link>
-            <Link href="/sign-in">
+            <Link href="/login">
               <Button className="bg-primary text-primary-foreground font-medium rounded-full px-6">
                 Client Portal
               </Button>
@@ -57,7 +57,7 @@ export default function Landing() {
             </p>
             <div className="mt-12 flex flex-col sm:flex-row items-center gap-4">
               <SignedOut>
-                <Link href="/sign-in">
+                <Link href="/login">
                   <Button size="lg" className="rounded-full px-8 h-14 text-base bg-gradient-brand text-white border-0 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
                     Client Sign In <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>

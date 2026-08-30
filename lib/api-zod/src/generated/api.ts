@@ -30,6 +30,48 @@ export const GetCurrentUserResponse = zod.object({
 
 
 /**
+ * @summary Get administrator-only access and audit information
+ */
+export const GetAdminOverviewResponse = zod.object({
+  "users": zod.array(zod.object({
+  "id": zod.string(),
+  "clerkUserId": zod.string(),
+  "email": zod.string(),
+  "displayName": zod.string(),
+  "role": zod.enum(['administrator', 'tutor', 'student']),
+  "createdAt": zod.coerce.date()
+})),
+  "memberships": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "userId": zod.string(),
+  "userName": zod.string(),
+  "membershipRole": zod.enum(['administrator', 'tutor', 'student']),
+  "subject": zod.string()
+})),
+  "assignments": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "tutorUserId": zod.string(),
+  "tutorName": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "subject": zod.string()
+})),
+  "audit": zod.array(zod.object({
+  "id": zod.string(),
+  "action": zod.string(),
+  "entityType": zod.string(),
+  "entityId": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Get the signed-in user's dashboard
  */
 export const GetDashboardResponse = zod.object({
@@ -584,6 +626,7 @@ export const ListContentSourcesQueryParams = zod.object({
 export const ListContentSourcesResponseItem = zod.object({
   "id": zod.string(),
   "courseId": zod.string(),
+  "subject": zod.string(),
   "title": zod.string(),
   "sourceKind": zod.enum(['pdf', 'html', 'text']),
   "sourceUrl": zod.string().nullish(),
@@ -600,6 +643,8 @@ export const ListContentSourcesResponse = zod.array(ListContentSourcesResponseIt
 /**
  * @summary Register an authorized PDF, HTML, or text lesson source
  */
+export const createContentSourceBodySubjectMax = 200;
+
 export const createContentSourceBodyTitleMax = 200;
 
 export const createContentSourceBodyOriginalFilenameMax = 255;
@@ -613,6 +658,7 @@ export const createContentSourceBodyExtractedTextMax = 50000;
 
 export const CreateContentSourceBody = zod.object({
   "courseId": zod.string(),
+  "subject": zod.string().max(createContentSourceBodySubjectMax).optional(),
   "title": zod.string().min(1).max(createContentSourceBodyTitleMax),
   "sourceKind": zod.enum(['pdf', 'html', 'text']),
   "sourceUrl": zod.string().nullish(),
@@ -625,6 +671,7 @@ export const CreateContentSourceBody = zod.object({
 export const CreateContentSourceResponse = zod.object({
   "id": zod.string(),
   "courseId": zod.string(),
+  "subject": zod.string(),
   "title": zod.string(),
   "sourceKind": zod.enum(['pdf', 'html', 'text']),
   "sourceUrl": zod.string().nullish(),
