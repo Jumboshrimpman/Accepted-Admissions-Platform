@@ -1,0 +1,370 @@
+Implement the following upgrades in the existing Accepted Admissions Platform. First inspect the current architecture, database schema, authentication, routes, and existing functionality. Preserve working features and the current visual system.
+
+Work incrementally and test each workflow. Do not claim an external integration is complete unless it has been tested end to end. Never hard-code credentials. Store all API keys and OAuth credentials in Replit Secrets.
+
+# 1. Authentication and permissions
+
+Continue using Clerk for authentication and implement server-enforced role-based access for:
+
+* Administrator
+* Tutor
+* Student/client
+* Read-only viewer
+
+Requirements:
+
+* Keep users signed in across page refreshes and browser restarts using Clerk’s normal persistent sessions.
+* If an authenticated user visits the sign-in page, redirect them to the appropriate portal dashboard.
+* Add a clearly visible “Back to Home” link on the portal sign-in page.
+* Enforce every permission on the server/API, not only by hiding buttons.
+* Create an audit log for significant administrator actions, role changes, payments, invoices, credits, and tutor-rate changes.
+
+Provision `ryo@jaac.co.jp` as a read-only viewer of Taito Goto’s student dashboard.
+
+* Display a clear banner: “You are viewing Taito Goto’s dashboard in view-only mode.”
+* Ryo should see the same student information Taito can see.
+* Ryo must not be able to edit, submit, upload, delete, schedule, cancel, purchase, or otherwise modify anything.
+* Reject attempted mutations at the API level, even if someone manually calls an endpoint.
+
+# 2. Tutor accounts and profiles
+
+Create or connect these SAT tutor profiles:
+
+* Xavier Morales — `xaver.rmz6@gmail.com`
+* Eunice Chon — `eunice_chon@berkeley.edu`
+
+Each tutor profile should support:
+
+* Name
+* Profile photograph
+* Public biography
+* Subjects and services
+* LinkedIn URL
+* Active/inactive status
+* Connected calendar status
+* Public booking eligibility
+* Internal hourly compensation rate
+* Optional internal administrator notes
+
+Permissions:
+
+* Administrators can create and edit all tutor information, including compensation.
+* Tutors can edit their own public profile, photograph, biography, LinkedIn URL, and availability settings.
+* Tutors may view their own compensation rate but may not change it.
+* Students may see only approved public details such as the tutor’s name, photograph, biography, subjects, and LinkedIn profile.
+* Students must never see compensation rates, internal notes, other clients, or financial information.
+
+# 3. Tutor calendar and scheduling integration
+
+Implement calendar-based scheduling for SAT tutoring. Prefer direct Google Calendar OAuth unless an existing Calendly integration is already configured and provides a more reliable path.
+
+Each tutor must be able to:
+
+* Connect, reconnect, and disconnect their own Google Calendar securely.
+* Select which calendar controls tutoring availability.
+* Configure available tutoring hours, time zone, booking notice, buffers, and blackout dates.
+* See their upcoming Accepted Admissions sessions.
+
+The client booking flow must:
+
+* Show only available appointment times for the selected tutor and product.
+* Read Google Calendar free/busy data without exposing private calendar event titles, attendees, descriptions, or locations.
+* Account for the tutor’s and client’s time zones.
+* Prevent double booking.
+* Recheck availability on the server immediately before confirming a session.
+* Create the confirmed session on the tutor’s connected calendar.
+* Support confirmation, cancellation, and rescheduling rules.
+* Send booking confirmations and changes by email once an email provider is connected.
+* Store the provider event ID so bookings remain synchronized.
+
+Build the integration so other calendar providers, including Calendly, could be added later without rebuilding the entire booking system.
+
+If Google OAuth credentials or authorization are missing, complete the application flow and connection UI, then provide the exact configuration steps and secrets required. Do not display fake availability or describe the integration as live.
+
+# 4. Michelle Makarem’s prepaid session
+
+Create or associate this client record:
+
+* Student/client: Michelle Makarem
+* Account email: `michaelmakarem@gmail.com`
+* Existing entitlement: one prepaid 60-minute SAT session
+* Eligible tutor: Xavier Morales
+
+Michelle must be able to sign in, see that she has one prepaid SAT hour, and schedule it from Xavier’s real availability without paying again.
+
+Use a credit ledger rather than a simple editable number. Track:
+
+* Original credit
+* Reserved credit
+* Completed credit
+* Restored credit after an eligible cancellation
+* Remaining balance
+* Administrator adjustments and explanations
+
+Do not consume the credit permanently until the session is completed. A booking may reserve it so it cannot be used twice.
+
+# 5. SAT products and pricing
+
+Create these public SAT tutoring products:
+
+| Product             | Duration | Total price | Effective hourly rate |
+| ------------------- | -------: | ----------: | --------------------: |
+| Single SAT session  |   1 hour |        $175 |             $175/hour |
+| SAT 10-hour package | 10 hours |      $1,500 |             $150/hour |
+| SAT 20-hour package | 20 hours |      $2,400 |             $120/hour |
+
+Requirements:
+
+* Display the total price and effective hourly rate clearly.
+* Let an administrator activate, deactivate, edit, or create additional offerings.
+* Track purchased, reserved, completed, expired, refunded, and remaining hours.
+* Allow eligible hours to be scheduled with the appropriate SAT tutor.
+* Do not allow a client to schedule more hours than they own.
+* Preserve a complete transaction and credit history.
+
+# 6. Payments and invoices
+
+Add a secure payment and invoicing system using Stripe Checkout and Stripe-hosted invoices, unless a working payment provider already exists.
+
+Requirements:
+
+* Never store raw card information.
+* Verify payment results through signed server-side webhooks.
+* Make webhook processing idempotent so the same event cannot create duplicate credits.
+* Track pending, paid, failed, refunded, partially refunded, canceled, and manually recorded payments.
+* Automatically issue the correct session credits only after confirmed payment.
+* Allow administrators to create custom offerings and invoices.
+* Support discounts, invoice due dates, descriptions, quantities, and client assignment.
+* Allow administrators to record payments received outside the website, including the payment method, date, amount, and an internal note.
+* Clearly distinguish online payments from manually recorded payments.
+* Show clients their invoices, receipts, payment status, purchases, and remaining hours.
+
+# 7. Public SAT offerings page
+
+Create a polished public SAT tutoring page within the new site’s existing design system.
+
+Include:
+
+* SAT tutoring overview
+* Tutor options
+* Single-session and package pricing
+* Explanation of how scheduling and credits work
+* Calls to action to purchase, request information, or sign in
+* Responsive mobile and desktop layouts
+* Appropriate SEO title, description, structured headings, and social-sharing metadata
+
+# 8. Public team page
+
+Create a public “Our Team” section based on the existing Accepted Admissions team page:
+
+`https://www.acceptedadmissions.org/our-team`
+
+Migrate the approved:
+
+* Names
+* Titles
+* Biographies
+* Headshots
+* LinkedIn redirects
+
+Keep the new platform’s visual design rather than copying Wix styling exactly. Store team profiles in administrator-editable content rather than hard-coded page markup.
+
+Do not invent LinkedIn URLs, biographies, titles, or credentials. If a LinkedIn URL or another field cannot be found in the existing platform data, create the field but place that profile on a missing-content checklist for the administrator.
+
+# 9. Public success page
+
+Create a public “Past Success” section based on:
+
+`https://www.acceptedadmissions.org/past-success`
+
+Migrate the approved testimonials, explanatory copy, and school-success content into the new visual system.
+
+Requirements:
+
+* Do not invent acceptances, statistics, quotations, client names, or outcomes.
+* Preserve testimonial attribution and anonymity exactly as approved.
+* Make success content editable through the administrator interface.
+* Add suitable SEO metadata.
+* Ensure logos and images have alt text and render correctly on mobile.
+
+# 10. Client request form
+
+Add a detailed public client-request form with at least these fields:
+
+1. Parent/guardian or client full name
+2. Student full name
+3. Email address
+4. Phone number
+5. Student grade or graduation year
+6. Current school
+7. Service requested
+8. Current SAT total score
+9. Current Reading/Writing score
+10. Current Math score
+11. Target SAT score
+12. Planned test date
+13. Goals and explanation of requested help
+14. General scheduling availability
+15. How they heard about Accepted Admissions
+16. Consent to be contacted and acknowledgment of the privacy policy
+
+Requirements:
+
+* Require and validate email and phone fields on both the client and server.
+* Normalize phone numbers and reject clearly invalid or placeholder values.
+* Use email verification or a confirmation link where practical.
+* Add spam and rate-limit protection.
+* Save each submission as a lead in the administrator dashboard.
+* Record the submission date, source page, status, assigned staff member, follow-up notes, and conversion status.
+* Send an acknowledgment to the requester and notify the administrator once email delivery is configured.
+* Never expose submitted information publicly.
+
+# 11. Public-site updates
+
+* Remove every instance of “Enrollment is now open for fall.”
+* Add the SAT offerings, Our Team, Past Success, and Client Request pages to the public navigation.
+* Preserve the existing site’s responsive design.
+* Ensure all calls to action and navigation links work.
+* Add appropriate loading, empty, success, and error states.
+
+# 12. Comprehensive administrator control panel
+
+Expand the administrator dashboard to include:
+
+## Overview
+
+* Total users
+* Students/clients
+* Tutors
+* Read-only viewers
+* Active programs
+* Active curricula
+* Upcoming sessions
+* Completed sessions
+* Cancellations
+* New client requests
+* Outstanding invoices
+* Collected revenue
+* Tutor costs
+* Gross profit
+
+## User management
+
+* Search and filter all users
+* Assign roles
+* Activate or deactivate access
+* Link parents or read-only viewers to students
+* View purchases, credits, invoices, sessions, and activity
+* Prevent accidental deletion of financial records
+
+## Programs and curricula
+
+* Create and manage programs
+* Assign students and tutors
+* Create and edit curriculum records
+* Track progress and session history
+* Associate products with programs and tutors
+
+## Sessions and calendar
+
+* Unified calendar of upcoming and past tutor-client meetings
+* Filter by tutor, student, program, status, and date
+* Session status: requested, confirmed, completed, canceled, no-show, or rescheduled
+* Session notes and internal administrator notes
+* Manual session creation and adjustment with an audit trail
+
+## Financial reporting
+
+Track:
+
+* Online payments
+* Offline payments
+* Invoiced revenue
+* Collected revenue
+* Outstanding balances
+* Refunds
+* Tutor compensation accrued from completed sessions
+* Tutor compensation paid
+* Gross profit calculated as collected revenue minus accrued tutor compensation
+
+Do not label this as net profit because it does not include every business expense.
+
+Allow filtering by date, client, tutor, program, product, and payment status. Make calculations derive from transaction and session records rather than manually entered dashboard totals.
+
+## Tutor compensation
+
+* Administrator sets each tutor’s rate and effective date.
+* Preserve historical rates so changing a rate does not rewrite past session costs.
+* Completed sessions accrue compensation using the applicable historical rate.
+* Tutors can view only their own completed sessions, accrued compensation, and payment status.
+* Students and viewers cannot access compensation information.
+
+## Offerings and invoices
+
+Administrators should be able to:
+
+* Create products and packages
+* Set pricing and included hours
+* Assign eligible tutors
+* Activate or deactivate products
+* Create and send invoices
+* Record offline payments
+* Apply purchased credits
+* Correct mistakes through logged adjustments rather than deleting history
+
+# 13. Otter.ai and meeting records
+
+Do not make Otter.ai a dependency for the core platform.
+
+First determine whether the available Otter API and account permissions can securely provide meeting records for this use case. If authorization is available, build an optional integration that associates approved meeting notes or transcript links with the correct session.
+
+Until then:
+
+* Allow tutors or administrators to add a meeting-notes link manually.
+* Keep all meeting notes private.
+* Do not expose transcripts to students unless an administrator explicitly approves access.
+* Do not scrape Otter or store credentials insecurely.
+* Clearly label the Otter integration as disconnected until it is genuinely authorized and tested.
+
+# 14. Security and data requirements
+
+* Use server-side authorization for every protected operation.
+* Never use an email address alone as proof of authorization.
+* Store OAuth tokens securely and encrypted where supported.
+* Keep secrets out of the repository and browser bundle.
+* Do not expose tutor rates, private calendar details, other clients, internal notes, leads, or financial information through public APIs.
+* Validate all form and API inputs.
+* Use database transactions where booking, payment, or credit updates could conflict.
+* Maintain audit records for sensitive changes.
+* Add safe error handling without exposing secrets or internal stack traces.
+
+# 15. Required acceptance tests
+
+The work is complete only when these workflows pass:
+
+1. Michelle signs in and sees exactly one prepaid SAT hour.
+2. Michelle books an available hour with Xavier without paying again.
+3. The booking reserves her credit and prevents double use.
+4. Xavier’s real calendar prevents conflicting bookings without revealing private events.
+5. A cancellation restores or retains credit according to the configured policy.
+6. A new client purchases each SAT product and receives the correct number of hours.
+7. Duplicate payment webhooks do not create duplicate credits.
+8. Xavier and Eunice can connect and manage their calendars independently.
+9. Ryo can view Taito’s dashboard but cannot change anything through either the interface or API.
+10. Authentication persists correctly, and signed-in users are redirected away from the sign-in page.
+11. The sign-in page has a working path back to the public home page.
+12. Public SAT, Team, Success, and Client Request pages work on mobile and desktop.
+13. Client-request submissions appear privately in the administrator dashboard.
+14. Tutor rates are visible only to the administrator and the applicable tutor.
+15. Financial totals reconcile to the underlying payments, sessions, and tutor rates.
+16. “Enrollment is now open for fall” no longer appears anywhere.
+
+At completion, provide:
+
+* A summary of implemented features
+* Database migrations made
+* Tests run and their results
+* External services that are live
+* External services still awaiting authorization
+* Exact Replit Secrets or configuration actions required from the owner
+* Any missing biographies, headshots, LinkedIn URLs, payment details, or policies requiring owner input
