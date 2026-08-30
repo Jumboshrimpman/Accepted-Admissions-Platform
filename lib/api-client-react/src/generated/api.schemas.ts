@@ -20,6 +20,7 @@ export const Role = {
   administrator: 'administrator',
   tutor: 'tutor',
   student: 'student',
+  viewer: 'viewer',
 } as const;
 
 export interface CurrentUser {

@@ -9,6 +9,7 @@ Set the following environment variables as comma-separated Clerk user IDs:
 - `ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS`: English/IELTS tutors; they receive the IELTS subject scope.
 - `ACCEPTED_TUTOR_CLERK_USER_IDS`: optional legacy tutor allowlist for a tutor who is intentionally assigned to all subjects.
 - `ACCEPTED_STUDENT_CLERK_USER_IDS`: students enrolled in the seeded Fall 2026 course.
+- `ACCEPTED_VIEWER_CLERK_USER_IDS`: read-only viewers; the current viewer policy links to Taito’s student record when it exists.
 
 The intended roster is:
 
@@ -50,6 +51,9 @@ sequence when checking the preview:
    administrators at `/admin`.
 7. Confirm a direct URL for another role shows an access message rather than
    private data.
+8. For a viewer, confirm the dashboard displays “You are viewing Taito Goto’s
+   dashboard in view-only mode.” and that both UI actions and direct mutation
+   requests are rejected with `VIEW_ONLY`.
 
 Expected error states:
 
@@ -59,3 +63,5 @@ Expected error states:
 - `403` with `ROLE_PROVISIONING_MISMATCH`: the Clerk ID is allowlisted for a
   different role than the existing application user; review the role assignment
   before changing it.
+- `403` with `VIEW_ONLY`: the authenticated account is a linked viewer and the
+  requested method would modify private portal data.

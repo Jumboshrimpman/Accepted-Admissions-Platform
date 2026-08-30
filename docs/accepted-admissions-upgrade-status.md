@@ -1,0 +1,45 @@
+# Accepted Admissions platform upgrade status
+
+## Implemented in this phase
+
+- Added a durable `viewer` application role and `viewer_links` relationship. Viewer access is deny-by-default, scoped to a linked student, and blocked for every non-read API request with `VIEW_ONLY`.
+- Added the public SAT offerings, Our Team, Past Success, and Client Request routes using the existing visual system.
+- Added public SAT product records with the requested prices and effective hourly rates:
+  - Single SAT session — $175 for 1 hour
+  - SAT 10-hour package — $1,500 for 10 hours
+  - SAT 20-hour package — $2,400 for 20 hours
+- Added administrator-editable foundations for tutor profiles, public content, availability rules, calendar connections, credits, invoices, payments, leads, compensation rates, and private meeting records.
+- Added Xavier Morales and Eunice Chon’s tutor records with public content fields empty until approved content is supplied.
+- Added Michelle Makarem’s pending client record and one original prepaid SAT hour. The `pending:` Clerk identifier is not an authorization credential; a later allowlisted Clerk identity is reconciled to this record by server-side account provisioning.
+- Added server-side client-request validation, phone normalization, consent checks, private lead storage, and a basic per-IP rate limit.
+- Added administrator operational and financial snapshot fields, including a clearly labeled gross profit calculation and provider readiness states.
+- Added the visible “Back to Home” link on the portal sign-in screen.
+- Removed the old enrollment status message from the application and replaced it with the neutral “SAT and IELTS program · Fall 2026” label.
+
+## External services
+
+The following are intentionally not labeled live:
+
+- Google Calendar: disconnected. The schema and provider boundary are ready, but OAuth credentials and tutor authorization are not configured.
+- Stripe: not configured. No Checkout session or webhook processing is claimed.
+- Email: not configured. Client requests are stored, but acknowledgements are not sent by an external provider.
+- Otter.ai: disconnected. Manual meeting-record links are supported by the schema; transcripts are not imported or exposed.
+
+## Owner input still required
+
+- Confirm and invite the intended development or production Clerk accounts before adding their Clerk IDs to allowlists. Existing invitation work remains separately gated.
+- Provide approved tutor headshots, biographies, titles, and LinkedIn redirects.
+- Provide approved Past Success copy, testimonials, attribution/anonymity choices, logos, and image alt text.
+- Configure provider credentials through Replit Secrets and complete end-to-end Google Calendar, Stripe, and email tests before enabling those workflows.
+- Define final cancellation, credit-restoration, invoice, refund, and privacy-policy rules.
+
+## Verification completed
+
+- Database migration generated and applied successfully in development.
+- Full workspace typecheck passed.
+- Accepted Admissions production build passed.
+- API server build passed.
+- Public product, tutor, and SAT content endpoints returned HTTP 200.
+- Invalid client-request input returned HTTP 400.
+- Unauthenticated credit access returned HTTP 401.
+- Public home, SAT offerings, and mobile client-request pages rendered without browser errors.

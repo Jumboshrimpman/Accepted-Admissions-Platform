@@ -4,16 +4,23 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, GraduationCap, Users } from "lucide-react";
 
 export default function Landing() {
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       <header className="container mx-auto px-6 h-20 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="/logo.svg" alt="Accepted Admissions" className="w-10 h-10 rounded-xl shadow-sm" />
+          <img src={`${basePath}/logo.svg`} alt="Accepted Admissions" className="w-10 h-10 rounded-xl shadow-sm" />
           <span className="font-bold text-xl tracking-tight text-foreground">
             Accepted Admissions
           </span>
         </div>
         <div className="flex items-center gap-4">
+            <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+              <Link href="/sat" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">SAT tutoring</Link>
+              <Link href="/our-team" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Our team</Link>
+              <Link href="/past-success" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Past success</Link>
+              <Link href="/client-request" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Client request</Link>
+            </nav>
             <Show when="signed-out">
             <Link href="/login">
               <Button variant="ghost" className="font-medium">Sign In</Button>
@@ -47,7 +54,7 @@ export default function Landing() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
               </span>
-              Enrollment for Fall is Open
+              SAT and IELTS program · Fall 2026
             </div>
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-foreground max-w-4xl leading-tight">
               Personalized guidance for your <span className="text-gradient-brand">highest ambitions</span>
@@ -113,7 +120,7 @@ export default function Landing() {
       <footer className="bg-background py-12 border-t mt-auto">
         <div className="container mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <img src="/logo.svg" alt="Accepted Admissions" className="w-6 h-6 rounded-md opacity-50 grayscale" />
+             <img src={`${basePath}/logo.svg`} alt="Accepted Admissions" className="w-6 h-6 rounded-md opacity-50 grayscale" />
             <span className="font-semibold text-muted-foreground">Accepted Admissions</span>
           </div>
           <p className="text-sm text-muted-foreground">

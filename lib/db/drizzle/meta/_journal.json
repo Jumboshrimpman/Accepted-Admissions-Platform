@@ -29,6 +29,13 @@
       "when": 1788117128499,
       "tag": "0003_bumpy_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788120527125,
+      "tag": "0004_daffy_vance_astro",
+      "breakpoints": true
     }
   ]
 }

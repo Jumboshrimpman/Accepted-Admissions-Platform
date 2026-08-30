@@ -24,7 +24,7 @@ export const GetCurrentUserResponse = zod.object({
   "id": zod.string(),
   "displayName": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['administrator', 'tutor', 'student']),
+  "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "avatarUrl": zod.string().nullish()
 })
 
@@ -38,7 +38,7 @@ export const GetAdminOverviewResponse = zod.object({
   "clerkUserId": zod.string(),
   "email": zod.string(),
   "displayName": zod.string(),
-  "role": zod.enum(['administrator', 'tutor', 'student']),
+  "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "createdAt": zod.coerce.date()
 })),
   "memberships": zod.array(zod.object({
@@ -47,7 +47,7 @@ export const GetAdminOverviewResponse = zod.object({
   "courseTitle": zod.string(),
   "userId": zod.string(),
   "userName": zod.string(),
-  "membershipRole": zod.enum(['administrator', 'tutor', 'student']),
+  "membershipRole": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "subject": zod.string()
 })),
   "assignments": zod.array(zod.object({
@@ -79,7 +79,7 @@ export const GetDashboardResponse = zod.object({
   "id": zod.string(),
   "displayName": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['administrator', 'tutor', 'student']),
+  "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "avatarUrl": zod.string().nullish()
 }),
   "welcomeMessage": zod.string().optional(),

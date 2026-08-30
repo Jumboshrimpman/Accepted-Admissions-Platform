@@ -657,7 +657,7 @@ components:
         error: { type: string }
     Role:
       type: string
-      enum: [administrator, tutor, student]
+      enum: [administrator, tutor, student, viewer]
     CurrentUser:
       type: object
       required: [id, displayName, email, role]

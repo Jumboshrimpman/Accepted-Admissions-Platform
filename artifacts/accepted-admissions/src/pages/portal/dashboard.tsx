@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useGetDashboard } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Calendar, Clock, ArrowRight, Target, Brain } from "lucide-react";
+import { BookOpen, Calendar, Clock, ArrowRight, Target, Brain, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
 
@@ -48,6 +48,15 @@ export default function PortalDashboard() {
           </p>
         </div>
       </div>
+      {dashboard.user.role === "viewer" && (
+        <div className="flex items-start gap-3 rounded-2xl border border-accent/20 bg-accent/10 p-4 text-sm text-foreground" role="status">
+          <Eye className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+          <div>
+            <p className="font-semibold">You are viewing Taito Goto’s dashboard in view-only mode.</p>
+            <p className="mt-1 text-muted-foreground">Assignments, sessions, and progress are visible for review. Editing, submissions, uploads, scheduling, purchases, and other changes are disabled.</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-8 md:grid-cols-3">
         {/* Next Session */}
@@ -105,11 +114,15 @@ export default function PortalDashboard() {
                 <div key={assignment.id} className="p-4 rounded-xl border bg-card/50">
                   <p className="font-medium line-clamp-1" title={assignment.title}>{assignment.title}</p>
                   <p className="text-xs text-muted-foreground mt-1 mb-3">{assignment.subject}</p>
-                  <Link href={`/portal/assignments/${assignment.id}`}>
-                    <Button size="sm" className="w-full bg-accent hover:bg-accent/90 text-white rounded-full">
-                      Start Attempt
-                    </Button>
-                  </Link>
+                  {dashboard.user.role === "viewer" ? (
+                    <p className="rounded-full bg-muted px-3 py-2 text-center text-xs font-medium text-muted-foreground">View-only access</p>
+                  ) : (
+                    <Link href={`/portal/assignments/${assignment.id}`}>
+                      <Button size="sm" className="w-full bg-accent hover:bg-accent/90 text-white rounded-full">
+                        Start Attempt
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               ))
             ) : (

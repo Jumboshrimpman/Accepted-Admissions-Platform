@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
-import { BarChart3, Users, BookOpen, Layers } from "lucide-react";
+import { BarChart3, Users, BookOpen, Layers, CalendarDays, FileText, Wallet, Eye, TriangleAlert } from "lucide-react";
 
 export default function AdminDashboard() {
   const { data: courses, isLoading } = useListCourses();
@@ -26,6 +26,21 @@ export default function AdminDashboard() {
 
   const activeCourses = courses?.filter(c => c.status === 'active') || [];
   const completedCourses = courses?.filter(c => c.status === 'completed') || [];
+  const platform = (overview as typeof overview & {
+    platform?: {
+      totalUsers: number;
+      clients: number;
+      tutors: number;
+      viewers: number;
+      upcomingSessions: number;
+      newRequests: number;
+      outstandingInvoices: number;
+      collectedRevenueCents: number;
+      tutorCostsCents: number;
+      grossProfitCents: number;
+      providerStatus: Record<string, string>;
+    };
+  } | undefined)?.platform;
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4">
@@ -75,6 +90,51 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {platform && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              [Users, "Users", platform.totalUsers],
+              [Eye, "View-only viewers", platform.viewers],
+              [CalendarDays, "Upcoming sessions", platform.upcomingSessions],
+              [FileText, "New client requests", platform.newRequests],
+            ].map(([Icon, label, value]) => {
+              const MetricIcon = Icon as typeof Users;
+              return (
+                <Card key={label as string} className="border-border/70">
+                  <CardContent className="flex items-center justify-between p-5">
+                    <div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label as string}</p><p className="mt-2 text-2xl font-bold">{value as number}</p></div>
+                    <MetricIcon className="h-5 w-5 text-accent" />
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <div className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
+            <Card>
+              <CardHeader>
+                <CardTitle>Financial snapshot</CardTitle>
+                <CardDescription>Derived from recorded payments and completed-session costs.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5 sm:grid-cols-3">
+                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Collected revenue</p><p className="mt-2 text-2xl font-bold">${(platform.collectedRevenueCents / 100).toLocaleString()}</p></div>
+                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Tutor costs</p><p className="mt-2 text-2xl font-bold">${(platform.tutorCostsCents / 100).toLocaleString()}</p></div>
+                <div><p className="text-xs uppercase tracking-wider text-muted-foreground">Gross profit</p><p className="mt-2 text-2xl font-bold text-accent">${(platform.grossProfitCents / 100).toLocaleString()}</p></div>
+              </CardContent>
+            </Card>
+            <Card className="border-accent/20 bg-accent/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><TriangleAlert className="h-4 w-4 text-accent" /> Provider readiness</CardTitle>
+                <CardDescription>Nothing is labeled live until it is authorized and tested.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                {Object.entries(platform.providerStatus).map(([provider, status]) => <div key={provider} className="rounded-xl border bg-card p-3"><p className="capitalize text-muted-foreground">{provider}</p><p className="mt-1 font-medium">{status}</p></div>)}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
 
       <Card>
         <CardHeader>

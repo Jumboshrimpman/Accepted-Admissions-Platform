@@ -64,18 +64,28 @@ import {
   assignmentsTable,
   attemptsTable,
   auditLogsTable,
+  availabilityRulesTable,
+  calendarConnectionsTable,
+  clientRequestsTable,
   courseMembershipsTable,
   coursesTable,
   curriculumBlocksTable,
+  creditLedgerTable,
   db,
+  invoicesTable,
+  paymentsTable,
+  publicContentTable,
   questionsTable,
   responsesTable,
   reviewQueueTable,
+  satProductsTable,
   sessionArtifactsTable,
   sessionsTable,
   timerEventsTable,
+  tutorProfilesTable,
   tutorAssignmentsTable,
   usersTable,
+  viewerLinksTable,
   type AppUser,
 } from "@workspace/db";
 
@@ -109,6 +119,7 @@ function configuredAccess(clerkUserId: string): ConfiguredAccess | null {
   const englishTutorIds = envIdSet("ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS");
   const tutorIds = envIdSet("ACCEPTED_TUTOR_CLERK_USER_IDS");
   const studentIds = envIdSet("ACCEPTED_STUDENT_CLERK_USER_IDS");
+  const viewerIds = envIdSet("ACCEPTED_VIEWER_CLERK_USER_IDS");
 
   if (adminIds.has(clerkUserId)) return { role: "administrator", subject: "all" };
   if (satTutorIds.has(clerkUserId)) return { role: "tutor", subject: "SAT" };
@@ -117,6 +128,9 @@ function configuredAccess(clerkUserId: string): ConfiguredAccess | null {
   }
   if (tutorIds.has(clerkUserId)) return { role: "tutor", subject: "all" };
   if (studentIds.has(clerkUserId)) return { role: "student", subject: "all" };
+  if (viewerIds.has(clerkUserId)) {
+    return { role: "viewer", subject: "student:taito0525@gmail.com" };
+  }
   return null;
 }
 
@@ -305,10 +319,178 @@ async function ensureSeedData(): Promise<string> {
   return course.id;
 }
 
+async function ensureUpgradeSeedData(): Promise<void> {
+  await db
+    .insert(tutorProfilesTable)
+    .values([
+      {
+        email: "xaver.rmz6@gmail.com",
+        name: "Xavier Morales",
+        title: "SAT Tutor",
+        subjects: ["SAT"],
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "eunice_chon@berkeley.edu",
+        name: "Eunice Chon",
+        title: "SAT Tutor",
+        subjects: ["SAT"],
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+    ])
+    .onConflictDoNothing();
+
+  await db
+    .insert(satProductsTable)
+    .values([
+      {
+        slug: "single-sat-session",
+        name: "Single SAT session",
+        description: "One focused 60-minute SAT tutoring session.",
+        durationHours: 1,
+        totalPriceCents: 17500,
+        effectiveHourlyRateCents: 17500,
+      },
+      {
+        slug: "sat-10-hour-package",
+        name: "SAT 10-hour package",
+        description: "Ten hours of flexible SAT tutoring with one shared balance.",
+        durationHours: 10,
+        totalPriceCents: 150000,
+        effectiveHourlyRateCents: 15000,
+      },
+      {
+        slug: "sat-20-hour-package",
+        name: "SAT 20-hour package",
+        description: "Twenty hours of flexible SAT tutoring with one shared balance.",
+        durationHours: 20,
+        totalPriceCents: 240000,
+        effectiveHourlyRateCents: 12000,
+      },
+    ])
+    .onConflictDoNothing();
+
+  const [singleSession] = await db
+    .select()
+    .from(satProductsTable)
+    .where(eq(satProductsTable.slug, "single-sat-session"))
+    .limit(1);
+  const [pendingMichelle] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, "michaelmakarem@gmail.com"))
+    .limit(1);
+  const michelle =
+    pendingMichelle ??
+    (
+      await db
+        .insert(usersTable)
+        .values({
+          clerkUserId: "pending:michaelmakarem@gmail.com",
+          email: "michaelmakarem@gmail.com",
+          displayName: "Michelle Makarem",
+          role: "student",
+        })
+        .returning()
+    )[0];
+  const courseId = await ensureSeedData();
+  if (michelle) {
+    await db
+      .insert(courseMembershipsTable)
+      .values({
+        courseId,
+        userId: michelle.id,
+        membershipRole: "student",
+        subject: "SAT",
+      })
+      .onConflictDoNothing();
+    const [existingCredit] = await db
+      .select({ id: creditLedgerTable.id })
+      .from(creditLedgerTable)
+      .where(
+        and(
+          eq(creditLedgerTable.clientUserId, michelle.id),
+          eq(creditLedgerTable.entryType, "original"),
+          eq(creditLedgerTable.note, "Prepaid 60-minute SAT session"),
+        ),
+      )
+      .limit(1);
+    if (!existingCredit && singleSession) {
+      await db.insert(creditLedgerTable).values({
+        clientUserId: michelle.id,
+        productId: singleSession.id,
+        entryType: "original",
+        hours: 1,
+        note: "Prepaid 60-minute SAT session",
+      });
+    }
+  }
+
+  await db
+    .insert(publicContentTable)
+    .values([
+      {
+        slug: "sat",
+        pageType: "sat-offerings",
+        title: "SAT tutoring",
+        seoTitle: "SAT tutoring | Accepted Admissions",
+        seoDescription:
+          "Focused SAT tutoring with flexible session products and a clear credit-based scheduling flow.",
+        body: {
+          sections: [
+            "Work with an SAT tutor around the skills and score goals that matter most.",
+            "Choose a single session or package, then use purchased hours to schedule eligible tutoring.",
+          ],
+        },
+        status: "published",
+        publishedAt: new Date(),
+      },
+      {
+        slug: "our-team",
+        pageType: "team",
+        title: "Our Team",
+        body: { contentPending: true },
+        status: "draft",
+      },
+      {
+        slug: "past-success",
+        pageType: "success",
+        title: "Past Success",
+        body: { contentPending: true },
+        status: "draft",
+      },
+    ])
+    .onConflictDoNothing();
+}
+
 async function syncConfiguredAccess(
   user: AppUser,
   access: ConfiguredAccess,
 ): Promise<void> {
+  if (access.role === "viewer") {
+    const [, targetEmail] = access.subject.split(":");
+    if (!targetEmail) return;
+    const [student] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, targetEmail))
+      .limit(1);
+    if (!student) return;
+    await db
+      .insert(viewerLinksTable)
+      .values({
+        viewerUserId: user.id,
+        studentUserId: student.id,
+        relationship: "read-only viewer",
+      })
+      .onConflictDoUpdate({
+        target: [viewerLinksTable.viewerUserId, viewerLinksTable.studentUserId],
+        set: { active: true },
+      });
+    return;
+  }
   if (access.role === "administrator") return;
 
   const courseId = await ensureSeedData();
@@ -406,15 +588,38 @@ async function requireAppUser(
       claimString(auth.sessionClaims, "name") ??
       claimString(auth.sessionClaims, "firstName") ??
       "Accepted Admissions user";
-    [appUser] = await db
-      .insert(usersTable)
-      .values({
-        clerkUserId,
-        email,
-        displayName,
-        role: configured.role,
-      })
-      .returning();
+    const [pendingUser] = await db
+      .select()
+      .from(usersTable)
+      .where(
+        and(
+          eq(usersTable.email, email),
+          sql`${usersTable.clerkUserId} like 'pending:%'`,
+        ),
+      )
+      .limit(1);
+    if (pendingUser) {
+      [appUser] = await db
+        .update(usersTable)
+        .set({
+          clerkUserId,
+          displayName,
+          role: configured.role,
+          updatedAt: new Date(),
+        })
+        .where(eq(usersTable.id, pendingUser.id))
+        .returning();
+    } else {
+      [appUser] = await db
+        .insert(usersTable)
+        .values({
+          clerkUserId,
+          email,
+          displayName,
+          role: configured.role,
+        })
+        .returning();
+    }
     await db.insert(auditLogsTable).values({
       actorUserId: appUser.id,
       action: "access.provisioned",
@@ -460,6 +665,24 @@ async function visibleCourseIds(user: AppUser): Promise<string[]> {
       (row) => row.id,
     );
   }
+  if (user.role === "viewer") {
+    return (
+      await db
+        .select({ id: courseMembershipsTable.courseId })
+        .from(viewerLinksTable)
+        .innerJoin(
+          courseMembershipsTable,
+          eq(courseMembershipsTable.userId, viewerLinksTable.studentUserId),
+        )
+        .where(
+          and(
+            eq(viewerLinksTable.viewerUserId, user.id),
+            eq(viewerLinksTable.active, true),
+            eq(courseMembershipsTable.membershipRole, "student"),
+          ),
+        )
+    ).map((row) => row.id);
+  }
   return (
     await db
       .select({ id: courseMembershipsTable.courseId })
@@ -479,6 +702,27 @@ async function canAccessCourse(
   subject?: string,
 ): Promise<boolean> {
   if (user.role === "administrator") return true;
+  if (user.role === "viewer") {
+    const [link] = await db
+      .select({ id: viewerLinksTable.id })
+      .from(viewerLinksTable)
+      .innerJoin(
+        courseMembershipsTable,
+        and(
+          eq(courseMembershipsTable.userId, viewerLinksTable.studentUserId),
+          eq(courseMembershipsTable.courseId, courseId),
+          eq(courseMembershipsTable.membershipRole, "student"),
+        ),
+      )
+      .where(
+        and(
+          eq(viewerLinksTable.viewerUserId, user.id),
+          eq(viewerLinksTable.active, true),
+        ),
+      )
+      .limit(1);
+    return Boolean(link);
+  }
   const [membership] = await db
     .select()
     .from(courseMembershipsTable)
@@ -496,6 +740,21 @@ async function canAccessCourse(
     membership.subject === "all" ||
     subjectFamily(membership.subject) === subjectFamily(subject)
   );
+}
+
+async function dataSubjectUserId(user: AppUser): Promise<string> {
+  if (user.role !== "viewer") return user.id;
+  const [link] = await db
+    .select({ studentUserId: viewerLinksTable.studentUserId })
+    .from(viewerLinksTable)
+    .where(
+      and(
+        eq(viewerLinksTable.viewerUserId, user.id),
+        eq(viewerLinksTable.active, true),
+      ),
+    )
+    .limit(1);
+  return link?.studentUserId ?? user.id;
 }
 
 async function courseSubjectForUser(
@@ -720,6 +979,10 @@ async function canAccessAttempt(user: AppUser, attemptId: string) {
   if (user.role === "student") {
     return record.attempt.userId === user.id ? record : null;
   }
+  if (user.role === "viewer") {
+    const subjectUserId = await dataSubjectUserId(user);
+    return record.attempt.userId === subjectUserId ? record : null;
+  }
   if (!(await canAccessCourse(user, record.courseId, record.subject))) return null;
   if (
     user.role === "tutor" &&
@@ -760,14 +1023,206 @@ async function enforceTimeLimit(attemptId: string) {
   return record.attempt;
 }
 
+const requestRateLimit = new Map<string, number>();
+
+function stringField(body: Record<string, unknown>, key: string): string {
+  return typeof body[key] === "string" ? body[key].trim() : "";
+}
+
+async function ensurePublicPlatformData(): Promise<void> {
+  await ensureUpgradeSeedData();
+}
+
+router.get("/public/products", async (_req, res): Promise<void> => {
+  await ensurePublicPlatformData();
+  const products = await db
+    .select()
+    .from(satProductsTable)
+    .where(eq(satProductsTable.active, true))
+    .orderBy(asc(satProductsTable.durationHours));
+  res.json(
+    products.map((product) => ({
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      durationHours: product.durationHours,
+      totalPriceCents: product.totalPriceCents,
+      effectiveHourlyRateCents: product.effectiveHourlyRateCents,
+    })),
+  );
+});
+
+router.get("/public/tutors", async (_req, res): Promise<void> => {
+  await ensurePublicPlatformData();
+  const tutors = await db
+    .select({
+      id: tutorProfilesTable.id,
+      name: tutorProfilesTable.name,
+      title: tutorProfilesTable.title,
+      photoUrl: tutorProfilesTable.photoUrl,
+      biography: tutorProfilesTable.biography,
+      subjects: tutorProfilesTable.subjects,
+      linkedinUrl: tutorProfilesTable.linkedinUrl,
+      bookingEligible: tutorProfilesTable.bookingEligible,
+      calendarStatus: tutorProfilesTable.calendarStatus,
+    })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.active, true))
+    .orderBy(asc(tutorProfilesTable.name));
+  res.json(tutors);
+});
+
+router.get("/public/content/:slug", async (req, res): Promise<void> => {
+  await ensurePublicPlatformData();
+  const [content] = await db
+    .select()
+    .from(publicContentTable)
+    .where(
+      and(
+        eq(publicContentTable.slug, req.params.slug),
+        eq(publicContentTable.status, "published"),
+      ),
+    )
+    .limit(1);
+  if (!content) {
+    res.status(404).json({ error: "Published content not found" });
+    return;
+  }
+  res.json({
+    slug: content.slug,
+    pageType: content.pageType,
+    title: content.title,
+    seoTitle: content.seoTitle,
+    seoDescription: content.seoDescription,
+    body: content.body,
+  });
+});
+
+router.post("/public/client-requests", async (req, res): Promise<void> => {
+  const ip = req.ip || "unknown";
+  const now = Date.now();
+  const lastRequest = requestRateLimit.get(ip) ?? 0;
+  if (now - lastRequest < 60_000) {
+    res.status(429).json({ error: "Please wait before sending another request." });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const requiredFields = [
+    "guardianName",
+    "studentName",
+    "email",
+    "phone",
+    "gradeOrGraduationYear",
+    "currentSchool",
+    "serviceRequested",
+    "goals",
+    "schedulingAvailability",
+    "referralSource",
+  ];
+  if (
+    requiredFields.some((field) => !stringField(body, field)) ||
+    body.consentToContact !== true ||
+    body.privacyAcknowledged !== true
+  ) {
+    res.status(400).json({
+      error: "Complete all required fields and accept contact and privacy terms.",
+    });
+    return;
+  }
+  const email = stringField(body, "email").toLowerCase();
+  const phone = stringField(body, "phone").replace(/[^\d+]/g, "");
+  if (
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    phone.replace(/\D/g, "").length < 10
+  ) {
+    res.status(400).json({ error: "Enter a valid email address and phone number." });
+    return;
+  }
+  const [lead] = await db
+    .insert(clientRequestsTable)
+    .values({
+      guardianName: stringField(body, "guardianName"),
+      studentName: stringField(body, "studentName"),
+      email,
+      phone,
+      gradeOrGraduationYear: stringField(body, "gradeOrGraduationYear"),
+      currentSchool: stringField(body, "currentSchool"),
+      serviceRequested: stringField(body, "serviceRequested"),
+      currentSatTotal: stringField(body, "currentSatTotal") || null,
+      currentReadingWriting: stringField(body, "currentReadingWriting") || null,
+      currentMath: stringField(body, "currentMath") || null,
+      targetSatScore: stringField(body, "targetSatScore") || null,
+      plannedTestDate: stringField(body, "plannedTestDate") || null,
+      goals: stringField(body, "goals"),
+      schedulingAvailability: stringField(body, "schedulingAvailability"),
+      referralSource: stringField(body, "referralSource"),
+      consentToContact: true,
+      privacyAcknowledged: true,
+      sourcePage: stringField(body, "sourcePage") || "/client-request",
+    })
+    .returning({ id: clientRequestsTable.id });
+  requestRateLimit.set(ip, now);
+  res.status(201).json({
+    id: lead!.id,
+    status: "received",
+    message: "Thanks — your request has been received.",
+  });
+});
+
 router.use(requireAppUser);
+
+router.use((req: AuthedRequest, res: Response, next: () => void) => {
+  if (
+    req.appUser?.role === "viewer" &&
+    !["GET", "HEAD", "OPTIONS"].includes(req.method)
+  ) {
+    res.status(403).json({
+      code: "VIEW_ONLY",
+      error: "This account is view-only and cannot modify portal data.",
+    });
+    return;
+  }
+  next();
+});
+
+router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
+  const subjectUserId = await dataSubjectUserId(req.appUser!);
+  const entries = await db
+    .select({
+      id: creditLedgerTable.id,
+      entryType: creditLedgerTable.entryType,
+      hours: creditLedgerTable.hours,
+      note: creditLedgerTable.note,
+      productId: creditLedgerTable.productId,
+      createdAt: creditLedgerTable.createdAt,
+    })
+    .from(creditLedgerTable)
+    .where(eq(creditLedgerTable.clientUserId, subjectUserId))
+    .orderBy(desc(creditLedgerTable.createdAt));
+  const remainingHours = entries.reduce((total, entry) => {
+    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
+    return total + (positive ? entry.hours : -entry.hours);
+  }, 0);
+  res.json({
+    readOnly: req.appUser!.role === "viewer",
+    remainingHours,
+    entries,
+    providerStatus: {
+      payments: "not configured",
+      calendar: "disconnected",
+      email: "not configured",
+    },
+  });
+});
 
 router.get(
   "/admin/overview",
   ensureRole(["administrator"]),
   async (_req: AuthedRequest, res): Promise<void> => {
     await ensureSeedData();
-    const [users, memberships, assignments, audit] = await Promise.all([
+    await ensureUpgradeSeedData();
+    const [users, memberships, assignments, audit, platform] = await Promise.all([
       db
         .select({
           id: usersTable.id,
@@ -816,6 +1271,37 @@ router.get(
         .from(auditLogsTable)
         .orderBy(desc(auditLogsTable.createdAt))
         .limit(100),
+      Promise.all([
+        db.select({ count: sql<number>`count(*)` }).from(usersTable),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(usersTable)
+          .where(eq(usersTable.role, "student")),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(usersTable)
+          .where(eq(usersTable.role, "tutor")),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(usersTable)
+          .where(eq(usersTable.role, "viewer")),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(sessionsTable)
+          .where(sql`${sessionsTable.dateTime} >= now()`),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(clientRequestsTable)
+          .where(eq(clientRequestsTable.status, "new")),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(invoicesTable)
+          .where(inArray(invoicesTable.status, ["pending", "sent", "overdue"])),
+        db
+          .select({ amount: sql<number>`coalesce(sum(${paymentsTable.amountCents}), 0)` })
+          .from(paymentsTable)
+          .where(eq(paymentsTable.status, "paid")),
+      ]),
     ]);
     const userById = new Map(users.map((user) => [user.id, user]));
     res.json({
@@ -827,6 +1313,24 @@ router.get(
         studentName: userById.get(assignment.studentUserId)?.displayName ?? "Unknown student",
       })),
       audit,
+      platform: {
+        totalUsers: Number(platform[0][0]?.count ?? 0),
+        clients: Number(platform[1][0]?.count ?? 0),
+        tutors: Number(platform[2][0]?.count ?? 0),
+        viewers: Number(platform[3][0]?.count ?? 0),
+        upcomingSessions: Number(platform[4][0]?.count ?? 0),
+        newRequests: Number(platform[5][0]?.count ?? 0),
+        outstandingInvoices: Number(platform[6][0]?.count ?? 0),
+        collectedRevenueCents: Number(platform[7][0]?.amount ?? 0),
+        tutorCostsCents: 0,
+        grossProfitCents: Number(platform[7][0]?.amount ?? 0),
+        providerStatus: {
+          calendar: "disconnected",
+          payments: "not configured",
+          email: "not configured",
+          otter: "disconnected",
+        },
+      },
     });
   },
 );
@@ -956,10 +1460,11 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
           .from(assignmentQuestionsTable)
           .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds))
           .groupBy(assignmentQuestionsTable.assignmentId);
+  const subjectUserId = await dataSubjectUserId(user);
   const attempts = await db
     .select({ assignmentId: attemptsTable.assignmentId, score: attemptsTable.score })
     .from(attemptsTable)
-    .where(eq(attemptsTable.userId, user.id))
+    .where(eq(attemptsTable.userId, subjectUserId))
     .orderBy(desc(attemptsTable.startedAt));
   const assignmentSummaries = scopedAssignments.map((assignment) => ({
     id: assignment.id,
@@ -1098,7 +1603,7 @@ async function assignmentSummariesForUser(
         .where(
           and(
             eq(attemptsTable.assignmentId, assignment.id),
-            eq(attemptsTable.userId, user.id),
+              eq(attemptsTable.userId, await dataSubjectUserId(user)),
           ),
         )
         .orderBy(desc(attemptsTable.startedAt));

@@ -15,6 +15,7 @@ export const roleEnum = pgEnum("app_role", [
   "administrator",
   "tutor",
   "student",
+  "viewer",
 ]);
 export const contentStatusEnum = pgEnum("content_status", [
   "draft",
@@ -270,6 +271,198 @@ export const auditLogsTable = pgTable("audit_logs", {
   entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const viewerLinksTable = pgTable(
+  "viewer_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    viewerUserId: uuid("viewer_user_id").notNull().references(() => usersTable.id),
+    studentUserId: uuid("student_user_id").notNull().references(() => usersTable.id),
+    relationship: text("relationship").notNull().default("read-only viewer"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("viewer_link_unique_idx").on(table.viewerUserId, table.studentUserId),
+  ],
+);
+
+export const tutorProfilesTable = pgTable(
+  "tutor_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").references(() => usersTable.id),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    title: text("title").notNull().default("Tutor"),
+    photoUrl: text("photo_url"),
+    biography: text("biography"),
+    subjects: jsonb("subjects").$type<string[]>().notNull().default([]),
+    linkedinUrl: text("linkedin_url"),
+    active: boolean("active").notNull().default(true),
+    bookingEligible: boolean("booking_eligible").notNull().default(false),
+    calendarStatus: text("calendar_status").notNull().default("disconnected"),
+    internalNotes: text("internal_notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("tutor_profile_email_idx").on(table.email)],
+);
+
+export const tutorCompensationRatesTable = pgTable("tutor_compensation_rates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
+  hourlyRateCents: numeric("hourly_rate_cents", { mode: "number" }).notNull(),
+  effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  createdBy: uuid("created_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const satProductsTable = pgTable(
+  "sat_products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    durationHours: numeric("duration_hours", { mode: "number" }).notNull(),
+    totalPriceCents: numeric("total_price_cents", { mode: "number" }).notNull(),
+    effectiveHourlyRateCents: numeric("effective_hourly_rate_cents", { mode: "number" }).notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("sat_product_slug_idx").on(table.slug)],
+);
+
+export const invoicesTable = pgTable("invoices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientUserId: uuid("client_user_id").references(() => usersTable.id),
+  status: text("status").notNull().default("pending"),
+  provider: text("provider").notNull().default("stripe"),
+  providerInvoiceId: text("provider_invoice_id"),
+  description: text("description").notNull(),
+  subtotalCents: numeric("subtotal_cents", { mode: "number" }).notNull(),
+  discountCents: numeric("discount_cents", { mode: "number" }).notNull().default(0),
+  totalCents: numeric("total_cents", { mode: "number" }).notNull(),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const paymentsTable = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientUserId: uuid("client_user_id").references(() => usersTable.id),
+    invoiceId: uuid("invoice_id").references(() => invoicesTable.id),
+    productId: uuid("product_id").references(() => satProductsTable.id),
+    amountCents: numeric("amount_cents", { mode: "number" }).notNull(),
+    status: text("status").notNull().default("pending"),
+    method: text("method").notNull().default("stripe"),
+    providerEventId: text("provider_event_id"),
+    internalNote: text("internal_note"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("payment_provider_event_idx").on(table.providerEventId),
+  ],
+);
+
+export const creditLedgerTable = pgTable("credit_ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientUserId: uuid("client_user_id").notNull().references(() => usersTable.id),
+  productId: uuid("product_id").references(() => satProductsTable.id),
+  sessionId: uuid("session_id").references(() => sessionsTable.id),
+  entryType: text("entry_type").notNull(),
+  hours: numeric("hours", { mode: "number" }).notNull(),
+  referenceType: text("reference_type"),
+  referenceId: text("reference_id"),
+  note: text("note"),
+  createdBy: uuid("created_by").references(() => usersTable.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const clientRequestsTable = pgTable("client_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  guardianName: text("guardian_name").notNull(),
+  studentName: text("student_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  gradeOrGraduationYear: text("grade_or_graduation_year").notNull(),
+  currentSchool: text("current_school").notNull(),
+  serviceRequested: text("service_requested").notNull(),
+  currentSatTotal: text("current_sat_total"),
+  currentReadingWriting: text("current_reading_writing"),
+  currentMath: text("current_math"),
+  targetSatScore: text("target_sat_score"),
+  plannedTestDate: text("planned_test_date"),
+  goals: text("goals").notNull(),
+  schedulingAvailability: text("scheduling_availability").notNull(),
+  referralSource: text("referral_source").notNull(),
+  consentToContact: boolean("consent_to_contact").notNull(),
+  privacyAcknowledged: boolean("privacy_acknowledged").notNull(),
+  sourcePage: text("source_page").notNull().default("/client-request"),
+  status: text("status").notNull().default("new"),
+  assignedStaffUserId: uuid("assigned_staff_user_id").references(() => usersTable.id),
+  followUpNotes: text("follow_up_notes"),
+  conversionStatus: text("conversion_status").notNull().default("unqualified"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const publicContentTable = pgTable(
+  "public_content",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull(),
+    pageType: text("page_type").notNull(),
+    title: text("title").notNull(),
+    seoTitle: text("seo_title"),
+    seoDescription: text("seo_description"),
+    body: jsonb("body").$type<Record<string, unknown>>().notNull().default({}),
+    status: contentStatusEnum("status").notNull().default("draft"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    updatedBy: uuid("updated_by").references(() => usersTable.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("public_content_slug_idx").on(table.slug)],
+);
+
+export const calendarConnectionsTable = pgTable("calendar_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
+  provider: text("provider").notNull().default("google"),
+  status: text("status").notNull().default("disconnected"),
+  calendarId: text("calendar_id"),
+  encryptedAccessToken: text("encrypted_access_token"),
+  encryptedRefreshToken: text("encrypted_refresh_token"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const availabilityRulesTable = pgTable("availability_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
+  timezone: text("timezone").notNull().default("America/New_York"),
+  weeklyHours: jsonb("weekly_hours").$type<Record<string, unknown>>().notNull().default({}),
+  bookingNoticeMinutes: numeric("booking_notice_minutes", { mode: "number" }).notNull().default(1440),
+  bufferMinutes: numeric("buffer_minutes", { mode: "number" }).notNull().default(15),
+  blackoutDates: jsonb("blackout_dates").$type<string[]>().notNull().default([]),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const meetingRecordsTable = pgTable("meeting_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id").notNull().references(() => sessionsTable.id),
+  provider: text("provider").notNull().default("manual"),
+  url: text("url").notNull(),
+  title: text("title"),
+  approvedForStudent: boolean("approved_for_student").notNull().default(false),
+  createdBy: uuid("created_by").notNull().references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

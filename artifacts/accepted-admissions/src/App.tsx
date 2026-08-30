@@ -29,6 +29,10 @@ import TutorDashboard from '@/pages/tutor/dashboard';
 import TutorCourse from '@/pages/tutor/course';
 import TutorSession from '@/pages/tutor/session';
 import AdminDashboard from '@/pages/admin/dashboard';
+import SatOfferings from '@/pages/public/sat-offerings';
+import OurTeam from '@/pages/public/our-team';
+import PastSuccess from '@/pages/public/past-success';
+import ClientRequest from '@/pages/public/client-request';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 import { ProvisioningReference } from '@/components/provisioning-reference';
@@ -84,7 +88,15 @@ function SignedOut({ children }: { children: ReactNode }) {
 
 function SignInPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50/50 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4">
+      <div className="w-full max-w-[400px] mb-4">
+        <a
+          href={`${basePath || '/'}`}
+          className="text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          ← Back to Home
+        </a>
+      </div>
       <SignIn
         routing="path"
         path={`${basePath}/login`}
@@ -106,6 +118,10 @@ function Router() {
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={Landing} />
+        <Route path="/sat" component={SatOfferings} />
+        <Route path="/our-team" component={OurTeam} />
+        <Route path="/past-success" component={PastSuccess} />
+        <Route path="/client-request" component={ClientRequest} />
         
         <Route path="/login/*?" component={SignInPage} />
 
@@ -254,7 +270,7 @@ function RoleBoundary({
   roles,
   children,
 }: {
-  roles: Array<"administrator" | "tutor" | "student">;
+  roles: Array<"administrator" | "tutor" | "student" | "viewer">;
   children: ReactNode;
 }) {
   const { data: user, isLoading, error } = useGetCurrentUser();
