@@ -14,3 +14,9 @@ Create hosted invoices as isolated drafts with pending customer items excluded, 
 **Why:** Customer-level pending invoice items can otherwise be swept into a concurrent or retried invoice and charge the wrong amount.
 
 **How to apply:** Keep invoice creation, item attachment, finalization, and compensating cleanup as one provider workflow; void Stripe before showing a local invoice as canceled.
+
+Stripe's current invoice-item endpoint accepts a catalog price through `pricing[price]`; the legacy top-level `price` parameter is rejected.
+
+**Why:** The connected Stripe test-mode API has moved the invoice-item request shape while preserving price-based invoice lines.
+
+**How to apply:** Verify provider request parameters against a test-mode fixture before changing hosted invoice creation, and keep the test-mode invoice-isolation case running.

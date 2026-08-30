@@ -9,11 +9,8 @@ import {
   usersTable,
   type AppUser,
 } from "@workspace/db";
-import {
-  formData,
-  stripeRequest,
-  type StripeRequestError,
-} from "./stripe-client";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { formData, stripeRequest, type StripeRequestError } from "./stripe-client.ts";
 
 type StripeRecord = Record<string, unknown>;
 
@@ -175,7 +172,7 @@ export async function createHostedInvoice(args: {
       body: formData({
         customer: customerId,
         invoice: id,
-        price: priceId,
+        "pricing[price]": priceId,
         "metadata[payment_id]": args.paymentId,
         "metadata[invoice_id]": args.invoiceId,
       }),
