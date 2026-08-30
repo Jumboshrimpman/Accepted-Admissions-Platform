@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { UserButton, useUser, useClerk } from "@clerk/clerk-react";
+import { useUser, useClerk } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
 import {
@@ -69,7 +69,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Accepted Admissions" className="w-8 h-8 rounded-lg" />
+              <img
+                src={`${import.meta.env.BASE_URL}logo.svg`}
+                alt="Accepted Admissions"
+                className="w-8 h-8 rounded-lg"
+              />
               <span className="font-bold text-lg tracking-tight text-foreground hidden sm:inline-block">
                 Accepted Admissions
               </span>

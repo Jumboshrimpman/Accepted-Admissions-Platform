@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { SignedIn, SignedOut } from "@clerk/clerk-react";
+import { Show } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, GraduationCap, Users } from "lucide-react";
 
@@ -14,7 +14,7 @@ export default function Landing() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <SignedOut>
+            <Show when="signed-out">
             <Link href="/login">
               <Button variant="ghost" className="font-medium">Sign In</Button>
             </Link>
@@ -23,14 +23,14 @@ export default function Landing() {
                 Client Portal
               </Button>
             </Link>
-          </SignedOut>
-          <SignedIn>
+            </Show>
+            <Show when="signed-in">
             <Link href="/portal">
               <Button className="bg-primary text-primary-foreground font-medium rounded-full px-6">
                 Go to Portal
               </Button>
             </Link>
-          </SignedIn>
+            </Show>
         </div>
       </header>
 
@@ -56,20 +56,20 @@ export default function Landing() {
               We provide high-touch, tailored tutoring and admissions consulting for students who aim higher. Your journey, our expertise.
             </p>
             <div className="mt-12 flex flex-col sm:flex-row items-center gap-4">
-              <SignedOut>
+                <Show when="signed-out">
                 <Link href="/login">
                   <Button size="lg" className="rounded-full px-8 h-14 text-base bg-gradient-brand text-white border-0 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
                     Client Sign In <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 </Link>
-              </SignedOut>
-              <SignedIn>
+                </Show>
+                <Show when="signed-in">
                 <Link href="/portal">
                   <Button size="lg" className="rounded-full px-8 h-14 text-base bg-gradient-brand text-white border-0 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
                     Enter Portal <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 </Link>
-              </SignedIn>
+                </Show>
             </div>
           </div>
         </section>

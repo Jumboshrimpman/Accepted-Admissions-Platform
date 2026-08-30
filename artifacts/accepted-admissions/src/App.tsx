@@ -1,5 +1,9 @@
-import { type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ReactNode, useEffect, useRef } from 'react';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -10,7 +14,8 @@ import {
   Router as WouterRouter,
   Redirect,
 } from 'wouter';
-import { ClerkProvider, SignedIn, SignedOut, SignIn } from '@clerk/clerk-react';
+import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
 import { useGetCurrentUser } from '@workspace/api-client-react';
 
 // Pages
@@ -27,11 +32,73 @@ import AdminDashboard from '@/pages/admin/dashboard';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 
-// Ensure you have this environment variable available
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_placeholder';
-const CLERK_PROXY_URL = import.meta.env.VITE_CLERK_PROXY_URL;
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const queryClient = new QueryClient();
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || '/'
+    : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY');
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const queryClient = useQueryClient();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (
+        previousUserId.current !== undefined &&
+        previousUserId.current !== userId
+      ) {
+        queryClient.clear();
+      }
+      previousUserId.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, queryClient]);
+
+  return null;
+}
+
+function SignedIn({ children }: { children: ReactNode }) {
+  return <Show when="signed-in">{children}</Show>;
+}
+
+function SignedOut({ children }: { children: ReactNode }) {
+  return <Show when="signed-out">{children}</Show>;
+}
+
+function SignInPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50/50 p-4">
+      <SignIn
+        routing="path"
+        path={`${basePath}/login`}
+        forceRedirectUrl={`${basePath}/portal`}
+        withSignUp={false}
+        appearance={{
+          elements: {
+            footerAction: { display: 'none' },
+            footer: { display: 'none' },
+          },
+        }}
+      />
+    </div>
+  );
+}
 
 function Router() {
   return (
@@ -39,22 +106,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Landing} />
         
-        <Route path="/login/*?">
-          <div className="min-h-screen flex items-center justify-center bg-gray-50/50 p-4">
-            <SignIn
-              routing="path"
-              path="/login"
-              forceRedirectUrl="/portal"
-              withSignUp={false}
-              appearance={{
-                elements: {
-                  footerAction: { display: "none" },
-                  footer: { display: "none" },
-                },
-              }}
-            />
-          </div>
-        </Route>
+        <Route path="/login/*?" component={SignInPage} />
 
         <Route path="/sign-in/*?">
           <Redirect to="/login" />
@@ -246,16 +298,20 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
+  const [, setLocation] = useLocation();
+
   return (
     <ClerkProvider
-      publishableKey={PUBLISHABLE_KEY}
-      proxyUrl={CLERK_PROXY_URL}
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      signInUrl={`${basePath}/login`}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
+          <Router />
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
@@ -263,4 +319,12 @@ function App() {
   );
 }
 
-export default App;
+function Root() {
+  return (
+    <WouterRouter base={basePath}>
+      <App />
+    </WouterRouter>
+  );
+}
+
+export default Root;

@@ -75,8 +75,5 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
-  },
-  "dependencies": {
-    "@clerk/clerk-react": "^5.61.3"
   }
 }
