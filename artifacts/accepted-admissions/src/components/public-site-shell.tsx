@@ -54,11 +54,11 @@ export function PublicSiteShell({
             <Menu className="ml-1 h-5 w-5 text-muted-foreground lg:hidden" aria-hidden="true" />
           </div>
         </div>
-        <div className="container mx-auto flex gap-1 overflow-x-auto px-6 pb-3 lg:hidden">
-          <Link className="whitespace-nowrap rounded-full bg-muted px-3 py-1.5 text-xs font-medium" href="/sat">SAT tutoring</Link>
-          <Link className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground" href="/our-team">Our team</Link>
-          <Link className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground" href="/past-success">Past success</Link>
-          <Link className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground" href="/client-request">Client request</Link>
+        <div className="container mx-auto grid grid-cols-2 gap-1 px-6 pb-3 lg:hidden">
+          <Link className="rounded-full bg-muted px-3 py-1.5 text-center text-xs font-medium" href="/sat">SAT tutoring</Link>
+          <Link className="rounded-full px-3 py-1.5 text-center text-xs font-medium text-muted-foreground" href="/our-team">Our team</Link>
+          <Link className="rounded-full px-3 py-1.5 text-center text-xs font-medium text-muted-foreground" href="/past-success">Past success</Link>
+          <Link className="rounded-full px-3 py-1.5 text-center text-xs font-medium text-muted-foreground" href="/client-request">Client request</Link>
         </div>
       </header>
       {children}

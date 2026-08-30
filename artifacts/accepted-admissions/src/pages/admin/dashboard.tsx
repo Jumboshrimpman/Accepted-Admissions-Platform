@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
 import { BarChart3, Users, BookOpen, Layers, CalendarDays, FileText, Wallet, Eye, TriangleAlert } from "lucide-react";
 import { AdminFinancialsPanel } from "@/pages/admin/financials-panel";
+import { PublicContentPanel } from "@/pages/admin/public-content-panel";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 
 export default function AdminDashboard() {
@@ -140,6 +141,7 @@ export default function AdminDashboard() {
 
       <AdminFinancialsPanel />
       <CalendarConnectionCard />
+      <PublicContentPanel />
 
       <Card>
         <CardHeader>

@@ -333,16 +333,30 @@ async function ensureUpgradeSeedData(): Promise<void> {
       {
         email: "xsfam6@gmail.com",
         name: "Xavier Morales",
-        title: "SAT Tutor",
-        subjects: ["SAT"],
+        title: "SAT & Math Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",
+        photoAltText: "Xavier Morales, SAT and Math Tutor",
+        biography:
+          "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He is a 2024 Rhodes Scholar, studying Philosophy for his Masters at Oxford until 2026. Xavier is also an incoming member of the 2029 Harvard Law School class.",
+        subjects: ["SAT", "Math"],
+        linkedinUrl: "https://www.linkedin.com/in/xavier-morales-8830821a5/",
+        publicApproved: true,
         calendarStatus: "disconnected",
         bookingEligible: true,
       },
       {
         email: "eunice_chon@berkeley.edu",
         name: "Eunice Chon",
-        title: "SAT Tutor",
-        subjects: ["SAT"],
+        title: "Scholarship Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_3d3d703b8ea343ef8805961027f1406a~mv2.jpg/v1/crop/x_32,y_0,w_537,h_400/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Manuel.jpg",
+        photoAltText: "Eunice Chon, Scholarship Tutor",
+        biography:
+          "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
+        subjects: ["Scholarships", "College admissions"],
+        linkedinUrl: "https://linkedin.com/in/eunicechon",
+        publicApproved: true,
         calendarStatus: "disconnected",
         bookingEligible: true,
       },
@@ -495,15 +509,71 @@ async function ensureUpgradeSeedData(): Promise<void> {
         slug: "our-team",
         pageType: "team",
         title: "Our Team",
-        body: { contentPending: true },
-        status: "draft",
+        seoTitle: "Our Team | Accepted Admissions",
+        seoDescription:
+          "Meet the tutors behind Accepted Admissions and learn how their experience shapes thoughtful student support.",
+        body: {
+          intro: "Choose the expert best fit for you.",
+        },
+        status: "published",
+        publishedAt: new Date(),
       },
       {
         slug: "past-success",
         pageType: "success",
         title: "Past Success",
-        body: { contentPending: true },
-        status: "draft",
+        seoTitle: "Past Student Success | Accepted Admissions",
+        seoDescription:
+          "Read an approved student testimonial and explore a sample of schools Accepted Admissions students have been accepted to.",
+        body: {
+          intro:
+            "This is a sample of the schools our students have been accepted to. We work hard to get our students into the schools of their dreams. As recent students, we have a nuanced understanding of our modern world's competitive college application process landscape.",
+          testimonial: {
+            quote:
+              "Really happy with my experience with Accepted Admissions. It was an advantage to have on-the-ground Harvard students who are current with applications advising me for cheaper than huge firms. It was nice to work with tutors who all had an Ivy League backgrounds.",
+            attribution: "Sarah M.",
+            attributionMode: "named",
+          },
+          schoolLogos: [
+            {
+              name: "Harvard University",
+              src: "https://static.wixstatic.com/media/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png",
+              alt: "Harvard University logo",
+            },
+            {
+              name: "Princeton University",
+              src: "https://static.wixstatic.com/media/2c8654_d6d5f4729bd048ddb2366f66b32506c4~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/princeton%20logo.png",
+              alt: "Princeton University logo",
+            },
+            {
+              name: "MIT",
+              src: "https://static.wixstatic.com/media/2c8654_e7dedad8e02d43e6965cb5d8054d6c15~mv2.jpg/v1/crop/x_276,y_222,w_528,h_425/fill/w_296,h_238,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/MIT_edited.jpg",
+              alt: "MIT logo",
+            },
+            {
+              name: "University of Chicago",
+              src: "https://static.wixstatic.com/media/2c8654_dfa69976a1274e4f9de87500d1409fc0~mv2.jpg",
+              alt: "University of Chicago logo",
+            },
+            {
+              name: "Georgetown University",
+              src: "https://static.wixstatic.com/media/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png/v1/fill/w_266,h_266,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Georgetown-University-Logo.png",
+              alt: "Georgetown University logo",
+            },
+            {
+              name: "Boston University",
+              src: "https://static.wixstatic.com/media/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png/v1/fill/w_250,h_250,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Boston_University_seal.svg.png",
+              alt: "Boston University seal",
+            },
+            {
+              name: "Claremont McKenna College",
+              src: "https://static.wixstatic.com/media/2c8654_69f9b18f19db4eb68fa898beeaec3768~mv2.png/v1/fill/w_266,h_277,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/CMC%20Seal.png",
+              alt: "Claremont McKenna College seal",
+            },
+          ],
+        },
+        status: "published",
+        publishedAt: new Date(),
       },
     ])
     .onConflictDoNothing();
@@ -1585,6 +1655,7 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       name: tutorProfilesTable.name,
       title: tutorProfilesTable.title,
       photoUrl: tutorProfilesTable.photoUrl,
+      photoAltText: tutorProfilesTable.photoAltText,
       biography: tutorProfilesTable.biography,
       subjects: tutorProfilesTable.subjects,
       linkedinUrl: tutorProfilesTable.linkedinUrl,
@@ -1592,7 +1663,12 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       calendarStatus: tutorProfilesTable.calendarStatus,
     })
     .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.active, true))
+    .where(
+      and(
+        eq(tutorProfilesTable.active, true),
+        eq(tutorProfilesTable.publicApproved, true),
+      ),
+    )
     .orderBy(asc(tutorProfilesTable.name));
   res.json(tutors);
 });
@@ -1622,6 +1698,170 @@ router.get("/public/content/:slug", async (req, res): Promise<void> => {
     body: content.body,
   });
 });
+
+router.get(
+  "/admin/tutors",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    await ensureUpgradeSeedData();
+    const tutors = await db
+      .select({
+        id: tutorProfilesTable.id,
+        email: tutorProfilesTable.email,
+        name: tutorProfilesTable.name,
+        title: tutorProfilesTable.title,
+        photoUrl: tutorProfilesTable.photoUrl,
+        photoAltText: tutorProfilesTable.photoAltText,
+        biography: tutorProfilesTable.biography,
+        subjects: tutorProfilesTable.subjects,
+        linkedinUrl: tutorProfilesTable.linkedinUrl,
+        publicApproved: tutorProfilesTable.publicApproved,
+        active: tutorProfilesTable.active,
+        bookingEligible: tutorProfilesTable.bookingEligible,
+      })
+      .from(tutorProfilesTable)
+      .orderBy(asc(tutorProfilesTable.name));
+    res.json(tutors);
+  },
+);
+
+router.patch(
+  "/admin/tutors/:id",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorId = typeof req.params.id === "string" ? req.params.id : "";
+    if (!tutorId) {
+      res.status(400).json({ error: "Tutor profile is required" });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const stringFields = [
+      "name",
+      "title",
+      "photoUrl",
+      "photoAltText",
+      "biography",
+      "linkedinUrl",
+    ] as const;
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    for (const field of stringFields) {
+      if (field in body && (typeof body[field] === "string" || body[field] === null)) {
+        updates[field] = body[field];
+      }
+    }
+    if ("subjects" in body && Array.isArray(body.subjects) && body.subjects.every((item) => typeof item === "string")) {
+      updates.subjects = body.subjects;
+    }
+    for (const field of ["publicApproved", "active", "bookingEligible"] as const) {
+      if (field in body && typeof body[field] === "boolean") updates[field] = body[field];
+    }
+    if (updates.publicApproved === true) {
+      const biography = updates.biography ?? (
+        await db
+          .select({ biography: tutorProfilesTable.biography })
+          .from(tutorProfilesTable)
+          .where(eq(tutorProfilesTable.id, tutorId))
+          .limit(1)
+      )[0]?.biography;
+      if (typeof biography !== "string" || !biography.trim()) {
+        res.status(400).json({ error: "An approved tutor needs a biography." });
+        return;
+      }
+    }
+    const [saved] = await db
+      .update(tutorProfilesTable)
+      .set(updates)
+      .where(eq(tutorProfilesTable.id, tutorId))
+      .returning({
+        id: tutorProfilesTable.id,
+        email: tutorProfilesTable.email,
+        name: tutorProfilesTable.name,
+        title: tutorProfilesTable.title,
+        photoUrl: tutorProfilesTable.photoUrl,
+        photoAltText: tutorProfilesTable.photoAltText,
+        biography: tutorProfilesTable.biography,
+        subjects: tutorProfilesTable.subjects,
+        linkedinUrl: tutorProfilesTable.linkedinUrl,
+        publicApproved: tutorProfilesTable.publicApproved,
+        active: tutorProfilesTable.active,
+        bookingEligible: tutorProfilesTable.bookingEligible,
+      });
+    if (!saved) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "public.tutor_updated",
+      entityType: "tutor_profile",
+      entityId: saved.id,
+      metadata: { publicApproved: saved.publicApproved },
+    });
+    res.json(saved);
+  },
+);
+
+router.get(
+  "/admin/public-content",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    await ensureUpgradeSeedData();
+    res.json(
+      await db
+        .select()
+        .from(publicContentTable)
+        .where(inArray(publicContentTable.pageType, ["team", "success"]))
+        .orderBy(asc(publicContentTable.slug)),
+    );
+  },
+);
+
+router.patch(
+  "/admin/public-content/:slug",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const slug = typeof req.params.slug === "string" ? req.params.slug : "";
+    if (!slug) {
+      res.status(400).json({ error: "Public content slug is required" });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const updates: Record<string, unknown> = { updatedAt: new Date(), updatedBy: req.appUser!.id };
+    for (const field of ["title", "seoTitle", "seoDescription"] as const) {
+      if (field in body && (typeof body[field] === "string" || body[field] === null)) {
+        updates[field] = body[field];
+      }
+    }
+    if ("body" in body && body.body && typeof body.body === "object" && !Array.isArray(body.body)) {
+      updates.body = body.body;
+    }
+    if ("status" in body && ["draft", "published", "archived"].includes(String(body.status))) {
+      updates.status = body.status;
+      updates.publishedAt = body.status === "published" ? new Date() : null;
+    }
+    const [saved] = await db
+      .update(publicContentTable)
+      .set(updates)
+      .where(eq(publicContentTable.slug, slug))
+      .returning();
+    if (!saved) {
+      res.status(404).json({ error: "Public content not found" });
+      return;
+    }
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "public.content_updated",
+      entityType: "public_content",
+      entityId: saved.id,
+      metadata: { slug: saved.slug, status: saved.status },
+    });
+    res.json(saved);
+  },
+);
 
 router.post("/public/client-requests", async (req, res): Promise<void> => {
   const ip = req.ip || "unknown";
