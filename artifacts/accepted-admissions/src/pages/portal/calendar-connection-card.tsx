@@ -18,8 +18,30 @@ export function CalendarConnectionCard() {
   const connectionsQuery = useListCalendarConnections();
   const disconnect = useDisconnectCalendar();
   const [message, setMessage] = useState("");
+  const [showConnectFallback, setShowConnectFallback] = useState(false);
   const connection = connectionsQuery.data?.[0];
   const connected = connection?.status === "connected";
+  const connectUrl = "/api/calendar/connect?redirect=1";
+
+  const connectCalendar = () => {
+    setMessage("");
+    setShowConnectFallback(false);
+    const authorizationWindow = window.open(
+      connectUrl,
+      "accepted-google-calendar",
+    );
+    if (!authorizationWindow) {
+      setShowConnectFallback(true);
+      setMessage(
+        "Your browser blocked the Google authorization window. Use the link below to open it directly.",
+      );
+      return;
+    }
+    authorizationWindow.opener = null;
+    setMessage(
+      "Google authorization opened in a separate window. Return here after granting access.",
+    );
+  };
 
   const disconnectCalendar = () => {
     if (!connection) return;
@@ -74,14 +96,19 @@ export function CalendarConnectionCard() {
               <p className="mt-1 text-muted-foreground">Your calendar stays private while the app checks availability.</p>
               </div>
             </div>
-            <Button asChild className="rounded-full">
-              <a href="/api/calendar/connect?redirect=1" target="_top">
-                <ExternalLink className="mr-2 h-4 w-4" /> Connect Google Calendar
-              </a>
+            <Button className="rounded-full" onClick={connectCalendar}>
+              <ExternalLink className="mr-2 h-4 w-4" /> Connect Google Calendar
             </Button>
           </div>
         )}
         {message && <p className="mt-3 text-sm text-muted-foreground" role="status">{message}</p>}
+        {showConnectFallback && (
+          <Button asChild variant="outline" className="mt-3 rounded-full">
+            <a href={connectUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" /> Open Google authorization
+            </a>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
