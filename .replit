@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "postgresql-16"]
+modules = ["nodejs-24", "postgresql-16", "python-base-3.13"]
 
 [deployment]
 router = "application"
@@ -45,6 +45,6 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-ACCEPTED_ADMIN_CLERK_USER_IDS = "user_3IeGScwZqzQA1VYEwiOijPa3U98"
+ACCEPTED_ADMIN_CLERK_USER_IDS = "user_3IeGScwZqzQA1VYEwiOijPa3U98,user_3IelBhbEVUsWpLzyohpV1UP44kk"
 ACCEPTED_SAT_TUTOR_CLERK_USER_IDS = "user_3IeYrIF9NB1KiaOwOvG62zbchRS"
 GOOGLE_CALENDAR_REDIRECT_URI = "https://37b01121-5efe-48c5-a064-3ce0cacd0f14-00-3qm3oiov7es7q-nnvlb9ic.reed.replit.dev/api/calendar/oauth/callback"
