@@ -1731,13 +1731,16 @@ router.get(
       });
       return;
     }
-    res.json({
-      authorizationUrl: googleCalendarAuthorizationUrl(
-        profile.id,
-        req.appUser!.id,
-        profile.email,
-      ),
-    });
+    const authorizationUrl = googleCalendarAuthorizationUrl(
+      profile.id,
+      req.appUser!.id,
+      profile.email,
+    );
+    if (req.query.redirect === "1") {
+      res.redirect(authorizationUrl);
+      return;
+    }
+    res.json({ authorizationUrl });
   },
 );
 

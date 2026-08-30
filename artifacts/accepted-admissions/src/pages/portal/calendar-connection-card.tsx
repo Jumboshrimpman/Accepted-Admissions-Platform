@@ -7,7 +7,6 @@ import {
   Unplug,
 } from "lucide-react";
 import {
-  getCalendarConnectUrl,
   useDisconnectCalendar,
   useListCalendarConnections,
 } from "@workspace/api-client-react";
@@ -21,19 +20,6 @@ export function CalendarConnectionCard() {
   const [message, setMessage] = useState("");
   const connection = connectionsQuery.data?.[0];
   const connected = connection?.status === "connected";
-
-  const connect = async () => {
-    setMessage("");
-    try {
-      const result = await getCalendarConnectUrl(
-        connection ? { tutorProfileId: connection.tutorProfileId } : undefined,
-      );
-      window.location.assign(result.authorizationUrl);
-    } catch (error) {
-      const data = (error as { data?: { error?: string } } | null)?.data;
-      setMessage(data?.error ?? "Google Calendar is not configured for this workspace.");
-    }
-  };
 
   const disconnectCalendar = () => {
     if (!connection) return;
@@ -88,8 +74,10 @@ export function CalendarConnectionCard() {
               <p className="mt-1 text-muted-foreground">Your calendar stays private while the app checks availability.</p>
               </div>
             </div>
-            <Button className="rounded-full" onClick={connect}>
-              <ExternalLink className="mr-2 h-4 w-4" /> Connect Google Calendar
+            <Button asChild className="rounded-full">
+              <a href="/api/calendar/connect?redirect=1" target="_top">
+                <ExternalLink className="mr-2 h-4 w-4" /> Connect Google Calendar
+              </a>
             </Button>
           </div>
         )}
