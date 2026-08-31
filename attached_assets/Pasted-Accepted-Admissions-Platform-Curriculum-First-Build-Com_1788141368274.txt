@@ -1,0 +1,860 @@
+Accepted Admissions Platform — Curriculum-First Build & Completion Prompt
+
+Continue building the existing Accepted Admissions platform. Do not restart, redesign from scratch, or redo functionality that already works unless I explicitly identify it as broken or bad. Inspect the existing implementation first, preserve completed work, and extend or repair only what is incomplete.
+
+PRIMARY OBJECTIVE
+
+The priority is now:
+
+1. SAT curriculum and assessment system
+2. Working, simple student/client dashboard
+3. Working, simple tutor dashboard
+4. Reliable admin controls needed to operate #1–3
+
+Everything else — Google Calendar, Wise, advanced financial reporting, Otter.ai, sophisticated public-site improvements, etc. — is secondary.
+
+I have already spent significant Replit usage/cost trying to configure Google Calendar. Do not burn substantial tokens or development effort repeatedly debugging optional integrations while the core curriculum product remains unfinished.
+
+Build the smallest reliable implementation that satisfies the core requirements first.
+
+Before making changes:
+
+Audit the current implementation against this prompt.
+Identify what is already complete and working.
+Preserve it.
+Identify what is partially implemented and finish it rather than rebuilding it.
+Identify what is missing.
+Work in priority order below.
+Reuse existing components, database models, auth, UI patterns, APIs, and infrastructure wherever reasonable.
+Do not repeatedly attempt an external integration if credentials, authorization, configuration, or an external service is blocking it. Clearly flag the blocker and move to the next priority.
+Test the actual user flows, not merely whether components render.
+
+⸻
+
+P0 — SAT CURRICULUM & ASSESSMENT ENGINE
+
+This is the most important part of the entire platform.
+
+Build a genuinely usable SAT tutoring curriculum system, beginning with Taito Goto.
+
+Correct any migrated references to “Taito Gato” → “Taito Goto” unless an administrator explicitly changes it later.
+
+Curriculum model
+
+A student program should contain:
+
+Program
+Sessions
+Pre-session homework/assessment
+In-session curriculum
+Student submissions
+Automatic grading
+Tutor review
+AI-generated performance analysis
+Student-facing feedback
+Tutor-facing feedback
+Follow-up practice based on mistakes
+Hard-question bank for extra session time
+
+Make this reusable so we can later create other SAT students/programs without hardcoding Taito throughout the application.
+
+Initial Taito SAT curriculum
+
+Before the October 2 session, Taito needs a full timed SAT diagnostic/practice test available directly through the platform.
+
+The student should be able to:
+
+Start the test
+See instructions
+Answer questions
+Navigate appropriately
+See remaining time
+Submit the test
+Have objective questions automatically graded
+Receive an SAT score/result
+Have results stored permanently
+See strengths and weaknesses
+See useful AI-generated feedback
+
+The tutor should automatically receive the results in Taito’s dashboard.
+
+Tutor analysis should summarize things such as:
+
+Overall score
+Section performance
+Question-level results
+Skill/topic weaknesses
+Skill/topic strengths
+Mistake patterns
+Suggested priorities for the next session
+Questions/topics that should be reviewed together
+
+Do not pretend AI analysis exists if it is only placeholder text. If an existing AI provider/configuration is available, use it efficiently. If AI is unavailable, preserve the data structure and provide deterministic analysis so the curriculum still works.
+
+Pre-session homework
+
+Before subsequent sessions, Taito should receive a smaller SAT homework/assessment through the platform.
+
+The workflow should be:
+
+Assigned → Student completes → Auto-grade → Analyze → Tutor alerted → Student receives feedback → Session curriculum adapts
+
+When homework is submitted, create a tutor alert such as:
+
+New submission — Taito Goto — October 2 SAT Session
+
+The tutor should be able to open it and immediately see:
+
+Student answers
+Correct answers
+Score
+Questions missed
+Explanations
+Topic/skill classification
+AI-generated or deterministic analysis
+Recommended session focus
+
+The student should receive useful feedback too, but tutor analysis can be more detailed.
+
+Adaptive curriculum
+
+For questions the student gets wrong, generate or select similar practice questions testing the same underlying concept.
+
+These should become part of the in-session curriculum so the tutor and student can work through them together.
+
+Do NOT simply reproduce copyrighted SAT questions.
+
+Use original SAT-style questions or appropriately licensed/public material.
+
+The session should therefore have two distinct areas:
+
+Before Session
+
+Homework / assessment completed independently.
+
+During Session
+
+Tutor-led material generated from:
+
+Homework mistakes
+Weak skills
+Similar practice questions
+Explanations
+Additional hard questions if needed
+
+If homework was not completed, the tutor should still be able to open that homework during the session and work through it with the student.
+
+If the student completes everything and gets everything correct, provide a Hard Question Bank that tutors can use to fill remaining session time.
+
+For every question, tutors and students should ultimately be able to see:
+
+Question
+Student answer where applicable
+Correct answer
+Explanation
+Skill/topic
+
+Curriculum authoring
+
+Tutors need practical controls to:
+
+Create/edit assignments
+Create/edit questions
+Rename programs
+Assign curriculum to sessions
+Change due dates
+Review submissions
+Add tutor notes
+Add or edit explanations
+Add questions to the in-session curriculum
+Pull questions from the hard-question bank
+
+Administrators should be able to see and manage all curriculum.
+
+Make curriculum access much more prominent than any generic “review” box. Remove the confusing review box if it serves no clear operational purpose.
+
+⸻
+
+P0 — STUDENT DASHBOARD
+
+The student dashboard should be extremely simple.
+
+Do NOT create an endless-scroll dashboard.
+
+The primary student view should emphasize:
+
+Next Session
+
+Date
+Time
+Tutor
+Join Meeting button
+
+My Curriculum
+
+Upcoming homework
+Due date
+Completion status
+Start/Continue button
+Previous submissions/results
+Session materials where appropriate
+
+My Progress
+
+A compact useful visualization of:
+
+SAT scores
+Completed work
+Skill strengths/weaknesses
+
+Sessions / Credits
+
+Upcoming sessions
+Previous sessions
+Available tutoring credits
+
+Do not expose tutor compensation, internal notes, admin analysis, or other students.
+
+⸻
+
+P0 — TUTOR DASHBOARD
+
+Tutors also need a compact operational dashboard rather than an endless scroll.
+
+Prioritize:
+
+Upcoming Sessions
+
+Student, date/time, program and Join Meeting button.
+
+New Submissions
+
+Clearly surfaced alerts for recently submitted student homework/tests.
+
+Students
+
+Tutor’s assigned students and programs.
+
+Curriculum
+
+Easy access to assignments, results, in-session curriculum and question bank.
+
+For an upcoming session, the tutor should be able to open one consolidated session view containing:
+
+Student
+Session date
+Homework status
+Homework results
+AI analysis
+Mistakes
+Recommended focus
+Generated/recommended practice questions
+Tutor notes
+In-session curriculum
+Meeting link
+
+Tutor profiles should support:
+
+Name
+Profile photo
+Biography
+LinkedIn
+Subjects/programs
+Internal hourly compensation rate
+
+Tutors may see/edit appropriate profile information, but compensation data must NEVER be visible to students.
+
+Correct “Xavi & Sama Morales” → “Xavier Morales” where this refers to the tutor.
+
+⸻
+
+P0 — MEETING LOGIC
+
+For now, use:
+
+Google Meet: meet.google.com/rih-iayt-okb
+
+This can be the default meeting room only when sessions do not overlap.
+
+The application must detect scheduling conflicts. Never schedule two simultaneous tutor/student meetings into the same room.
+
+If meeting overlap exists, flag it rather than silently assigning the same room.
+
+Do not spend excessive effort on Google Calendar before curriculum/dashboard functionality works.
+
+Eventually we need calendar availability for:
+
+SAT Tutor
+
+Xavier Morales
+xaver.rmz6@gmail.com
+
+SAT Tutor
+
+Eunice Chon
+eunice_chon@berkeley.edu
+
+Clients should eventually be able to book available tutor time.
+
+Prefer reusing the Google Calendar OAuth implementation that already exists rather than rebuilding it.
+
+If the integration is currently blocked by OAuth/Google Cloud configuration, stop after identifying the exact remaining blocker. Do not repeatedly rewrite working OAuth code.
+
+The internal scheduling/database system should still work without Google Calendar.
+
+⸻
+
+P0 — AUTHENTICATION / ACCESS
+
+Successful sign-in must persist appropriately so users are not unnecessarily logged out.
+
+Make sure portal authorization is enforced server-side, not merely by hiding UI.
+
+Add an obvious way to return to the public Home page from the portal sign-in screen.
+
+If already authenticated, handle the sign-in route intelligently rather than forcing another unnecessary login.
+
+Ryo / JAAC access
+
+Provision:
+
+ryo@jaac.co.jp
+
+with access to Taito Goto’s student dashboard in VIEW-ONLY mode.
+
+Clearly display:
+
+You are viewing Taito Goto’s dashboard in View Only mode.
+
+Ryo may view authorized Taito information but must not:
+
+Submit homework
+Change answers
+Modify curriculum
+Edit Taito’s information
+Schedule/cancel sessions unless explicitly authorized later
+Access other students
+
+Enforce view-only permissions server-side.
+
+⸻
+
+P1 — ADMIN PORTAL CLEANUP
+
+The current admin portal is too messy.
+
+Refactor the existing admin experience rather than rebuilding the entire application.
+
+It should be sleek, compact, clear, and operational.
+
+Use navigation/tabs/cards/tables instead of one giant scrolling page.
+
+Suggested major areas:
+
+Overview | Clients | Tutors | Programs | Curriculum | Sessions | Billing | Products | Requests | Settings
+
+Overview
+
+Compact operational snapshot:
+
+Active students
+Active tutors
+Active programs
+Upcoming sessions
+Recent submissions
+Curriculum requiring attention
+Outstanding invoices
+Revenue snapshot
+
+Clients
+
+See all clients/students and relevant:
+
+Program
+Tutor
+Credits
+Payments
+Sessions
+Curriculum progress
+
+Tutors
+
+Create/edit tutor profiles and store:
+
+Name
+Photo
+Bio
+LinkedIn
+Programs
+Internal hourly compensation rate
+Sessions completed
+Upcoming sessions
+
+Programs / Curriculum
+
+Administrators need visibility across:
+
+Programs
+Assignments
+Upcoming curriculum
+Student submissions
+Tutor activity
+
+Curriculum should be a first-class admin feature.
+
+Sessions
+
+Provide:
+
+Upcoming sessions
+Completed sessions
+Tutor/student
+Program
+Meeting link
+Session status
+
+A compact calendar view is useful if it can be implemented efficiently using existing components. Do not spend disproportionate effort building one.
+
+Financial overview
+
+Allow the administrator to record:
+
+Client amount paid
+Payment source
+Tutor rate
+Sessions delivered
+Revenue
+Tutor cost
+Gross profit
+
+Support manually recorded payments because some clients may pay outside the website.
+
+Do not expose this financial information to students.
+
+Otter.ai integration is optional and NOT a priority right now.
+
+⸻
+
+P1 — SAT PRODUCTS & CREDITS
+
+Create/manage these initial SAT products:
+
+1 hour — $175
+5 hours — create a sensible middle-tier package and make its price administrator-editable
+10 hours — $1,500 ($150/hour)
+20 hours — $2,400 ($120/hour)
+
+Do not hard-code the architecture around these prices. Admins should be able to create/edit/deactivate products later.
+
+Purchases should generate tutoring credits.
+
+Credits must have a ledger/history so they cannot accidentally be issued twice.
+
+Michelle Makarem
+
+Client/student:
+
+michaelmakarem@gmail.com
+Michelle Makarem
+
+Michelle currently has 1 prepaid SAT session/credit that can be scheduled with Xavier Morales.
+
+She should be able to use that existing credit without paying again.
+
+After that credit is consumed, additional sessions require available purchased credits/payment.
+
+⸻
+
+P1 — BILLING & INVOICES
+
+Administrators should be able to:
+
+Create products
+Create invoices
+Assign invoices to clients
+Add line items
+Record manual payments
+Accept online payments
+Issue tutoring credits after verified payment
+View payment history
+
+Stripe remains the default payment method for normal SAT purchases.
+
+Invoice experience
+
+Recreate the useful invoice functionality requested previously using the Accepted Admissions visual system.
+
+Include:
+
+Accepted Admissions branding
+Invoice number
+Issue date
+Due date
+Client
+Billing address
+Issuer information
+Line items
+Quantity
+Unit price
+Tax
+Total
+Amount due
+Payment status
+Payment instructions
+PDF download
+Receipt after payment
+
+Issuer/business information must be admin-editable rather than hard-coded.
+
+⸻
+
+P2 — PUBLIC WEBSITE
+
+Improve the existing website without unnecessarily rebuilding it.
+
+Remove:
+
+“Enrollment is now open for fall.”
+
+Do NOT put detailed pricing prominently on the homepage.
+
+Instead create/use clear navigation such as:
+
+Home | SAT Tutoring | Success | Team | Pricing | Client Portal
+
+SAT page
+
+Explain SAT tutoring and packages clearly.
+
+Pricing
+
+Display the SAT products without repetitive pricing presentations.
+
+Team
+
+Build a public Team page modeled conceptually on the existing Accepted Admissions team page:
+
+acceptedadmissions.org/our-team
+
+Include the existing team members’:
+
+Name
+Photo where available
+Biography
+Role
+LinkedIn redirect
+
+Preserve/migrate existing biographies rather than inventing replacements.
+
+Success
+
+Build/migrate a public success/results page based on:
+
+acceptedadmissions.org/past-success
+
+Preserve legitimate existing success information.
+
+Client Request Form
+
+Create a substantive lead form with roughly 10 useful fields, including:
+
+Name
+Student name if different
+Email
+Phone
+Program/service
+Current grade/year
+Current SAT score
+Target SAT score
+Timeline/test date
+Detailed explanation of what they want help with
+
+Validate email and phone properly.
+
+Store submissions for admins and make them easy to contact.
+
+Design
+
+Improve visual quality while keeping the existing Accepted Admissions identity.
+
+Make layouts more compact and intentional.
+
+Change the logo/icon treatment to an “A” where appropriate.
+
+⸻
+
+P2 — WISE BUSINESS
+
+Wise is secondary.
+
+Do not spend significant development effort on Wise until P0 and P1 functionality works.
+
+Wise supplements Stripe; it does not replace Stripe.
+
+Intended use:
+
+JAAC
+International clients
+Custom invoices
+International transfers
+Multi-currency payments
+
+The Accepted Admissions database remains the source of truth.
+
+Phase 1 — Manual / Wise-hosted links
+
+Admins can choose per invoice:
+
+Stripe
+Wise
+Both
+Offline/manual
+
+For Wise:
+
+Admin may paste a legitimate Wise-generated invoice/payment URL.
+Client sees “Pay securely with Wise.”
+Open it in a new tab.
+Clicking the link NEVER marks the invoice paid.
+Never fabricate Wise URLs.
+Never expose bank account/routing details publicly.
+Never imitate Wise’s card-entry interface.
+
+Allow manual reconciliation requiring:
+
+Amount
+Currency
+Wise transaction reference
+Date received
+Admin note
+Optional receipt/statement attachment
+
+Maintain an immutable audit trail.
+
+After verification:
+
+Create payment transaction.
+Mark invoice appropriately.
+Issue tutoring credits exactly once.
+Notify client.
+Prevent duplicate processing.
+
+Phase 2 — Wise API
+
+Only implement this after core platform functionality works and only if credentials/API access are actually available.
+
+Expected server secrets:
+
+WISE_API_TOKEN
+WISE_PROFILE_ID
+
+Never expose them client-side, in logs, API responses, or chat.
+
+Allowed functionality:
+
+Identify incoming payments
+Read relevant transaction activity/statements
+Match payments to invoices
+Reconcile reference/currency/amount/profile
+Update invoice after verified match
+
+Explicitly prohibited:
+
+Sending transfers
+Paying tutors
+Creating recipients
+Currency conversion
+Withdrawals
+Public balance exposure
+
+Matching requires:
+
+Invoice reference
+Currency
+Amount
+Correct Wise Business profile
+Completed transaction
+
+Do not match solely by payer name or amount.
+
+Store Wise transaction IDs and enforce idempotency.
+
+Supported invoice/payment statuses:
+
+Draft
+Sent
+Viewed
+Pending payment
+Under review
+Partially paid
+Paid
+Overpaid
+Failed
+Canceled
+Refunded
+Partially refunded
+
+⸻
+
+ENGINEERING REQUIREMENTS
+
+Do not sacrifice security/data integrity just to make the UI appear complete.
+
+In particular:
+
+Enforce roles server-side.
+Never trust client-side payment status.
+Never issue credits from an unverified payment redirect.
+Use transaction/idempotency protections for credit issuance.
+Prevent students from accessing other students.
+Prevent tutors from accessing students they are not authorized to access.
+Keep tutor compensation private.
+Keep API credentials server-side.
+Preserve audit history.
+Validate form input server-side.
+Detect scheduling conflicts.
+Do not fabricate successful external integrations.
+
+Prefer extending existing database schemas over creating parallel duplicate systems.
+
+Do not seed fake production data merely to make dashboards look populated. Clearly identify demo/sample data if needed for testing.
+
+⸻
+
+IMPLEMENTATION ORDER
+
+Work in this order and do not allow lower-priority features to derail higher-priority work:
+
+Phase A — Core learning product
+
+Audit existing implementation.
+Fix/preserve authentication and roles.
+Build curriculum data model.
+Build Taito full SAT diagnostic.
+Build grading/results.
+Build student feedback.
+Build tutor analysis/submission alerts.
+Build pre-session homework.
+Build adaptive/in-session curriculum.
+Build hard-question bank.
+Finish simple student dashboard.
+Finish simple tutor dashboard.
+
+Phase B — Operations
+
+Clean up admin portal.
+Admin curriculum management.
+Tutor/client/program management.
+Sessions/meeting management.
+SAT products and credit ledger.
+Michelle’s existing prepaid credit.
+Invoicing/manual payments.
+Stripe payment flow.
+
+Phase C — Public experience
+
+SAT public page.
+Pricing page.
+Team migration.
+Success migration.
+Client request form.
+General design cleanup.
+
+Phase D — Integrations
+
+Reuse/finish Google Calendar only if configuration permits.
+Wise hosted-link/manual reconciliation.
+Wise API only if credentials/access permit.
+Otter.ai only later if useful.
+
+⸻
+
+COST / EFFICIENCY RULE
+
+This is important.
+
+Do not repeatedly rewrite or debug an integration while guessing at the cause.
+
+For Google Calendar, Wise, Stripe, AI APIs, etc.:
+
+Inspect existing implementation.
+Test it.
+Identify the precise failure.
+Fix it if the failure is in our code.
+If blocked by external credentials/configuration/authorization, stop.
+Tell me the exact action I need to take.
+Continue building functionality that does not depend on that external blocker.
+
+Do not rebuild working infrastructure merely because another implementation might be cleaner.
+
+Favor functional incremental improvements over architecture churn.
+
+⸻
+
+ACCEPTANCE TEST — CORE PRODUCT
+
+The build is not complete merely because pages exist.
+
+At minimum demonstrate this actual workflow:
+
+Taito logs in.
+Taito sees his next SAT session.
+Taito sees his assigned diagnostic/homework.
+Taito completes an assessment.
+The platform grades it.
+Results are stored.
+Taito receives meaningful feedback.
+Xavier receives a New Submission alert.
+Xavier opens Taito’s results.
+Xavier sees question-level mistakes and analysis.
+Xavier sees recommended/adaptive questions for the session.
+Xavier can access the in-session curriculum.
+Both can access correct answers/explanations where appropriate.
+Their upcoming session and meeting information are visible.
+Ryo can view Taito’s authorized dashboard but cannot modify anything.
+Admin can see the student, tutor, program, curriculum, submission and upcoming session.
+
+Get this workflow working before spending substantial effort on Wise, Otter, advanced calendar functionality, or cosmetic extras.
+
+⸻
+
+COMPLETION REPORT
+
+When finished with the current build pass, give me a concise checklist divided into:
+
+Completed & tested
+
+Only functionality you actually verified.
+
+Existing functionality preserved
+
+Important things that were already working and therefore were not rebuilt.
+
+Partially complete
+
+What exists but still needs work.
+
+Blocked by me/external service
+
+For each blocker, give me the exact action required from me. Do not vaguely say “configure Google” or “set up API.”
+
+Not started / intentionally deferred
+
+Especially lower-priority features deferred to protect development time.
+
+Tests performed
+
+List the end-to-end flows actually tested.
+
+External integrations
+
+For each of Google Calendar, Stripe, Wise and AI, report:
+
+Connected or not
+What genuinely works
+What remains manual
+Required secrets
+Remaining authorization/configuration
+Do not claim an integration is complete unless it was actually tested successfully.
+
+Most importantly: leave me with a working SAT curriculum → submission → grading → feedback → tutor-review → session-preparation loop. That is the product priority.
