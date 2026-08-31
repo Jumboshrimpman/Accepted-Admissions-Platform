@@ -9,6 +9,7 @@ import {
   encryptCalendarToken,
   exchangeGoogleCode,
   getGoogleCalendarConfig,
+  googleCalendarCompletionHtml,
   googleCalendarAuthorizationUrl,
   listGoogleBusyWindows,
   readCalendarOAuthState,
@@ -1608,19 +1609,7 @@ router.get(
       .update(tutorProfilesTable)
       .set({ calendarStatus: "connected", updatedAt: new Date() })
       .where(eq(tutorProfilesTable.id, stateData.tutorProfileId));
-    const [owner] = await db
-      .select({ role: usersTable.role })
-      .from(tutorProfilesTable)
-      .innerJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
-      .where(eq(tutorProfilesTable.id, stateData.tutorProfileId))
-      .limit(1);
-    const returnPath =
-      owner?.role === "administrator"
-        ? "/admin"
-        : owner?.role === "tutor"
-          ? "/tutor"
-          : "/portal";
-    res.redirect(`${returnPath}?calendar=connected`);
+    res.status(200).type("html").send(googleCalendarCompletionHtml());
   } catch {
     res.status(502).send("Google Calendar authorization failed. Please try again.");
   }

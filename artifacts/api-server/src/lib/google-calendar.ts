@@ -104,6 +104,40 @@ export function googleCalendarAuthorizationUrl(
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
+export function googleCalendarCompletionHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Google Calendar connected</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #172033; font-family: ui-sans-serif, system-ui, sans-serif; }
+      main { width: min(28rem, calc(100% - 2rem)); padding: 2rem; border: 1px solid #dbe3ef; border-radius: 1rem; background: white; box-shadow: 0 1rem 3rem rgba(23, 32, 51, 0.08); text-align: center; }
+      h1 { margin: 0; font-size: 1.5rem; }
+      p { margin: 0.75rem 0 0; color: #526078; line-height: 1.6; }
+      button { margin-top: 1.25rem; border: 0; border-radius: 999px; padding: 0.7rem 1.1rem; background: #172033; color: white; font: inherit; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Google Calendar connected</h1>
+      <p>You can close this window and return to Accepted Admissions.</p>
+      <button type="button" onclick="window.close()">Close window</button>
+    </main>
+    <script>
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(
+          { type: "accepted-admissions:calendar-connected" },
+          window.location.origin
+        );
+        window.setTimeout(() => window.close(), 350);
+      }
+    </script>
+  </body>
+</html>`;
+}
+
 export async function exchangeGoogleCode(code: string): Promise<{
   accessToken: string;
   refreshToken?: string;

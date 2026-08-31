@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { createCalendarOAuthState, decryptCalendarToken, encryptCalendarToken, GOOGLE_CALENDAR_SCOPES, readCalendarOAuthState } from "./google-calendar.ts";
+import { createCalendarOAuthState, decryptCalendarToken, encryptCalendarToken, GOOGLE_CALENDAR_SCOPES, googleCalendarCompletionHtml, readCalendarOAuthState } from "./google-calendar.ts";
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
 
@@ -30,4 +30,11 @@ test("calendar tokens round-trip through authenticated encryption", () => {
   const encrypted = encryptCalendarToken("google-access-token");
   assert.notEqual(encrypted, "google-access-token");
   assert.equal(decryptCalendarToken(encrypted), "google-access-token");
+});
+
+test("calendar completion page notifies and closes the authorization window", () => {
+  const html = googleCalendarCompletionHtml();
+  assert.match(html, /Google Calendar connected/);
+  assert.match(html, /accepted-admissions:calendar-connected/);
+  assert.match(html, /window\.close/);
 });

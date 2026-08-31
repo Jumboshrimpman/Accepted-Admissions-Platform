@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarCheck2,
   ExternalLink,
@@ -21,7 +21,23 @@ export function CalendarConnectionCard() {
   const [showConnectFallback, setShowConnectFallback] = useState(false);
   const connection = connectionsQuery.data?.[0];
   const connected = connection?.status === "connected";
+  const refetchConnections = connectionsQuery.refetch;
   const connectUrl = "/api/calendar/connect?redirect=1";
+
+  useEffect(() => {
+    const receiveCalendarConnection = (event: MessageEvent) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.data?.type !== "accepted-admissions:calendar-connected"
+      ) {
+        return;
+      }
+      void refetchConnections();
+      setMessage("Google Calendar connected successfully.");
+    };
+    window.addEventListener("message", receiveCalendarConnection);
+    return () => window.removeEventListener("message", receiveCalendarConnection);
+  }, [refetchConnections]);
 
   const connectCalendar = () => {
     setMessage("");
@@ -37,7 +53,6 @@ export function CalendarConnectionCard() {
       );
       return;
     }
-    authorizationWindow.opener = null;
     setMessage(
       "Google authorization opened in a separate window. Return here after granting access.",
     );
