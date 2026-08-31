@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { endOfDay, format, parseISO, startOfDay } from "date-fns";
 import {
   CalendarClock,
   CheckCircle2,
@@ -23,6 +23,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -37,10 +38,35 @@ function errorMessage(error: unknown): string {
   return data?.error ?? "The booking could not be completed. Please try again.";
 }
 
+function dayKeyInTimeZone(value: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(parseISO(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function dateFromDayKey(dayKey: string): Date {
+  return parseISO(`${dayKey}T12:00:00`);
+}
+
+function timeInTimeZone(value: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parseISO(value));
+}
+
 export function BookingCard() {
   const queryClient = useQueryClient();
   const [selectedTutorId, setSelectedTutorId] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
+  const [selectedDateKey, setSelectedDateKey] = useState("");
   const [reschedulingSessionId, setReschedulingSessionId] = useState<string | null>(null);
   const [remainingHours, setRemainingHours] = useState<number | null>(null);
   const [creditError, setCreditError] = useState("");
@@ -108,6 +134,7 @@ export function BookingCard() {
   const chooseTutor = (tutorId: string) => {
     setSelectedTutorId(tutorId);
     setSelectedSlot("");
+    setSelectedDateKey("");
     setMessage("");
   };
 
@@ -164,6 +191,26 @@ export function BookingCard() {
 
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
   const availableSlots = availabilityQuery.data?.slots ?? [];
+  const tutorTimezone = availabilityQuery.data?.tutor.timezone ?? "UTC";
+  const availableDateKeys = useMemo(
+    () => new Set(availableSlots.map((slot) => dayKeyInTimeZone(slot, tutorTimezone))),
+    [availableSlots, tutorTimezone],
+  );
+  const selectedDateSlots = availableSlots.filter(
+    (slot) => dayKeyInTimeZone(slot, tutorTimezone) === selectedDateKey,
+  );
+  const selectedDate = selectedDateKey ? dateFromDayKey(selectedDateKey) : undefined;
+  const rangeStart = startOfDay(dateFromDayKey(dayKeyInTimeZone(range.from, tutorTimezone)));
+  const rangeEnd = endOfDay(dateFromDayKey(dayKeyInTimeZone(range.to, tutorTimezone)));
+
+  useEffect(() => {
+    if (!selectedDateKey || !availableDateKeys.has(selectedDateKey)) {
+      const firstAvailableSlot = availableSlots[0];
+      setSelectedDateKey(
+        firstAvailableSlot ? dayKeyInTimeZone(firstAvailableSlot, tutorTimezone) : "",
+      );
+    }
+  }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
 
   return (
     <Card className="border-primary/15 shadow-lg shadow-primary/5">
@@ -246,25 +293,57 @@ export function BookingCard() {
                 ) : availableSlots.length === 0 ? (
                   <p className="mt-4 text-sm text-muted-foreground">No times are open in this window. Try another tutor.</p>
                 ) : (
-                  <div className="mt-4 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-                    {availableSlots.map((slot) => (
-                      <button
-                        key={slot}
-                        type="button"
-                        onClick={() => setSelectedSlot(slot)}
-                        className={`rounded-xl border px-3 py-3 text-left text-sm ${
-                          selectedSlot === slot
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "bg-background hover:border-primary/50"
-                        }`}
-                      >
-                        <span className="flex items-center gap-2 font-medium">
-                          <Clock3 className="h-4 w-4" />
-                          {format(parseISO(slot), "EEE, MMM d")}
-                        </span>
-                        <span className="mt-1 block pl-6 text-xs opacity-80">{format(parseISO(slot), "h:mm a")}</span>
-                      </button>
-                    ))}
+                  <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
+                    <div className="rounded-xl border bg-background p-2 sm:p-3">
+                      <AvailabilityCalendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={(date) => {
+                          setSelectedDateKey(date ? format(date, "yyyy-MM-dd") : "");
+                          setSelectedSlot("");
+                        }}
+                        defaultMonth={rangeStart}
+                        fromDate={rangeStart}
+                        toDate={rangeEnd}
+                        disabled={(date) =>
+                          date < rangeStart ||
+                          date > rangeEnd ||
+                          !availableDateKeys.has(format(date, "yyyy-MM-dd"))
+                        }
+                        className="mx-auto w-full"
+                      />
+                      <p className="px-2 pb-2 text-center text-xs text-muted-foreground">
+                        Dates with open times are available to select.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border bg-background p-4">
+                      <div className="flex items-center gap-2">
+                        <Clock3 className="h-4 w-4 text-primary" />
+                        <p className="font-semibold">
+                          {selectedDate ? format(selectedDate, "EEEE, MMM d") : "Choose a date"}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Available times are shown in the tutor’s timezone.
+                      </p>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                        {selectedDateSlots.map((slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`rounded-xl border px-3 py-3 text-left text-sm transition-colors ${
+                              selectedSlot === slot
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "bg-background hover:border-primary/50"
+                            }`}
+                          >
+                            <span className="font-medium">{timeInTimeZone(slot, tutorTimezone)}</span>
+                            <span className="mt-1 block text-xs opacity-70">60-minute session</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
                 {selectedSlot && (

@@ -7,7 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "test": "node --experimental-strip-types --test src/lib/*.test.ts && vitest run --environment jsdom src/pages/portal/calendar-connection-card.test.tsx",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts && vitest run --environment jsdom src/pages/portal/*.test.tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
