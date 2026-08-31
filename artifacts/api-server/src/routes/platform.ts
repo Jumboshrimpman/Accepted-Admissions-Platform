@@ -24,6 +24,12 @@ import {
   type BusyWindow,
 } from "../lib/booking";
 import {
+  TAITO_FALL_2026_SESSIONS,
+  TAITO_SESSION_TIMEZONE,
+  sessionTitle,
+  taitoSessionDateTime,
+} from "../lib/session-schedule";
+import {
   createCheckoutSession,
   createHostedInvoice,
   stripeErrorMessage,
@@ -157,7 +163,10 @@ async function ensureSeedData(): Promise<string> {
     .from(coursesTable)
     .where(eq(coursesTable.title, "Fall 2026 SAT & IELTS"))
     .limit(1);
-  if (existing) return existing.id;
+  if (existing) {
+    await reconcileTaitoSessions(existing.id);
+    return existing.id;
+  }
 
   const [course] = await db
     .insert(coursesTable)
@@ -173,35 +182,21 @@ async function ensureSeedData(): Promise<string> {
     })
     .returning();
 
-  const progression = [
-    ["2026-10-02T12:00:00.000Z", "SAT", "Summer review, baseline & goal setting"],
-    ["2026-10-09T12:00:00.000Z", "SAT", "Standard English Conventions"],
-    ["2026-10-16T12:00:00.000Z", "SAT", "Information, evidence & inference"],
-    ["2026-10-23T12:00:00.000Z", "IELTS", "Integrated IELTS diagnostic"],
-    ["2026-10-30T12:00:00.000Z", "SAT", "Craft and Structure"],
-    ["2026-11-06T12:00:00.000Z", "SAT", "Expression of Ideas"],
-    ["2026-11-13T12:00:00.000Z", "IELTS", "Coherence, evidence & speaking"],
-    ["2026-11-20T12:00:00.000Z", "SAT", "Advanced evidence & synthesis"],
-    ["2026-11-27T12:00:00.000Z", "SAT", "Mixed timed module & pacing"],
-    ["2026-12-04T12:00:00.000Z", "IELTS", "Timed mini-mock & revision"],
-    ["2026-12-11T12:00:00.000Z", "SAT", "Hard mixed SAT practice"],
-    ["2026-12-18T12:00:00.000Z", "SAT", "Cumulative review & next-term plan"],
-  ] as const;
-
   const seededSessions = await db
     .insert(sessionsTable)
     .values(
-      progression.map(([dateTime, subject, title]) => ({
+      TAITO_FALL_2026_SESSIONS.map(({ dateKey, subject, tutorName }) => ({
         courseId: course.id,
-        dateTime: new Date(dateTime),
-        timezone: "Asia/Tokyo",
+        dateTime: taitoSessionDateTime(dateKey),
+        timezone: TAITO_SESSION_TIMEZONE,
         subject,
-        title,
+        title: sessionTitle(subject, tutorName),
         status: "published" as const,
         hasHomework: subject === "SAT",
       })),
     )
     .returning();
+  await reconcileTaitoSessions(course.id);
 
   await db.insert(curriculumBlocksTable).values([
     {
@@ -327,6 +322,94 @@ async function ensureSeedData(): Promise<string> {
   return course.id;
 }
 
+async function reconcileTaitoSessions(courseId: string): Promise<void> {
+  const [courseSessions, tutorProfiles, users] = await Promise.all([
+    db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.courseId, courseId)),
+    db
+      .select({
+        id: tutorProfilesTable.id,
+        userId: tutorProfilesTable.userId,
+        email: tutorProfilesTable.email,
+        name: tutorProfilesTable.name,
+      })
+      .from(tutorProfilesTable)
+      .where(
+        inArray(tutorProfilesTable.email, [
+          "eunice_chon@berkeley.edu",
+          "nika.raiffe@gmail.com",
+        ]),
+      ),
+    db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+      })
+      .from(usersTable)
+      .where(
+        inArray(usersTable.email, [
+          "taito0525@gmail.com",
+          "eunice_chon@berkeley.edu",
+          "nika.raiffe@gmail.com",
+        ]),
+      ),
+  ]);
+  const student = users.find((user) => user.email === "taito0525@gmail.com");
+  const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
+  for (const session of courseSessions) {
+    const dateKey = session.dateTime.toISOString().slice(0, 10);
+    if (!sessionsByDate.has(dateKey)) sessionsByDate.set(dateKey, session);
+  }
+
+  for (const scheduled of TAITO_FALL_2026_SESSIONS) {
+    const dateTime = taitoSessionDateTime(scheduled.dateKey);
+    const existing = sessionsByDate.get(scheduled.dateKey);
+    const profile = tutorProfiles.find(
+      (candidate) => candidate.email === scheduled.tutorEmail,
+    );
+    const account = users.find(
+      (candidate) => candidate.email === scheduled.tutorEmail,
+    );
+    const tutorUserId =
+      profile?.userId ?? account?.id ?? existing?.tutorUserId ?? null;
+    const clientUserId = student?.id ?? existing?.clientUserId ?? null;
+    const values = {
+      dateTime,
+      timezone: TAITO_SESSION_TIMEZONE,
+      subject: scheduled.subject,
+      title: sessionTitle(scheduled.subject, scheduled.tutorName),
+      status: "published" as const,
+      durationMinutes: 60,
+      hasHomework: scheduled.subject === "SAT",
+      tutorUserId,
+      clientUserId,
+    };
+
+    if (existing) {
+      if (
+        existing.providerEventId &&
+        existing.dateTime.getTime() !== dateTime.getTime()
+      ) {
+        throw new Error(
+          `Cannot move Taito session ${existing.id} because it has a provider calendar event.`,
+        );
+      }
+      await db
+        .update(sessionsTable)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(sessionsTable.id, existing.id));
+    } else {
+      await db.insert(sessionsTable).values({
+        courseId,
+        ...values,
+        bookingStatus: "confirmed",
+      });
+    }
+  }
+}
+
 async function ensureUpgradeSeedData(): Promise<void> {
   await db
     .insert(tutorProfilesTable)
@@ -360,6 +443,15 @@ async function ensureUpgradeSeedData(): Promise<void> {
         publicApproved: true,
         calendarStatus: "disconnected",
         bookingEligible: true,
+      },
+      {
+        email: "nika.raiffe@gmail.com",
+        name: "Nika Raiffe",
+        title: "English & IELTS Tutor",
+        subjects: ["English", "IELTS"],
+        publicApproved: false,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
       },
     ])
     .onConflictDoNothing();
@@ -1105,6 +1197,43 @@ function tutorShape(user: AppUser | null) {
     specialty: user.role === "tutor" ? "Assigned tutor" : "Program administrator",
     avatarUrl: null,
   };
+}
+
+async function sessionTutorShape(session: {
+  tutorUserId: string | null;
+  dateTime: Date;
+}) {
+  const scheduled = TAITO_FALL_2026_SESSIONS.find(
+    (candidate) =>
+      candidate.dateKey === session.dateTime.toISOString().slice(0, 10),
+  );
+  if (scheduled) {
+    const [profile] = await db
+      .select({
+        id: tutorProfilesTable.id,
+        name: tutorProfilesTable.name,
+        title: tutorProfilesTable.title,
+        photoUrl: tutorProfilesTable.photoUrl,
+      })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.email, scheduled.tutorEmail))
+      .limit(1);
+    if (profile) {
+      return {
+        id: profile.id,
+        name: profile.name,
+        specialty: profile.title,
+        avatarUrl: profile.photoUrl,
+      };
+    }
+  }
+  if (!session.tutorUserId) return null;
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, session.tutorUserId))
+    .limit(1);
+  return tutorShape(user ?? null);
 }
 
 async function courseShape(courseId: string, user?: AppUser) {
@@ -3184,10 +3313,12 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
       meetUrl: course?.meetUrl ?? null,
       driveUrl: course?.driveUrl ?? null,
       goalSummary: course?.goalSummary ?? null,
-      sessions: resolvedSessions.map((session) => ({
-        ...session,
-        tutor: null,
-      })),
+      sessions: await Promise.all(
+        resolvedSessions.map(async (session) => ({
+          ...session,
+          tutor: await sessionTutorShape(session),
+        })),
+      ),
     }),
   );
 });
@@ -3217,7 +3348,12 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
             : null,
         ),
     )
-  ).filter(Boolean).slice(0, 4);
+  )
+    .filter(
+      (session): session is (typeof upcomingSessions)[number] =>
+        Boolean(session),
+    )
+    .slice(0, 4);
   const assignments =
     ids.length === 0
       ? []
@@ -3284,10 +3420,12 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
       },
       welcomeMessage: "Your Fall program is ready. Keep building on each session.",
       courses,
-      upcomingSessions: scopedUpcomingSessions.map((session) => ({
-        ...session,
-        tutor: null,
-      })),
+      upcomingSessions: await Promise.all(
+        scopedUpcomingSessions.map(async (session) => ({
+          ...session,
+          tutor: await sessionTutorShape(session),
+        })),
+      ),
       assignments: assignmentSummaries,
       recentScores: attempts
         .filter((attempt) => attempt.score !== null)
@@ -3332,7 +3470,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
   res.json(
     GetSessionResponse.parse({
       ...session,
-      tutor: null,
+      tutor: await sessionTutorShape(session),
       blocks:
         req.appUser!.role === "student"
           ? blocks.filter(
