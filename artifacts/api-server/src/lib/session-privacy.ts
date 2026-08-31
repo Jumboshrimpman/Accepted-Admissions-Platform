@@ -1,0 +1,204 @@
+import { and, asc, eq, inArray } from "drizzle-orm";
+import {
+  courseMembershipsTable,
+  db,
+  sessionsTable,
+  tutorProfilesTable,
+  usersTable,
+  viewerLinksTable,
+  type AppUser,
+} from "@workspace/db";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+
+function subjectFamily(subject: string): string {
+  const normalized = subject.trim().toLowerCase();
+  if (normalized.startsWith("sat")) return "sat";
+  if (normalized.startsWith("ielts") || normalized.startsWith("english")) {
+    return "ielts";
+  }
+  return normalized;
+}
+
+export async function reconcileTaitoSessions(courseId: string): Promise<void> {
+  const [courseSessions, tutorProfiles, users] = await Promise.all([
+    db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.courseId, courseId)),
+    db
+      .select({
+        id: tutorProfilesTable.id,
+        userId: tutorProfilesTable.userId,
+        email: tutorProfilesTable.email,
+        name: tutorProfilesTable.name,
+      })
+      .from(tutorProfilesTable)
+      .where(
+        inArray(tutorProfilesTable.email, [
+          "eunice_chon@berkeley.edu",
+          "nika.raiffe@gmail.com",
+        ]),
+      ),
+    db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+      })
+      .from(usersTable)
+      .where(
+        inArray(usersTable.email, [
+          "taito0525@gmail.com",
+          "eunice_chon@berkeley.edu",
+          "nika.raiffe@gmail.com",
+        ]),
+      ),
+  ]);
+  const student = users.find((user) => user.email === "taito0525@gmail.com");
+  const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
+  for (const session of courseSessions) {
+    const dateKey = session.dateTime.toISOString().slice(0, 10);
+    if (!sessionsByDate.has(dateKey)) sessionsByDate.set(dateKey, session);
+  }
+
+  for (const scheduled of TAITO_FALL_2026_SESSIONS) {
+    const dateTime = taitoSessionDateTime(scheduled.dateKey);
+    const existing = sessionsByDate.get(scheduled.dateKey);
+    const profile = tutorProfiles.find(
+      (candidate) => candidate.email === scheduled.tutorEmail,
+    );
+    const account = users.find(
+      (candidate) => candidate.email === scheduled.tutorEmail,
+    );
+    const tutorUserId =
+      profile?.userId ?? account?.id ?? existing?.tutorUserId ?? null;
+    const clientUserId = student?.id ?? existing?.clientUserId ?? null;
+    const values = {
+      dateTime,
+      timezone: TAITO_SESSION_TIMEZONE,
+      subject: scheduled.subject,
+      title: sessionTitle(scheduled.subject, scheduled.tutorName),
+      status: "published" as const,
+      durationMinutes: 60,
+      hasHomework: scheduled.subject === "SAT",
+      tutorUserId,
+      clientUserId,
+    };
+
+    if (existing) {
+      if (
+        existing.providerEventId &&
+        existing.dateTime.getTime() !== dateTime.getTime()
+      ) {
+        throw new Error(
+          `Cannot move Taito session ${existing.id} because it has a provider calendar event.`,
+        );
+      }
+      await db
+        .update(sessionsTable)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(sessionsTable.id, existing.id));
+    } else {
+      await db.insert(sessionsTable).values({
+        courseId,
+        ...values,
+        bookingStatus: "confirmed",
+      });
+    }
+  }
+}
+
+async function canAccessCourse(
+  user: AppUser,
+  courseId: string,
+  subject?: string,
+): Promise<boolean> {
+  if (user.role === "administrator") return true;
+  if (user.role === "viewer") {
+    const [link] = await db
+      .select({ id: viewerLinksTable.id })
+      .from(viewerLinksTable)
+      .innerJoin(
+        courseMembershipsTable,
+        and(
+          eq(courseMembershipsTable.userId, viewerLinksTable.studentUserId),
+          eq(courseMembershipsTable.courseId, courseId),
+          eq(courseMembershipsTable.membershipRole, "student"),
+        ),
+      )
+      .where(
+        and(
+          eq(viewerLinksTable.viewerUserId, user.id),
+          eq(viewerLinksTable.active, true),
+        ),
+      )
+      .limit(1);
+    return Boolean(link);
+  }
+  const [membership] = await db
+    .select()
+    .from(courseMembershipsTable)
+    .where(
+      and(
+        eq(courseMembershipsTable.courseId, courseId),
+        eq(courseMembershipsTable.userId, user.id),
+        eq(courseMembershipsTable.membershipRole, user.role),
+      ),
+    )
+    .limit(1);
+  return (
+    Boolean(membership) &&
+    (!subject ||
+      membership!.subject === "all" ||
+      subjectFamily(membership!.subject) === subjectFamily(subject))
+  );
+}
+
+export async function visibleSessionsForUser(
+  user: AppUser,
+  courseId: string,
+) {
+  const sessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.courseId, courseId))
+    .orderBy(asc(sessionsTable.dateTime));
+  return (
+    await Promise.all(
+      sessions.map(async (session) =>
+        (await canAccessCourse(user, session.courseId, session.subject))
+          ? session
+          : null,
+      ),
+    )
+  ).filter(
+    (session): session is (typeof sessions)[number] => Boolean(session),
+  );
+}
+
+type PublicSessionSource = Pick<
+  typeof sessionsTable.$inferSelect,
+  | "id"
+  | "courseId"
+  | "dateTime"
+  | "timezone"
+  | "subject"
+  | "title"
+  | "status"
+  | "hasHomework"
+  | "hasReport"
+>;
+
+export function publicSessionShape(session: PublicSessionSource) {
+  return {
+    id: session.id,
+    courseId: session.courseId,
+    dateTime: session.dateTime,
+    timezone: session.timezone,
+    subject: session.subject,
+    title: session.title,
+    status: session.status,
+    hasHomework: session.hasHomework,
+    hasReport: session.hasReport,
+  };
+}

@@ -35,6 +35,11 @@ import {
   taitoSessionDateTime,
 } from "../lib/session-schedule";
 import {
+  publicSessionShape,
+  reconcileTaitoSessions,
+  visibleSessionsForUser,
+} from "../lib/session-privacy";
+import {
   createCheckoutSession,
   createHostedInvoice,
   stripeErrorMessage,
@@ -325,94 +330,6 @@ async function ensureSeedData(): Promise<string> {
   );
 
   return course.id;
-}
-
-async function reconcileTaitoSessions(courseId: string): Promise<void> {
-  const [courseSessions, tutorProfiles, users] = await Promise.all([
-    db
-      .select()
-      .from(sessionsTable)
-      .where(eq(sessionsTable.courseId, courseId)),
-    db
-      .select({
-        id: tutorProfilesTable.id,
-        userId: tutorProfilesTable.userId,
-        email: tutorProfilesTable.email,
-        name: tutorProfilesTable.name,
-      })
-      .from(tutorProfilesTable)
-      .where(
-        inArray(tutorProfilesTable.email, [
-          "eunice_chon@berkeley.edu",
-          "nika.raiffe@gmail.com",
-        ]),
-      ),
-    db
-      .select({
-        id: usersTable.id,
-        email: usersTable.email,
-      })
-      .from(usersTable)
-      .where(
-        inArray(usersTable.email, [
-          "taito0525@gmail.com",
-          "eunice_chon@berkeley.edu",
-          "nika.raiffe@gmail.com",
-        ]),
-      ),
-  ]);
-  const student = users.find((user) => user.email === "taito0525@gmail.com");
-  const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
-  for (const session of courseSessions) {
-    const dateKey = session.dateTime.toISOString().slice(0, 10);
-    if (!sessionsByDate.has(dateKey)) sessionsByDate.set(dateKey, session);
-  }
-
-  for (const scheduled of TAITO_FALL_2026_SESSIONS) {
-    const dateTime = taitoSessionDateTime(scheduled.dateKey);
-    const existing = sessionsByDate.get(scheduled.dateKey);
-    const profile = tutorProfiles.find(
-      (candidate) => candidate.email === scheduled.tutorEmail,
-    );
-    const account = users.find(
-      (candidate) => candidate.email === scheduled.tutorEmail,
-    );
-    const tutorUserId =
-      profile?.userId ?? account?.id ?? existing?.tutorUserId ?? null;
-    const clientUserId = student?.id ?? existing?.clientUserId ?? null;
-    const values = {
-      dateTime,
-      timezone: TAITO_SESSION_TIMEZONE,
-      subject: scheduled.subject,
-      title: sessionTitle(scheduled.subject, scheduled.tutorName),
-      status: "published" as const,
-      durationMinutes: 60,
-      hasHomework: scheduled.subject === "SAT",
-      tutorUserId,
-      clientUserId,
-    };
-
-    if (existing) {
-      if (
-        existing.providerEventId &&
-        existing.dateTime.getTime() !== dateTime.getTime()
-      ) {
-        throw new Error(
-          `Cannot move Taito session ${existing.id} because it has a provider calendar event.`,
-        );
-      }
-      await db
-        .update(sessionsTable)
-        .set({ ...values, updatedAt: new Date() })
-        .where(eq(sessionsTable.id, existing.id));
-    } else {
-      await db.insert(sessionsTable).values({
-        courseId,
-        ...values,
-        bookingStatus: "confirmed",
-      });
-    }
-  }
 }
 
 async function ensureUpgradeSeedData(): Promise<void> {
@@ -1267,11 +1184,8 @@ async function courseShape(courseId: string, user?: AppUser) {
           .limit(1)
       )[0]
     : null;
-  const sessionsForUser = membership && membership.subject !== "all"
-    ? courseSessions.filter(
-        (session) =>
-          subjectFamily(session.subject) === subjectFamily(membership.subject),
-      )
+  const sessionsForUser = user
+    ? await visibleSessionsForUser(user, course.id)
     : courseSessions;
   const tutorMemberships = await db
     .select({ user: usersTable, subject: courseMembershipsTable.subject })
@@ -3272,7 +3186,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
       goalSummary: course?.goalSummary ?? null,
       sessions: await Promise.all(
         resolvedSessions.map(async (session) => ({
-          ...session,
+          ...publicSessionShape(session),
           tutor: await sessionTutorShape(session),
         })),
       ),
@@ -3287,29 +3201,13 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
   const courses = (
     await Promise.all(ids.map((id) => courseShape(id, user)))
   ).filter(Boolean);
-  const upcomingSessions =
-    ids.length === 0
-      ? []
-      : await db
-          .select()
-          .from(sessionsTable)
-          .where(inArray(sessionsTable.courseId, ids))
-          .orderBy(asc(sessionsTable.dateTime))
-          .limit(12);
   const scopedUpcomingSessions = (
     await Promise.all(
-      upcomingSessions
-        .map(async (session) =>
-          (await canAccessCourse(user, session.courseId, session.subject))
-            ? session
-            : null,
-        ),
+      ids.map((courseId) => visibleSessionsForUser(user, courseId)),
     )
   )
-    .filter(
-      (session): session is (typeof upcomingSessions)[number] =>
-        Boolean(session),
-    )
+    .flat()
+    .sort((left, right) => left.dateTime.getTime() - right.dateTime.getTime())
     .slice(0, 12);
   const assignments =
     ids.length === 0
@@ -3379,7 +3277,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
       courses,
       upcomingSessions: await Promise.all(
         scopedUpcomingSessions.map(async (session) => ({
-          ...session,
+          ...publicSessionShape(session),
           tutor: await sessionTutorShape(session),
         })),
       ),
@@ -3426,7 +3324,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
   );
   res.json(
     GetSessionResponse.parse({
-      ...session,
+      ...publicSessionShape(session),
       tutor: await sessionTutorShape(session),
       blocks:
         req.appUser!.role === "student"
