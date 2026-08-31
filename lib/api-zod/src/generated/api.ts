@@ -630,7 +630,9 @@ export const GetDashboardResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "attemptCount": zod.number(),
   "maxAttempts": zod.number(),
-  "latestScore": zod.number().nullish()
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })),
   "recentScores": zod.array(zod.object({
   "label": zod.string(),
@@ -930,7 +932,9 @@ export const GetSessionResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "attemptCount": zod.number(),
   "maxAttempts": zod.number(),
-  "latestScore": zod.number().nullish()
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })),
   "studentNotes": zod.string().nullish(),
   "tutorNotes": zod.string().nullish(),
@@ -1015,7 +1019,9 @@ export const ListAssignmentsResponseItem = zod.object({
   "timeLimitMinutes": zod.number(),
   "attemptCount": zod.number(),
   "maxAttempts": zod.number(),
-  "latestScore": zod.number().nullish()
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })
 export const ListAssignmentsResponse = zod.array(ListAssignmentsResponseItem)
 
@@ -1037,7 +1043,9 @@ export const GetAssignmentResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "attemptCount": zod.number(),
   "maxAttempts": zod.number(),
-  "latestScore": zod.number().nullish()
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 }).and(zod.object({
   "instructions": zod.string(),
   "questions": zod.array(zod.object({
@@ -1074,6 +1082,7 @@ export const StartAttemptResponse = zod.object({
   "activeSeconds": zod.number(),
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
+  "remainingSeconds": zod.number(),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -1085,7 +1094,56 @@ export const StartAttemptResponse = zod.object({
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
+})).optional(),
+  "result": zod.object({
+  "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
+  "score": zod.number(),
+  "correctCount": zod.number(),
+  "totalCount": zod.number(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "breakdown": zod.array(zod.object({
+  "skill": zod.string(),
+  "correct": zod.number(),
+  "total": zod.number(),
+  "accuracy": zod.number().optional()
+})),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
 })).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
+}).nullish()
 })
 
 
@@ -1104,6 +1162,7 @@ export const GetAttemptResponse = zod.object({
   "activeSeconds": zod.number(),
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
+  "remainingSeconds": zod.number(),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -1115,7 +1174,181 @@ export const GetAttemptResponse = zod.object({
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
+})).optional(),
+  "result": zod.object({
+  "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
+  "score": zod.number(),
+  "correctCount": zod.number(),
+  "totalCount": zod.number(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "breakdown": zod.array(zod.object({
+  "skill": zod.string(),
+  "correct": zod.number(),
+  "total": zod.number(),
+  "accuracy": zod.number().optional()
+})),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
 })).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
+}).nullish()
+})
+
+
+/**
+ * @summary Get the permanently stored result and feedback for an attempt
+ */
+export const GetAttemptResultParams = zod.object({
+  "attemptId": zod.coerce.string()
+})
+
+export const GetAttemptResultResponse = zod.object({
+  "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
+  "score": zod.number(),
+  "correctCount": zod.number(),
+  "totalCount": zod.number(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "breakdown": zod.array(zod.object({
+  "skill": zod.string(),
+  "correct": zod.number(),
+  "total": zod.number(),
+  "accuracy": zod.number().optional()
+})),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
+})
+
+
+/**
+ * @summary Update tutor review status and private notes for a submitted attempt
+ */
+export const UpdateAttemptReviewParams = zod.object({
+  "attemptId": zod.coerce.string()
+})
+
+export const updateAttemptReviewBodyTutorNotesMax = 10000;
+
+
+
+export const UpdateAttemptReviewBody = zod.object({
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
+  "tutorNotes": zod.string().max(updateAttemptReviewBodyTutorNotesMax).nullish()
+})
+
+export const UpdateAttemptReviewResponse = zod.object({
+  "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
+  "score": zod.number(),
+  "correctCount": zod.number(),
+  "totalCount": zod.number(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "breakdown": zod.array(zod.object({
+  "skill": zod.string(),
+  "correct": zod.number(),
+  "total": zod.number(),
+  "accuracy": zod.number().optional()
+})),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
 })
 
 
@@ -1168,6 +1401,7 @@ export const PauseAttemptResponse = zod.object({
   "activeSeconds": zod.number(),
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
+  "remainingSeconds": zod.number(),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -1179,53 +1413,11 @@ export const PauseAttemptResponse = zod.object({
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
-})).optional()
-})
-
-
-/**
- * @summary Resume a paused attempt
- */
-export const ResumeAttemptParams = zod.object({
-  "attemptId": zod.coerce.string()
-})
-
-export const ResumeAttemptResponse = zod.object({
-  "id": zod.string(),
-  "assignmentId": zod.string(),
-  "status": zod.enum(['active', 'paused', 'submitted', 'expired']),
-  "startedAt": zod.coerce.date(),
-  "activeSeconds": zod.number(),
-  "pausedSeconds": zod.number(),
-  "pauseCount": zod.number(),
-  "responses": zod.array(zod.object({
-  "questionId": zod.string(),
-  "prediction": zod.string().nullable(),
-  "predictionLocked": zod.boolean(),
-  "finalAnswer": zod.string().nullable(),
-  "flagged": zod.boolean(),
-  "savedAt": zod.coerce.date().optional()
-})),
-  "timerEvents": zod.array(zod.object({
-  "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
-  "at": zod.coerce.date()
-})).optional()
-})
-
-
-/**
- * @summary Submit and grade an attempt
- */
-export const SubmitAttemptParams = zod.object({
-  "attemptId": zod.coerce.string()
-})
-
-export const SubmitAttemptBody = zod.object({
-  "confirm": zod.boolean()
-})
-
-export const SubmitAttemptResponse = zod.object({
+})).optional(),
+  "result": zod.object({
   "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
   "correctCount": zod.number(),
   "totalCount": zod.number(),
@@ -1248,8 +1440,171 @@ export const SubmitAttemptResponse = zod.object({
   "questionType": zod.string().optional(),
   "difficulty": zod.string().optional(),
   "timeSpentSeconds": zod.number().optional(),
-  "flagged": zod.boolean()
-}))
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
+}).nullish()
+})
+
+
+/**
+ * @summary Resume a paused attempt
+ */
+export const ResumeAttemptParams = zod.object({
+  "attemptId": zod.coerce.string()
+})
+
+export const ResumeAttemptResponse = zod.object({
+  "id": zod.string(),
+  "assignmentId": zod.string(),
+  "status": zod.enum(['active', 'paused', 'submitted', 'expired']),
+  "startedAt": zod.coerce.date(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "pauseCount": zod.number(),
+  "remainingSeconds": zod.number(),
+  "responses": zod.array(zod.object({
+  "questionId": zod.string(),
+  "prediction": zod.string().nullable(),
+  "predictionLocked": zod.boolean(),
+  "finalAnswer": zod.string().nullable(),
+  "flagged": zod.boolean(),
+  "savedAt": zod.coerce.date().optional()
+})),
+  "timerEvents": zod.array(zod.object({
+  "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
+  "at": zod.coerce.date()
+})).optional(),
+  "result": zod.object({
+  "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
+  "score": zod.number(),
+  "correctCount": zod.number(),
+  "totalCount": zod.number(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "breakdown": zod.array(zod.object({
+  "skill": zod.string(),
+  "correct": zod.number(),
+  "total": zod.number(),
+  "accuracy": zod.number().optional()
+})),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
+}).nullish()
+})
+
+
+/**
+ * @summary Submit and grade an attempt
+ */
+export const SubmitAttemptParams = zod.object({
+  "attemptId": zod.coerce.string()
+})
+
+export const SubmitAttemptBody = zod.object({
+  "confirm": zod.boolean()
+})
+
+export const SubmitAttemptResponse = zod.object({
+  "attemptId": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "submittedAt": zod.coerce.date().nullish(),
+  "score": zod.number(),
+  "correctCount": zod.number(),
+  "totalCount": zod.number(),
+  "activeSeconds": zod.number(),
+  "pausedSeconds": zod.number(),
+  "breakdown": zod.array(zod.object({
+  "skill": zod.string(),
+  "correct": zod.number(),
+  "total": zod.number(),
+  "accuracy": zod.number().optional()
+})),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional()
+})),
+  "analysis": zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),
+  "studentFeedback": zod.string(),
+  "tutorNotes": zod.string().nullish(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional()
 })
 
 
@@ -1269,6 +1624,25 @@ export const ListReviewQueueResponseItem = zod.object({
   "tutorNote": zod.string().nullish()
 })
 export const ListReviewQueueResponse = zod.array(ListReviewQueueResponseItem)
+
+
+/**
+ * @summary List submitted SAT attempts for tutor review
+ */
+export const ListReviewSubmissionsResponseItem = zod.object({
+  "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "score": zod.number(),
+  "submittedAt": zod.coerce.date(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
+  "mistakeCount": zod.number().optional(),
+  "tutorNotes": zod.string().nullish()
+})
+export const ListReviewSubmissionsResponse = zod.array(ListReviewSubmissionsResponseItem)
 
 
 /**

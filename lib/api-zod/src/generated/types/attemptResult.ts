@@ -5,11 +5,17 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AttemptAnalysis } from './attemptAnalysis';
 import type { AttemptResultItem } from './attemptResultItem';
+import type { AttemptResultReviewStatus } from './attemptResultReviewStatus';
+import type { AttemptResultStatus } from './attemptResultStatus';
 import type { ScoreBreakdown } from './scoreBreakdown';
 
 export interface AttemptResult {
   attemptId: string;
+  status: AttemptResultStatus;
+  /** @nullable */
+  submittedAt?: Date | null;
   score: number;
   correctCount: number;
   totalCount: number;
@@ -17,4 +23,9 @@ export interface AttemptResult {
   pausedSeconds: number;
   breakdown: ScoreBreakdown[];
   items: AttemptResultItem[];
+  analysis: AttemptAnalysis;
+  studentFeedback: string;
+  /** @nullable */
+  tutorNotes?: string | null;
+  reviewStatus?: AttemptResultReviewStatus;
 }

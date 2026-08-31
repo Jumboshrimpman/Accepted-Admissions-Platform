@@ -1,5 +1,5 @@
 {
-  "id": "31173376-1e70-4e45-a44c-818dba971b0e",
+  "id": "57905d86-10e7-4d65-99c9-feee631ef398",
   "prevId": "344ec6b3-aa97-4e63-a326-481138f9a224",
   "version": "7",
   "dialect": "postgresql",
@@ -240,6 +240,13 @@
           "notNull": true,
           "default": "'active'"
         },
+        "review_status": {
+          "name": "review_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'new'"
+        },
         "started_at": {
           "name": "started_at",
           "type": "timestamp with time zone",
@@ -256,6 +263,30 @@
         "score": {
           "name": "score",
           "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "analysis": {
+          "name": "analysis",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "student_feedback": {
+          "name": "student_feedback",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tutor_notes": {
+          "name": "tutor_notes",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -1326,48 +1357,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "issuer_name": {
-          "name": "issuer_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'Accepted Admissions'"
-        },
-        "issuer_email": {
-          "name": "issuer_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "issuer_address": {
-          "name": "issuer_address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "client_name": {
-          "name": "client_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "client_email": {
-          "name": "client_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "line_items": {
-          "name": "line_items",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
         "subtotal_cents": {
           "name": "subtotal_cents",
           "type": "numeric",
@@ -1381,34 +1370,14 @@
           "notNull": true,
           "default": 0
         },
-        "tax_cents": {
-          "name": "tax_cents",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "total_cents": {
           "name": "total_cents",
           "type": "numeric",
           "primaryKey": false,
           "notNull": true
         },
-        "payment_instructions": {
-          "name": "payment_instructions",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
         "hosted_invoice_url": {
           "name": "hosted_invoice_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "receipt_url": {
-          "name": "receipt_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1425,28 +1394,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "audit_metadata": {
-          "name": "audit_metadata",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -1461,19 +1410,6 @@
           "tableTo": "users",
           "columnsFrom": [
             "client_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "invoices_created_by_users_id_fk": {
-          "name": "invoices_created_by_users_id_fk",
-          "tableFrom": "invoices",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
           ],
           "columnsTo": [
             "id"
@@ -1665,25 +1601,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "receipt_url": {
-          "name": "receipt_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "verified_at": {
-          "name": "verified_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "audit_metadata": {
-          "name": "audit_metadata",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
         },
         "paid_at": {
           "name": "paid_at",

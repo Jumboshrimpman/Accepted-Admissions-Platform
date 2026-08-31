@@ -160,7 +160,10 @@ export default function PortalSession() {
                     <p className="font-medium text-sm mb-2">{assignment.title}</p>
                     <Link href={`/portal/assignments/${assignment.id}`}>
                       <Button size="sm" className="w-full bg-accent hover:bg-accent/90 text-white rounded-full">
-                        Start
+                        {assignment.latestAttemptStatus === "submitted" ||
+                        assignment.latestAttemptStatus === "expired"
+                          ? "View result"
+                          : "Start"}
                       </Button>
                     </Link>
                   </div>

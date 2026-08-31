@@ -209,9 +209,14 @@ export const attemptsTable = pgTable("attempts", {
   assignmentId: uuid("assignment_id").notNull().references(() => assignmentsTable.id),
   userId: uuid("user_id").notNull().references(() => usersTable.id),
   status: attemptStatusEnum("status").notNull().default("active"),
+  reviewStatus: text("review_status").notNull().default("new"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
   score: numeric("score", { mode: "number" }),
+  result: jsonb("result").$type<Record<string, unknown> | null>(),
+  analysis: jsonb("analysis").$type<Record<string, unknown> | null>(),
+  studentFeedback: text("student_feedback"),
+  tutorNotes: text("tutor_notes"),
 });
 
 export const responsesTable = pgTable(

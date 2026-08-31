@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttemptResponse } from './attemptResponse';
+import type { AttemptResult } from './attemptResult';
 import type { AttemptStatus } from './attemptStatus';
 import type { TimerEvent } from './timerEvent';
 
@@ -17,6 +18,8 @@ export interface Attempt {
   activeSeconds: number;
   pausedSeconds: number;
   pauseCount: number;
+  remainingSeconds: number;
   responses: AttemptResponse[];
   timerEvents?: TimerEvent[];
+  result?: AttemptResult | null;
 }

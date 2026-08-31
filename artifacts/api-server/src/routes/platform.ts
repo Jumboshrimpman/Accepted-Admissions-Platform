@@ -61,6 +61,8 @@ import {
   GetAssignmentResponse,
   GetAttemptParams,
   GetAttemptResponse,
+  GetAttemptResultParams,
+  GetAttemptResultResponse,
   GetCourseParams,
   GetCourseResponse,
   GetCurrentUserResponse,
@@ -75,6 +77,7 @@ import {
   ListQuestionBankQueryParams,
   ListQuestionBankResponse,
   ListReviewQueueResponse,
+  ListReviewSubmissionsResponse,
   ListSessionArtifactsParams,
   ListSessionArtifactsResponse,
   UpdateQuestionBankItemBody,
@@ -92,6 +95,9 @@ import {
   SubmitAttemptBody,
   SubmitAttemptParams,
   SubmitAttemptResponse,
+  UpdateAttemptReviewBody,
+  UpdateAttemptReviewParams,
+  UpdateAttemptReviewResponse,
   UpdateCurriculumBlockBody,
   UpdateCurriculumBlockParams,
   UpdateCurriculumBlockResponse,
@@ -167,6 +173,540 @@ function publicAppOrigin(): string {
   throw new Error("APP_ORIGIN must be configured for hosted payment redirects");
 }
 
+const SAT_DIAGNOSTIC_QUESTIONS = [
+  {
+    prompt: "Which choice most effectively combines the sentences while maintaining standard English conventions?",
+    stimulus:
+      "The community archive contains letters, maps, and photographs from the town's earliest residents. Together, these materials reveal how the waterfront changed over time.",
+    domain: "Standard English Conventions",
+    skill: "Boundaries",
+    difficulty: "medium",
+    choices: [
+      { id: "a", label: "A", text: "residents, together these" },
+      { id: "b", label: "B", text: "residents; together, these" },
+      { id: "c", label: "C", text: "residents together these" },
+      { id: "d", label: "D", text: "residents: together these" },
+    ],
+    correctAnswer: "b",
+    explanation:
+      "A semicolon correctly joins two independent clauses, and the introductory adverb is followed by a comma.",
+  },
+  {
+    prompt: "Which conclusion is best supported by the study?",
+    stimulus:
+      "In a greenhouse study, seedlings receiving six hours of filtered light grew taller than seedlings receiving six hours of direct light, while both groups received equal water and nutrients.",
+    domain: "Information and Ideas",
+    skill: "Command of Evidence",
+    difficulty: "hard",
+    choices: [
+      { id: "a", label: "A", text: "Filtered light always improves plant health." },
+      { id: "b", label: "B", text: "Water affected the groups differently." },
+      { id: "c", label: "C", text: "Light conditions may influence seedling height." },
+      { id: "d", label: "D", text: "Direct light prevents all seedling growth." },
+    ],
+    correctAnswer: "c",
+    explanation:
+      "The controlled comparison supports a limited conclusion about a possible relationship between light conditions and height.",
+  },
+  {
+    prompt: "Which choice completes the text with the most logical transition?",
+    stimulus:
+      "The first prototype was inexpensive to produce. _____, it was too fragile for repeated classroom use.",
+    domain: "Expression of Ideas",
+    skill: "Transitions",
+    difficulty: "medium",
+    choices: [
+      { id: "a", label: "A", text: "Similarly" },
+      { id: "b", label: "B", text: "However" },
+      { id: "c", label: "C", text: "For example" },
+      { id: "d", label: "D", text: "Therefore" },
+    ],
+    correctAnswer: "b",
+    explanation:
+      "The second sentence contrasts the prototype's low cost with its lack of durability, so “However” is logical.",
+  },
+  {
+    prompt: "Which choice completes the text so that it conforms to the conventions of Standard English?",
+    stimulus:
+      "The museum's new exhibit features three artists _____ work explores migration and memory.",
+    domain: "Standard English Conventions",
+    skill: "Form, Structure, and Sense",
+    difficulty: "medium",
+    choices: [
+      { id: "a", label: "A", text: "who's" },
+      { id: "b", label: "B", text: "whose" },
+      { id: "c", label: "C", text: "whom's" },
+      { id: "d", label: "D", text: "who" },
+    ],
+    correctAnswer: "b",
+    explanation: "The possessive relative pronoun “whose” correctly describes the artists' work.",
+  },
+  {
+    prompt: "Which choice most effectively states the main idea of the text?",
+    stimulus:
+      "Rather than replacing the old footbridge, residents repaired its supports and added a ramp. The project preserved a familiar landmark while making the crossing safer for more people.",
+    domain: "Information and Ideas",
+    skill: "Central Ideas and Details",
+    difficulty: "foundational",
+    choices: [
+      { id: "a", label: "A", text: "A landmark was removed after years of neglect." },
+      { id: "b", label: "B", text: "Residents balanced preservation with improved access." },
+      { id: "c", label: "C", text: "The footbridge was moved to a new location." },
+      { id: "d", label: "D", text: "Only visitors use the repaired footbridge." },
+    ],
+    correctAnswer: "b",
+    explanation:
+      "The text emphasizes both preserving the bridge and improving its safety and accessibility.",
+  },
+  {
+    prompt: "Which choice completes the text with the most logical transition?",
+    stimulus:
+      "The first trial used recycled paper. _____, the research team tested a version made from agricultural waste.",
+    domain: "Expression of Ideas",
+    skill: "Transitions",
+    difficulty: "medium",
+    choices: [
+      { id: "a", label: "A", text: "In contrast" },
+      { id: "b", label: "B", text: "Next" },
+      { id: "c", label: "C", text: "For instance" },
+      { id: "d", label: "D", text: "Nevertheless" },
+    ],
+    correctAnswer: "b",
+    explanation: "“Next” clearly signals the subsequent step in the team's testing process.",
+  },
+  {
+    prompt: "Which choice best describes the function of the sentence in the text as a whole?",
+    stimulus:
+      "Many coastal plants tolerate salt in the soil. This adaptation allows them to survive where freshwater species cannot.",
+    domain: "Information and Ideas",
+    skill: "Text Structure and Purpose",
+    difficulty: "hard",
+    choices: [
+      { id: "a", label: "A", text: "It introduces a problem that the next sentence disproves." },
+      { id: "b", label: "B", text: "It gives an example that clarifies a broader claim." },
+      { id: "c", label: "C", text: "It presents a counterargument to the study." },
+      { id: "d", label: "D", text: "It lists two unrelated observations." },
+    ],
+    correctAnswer: "b",
+    explanation:
+      "The second sentence explains why salt tolerance matters, clarifying the observation in the first sentence.",
+  },
+  {
+    prompt: "Which choice completes the text so that it conforms to the conventions of Standard English?",
+    stimulus:
+      "The solar panels, installed on the library's roof last spring, _____ enough electricity to power the reading room.",
+    domain: "Standard English Conventions",
+    skill: "Subject-Verb Agreement",
+    difficulty: "foundational",
+    choices: [
+      { id: "a", label: "A", text: "generates" },
+      { id: "b", label: "B", text: "generate" },
+      { id: "c", label: "C", text: "is generating" },
+      { id: "d", label: "D", text: "has generated" },
+    ],
+    correctAnswer: "b",
+    explanation: "The plural subject “panels” takes the plural verb “generate.”",
+  },
+  {
+    prompt: "Which choice most logically completes the text?",
+    stimulus:
+      "The city tested two designs for a protected bike lane. The design with a planted divider received more favorable safety ratings from riders.",
+    domain: "Information and Ideas",
+    skill: "Inferences",
+    difficulty: "medium",
+    choices: [
+      { id: "a", label: "A", text: "Riders preferred the design with a planted divider." },
+      { id: "b", label: "B", text: "The city ended all bicycle programs." },
+      { id: "c", label: "C", text: "Planting trees always reduces traffic." },
+      { id: "d", label: "D", text: "Both designs received identical ratings." },
+    ],
+    correctAnswer: "a",
+    explanation:
+      "More favorable ratings indicate that riders preferred the protected-lane design with a planted divider.",
+  },
+  {
+    prompt: "Which choice completes the text with the most logical transition?",
+    stimulus:
+      "The recipe requires only four ingredients. _____, the finished dish has a complex flavor.",
+    domain: "Expression of Ideas",
+    skill: "Transitions",
+    difficulty: "medium",
+    choices: [
+      { id: "a", label: "A", text: "As a result" },
+      { id: "b", label: "B", text: "In addition" },
+      { id: "c", label: "C", text: "Even so" },
+      { id: "d", label: "D", text: "For example" },
+    ],
+    correctAnswer: "c",
+    explanation:
+      "“Even so” signals the contrast between the recipe's simplicity and the dish's complex flavor.",
+  },
+] as const;
+
+const SAT_HOMEWORK_SETS = [
+  {
+    dateKey: "2026-10-09",
+    title: "SAT Homework — Grammar and Boundaries",
+    instructions:
+      "Complete this original practice set independently. Use your explanations to identify one grammar rule to revisit before the next SAT session.",
+    questions: [
+      {
+        prompt: "The science club meets every Thursday _____ its members often stay late to finish experiments.",
+        domain: "Standard English Conventions",
+        skill: "Boundaries",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "Thursday, its" },
+          { id: "b", label: "B", text: "Thursday; its" },
+          { id: "c", label: "C", text: "Thursday its" },
+          { id: "d", label: "D", text: "Thursday: its" },
+        ],
+        correctAnswer: "b",
+        explanation: "A semicolon joins the two independent clauses.",
+      },
+      {
+        prompt: "The volunteers brought _____ own tools to the restoration project.",
+        domain: "Standard English Conventions",
+        skill: "Form, Structure, and Sense",
+        difficulty: "foundational",
+        choices: [
+          { id: "a", label: "A", text: "there" },
+          { id: "b", label: "B", text: "they're" },
+          { id: "c", label: "C", text: "their" },
+          { id: "d", label: "D", text: "theirs" },
+        ],
+        correctAnswer: "c",
+        explanation: "The possessive determiner “their” modifies “own tools.”",
+      },
+      {
+        prompt: "The new schedule is more flexible _____ it still protects the team's planning time.",
+        domain: "Standard English Conventions",
+        skill: "Boundaries",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "flexible, it" },
+          { id: "b", label: "B", text: "flexible; it" },
+          { id: "c", label: "C", text: "flexible it" },
+          { id: "d", label: "D", text: "flexible: it" },
+        ],
+        correctAnswer: "b",
+        explanation: "The semicolon separates two complete clauses.",
+      },
+      {
+        prompt: "The committee reviewed the proposal carefully and _____ a revised budget.",
+        domain: "Standard English Conventions",
+        skill: "Subject-Verb Agreement",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "recommend" },
+          { id: "b", label: "B", text: "recommends" },
+          { id: "c", label: "C", text: "recommending" },
+          { id: "d", label: "D", text: "has recommend" },
+        ],
+        correctAnswer: "a",
+        explanation: "The plural subject “committee” is treated as a group taking “recommend” here.",
+      },
+    ],
+  },
+  {
+    dateKey: "2026-10-16",
+    title: "SAT Homework — Evidence and Inference",
+    instructions:
+      "Read each original passage closely. Choose the answer supported by the stated evidence rather than by an absolute claim.",
+    questions: [
+      {
+        prompt: "Which conclusion is best supported by the survey?",
+        stimulus: "After the park added shaded benches, afternoon visits increased by 18 percent compared with the previous summer.",
+        domain: "Information and Ideas",
+        skill: "Command of Evidence",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "Shaded benches may have encouraged more afternoon visits." },
+          { id: "b", label: "B", text: "Every resident prefers shaded benches." },
+          { id: "c", label: "C", text: "The benches caused every visit to the park." },
+          { id: "d", label: "D", text: "Afternoon visits never occurred before the change." },
+        ],
+        correctAnswer: "a",
+        explanation: "The comparison supports a cautious possible relationship, not an absolute conclusion.",
+      },
+      {
+        prompt: "Which choice best states the central idea of the text?",
+        stimulus: "A small archive digitized its handwritten maps and added searchable labels. Researchers can now find patterns without handling the fragile originals.",
+        domain: "Information and Ideas",
+        skill: "Central Ideas and Details",
+        difficulty: "foundational",
+        choices: [
+          { id: "a", label: "A", text: "Digitization improved access while protecting fragile maps." },
+          { id: "b", label: "B", text: "Researchers no longer study maps." },
+          { id: "c", label: "C", text: "Handwritten maps are impossible to search." },
+          { id: "d", label: "D", text: "The archive discarded its original collection." },
+        ],
+        correctAnswer: "a",
+        explanation: "The text names both searchable access and protection of the originals.",
+      },
+      {
+        prompt: "What does the phrase “measured optimism” most nearly suggest in the text?",
+        stimulus: "The first results were promising, but the engineers expressed measured optimism until a larger trial could confirm the pattern.",
+        domain: "Information and Ideas",
+        skill: "Words in Context",
+        difficulty: "hard",
+        choices: [
+          { id: "a", label: "A", text: "Confidence tempered by caution" },
+          { id: "b", label: "B", text: "Complete rejection of the results" },
+          { id: "c", label: "C", text: "Excitement unrelated to evidence" },
+          { id: "d", label: "D", text: "Certainty that no trial is needed" },
+        ],
+        correctAnswer: "a",
+        explanation: "The engineers are hopeful but wait for more evidence before drawing a firm conclusion.",
+      },
+      {
+        prompt: "Which choice most logically completes the text?",
+        stimulus: "The town planted native flowers along the creek. By midsummer, the new strip attracted more bees than the mowed grass had.",
+        domain: "Information and Ideas",
+        skill: "Inferences",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "Native flowers may provide a better habitat for bees." },
+          { id: "b", label: "B", text: "Mowed grass is never found near creeks." },
+          { id: "c", label: "C", text: "Bees avoid every kind of flower." },
+          { id: "d", label: "D", text: "The creek became deeper after planting." },
+        ],
+        correctAnswer: "a",
+        explanation: "The observed increase supports a limited inference about habitat.",
+      },
+    ],
+  },
+  {
+    dateKey: "2026-10-30",
+    title: "SAT Homework — Transitions and Purpose",
+    instructions:
+      "Complete this original practice set, then explain how each transition connects the surrounding ideas.",
+    questions: [
+      {
+        prompt: "Which choice completes the text with the most logical transition?",
+        stimulus: "The first design was inexpensive. _____, it required frequent repairs.",
+        domain: "Expression of Ideas",
+        skill: "Transitions",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "However" },
+          { id: "b", label: "B", text: "Likewise" },
+          { id: "c", label: "C", text: "For example" },
+          { id: "d", label: "D", text: "As a result" },
+        ],
+        correctAnswer: "a",
+        explanation: "“However” introduces the contrast between low cost and frequent repairs.",
+      },
+      {
+        prompt: "Which choice completes the text with the most logical transition?",
+        stimulus: "The trail was closed for repairs. _____, hikers used the nearby riverside path.",
+        domain: "Expression of Ideas",
+        skill: "Transitions",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "Nevertheless" },
+          { id: "b", label: "B", text: "As a result" },
+          { id: "c", label: "C", text: "In particular" },
+          { id: "d", label: "D", text: "Similarly" },
+        ],
+        correctAnswer: "b",
+        explanation: "The second sentence is a consequence of the closure.",
+      },
+      {
+        prompt: "What is the primary purpose of the sentence in the text?",
+        stimulus: "The garden's water use fell by a third after drip lines replaced overhead sprinklers.",
+        domain: "Expression of Ideas",
+        skill: "Text Structure and Purpose",
+        difficulty: "hard",
+        choices: [
+          { id: "a", label: "A", text: "To provide evidence of the system's efficiency" },
+          { id: "b", label: "B", text: "To introduce an unrelated concern" },
+          { id: "c", label: "C", text: "To question whether the garden exists" },
+          { id: "d", label: "D", text: "To describe the garden's history" },
+        ],
+        correctAnswer: "a",
+        explanation: "The water-use statistic supports a claim about efficiency.",
+      },
+      {
+        prompt: "Which choice completes the text with the most logical transition?",
+        stimulus: "The team expected the test to take one week. _____, an equipment delay extended it to three weeks.",
+        domain: "Expression of Ideas",
+        skill: "Transitions",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "Instead" },
+          { id: "b", label: "B", text: "For instance" },
+          { id: "c", label: "C", text: "In addition" },
+          { id: "d", label: "D", text: "Similarly" },
+        ],
+        correctAnswer: "a",
+        explanation: "“Instead” signals the actual outcome in contrast to the expectation.",
+      },
+    ],
+  },
+] as const;
+
+type SeedSatQuestion = {
+  prompt: string;
+  stimulus?: string | null;
+  domain: string;
+  skill: string;
+  difficulty: "foundational" | "medium" | "hard";
+  choices: readonly { id: string; label: string; text: string }[];
+  correctAnswer: string;
+  explanation: string;
+};
+
+async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
+  const sessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.courseId, courseId));
+  const satSessions = new Map(
+    sessions
+      .filter((session) => session.subject === "SAT")
+      .map((session) => [session.dateTime.getTime(), session]),
+  );
+
+  async function ensureAssignment(
+    session: typeof sessions[number],
+    title: string,
+    instructions: string,
+    timeLimitMinutes: number,
+    deadline: Date | null,
+    maxAttempts: number,
+    questions: readonly SeedSatQuestion[],
+  ) {
+    let [assignment] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(
+        and(
+          eq(assignmentsTable.courseId, courseId),
+          eq(assignmentsTable.title, title),
+        ),
+      )
+      .limit(1);
+    if (!assignment && title.startsWith("SAT Diagnostic")) {
+      [assignment] = await db
+        .select()
+        .from(assignmentsTable)
+        .where(
+          and(
+            eq(assignmentsTable.courseId, courseId),
+            eq(assignmentsTable.title, "Baseline Reading & Writing Mini-Section"),
+          ),
+        )
+        .limit(1);
+    }
+    if (!assignment) {
+      [assignment] = await db
+        .insert(assignmentsTable)
+        .values({
+          courseId,
+          sessionId: session.id,
+          title,
+          subject: "SAT Reading & Writing",
+          instructions,
+          status: "published",
+          deadline,
+          timeLimitMinutes,
+          maxAttempts,
+        })
+        .returning();
+    } else {
+      [assignment] = await db
+        .update(assignmentsTable)
+        .set({
+          sessionId: session.id,
+          title,
+          instructions,
+          status: "published",
+          deadline,
+          timeLimitMinutes,
+          maxAttempts,
+        })
+        .where(eq(assignmentsTable.id, assignment.id))
+        .returning();
+    }
+    for (const [position, question] of questions.entries()) {
+      let [storedQuestion] = await db
+        .select()
+        .from(questionsTable)
+        .where(eq(questionsTable.prompt, question.prompt))
+        .limit(1);
+      if (!storedQuestion) {
+        [storedQuestion] = await db
+          .insert(questionsTable)
+          .values({
+            subject: "SAT Reading & Writing",
+            domain: question.domain,
+            skill: question.skill,
+            questionType: "multiple_choice",
+            difficulty: question.difficulty,
+            stimulus: "stimulus" in question ? question.stimulus : null,
+            prompt: question.prompt,
+            choices: [...question.choices],
+            correctAnswer: question.correctAnswer,
+            explanation: question.explanation,
+            sourceType: "original",
+            generationMethod: "tutor-authored",
+            reviewStatus: "reviewed",
+            tags: ["sat-original"],
+          })
+          .returning();
+      }
+      const [existingLink] = await db
+        .select({ id: assignmentQuestionsTable.id })
+        .from(assignmentQuestionsTable)
+        .where(
+          and(
+            eq(assignmentQuestionsTable.assignmentId, assignment.id),
+            eq(assignmentQuestionsTable.questionId, storedQuestion.id),
+          ),
+        )
+        .limit(1);
+      if (!existingLink) {
+        await db.insert(assignmentQuestionsTable).values({
+          assignmentId: assignment.id,
+          questionId: storedQuestion.id,
+          position,
+          predictionFirst: position % 3 !== 1,
+        });
+      }
+    }
+  }
+
+  const diagnosticSession = satSessions.get(
+    taitoSessionDateTime("2026-10-02").getTime(),
+  );
+  if (diagnosticSession) {
+    await ensureAssignment(
+      diagnosticSession,
+      "SAT Diagnostic — Reading & Writing",
+      "Complete this original, full timed SAT Reading & Writing diagnostic independently before the October 2 session. Use the result to identify your strongest skills and the next skills to practice.",
+      35,
+      new Date("2026-10-01T12:00:00.000Z"),
+      1,
+      SAT_DIAGNOSTIC_QUESTIONS,
+    );
+  }
+  for (const homework of SAT_HOMEWORK_SETS) {
+    const session = satSessions.get(taitoSessionDateTime(homework.dateKey).getTime());
+    if (session) {
+      await ensureAssignment(
+        session,
+        homework.title,
+        homework.instructions,
+        15,
+        null,
+        2,
+        homework.questions,
+      );
+    }
+  }
+}
+
 async function ensureSeedData(): Promise<string> {
   const [existing] = await db
     .select({ id: coursesTable.id })
@@ -175,6 +715,7 @@ async function ensureSeedData(): Promise<string> {
     .limit(1);
   if (existing) {
     await reconcileTaitoSessions(existing.id);
+    await ensureSatAssessmentSeed(existing.id);
     return existing.id;
   }
 
@@ -329,6 +870,7 @@ async function ensureSeedData(): Promise<string> {
     })),
   );
 
+  await ensureSatAssessmentSeed(course.id);
   return course.id;
 }
 
@@ -1283,12 +1825,15 @@ async function timerSummary(attemptId: string) {
 }
 
 async function attemptShape(attemptId: string) {
-  const [attempt] = await db
-    .select()
+  const [record] = await db
+    .select({ attempt: attemptsTable, timeLimitMinutes: assignmentsTable.timeLimitMinutes })
     .from(attemptsTable)
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
     .where(eq(attemptsTable.id, attemptId))
     .limit(1);
-  if (!attempt) return null;
+  if (!record) return null;
+  const attempt = record.attempt;
+  const timing = await timerSummary(attempt.id);
   const saved = await db
     .select()
     .from(responsesTable)
@@ -1298,7 +1843,15 @@ async function attemptShape(attemptId: string) {
     assignmentId: attempt.assignmentId,
     status: attempt.status,
     startedAt: attempt.startedAt,
-    ...(await timerSummary(attempt.id)),
+    ...timing,
+    remainingSeconds: Math.max(
+      0,
+      record.timeLimitMinutes * 60 - timing.activeSeconds,
+    ),
+    result:
+      attempt.status === "submitted" || attempt.status === "expired"
+        ? await storedAttemptResult(attempt.id)
+        : null,
     responses: saved.map((response) => ({
       questionId: response.questionId,
       prediction: response.prediction,
@@ -1369,6 +1922,234 @@ async function enforceTimeLimit(attemptId: string) {
     return expired;
   }
   return record.attempt;
+}
+
+type AttemptAnalysisPayload = {
+  source: "deterministic" | "provider";
+  label: string;
+  provider: string | null;
+  strengths: string[];
+  weaknesses: string[];
+  mistakePatterns: string[];
+  nextFocus: string[];
+  feedback: string;
+};
+
+type AttemptResultPayload = {
+  attemptId: string;
+  status: "submitted" | "expired";
+  submittedAt: Date | null;
+  score: number;
+  correctCount: number;
+  totalCount: number;
+  activeSeconds: number;
+  pausedSeconds: number;
+  breakdown: Array<{
+    skill: string;
+    correct: number;
+    total: number;
+    accuracy: number;
+  }>;
+  items: Array<{
+    questionId: string;
+    correct: boolean;
+    prediction: string | null;
+    finalAnswer: string | null;
+    correctAnswer: string;
+    explanation: string;
+    skill: string;
+    questionType: string;
+    difficulty: string;
+    timeSpentSeconds: number;
+    flagged: boolean;
+    prompt: string;
+    stimulus: string | null;
+    choices: Array<{ id: string; label: string; text: string }>;
+  }>;
+  analysis: AttemptAnalysisPayload;
+  studentFeedback: string;
+};
+
+async function storedAttemptResult(
+  attemptId: string,
+  includeTutorFields = false,
+) {
+  const [attempt] = await db
+    .select({
+      result: attemptsTable.result,
+      tutorNotes: attemptsTable.tutorNotes,
+      reviewStatus: attemptsTable.reviewStatus,
+    })
+    .from(attemptsTable)
+    .where(eq(attemptsTable.id, attemptId))
+    .limit(1);
+  if (!attempt?.result) return null;
+  return {
+    ...(attempt.result as Record<string, unknown>),
+    ...(includeTutorFields
+      ? {
+          tutorNotes: attempt.tutorNotes,
+          reviewStatus: attempt.reviewStatus,
+        }
+      : {}),
+  };
+}
+
+function deterministicAnalysis(
+  breakdown: AttemptResultPayload["breakdown"],
+  items: AttemptResultPayload["items"],
+  score: number,
+): AttemptAnalysisPayload {
+  const strengths = breakdown
+    .filter((skill) => skill.accuracy >= 80)
+    .sort((a, b) => b.accuracy - a.accuracy)
+    .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% accuracy)`);
+  const weaknesses = breakdown
+    .filter((skill) => skill.accuracy < 80)
+    .sort((a, b) => a.accuracy - b.accuracy)
+    .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% accuracy)`);
+  const mistakesBySkill = new Map<string, number>();
+  for (const item of items) {
+    if (!item.correct) {
+      mistakesBySkill.set(item.skill, (mistakesBySkill.get(item.skill) ?? 0) + 1);
+    }
+  }
+  const mistakePatterns = [...mistakesBySkill.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([skill, count]) =>
+      `${skill}: ${count} ${count === 1 ? "miss" : "misses"}${items.some((item) => !item.correct && item.skill === skill && !item.finalAnswer) ? " or unanswered item" : ""}`,
+    );
+  const nextFocus = (weaknesses.length > 0
+    ? weaknesses
+    : strengths.slice().reverse()
+  )
+    .slice(0, 3)
+    .map((skill) => skill.replace(/ \(\d+% accuracy\)$/, ""));
+  if (nextFocus.length === 0) nextFocus.push("Keep practicing mixed SAT Reading & Writing sets.");
+  const feedback =
+    score >= 80
+      ? "You are building a strong foundation. Keep your accuracy steady while practicing under the time limit."
+      : score >= 60
+        ? "You have a useful foundation. Review the focus areas below, then retry a short mixed set under time."
+        : "Start with the focus areas below and explain each missed answer before moving to another timed set.";
+  return {
+    source: "deterministic",
+    label: "Deterministic skill analysis",
+    provider: null,
+    strengths: strengths.length > 0 ? strengths : ["No skill reached 80% yet; every item gives us a useful starting point."],
+    weaknesses: weaknesses.length > 0 ? weaknesses : ["No major weakness identified in this set."],
+    mistakePatterns: mistakePatterns.length > 0 ? mistakePatterns : ["No incorrect responses in this attempt."],
+    nextFocus,
+    feedback,
+  };
+}
+
+async function finalizeAttemptResult(
+  attemptId: string,
+  status: "submitted" | "expired",
+): Promise<AttemptResultPayload | null> {
+  const [attempt] = await db
+    .select()
+    .from(attemptsTable)
+    .where(eq(attemptsTable.id, attemptId))
+    .limit(1);
+  if (!attempt) return null;
+  if (attempt.result) return attempt.result as AttemptResultPayload;
+
+  const assignedQuestions = await db
+    .select({ question: questionsTable })
+    .from(assignmentQuestionsTable)
+    .innerJoin(
+      questionsTable,
+      eq(questionsTable.id, assignmentQuestionsTable.questionId),
+    )
+    .where(eq(assignmentQuestionsTable.assignmentId, attempt.assignmentId))
+    .orderBy(asc(assignmentQuestionsTable.position));
+  const submittedResponses = await db
+    .select()
+    .from(responsesTable)
+    .where(eq(responsesTable.attemptId, attempt.id));
+  const joined = assignedQuestions.map(({ question }) => ({
+    question,
+    response:
+      submittedResponses.find((response) => response.questionId === question.id) ??
+      null,
+  }));
+  let correctCount = 0;
+  for (const item of joined) {
+    const correct = item.response?.finalAnswer === item.question.correctAnswer;
+    if (correct) correctCount += 1;
+    if (item.response) {
+      await db
+        .update(responsesTable)
+        .set({ correct })
+        .where(eq(responsesTable.id, item.response.id));
+    }
+  }
+  const totalCount = joined.length;
+  const score = totalCount === 0 ? 0 : (correctCount / totalCount) * 100;
+  const timing = await timerSummary(attempt.id);
+  const bySkill = new Map<string, { correct: number; total: number }>();
+  for (const item of joined) {
+    const current = bySkill.get(item.question.skill) ?? { correct: 0, total: 0 };
+    current.total += 1;
+    if (item.response?.finalAnswer === item.question.correctAnswer) current.correct += 1;
+    bySkill.set(item.question.skill, current);
+  }
+  const breakdown = [...bySkill.entries()].map(([skill, value]) => ({
+    skill,
+    ...value,
+    accuracy: value.total === 0 ? 0 : (value.correct / value.total) * 100,
+  }));
+  const items = joined.map(({ response, question }) => ({
+    questionId: question.id,
+    correct: response?.finalAnswer === question.correctAnswer,
+    prediction: response?.prediction ?? null,
+    finalAnswer: response?.finalAnswer ?? null,
+    correctAnswer: question.correctAnswer,
+    explanation: question.explanation,
+    skill: question.skill,
+    questionType: question.questionType,
+    difficulty: question.difficulty,
+    timeSpentSeconds: response?.timeSpentSeconds ?? 0,
+    flagged: response?.flagged ?? false,
+    prompt: question.prompt,
+    stimulus: question.stimulus,
+    choices: question.choices,
+  }));
+  const analysis = deterministicAnalysis(breakdown, items, score);
+  const result: AttemptResultPayload = {
+    attemptId: attempt.id,
+    status,
+    submittedAt: new Date(),
+    score,
+    correctCount,
+    totalCount,
+    activeSeconds: timing.activeSeconds,
+    pausedSeconds: timing.pausedSeconds,
+    breakdown,
+    items,
+    analysis,
+    studentFeedback: analysis.feedback,
+  };
+  await db
+    .update(attemptsTable)
+    .set({
+      status,
+      submittedAt: result.submittedAt,
+      score,
+      result,
+      analysis,
+      studentFeedback: analysis.feedback,
+      reviewStatus: "new",
+    })
+    .where(eq(attemptsTable.id, attempt.id));
+  if (status === "submitted") {
+    await db
+      .insert(timerEventsTable)
+      .values({ attemptId: attempt.id, type: "submitted" });
+  }
+  return result;
 }
 
 const requestRateLimit = new Map<string, number>();
@@ -3772,7 +4553,9 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
     )
   ).filter(
     (assignment): assignment is (typeof assignments)[number] =>
-      Boolean(assignment),
+      assignment !== null &&
+      (user.role !== "student" ||
+        (assignment.status !== "draft" && assignment.status !== "archived")),
   );
   const assignmentIds = scopedAssignments.map((item) => item.id);
   const counts =
@@ -3919,8 +4702,15 @@ async function assignmentSummariesForUser(
   ).filter(
     (assignment): assignment is (typeof rows)[number] => Boolean(assignment),
   );
+  const subjectUserId = await dataSubjectUserId(user);
   return Promise.all(
     scopedRows.map(async (assignment) => {
+      if (
+        user.role === "student" &&
+        (assignment.status === "draft" || assignment.status === "archived")
+      ) {
+        return null;
+      }
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(assignmentQuestionsTable)
@@ -3931,7 +4721,7 @@ async function assignmentSummariesForUser(
         .where(
           and(
             eq(attemptsTable.assignmentId, assignment.id),
-              eq(attemptsTable.userId, await dataSubjectUserId(user)),
+              eq(attemptsTable.userId, subjectUserId),
           ),
         )
         .orderBy(desc(attemptsTable.startedAt));
@@ -3946,8 +4736,12 @@ async function assignmentSummariesForUser(
         attemptCount: attempts.length,
         maxAttempts: assignment.maxAttempts,
         latestScore: attempts[0]?.score ?? null,
+        latestAttemptId: attempts[0]?.id ?? null,
+        latestAttemptStatus: attempts[0]?.status ?? null,
       };
     }),
+  ).then((items) =>
+    items.filter((item): item is NonNullable<typeof item> => item !== null),
   );
 }
 
@@ -3962,7 +4756,10 @@ router.get("/assignments", async (req: AuthedRequest, res): Promise<void> => {
     query.data.courseId,
   );
   if (query.data.status) {
-    assignments = assignments.filter((item) => item.status === query.data.status);
+    assignments = assignments.filter(
+      (item): item is NonNullable<typeof item> =>
+        item !== null && item.status === query.data.status,
+    );
   }
   res.json(ListAssignmentsResponse.parse(assignments));
 });
@@ -3986,6 +4783,8 @@ router.get(
         assignment.courseId,
         assignment.subject,
       ))
+      || (req.appUser!.role === "student" &&
+        (assignment.status === "draft" || assignment.status === "archived"))
     ) {
       res.status(404).json({ error: "Assignment not found" });
       return;
@@ -4008,7 +4807,7 @@ router.get(
       .where(
         and(
           eq(attemptsTable.assignmentId, assignment.id),
-          eq(attemptsTable.userId, req.appUser!.id),
+          eq(attemptsTable.userId, await dataSubjectUserId(req.appUser!)),
         ),
       )
       .orderBy(desc(attemptsTable.startedAt))
@@ -4021,7 +4820,10 @@ router.get(
       : [];
     const summary = (
       await assignmentSummariesForUser(req.appUser!, assignment.courseId)
-    ).find((item) => item.id === assignment.id)!;
+    ).find(
+      (item): item is NonNullable<typeof item> =>
+        item !== null && item.id === assignment.id,
+    )!;
     res.json(
       GetAssignmentResponse.parse({
         ...summary,
@@ -4072,6 +4874,28 @@ router.post(
       ))
     ) {
       res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    if (req.appUser!.role !== "student") {
+      res.status(403).json({ error: "Only students can start assignments" });
+      return;
+    }
+    if (assignment.status !== "published") {
+      res.status(409).json({ error: "This assignment is not available to start" });
+      return;
+    }
+    const unreviewedQuestions = await db
+      .select({ id: questionsTable.id, reviewStatus: questionsTable.reviewStatus })
+      .from(assignmentQuestionsTable)
+      .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+      .where(
+        and(
+          eq(assignmentQuestionsTable.assignmentId, assignment.id),
+          sql`${questionsTable.reviewStatus} NOT IN ('reviewed', 'approved')`,
+        ),
+      );
+    if (unreviewedQuestions.length > 0) {
+      res.status(409).json({ error: "This assignment contains unpublished questions" });
       return;
     }
     if (assignment.deadline && assignment.deadline.getTime() < Date.now()) {
@@ -4126,8 +4950,39 @@ router.get("/attempts/:attemptId", async (req: AuthedRequest, res): Promise<void
     res.status(404).json({ error: "Attempt not found" });
     return;
   }
+  if (attempt.status === "expired" && !attempt.result) {
+    await finalizeAttemptResult(attempt.id, "expired");
+  }
   res.json(GetAttemptResponse.parse(await attemptShape(attempt.id)));
 });
+
+router.get(
+  "/attempts/:attemptId/result",
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = GetAttemptResultParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const access = await canAccessAttempt(req.appUser!, params.data.attemptId);
+    if (!access) {
+      res.status(404).json({ error: "Attempt result not found" });
+      return;
+    }
+    if (access.attempt.status === "expired" && !access.attempt.result) {
+      await finalizeAttemptResult(access.attempt.id, "expired");
+    }
+    const result = await storedAttemptResult(
+      params.data.attemptId,
+      req.appUser!.role === "tutor" || req.appUser!.role === "administrator",
+    );
+    if (!result) {
+      res.status(404).json({ error: "Attempt result not found" });
+      return;
+    }
+    res.json(GetAttemptResultResponse.parse(result));
+  },
+);
 
 router.put(
   "/attempts/:attemptId/responses",
@@ -4304,104 +5159,143 @@ router.post(
       .select()
       .from(attemptsTable)
       .where(eq(attemptsTable.id, params.data.attemptId));
-    if (
-      !attempt ||
-      attempt.userId !== req.appUser!.id ||
-      attempt.status === "submitted"
-    ) {
+    if (!attempt || attempt.userId !== req.appUser!.id) {
       res.status(409).json({ error: "Attempt cannot be submitted" });
       return;
     }
-    if ((await enforceTimeLimit(attempt.id))?.status === "expired") {
-      res.status(409).json({ error: "Time limit reached" });
+    if (attempt.status === "submitted") {
+      const stored = await storedAttemptResult(attempt.id);
+      if (stored) {
+        res.json(SubmitAttemptResponse.parse(stored));
+      } else {
+        res.status(409).json({ error: "Attempt result is unavailable" });
+      }
       return;
     }
-    const assignedQuestions = await db
-      .select({ question: questionsTable })
-      .from(assignmentQuestionsTable)
-      .innerJoin(
-        questionsTable,
-        eq(questionsTable.id, assignmentQuestionsTable.questionId),
+    const currentAttempt = await enforceTimeLimit(attempt.id);
+    if (!currentAttempt) {
+      res.status(409).json({ error: "Attempt cannot be submitted" });
+      return;
+    }
+    const resultStatus = currentAttempt.status === "expired" ? "expired" : "submitted";
+    const result = await finalizeAttemptResult(attempt.id, resultStatus);
+    if (!result) {
+      res.status(409).json({ error: "Attempt result could not be created" });
+      return;
+    }
+    res.json(SubmitAttemptResponse.parse(result));
+  },
+);
+
+router.get(
+  "/review-submissions",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const courseIds = await visibleCourseIds(req.appUser!);
+    const rows =
+      courseIds.length === 0
+        ? []
+        : await db
+            .select({
+              attempt: attemptsTable,
+              assignment: assignmentsTable,
+              student: usersTable,
+            })
+            .from(attemptsTable)
+            .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+            .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+            .where(
+              and(
+                inArray(assignmentsTable.courseId, courseIds),
+                inArray(attemptsTable.status, ["submitted", "expired"]),
+                isNotNull(attemptsTable.result),
+                isNotNull(attemptsTable.submittedAt),
+              ),
+            )
+            .orderBy(desc(attemptsTable.submittedAt));
+    const visibleRows = (
+      await Promise.all(
+        rows.map(async (row) =>
+          (await canAccessStudent(
+            req.appUser!,
+            row.assignment.courseId,
+            row.student.id,
+            row.assignment.subject,
+          ))
+            ? row
+            : null,
+        ),
       )
-      .where(eq(assignmentQuestionsTable.assignmentId, attempt.assignmentId))
-      .orderBy(asc(assignmentQuestionsTable.position));
-    const submittedResponses = await db
-      .select()
-      .from(responsesTable)
-      .where(eq(responsesTable.attemptId, attempt.id));
-    const joined = assignedQuestions.map(({ question }) => ({
-      question,
-      response:
-        submittedResponses.find((response) => response.questionId === question.id) ??
-        null,
-    }));
-    let correctCount = 0;
-    for (const item of joined) {
-      const correct =
-        item.response?.finalAnswer === item.question.correctAnswer;
-      if (correct) correctCount += 1;
-      if (item.response) {
-        await db
-          .update(responsesTable)
-          .set({ correct })
-          .where(eq(responsesTable.id, item.response.id));
-      }
-      if (!correct) {
-        await db.insert(reviewQueueTable).values({
-          attemptId: attempt.id,
-          questionId: item.question.id,
-          studentUserId: req.appUser!.id,
-          skill: item.question.skill,
-          reason: "Incorrect answer — review during the next session",
-        });
-      }
-    }
-    const totalCount = joined.length;
-    const score = totalCount === 0 ? 0 : (correctCount / totalCount) * 100;
-    await db
-      .update(attemptsTable)
-      .set({ status: "submitted", submittedAt: new Date(), score })
-      .where(eq(attemptsTable.id, attempt.id));
-    await db
-      .insert(timerEventsTable)
-      .values({ attemptId: attempt.id, type: "submitted" });
-    const timing = await timerSummary(attempt.id);
-    const bySkill = new Map<string, { correct: number; total: number }>();
-    for (const item of joined) {
-      const current = bySkill.get(item.question.skill) ?? { correct: 0, total: 0 };
-      current.total += 1;
-      if (item.response?.finalAnswer === item.question.correctAnswer) {
-        current.correct += 1;
-      }
-      bySkill.set(item.question.skill, current);
-    }
+    ).filter((row): row is (typeof rows)[number] => Boolean(row));
     res.json(
-      SubmitAttemptResponse.parse({
-        attemptId: attempt.id,
-        score,
-        correctCount,
-        totalCount,
-        activeSeconds: timing.activeSeconds,
-        pausedSeconds: timing.pausedSeconds,
-        breakdown: [...bySkill.entries()].map(([skill, value]) => ({
-          skill,
-          ...value,
-          accuracy: value.total === 0 ? 0 : (value.correct / value.total) * 100,
-        })),
-        items: joined.map(({ response, question }) => ({
-          questionId: question.id,
-          correct: response?.finalAnswer === question.correctAnswer,
-          prediction: response?.prediction ?? null,
-          finalAnswer: response?.finalAnswer ?? null,
-          correctAnswer: question.correctAnswer,
-          explanation: question.explanation,
-          skill: question.skill,
-          questionType: question.questionType,
-          difficulty: question.difficulty,
-          timeSpentSeconds: response?.timeSpentSeconds ?? 0,
-          flagged: response?.flagged ?? false,
-        })),
-      }),
+      ListReviewSubmissionsResponse.parse(
+        visibleRows
+          .filter((row) => Boolean(row.attempt.submittedAt))
+          .map(({ attempt, assignment, student }) => ({
+            attemptId: attempt.id,
+            assignmentId: assignment.id,
+            assignmentTitle: assignment.title,
+            studentUserId: student.id,
+            studentName: student.displayName,
+            status: attempt.status,
+            score: attempt.score ?? 0,
+            submittedAt: attempt.submittedAt!,
+            reviewStatus: attempt.reviewStatus,
+            mistakeCount: Array.isArray(
+              (attempt.result as Record<string, unknown> | null)?.items,
+            )
+              ? (
+                  attempt.result as {
+                    items: Array<{ correct: boolean }>;
+                  }
+                ).items.filter((item) => !item.correct).length
+              : 0,
+            tutorNotes: attempt.tutorNotes,
+          })),
+      ),
+    );
+  },
+);
+
+router.patch(
+  "/attempts/:attemptId/review",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAttemptReviewParams.safeParse(req.params);
+    const body = UpdateAttemptReviewBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid review update" });
+      return;
+    }
+    const access = await canAccessAttempt(req.appUser!, params.data.attemptId);
+    if (!access) {
+      res.status(404).json({ error: "Attempt not found" });
+      return;
+    }
+    const [attempt] = await db
+      .select()
+      .from(attemptsTable)
+      .where(eq(attemptsTable.id, params.data.attemptId))
+      .limit(1);
+    if (!attempt?.result) {
+      res.status(404).json({ error: "Attempt result not found" });
+      return;
+    }
+    const [updated] = await db
+      .update(attemptsTable)
+      .set({
+        reviewStatus: body.data.reviewStatus ?? attempt.reviewStatus,
+        tutorNotes:
+          body.data.tutorNotes !== undefined
+            ? body.data.tutorNotes
+            : attempt.tutorNotes,
+      })
+      .where(eq(attemptsTable.id, attempt.id))
+      .returning();
+    res.json(
+      UpdateAttemptReviewResponse.parse(
+        await storedAttemptResult(updated!.id, true),
+      ),
     );
   },
 );

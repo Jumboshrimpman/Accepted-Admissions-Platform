@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AssignmentSummaryLatestAttemptStatus } from './assignmentSummaryLatestAttemptStatus';
 import type { AssignmentSummaryStatus } from './assignmentSummaryStatus';
 
 export interface AssignmentSummary {
@@ -20,4 +21,8 @@ export interface AssignmentSummary {
   maxAttempts: number;
   /** @nullable */
   latestScore?: number | null;
+  /** @nullable */
+  latestAttemptId?: string | null;
+  /** @nullable */
+  latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
 }

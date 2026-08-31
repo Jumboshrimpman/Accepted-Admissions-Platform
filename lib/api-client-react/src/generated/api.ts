@@ -29,6 +29,7 @@ import type {
   AttemptResponse,
   AttemptResponseInput,
   AttemptResult,
+  AttemptReviewUpdate,
   AttemptSubmission,
   BadRequestResponse,
   BookingAvailability,
@@ -75,6 +76,7 @@ import type {
   RescheduleBookingInput,
   ReviewQueueItem,
   ReviewQueueUpdate,
+  ReviewSubmission,
   SatProduct,
   SessionArtifact,
   SessionArtifactInput,
@@ -2517,6 +2519,155 @@ export function useGetAttempt<TData = Awaited<ReturnType<typeof getAttempt>>, TE
 
 
 
+export const getGetAttemptResultUrl = (attemptId: string,) => {
+
+
+
+
+  return `/api/attempts/${attemptId}/result`
+}
+
+/**
+ * @summary Get the permanently stored result and feedback for an attempt
+ */
+export const getAttemptResult = async (attemptId: string, options?: Parameters<typeof customFetch>[1]): Promise<AttemptResult> => {
+
+  return customFetch<AttemptResult>(getGetAttemptResultUrl(attemptId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAttemptResultQueryKey = (attemptId: string,) => {
+    return [
+    `/api/attempts/${attemptId}/result`
+    ] as const;
+    }
+
+
+export const getGetAttemptResultQueryOptions = <TData = Awaited<ReturnType<typeof getAttemptResult>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(attemptId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAttemptResult>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAttemptResultQueryKey(attemptId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAttemptResult>>> = ({ signal }) => getAttemptResult(attemptId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: attemptId !== null && attemptId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAttemptResult>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAttemptResultQueryResult = NonNullable<Awaited<ReturnType<typeof getAttemptResult>>>
+export type GetAttemptResultQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+/**
+ * @summary Get the permanently stored result and feedback for an attempt
+ */
+
+export function useGetAttemptResult<TData = Awaited<ReturnType<typeof getAttemptResult>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ attemptId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAttemptResult>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAttemptResultQueryOptions(attemptId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAttemptReviewUrl = (attemptId: string,) => {
+
+
+
+
+  return `/api/attempts/${attemptId}/review`
+}
+
+/**
+ * @summary Update tutor review status and private notes for a submitted attempt
+ */
+export const updateAttemptReview = async (attemptId: string,
+    attemptReviewUpdate: AttemptReviewUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AttemptResult> => {
+
+  return customFetch<AttemptResult>(getUpdateAttemptReviewUrl(attemptId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attemptReviewUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAttemptReviewMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAttemptReview>>, TError,{attemptId: string;data: BodyType<AttemptReviewUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAttemptReview>>, TError,{attemptId: string;data: BodyType<AttemptReviewUpdate>}, TContext> => {
+
+const mutationKey = ['updateAttemptReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAttemptReview>>, {attemptId: string;data: BodyType<AttemptReviewUpdate>}> = (props) => {
+          const {attemptId,data} = props ?? {};
+
+          return  updateAttemptReview(attemptId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAttemptReviewMutationResult = NonNullable<Awaited<ReturnType<typeof updateAttemptReview>>>
+    export type UpdateAttemptReviewMutationBody = BodyType<AttemptReviewUpdate>
+    export type UpdateAttemptReviewMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Update tutor review status and private notes for a submitted attempt
+ */
+export const useUpdateAttemptReview = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAttemptReview>>, TError,{attemptId: string;data: BodyType<AttemptReviewUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAttemptReview>>,
+        TError,
+        {attemptId: string;data: BodyType<AttemptReviewUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAttemptReviewMutationOptions(options));
+    }
+
 export const getSaveAttemptResponseUrl = (attemptId: string,) => {
 
 
@@ -2868,6 +3019,83 @@ export function useListReviewQueue<TData = Awaited<ReturnType<typeof listReviewQ
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListReviewQueueQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListReviewSubmissionsUrl = () => {
+
+
+
+
+  return `/api/review-submissions`
+}
+
+/**
+ * @summary List submitted SAT attempts for tutor review
+ */
+export const listReviewSubmissions = async ( options?: Parameters<typeof customFetch>[1]): Promise<ReviewSubmission[]> => {
+
+  return customFetch<ReviewSubmission[]>(getListReviewSubmissionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListReviewSubmissionsQueryKey = () => {
+    return [
+    `/api/review-submissions`
+    ] as const;
+    }
+
+
+export const getListReviewSubmissionsQueryOptions = <TData = Awaited<ReturnType<typeof listReviewSubmissions>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReviewSubmissions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListReviewSubmissionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listReviewSubmissions>>> = ({ signal }) => listReviewSubmissions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listReviewSubmissions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListReviewSubmissionsQueryResult = NonNullable<Awaited<ReturnType<typeof listReviewSubmissions>>>
+export type ListReviewSubmissionsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List submitted SAT attempts for tutor review
+ */
+
+export function useListReviewSubmissions<TData = Awaited<ReturnType<typeof listReviewSubmissions>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReviewSubmissions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListReviewSubmissionsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

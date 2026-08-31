@@ -607,6 +607,43 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /attempts/{attemptId}/result:
+    get:
+      operationId: getAttemptResult
+      tags: [assignments]
+      summary: Get the permanently stored result and feedback for an attempt
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      responses:
+        "200":
+          description: Stored graded result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /attempts/{attemptId}/review:
+    patch:
+      operationId: updateAttemptReview
+      tags: [review]
+      summary: Update tutor review status and private notes for a submitted attempt
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttemptReviewUpdate" }
+      responses:
+        "200":
+          description: Updated tutor review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /attempts/{attemptId}/responses:
     put:
       operationId: saveAttemptResponse
@@ -725,6 +762,21 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /review-submissions:
+    get:
+      operationId: listReviewSubmissions
+      tags: [review]
+      summary: List submitted SAT attempts for tutor review
+      responses:
+        "200":
+          description: Consolidated submitted attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReviewSubmission" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /review-queue/{itemId}:
     patch:
       operationId: updateReviewQueueItem
@@ -1493,6 +1545,8 @@ components:
         attemptCount: { type: number }
         maxAttempts: { type: number }
         latestScore: { type: ["number", "null"] }
+        latestAttemptId: { type: ["string", "null"] }
+        latestAttemptStatus: { type: ["string", "null"], enum: [active, paused, submitted, expired, null] }
     AssignmentQuestion:
       type: object
       required: [id, position, subject, questionType, prompt, skill, difficulty, predictionFirst]
@@ -1553,7 +1607,7 @@ components:
         at: { type: string, format: date-time }
     Attempt:
       type: object
-      required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, responses]
+      required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, remainingSeconds, responses]
       properties:
         id: { type: string }
         assignmentId: { type: string }
@@ -1562,12 +1616,17 @@ components:
         activeSeconds: { type: number }
         pausedSeconds: { type: number }
         pauseCount: { type: number }
+        remainingSeconds: { type: number }
         responses:
           type: array
           items: { $ref: "#/components/schemas/AttemptResponse" }
         timerEvents:
           type: array
           items: { $ref: "#/components/schemas/TimerEvent" }
+        result:
+          allOf:
+            - $ref: "#/components/schemas/AttemptResult"
+          nullable: true
     AttemptSubmission:
       type: object
       required: [confirm]
@@ -1583,7 +1642,7 @@ components:
         accuracy: { type: number }
     AttemptResultItem:
       type: object
-      required: [questionId, correct, finalAnswer, correctAnswer, explanation, skill, flagged]
+      required: [questionId, correct, finalAnswer, correctAnswer, explanation, skill, flagged, prompt]
       properties:
         questionId: { type: string }
         correct: { type: boolean }
@@ -1596,11 +1655,44 @@ components:
         difficulty: { type: string }
         timeSpentSeconds: { type: number }
         flagged: { type: boolean }
+        prompt: { type: string }
+        stimulus: { type: ["string", "null"] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+    AttemptAnalysis:
+      type: object
+      required: [source, label, strengths, weaknesses, mistakePatterns, nextFocus, feedback]
+      properties:
+        source: { type: string, enum: [deterministic, provider] }
+        label: { type: string }
+        provider: { type: ["string", "null"] }
+        strengths:
+          type: array
+          items: { type: string }
+        weaknesses:
+          type: array
+          items: { type: string }
+        mistakePatterns:
+          type: array
+          items: { type: string }
+        nextFocus:
+          type: array
+          items: { type: string }
+        feedback: { type: string }
     AttemptResult:
       type: object
-      required: [attemptId, score, correctCount, totalCount, activeSeconds, pausedSeconds, breakdown, items]
+      required: [attemptId, status, score, correctCount, totalCount, activeSeconds, pausedSeconds, breakdown, items, analysis, studentFeedback]
       properties:
         attemptId: { type: string }
+        status: { type: string, enum: [submitted, expired] }
+        submittedAt: { type: ["string", "null"], format: date-time }
         score: { type: number }
         correctCount: { type: number }
         totalCount: { type: number }
@@ -1612,6 +1704,30 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/AttemptResultItem" }
+        analysis: { $ref: "#/components/schemas/AttemptAnalysis" }
+        studentFeedback: { type: string }
+        tutorNotes: { type: ["string", "null"] }
+        reviewStatus: { type: string, enum: [new, in_review, reviewed] }
+    ReviewSubmission:
+      type: object
+      required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, status, score, submittedAt, reviewStatus]
+      properties:
+        attemptId: { type: string }
+        assignmentId: { type: string }
+        assignmentTitle: { type: string }
+        studentUserId: { type: string }
+        studentName: { type: string }
+        status: { type: string, enum: [submitted, expired] }
+        score: { type: number }
+        submittedAt: { type: string, format: date-time }
+        reviewStatus: { type: string, enum: [new, in_review, reviewed] }
+        mistakeCount: { type: number }
+        tutorNotes: { type: ["string", "null"] }
+    AttemptReviewUpdate:
+      type: object
+      properties:
+        reviewStatus: { type: string, enum: [new, in_review, reviewed] }
+        tutorNotes: { type: ["string", "null"], maxLength: 10000 }
     ReviewQueueItem:
       type: object
       required: [id, attemptId, questionId, studentName, skill, reason, status]
@@ -1783,4 +1899,3 @@ components:
         reviewSkills:
           type: array
           items: { type: string }
-

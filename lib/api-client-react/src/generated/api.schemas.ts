@@ -727,6 +727,19 @@ export const AssignmentSummaryStatus = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
+export type AssignmentSummaryLatestAttemptStatus = typeof AssignmentSummaryLatestAttemptStatus[keyof typeof AssignmentSummaryLatestAttemptStatus] | null;
+
+
+export const AssignmentSummaryLatestAttemptStatus = {
+  active: 'active',
+  paused: 'paused',
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
 export interface AssignmentSummary {
   id: string;
   title: string;
@@ -740,6 +753,10 @@ export interface AssignmentSummary {
   maxAttempts: number;
   /** @nullable */
   latestScore?: number | null;
+  /** @nullable */
+  latestAttemptId?: string | null;
+  /** @nullable */
+  latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
 }
 
 export type SessionDetail = Session & ({
@@ -841,21 +858,13 @@ export const AttemptStatus = {
   expired: 'expired',
 } as const;
 
-export interface Attempt {
-  id: string;
-  assignmentId: string;
-  status: AttemptStatus;
-  startedAt: string;
-  activeSeconds: number;
-  pausedSeconds: number;
-  pauseCount: number;
-  responses: AttemptResponse[];
-  timerEvents?: TimerEvent[];
-}
+export type AttemptResultStatus = typeof AttemptResultStatus[keyof typeof AttemptResultStatus];
 
-export interface AttemptSubmission {
-  confirm: boolean;
-}
+
+export const AttemptResultStatus = {
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
 
 export interface ScoreBreakdown {
   skill: string;
@@ -863,6 +872,12 @@ export interface ScoreBreakdown {
   total: number;
   accuracy?: number;
 }
+
+export type AttemptResultItemChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
 
 export interface AttemptResultItem {
   questionId: string;
@@ -878,10 +893,46 @@ export interface AttemptResultItem {
   difficulty?: string;
   timeSpentSeconds?: number;
   flagged: boolean;
+  prompt: string;
+  /** @nullable */
+  stimulus?: string | null;
+  choices?: AttemptResultItemChoicesItem[];
 }
+
+export type AttemptAnalysisSource = typeof AttemptAnalysisSource[keyof typeof AttemptAnalysisSource];
+
+
+export const AttemptAnalysisSource = {
+  deterministic: 'deterministic',
+  provider: 'provider',
+} as const;
+
+export interface AttemptAnalysis {
+  source: AttemptAnalysisSource;
+  label: string;
+  /** @nullable */
+  provider?: string | null;
+  strengths: string[];
+  weaknesses: string[];
+  mistakePatterns: string[];
+  nextFocus: string[];
+  feedback: string;
+}
+
+export type AttemptResultReviewStatus = typeof AttemptResultReviewStatus[keyof typeof AttemptResultReviewStatus];
+
+
+export const AttemptResultReviewStatus = {
+  new: 'new',
+  in_review: 'in_review',
+  reviewed: 'reviewed',
+} as const;
 
 export interface AttemptResult {
   attemptId: string;
+  status: AttemptResultStatus;
+  /** @nullable */
+  submittedAt?: string | null;
   score: number;
   correctCount: number;
   totalCount: number;
@@ -889,6 +940,79 @@ export interface AttemptResult {
   pausedSeconds: number;
   breakdown: ScoreBreakdown[];
   items: AttemptResultItem[];
+  analysis: AttemptAnalysis;
+  studentFeedback: string;
+  /** @nullable */
+  tutorNotes?: string | null;
+  reviewStatus?: AttemptResultReviewStatus;
+}
+
+export interface Attempt {
+  id: string;
+  assignmentId: string;
+  status: AttemptStatus;
+  startedAt: string;
+  activeSeconds: number;
+  pausedSeconds: number;
+  pauseCount: number;
+  remainingSeconds: number;
+  responses: AttemptResponse[];
+  timerEvents?: TimerEvent[];
+  result?: AttemptResult | null;
+}
+
+export interface AttemptSubmission {
+  confirm: boolean;
+}
+
+export type ReviewSubmissionStatus = typeof ReviewSubmissionStatus[keyof typeof ReviewSubmissionStatus];
+
+
+export const ReviewSubmissionStatus = {
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export type ReviewSubmissionReviewStatus = typeof ReviewSubmissionReviewStatus[keyof typeof ReviewSubmissionReviewStatus];
+
+
+export const ReviewSubmissionReviewStatus = {
+  new: 'new',
+  in_review: 'in_review',
+  reviewed: 'reviewed',
+} as const;
+
+export interface ReviewSubmission {
+  attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentUserId: string;
+  studentName: string;
+  status: ReviewSubmissionStatus;
+  score: number;
+  submittedAt: string;
+  reviewStatus: ReviewSubmissionReviewStatus;
+  mistakeCount?: number;
+  /** @nullable */
+  tutorNotes?: string | null;
+}
+
+export type AttemptReviewUpdateReviewStatus = typeof AttemptReviewUpdateReviewStatus[keyof typeof AttemptReviewUpdateReviewStatus];
+
+
+export const AttemptReviewUpdateReviewStatus = {
+  new: 'new',
+  in_review: 'in_review',
+  reviewed: 'reviewed',
+} as const;
+
+export interface AttemptReviewUpdate {
+  reviewStatus?: AttemptReviewUpdateReviewStatus;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  tutorNotes?: string | null;
 }
 
 export type ReviewQueueItemStatus = typeof ReviewQueueItemStatus[keyof typeof ReviewQueueItemStatus];

@@ -7,3 +7,4 @@
 - [Invitation dispatch confirmation](invitation-dispatch-confirmation.md) — treat sending identity invitations as a separate, immediate confirmation from confirming addresses or target environments.
 - [Session response privacy](session-response-privacy.md) — whitelist scheduling fields; never spread provider calendar metadata into student or tutor responses.
 - [Stripe test-mode safety](stripe-test-mode-safety.md) — STRIPE_TEST_MODE enables regression cases but does not switch an active Stripe connection out of live mode.
+- [Assessment result finalization](assessment-result-finalization.md) — expiry must finalize and persist the same result contract as explicit submission.

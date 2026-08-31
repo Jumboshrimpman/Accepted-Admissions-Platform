@@ -31,6 +31,7 @@ import PortalAssignment from '@/pages/portal/assignment';
 import TutorDashboard from '@/pages/tutor/dashboard';
 import TutorCourse from '@/pages/tutor/course';
 import TutorSession from '@/pages/tutor/session';
+import TutorAttempt from '@/pages/tutor/attempt';
 import AdminDashboard from '@/pages/admin/dashboard';
 import SatOfferings from '@/pages/public/sat-offerings';
 import OurTeam from '@/pages/public/our-team';
@@ -212,6 +213,19 @@ function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/tutor/attempts/:attemptId">
+          <SignedIn>
+            <RoleBoundary roles={["tutor", "administrator"]}>
+              <Shell>
+                <TutorAttempt />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/tutor*">
           <SignedIn>
             <RoleBoundary roles={["tutor", "administrator"]}>
@@ -220,6 +234,7 @@ function Router() {
                 <Route path="/tutor" component={TutorDashboard} />
                 <Route path="/tutor/courses/:courseId" component={TutorCourse} />
                 <Route path="/tutor/sessions/:sessionId" component={TutorSession} />
+                <Route path="/tutor/attempts/:attemptId" component={TutorAttempt} />
                 <Route component={NotFound} />
               </Switch>
               </Shell>

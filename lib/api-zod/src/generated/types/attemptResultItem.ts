@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AttemptResultItemChoicesItem } from './attemptResultItemChoicesItem';
 
 export interface AttemptResultItem {
   questionId: string;
@@ -20,4 +21,8 @@ export interface AttemptResultItem {
   difficulty?: string;
   timeSpentSeconds?: number;
   flagged: boolean;
+  prompt: string;
+  /** @nullable */
+  stimulus?: string | null;
+  choices?: AttemptResultItemChoicesItem[];
 }

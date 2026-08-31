@@ -1,4 +1,4 @@
-import { useListReviewQueue, useListCourses, useUpdateReviewQueueItem, getListReviewQueueQueryKey } from "@workspace/api-client-react";
+import { useListReviewQueue, useListReviewSubmissions, useListCourses, useUpdateReviewQueueItem, getListReviewQueueQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -37,6 +37,7 @@ export default function TutorDashboard() {
 function FullTutorDashboard() {
   const queryClient = useQueryClient();
   const { data: queue, isLoading: loadingQueue } = useListReviewQueue();
+  const { data: submissions, isLoading: loadingSubmissions } = useListReviewSubmissions();
   const { data: courses, isLoading: loadingCourses } = useListCourses();
   const updateReview = useUpdateReviewQueueItem();
 
@@ -51,7 +52,7 @@ function FullTutorDashboard() {
     });
   };
 
-  if (loadingQueue || loadingCourses) {
+  if (loadingQueue || loadingSubmissions || loadingCourses) {
     return (
       <div className="space-y-8">
         <Skeleton className="h-10 w-64 rounded-xl" />
@@ -64,6 +65,7 @@ function FullTutorDashboard() {
   }
 
   const openQueue = queue?.filter(q => q.status === 'open') || [];
+  const pendingSubmissions = submissions?.filter((submission) => submission.reviewStatus !== "reviewed") || [];
   
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
@@ -71,6 +73,36 @@ function FullTutorDashboard() {
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Tutor Dashboard</h1>
         <p className="text-muted-foreground text-lg mt-1">Manage your students and review their work.</p>
       </div>
+
+      <Card className="border-primary/20 shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <BookOpen className="h-5 w-5 text-primary" />
+            New SAT submissions
+            {pendingSubmissions.length > 0 && <Badge className="ml-2">{pendingSubmissions.length}</Badge>}
+          </CardTitle>
+          <CardDescription>Open a consolidated result to review answers, patterns, and next focus.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {submissions && submissions.length > 0 ? (
+            <div className="space-y-3">
+              {submissions.map((submission) => (
+                <Link key={submission.attemptId} href={`/tutor/attempts/${submission.attemptId}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 transition-colors hover:border-primary/50 hover:bg-muted/30">
+                    <div>
+                      <p className="font-semibold">{submission.studentName} · {submission.assignmentTitle}</p>
+                      <p className="text-sm text-muted-foreground">{submission.status === "expired" ? "Time expired" : "Submitted"} · {submission.mistakeCount ?? 0} mistakes · {Math.round(submission.score)}%</p>
+                    </div>
+                    <Badge variant={submission.reviewStatus === "reviewed" ? "default" : "outline"}>{submission.reviewStatus.replace("_", " ")}</Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-center text-muted-foreground">No submitted assessments yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Review Queue */}
