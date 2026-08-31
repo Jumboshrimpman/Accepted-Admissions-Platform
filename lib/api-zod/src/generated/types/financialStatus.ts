@@ -13,6 +13,7 @@ export const FinancialStatus = {
   pending: 'pending',
   sent: 'sent',
   overdue: 'overdue',
+  partially_paid: 'partially_paid',
   paid: 'paid',
   failed: 'failed',
   canceled: 'canceled',

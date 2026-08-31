@@ -82,14 +82,27 @@ export const GetFinancialsResponse = zod.object({
   "id": zod.string(),
   "clientUserId": zod.string().nullish(),
   "clientName": zod.string().nullish(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "provider": zod.string(),
   "providerInvoiceId": zod.string().nullish(),
   "description": zod.string(),
+  "issuerName": zod.string().optional(),
+  "issuerEmail": zod.string().optional(),
+  "issuerAddress": zod.string().optional(),
+  "clientEmail": zod.string().nullish(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPriceCents": zod.number(),
+  "productId": zod.string().nullish()
+})).optional(),
   "subtotalCents": zod.number(),
   "discountCents": zod.number(),
+  "taxCents": zod.number().optional(),
   "totalCents": zod.number(),
+  "paymentInstructions": zod.string().optional(),
   "hostedInvoiceUrl": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
   "dueAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -103,9 +116,11 @@ export const GetFinancialsResponse = zod.object({
   "productName": zod.string().nullish(),
   "amountCents": zod.number(),
   "refundedAmountCents": zod.number(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "method": zod.string(),
   "failureReason": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -117,6 +132,8 @@ export const GetFinancialsResponse = zod.object({
   "hours": zod.number(),
   "note": zod.string().nullish(),
   "productId": zod.string().nullish(),
+  "referenceType": zod.string().nullish(),
+  "referenceId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -153,20 +170,34 @@ export const GetAdminFinancialsResponse = zod.object({
   "description": zod.string(),
   "durationHours": zod.number(),
   "totalPriceCents": zod.number(),
-  "effectiveHourlyRateCents": zod.number()
+  "effectiveHourlyRateCents": zod.number(),
+  "active": zod.boolean()
 })),
   "invoices": zod.array(zod.object({
   "id": zod.string(),
   "clientUserId": zod.string().nullish(),
   "clientName": zod.string().nullish(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "provider": zod.string(),
   "providerInvoiceId": zod.string().nullish(),
   "description": zod.string(),
+  "issuerName": zod.string().optional(),
+  "issuerEmail": zod.string().optional(),
+  "issuerAddress": zod.string().optional(),
+  "clientEmail": zod.string().nullish(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPriceCents": zod.number(),
+  "productId": zod.string().nullish()
+})).optional(),
   "subtotalCents": zod.number(),
   "discountCents": zod.number(),
+  "taxCents": zod.number().optional(),
   "totalCents": zod.number(),
+  "paymentInstructions": zod.string().optional(),
   "hostedInvoiceUrl": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
   "dueAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -180,9 +211,11 @@ export const GetAdminFinancialsResponse = zod.object({
   "productName": zod.string().nullish(),
   "amountCents": zod.number(),
   "refundedAmountCents": zod.number(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "method": zod.string(),
   "failureReason": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -194,14 +227,142 @@ export const GetAdminFinancialsResponse = zod.object({
   "hours": zod.number(),
   "note": zod.string().nullish(),
   "productId": zod.string().nullish(),
+  "referenceType": zod.string().nullish(),
+  "referenceId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }))
 })
 
 
 /**
+ * @summary List all SAT products for catalog administration
+ */
+export const ListAdminProductsResponseItem = zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "durationHours": zod.number(),
+  "totalPriceCents": zod.number(),
+  "effectiveHourlyRateCents": zod.number(),
+  "active": zod.boolean()
+})
+export const ListAdminProductsResponse = zod.array(ListAdminProductsResponseItem)
+
+
+/**
+ * @summary Create an SAT product
+ */
+export const createAdminProductBodySlugMin = 2;
+export const createAdminProductBodySlugMax = 100;
+
+export const createAdminProductBodyNameMin = 2;
+export const createAdminProductBodyNameMax = 200;
+
+export const createAdminProductBodyDescriptionMax = 1000;
+
+export const createAdminProductBodyDurationHoursMin = 0.25;
+export const createAdminProductBodyDurationHoursMax = 1000;
+
+export const createAdminProductBodyTotalPriceCentsMax = 100000000;
+
+export const createAdminProductBodyActiveDefault = true;
+
+export const CreateAdminProductBody = zod.object({
+  "slug": zod.string().min(createAdminProductBodySlugMin).max(createAdminProductBodySlugMax),
+  "name": zod.string().min(createAdminProductBodyNameMin).max(createAdminProductBodyNameMax),
+  "description": zod.string().max(createAdminProductBodyDescriptionMax),
+  "durationHours": zod.number().min(createAdminProductBodyDurationHoursMin).max(createAdminProductBodyDurationHoursMax),
+  "totalPriceCents": zod.number().min(1).max(createAdminProductBodyTotalPriceCentsMax),
+  "active": zod.boolean().default(createAdminProductBodyActiveDefault)
+})
+
+export const CreateAdminProductResponse = zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "durationHours": zod.number(),
+  "totalPriceCents": zod.number(),
+  "effectiveHourlyRateCents": zod.number(),
+  "active": zod.boolean()
+})
+
+
+/**
+ * @summary Edit or deactivate an SAT product
+ */
+export const UpdateAdminProductParams = zod.object({
+  "productId": zod.coerce.string()
+})
+
+export const updateAdminProductBodySlugMin = 2;
+export const updateAdminProductBodySlugMax = 100;
+
+export const updateAdminProductBodyNameMin = 2;
+export const updateAdminProductBodyNameMax = 200;
+
+export const updateAdminProductBodyDescriptionMax = 1000;
+
+export const updateAdminProductBodyDurationHoursMin = 0.25;
+export const updateAdminProductBodyDurationHoursMax = 1000;
+
+export const updateAdminProductBodyTotalPriceCentsMax = 100000000;
+
+
+
+export const UpdateAdminProductBody = zod.object({
+  "slug": zod.string().min(updateAdminProductBodySlugMin).max(updateAdminProductBodySlugMax).optional(),
+  "name": zod.string().min(updateAdminProductBodyNameMin).max(updateAdminProductBodyNameMax).optional(),
+  "description": zod.string().max(updateAdminProductBodyDescriptionMax).optional(),
+  "durationHours": zod.number().min(updateAdminProductBodyDurationHoursMin).max(updateAdminProductBodyDurationHoursMax).optional(),
+  "totalPriceCents": zod.number().min(1).max(updateAdminProductBodyTotalPriceCentsMax).optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateAdminProductResponse = zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "durationHours": zod.number(),
+  "totalPriceCents": zod.number(),
+  "effectiveHourlyRateCents": zod.number(),
+  "active": zod.boolean()
+})
+
+
+/**
  * @summary Create and send a Stripe-hosted invoice
  */
+export const createHostedInvoiceBodyDescriptionMax = 500;
+
+export const createHostedInvoiceBodyIssuerNameMax = 200;
+
+export const createHostedInvoiceBodyIssuerEmailMax = 320;
+
+export const createHostedInvoiceBodyIssuerAddressMax = 1000;
+
+export const createHostedInvoiceBodyClientNameMax = 200;
+
+export const createHostedInvoiceBodyClientEmailMax = 320;
+
+export const createHostedInvoiceBodyLineItemsItemDescriptionMax = 500;
+
+export const createHostedInvoiceBodyLineItemsItemQuantityMin = 0.01;
+export const createHostedInvoiceBodyLineItemsItemQuantityMax = 100;
+
+export const createHostedInvoiceBodyLineItemsItemUnitPriceCentsMin = 0;
+export const createHostedInvoiceBodyLineItemsItemUnitPriceCentsMax = 100000000;
+
+export const createHostedInvoiceBodyLineItemsMax = 25;
+
+export const createHostedInvoiceBodyDiscountCentsMin = 0;
+
+export const createHostedInvoiceBodyTaxCentsMin = 0;
+
+export const createHostedInvoiceBodyPaymentInstructionsMax = 2000;
+
 export const createHostedInvoiceBodyDaysUntilDueDefault = 7;
 export const createHostedInvoiceBodyDaysUntilDueMax = 90;
 
@@ -209,7 +370,24 @@ export const createHostedInvoiceBodyDaysUntilDueMax = 90;
 
 export const CreateHostedInvoiceBody = zod.object({
   "clientUserId": zod.string(),
-  "productId": zod.string(),
+  "productId": zod.string().optional(),
+  "description": zod.string().max(createHostedInvoiceBodyDescriptionMax).optional(),
+  "issuerName": zod.string().max(createHostedInvoiceBodyIssuerNameMax).optional(),
+  "issuerEmail": zod.string().max(createHostedInvoiceBodyIssuerEmailMax).optional(),
+  "issuerAddress": zod.string().max(createHostedInvoiceBodyIssuerAddressMax).optional(),
+  "clientName": zod.string().max(createHostedInvoiceBodyClientNameMax).optional(),
+  "clientEmail": zod.string().max(createHostedInvoiceBodyClientEmailMax).optional(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string().min(1).max(createHostedInvoiceBodyLineItemsItemDescriptionMax),
+  "quantity": zod.number().min(createHostedInvoiceBodyLineItemsItemQuantityMin).max(createHostedInvoiceBodyLineItemsItemQuantityMax),
+  "unitPriceCents": zod.number().min(createHostedInvoiceBodyLineItemsItemUnitPriceCentsMin).max(createHostedInvoiceBodyLineItemsItemUnitPriceCentsMax),
+  "productId": zod.string().optional()
+})).max(createHostedInvoiceBodyLineItemsMax).optional(),
+  "discountCents": zod.number().min(createHostedInvoiceBodyDiscountCentsMin).optional(),
+  "taxCents": zod.number().min(createHostedInvoiceBodyTaxCentsMin).optional(),
+  "paymentInstructions": zod.string().max(createHostedInvoiceBodyPaymentInstructionsMax).optional(),
+  "provider": zod.enum(['stripe_invoice', 'manual']).optional(),
+  "dueAt": zod.coerce.date().optional(),
   "daysUntilDue": zod.number().min(1).max(createHostedInvoiceBodyDaysUntilDueMax).default(createHostedInvoiceBodyDaysUntilDueDefault)
 })
 
@@ -217,14 +395,27 @@ export const CreateHostedInvoiceResponse = zod.object({
   "id": zod.string(),
   "clientUserId": zod.string().nullish(),
   "clientName": zod.string().nullish(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "provider": zod.string(),
   "providerInvoiceId": zod.string().nullish(),
   "description": zod.string(),
+  "issuerName": zod.string().optional(),
+  "issuerEmail": zod.string().optional(),
+  "issuerAddress": zod.string().optional(),
+  "clientEmail": zod.string().nullish(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPriceCents": zod.number(),
+  "productId": zod.string().nullish()
+})).optional(),
   "subtotalCents": zod.number(),
   "discountCents": zod.number(),
+  "taxCents": zod.number().optional(),
   "totalCents": zod.number(),
+  "paymentInstructions": zod.string().optional(),
   "hostedInvoiceUrl": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
   "dueAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -238,22 +429,81 @@ export const UpdateInvoiceParams = zod.object({
   "invoiceId": zod.coerce.string()
 })
 
+export const updateInvoiceBodyDescriptionMax = 500;
+
+export const updateInvoiceBodyIssuerNameMax = 200;
+
+export const updateInvoiceBodyIssuerEmailMax = 320;
+
+export const updateInvoiceBodyIssuerAddressMax = 1000;
+
+export const updateInvoiceBodyClientNameMax = 200;
+
+export const updateInvoiceBodyClientEmailMax = 320;
+
+export const updateInvoiceBodyLineItemsItemDescriptionMax = 500;
+
+export const updateInvoiceBodyLineItemsItemQuantityMin = 0.01;
+export const updateInvoiceBodyLineItemsItemQuantityMax = 100;
+
+export const updateInvoiceBodyLineItemsItemUnitPriceCentsMin = 0;
+export const updateInvoiceBodyLineItemsItemUnitPriceCentsMax = 100000000;
+
+export const updateInvoiceBodyLineItemsMax = 25;
+
+export const updateInvoiceBodyDiscountCentsMin = 0;
+
+export const updateInvoiceBodyTaxCentsMin = 0;
+
+export const updateInvoiceBodyPaymentInstructionsMax = 2000;
+
+
+
 export const UpdateInvoiceBody = zod.object({
-  "status": zod.enum(['pending', 'sent', 'overdue', 'failed', 'canceled'])
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled']).optional(),
+  "description": zod.string().max(updateInvoiceBodyDescriptionMax).optional(),
+  "issuerName": zod.string().max(updateInvoiceBodyIssuerNameMax).optional(),
+  "issuerEmail": zod.string().max(updateInvoiceBodyIssuerEmailMax).optional(),
+  "issuerAddress": zod.string().max(updateInvoiceBodyIssuerAddressMax).optional(),
+  "clientName": zod.string().max(updateInvoiceBodyClientNameMax).optional(),
+  "clientEmail": zod.string().max(updateInvoiceBodyClientEmailMax).optional(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string().min(1).max(updateInvoiceBodyLineItemsItemDescriptionMax),
+  "quantity": zod.number().min(updateInvoiceBodyLineItemsItemQuantityMin).max(updateInvoiceBodyLineItemsItemQuantityMax),
+  "unitPriceCents": zod.number().min(updateInvoiceBodyLineItemsItemUnitPriceCentsMin).max(updateInvoiceBodyLineItemsItemUnitPriceCentsMax),
+  "productId": zod.string().optional()
+})).max(updateInvoiceBodyLineItemsMax).optional(),
+  "discountCents": zod.number().min(updateInvoiceBodyDiscountCentsMin).optional(),
+  "taxCents": zod.number().min(updateInvoiceBodyTaxCentsMin).optional(),
+  "paymentInstructions": zod.string().max(updateInvoiceBodyPaymentInstructionsMax).optional(),
+  "dueAt": zod.coerce.date().optional()
 })
 
 export const UpdateInvoiceResponse = zod.object({
   "id": zod.string(),
   "clientUserId": zod.string().nullish(),
   "clientName": zod.string().nullish(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "provider": zod.string(),
   "providerInvoiceId": zod.string().nullish(),
   "description": zod.string(),
+  "issuerName": zod.string().optional(),
+  "issuerEmail": zod.string().optional(),
+  "issuerAddress": zod.string().optional(),
+  "clientEmail": zod.string().nullish(),
+  "lineItems": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number(),
+  "unitPriceCents": zod.number(),
+  "productId": zod.string().nullish()
+})).optional(),
   "subtotalCents": zod.number(),
   "discountCents": zod.number(),
+  "taxCents": zod.number().optional(),
   "totalCents": zod.number(),
+  "paymentInstructions": zod.string().optional(),
   "hostedInvoiceUrl": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
   "dueAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -263,13 +513,16 @@ export const UpdateInvoiceResponse = zod.object({
 /**
  * @summary Record a verified offline SAT payment and fulfill its credits
  */
+
 export const createOfflinePaymentBodyNoteMax = 2000;
 
 
 
 export const CreateOfflinePaymentBody = zod.object({
   "clientUserId": zod.string(),
-  "productId": zod.string(),
+  "productId": zod.string().optional(),
+  "invoiceId": zod.string().optional(),
+  "amountCents": zod.number().min(1).optional(),
   "note": zod.string().max(createOfflinePaymentBodyNoteMax).optional()
 })
 
@@ -282,9 +535,11 @@ export const CreateOfflinePaymentResponse = zod.object({
   "productName": zod.string().nullish(),
   "amountCents": zod.number(),
   "refundedAmountCents": zod.number(),
-  "status": zod.enum(['pending', 'sent', 'overdue', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
+  "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled', 'refunded', 'partially_refunded']),
   "method": zod.string(),
   "failureReason": zod.string().nullish(),
+  "receiptUrl": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -315,6 +570,8 @@ export const CreateCreditAdjustmentResponse = zod.object({
   "hours": zod.number(),
   "note": zod.string().nullish(),
   "productId": zod.string().nullish(),
+  "referenceType": zod.string().nullish(),
+  "referenceId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 

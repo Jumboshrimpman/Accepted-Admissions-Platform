@@ -6,6 +6,7 @@
 - Added the public SAT offerings, Our Team, Past Success, and Client Request routes using the existing visual system.
 - Added public SAT product records with the requested prices and effective hourly rates:
   - Single SAT session — $175 for 1 hour
+  - SAT 5-hour package — $800 for 5 hours
   - SAT 10-hour package — $1,500 for 10 hours
   - SAT 20-hour package — $2,400 for 20 hours
 - Added administrator-editable foundations for tutor profiles, public content, availability rules, calendar connections, credits, invoices, payments, leads, compensation rates, and private meeting records.
@@ -20,7 +21,8 @@
 - Added prepaid SAT booking for eligible tutors, including server-validated availability, atomic credit reservation, provider event IDs, cancellation with credit restoration, and rescheduling.
 - Added independently scoped Google Calendar OAuth and tutor controls for Xavier Morales and Eunice Chon; booking exposes only free/busy-derived slots and explicit disconnected states.
 - Added Stripe-hosted SAT Checkout and invoice creation, raw-body webhook signature verification, event idempotency, payment/refund status tracking, and exactly-once credit fulfillment.
-- Added account-scoped client financial history plus administrator controls for hosted invoices, offline payments, invoice states, and audited credit adjustments.
+- Added editable administrator product catalog controls, invoice line items and issuer/client snapshots, tax/discount totals, payment instructions, manual reconciliation, verified receipt links, invoice states, and audited credit adjustments.
+- Added account-scoped client financial history with verified payment labels, receipt links, source-aware credit history, and remaining balances; unverified links and redirects never fulfill credits.
 - Added role-specific portal email provisioning using Clerk’s server-verified primary email. Existing Clerk ID lists remain supported as explicit compatibility overrides, while conflicting email roles fail closed.
 
 ## External services
@@ -46,6 +48,7 @@ The following are intentionally not labeled live:
 - Full workspace typecheck passed.
 - Accepted Admissions production build passed.
 - API server build passed.
+- Accepted Admissions and API server regression tests passed, including client portal financial rendering and Stripe signature/refund/idempotency coverage (external Stripe tests remain test-mode gated).
 - Booking availability, time-zone, buffer, OAuth signing/encryption, and event-payload tests passed.
 - Google OAuth configuration resolves to the workspace callback with offline consent and only free/busy plus calendar-event scopes.
 - The callback rejects incomplete authorization, calendar routes reject unauthenticated requests, and the running API health check returned HTTP 200.

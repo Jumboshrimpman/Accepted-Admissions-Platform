@@ -109,6 +109,64 @@ paths:
               schema: { $ref: "#/components/schemas/AdminFinancials" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/products:
+    get:
+      operationId: listAdminProducts
+      tags: [administration]
+      summary: List all SAT products for catalog administration
+      responses:
+        "200":
+          description: Editable SAT product catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SatProduct" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createAdminProduct
+      tags: [administration]
+      summary: Create an SAT product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Created SAT product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SatProduct" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/products/{productId}:
+    patch:
+      operationId: updateAdminProduct
+      tags: [administration]
+      summary: Edit or deactivate an SAT product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdate" }
+      responses:
+        "200":
+          description: Updated SAT product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SatProduct" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/invoices:
     post:
       operationId: createHostedInvoice
@@ -954,10 +1012,10 @@ components:
         code: { type: string }
     FinancialStatus:
       type: string
-      enum: [pending, sent, overdue, paid, failed, canceled, refunded, partially_refunded]
+      enum: [pending, sent, overdue, partially_paid, paid, failed, canceled, refunded, partially_refunded]
     SatProduct:
       type: object
-      required: [id, slug, name, description, durationHours, totalPriceCents, effectiveHourlyRateCents]
+      required: [id, slug, name, description, durationHours, totalPriceCents, effectiveHourlyRateCents, active]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -966,6 +1024,7 @@ components:
         durationHours: { type: number }
         totalPriceCents: { type: number }
         effectiveHourlyRateCents: { type: number }
+        active: { type: boolean }
     InvoiceRecord:
       type: object
       required: [id, status, provider, description, subtotalCents, discountCents, totalCents, createdAt]
@@ -977,10 +1036,27 @@ components:
         provider: { type: string }
         providerInvoiceId: { type: ["string", "null"] }
         description: { type: string }
+        issuerName: { type: string }
+        issuerEmail: { type: string }
+        issuerAddress: { type: string }
+        clientEmail: { type: ["string", "null"] }
+        lineItems:
+          type: array
+          items:
+            type: object
+            required: [description, quantity, unitPriceCents]
+            properties:
+              description: { type: string }
+              quantity: { type: number }
+              unitPriceCents: { type: number }
+              productId: { type: ["string", "null"] }
         subtotalCents: { type: number }
         discountCents: { type: number }
+        taxCents: { type: number }
         totalCents: { type: number }
+        paymentInstructions: { type: string }
         hostedInvoiceUrl: { type: ["string", "null"] }
+        receiptUrl: { type: ["string", "null"] }
         dueAt: { type: ["string", "null"], format: date-time }
         paidAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
@@ -999,6 +1075,8 @@ components:
         status: { $ref: "#/components/schemas/FinancialStatus" }
         method: { type: string }
         failureReason: { type: ["string", "null"] }
+        receiptUrl: { type: ["string", "null"] }
+        verifiedAt: { type: ["string", "null"], format: date-time }
         paidAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     CreditLedgerEntry:
@@ -1012,6 +1090,8 @@ components:
         hours: { type: number }
         note: { type: ["string", "null"] }
         productId: { type: ["string", "null"] }
+        referenceType: { type: ["string", "null"] }
+        referenceId: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     FinancialSummary:
       type: object
@@ -1070,17 +1150,44 @@ components:
           items: { $ref: "#/components/schemas/CreditLedgerEntry" }
     HostedInvoiceInput:
       type: object
-      required: [clientUserId, productId]
+      required: [clientUserId]
       properties:
         clientUserId: { type: string }
         productId: { type: string }
+        description: { type: string, maxLength: 500 }
+        issuerName: { type: string, maxLength: 200 }
+        issuerEmail: { type: string, maxLength: 320 }
+        issuerAddress: { type: string, maxLength: 1000 }
+        clientName: { type: string, maxLength: 200 }
+        clientEmail: { type: string, maxLength: 320 }
+        lineItems:
+          type: array
+          maxItems: 25
+          items: { $ref: "#/components/schemas/InvoiceLineItemInput" }
+        discountCents: { type: number, minimum: 0 }
+        taxCents: { type: number, minimum: 0 }
+        paymentInstructions: { type: string, maxLength: 2000 }
+        provider:
+          type: string
+          enum: [stripe_invoice, manual]
+        dueAt: { type: string, format: date-time }
         daysUntilDue: { type: number, minimum: 1, maximum: 90, default: 7 }
+    InvoiceLineItemInput:
+      type: object
+      required: [description, quantity, unitPriceCents]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 500 }
+        quantity: { type: number, minimum: 0.01, maximum: 100 }
+        unitPriceCents: { type: number, minimum: 0, maximum: 100000000 }
+        productId: { type: string }
     OfflinePaymentInput:
       type: object
-      required: [clientUserId, productId]
+      required: [clientUserId]
       properties:
         clientUserId: { type: string }
         productId: { type: string }
+        invoiceId: { type: string }
+        amountCents: { type: number, minimum: 1 }
         note: { type: string, maxLength: 2000 }
     CreditAdjustmentInput:
       type: object
@@ -1091,11 +1198,43 @@ components:
         note: { type: string, minLength: 3, maxLength: 2000 }
     InvoiceUpdate:
       type: object
-      required: [status]
       properties:
         status:
           type: string
-          enum: [pending, sent, overdue, failed, canceled]
+          enum: [pending, sent, overdue, partially_paid, paid, failed, canceled]
+        description: { type: string, maxLength: 500 }
+        issuerName: { type: string, maxLength: 200 }
+        issuerEmail: { type: string, maxLength: 320 }
+        issuerAddress: { type: string, maxLength: 1000 }
+        clientName: { type: string, maxLength: 200 }
+        clientEmail: { type: string, maxLength: 320 }
+        lineItems:
+          type: array
+          maxItems: 25
+          items: { $ref: "#/components/schemas/InvoiceLineItemInput" }
+        discountCents: { type: number, minimum: 0 }
+        taxCents: { type: number, minimum: 0 }
+        paymentInstructions: { type: string, maxLength: 2000 }
+        dueAt: { type: string, format: date-time }
+    ProductInput:
+      type: object
+      required: [slug, name, description, durationHours, totalPriceCents]
+      properties:
+        slug: { type: string, minLength: 2, maxLength: 100 }
+        name: { type: string, minLength: 2, maxLength: 200 }
+        description: { type: string, maxLength: 1000 }
+        durationHours: { type: number, minimum: 0.25, maximum: 1000 }
+        totalPriceCents: { type: number, minimum: 1, maximum: 100000000 }
+        active: { type: boolean, default: true }
+    ProductUpdate:
+      type: object
+      properties:
+        slug: { type: string, minLength: 2, maxLength: 100 }
+        name: { type: string, minLength: 2, maxLength: 200 }
+        description: { type: string, maxLength: 1000 }
+        durationHours: { type: number, minimum: 0.25, maximum: 1000 }
+        totalPriceCents: { type: number, minimum: 1, maximum: 100000000 }
+        active: { type: boolean }
     BookingTutor:
       type: object
       required: [id, name, title, subjects, calendarStatus, providerStatus]

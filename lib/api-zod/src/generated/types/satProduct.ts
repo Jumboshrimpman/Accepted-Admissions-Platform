@@ -14,4 +14,5 @@ export interface SatProduct {
   durationHours: number;
   totalPriceCents: number;
   effectiveHourlyRateCents: number;
+  active: boolean;
 }

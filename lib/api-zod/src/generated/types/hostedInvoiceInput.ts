@@ -5,10 +5,34 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { HostedInvoiceInputProvider } from './hostedInvoiceInputProvider';
+import type { InvoiceLineItemInput } from './invoiceLineItemInput';
 
 export interface HostedInvoiceInput {
   clientUserId: string;
-  productId: string;
+  productId?: string;
+  /** @maxLength 500 */
+  description?: string;
+  /** @maxLength 200 */
+  issuerName?: string;
+  /** @maxLength 320 */
+  issuerEmail?: string;
+  /** @maxLength 1000 */
+  issuerAddress?: string;
+  /** @maxLength 200 */
+  clientName?: string;
+  /** @maxLength 320 */
+  clientEmail?: string;
+  /** @maxItems 25 */
+  lineItems?: InvoiceLineItemInput[];
+  /** @minimum 0 */
+  discountCents?: number;
+  /** @minimum 0 */
+  taxCents?: number;
+  /** @maxLength 2000 */
+  paymentInstructions?: string;
+  provider?: HostedInvoiceInputProvider;
+  dueAt?: Date;
   /**
      * @minimum 1
      * @maximum 90

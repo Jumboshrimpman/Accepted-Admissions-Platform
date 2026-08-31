@@ -21,6 +21,7 @@ export const FinancialStatus = {
   pending: 'pending',
   sent: 'sent',
   overdue: 'overdue',
+  partially_paid: 'partially_paid',
   paid: 'paid',
   failed: 'failed',
   canceled: 'canceled',
@@ -36,7 +37,16 @@ export interface SatProduct {
   durationHours: number;
   totalPriceCents: number;
   effectiveHourlyRateCents: number;
+  active: boolean;
 }
+
+export type InvoiceRecordLineItemsItem = {
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  /** @nullable */
+  productId?: string | null;
+};
 
 export interface InvoiceRecord {
   id: string;
@@ -49,11 +59,21 @@ export interface InvoiceRecord {
   /** @nullable */
   providerInvoiceId?: string | null;
   description: string;
+  issuerName?: string;
+  issuerEmail?: string;
+  issuerAddress?: string;
+  /** @nullable */
+  clientEmail?: string | null;
+  lineItems?: InvoiceRecordLineItemsItem[];
   subtotalCents: number;
   discountCents: number;
+  taxCents?: number;
   totalCents: number;
+  paymentInstructions?: string;
   /** @nullable */
   hostedInvoiceUrl?: string | null;
+  /** @nullable */
+  receiptUrl?: string | null;
   /** @nullable */
   dueAt?: string | null;
   /** @nullable */
@@ -80,6 +100,10 @@ export interface PaymentRecord {
   /** @nullable */
   failureReason?: string | null;
   /** @nullable */
+  receiptUrl?: string | null;
+  /** @nullable */
+  verifiedAt?: string | null;
+  /** @nullable */
   paidAt?: string | null;
   createdAt: string;
 }
@@ -95,6 +119,10 @@ export interface CreditLedgerEntry {
   note?: string | null;
   /** @nullable */
   productId?: string | null;
+  /** @nullable */
+  referenceType?: string | null;
+  /** @nullable */
+  referenceId?: string | null;
   createdAt: string;
 }
 
@@ -139,9 +167,58 @@ export interface AdminFinancials {
   credits: CreditLedgerEntry[];
 }
 
+export type HostedInvoiceInputProvider = typeof HostedInvoiceInputProvider[keyof typeof HostedInvoiceInputProvider];
+
+
+export const HostedInvoiceInputProvider = {
+  stripe_invoice: 'stripe_invoice',
+  manual: 'manual',
+} as const;
+
+export interface InvoiceLineItemInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  description: string;
+  /**
+     * @minimum 0.01
+     * @maximum 100
+     */
+  quantity: number;
+  /**
+     * @minimum 0
+     * @maximum 100000000
+     */
+  unitPriceCents: number;
+  productId?: string;
+}
+
 export interface HostedInvoiceInput {
   clientUserId: string;
-  productId: string;
+  productId?: string;
+  /** @maxLength 500 */
+  description?: string;
+  /** @maxLength 200 */
+  issuerName?: string;
+  /** @maxLength 320 */
+  issuerEmail?: string;
+  /** @maxLength 1000 */
+  issuerAddress?: string;
+  /** @maxLength 200 */
+  clientName?: string;
+  /** @maxLength 320 */
+  clientEmail?: string;
+  /** @maxItems 25 */
+  lineItems?: InvoiceLineItemInput[];
+  /** @minimum 0 */
+  discountCents?: number;
+  /** @minimum 0 */
+  taxCents?: number;
+  /** @maxLength 2000 */
+  paymentInstructions?: string;
+  provider?: HostedInvoiceInputProvider;
+  dueAt?: string;
   /**
      * @minimum 1
      * @maximum 90
@@ -151,7 +228,10 @@ export interface HostedInvoiceInput {
 
 export interface OfflinePaymentInput {
   clientUserId: string;
-  productId: string;
+  productId?: string;
+  invoiceId?: string;
+  /** @minimum 1 */
+  amountCents?: number;
   /** @maxLength 2000 */
   note?: string;
 }
@@ -177,12 +257,87 @@ export const InvoiceUpdateStatus = {
   pending: 'pending',
   sent: 'sent',
   overdue: 'overdue',
+  partially_paid: 'partially_paid',
+  paid: 'paid',
   failed: 'failed',
   canceled: 'canceled',
 } as const;
 
 export interface InvoiceUpdate {
-  status: InvoiceUpdateStatus;
+  status?: InvoiceUpdateStatus;
+  /** @maxLength 500 */
+  description?: string;
+  /** @maxLength 200 */
+  issuerName?: string;
+  /** @maxLength 320 */
+  issuerEmail?: string;
+  /** @maxLength 1000 */
+  issuerAddress?: string;
+  /** @maxLength 200 */
+  clientName?: string;
+  /** @maxLength 320 */
+  clientEmail?: string;
+  /** @maxItems 25 */
+  lineItems?: InvoiceLineItemInput[];
+  /** @minimum 0 */
+  discountCents?: number;
+  /** @minimum 0 */
+  taxCents?: number;
+  /** @maxLength 2000 */
+  paymentInstructions?: string;
+  dueAt?: string;
+}
+
+export interface ProductInput {
+  /**
+     * @minLength 2
+     * @maxLength 100
+     */
+  slug: string;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  name: string;
+  /** @maxLength 1000 */
+  description: string;
+  /**
+     * @minimum 0.25
+     * @maximum 1000
+     */
+  durationHours: number;
+  /**
+     * @minimum 1
+     * @maximum 100000000
+     */
+  totalPriceCents: number;
+  active?: boolean;
+}
+
+export interface ProductUpdate {
+  /**
+     * @minLength 2
+     * @maxLength 100
+     */
+  slug?: string;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  name?: string;
+  /** @maxLength 1000 */
+  description?: string;
+  /**
+     * @minimum 0.25
+     * @maximum 1000
+     */
+  durationHours?: number;
+  /**
+     * @minimum 1
+     * @maximum 100000000
+     */
+  totalPriceCents?: number;
+  active?: boolean;
 }
 
 export type BookingTutorProviderStatus = typeof BookingTutorProviderStatus[keyof typeof BookingTutorProviderStatus];

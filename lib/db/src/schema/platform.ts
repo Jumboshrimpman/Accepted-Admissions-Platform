@@ -358,13 +358,38 @@ export const invoicesTable = pgTable("invoices", {
   provider: text("provider").notNull().default("stripe"),
   providerInvoiceId: text("provider_invoice_id"),
   description: text("description").notNull(),
+  issuerName: text("issuer_name").notNull().default("Accepted Admissions"),
+  issuerEmail: text("issuer_email").notNull().default(""),
+  issuerAddress: text("issuer_address").notNull().default(""),
+  clientName: text("client_name").notNull().default(""),
+  clientEmail: text("client_email").notNull().default(""),
+  lineItems: jsonb("line_items")
+    .$type<
+      Array<{
+        description: string;
+        quantity: number;
+        unitPriceCents: number;
+        productId?: string;
+      }>
+    >()
+    .notNull()
+    .default([]),
   subtotalCents: numeric("subtotal_cents", { mode: "number" }).notNull(),
   discountCents: numeric("discount_cents", { mode: "number" }).notNull().default(0),
+  taxCents: numeric("tax_cents", { mode: "number" }).notNull().default(0),
   totalCents: numeric("total_cents", { mode: "number" }).notNull(),
+  paymentInstructions: text("payment_instructions").notNull().default(""),
   hostedInvoiceUrl: text("hosted_invoice_url"),
+  receiptUrl: text("receipt_url"),
   dueAt: timestamp("due_at", { withTimezone: true }),
   paidAt: timestamp("paid_at", { withTimezone: true }),
+  auditMetadata: jsonb("audit_metadata")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  createdBy: uuid("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const paymentsTable = pgTable(
@@ -383,6 +408,12 @@ export const paymentsTable = pgTable(
     refundedAmountCents: numeric("refunded_amount_cents", { mode: "number" }).notNull().default(0),
     failureReason: text("failure_reason"),
     internalNote: text("internal_note"),
+    receiptUrl: text("receipt_url"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    auditMetadata: jsonb("audit_metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

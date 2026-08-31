@@ -13,6 +13,8 @@ export const InvoiceUpdateStatus = {
   pending: 'pending',
   sent: 'sent',
   overdue: 'overdue',
+  partially_paid: 'partially_paid',
+  paid: 'paid',
   failed: 'failed',
   canceled: 'canceled',
 } as const;

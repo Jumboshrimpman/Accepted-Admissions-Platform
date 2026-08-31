@@ -5,8 +5,30 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { InvoiceLineItemInput } from './invoiceLineItemInput';
 import type { InvoiceUpdateStatus } from './invoiceUpdateStatus';
 
 export interface InvoiceUpdate {
-  status: InvoiceUpdateStatus;
+  status?: InvoiceUpdateStatus;
+  /** @maxLength 500 */
+  description?: string;
+  /** @maxLength 200 */
+  issuerName?: string;
+  /** @maxLength 320 */
+  issuerEmail?: string;
+  /** @maxLength 1000 */
+  issuerAddress?: string;
+  /** @maxLength 200 */
+  clientName?: string;
+  /** @maxLength 320 */
+  clientEmail?: string;
+  /** @maxItems 25 */
+  lineItems?: InvoiceLineItemInput[];
+  /** @minimum 0 */
+  discountCents?: number;
+  /** @minimum 0 */
+  taxCents?: number;
+  /** @maxLength 2000 */
+  paymentInstructions?: string;
+  dueAt?: Date;
 }

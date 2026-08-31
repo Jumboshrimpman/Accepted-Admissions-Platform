@@ -37,7 +37,7 @@ export function FinancialCard() {
     );
   }
 
-  const { invoices, payments, remainingHours, readOnly } = query.data;
+  const { invoices, payments, credits, remainingHours, readOnly } = query.data;
   return (
     <Card className="border-primary/15 shadow-lg shadow-primary/5">
       <CardHeader>
@@ -80,7 +80,7 @@ export function FinancialCard() {
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">{money(payment.amountCents)}</p>
-                    <Badge variant="outline" className="capitalize">{statusLabel(payment.status)}</Badge>
+                      <Badge variant="outline" className="capitalize">{statusLabel(payment.status)}{payment.verifiedAt ? " · verified" : ""}</Badge>
                   </div>
                 </div>
               ))}
@@ -115,9 +115,41 @@ export function FinancialCard() {
                         </a>
                       </Button>
                     )}
+                    {invoice.receiptUrl && (
+                      <Button asChild size="icon" variant="ghost" aria-label="Open verified receipt">
+                        <a href={invoice.receiptUrl} target="_blank" rel="noreferrer">
+                          <ReceiptText className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Credit history
+          </h3>
+          {credits.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No credit ledger entries yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {credits.slice(0, 8).map((credit) => {
+                const debit = credit.entryType.includes("debit") || credit.entryType === "refund";
+                return (
+                  <div key={credit.id} className="flex items-center justify-between rounded-xl border p-3 text-sm">
+                    <div>
+                      <p className="font-medium capitalize">{credit.referenceType ?? credit.entryType}</p>
+                      <p className="text-xs text-muted-foreground">{credit.note ?? "Account credit activity"}</p>
+                    </div>
+                    <span className={debit ? "font-semibold text-destructive" : "font-semibold text-emerald-700"}>
+                      {debit ? "-" : "+"}{credit.hours} hr
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

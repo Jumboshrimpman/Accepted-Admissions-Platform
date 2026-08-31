@@ -26,6 +26,10 @@ export interface PaymentRecord {
   /** @nullable */
   failureReason?: string | null;
   /** @nullable */
+  receiptUrl?: string | null;
+  /** @nullable */
+  verifiedAt?: Date | null;
+  /** @nullable */
   paidAt?: Date | null;
   createdAt: Date;
 }

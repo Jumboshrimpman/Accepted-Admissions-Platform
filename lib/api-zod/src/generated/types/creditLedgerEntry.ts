@@ -17,5 +17,9 @@ export interface CreditLedgerEntry {
   note?: string | null;
   /** @nullable */
   productId?: string | null;
+  /** @nullable */
+  referenceType?: string | null;
+  /** @nullable */
+  referenceId?: string | null;
   createdAt: Date;
 }

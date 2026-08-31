@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FinancialStatus } from './financialStatus';
+import type { InvoiceRecordLineItemsItem } from './invoiceRecordLineItemsItem';
 
 export interface InvoiceRecord {
   id: string;
@@ -18,11 +19,21 @@ export interface InvoiceRecord {
   /** @nullable */
   providerInvoiceId?: string | null;
   description: string;
+  issuerName?: string;
+  issuerEmail?: string;
+  issuerAddress?: string;
+  /** @nullable */
+  clientEmail?: string | null;
+  lineItems?: InvoiceRecordLineItemsItem[];
   subtotalCents: number;
   discountCents: number;
+  taxCents?: number;
   totalCents: number;
+  paymentInstructions?: string;
   /** @nullable */
   hostedInvoiceUrl?: string | null;
+  /** @nullable */
+  receiptUrl?: string | null;
   /** @nullable */
   dueAt?: Date | null;
   /** @nullable */

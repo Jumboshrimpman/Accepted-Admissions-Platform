@@ -390,6 +390,14 @@ async function ensureUpgradeSeedData(): Promise<void> {
         effectiveHourlyRateCents: 17500,
       },
       {
+        slug: "sat-5-hour-package",
+        name: "SAT 5-hour package",
+        description: "Five hours of focused SAT tutoring with a shared balance.",
+        durationHours: 5,
+        totalPriceCents: 80000,
+        effectiveHourlyRateCents: 16000,
+      },
+      {
         slug: "sat-10-hour-package",
         name: "SAT 10-hour package",
         description: "Ten hours of flexible SAT tutoring with one shared balance.",
@@ -1367,6 +1375,66 @@ const requestRateLimit = new Map<string, number>();
 
 function stringField(body: Record<string, unknown>, key: string): string {
   return typeof body[key] === "string" ? body[key].trim() : "";
+}
+
+type InvoiceLineItem = {
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  productId?: string;
+};
+
+function parseInvoiceLineItems(
+  value: unknown,
+  fallback?: InvoiceLineItem,
+): InvoiceLineItem[] {
+  if (value === undefined) return fallback ? [fallback] : [];
+  if (!Array.isArray(value) || value.length === 0 || value.length > 25) {
+    throw new Error("Invoice line items must contain between 1 and 25 items");
+  }
+  return value.map((item) => {
+    if (!item || typeof item !== "object") throw new Error("Invalid invoice line item");
+    const row = item as Record<string, unknown>;
+    const description = typeof row.description === "string" ? row.description.trim() : "";
+    const quantity = Number(row.quantity);
+    const unitPriceCents = Number(row.unitPriceCents);
+    const productId = typeof row.productId === "string" ? row.productId.trim() : undefined;
+    if (
+      !description ||
+      description.length > 500 ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      quantity > 100 ||
+      !Number.isInteger(unitPriceCents) ||
+      unitPriceCents < 0 ||
+      unitPriceCents > 100_000_000
+    ) {
+      throw new Error("Each invoice line needs a description, quantity, and valid unit price");
+    }
+    return { description, quantity, unitPriceCents, ...(productId ? { productId } : {}) };
+  });
+}
+
+function invoiceTotals(
+  lineItems: InvoiceLineItem[],
+  discountCents: number,
+  taxCents: number,
+): { subtotalCents: number; totalCents: number } {
+  const subtotalCents = lineItems.reduce(
+    (total, item) => total + Math.round(item.quantity * item.unitPriceCents),
+    0,
+  );
+  const discount = Math.min(subtotalCents, Math.max(0, Math.round(discountCents)));
+  const tax = Math.max(0, Math.round(taxCents));
+  return { subtotalCents, totalCents: Math.max(0, subtotalCents - discount + tax) };
+}
+
+function invoiceDate(value: unknown): Date | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string") throw new Error("dueAt must be a valid date");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("dueAt must be a valid date");
+  return date;
 }
 
 async function ensurePublicPlatformData(): Promise<void> {
@@ -2479,6 +2547,8 @@ async function financialSummary(clientUserId: string) {
         status: paymentsTable.status,
         method: paymentsTable.method,
         failureReason: paymentsTable.failureReason,
+        receiptUrl: paymentsTable.receiptUrl,
+        verifiedAt: paymentsTable.verifiedAt,
         paidAt: paymentsTable.paidAt,
         createdAt: paymentsTable.createdAt,
       })
@@ -2494,6 +2564,8 @@ async function financialSummary(clientUserId: string) {
         hours: creditLedgerTable.hours,
         note: creditLedgerTable.note,
         productId: creditLedgerTable.productId,
+        referenceType: creditLedgerTable.referenceType,
+        referenceId: creditLedgerTable.referenceId,
         createdAt: creditLedgerTable.createdAt,
       })
       .from(creditLedgerTable)
@@ -2512,10 +2584,19 @@ async function financialSummary(clientUserId: string) {
       provider: invoice.provider,
       providerInvoiceId: invoice.providerInvoiceId,
       description: invoice.description,
+      issuerName: invoice.issuerName,
+      issuerEmail: invoice.issuerEmail,
+      issuerAddress: invoice.issuerAddress,
+      clientName: invoice.clientName || null,
+      clientEmail: invoice.clientEmail || null,
+      lineItems: invoice.lineItems,
       subtotalCents: invoice.subtotalCents,
       discountCents: invoice.discountCents,
+      taxCents: invoice.taxCents,
       totalCents: invoice.totalCents,
+      paymentInstructions: invoice.paymentInstructions,
       hostedInvoiceUrl: invoice.hostedInvoiceUrl,
+      receiptUrl: invoice.receiptUrl,
       dueAt: invoice.dueAt,
       paidAt: invoice.paidAt,
       createdAt: invoice.createdAt,
@@ -2559,8 +2640,17 @@ router.post(
           status: "pending",
           provider: "stripe_checkout",
           description: product.name,
+          clientName: req.appUser!.displayName,
+          clientEmail: req.appUser!.email,
+          lineItems: [{
+            description: product.name,
+            quantity: 1,
+            unitPriceCents: product.totalPriceCents,
+            productId: product.id,
+          }],
           subtotalCents: product.totalPriceCents,
           totalCents: product.totalPriceCents,
+          createdBy: req.appUser!.id,
         })
         .returning();
       const [createdPayment] = await tx
@@ -2621,6 +2711,144 @@ router.post(
 );
 
 router.get(
+  "/admin/products",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    const products = await db
+      .select()
+      .from(satProductsTable)
+      .orderBy(asc(satProductsTable.durationHours));
+    res.json(products);
+  },
+);
+
+router.post(
+  "/admin/products",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const slug = stringField(body, "slug").toLowerCase();
+    const name = stringField(body, "name");
+    const description = stringField(body, "description");
+    const durationHours = Number(body.durationHours);
+    const totalPriceCents = Number(body.totalPriceCents);
+    const active = body.active === undefined ? true : body.active === true;
+    if (
+      !/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(slug) ||
+      name.length < 2 ||
+      name.length > 200 ||
+      description.length > 1000 ||
+      !Number.isFinite(durationHours) ||
+      durationHours < 0.25 ||
+      durationHours > 1000 ||
+      !Number.isInteger(totalPriceCents) ||
+      totalPriceCents < 1 ||
+      totalPriceCents > 100_000_000
+    ) {
+      res.status(400).json({ error: "Enter a valid product slug, name, duration, and price" });
+      return;
+    }
+    try {
+      const [product] = await db
+        .insert(satProductsTable)
+        .values({
+          slug,
+          name,
+          description,
+          durationHours,
+          totalPriceCents,
+          effectiveHourlyRateCents: Math.round(totalPriceCents / durationHours),
+          active,
+        })
+        .returning();
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "product.created",
+        entityType: "sat_product",
+        entityId: product!.id,
+        metadata: { slug, durationHours, totalPriceCents },
+      });
+      res.status(201).json(product);
+    } catch {
+      res.status(409).json({ error: "A product with this slug already exists" });
+    }
+  },
+);
+
+router.patch(
+  "/admin/products/:productId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const productId = typeof req.params.productId === "string" ? req.params.productId : "";
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const [existing] = await db
+      .select()
+      .from(satProductsTable)
+      .where(eq(satProductsTable.id, productId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "SAT product not found" });
+      return;
+    }
+    const slug = body.slug === undefined ? existing.slug : stringField(body, "slug").toLowerCase();
+    const name = body.name === undefined ? existing.name : stringField(body, "name");
+    const description =
+      body.description === undefined ? existing.description : stringField(body, "description");
+    const durationHours =
+      body.durationHours === undefined ? existing.durationHours : Number(body.durationHours);
+    const totalPriceCents =
+      body.totalPriceCents === undefined ? existing.totalPriceCents : Number(body.totalPriceCents);
+    const active = body.active === undefined ? existing.active : body.active === true;
+    if (
+      !/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(slug) ||
+      name.length < 2 ||
+      name.length > 200 ||
+      description.length > 1000 ||
+      !Number.isFinite(durationHours) ||
+      durationHours < 0.25 ||
+      durationHours > 1000 ||
+      !Number.isInteger(totalPriceCents) ||
+      totalPriceCents < 1 ||
+      totalPriceCents > 100_000_000
+    ) {
+      res.status(400).json({ error: "Enter a valid product slug, name, duration, and price" });
+      return;
+    }
+    try {
+      const catalogChanged =
+        name !== existing.name ||
+        description !== existing.description ||
+        totalPriceCents !== existing.totalPriceCents;
+      const [product] = await db
+        .update(satProductsTable)
+        .set({
+          slug,
+          name,
+          description,
+          durationHours,
+          totalPriceCents,
+          effectiveHourlyRateCents: Math.round(totalPriceCents / durationHours),
+          active,
+          ...(catalogChanged ? { stripeProductId: null, stripePriceId: null } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(satProductsTable.id, productId))
+        .returning();
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: active ? "product.updated" : "product.deactivated",
+        entityType: "sat_product",
+        entityId: product!.id,
+        metadata: { slug, durationHours, totalPriceCents, active },
+      });
+      res.json(product);
+    } catch {
+      res.status(409).json({ error: "A product with this slug already exists" });
+    }
+  },
+);
+
+router.get(
   "/admin/financials",
   ensureRole(["administrator"]),
   async (_req: AuthedRequest, res): Promise<void> => {
@@ -2643,9 +2871,9 @@ router.get(
           durationHours: satProductsTable.durationHours,
           totalPriceCents: satProductsTable.totalPriceCents,
           effectiveHourlyRateCents: satProductsTable.effectiveHourlyRateCents,
+          active: satProductsTable.active,
         })
         .from(satProductsTable)
-        .where(eq(satProductsTable.active, true))
         .orderBy(asc(satProductsTable.durationHours)),
       db
         .select({
@@ -2656,10 +2884,18 @@ router.get(
           provider: invoicesTable.provider,
           providerInvoiceId: invoicesTable.providerInvoiceId,
           description: invoicesTable.description,
+          issuerName: invoicesTable.issuerName,
+          issuerEmail: invoicesTable.issuerEmail,
+          issuerAddress: invoicesTable.issuerAddress,
+          clientEmail: invoicesTable.clientEmail,
+          lineItems: invoicesTable.lineItems,
           subtotalCents: invoicesTable.subtotalCents,
           discountCents: invoicesTable.discountCents,
+          taxCents: invoicesTable.taxCents,
           totalCents: invoicesTable.totalCents,
+          paymentInstructions: invoicesTable.paymentInstructions,
           hostedInvoiceUrl: invoicesTable.hostedInvoiceUrl,
+          receiptUrl: invoicesTable.receiptUrl,
           dueAt: invoicesTable.dueAt,
           paidAt: invoicesTable.paidAt,
           createdAt: invoicesTable.createdAt,
@@ -2680,6 +2916,8 @@ router.get(
           status: paymentsTable.status,
           method: paymentsTable.method,
           failureReason: paymentsTable.failureReason,
+          receiptUrl: paymentsTable.receiptUrl,
+          verifiedAt: paymentsTable.verifiedAt,
           paidAt: paymentsTable.paidAt,
           createdAt: paymentsTable.createdAt,
         })
@@ -2695,6 +2933,9 @@ router.get(
           entryType: creditLedgerTable.entryType,
           hours: creditLedgerTable.hours,
           note: creditLedgerTable.note,
+          productId: creditLedgerTable.productId,
+          referenceType: creditLedgerTable.referenceType,
+          referenceId: creditLedgerTable.referenceId,
           createdAt: creditLedgerTable.createdAt,
         })
         .from(creditLedgerTable)
@@ -2712,7 +2953,8 @@ router.post(
   async (req: AuthedRequest, res): Promise<void> => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const clientUserId = stringField(body, "clientUserId");
-    const productId = stringField(body, "productId");
+    const productId = stringField(body, "productId") || undefined;
+    const provider = stringField(body, "provider") || "stripe_invoice";
     const rawDays = typeof body.daysUntilDue === "number" ? body.daysUntilDue : 7;
     const daysUntilDue = Math.max(1, Math.min(90, Math.round(rawDays)));
     const [[client], [product]] = await Promise.all([
@@ -2720,23 +2962,125 @@ router.post(
       db
         .select()
         .from(satProductsTable)
-        .where(and(eq(satProductsTable.id, productId), eq(satProductsTable.active, true)))
+        .where(
+          productId
+            ? and(eq(satProductsTable.id, productId), eq(satProductsTable.active, true))
+            : sql`false`,
+        )
         .limit(1),
     ]);
-    if (!client || client.role !== "student" || !product) {
-      res.status(404).json({ error: "Client or SAT product not found" });
+    let lineItems: InvoiceLineItem[];
+    try {
+      lineItems = parseInvoiceLineItems(
+        body.lineItems,
+        product
+          ? {
+              description: product.name,
+              quantity: 1,
+              unitPriceCents: product.totalPriceCents,
+              productId: product.id,
+            }
+          : undefined,
+      );
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid line items" });
       return;
     }
+    if (!client || client.role !== "student" || (provider === "stripe_invoice" && !product)) {
+      res.status(404).json({
+        error:
+          provider === "stripe_invoice"
+            ? "Client and an active SAT product are required for Stripe invoices"
+            : "Client not found",
+      });
+      return;
+    }
+    if (!["stripe_invoice", "manual"].includes(provider) || lineItems.length === 0) {
+      res.status(400).json({ error: "Choose a valid provider and add at least one line item" });
+      return;
+    }
+    const discountCents = Number(body.discountCents ?? 0);
+    const taxCents = Number(body.taxCents ?? 0);
+    if (
+      !Number.isFinite(discountCents) ||
+      discountCents < 0 ||
+      !Number.isFinite(taxCents) ||
+      taxCents < 0
+    ) {
+      res.status(400).json({ error: "Discount and tax must be non-negative amounts" });
+      return;
+    }
+    const totals = invoiceTotals(lineItems, discountCents, taxCents);
+    if (totals.totalCents <= 0) {
+      res.status(400).json({ error: "Invoice total must be greater than zero" });
+      return;
+    }
+    if (
+      provider === "stripe_invoice" &&
+      (!product ||
+        lineItems.length !== 1 ||
+        lineItems[0]!.productId !== product.id ||
+        lineItems[0]!.quantity !== 1 ||
+        lineItems[0]!.unitPriceCents !== product.totalPriceCents ||
+        discountCents !== 0 ||
+        taxCents !== 0)
+    ) {
+      res.status(400).json({
+        error:
+          "Stripe hosted invoices must use one catalog product at its current price; use Manual / offline for custom line items, tax, or discounts",
+      });
+      return;
+    }
+    let dueAt: Date | null;
+    try {
+      dueAt =
+        invoiceDate(body.dueAt) ??
+        new Date(Date.now() + daysUntilDue * 24 * 60 * 60 * 1000);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid due date" });
+      return;
+    }
+    const description = stringField(body, "description") || lineItems[0]!.description;
+    const issuerName = stringField(body, "issuerName") || "Accepted Admissions";
+    const issuerEmail = stringField(body, "issuerEmail");
+    const issuerAddress = stringField(body, "issuerAddress");
+    const clientName = stringField(body, "clientName") || client.displayName;
+    const clientEmail = stringField(body, "clientEmail") || client.email;
+    const paymentInstructions = stringField(body, "paymentInstructions");
+    const creditProductId = product?.id ?? lineItems.find((item) => item.productId)?.productId;
+    const creditProduct = creditProductId
+      ? product?.id === creditProductId
+        ? product
+        : (
+            await db
+              .select()
+              .from(satProductsTable)
+              .where(eq(satProductsTable.id, creditProductId))
+              .limit(1)
+          )[0]
+      : undefined;
     const [invoice, payment] = await db.transaction(async (tx) => {
       const [createdInvoice] = await tx
         .insert(invoicesTable)
         .values({
           clientUserId: client.id,
           status: "pending",
-          provider: "stripe_invoice",
-          description: product.name,
-          subtotalCents: product.totalPriceCents,
-          totalCents: product.totalPriceCents,
+          provider,
+          description,
+          issuerName,
+          issuerEmail,
+          issuerAddress,
+          clientName,
+          clientEmail,
+          lineItems,
+          subtotalCents: totals.subtotalCents,
+          discountCents: Math.min(totals.subtotalCents, Math.round(discountCents)),
+          taxCents: Math.round(taxCents),
+          totalCents: totals.totalCents,
+          paymentInstructions,
+          dueAt,
+          createdBy: req.appUser!.id,
+          auditMetadata: { createdBy: req.appUser!.id, createdAt: new Date().toISOString() },
         })
         .returning();
       const [createdPayment] = await tx
@@ -2744,18 +3088,29 @@ router.post(
         .values({
           clientUserId: client.id,
           invoiceId: createdInvoice!.id,
-          productId: product.id,
-          amountCents: product.totalPriceCents,
+          productId: creditProduct?.id,
+          amountCents: totals.totalCents,
           status: "pending",
-          method: "stripe_invoice",
+          method: provider,
         })
         .returning();
       return [createdInvoice!, createdPayment!];
     });
+    if (provider === "manual") {
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "invoice.manual_created",
+        entityType: "invoice",
+        entityId: invoice.id,
+        metadata: { clientUserId: client.id, lineItemCount: lineItems.length },
+      });
+      res.status(201).json(invoice);
+      return;
+    }
     try {
       const hosted = await createHostedInvoice({
         user: client,
-        product,
+        product: product!,
         invoiceId: invoice.id,
         paymentId: payment.id,
         daysUntilDue,
@@ -2767,6 +3122,7 @@ router.post(
           providerInvoiceId: hosted.id,
           hostedInvoiceUrl: hosted.hostedInvoiceUrl,
           dueAt: hosted.dueAt,
+          updatedAt: new Date(),
         })
         .where(eq(invoicesTable.id, invoice.id))
         .returning();
@@ -2804,63 +3160,161 @@ router.post(
   async (req: AuthedRequest, res): Promise<void> => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const clientUserId = stringField(body, "clientUserId");
-    const productId = stringField(body, "productId");
+    const requestedProductId = stringField(body, "productId") || undefined;
+    const requestedInvoiceId = stringField(body, "invoiceId") || undefined;
     const note = stringField(body, "note");
-    const [[client], [product]] = await Promise.all([
+    const [[client], [requestedInvoice], [requestedProduct]] = await Promise.all([
       db.select().from(usersTable).where(eq(usersTable.id, clientUserId)).limit(1),
-      db.select().from(satProductsTable).where(eq(satProductsTable.id, productId)).limit(1),
+      requestedInvoiceId
+        ? db.select().from(invoicesTable).where(eq(invoicesTable.id, requestedInvoiceId)).limit(1)
+        : Promise.resolve([]),
+      requestedProductId
+        ? db.select().from(satProductsTable).where(eq(satProductsTable.id, requestedProductId)).limit(1)
+        : Promise.resolve([]),
     ]);
-    if (!client || client.role !== "student" || !product) {
-      res.status(404).json({ error: "Client or SAT product not found" });
+    if (!client || client.role !== "student") {
+      res.status(404).json({ error: "Client not found" });
       return;
     }
-    const payment = await db.transaction(async (tx) => {
+    if (requestedInvoice && requestedInvoice.clientUserId !== client.id) {
+      res.status(404).json({ error: "Invoice not found for this client" });
+      return;
+    }
+    const invoiceProductId =
+      requestedInvoice?.lineItems.find((item) => item.productId)?.productId;
+    const [invoiceProduct] = invoiceProductId
+      ? await db.select().from(satProductsTable).where(eq(satProductsTable.id, invoiceProductId)).limit(1)
+      : [];
+    const product = requestedProduct ?? invoiceProduct;
+    if (
+      requestedInvoice &&
+      requestedProductId &&
+      invoiceProductId &&
+      requestedProductId !== invoiceProductId
+    ) {
+      res.status(400).json({ error: "Payment product does not match the invoice" });
+      return;
+    }
+    if (!product) {
+      res.status(404).json({ error: "SAT product or invoice line with a product is required" });
+      return;
+    }
+    const amountCents = Number(body.amountCents ?? requestedInvoice?.totalCents ?? product.totalPriceCents);
+    if (!Number.isInteger(amountCents) || amountCents <= 0) {
+      res.status(400).json({ error: "A positive verified payment amount is required" });
+      return;
+    }
+    let payment: typeof paymentsTable.$inferSelect;
+    try {
+      payment = await db.transaction(async (tx) => {
       const now = new Date();
-      const [invoice] = await tx
-        .insert(invoicesTable)
-        .values({
-          clientUserId: client.id,
-          status: "paid",
-          provider: "offline",
-          description: product.name,
-          subtotalCents: product.totalPriceCents,
-          totalCents: product.totalPriceCents,
-          paidAt: now,
+      let invoice = requestedInvoice;
+      if (requestedInvoiceId) {
+        await tx.execute(sql`select id from invoices where id = ${requestedInvoiceId} for update`);
+        [invoice] = await tx
+          .select()
+          .from(invoicesTable)
+          .where(eq(invoicesTable.id, requestedInvoiceId))
+          .limit(1);
+        if (!invoice || ["paid", "refunded", "partially_refunded"].includes(invoice.status)) {
+          throw new Error("This invoice has already been reconciled");
+        }
+      } else {
+        [invoice] = await tx
+          .insert(invoicesTable)
+          .values({
+            clientUserId: client.id,
+            status: "paid",
+            provider: "offline",
+            description: product.name,
+            issuerName: "Accepted Admissions",
+            clientName: client.displayName,
+            clientEmail: client.email,
+            lineItems: [{
+              description: product.name,
+              quantity: 1,
+              unitPriceCents: amountCents,
+              productId: product.id,
+            }],
+            subtotalCents: amountCents,
+            totalCents: amountCents,
+            paidAt: now,
+            createdBy: req.appUser!.id,
+          })
+          .returning();
+      }
+      const [previousPayments] = await tx
+        .select({
+          total: sql<number>`coalesce(sum(${paymentsTable.amountCents}), 0)`,
         })
-        .returning();
+        .from(paymentsTable)
+        .where(
+          and(
+            eq(paymentsTable.invoiceId, invoice!.id),
+            inArray(paymentsTable.status, ["paid", "partially_paid"]),
+            isNotNull(paymentsTable.verifiedAt),
+          ),
+        );
+      const cumulativeAmount = Number(previousPayments?.total ?? 0) + amountCents;
+      const fullyPaid = cumulativeAmount >= invoice!.totalCents;
+      const paymentStatus = fullyPaid ? "paid" : "partially_paid";
       const [createdPayment] = await tx
         .insert(paymentsTable)
         .values({
           clientUserId: client.id,
           invoiceId: invoice!.id,
           productId: product.id,
-          amountCents: product.totalPriceCents,
-          status: "paid",
+          amountCents,
+          status: paymentStatus,
           method: "offline",
           internalNote: note || "Offline payment recorded by administrator",
           paidAt: now,
+          verifiedAt: now,
+          auditMetadata: { verifiedBy: req.appUser!.id, verifiedAt: now.toISOString() },
         })
         .returning();
-      await tx.insert(creditLedgerTable).values({
-        clientUserId: client.id,
-        productId: product.id,
-        entryType: "original",
-        hours: product.durationHours,
-        referenceType: "payment",
-        referenceId: createdPayment!.id,
-        fulfillmentKey: `payment:${createdPayment!.id}`,
-        note: `${product.name} offline payment`,
-        createdBy: req.appUser!.id,
-      });
+      if (fullyPaid) {
+        await tx
+          .insert(creditLedgerTable)
+          .values({
+            clientUserId: client.id,
+            productId: product.id,
+            entryType: "original",
+            hours: product.durationHours,
+            referenceType: "invoice",
+            referenceId: invoice!.id,
+            fulfillmentKey: `invoice:${invoice!.id}`,
+            note: `${product.name} offline payment`,
+            createdBy: req.appUser!.id,
+          })
+          .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
+      }
+      await tx
+        .update(invoicesTable)
+        .set({ status: paymentStatus, ...(fullyPaid ? { paidAt: now } : {}), updatedAt: now })
+        .where(eq(invoicesTable.id, invoice!.id));
       await tx.insert(auditLogsTable).values({
         actorUserId: req.appUser!.id,
         action: "payment.offline_recorded",
         entityType: "payment",
         entityId: createdPayment!.id,
-        metadata: { clientUserId: client.id, productId: product.id },
+        metadata: {
+          clientUserId: client.id,
+          productId: product.id,
+          invoiceId: invoice!.id,
+          cumulativeAmount,
+          fullyPaid,
+        },
       });
       return createdPayment!;
-    });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "This invoice has already been reconciled") {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
     res.status(201).json(payment);
   },
 );
@@ -2914,9 +3368,13 @@ router.patch(
   ensureRole(["administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const invoiceId = typeof req.params.invoiceId === "string" ? req.params.invoiceId : "";
-    const status = stringField((req.body ?? {}) as Record<string, unknown>, "status");
-    if (!["pending", "sent", "overdue", "failed", "canceled"].includes(status)) {
-      res.status(400).json({ error: "Invalid invoice status" });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const status = body.status === undefined ? undefined : stringField(body, "status");
+    if (
+      status !== undefined &&
+      !["pending", "sent", "overdue", "partially_paid", "paid", "failed", "canceled"].includes(status)
+    ) {
+      res.status(400).json({ error: "Paid status requires a verified payment reconciliation" });
       return;
     }
     const [updated] = await db
@@ -2927,6 +3385,65 @@ router.patch(
     const invoice = updated;
     if (!invoice) {
       res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    if (
+      invoice.provider === "stripe_invoice" &&
+      invoice.providerInvoiceId &&
+      Object.keys(body).some((key) => key !== "status")
+    ) {
+      res.status(409).json({
+        error: "Sent Stripe invoices cannot be edited locally; cancel and create a new invoice",
+      });
+      return;
+    }
+    if (status === "paid") {
+      const [verifiedPayment] = await db
+        .select({ id: paymentsTable.id })
+        .from(paymentsTable)
+        .where(
+          and(
+            eq(paymentsTable.invoiceId, invoiceId),
+            eq(paymentsTable.status, "paid"),
+            isNotNull(paymentsTable.verifiedAt),
+          ),
+        )
+        .limit(1);
+      if (!verifiedPayment) {
+        res.status(409).json({ error: "Only a verified payment can mark an invoice paid" });
+        return;
+      }
+    }
+    if (["paid", "refunded", "partially_refunded"].includes(invoice.status) &&
+        (status !== undefined || body.lineItems !== undefined || body.totalCents !== undefined)) {
+      res.status(409).json({ error: "Settled invoices cannot be edited" });
+      return;
+    }
+    let lineItems = invoice.lineItems;
+    try {
+      if (body.lineItems !== undefined) lineItems = parseInvoiceLineItems(body.lineItems);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid line items" });
+      return;
+    }
+    const discountCents =
+      body.discountCents === undefined ? invoice.discountCents : Number(body.discountCents);
+    const taxCents = body.taxCents === undefined ? invoice.taxCents : Number(body.taxCents);
+    if (
+      !Number.isFinite(discountCents) ||
+      discountCents < 0 ||
+      !Number.isFinite(taxCents) ||
+      taxCents < 0
+    ) {
+      res.status(400).json({ error: "Discount and tax must be non-negative amounts" });
+      return;
+    }
+    const totals = invoiceTotals(lineItems, discountCents, taxCents);
+    let dueAt: Date | null | undefined;
+    try {
+      dueAt = body.dueAt === undefined ? undefined : invoiceDate(body.dueAt);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid due date" });
       return;
     }
     if (
@@ -2942,17 +3459,45 @@ router.patch(
         return;
       }
     }
-    const [saved] = await db
-      .update(invoicesTable)
-      .set({ status })
-      .where(eq(invoicesTable.id, invoiceId))
-      .returning();
+    const [saved] = await db.transaction(async (tx) => {
+      const [result] = await tx
+        .update(invoicesTable)
+        .set({
+          ...(status === undefined ? {} : { status }),
+          ...(body.description === undefined ? {} : { description: stringField(body, "description") }),
+          ...(body.issuerName === undefined ? {} : { issuerName: stringField(body, "issuerName") }),
+          ...(body.issuerEmail === undefined ? {} : { issuerEmail: stringField(body, "issuerEmail") }),
+          ...(body.issuerAddress === undefined ? {} : { issuerAddress: stringField(body, "issuerAddress") }),
+          ...(body.clientName === undefined ? {} : { clientName: stringField(body, "clientName") }),
+          ...(body.clientEmail === undefined ? {} : { clientEmail: stringField(body, "clientEmail") }),
+          ...(body.lineItems === undefined ? {} : { lineItems }),
+          ...(body.discountCents === undefined ? {} : { discountCents: Math.round(discountCents) }),
+          ...(body.taxCents === undefined ? {} : { taxCents: Math.round(taxCents) }),
+          ...(body.lineItems === undefined && body.discountCents === undefined && body.taxCents === undefined
+            ? {}
+            : { subtotalCents: totals.subtotalCents, totalCents: totals.totalCents }),
+          ...(body.paymentInstructions === undefined
+            ? {}
+            : { paymentInstructions: stringField(body, "paymentInstructions") }),
+          ...(dueAt === undefined ? {} : { dueAt }),
+          updatedAt: new Date(),
+        })
+        .where(eq(invoicesTable.id, invoiceId))
+        .returning();
+      if (body.lineItems !== undefined || body.discountCents !== undefined || body.taxCents !== undefined) {
+        await tx
+          .update(paymentsTable)
+          .set({ amountCents: totals.totalCents, updatedAt: new Date() })
+          .where(and(eq(paymentsTable.invoiceId, invoiceId), eq(paymentsTable.status, "pending")));
+      }
+      return [result];
+    });
     await db.insert(auditLogsTable).values({
       actorUserId: req.appUser!.id,
-      action: "invoice.status_updated",
+      action: status ? "invoice.updated" : "invoice.details_updated",
       entityType: "invoice",
       entityId: saved!.id,
-      metadata: { status },
+      metadata: { status: status ?? "unchanged", fields: Object.keys(body) },
     });
     res.json(saved);
   },

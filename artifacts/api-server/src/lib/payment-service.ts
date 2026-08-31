@@ -297,11 +297,13 @@ export async function processStripeWebhook(event: {
     const paymentIntentId =
       recordString(object, "payment_intent") ??
       findObjectId(object, "payment_intent");
+    const receiptUrl = recordString(object, "receipt_url");
 
     if (
       event.type === "checkout.session.completed" ||
       event.type === "payment_intent.succeeded" ||
-      event.type === "invoice.paid"
+      event.type === "invoice.paid" ||
+      event.type === "charge.succeeded"
     ) {
       if (
         event.type === "checkout.session.completed" &&
@@ -328,6 +330,8 @@ export async function processStripeWebhook(event: {
           providerCheckoutSessionId:
             event.type.startsWith("checkout.") ? objectId : payment.providerCheckoutSessionId,
           paidAt: payment.paidAt ?? now,
+          verifiedAt: payment.verifiedAt ?? now,
+          receiptUrl: receiptUrl ?? payment.receiptUrl,
           updatedAt: now,
           failureReason: null,
         })
@@ -335,7 +339,12 @@ export async function processStripeWebhook(event: {
       if (invoiceId) {
         await tx
           .update(invoicesTable)
-          .set({ status: retainedRefundStatus, paidAt: payment.paidAt ?? now })
+          .set({
+            status: retainedRefundStatus,
+            paidAt: payment.paidAt ?? now,
+            receiptUrl: receiptUrl ?? undefined,
+            updatedAt: now,
+          })
           .where(eq(invoicesTable.id, invoiceId));
       }
       if (product) {

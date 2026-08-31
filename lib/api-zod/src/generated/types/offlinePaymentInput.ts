@@ -8,7 +8,10 @@
 
 export interface OfflinePaymentInput {
   clientUserId: string;
-  productId: string;
+  productId?: string;
+  invoiceId?: string;
+  /** @minimum 1 */
+  amountCents?: number;
   /** @maxLength 2000 */
   note?: string;
 }
