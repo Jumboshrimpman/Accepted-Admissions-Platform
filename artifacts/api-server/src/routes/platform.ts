@@ -3310,7 +3310,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
       (session): session is (typeof upcomingSessions)[number] =>
         Boolean(session),
     )
-    .slice(0, 4);
+    .slice(0, 12);
   const assignments =
     ids.length === 0
       ? []

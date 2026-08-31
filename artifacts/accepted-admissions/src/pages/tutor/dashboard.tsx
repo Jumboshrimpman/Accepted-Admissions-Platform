@@ -7,8 +7,34 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen, Users, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
+import FallWelcomeDashboard from "@/pages/portal/fall-welcome-dashboard";
+import {
+  getGetCurrentUserQueryKey,
+  useGetCurrentUser,
+} from "@workspace/api-client-react";
+
+const FALL_WELCOME_TUTOR_EMAILS = new Set([
+  "eunice_chon@berkeley.edu",
+  "nika.raiffe@gmail.com",
+]);
 
 export default function TutorDashboard() {
+  const { data: currentUser, isLoading } = useGetCurrentUser({
+    query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
+  });
+
+  if (
+    !isLoading &&
+    currentUser &&
+    FALL_WELCOME_TUTOR_EMAILS.has(currentUser.email.trim().toLowerCase())
+  ) {
+    return <FallWelcomeDashboard />;
+  }
+
+  return <FullTutorDashboard />;
+}
+
+function FullTutorDashboard() {
   const queryClient = useQueryClient();
   const { data: queue, isLoading: loadingQueue } = useListReviewQueue();
   const { data: courses, isLoading: loadingCourses } = useListCourses();
