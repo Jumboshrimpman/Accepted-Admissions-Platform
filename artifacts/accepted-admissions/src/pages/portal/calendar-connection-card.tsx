@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CalendarCheck2,
   ExternalLink,
@@ -7,14 +7,25 @@ import {
   Unplug,
 } from "lucide-react";
 import {
+  useGetCurrentUser,
   useDisconnectCalendar,
   useListCalendarConnections,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  trackCalendarConnection,
+  type CalendarConnectionLocation,
+  type CalendarConnectionOutcome,
+} from "@/lib/analytics";
 
-export function CalendarConnectionCard() {
+export function CalendarConnectionCard({
+  location,
+}: {
+  location: CalendarConnectionLocation;
+}) {
+  const currentUserQuery = useGetCurrentUser();
   const connectionsQuery = useListCalendarConnections();
   const disconnect = useDisconnectCalendar();
   const [message, setMessage] = useState("");
@@ -24,39 +35,78 @@ export function CalendarConnectionCard() {
   const refetchConnections = connectionsQuery.refetch;
   const connectUrl = "/api/calendar/connect?redirect=1";
 
+  const trackCalendarOutcome = useCallback(
+    (outcome: CalendarConnectionOutcome) => {
+      const role = currentUserQuery.data?.role;
+      if (!role) return;
+      trackCalendarConnection(role, location, outcome);
+    },
+    [currentUserQuery.data?.role, location],
+  );
+
   useEffect(() => {
-    const receiveCalendarConnection = (event: MessageEvent) => {
+    const receiveCalendarConnection = (data: unknown) => {
       if (
-        event.origin !== window.location.origin ||
+        !data ||
+        typeof data !== "object" ||
         ![
           "accepted-admissions:calendar-connected",
           "accepted-admissions:calendar-connection-failed",
-        ].includes(event.data?.type)
+        ].includes((data as { type?: string }).type ?? "")
       ) {
         return;
       }
-      if (event.data.type === "accepted-admissions:calendar-connected") {
+      const result = data as { type: string; outcome?: string };
+      if (result.type === "accepted-admissions:calendar-connected") {
+        trackCalendarOutcome("connected");
         setShowConnectFallback(false);
         void refetchConnections();
         setMessage("Google Calendar connected successfully.");
       } else {
+        const outcome: CalendarConnectionOutcome =
+          result.outcome === "cancelled"
+            ? "cancelled"
+            : result.outcome === "rejected"
+              ? "rejected"
+              : "failed";
+        trackCalendarOutcome(outcome);
         setMessage(
           "Google Calendar authorization was not completed. Check the authorization window and try again.",
         );
       }
     };
-    window.addEventListener("message", receiveCalendarConnection);
-    return () => window.removeEventListener("message", receiveCalendarConnection);
-  }, [refetchConnections]);
+    const receiveWindowMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin) {
+        receiveCalendarConnection(event.data);
+      }
+    };
+    const broadcastChannel =
+      typeof BroadcastChannel === "undefined"
+        ? null
+        : new BroadcastChannel("accepted-admissions:calendar-connection");
+    const receiveBroadcastMessage = (event: MessageEvent) => {
+      receiveCalendarConnection(event.data);
+    };
+
+    window.addEventListener("message", receiveWindowMessage);
+    broadcastChannel?.addEventListener("message", receiveBroadcastMessage);
+    return () => {
+      window.removeEventListener("message", receiveWindowMessage);
+      broadcastChannel?.removeEventListener("message", receiveBroadcastMessage);
+      broadcastChannel?.close();
+    };
+  }, [refetchConnections, trackCalendarOutcome]);
 
   const connectCalendar = () => {
     setMessage("");
     setShowConnectFallback(false);
+    trackCalendarOutcome("popup_launched");
     const authorizationWindow = window.open(
       connectUrl,
       "accepted-google-calendar",
     );
     if (!authorizationWindow) {
+      trackCalendarOutcome("popup_blocked");
       setShowConnectFallback(true);
       setMessage(
         "Your browser blocked the Google authorization window. Use the link below to open it directly.",
@@ -74,10 +124,14 @@ export function CalendarConnectionCard() {
       { tutorProfileId: connection.tutorProfileId },
       {
         onSuccess: () => {
+          trackCalendarOutcome("disconnected");
           void connectionsQuery.refetch();
           setMessage("Google Calendar disconnected. Students will no longer see times until it is reconnected.");
         },
-        onError: () => setMessage("The calendar could not be disconnected. Please try again."),
+        onError: () => {
+          trackCalendarOutcome("disconnect_failed");
+          setMessage("The calendar could not be disconnected. Please try again.");
+        },
       },
     );
   };
@@ -129,7 +183,12 @@ export function CalendarConnectionCard() {
         {message && <p className="mt-3 text-sm text-muted-foreground" role="status">{message}</p>}
         {showConnectFallback && (
           <Button asChild variant="outline" className="mt-3 rounded-full">
-            <a href={connectUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={connectUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackCalendarOutcome("popup_launched")}
+            >
               <ExternalLink className="mr-2 h-4 w-4" /> Open Google authorization
             </a>
           </Button>

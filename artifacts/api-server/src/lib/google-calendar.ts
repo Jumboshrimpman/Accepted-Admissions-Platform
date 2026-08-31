@@ -107,8 +107,10 @@ export function googleCalendarAuthorizationUrl(
 export function googleCalendarCompletionHtml(options: {
   success?: boolean;
   message?: string;
+  outcome?: "connected" | "cancelled" | "rejected" | "failed";
 } = {}): string {
   const success = options.success ?? true;
+  const outcome = options.outcome ?? (success ? "connected" : "failed");
   const title = success
     ? "Google Calendar connected"
     : "Google Calendar connection failed";
@@ -149,12 +151,19 @@ export function googleCalendarCompletionHtml(options: {
       <button type="button" onclick="window.close()">Close window</button>
     </main>
     <script>
+      const connectionResult = {
+        type: "accepted-admissions:calendar-${success ? "connected" : "connection-failed"}",
+        outcome: "${outcome}",
+      };
       if (window.opener && !window.opener.closed) {
-        window.opener.postMessage(
-          { type: "accepted-admissions:calendar-${success ? "connected" : "connection-failed"}" },
-          window.location.origin
-        );
+        window.opener.postMessage(connectionResult, window.location.origin);
         ${success ? "window.setTimeout(() => window.close(), 350);" : ""}
+      } else if ("BroadcastChannel" in window) {
+        const connectionChannel = new BroadcastChannel(
+          "accepted-admissions:calendar-connection"
+        );
+        connectionChannel.postMessage(connectionResult);
+        connectionChannel.close();
       }
     </script>
   </body>

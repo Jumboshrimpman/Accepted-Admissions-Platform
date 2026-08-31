@@ -126,7 +126,7 @@ export default function TutorDashboard() {
           </CardContent>
         </Card>
       </div>
-      <CalendarConnectionCard />
+      <CalendarConnectionCard location="tutor_dashboard" />
     </div>
   );
 }

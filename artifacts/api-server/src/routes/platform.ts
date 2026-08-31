@@ -1548,6 +1548,7 @@ router.get(
         .send(
           googleCalendarCompletionHtml({
             success: false,
+            outcome: "failed",
             message: "Calendar authorization was not completed.",
           }),
         );
@@ -1562,6 +1563,7 @@ router.get(
           .send(
             googleCalendarCompletionHtml({
               success: false,
+              outcome: "failed",
               message: "Calendar authorization expired. Please try again.",
             }),
           );
@@ -1587,6 +1589,7 @@ router.get(
           .send(
             googleCalendarCompletionHtml({
               success: false,
+              outcome: "rejected",
               message: "Calendar authorization belongs to a different portal account.",
             }),
           );
@@ -1599,6 +1602,7 @@ router.get(
           .send(
             googleCalendarCompletionHtml({
               success: false,
+              outcome: "cancelled",
               message: "Google authorization was cancelled. No calendar changes were made.",
             }),
           );
@@ -1611,6 +1615,7 @@ router.get(
           .send(
             googleCalendarCompletionHtml({
               success: false,
+              outcome: "failed",
               message: "Google did not return an authorization code. Please try again.",
             }),
           );
@@ -1624,6 +1629,7 @@ router.get(
           .send(
             googleCalendarCompletionHtml({
               success: false,
+              outcome: "rejected",
               message: "Choose the Google account that matches your portal sign-in.",
             }),
           );
@@ -1676,6 +1682,7 @@ router.get(
         .send(
           googleCalendarCompletionHtml({
             success: false,
+            outcome: "failed",
             message: "Google Calendar authorization failed. Please try again.",
           }),
         );

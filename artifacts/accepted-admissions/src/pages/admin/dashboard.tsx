@@ -140,7 +140,7 @@ export default function AdminDashboard() {
       )}
 
       <AdminFinancialsPanel />
-      <CalendarConnectionCard />
+      <CalendarConnectionCard location="admin_dashboard" />
       <PublicContentPanel />
 
       <Card>

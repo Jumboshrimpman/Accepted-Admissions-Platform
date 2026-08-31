@@ -139,7 +139,9 @@ export default function PortalDashboard() {
 
       {dashboard.user.role === "student" && <BookingCard />}
       {(dashboard.user.role === "student" || dashboard.user.role === "viewer") && <FinancialCard />}
-      {dashboard.user.role !== "viewer" && <CalendarConnectionCard />}
+      {dashboard.user.role !== "viewer" && (
+        <CalendarConnectionCard location="portal_dashboard" />
+      )}
 
       {/* Courses */}
       <div className="space-y-4">
