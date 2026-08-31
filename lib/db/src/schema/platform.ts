@@ -134,6 +134,7 @@ export const assignmentsTable = pgTable("assignments", {
   id: uuid("id").primaryKey().defaultRandom(),
   courseId: uuid("course_id").notNull().references(() => coursesTable.id),
   sessionId: uuid("session_id").references(() => sessionsTable.id),
+  deliveryPhase: text("delivery_phase").notNull().default("before_session"),
   title: text("title").notNull(),
   subject: text("subject").notNull(),
   instructions: text("instructions").notNull(),
@@ -200,6 +201,37 @@ export const assignmentQuestionsTable = pgTable(
     uniqueIndex("assignment_question_unique_idx").on(
       table.assignmentId,
       table.questionId,
+    ),
+  ],
+);
+
+export const adaptiveRecommendationsTable = pgTable(
+  "adaptive_recommendations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => sessionsTable.id),
+    sourceAttemptId: uuid("source_attempt_id")
+      .notNull()
+      .references(() => attemptsTable.id),
+    sourceQuestionId: uuid("source_question_id")
+      .notNull()
+      .references(() => questionsTable.id),
+    studentUserId: uuid("student_user_id").notNull().references(() => usersTable.id),
+    skill: text("skill").notNull(),
+    reason: text("reason").notNull(),
+    recommendedQuestionId: uuid("recommended_question_id").references(
+      () => questionsTable.id,
+    ),
+    status: text("status").notNull().default("recommended"),
+    position: numeric("position", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("adaptive_recommendation_source_unique_idx").on(
+      table.sessionId,
+      table.sourceAttemptId,
+      table.sourceQuestionId,
     ),
   ],
 );

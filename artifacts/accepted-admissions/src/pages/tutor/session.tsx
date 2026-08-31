@@ -3,13 +3,22 @@ import { Link, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetSessionQueryKey,
+  getGetAdaptiveCurriculumQueryKey,
+  getGetAssignmentQueryKey,
   getListContentSourcesQueryKey,
   getListQuestionBankQueryKey,
   getListSessionArtifactsQueryKey,
   type QuestionBankItem,
+  useGetAdaptiveCurriculum,
+  useGetAssignment,
+  useRefreshAdaptiveCurriculum,
+  useUpdateAdaptiveRecommendation,
+  useUpdateAssignmentQuestion,
+  useRemoveQuestionFromAssignment,
   useAttachQuestionToAssignment,
   useCreateContentSource,
   useCreateCurriculumBlock,
+  useUpdateCurriculumBlock,
   useGeneratePracticeQuestions,
   useGetSession,
   useListContentSources,
@@ -21,14 +30,18 @@ import {
 import { format, parseISO } from "date-fns";
 import {
   BookOpenCheck,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   ChevronRight,
   FileInput,
   FileText,
   GripVertical,
   Plus,
+  RefreshCw,
   Save,
   Sparkles,
+  ListChecks,
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -233,10 +246,32 @@ export default function TutorSession() {
       queryKey: getListSessionArtifactsQueryKey(sessionId),
     },
   });
+  const duringAssignmentId =
+    session?.assignments.find(
+      (assignment) => assignment.deliveryPhase === "during_session",
+    )?.id ?? "";
+  const { data: duringAssignment } = useGetAssignment(duringAssignmentId, {
+    query: {
+      enabled: Boolean(duringAssignmentId),
+      queryKey: getGetAssignmentQueryKey(duringAssignmentId),
+    },
+  });
+  const { data: adaptive } = useGetAdaptiveCurriculum(sessionId, {
+    query: {
+      enabled: Boolean(sessionId),
+      queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+    },
+  });
   const createBlock = useCreateCurriculumBlock();
+  const updateBlock = useUpdateCurriculumBlock();
   const createSource = useCreateContentSource();
   const generateQuestions = useGeneratePracticeQuestions();
   const saveArtifact = useUpsertSessionArtifact();
+  const refreshAdaptive = useRefreshAdaptiveCurriculum();
+  const updateRecommendation = useUpdateAdaptiveRecommendation();
+  const attachQuestion = useAttachQuestionToAssignment();
+  const updateAssignmentQuestion = useUpdateAssignmentQuestion();
+  const removeAssignmentQuestion = useRemoveQuestionFromAssignment();
 
   const [addingBlock, setAddingBlock] = useState(false);
   const [newBlockText, setNewBlockText] = useState("");
@@ -249,6 +284,7 @@ export default function TutorSession() {
   const [focus, setFocus] = useState("");
   const [transcript, setTranscript] = useState("");
   const [report, setReport] = useState("");
+  const [tutorNotes, setTutorNotes] = useState("");
 
   useEffect(() => {
     if (!selectedSourceId && sources[0]) setSelectedSourceId(sources[0].id);
@@ -260,6 +296,9 @@ export default function TutorSession() {
     );
     setReport(
       artifacts.find((artifact) => artifact.kind === "report")?.content ?? "",
+    );
+    setTutorNotes(
+      artifacts.find((artifact) => artifact.kind === "tutor_notes")?.content ?? "",
     );
   }, [artifacts]);
 
@@ -287,6 +326,32 @@ export default function TutorSession() {
     queryClient.invalidateQueries({
       queryKey: getListSessionArtifactsQueryKey(sessionId),
     });
+  const refreshAdaptiveData = () => {
+    queryClient.invalidateQueries({
+      queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getGetSessionQueryKey(sessionId),
+    });
+    if (duringAssignmentId) {
+      queryClient.invalidateQueries({
+        queryKey: getGetAssignmentQueryKey(duringAssignmentId),
+      });
+    }
+  };
+  const saveTutorNotes = () =>
+    saveArtifact.mutate(
+      {
+        sessionId,
+        data: {
+          kind: "tutor_notes",
+          content: tutorNotes,
+          visibility: "tutor",
+          status: "draft",
+        },
+      },
+      { onSuccess: refreshArtifacts },
+    );
 
   const handleAddHeading = () => {
     if (!newBlockText.trim()) return;
@@ -528,6 +593,347 @@ export default function TutorSession() {
         </TabsContent>
 
         <TabsContent value="curriculum" className="space-y-4">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    Adaptive session plan
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Start with Before Session homework, then publish the approved
+                    During Session sequence. Recommendations never expose source
+                    extracts.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={refreshAdaptive.isPending}
+                  onClick={() =>
+                    refreshAdaptive.mutate(
+                      { sessionId },
+                      { onSuccess: refreshAdaptiveData },
+                    )
+                  }
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  {refreshAdaptive.isPending ? "Refreshing…" : "Refresh from latest result"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="font-semibold">Before Session</p>
+                    <Badge variant="outline">
+                      {adaptive?.homework?.latestAttemptStatus === "submitted" ||
+                      adaptive?.homework?.latestAttemptStatus === "expired"
+                        ? "Complete"
+                        : "Incomplete"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {adaptive?.homework
+                      ? `${adaptive.homework.title} · ${adaptive.homework.questionCount} questions`
+                      : "No homework assignment is linked to this session yet."}
+                  </p>
+                  {adaptive?.homework && (
+                    <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId ?? ""}`}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="mt-3"
+                        disabled={!adaptive.homework.latestAttemptId}
+                      >
+                        Open homework / result
+                      </Button>
+                    </Link>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Incomplete homework can still be worked through during the session.
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="font-semibold">During Session</p>
+                    <Badge variant="secondary">
+                      {duringAssignment?.questions.length ?? 0} questions
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {duringAssignment
+                      ? duringAssignment.title
+                      : "Refresh or accept a recommendation to create the in-session sequence."}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Only approved original practice can enter this sequence.
+                  </p>
+                </div>
+              </div>
+
+              {adaptive && adaptive.mistakes.length > 0 && (
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-primary" />
+                    <p className="font-semibold">Latest result — missed skills</p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[...new Set(adaptive.mistakes.map((mistake) => mistake.skill))].map(
+                      (skill) => (
+                        <div key={skill} className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                          <span className="font-medium">{skill}</span>
+                          <span className="ml-2 text-muted-foreground">
+                            {adaptive.mistakes.filter((mistake) => mistake.skill === skill).length}{" "}
+                            missed
+                          </span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {adaptive && adaptive.recommendations.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold">Recommended original practice</p>
+                    <Badge variant="outline">
+                      {adaptive.recommendations.filter(
+                        (recommendation) => recommendation.status === "recommended",
+                      ).length}{" "}
+                      awaiting decision
+                    </Badge>
+                  </div>
+                  {adaptive.recommendations.map((recommendation) => (
+                    <div key={recommendation.id} className="rounded-xl border bg-background p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{recommendation.skill}</Badge>
+                            <Badge
+                              variant={
+                                recommendation.status === "accepted" ? "default" : "outline"
+                              }
+                            >
+                              {recommendation.status}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {recommendation.reason}
+                          </p>
+                        </div>
+                        {recommendation.status === "recommended" && (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              disabled={updateRecommendation.isPending}
+                              onClick={() =>
+                                updateRecommendation.mutate(
+                                  {
+                                    recommendationId: recommendation.id,
+                                    data: {
+                                      status: "accepted",
+                                      assignmentId: duringAssignmentId || null,
+                                    },
+                                  },
+                                  { onSuccess: refreshAdaptiveData },
+                                )
+                              }
+                            >
+                              Add to session
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={updateRecommendation.isPending}
+                              onClick={() =>
+                                updateRecommendation.mutate(
+                                  {
+                                    recommendationId: recommendation.id,
+                                    data: { status: "dismissed" },
+                                  },
+                                  { onSuccess: refreshAdaptiveData },
+                                )
+                              }
+                            >
+                              Dismiss
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      {recommendation.question && (
+                        <p className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
+                          {recommendation.question.prompt}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adaptive && adaptive.hardQuestions.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold">Hard-question bank</p>
+                    <Badge variant="outline">Available after completed homework</Badge>
+                  </div>
+                  {adaptive.hardQuestions.map((question) => (
+                    <div key={question.id} className="flex items-center justify-between gap-3 rounded-xl border bg-background p-3">
+                      <div>
+                        <Badge variant="secondary">{question.skill}</Badge>
+                        <p className="mt-1 text-sm">{question.prompt}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          !duringAssignmentId ||
+                          !duringAssignment ||
+                          duringAssignment.questions.some((item) => item.id === question.id)
+                        }
+                        onClick={() =>
+                          duringAssignmentId &&
+                          attachQuestion.mutate(
+                            {
+                              assignmentId: duringAssignmentId,
+                              data: {
+                                questionId: question.id,
+                                position: duringAssignment?.questions.length ?? 0,
+                              },
+                            },
+                            { onSuccess: refreshAdaptiveData },
+                          )
+                        }
+                      >
+                        Add hard question
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {duringAssignment && duringAssignment.questions.length > 0 && (
+                <div className="space-y-3 rounded-xl border bg-background p-4">
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-primary" />
+                    <p className="font-semibold">Published in-session sequence</p>
+                  </div>
+                  {duringAssignment.questions.map((question, index) => (
+                    <div key={question.id} className="flex items-center gap-2 rounded-lg border p-3">
+                      <span className="w-6 text-sm font-semibold text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <p className="flex-1 truncate text-sm">{question.prompt}</p>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={index === 0 || updateAssignmentQuestion.isPending}
+                        onClick={() => {
+                          const previous = duringAssignment.questions[index - 1];
+                          updateAssignmentQuestion.mutate(
+                            {
+                              assignmentId: duringAssignment.id,
+                              questionId: question.id,
+                              data: { position: previous.position },
+                            },
+                            {
+                              onSuccess: () =>
+                                updateAssignmentQuestion.mutate(
+                                  {
+                                    assignmentId: duringAssignment.id,
+                                    questionId: previous.id,
+                                    data: { position: question.position },
+                                  },
+                                  { onSuccess: refreshAdaptiveData },
+                                ),
+                            },
+                          );
+                        }}
+                        aria-label="Move question up"
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={
+                          index === duringAssignment.questions.length - 1 ||
+                          updateAssignmentQuestion.isPending
+                        }
+                        onClick={() => {
+                          const next = duringAssignment.questions[index + 1];
+                          updateAssignmentQuestion.mutate(
+                            {
+                              assignmentId: duringAssignment.id,
+                              questionId: question.id,
+                              data: { position: next.position },
+                            },
+                            {
+                              onSuccess: () =>
+                                updateAssignmentQuestion.mutate(
+                                  {
+                                    assignmentId: duringAssignment.id,
+                                    questionId: next.id,
+                                    data: { position: question.position },
+                                  },
+                                  { onSuccess: refreshAdaptiveData },
+                                ),
+                            },
+                          );
+                        }}
+                        aria-label="Move question down"
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive"
+                        disabled={removeAssignmentQuestion.isPending}
+                        onClick={() =>
+                          removeAssignmentQuestion.mutate(
+                            {
+                              assignmentId: duringAssignment.id,
+                              questionId: question.id,
+                            },
+                            { onSuccess: refreshAdaptiveData },
+                          )
+                        }
+                        aria-label="Remove question"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-xl border bg-background p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="font-semibold">Private tutor guidance</p>
+                  <Badge variant="outline">Tutor only</Badge>
+                </div>
+                <Textarea
+                  value={tutorNotes}
+                  onChange={(event) => setTutorNotes(event.target.value)}
+                  placeholder="Write prompts, misconceptions to probe, or a plan for working through incomplete homework."
+                  className="min-h-24"
+                />
+                <Button
+                  size="sm"
+                  className="mt-3"
+                  disabled={!tutorNotes.trim() || saveArtifact.isPending}
+                  onClick={saveTutorNotes}
+                >
+                  <Save className="mr-2 h-4 w-4" /> Save private guidance
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex items-center justify-between border-b pb-2">
             <h2 className="text-2xl font-bold">Curriculum builder</h2>
             <Button size="sm" onClick={() => setAddingBlock(true)} disabled={addingBlock}>
@@ -540,8 +946,36 @@ export default function TutorSession() {
                 <GripVertical className="mt-1 h-5 w-5 text-muted-foreground/40" />
                 <div className="flex-1">
                   <div className="mb-2 flex justify-between">
-                    <Badge variant="secondary">{block.kind}</Badge>
-                    <Badge variant="outline">{block.visibility}</Badge>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="secondary">{block.kind}</Badge>
+                      <Badge variant="outline">{block.visibility}</Badge>
+                      <Badge variant={block.status === "published" ? "default" : "outline"}>
+                        {block.status}
+                      </Badge>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateBlock.isPending}
+                      onClick={() =>
+                        updateBlock.mutate(
+                          {
+                            blockId: block.id,
+                            data: {
+                              status: block.status === "published" ? "draft" : "published",
+                            },
+                          },
+                          {
+                            onSuccess: () =>
+                              queryClient.invalidateQueries({
+                                queryKey: getGetSessionQueryKey(sessionId),
+                              }),
+                          },
+                        )
+                      }
+                    >
+                      {block.status === "published" ? "Unpublish" : "Publish"}
+                    </Button>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {block.kind === "heading"

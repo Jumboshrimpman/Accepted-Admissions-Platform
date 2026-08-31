@@ -717,6 +717,14 @@ export interface CurriculumBlockUpdate {
   config?: CurriculumBlockUpdateConfig;
 }
 
+export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPhase[keyof typeof AssignmentSummaryDeliveryPhase];
+
+
+export const AssignmentSummaryDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
 export type AssignmentSummaryStatus = typeof AssignmentSummaryStatus[keyof typeof AssignmentSummaryStatus];
 
 
@@ -742,6 +750,7 @@ export const AssignmentSummaryLatestAttemptStatus = {
 
 export interface AssignmentSummary {
   id: string;
+  deliveryPhase?: AssignmentSummaryDeliveryPhase;
   title: string;
   subject: string;
   status: AssignmentSummaryStatus;
@@ -770,12 +779,6 @@ export type SessionDetail = Session & ({
   postSessionReportId?: string | null;
 });
 
-export type AssignmentQuestionChoicesItem = {
-  id: string;
-  label: string;
-  text: string;
-};
-
 export type AssignmentQuestionDifficulty = typeof AssignmentQuestionDifficulty[keyof typeof AssignmentQuestionDifficulty];
 
 
@@ -784,6 +787,12 @@ export const AssignmentQuestionDifficulty = {
   medium: 'medium',
   hard: 'hard',
 } as const;
+
+export type AssignmentQuestionChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
 
 export interface AssignmentQuestion {
   id: string;
@@ -797,6 +806,78 @@ export interface AssignmentQuestion {
   skill: string;
   difficulty: AssignmentQuestionDifficulty;
   predictionFirst: boolean;
+}
+
+export type AdaptiveQuestion = AssignmentQuestion & {
+  correctAnswer: string;
+  explanation: string;
+  sourceType: string;
+  reviewStatus: string;
+};
+
+export type AdaptiveRecommendationStatus = typeof AdaptiveRecommendationStatus[keyof typeof AdaptiveRecommendationStatus];
+
+
+export const AdaptiveRecommendationStatus = {
+  recommended: 'recommended',
+  accepted: 'accepted',
+  dismissed: 'dismissed',
+} as const;
+
+export interface AdaptiveRecommendation {
+  id: string;
+  sourceAttemptId: string;
+  sourceQuestionId: string;
+  studentUserId: string;
+  skill: string;
+  reason: string;
+  status: AdaptiveRecommendationStatus;
+  position: number;
+  question?: AdaptiveQuestion | null;
+}
+
+export interface AdaptiveMistake {
+  questionId: string;
+  skill: string;
+  prompt: string;
+  /** @nullable */
+  finalAnswer: string | null;
+  correctAnswer: string;
+  reason: string;
+}
+
+export interface AdaptiveCurriculum {
+  sessionId: string;
+  homework: AssignmentSummary | null;
+  mistakes: AdaptiveMistake[];
+  recommendations: AdaptiveRecommendation[];
+  hardQuestions: AdaptiveQuestion[];
+  /** @nullable */
+  tutorNotes: string | null;
+  publishedBlocks: CurriculumBlock[];
+}
+
+export type AdaptiveRecommendationUpdateStatus = typeof AdaptiveRecommendationUpdateStatus[keyof typeof AdaptiveRecommendationUpdateStatus];
+
+
+export const AdaptiveRecommendationUpdateStatus = {
+  recommended: 'recommended',
+  accepted: 'accepted',
+  dismissed: 'dismissed',
+} as const;
+
+export interface AdaptiveRecommendationUpdate {
+  status: AdaptiveRecommendationUpdateStatus;
+  /** @nullable */
+  assignmentId?: string | null;
+  /** @minimum 0 */
+  position?: number;
+}
+
+export interface AssignmentQuestionUpdate {
+  /** @minimum 0 */
+  position?: number;
+  predictionFirst?: boolean;
 }
 
 export type AssignmentDetail = AssignmentSummary & {
@@ -1290,6 +1371,7 @@ export type SessionArtifactKind = typeof SessionArtifactKind[keyof typeof Sessio
 export const SessionArtifactKind = {
   transcript: 'transcript',
   report: 'report',
+  tutor_notes: 'tutor_notes',
 } as const;
 
 export type SessionArtifactVisibility = typeof SessionArtifactVisibility[keyof typeof SessionArtifactVisibility];
@@ -1325,6 +1407,7 @@ export type SessionArtifactInputKind = typeof SessionArtifactInputKind[keyof typ
 export const SessionArtifactInputKind = {
   transcript: 'transcript',
   report: 'report',
+  tutor_notes: 'tutor_notes',
 } as const;
 
 export type SessionArtifactInputVisibility = typeof SessionArtifactInputVisibility[keyof typeof SessionArtifactInputVisibility];

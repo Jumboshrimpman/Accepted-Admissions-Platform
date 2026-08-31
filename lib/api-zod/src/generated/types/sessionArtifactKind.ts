@@ -12,4 +12,5 @@ export type SessionArtifactKind = typeof SessionArtifactKind[keyof typeof Sessio
 export const SessionArtifactKind = {
   transcript: 'transcript',
   report: 'report',
+  tutor_notes: 'tutor_notes',
 } as const;

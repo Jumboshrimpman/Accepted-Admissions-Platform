@@ -6,6 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adaptiveCurriculum';
+export * from './adaptiveMistake';
+export * from './adaptiveQuestion';
+export * from './adaptiveRecommendation';
+export * from './adaptiveRecommendationStatus';
+export * from './adaptiveRecommendationUpdate';
+export * from './adaptiveRecommendationUpdateStatus';
 export * from './adminFinancials';
 export * from './adminOverview';
 export * from './adminOverviewAssignmentsItem';
@@ -17,7 +24,9 @@ export * from './assignmentDetail';
 export * from './assignmentQuestion';
 export * from './assignmentQuestionChoicesItem';
 export * from './assignmentQuestionDifficulty';
+export * from './assignmentQuestionUpdate';
 export * from './assignmentSummary';
+export * from './assignmentSummaryDeliveryPhase';
 export * from './assignmentSummaryLatestAttemptStatus';
 export * from './assignmentSummaryStatus';
 export * from './attachQuestionInput';

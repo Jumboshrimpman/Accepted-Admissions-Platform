@@ -12,4 +12,5 @@ export type SessionArtifactInputKind = typeof SessionArtifactInputKind[keyof typ
 export const SessionArtifactInputKind = {
   transcript: 'transcript',
   report: 'report',
+  tutor_notes: 'tutor_notes',
 } as const;

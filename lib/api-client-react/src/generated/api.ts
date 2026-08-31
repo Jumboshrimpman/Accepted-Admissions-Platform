@@ -20,9 +20,14 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdaptiveCurriculum,
+  AdaptiveRecommendation,
+  AdaptiveRecommendationUpdate,
   AdminFinancials,
   AdminOverview,
   AssignmentDetail,
+  AssignmentQuestion,
+  AssignmentQuestionUpdate,
   AssignmentSummary,
   AttachQuestionInput,
   Attempt,
@@ -2138,6 +2143,226 @@ export const useCreateCurriculumBlock = <TError = ErrorType<UnauthorizedResponse
       return useMutation(getCreateCurriculumBlockMutationOptions(options));
     }
 
+export const getGetAdaptiveCurriculumUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/adaptive-curriculum`
+}
+
+/**
+ * @summary Get adaptive preparation and in-session curriculum
+ */
+export const getAdaptiveCurriculum = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdaptiveCurriculum> => {
+
+  return customFetch<AdaptiveCurriculum>(getGetAdaptiveCurriculumUrl(sessionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdaptiveCurriculumQueryKey = (sessionId: string,) => {
+    return [
+    `/api/sessions/${sessionId}/adaptive-curriculum`
+    ] as const;
+    }
+
+
+export const getGetAdaptiveCurriculumQueryOptions = <TData = Awaited<ReturnType<typeof getAdaptiveCurriculum>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(sessionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdaptiveCurriculum>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdaptiveCurriculumQueryKey(sessionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdaptiveCurriculum>>> = ({ signal }) => getAdaptiveCurriculum(sessionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: sessionId !== null && sessionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdaptiveCurriculum>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdaptiveCurriculumQueryResult = NonNullable<Awaited<ReturnType<typeof getAdaptiveCurriculum>>>
+export type GetAdaptiveCurriculumQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+/**
+ * @summary Get adaptive preparation and in-session curriculum
+ */
+
+export function useGetAdaptiveCurriculum<TData = Awaited<ReturnType<typeof getAdaptiveCurriculum>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ sessionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdaptiveCurriculum>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdaptiveCurriculumQueryOptions(sessionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRefreshAdaptiveCurriculumUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/adaptive-curriculum`
+}
+
+/**
+ * @summary Derive idempotent recommendations from the latest completed assessment
+ */
+export const refreshAdaptiveCurriculum = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdaptiveCurriculum> => {
+
+  return customFetch<AdaptiveCurriculum>(getRefreshAdaptiveCurriculumUrl(sessionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRefreshAdaptiveCurriculumMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshAdaptiveCurriculum>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refreshAdaptiveCurriculum>>, TError,{sessionId: string}, TContext> => {
+
+const mutationKey = ['refreshAdaptiveCurriculum'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshAdaptiveCurriculum>>, {sessionId: string}> = (props) => {
+          const {sessionId} = props ?? {};
+
+          return  refreshAdaptiveCurriculum(sessionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefreshAdaptiveCurriculumMutationResult = NonNullable<Awaited<ReturnType<typeof refreshAdaptiveCurriculum>>>
+
+    export type RefreshAdaptiveCurriculumMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Derive idempotent recommendations from the latest completed assessment
+ */
+export const useRefreshAdaptiveCurriculum = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshAdaptiveCurriculum>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refreshAdaptiveCurriculum>>,
+        TError,
+        {sessionId: string},
+        TContext
+      > => {
+      return useMutation(getRefreshAdaptiveCurriculumMutationOptions(options));
+    }
+
+export const getUpdateAdaptiveRecommendationUrl = (recommendationId: string,) => {
+
+
+
+
+  return `/api/adaptive-recommendations/${recommendationId}`
+}
+
+/**
+ * @summary Accept or dismiss a recommendation and optionally add it to the session sequence
+ */
+export const updateAdaptiveRecommendation = async (recommendationId: string,
+    adaptiveRecommendationUpdate: AdaptiveRecommendationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdaptiveRecommendation> => {
+
+  return customFetch<AdaptiveRecommendation>(getUpdateAdaptiveRecommendationUrl(recommendationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adaptiveRecommendationUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdaptiveRecommendationMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdaptiveRecommendation>>, TError,{recommendationId: string;data: BodyType<AdaptiveRecommendationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdaptiveRecommendation>>, TError,{recommendationId: string;data: BodyType<AdaptiveRecommendationUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdaptiveRecommendation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdaptiveRecommendation>>, {recommendationId: string;data: BodyType<AdaptiveRecommendationUpdate>}> = (props) => {
+          const {recommendationId,data} = props ?? {};
+
+          return  updateAdaptiveRecommendation(recommendationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdaptiveRecommendationMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdaptiveRecommendation>>>
+    export type UpdateAdaptiveRecommendationMutationBody = BodyType<AdaptiveRecommendationUpdate>
+    export type UpdateAdaptiveRecommendationMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Accept or dismiss a recommendation and optionally add it to the session sequence
+ */
+export const useUpdateAdaptiveRecommendation = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdaptiveRecommendation>>, TError,{recommendationId: string;data: BodyType<AdaptiveRecommendationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdaptiveRecommendation>>,
+        TError,
+        {recommendationId: string;data: BodyType<AdaptiveRecommendationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdaptiveRecommendationMutationOptions(options));
+    }
+
 export const getUpdateCurriculumBlockUrl = (blockId: string,) => {
 
 
@@ -3633,6 +3858,153 @@ export const useAttachQuestionToAssignment = <TError = ErrorType<BadRequestRespo
         TContext
       > => {
       return useMutation(getAttachQuestionToAssignmentMutationOptions(options));
+    }
+
+export const getUpdateAssignmentQuestionUrl = (assignmentId: string,
+    questionId: string,) => {
+
+
+
+
+  return `/api/assignments/${assignmentId}/questions/${questionId}`
+}
+
+/**
+ * @summary Reorder or change an approved question in an assignment
+ */
+export const updateAssignmentQuestion = async (assignmentId: string,
+    questionId: string,
+    assignmentQuestionUpdate: AssignmentQuestionUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AssignmentQuestion> => {
+
+  return customFetch<AssignmentQuestion>(getUpdateAssignmentQuestionUrl(assignmentId,questionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(assignmentQuestionUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAssignmentQuestionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAssignmentQuestion>>, TError,{assignmentId: string;questionId: string;data: BodyType<AssignmentQuestionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAssignmentQuestion>>, TError,{assignmentId: string;questionId: string;data: BodyType<AssignmentQuestionUpdate>}, TContext> => {
+
+const mutationKey = ['updateAssignmentQuestion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAssignmentQuestion>>, {assignmentId: string;questionId: string;data: BodyType<AssignmentQuestionUpdate>}> = (props) => {
+          const {assignmentId,questionId,data} = props ?? {};
+
+          return  updateAssignmentQuestion(assignmentId,questionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAssignmentQuestionMutationResult = NonNullable<Awaited<ReturnType<typeof updateAssignmentQuestion>>>
+    export type UpdateAssignmentQuestionMutationBody = BodyType<AssignmentQuestionUpdate>
+    export type UpdateAssignmentQuestionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Reorder or change an approved question in an assignment
+ */
+export const useUpdateAssignmentQuestion = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAssignmentQuestion>>, TError,{assignmentId: string;questionId: string;data: BodyType<AssignmentQuestionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAssignmentQuestion>>,
+        TError,
+        {assignmentId: string;questionId: string;data: BodyType<AssignmentQuestionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAssignmentQuestionMutationOptions(options));
+    }
+
+export const getRemoveQuestionFromAssignmentUrl = (assignmentId: string,
+    questionId: string,) => {
+
+
+
+
+  return `/api/assignments/${assignmentId}/questions/${questionId}`
+}
+
+/**
+ * @summary Remove a question from an assignment
+ */
+export const removeQuestionFromAssignment = async (assignmentId: string,
+    questionId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRemoveQuestionFromAssignmentUrl(assignmentId,questionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveQuestionFromAssignmentMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeQuestionFromAssignment>>, TError,{assignmentId: string;questionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeQuestionFromAssignment>>, TError,{assignmentId: string;questionId: string}, TContext> => {
+
+const mutationKey = ['removeQuestionFromAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeQuestionFromAssignment>>, {assignmentId: string;questionId: string}> = (props) => {
+          const {assignmentId,questionId} = props ?? {};
+
+          return  removeQuestionFromAssignment(assignmentId,questionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveQuestionFromAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof removeQuestionFromAssignment>>>
+
+    export type RemoveQuestionFromAssignmentMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Remove a question from an assignment
+ */
+export const useRemoveQuestionFromAssignment = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeQuestionFromAssignment>>, TError,{assignmentId: string;questionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeQuestionFromAssignment>>,
+        TError,
+        {assignmentId: string;questionId: string},
+        TContext
+      > => {
+      return useMutation(getRemoveQuestionFromAssignmentMutationOptions(options));
     }
 
 export const getListSessionArtifactsUrl = (sessionId: string,) => {

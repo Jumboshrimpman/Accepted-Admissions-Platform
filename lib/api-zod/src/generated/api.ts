@@ -622,6 +622,7 @@ export const GetDashboardResponse = zod.object({
 })),
   "assignments": zod.array(zod.object({
   "id": zod.string(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -924,6 +925,7 @@ export const GetSessionResponse = zod.object({
 })),
   "assignments": zod.array(zod.object({
   "id": zod.string(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -972,6 +974,250 @@ export const CreateCurriculumBlockResponse = zod.object({
 
 
 /**
+ * @summary Get adaptive preparation and in-session curriculum
+ */
+export const GetAdaptiveCurriculumParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const GetAdaptiveCurriculumResponse = zod.object({
+  "sessionId": zod.string(),
+  "homework": zod.object({
+  "id": zod.string(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullish(),
+  "questionCount": zod.number(),
+  "timeLimitMinutes": zod.number(),
+  "attemptCount": zod.number(),
+  "maxAttempts": zod.number(),
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+}).nullable(),
+  "mistakes": zod.array(zod.object({
+  "questionId": zod.string(),
+  "skill": zod.string(),
+  "prompt": zod.string(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "reason": zod.string()
+})),
+  "recommendations": zod.array(zod.object({
+  "id": zod.string(),
+  "sourceAttemptId": zod.string(),
+  "sourceQuestionId": zod.string(),
+  "studentUserId": zod.string(),
+  "skill": zod.string(),
+  "reason": zod.string(),
+  "status": zod.enum(['recommended', 'accepted', 'dismissed']),
+  "position": zod.number(),
+  "question": zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean()
+}).and(zod.object({
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "reviewStatus": zod.string()
+})).nullish()
+})),
+  "hardQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean()
+}).and(zod.object({
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "reviewStatus": zod.string()
+}))),
+  "tutorNotes": zod.string().nullable(),
+  "publishedBlocks": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "position": zod.number(),
+  "visibility": zod.enum(['student', 'tutor', 'both']),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "config": zod.record(zod.string(), zod.unknown())
+}))
+})
+
+
+/**
+ * @summary Derive idempotent recommendations from the latest completed assessment
+ */
+export const RefreshAdaptiveCurriculumParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const RefreshAdaptiveCurriculumResponse = zod.object({
+  "sessionId": zod.string(),
+  "homework": zod.object({
+  "id": zod.string(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullish(),
+  "questionCount": zod.number(),
+  "timeLimitMinutes": zod.number(),
+  "attemptCount": zod.number(),
+  "maxAttempts": zod.number(),
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+}).nullable(),
+  "mistakes": zod.array(zod.object({
+  "questionId": zod.string(),
+  "skill": zod.string(),
+  "prompt": zod.string(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "reason": zod.string()
+})),
+  "recommendations": zod.array(zod.object({
+  "id": zod.string(),
+  "sourceAttemptId": zod.string(),
+  "sourceQuestionId": zod.string(),
+  "studentUserId": zod.string(),
+  "skill": zod.string(),
+  "reason": zod.string(),
+  "status": zod.enum(['recommended', 'accepted', 'dismissed']),
+  "position": zod.number(),
+  "question": zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean()
+}).and(zod.object({
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "reviewStatus": zod.string()
+})).nullish()
+})),
+  "hardQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean()
+}).and(zod.object({
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "reviewStatus": zod.string()
+}))),
+  "tutorNotes": zod.string().nullable(),
+  "publishedBlocks": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "position": zod.number(),
+  "visibility": zod.enum(['student', 'tutor', 'both']),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "config": zod.record(zod.string(), zod.unknown())
+}))
+})
+
+
+/**
+ * @summary Accept or dismiss a recommendation and optionally add it to the session sequence
+ */
+export const UpdateAdaptiveRecommendationParams = zod.object({
+  "recommendationId": zod.coerce.string()
+})
+
+export const updateAdaptiveRecommendationBodyPositionMin = 0;
+
+
+
+export const UpdateAdaptiveRecommendationBody = zod.object({
+  "status": zod.enum(['recommended', 'accepted', 'dismissed']),
+  "assignmentId": zod.string().nullish(),
+  "position": zod.number().min(updateAdaptiveRecommendationBodyPositionMin).optional()
+})
+
+export const UpdateAdaptiveRecommendationResponse = zod.object({
+  "id": zod.string(),
+  "sourceAttemptId": zod.string(),
+  "sourceQuestionId": zod.string(),
+  "studentUserId": zod.string(),
+  "skill": zod.string(),
+  "reason": zod.string(),
+  "status": zod.enum(['recommended', 'accepted', 'dismissed']),
+  "position": zod.number(),
+  "question": zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean()
+}).and(zod.object({
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "sourceType": zod.string(),
+  "reviewStatus": zod.string()
+})).nullish()
+})
+
+
+/**
  * @summary Update a curriculum block
  */
 export const UpdateCurriculumBlockParams = zod.object({
@@ -1011,6 +1257,7 @@ export const ListAssignmentsQueryParams = zod.object({
 
 export const ListAssignmentsResponseItem = zod.object({
   "id": zod.string(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -1035,6 +1282,7 @@ export const GetAssignmentParams = zod.object({
 
 export const GetAssignmentResponse = zod.object({
   "id": zod.string(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -1944,6 +2192,52 @@ export const AttachQuestionToAssignmentResponse = zod.object({
 
 
 /**
+ * @summary Reorder or change an approved question in an assignment
+ */
+export const UpdateAssignmentQuestionParams = zod.object({
+  "assignmentId": zod.coerce.string(),
+  "questionId": zod.coerce.string()
+})
+
+export const updateAssignmentQuestionBodyPositionMin = 0;
+
+
+
+export const UpdateAssignmentQuestionBody = zod.object({
+  "position": zod.number().min(updateAssignmentQuestionBodyPositionMin).optional(),
+  "predictionFirst": zod.boolean().optional()
+})
+
+export const UpdateAssignmentQuestionResponse = zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean()
+})
+
+
+/**
+ * @summary Remove a question from an assignment
+ */
+export const RemoveQuestionFromAssignmentParams = zod.object({
+  "assignmentId": zod.coerce.string(),
+  "questionId": zod.coerce.string()
+})
+
+export const RemoveQuestionFromAssignmentResponse = zod.void()
+
+
+/**
  * @summary List authorized transcript and post-session report artifacts
  */
 export const ListSessionArtifactsParams = zod.object({
@@ -1953,7 +2247,7 @@ export const ListSessionArtifactsParams = zod.object({
 export const ListSessionArtifactsResponseItem = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
-  "kind": zod.enum(['transcript', 'report']),
+  "kind": zod.enum(['transcript', 'report', 'tutor_notes']),
   "content": zod.string(),
   "visibility": zod.enum(['course', 'tutor']),
   "status": zod.enum(['draft', 'published']),
@@ -1975,7 +2269,7 @@ export const upsertSessionArtifactBodyContentMax = 30000;
 
 
 export const UpsertSessionArtifactBody = zod.object({
-  "kind": zod.enum(['transcript', 'report']),
+  "kind": zod.enum(['transcript', 'report', 'tutor_notes']),
   "content": zod.string().min(1).max(upsertSessionArtifactBodyContentMax),
   "visibility": zod.enum(['course', 'tutor']).optional(),
   "status": zod.enum(['draft', 'published']).optional()
@@ -1984,7 +2278,7 @@ export const UpsertSessionArtifactBody = zod.object({
 export const UpsertSessionArtifactResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
-  "kind": zod.enum(['transcript', 'report']),
+  "kind": zod.enum(['transcript', 'report', 'tutor_notes']),
   "content": zod.string(),
   "visibility": zod.enum(['course', 'tutor']),
   "status": zod.enum(['draft', 'published']),

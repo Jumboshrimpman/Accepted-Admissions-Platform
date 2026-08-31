@@ -96,6 +96,12 @@ export default function PortalSession() {
   }
 
   const studentBlocks = session.blocks.filter(b => b.visibility === 'student' || b.visibility === 'both');
+  const beforeSessionAssignments = session.assignments.filter(
+    (assignment) => assignment.deliveryPhase !== "during_session",
+  );
+  const duringSessionAssignments = session.assignments.filter(
+    (assignment) => assignment.deliveryPhase === "during_session",
+  );
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
@@ -133,7 +139,7 @@ export default function PortalSession() {
 
       <div className="grid gap-8 md:grid-cols-[1fr_300px]">
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold border-b pb-2">Curriculum</h2>
+          <h2 className="text-2xl font-bold border-b pb-2">During Session curriculum</h2>
           {studentBlocks.length > 0 ? (
             <div className="space-y-4">
               {studentBlocks.map(block => (
@@ -143,19 +149,43 @@ export default function PortalSession() {
           ) : (
             <p className="text-muted-foreground italic">No curriculum blocks published for this session yet.</p>
           )}
+          {duringSessionAssignments.length > 0 && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Practice with your tutor</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {duringSessionAssignments.map((assignment) => (
+                  <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
+                    <div>
+                      <p className="font-medium text-sm">{assignment.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {assignment.questionCount} original practice questions
+                      </p>
+                    </div>
+                    <Link href={`/portal/assignments/${assignment.id}`}>
+                      <Button size="sm" variant="secondary">
+                        Open
+                      </Button>
+                    </Link>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-6">
-          {session.assignments && session.assignments.length > 0 && (
+          {beforeSessionAssignments.length > 0 && (
             <Card className="border-accent/20 shadow-md">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <PenTool className="w-5 h-5 text-accent" />
-                  Assignments
+                  Before Session
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {session.assignments.map(assignment => (
+                {beforeSessionAssignments.map(assignment => (
                   <div key={assignment.id} className="p-3 rounded-lg bg-accent/5 border border-accent/10">
                     <p className="font-medium text-sm mb-2">{assignment.title}</p>
                     <Link href={`/portal/assignments/${assignment.id}`}>

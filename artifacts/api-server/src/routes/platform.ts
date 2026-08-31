@@ -1,5 +1,15 @@
 import { clerkClient, getAuth } from "@clerk/express";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
@@ -49,6 +59,8 @@ import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
   AttachQuestionToAssignmentResponse,
+  GetAdaptiveCurriculumParams,
+  GetAdaptiveCurriculumResponse,
   CreateContentSourceBody,
   CreateContentSourceResponse,
   CreateCurriculumBlockBody,
@@ -80,6 +92,16 @@ import {
   ListReviewSubmissionsResponse,
   ListSessionArtifactsParams,
   ListSessionArtifactsResponse,
+  RefreshAdaptiveCurriculumParams,
+  RefreshAdaptiveCurriculumResponse,
+  UpdateAdaptiveRecommendationBody,
+  UpdateAdaptiveRecommendationParams,
+  UpdateAdaptiveRecommendationResponse,
+  UpdateAssignmentQuestionBody,
+  UpdateAssignmentQuestionParams,
+  UpdateAssignmentQuestionResponse,
+  RemoveQuestionFromAssignmentParams,
+  RemoveQuestionFromAssignmentResponse,
   UpdateQuestionBankItemBody,
   UpdateQuestionBankItemParams,
   UpdateQuestionBankItemResponse,
@@ -118,6 +140,7 @@ import {
   contentSourcesTable,
   assignmentQuestionsTable,
   assignmentsTable,
+  adaptiveRecommendationsTable,
   attemptsTable,
   auditLogsTable,
   availabilityRulesTable,
@@ -2149,7 +2172,275 @@ async function finalizeAttemptResult(
       .insert(timerEventsTable)
       .values({ attemptId: attempt.id, type: "submitted" });
   }
+  await deriveAdaptiveRecommendations(attempt.id);
   return result;
+}
+
+type AdaptiveResultItem = {
+  questionId: string;
+  correct: boolean;
+  skill: string;
+  prompt: string;
+  finalAnswer?: string | null;
+  correctAnswer: string;
+};
+
+function adaptiveQuestionShape(
+  question: typeof questionsTable.$inferSelect,
+  position = 0,
+) {
+  return {
+    id: question.id,
+    position,
+    subject: question.subject,
+    questionType: question.questionType,
+    prompt: question.prompt,
+    stimulus: question.stimulus,
+    choices: question.choices,
+    skill: question.skill,
+    difficulty: question.difficulty,
+    predictionFirst: false,
+    correctAnswer: question.correctAnswer,
+    explanation: question.explanation,
+    sourceType: question.sourceType,
+    reviewStatus: question.reviewStatus,
+  };
+}
+
+async function usedQuestionIdsForStudent(
+  courseId: string,
+  studentUserId: string,
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ questionId: responsesTable.questionId })
+    .from(responsesTable)
+    .innerJoin(attemptsTable, eq(attemptsTable.id, responsesTable.attemptId))
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+    .where(
+      and(
+        eq(assignmentsTable.courseId, courseId),
+        eq(attemptsTable.userId, studentUserId),
+      ),
+    );
+  return new Set(rows.map((row) => row.questionId));
+}
+
+function deterministicAdaptiveQuestion(skill: string, subject: string) {
+  const normalized = skill.trim().toLowerCase();
+  if (normalized.includes("transition")) {
+    return {
+      stimulus:
+        "The design reduced material waste during production. _____, the team continued testing its durability.",
+      prompt: "Which choice completes the text with the most logical transition?",
+      choices: [
+        { id: "a", label: "A", text: "However" },
+        { id: "b", label: "B", text: "For example" },
+        { id: "c", label: "C", text: "Similarly" },
+        { id: "d", label: "D", text: "In particular" },
+      ],
+      correctAnswer: "a",
+      explanation:
+        "The second sentence introduces a related but contrasting concern, so “However” is the logical transition.",
+    };
+  }
+  if (normalized.includes("evidence") || normalized.includes("inference")) {
+    return {
+      stimulus:
+        "A two-week comparison found that seedlings in the shaded plot retained more water than seedlings in the unshaded plot, while both plots received the same amount of rain.",
+      prompt: "Which conclusion is best supported by the evidence?",
+      choices: [
+        { id: "a", label: "A", text: "Shade may help the soil retain moisture." },
+        { id: "b", label: "B", text: "Every plant grows best in shade." },
+        { id: "c", label: "C", text: "Rain never reaches shaded plots." },
+        { id: "d", label: "D", text: "The comparison proves all soil is identical." },
+      ],
+      correctAnswer: "a",
+      explanation:
+        "The controlled comparison supports a limited relationship between shade and moisture retention, not an absolute claim.",
+    };
+  }
+  return {
+    stimulus:
+      "The neighborhood library added quiet study rooms and extended its evening hours. Attendance increased during the following month.",
+    prompt: "Which choice best states the central idea of the text?",
+    choices: [
+      { id: "a", label: "A", text: "The library closed its study rooms." },
+      { id: "b", label: "B", text: "Library changes coincided with increased attendance." },
+      { id: "c", label: "C", text: "Only librarians attended in the evening." },
+      { id: "d", label: "D", text: "The neighborhood stopped using the library." },
+    ],
+    correctAnswer: "b",
+    explanation:
+      "The text connects the library's added access and facilities with increased attendance without claiming that the changes caused every visit.",
+  };
+}
+
+async function createDeterministicAdaptiveQuestion(
+  skill: string,
+  subject: string,
+  usedQuestionIds: Set<string>,
+) {
+  const existing = await db
+    .select()
+    .from(questionsTable)
+    .where(
+      and(
+        eq(questionsTable.subject, subject),
+        eq(questionsTable.skill, skill),
+        eq(questionsTable.sourceType, "original"),
+        eq(questionsTable.generationMethod, "adaptive-deterministic"),
+        eq(questionsTable.reviewStatus, "approved"),
+      ),
+    )
+    .orderBy(desc(questionsTable.createdAt));
+  const available = existing.find((question) => !usedQuestionIds.has(question.id));
+  if (available) return available;
+
+  const template = deterministicAdaptiveQuestion(skill, subject);
+  const [created] = await db
+    .insert(questionsTable)
+    .values({
+      subject,
+      domain: "Adaptive practice",
+      skill,
+      questionType: "multiple_choice",
+      difficulty: "hard",
+      stimulus: template.stimulus,
+      prompt: template.prompt,
+      choices: template.choices,
+      correctAnswer: template.correctAnswer,
+      explanation: template.explanation,
+      sourceType: "original",
+      sourceId: null,
+      reviewStatus: "approved",
+      tags: [`adaptive:${skill.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`],
+      generationMethod: "adaptive-deterministic",
+      reviewedAt: new Date(),
+    })
+    .returning();
+  return created;
+}
+
+async function ensureHardQuestionFallback(
+  session: typeof sessionsTable.$inferSelect,
+  courseId: string,
+  studentUserId: string,
+) {
+  const usedQuestionIds = await usedQuestionIdsForStudent(courseId, studentUserId);
+  const hardQuestions = await db
+    .select({ id: questionsTable.id, subject: questionsTable.subject })
+    .from(questionsTable)
+    .where(
+      and(
+        eq(questionsTable.reviewStatus, "approved"),
+        eq(questionsTable.sourceType, "original"),
+        eq(questionsTable.difficulty, "hard"),
+      ),
+    );
+  const available = hardQuestions.find(
+    (question) =>
+      subjectFamily(question.subject) === subjectFamily(session.subject) &&
+      !usedQuestionIds.has(question.id),
+  );
+  if (!available) {
+    await createDeterministicAdaptiveQuestion(
+      "Mixed SAT reasoning",
+      session.subject,
+      usedQuestionIds,
+    );
+  }
+}
+
+async function deriveAdaptiveRecommendations(attemptId: string): Promise<void> {
+  const [record] = await db
+    .select({ attempt: attemptsTable, assignment: assignmentsTable, session: sessionsTable })
+    .from(attemptsTable)
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+    .innerJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
+    .where(eq(attemptsTable.id, attemptId))
+    .limit(1);
+  if (!record?.attempt.result) return;
+  const result = record.attempt.result as { items?: AdaptiveResultItem[] };
+  const missed = (result.items ?? []).filter((item) => item.correct === false);
+  if (missed.length === 0) {
+    await ensureHardQuestionFallback(
+      record.session,
+      record.assignment.courseId,
+      record.attempt.userId,
+    );
+    return;
+  }
+
+  const existing = await db
+    .select({ sourceQuestionId: adaptiveRecommendationsTable.sourceQuestionId })
+    .from(adaptiveRecommendationsTable)
+    .where(
+      and(
+        eq(adaptiveRecommendationsTable.sessionId, record.session.id),
+        eq(adaptiveRecommendationsTable.sourceAttemptId, attemptId),
+      ),
+    );
+  const existingSourceIds = new Set(existing.map((item) => item.sourceQuestionId));
+  const usedQuestionIds = await usedQuestionIdsForStudent(
+    record.assignment.courseId,
+    record.attempt.userId,
+  );
+  const approvedOriginals = await db
+    .select()
+    .from(questionsTable)
+    .where(
+      and(
+        eq(questionsTable.reviewStatus, "approved"),
+        eq(questionsTable.sourceType, "original"),
+      ),
+    );
+  const subjectFamilyName = subjectFamily(record.session.subject);
+  const candidates = approvedOriginals.filter(
+    (question) =>
+      subjectFamily(question.subject) === subjectFamilyName &&
+      !usedQuestionIds.has(question.id),
+  );
+  const questionBySkill = new Map<string, typeof questionsTable.$inferSelect>();
+  for (const item of missed) {
+    if (existingSourceIds.has(item.questionId)) continue;
+    let recommended = questionBySkill.get(item.skill);
+    if (!recommended) {
+      recommended =
+        candidates.find((question) => question.skill === item.skill) ??
+        (await createDeterministicAdaptiveQuestion(
+          item.skill,
+          record.session.subject,
+          usedQuestionIds,
+        ));
+      questionBySkill.set(item.skill, recommended);
+      usedQuestionIds.add(recommended.id);
+    }
+    await db
+      .insert(adaptiveRecommendationsTable)
+      .values({
+        sessionId: record.session.id,
+        sourceAttemptId: attemptId,
+        sourceQuestionId: item.questionId,
+        studentUserId: record.attempt.userId,
+        skill: item.skill,
+        reason: `Missed ${item.skill} on the latest assessment; practice an approved original variant before the session.`,
+        recommendedQuestionId: recommended.id,
+        status: "recommended",
+        position: questionBySkill.size - 1,
+      })
+      .onConflictDoNothing();
+  }
+  await db.insert(auditLogsTable).values({
+    actorUserId: record.attempt.userId,
+    action: "adaptive_curriculum.recommendations_derived",
+    entityType: "session",
+    entityId: record.session.id,
+    metadata: {
+      sourceAttemptId: attemptId,
+      missedQuestionCount: missed.length,
+      skillCount: questionBySkill.size,
+    },
+  });
 }
 
 const requestRateLimit = new Map<string, number>();
@@ -4655,7 +4946,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       ...publicSessionShape(session),
       tutor: await sessionTutorShape(session),
       blocks:
-        req.appUser!.role === "student"
+        req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
           ? blocks.filter(
               (block) =>
                 block.status === "published" && block.visibility !== "tutor",
@@ -4664,7 +4955,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       assignments,
       studentNotes: null,
       tutorNotes:
-        req.appUser!.role === "student"
+        req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
           ? null
           : "Review predictions before revealing answer choices.",
       postSessionReportId: null,
@@ -4706,7 +4997,7 @@ async function assignmentSummariesForUser(
   return Promise.all(
     scopedRows.map(async (assignment) => {
       if (
-        user.role === "student" &&
+        (user.role === "student" || user.role === "viewer") &&
         (assignment.status === "draft" || assignment.status === "archived")
       ) {
         return null;
@@ -4727,6 +5018,10 @@ async function assignmentSummariesForUser(
         .orderBy(desc(attemptsTable.startedAt));
       return {
         id: assignment.id,
+        deliveryPhase:
+          assignment.deliveryPhase === "during_session"
+            ? "during_session"
+            : "before_session",
         title: assignment.title,
         subject: assignment.subject,
         status: assignment.status,
@@ -4744,6 +5039,268 @@ async function assignmentSummariesForUser(
     items.filter((item): item is NonNullable<typeof item> => item !== null),
   );
 }
+
+async function ensureDuringSessionAssignment(
+  session: typeof sessionsTable.$inferSelect,
+): Promise<typeof assignmentsTable.$inferSelect> {
+  const [existing] = await db
+    .select()
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, session.id),
+        eq(assignmentsTable.deliveryPhase, "during_session"),
+      ),
+    )
+    .orderBy(asc(assignmentsTable.createdAt))
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db
+    .insert(assignmentsTable)
+    .values({
+      courseId: session.courseId,
+      sessionId: session.id,
+      deliveryPhase: "during_session",
+      title: `During session practice — ${session.title}`,
+      subject: session.subject,
+      instructions:
+        "Work through this original practice sequence with your tutor during the session.",
+      status: "published",
+      timeLimitMinutes: 30,
+      maxAttempts: 1,
+    })
+    .returning();
+  return created!;
+}
+
+async function adaptiveCurriculumForSession(
+  session: typeof sessionsTable.$inferSelect,
+  user: AppUser,
+) {
+  const summaries = await assignmentSummariesForUser(user, session.courseId, session.id);
+  const homework =
+    summaries.find((assignment) => assignment.deliveryPhase === "before_session") ??
+    summaries[0] ??
+    null;
+  const subjectUserId = session.clientUserId ?? (await dataSubjectUserId(user));
+  const [latestAttempt] = homework
+    ? await db
+        .select()
+        .from(attemptsTable)
+        .where(
+          and(
+            eq(attemptsTable.assignmentId, homework.id),
+            eq(attemptsTable.userId, subjectUserId),
+          ),
+        )
+        .orderBy(desc(attemptsTable.startedAt))
+        .limit(1)
+    : [];
+  const result = latestAttempt?.result as
+    | { items?: AdaptiveResultItem[] }
+    | null
+    | undefined;
+  const isStaff = user.role === "administrator" || user.role === "tutor";
+  const completed = latestAttempt?.status === "submitted" || latestAttempt?.status === "expired";
+  const mistakes =
+    isStaff && completed
+      ? (result?.items ?? [])
+          .filter((item) => item.correct === false)
+          .map((item) => ({
+            questionId: item.questionId,
+            skill: item.skill,
+            prompt: item.prompt,
+            finalAnswer: item.finalAnswer ?? null,
+            correctAnswer: item.correctAnswer,
+            reason: `The latest assessment response missed ${item.skill}.`,
+          }))
+      : [];
+  const recommendationRows =
+    isStaff && completed
+      ? await db
+          .select({
+            recommendation: adaptiveRecommendationsTable,
+            question: questionsTable,
+          })
+          .from(adaptiveRecommendationsTable)
+          .leftJoin(
+            questionsTable,
+            eq(
+              questionsTable.id,
+              adaptiveRecommendationsTable.recommendedQuestionId,
+            ),
+          )
+          .where(eq(adaptiveRecommendationsTable.sessionId, session.id))
+          .orderBy(
+            asc(adaptiveRecommendationsTable.position),
+            asc(adaptiveRecommendationsTable.createdAt),
+          )
+      : [];
+  const hardQuestions: ReturnType<typeof adaptiveQuestionShape>[] = [];
+  if (isStaff && completed) {
+    const usedQuestionIds = await usedQuestionIdsForStudent(
+      session.courseId,
+      subjectUserId,
+    );
+    const hardPool = await db
+      .select()
+      .from(questionsTable)
+      .where(
+        and(
+          eq(questionsTable.reviewStatus, "approved"),
+          eq(questionsTable.sourceType, "original"),
+          eq(questionsTable.difficulty, "hard"),
+        ),
+      );
+    hardQuestions.push(
+      ...hardPool
+        .filter(
+          (question) =>
+            subjectFamily(question.subject) === subjectFamily(session.subject) &&
+            !usedQuestionIds.has(question.id),
+        )
+        .slice(0, 8)
+        .map((question, index) => adaptiveQuestionShape(question, index)),
+    );
+  }
+  const blocks = await db
+    .select()
+    .from(curriculumBlocksTable)
+    .where(
+      and(
+        eq(curriculumBlocksTable.sessionId, session.id),
+        eq(curriculumBlocksTable.status, "published"),
+      ),
+    )
+    .orderBy(asc(curriculumBlocksTable.position));
+  const [notes] = await db
+    .select({ content: sessionArtifactsTable.content })
+    .from(sessionArtifactsTable)
+    .where(
+      and(
+        eq(sessionArtifactsTable.sessionId, session.id),
+        eq(sessionArtifactsTable.kind, "tutor_notes"),
+      ),
+    )
+    .limit(1);
+  return {
+    sessionId: session.id,
+    homework,
+    mistakes,
+    recommendations: recommendationRows.map(({ recommendation, question }) => ({
+      id: recommendation.id,
+      sourceAttemptId: recommendation.sourceAttemptId,
+      sourceQuestionId: recommendation.sourceQuestionId,
+      studentUserId: recommendation.studentUserId,
+      skill: recommendation.skill,
+      reason: recommendation.reason,
+      status:
+        recommendation.status === "accepted" || recommendation.status === "dismissed"
+          ? recommendation.status
+          : "recommended",
+      position: recommendation.position,
+      question:
+        isStaff && question
+          ? adaptiveQuestionShape(question, recommendation.position)
+          : null,
+    })),
+    hardQuestions,
+    tutorNotes: isStaff ? notes?.content ?? null : null,
+    publishedBlocks: isStaff
+      ? blocks
+      : blocks.filter((block) => block.visibility !== "tutor"),
+  };
+}
+
+router.get(
+  "/sessions/:sessionId/adaptive-curriculum",
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = GetAdaptiveCurriculumParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, params.data.sessionId))
+      .limit(1);
+    if (
+      !session ||
+      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
+    ) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    res.json(
+      GetAdaptiveCurriculumResponse.parse(
+        await adaptiveCurriculumForSession(session, req.appUser!),
+      ),
+    );
+  },
+);
+
+router.post(
+  "/sessions/:sessionId/adaptive-curriculum",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = RefreshAdaptiveCurriculumParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, params.data.sessionId))
+      .limit(1);
+    if (
+      !session ||
+      !(await canAccessStudent(
+        req.appUser!,
+        session.courseId,
+        session.clientUserId ?? "",
+        session.subject,
+      ))
+    ) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const homework = await db
+      .select({ id: assignmentsTable.id })
+      .from(assignmentsTable)
+      .where(
+        and(
+          eq(assignmentsTable.sessionId, session.id),
+          eq(assignmentsTable.deliveryPhase, "before_session"),
+        ),
+      )
+      .limit(1);
+    if (homework[0]) {
+      const [attempt] = await db
+        .select({ id: attemptsTable.id })
+        .from(attemptsTable)
+        .where(
+          and(
+            eq(attemptsTable.assignmentId, homework[0].id),
+            eq(attemptsTable.userId, session.clientUserId ?? ""),
+            inArray(attemptsTable.status, ["submitted", "expired"]),
+          ),
+        )
+        .orderBy(desc(attemptsTable.startedAt))
+        .limit(1);
+      if (attempt) await deriveAdaptiveRecommendations(attempt.id);
+    }
+    await ensureDuringSessionAssignment(session);
+    res
+      .status(201)
+      .json(
+        RefreshAdaptiveCurriculumResponse.parse(
+          await adaptiveCurriculumForSession(session, req.appUser!),
+        ),
+      );
+  },
+);
 
 router.get("/assignments", async (req: AuthedRequest, res): Promise<void> => {
   const query = ListAssignmentsQueryParams.safeParse(req.query);
@@ -4783,7 +5340,7 @@ router.get(
         assignment.courseId,
         assignment.subject,
       ))
-      || (req.appUser!.role === "student" &&
+      || ((req.appUser!.role === "student" || req.appUser!.role === "viewer") &&
         (assignment.status === "draft" || assignment.status === "archived"))
     ) {
       res.status(404).json({ error: "Assignment not found" });
@@ -5759,6 +6316,11 @@ router.get(
       res.status(404).json({ error: "Course not found" });
       return;
     }
+    const [course] = await db
+      .select({ subject: coursesTable.subject })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, query.data.courseId))
+      .limit(1);
     const conditions = [eq(contentSourcesTable.courseId, query.data.courseId)];
     if (query.data.reviewStatus) {
       conditions.push(eq(questionsTable.reviewStatus, query.data.reviewStatus));
@@ -5787,7 +6349,30 @@ router.get(
     ).filter((question): question is (typeof rows)[number]["question"] =>
       Boolean(question),
     );
-    res.json(ListQuestionBankResponse.parse(visibleRows.map(questionBankShape)));
+    const originalQuestions = course
+      ? await db
+          .select()
+          .from(questionsTable)
+          .where(
+            and(
+              isNull(questionsTable.sourceId),
+              eq(questionsTable.reviewStatus, query.data.reviewStatus ?? "approved"),
+            ),
+          )
+          .then((items) =>
+            items.filter(
+              (question) =>
+                subjectFamily(question.subject) === subjectFamily(course.subject),
+            ),
+          )
+      : [];
+    const questionIds = new Set(visibleRows.map((question) => question.id));
+    res.json(
+      ListQuestionBankResponse.parse(
+        [...visibleRows, ...originalQuestions.filter((question) => !questionIds.has(question.id))]
+          .map(questionBankShape),
+      ),
+    );
   },
 );
 
@@ -5806,24 +6391,39 @@ router.patch(
       return;
     }
     const [visibleQuestion] = await db
-      .select({
-        question: questionsTable,
-        courseId: contentSourcesTable.courseId,
-        subject: contentSourcesTable.subject,
-      })
+      .select({ question: questionsTable })
       .from(questionsTable)
-      .innerJoin(
-        contentSourcesTable,
-        eq(contentSourcesTable.id, questionsTable.sourceId),
-      )
       .where(eq(questionsTable.id, params.data.questionId));
+    const [questionSource] = visibleQuestion?.question.sourceId
+      ? await db
+          .select({
+            courseId: contentSourcesTable.courseId,
+            subject: contentSourcesTable.subject,
+          })
+          .from(contentSourcesTable)
+          .where(eq(contentSourcesTable.id, visibleQuestion.question.sourceId))
+          .limit(1)
+      : [];
+    let accessibleQuestion = false;
+    if (visibleQuestion && questionSource) {
+      accessibleQuestion = await canAccessCourse(
+        req.appUser!,
+        questionSource.courseId,
+        visibleQuestion.question.subject || questionSource.subject,
+      );
+    } else if (visibleQuestion) {
+      const accessibleCourses = await visibleCourseIds(req.appUser!);
+      accessibleQuestion = (
+        await Promise.all(
+          accessibleCourses.map((courseId) =>
+            canAccessCourse(req.appUser!, courseId, visibleQuestion.question.subject),
+          ),
+        )
+      ).some(Boolean);
+    }
     if (
       !visibleQuestion ||
-      !(await canAccessCourse(
-        req.appUser!,
-        visibleQuestion.courseId,
-      visibleQuestion.question.subject || visibleQuestion.subject,
-      ))
+      !accessibleQuestion
     ) {
       res.status(404).json({ error: "Question not found" });
       return;
@@ -5883,27 +6483,33 @@ router.post(
       .from(assignmentsTable)
       .where(eq(assignmentsTable.id, params.data.assignmentId));
     const [questionRecord] = await db
-      .select({ question: questionsTable, courseId: contentSourcesTable.courseId })
+      .select({ question: questionsTable })
       .from(questionsTable)
-      .innerJoin(
-        contentSourcesTable,
-        eq(contentSourcesTable.id, questionsTable.sourceId),
-      )
       .where(eq(questionsTable.id, body.data.questionId));
+    const [sourceRecord] = questionRecord?.question.sourceId
+      ? await db
+          .select({ courseId: contentSourcesTable.courseId })
+          .from(contentSourcesTable)
+          .where(eq(contentSourcesTable.id, questionRecord.question.sourceId))
+          .limit(1)
+      : [];
     if (
       !assignment ||
       !questionRecord ||
-      assignment.courseId !== questionRecord.courseId ||
+      subjectFamily(assignment.subject) !==
+        subjectFamily(questionRecord.question.subject) ||
       !(await canAccessCourse(
         req.appUser!,
         assignment.courseId,
         assignment.subject,
       )) ||
-      !(await canAccessCourse(
-        req.appUser!,
-        questionRecord.courseId,
-        questionRecord.question.subject,
-      ))
+      (sourceRecord &&
+        (sourceRecord.courseId !== assignment.courseId ||
+          !(await canAccessCourse(
+            req.appUser!,
+            sourceRecord.courseId,
+            questionRecord.question.subject,
+          ))))
     ) {
       res.status(404).json({ error: "Assignment or question not found" });
       return;
@@ -5944,6 +6550,224 @@ router.post(
   },
 );
 
+router.patch(
+  "/assignments/:assignmentId/questions/:questionId",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAssignmentQuestionParams.safeParse(req.params);
+    const body = UpdateAssignmentQuestionBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid assignment question update" });
+      return;
+    }
+    const [record] = await db
+      .select({ assignmentQuestion: assignmentQuestionsTable, assignment: assignmentsTable, question: questionsTable })
+      .from(assignmentQuestionsTable)
+      .innerJoin(assignmentsTable, eq(assignmentsTable.id, assignmentQuestionsTable.assignmentId))
+      .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+      .where(
+        and(
+          eq(assignmentQuestionsTable.assignmentId, params.data.assignmentId),
+          eq(assignmentQuestionsTable.questionId, params.data.questionId),
+        ),
+      )
+      .limit(1);
+    if (
+      !record ||
+      !(await canAccessCourse(
+        req.appUser!,
+        record.assignment.courseId,
+        record.assignment.subject,
+      ))
+    ) {
+      res.status(404).json({ error: "Assignment question not found" });
+      return;
+    }
+    const [updated] = await db
+      .update(assignmentQuestionsTable)
+      .set(body.data)
+      .where(eq(assignmentQuestionsTable.id, record.assignmentQuestion.id))
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "assignment_question.updated",
+      entityType: "assignment",
+      entityId: record.assignment.id,
+      metadata: { questionId: record.question.id, position: updated!.position },
+    });
+    res.json(
+      UpdateAssignmentQuestionResponse.parse({
+        id: record.question.id,
+        position: updated!.position,
+        subject: record.question.subject,
+        questionType: record.question.questionType,
+        prompt: record.question.prompt,
+        stimulus: record.question.stimulus,
+        choices: record.question.choices,
+        skill: record.question.skill,
+        difficulty: record.question.difficulty,
+        predictionFirst: updated!.predictionFirst,
+      }),
+    );
+  },
+);
+
+router.delete(
+  "/assignments/:assignmentId/questions/:questionId",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = RemoveQuestionFromAssignmentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [record] = await db
+      .select({ assignmentQuestion: assignmentQuestionsTable, assignment: assignmentsTable })
+      .from(assignmentQuestionsTable)
+      .innerJoin(assignmentsTable, eq(assignmentsTable.id, assignmentQuestionsTable.assignmentId))
+      .where(
+        and(
+          eq(assignmentQuestionsTable.assignmentId, params.data.assignmentId),
+          eq(assignmentQuestionsTable.questionId, params.data.questionId),
+        ),
+      )
+      .limit(1);
+    if (
+      !record ||
+      !(await canAccessCourse(
+        req.appUser!,
+        record.assignment.courseId,
+        record.assignment.subject,
+      ))
+    ) {
+      res.status(404).json({ error: "Assignment question not found" });
+      return;
+    }
+    await db
+      .delete(assignmentQuestionsTable)
+      .where(eq(assignmentQuestionsTable.id, record.assignmentQuestion.id));
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "assignment_question.removed",
+      entityType: "assignment",
+      entityId: record.assignment.id,
+      metadata: { questionId: params.data.questionId },
+    });
+    res.status(204).send();
+  },
+);
+
+router.patch(
+  "/adaptive-recommendations/:recommendationId",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdaptiveRecommendationParams.safeParse(req.params);
+    const body = UpdateAdaptiveRecommendationBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid recommendation update" });
+      return;
+    }
+    const [record] = await db
+      .select({ recommendation: adaptiveRecommendationsTable, session: sessionsTable })
+      .from(adaptiveRecommendationsTable)
+      .innerJoin(sessionsTable, eq(sessionsTable.id, adaptiveRecommendationsTable.sessionId))
+      .where(eq(adaptiveRecommendationsTable.id, params.data.recommendationId))
+      .limit(1);
+    if (
+      !record ||
+      !(await canAccessStudent(
+        req.appUser!,
+        record.session.courseId,
+        record.session.clientUserId ?? "",
+        record.session.subject,
+      ))
+    ) {
+      res.status(404).json({ error: "Recommendation not found" });
+      return;
+    }
+    let assignmentId = body.data.assignmentId ?? null;
+    if (body.data.status === "accepted") {
+      const [question] = await db
+        .select()
+        .from(questionsTable)
+        .where(eq(questionsTable.id, record.recommendation.recommendedQuestionId ?? ""));
+      if (!question || question.reviewStatus !== "approved") {
+        res.status(400).json({ error: "Only approved practice can be accepted" });
+        return;
+      }
+      const assignment = assignmentId
+        ? (await db
+            .select()
+            .from(assignmentsTable)
+            .where(eq(assignmentsTable.id, assignmentId))
+            .limit(1))[0]
+        : await ensureDuringSessionAssignment(record.session);
+      if (
+        !assignment ||
+        assignment.sessionId !== record.session.id ||
+        assignment.deliveryPhase !== "during_session" ||
+        !(await canAccessCourse(
+          req.appUser!,
+          assignment.courseId,
+          assignment.subject,
+        ))
+      ) {
+        res.status(404).json({ error: "During-session assignment not found" });
+        return;
+      }
+      assignmentId = assignment.id;
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(assignmentQuestionsTable)
+        .where(eq(assignmentQuestionsTable.assignmentId, assignment.id));
+      await db
+        .insert(assignmentQuestionsTable)
+        .values({
+          assignmentId: assignment.id,
+          questionId: question.id,
+          position: body.data.position ?? Number(count),
+        })
+        .onConflictDoNothing();
+    }
+    const [updated] = await db
+      .update(adaptiveRecommendationsTable)
+      .set({
+        status: body.data.status,
+        position: body.data.position ?? record.recommendation.position,
+        updatedAt: new Date(),
+      })
+      .where(eq(adaptiveRecommendationsTable.id, record.recommendation.id))
+      .returning();
+    const [question] = updated?.recommendedQuestionId
+      ? await db
+          .select()
+          .from(questionsTable)
+          .where(eq(questionsTable.id, updated.recommendedQuestionId))
+          .limit(1)
+      : [];
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: `adaptive_recommendation.${body.data.status}`,
+      entityType: "session",
+      entityId: record.session.id,
+      metadata: { recommendationId: updated!.id, assignmentId },
+    });
+    res.json(
+      UpdateAdaptiveRecommendationResponse.parse({
+        id: updated!.id,
+        sourceAttemptId: updated!.sourceAttemptId,
+        sourceQuestionId: updated!.sourceQuestionId,
+        studentUserId: updated!.studentUserId,
+        skill: updated!.skill,
+        reason: updated!.reason,
+        status: updated!.status,
+        position: updated!.position,
+        question: question ? adaptiveQuestionShape(question, updated!.position) : null,
+      }),
+    );
+  },
+);
+
 router.get(
   "/sessions/:sessionId/artifacts",
   async (req: AuthedRequest, res): Promise<void> => {
@@ -5969,7 +6793,7 @@ router.get(
       .where(eq(sessionArtifactsTable.sessionId, session.id))
       .orderBy(asc(sessionArtifactsTable.kind));
     const visible =
-      req.appUser!.role === "student"
+      req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
         ? artifacts.filter(
             (artifact) =>
               artifact.kind === "report" &&

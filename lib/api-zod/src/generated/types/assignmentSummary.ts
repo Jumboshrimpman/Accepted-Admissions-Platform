@@ -5,11 +5,13 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AssignmentSummaryDeliveryPhase } from './assignmentSummaryDeliveryPhase';
 import type { AssignmentSummaryLatestAttemptStatus } from './assignmentSummaryLatestAttemptStatus';
 import type { AssignmentSummaryStatus } from './assignmentSummaryStatus';
 
 export interface AssignmentSummary {
   id: string;
+  deliveryPhase?: AssignmentSummaryDeliveryPhase;
   title: string;
   subject: string;
   status: AssignmentSummaryStatus;

@@ -497,6 +497,61 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /sessions/{sessionId}/adaptive-curriculum:
+    get:
+      operationId: getAdaptiveCurriculum
+      tags: [curriculum]
+      summary: Get adaptive preparation and in-session curriculum
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Tutor preparation data or the safe student curriculum subset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdaptiveCurriculum" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: refreshAdaptiveCurriculum
+      tags: [curriculum]
+      summary: Derive idempotent recommendations from the latest completed assessment
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "201":
+          description: Refreshed adaptive curriculum
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdaptiveCurriculum" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /adaptive-recommendations/{recommendationId}:
+    patch:
+      operationId: updateAdaptiveRecommendation
+      tags: [curriculum]
+      summary: Accept or dismiss a recommendation and optionally add it to the session sequence
+      parameters:
+        - name: recommendationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdaptiveRecommendationUpdate" }
+      responses:
+        "200":
+          description: Updated recommendation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdaptiveRecommendation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /blocks/{blockId}:
     patch:
       operationId: updateCurriculumBlock
@@ -929,6 +984,41 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/QuestionBankItem" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /assignments/{assignmentId}/questions/{questionId}:
+    patch:
+      operationId: updateAssignmentQuestion
+      tags: [content]
+      summary: Reorder or change an approved question in an assignment
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentQuestionUpdate" }
+      responses:
+        "200":
+          description: Updated assignment question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssignmentQuestion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeQuestionFromAssignment
+      tags: [content]
+      summary: Remove a question from an assignment
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "204": { description: Question removed }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1531,11 +1621,77 @@ components:
             studentNotes: { type: ["string", "null"] }
             tutorNotes: { type: ["string", "null"] }
             postSessionReportId: { type: ["string", "null"] }
+    AdaptiveQuestion:
+      allOf:
+        - $ref: "#/components/schemas/AssignmentQuestion"
+        - type: object
+          required: [correctAnswer, explanation, sourceType, reviewStatus]
+          properties:
+            correctAnswer: { type: string }
+            explanation: { type: string }
+            sourceType: { type: string }
+            reviewStatus: { type: string }
+    AdaptiveRecommendation:
+      type: object
+      required: [id, sourceAttemptId, sourceQuestionId, studentUserId, skill, reason, status, position]
+      properties:
+        id: { type: string }
+        sourceAttemptId: { type: string }
+        sourceQuestionId: { type: string }
+        studentUserId: { type: string }
+        skill: { type: string }
+        reason: { type: string }
+        status: { type: string, enum: [recommended, accepted, dismissed] }
+        position: { type: number }
+        question:
+          allOf:
+            - $ref: "#/components/schemas/AdaptiveQuestion"
+          nullable: true
+    AdaptiveMistake:
+      type: object
+      required: [questionId, skill, prompt, finalAnswer, correctAnswer, reason]
+      properties:
+        questionId: { type: string }
+        skill: { type: string }
+        prompt: { type: string }
+        finalAnswer: { type: ["string", "null"] }
+        correctAnswer: { type: string }
+        reason: { type: string }
+    AdaptiveCurriculum:
+      type: object
+      required: [sessionId, homework, mistakes, recommendations, hardQuestions, tutorNotes, publishedBlocks]
+      properties:
+        sessionId: { type: string }
+        homework:
+          allOf:
+            - $ref: "#/components/schemas/AssignmentSummary"
+          nullable: true
+        mistakes:
+          type: array
+          items: { $ref: "#/components/schemas/AdaptiveMistake" }
+        recommendations:
+          type: array
+          items: { $ref: "#/components/schemas/AdaptiveRecommendation" }
+        hardQuestions:
+          type: array
+          items: { $ref: "#/components/schemas/AdaptiveQuestion" }
+        tutorNotes: { type: ["string", "null"] }
+        publishedBlocks:
+          type: array
+          items: { $ref: "#/components/schemas/CurriculumBlock" }
+    AdaptiveRecommendationUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [recommended, accepted, dismissed] }
+        assignmentId: { type: ["string", "null"] }
+        position: { type: number, minimum: 0 }
     AssignmentSummary:
       type: object
       required: [id, title, subject, status, questionCount, timeLimitMinutes, attemptCount, maxAttempts]
       properties:
         id: { type: string }
+        deliveryPhase: { type: string, enum: [before_session, during_session] }
         title: { type: string }
         subject: { type: string }
         status: { type: string, enum: [draft, published, completed, archived] }
@@ -1568,6 +1724,11 @@ components:
               text: { type: string }
         skill: { type: string }
         difficulty: { type: string, enum: [foundational, medium, hard] }
+        predictionFirst: { type: boolean }
+    AssignmentQuestionUpdate:
+      type: object
+      properties:
+        position: { type: number, minimum: 0 }
         predictionFirst: { type: boolean }
     AssignmentDetail:
       allOf:
@@ -1858,7 +2019,7 @@ components:
       properties:
         id: { type: string }
         sessionId: { type: string }
-        kind: { type: string, enum: [transcript, report] }
+        kind: { type: string, enum: [transcript, report, tutor_notes] }
         content: { type: string }
         visibility: { type: string, enum: [course, tutor] }
         status: { type: string, enum: [draft, published] }
@@ -1868,7 +2029,7 @@ components:
       type: object
       required: [kind, content]
       properties:
-        kind: { type: string, enum: [transcript, report] }
+        kind: { type: string, enum: [transcript, report, tutor_notes] }
         content: { type: string, minLength: 1, maxLength: 30000 }
         visibility: { type: string, enum: [course, tutor] }
         status: { type: string, enum: [draft, published] }
