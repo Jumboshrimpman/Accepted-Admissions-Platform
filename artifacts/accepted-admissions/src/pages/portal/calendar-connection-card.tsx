@@ -39,7 +39,11 @@ export function CalendarConnectionCard({
     (outcome: CalendarConnectionOutcome) => {
       const role = currentUserQuery.data?.role;
       if (!role) return;
-      trackCalendarConnection(role, location, outcome);
+      try {
+        trackCalendarConnection(role, location, outcome);
+      } catch {
+        // Analytics must never interrupt the calendar connection flow.
+      }
     },
     [currentUserQuery.data?.role, location],
   );
