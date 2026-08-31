@@ -1,12 +1,11 @@
 import { clerkClient, getAuth } from "@clerk/express";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
   createGoogleEvent,
   decryptCalendarToken,
   deleteGoogleEvent,
-  encryptCalendarToken,
   exchangeGoogleCode,
   getGoogleCalendarConfig,
   googleCalendarCompletionHtml,
@@ -16,6 +15,12 @@ import {
   refreshGoogleAccessToken,
   updateGoogleEvent,
 } from "../lib/google-calendar";
+import {
+  disconnectGoogleCalendarConnection,
+  markGoogleCalendarDisconnected,
+  persistGoogleCalendarConnection,
+  saveRefreshedGoogleAccessToken,
+} from "../lib/calendar-persistence";
 import {
   calendarEventPayload,
   generateAvailableSlots,
@@ -1502,27 +1507,15 @@ async function calendarAccess(tutorProfileId: string) {
         decryptCalendarToken(connection.encryptedRefreshToken),
       );
       accessToken = refreshed.accessToken;
-      await db
-        .update(calendarConnectionsTable)
-        .set({
-          encryptedAccessToken: encryptCalendarToken(accessToken),
-          accessTokenExpiresAt: refreshed.expiresIn
-            ? new Date(Date.now() + refreshed.expiresIn * 1000)
-            : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(calendarConnectionsTable.id, connection.id));
+      await saveRefreshedGoogleAccessToken(
+        connection.id,
+        accessToken,
+        refreshed.expiresIn,
+      );
     }
     return { connection, accessToken };
   } catch {
-    await db
-      .update(calendarConnectionsTable)
-      .set({ status: "disconnected", updatedAt: new Date() })
-      .where(eq(calendarConnectionsTable.id, connection.id));
-    await db
-      .update(tutorProfilesTable)
-      .set({ calendarStatus: "disconnected", updatedAt: new Date() })
-      .where(eq(tutorProfilesTable.id, tutorProfileId));
+    await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
     return null;
   }
 }
@@ -1572,14 +1565,10 @@ async function slotsForTutor(
       to,
     );
   } catch {
-    await db
-      .update(calendarConnectionsTable)
-      .set({ status: "disconnected", updatedAt: new Date() })
-      .where(eq(calendarConnectionsTable.id, access.connection.id));
-    await db
-      .update(tutorProfilesTable)
-      .set({ calendarStatus: "disconnected", updatedAt: new Date() })
-      .where(eq(tutorProfilesTable.id, tutorProfileId));
+    await markGoogleCalendarDisconnected(
+      tutorProfileId,
+      access.connection.id,
+    );
     return { tutor, rule, access: null, slots: [] as string[] };
   }
   const [bookedSessions] = await Promise.all([
@@ -1764,45 +1753,17 @@ router.get(
           );
         return;
       }
-      const [existing] = await db
-        .select({ id: calendarConnectionsTable.id })
-        .from(calendarConnectionsTable)
-        .where(
-          and(
-            eq(calendarConnectionsTable.tutorProfileId, stateData.tutorProfileId),
-            eq(calendarConnectionsTable.provider, "google"),
-          ),
-        )
-        .limit(1);
-      const values = {
-        status: "connected",
-        calendarId: "primary",
-        encryptedAccessToken: encryptCalendarToken(tokens.accessToken),
-        encryptedRefreshToken: tokens.refreshToken
-          ? encryptCalendarToken(tokens.refreshToken)
-          : undefined,
-        accessTokenExpiresAt: tokens.expiresIn
-          ? new Date(Date.now() + tokens.expiresIn * 1000)
-          : null,
-        connectedAt: new Date(),
-        updatedAt: new Date(),
-      };
-      if (existing) {
-        await db
-          .update(calendarConnectionsTable)
-          .set(values)
-          .where(eq(calendarConnectionsTable.id, existing.id));
-      } else {
-        await db.insert(calendarConnectionsTable).values({
-          tutorProfileId: stateData.tutorProfileId,
-          provider: "google",
-          ...values,
-        });
-      }
-      await db
-        .update(tutorProfilesTable)
-        .set({ calendarStatus: "connected", updatedAt: new Date() })
-        .where(eq(tutorProfilesTable.id, stateData.tutorProfileId));
+      const verificationStart = new Date();
+      await listGoogleBusyWindows(
+        tokens.accessToken,
+        "primary",
+        verificationStart,
+        new Date(verificationStart.getTime() + 60_000),
+      );
+      await persistGoogleCalendarConnection(
+        stateData.tutorProfileId,
+        tokens,
+      );
       res.status(200).type("html").send(googleCalendarCompletionHtml());
     } catch {
       res
@@ -2219,25 +2180,7 @@ router.delete(
       res.status(404).json({ code: "TUTOR_NOT_FOUND", error: "Tutor profile not found." });
       return;
     }
-    await db
-      .update(calendarConnectionsTable)
-      .set({
-        status: "disconnected",
-        encryptedAccessToken: null,
-        encryptedRefreshToken: null,
-        accessTokenExpiresAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(calendarConnectionsTable.tutorProfileId, profile.id),
-          eq(calendarConnectionsTable.provider, "google"),
-        ),
-      );
-    await db
-      .update(tutorProfilesTable)
-      .set({ calendarStatus: "disconnected", updatedAt: new Date() })
-      .where(eq(tutorProfilesTable.id, profile.id));
+    await disconnectGoogleCalendarConnection(profile.id);
     res.status(204).send();
   },
 );
@@ -3139,7 +3082,8 @@ router.get(
   async (_req: AuthedRequest, res): Promise<void> => {
     await ensureSeedData();
     await ensureUpgradeSeedData();
-    const [users, memberships, assignments, audit, platform] = await Promise.all([
+    const [users, memberships, assignments, audit, platform, connectedCalendars] =
+      await Promise.all([
       db
         .select({
           id: usersTable.id,
@@ -3219,6 +3163,16 @@ router.get(
           .from(paymentsTable)
           .where(eq(paymentsTable.status, "paid")),
       ]),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(calendarConnectionsTable)
+        .where(
+          and(
+            eq(calendarConnectionsTable.provider, "google"),
+            eq(calendarConnectionsTable.status, "connected"),
+            isNotNull(calendarConnectionsTable.encryptedAccessToken),
+          ),
+        ),
     ]);
     const userById = new Map(users.map((user) => [user.id, user]));
     res.json({
@@ -3242,7 +3196,10 @@ router.get(
         tutorCostsCents: 0,
         grossProfitCents: Number(platform[7][0]?.amount ?? 0),
         providerStatus: {
-          calendar: "disconnected",
+          calendar:
+            Number(connectedCalendars[0]?.count ?? 0) > 0
+              ? "connected"
+              : "disconnected",
           payments: process.env.STRIPE_WEBHOOK_SECRET
             ? "connected"
             : "connected · webhook setup required",

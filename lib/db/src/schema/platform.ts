@@ -472,18 +472,27 @@ export const publicContentTable = pgTable(
   (table) => [uniqueIndex("public_content_slug_idx").on(table.slug)],
 );
 
-export const calendarConnectionsTable = pgTable("calendar_connections", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
-  provider: text("provider").notNull().default("google"),
-  status: text("status").notNull().default("disconnected"),
-  calendarId: text("calendar_id"),
-  encryptedAccessToken: text("encrypted_access_token"),
-  encryptedRefreshToken: text("encrypted_refresh_token"),
-  accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
-  connectedAt: timestamp("connected_at", { withTimezone: true }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const calendarConnectionsTable = pgTable(
+  "calendar_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
+    provider: text("provider").notNull().default("google"),
+    status: text("status").notNull().default("disconnected"),
+    calendarId: text("calendar_id"),
+    encryptedAccessToken: text("encrypted_access_token"),
+    encryptedRefreshToken: text("encrypted_refresh_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("calendar_connection_profile_provider_idx").on(
+      table.tutorProfileId,
+      table.provider,
+    ),
+  ],
+);
 
 export const availabilityRulesTable = pgTable("availability_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
