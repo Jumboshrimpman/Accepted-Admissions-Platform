@@ -1536,83 +1536,150 @@ function sendBookingError(error: unknown, res: Response): void {
 
 router.get(
   "/calendar/oauth/callback",
-  requireAppUser,
   async (req: AuthedRequest, res): Promise<void> => {
-  const state = typeof req.query.state === "string" ? req.query.state : "";
-  const code = typeof req.query.code === "string" ? req.query.code : "";
-  if (!state || !code) {
-    res.status(400).send("Calendar authorization was not completed.");
-    return;
-  }
-  try {
-    const stateData = readCalendarOAuthState(state);
-    if (!stateData) {
-      res.status(400).send("Calendar authorization expired. Please try again.");
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const providerError =
+      typeof req.query.error === "string" ? req.query.error : undefined;
+    if (!state) {
+      res
+        .status(400)
+        .type("html")
+        .send(
+          googleCalendarCompletionHtml({
+            success: false,
+            message: "Calendar authorization was not completed.",
+          }),
+        );
       return;
     }
-    if (stateData.appUserId !== req.appUser!.id) {
-      res.status(403).send("Calendar authorization belongs to a different signed-in account.");
-      return;
+    try {
+      const stateData = readCalendarOAuthState(state);
+      if (!stateData) {
+        res
+          .status(400)
+          .type("html")
+          .send(
+            googleCalendarCompletionHtml({
+              success: false,
+              message: "Calendar authorization expired. Please try again.",
+            }),
+          );
+        return;
+      }
+      const [profile] = await db
+        .select({
+          id: tutorProfilesTable.id,
+          email: tutorProfilesTable.email,
+        })
+        .from(tutorProfilesTable)
+        .where(
+          and(
+            eq(tutorProfilesTable.id, stateData.tutorProfileId),
+            eq(tutorProfilesTable.userId, stateData.appUserId),
+          ),
+        )
+        .limit(1);
+      if (!profile) {
+        res
+          .status(403)
+          .type("html")
+          .send(
+            googleCalendarCompletionHtml({
+              success: false,
+              message: "Calendar authorization belongs to a different portal account.",
+            }),
+          );
+        return;
+      }
+      if (providerError) {
+        res
+          .status(400)
+          .type("html")
+          .send(
+            googleCalendarCompletionHtml({
+              success: false,
+              message: "Google authorization was cancelled. No calendar changes were made.",
+            }),
+          );
+        return;
+      }
+      if (!code) {
+        res
+          .status(400)
+          .type("html")
+          .send(
+            googleCalendarCompletionHtml({
+              success: false,
+              message: "Google did not return an authorization code. Please try again.",
+            }),
+          );
+        return;
+      }
+      const tokens = await exchangeGoogleCode(code);
+      if (tokens.email.trim().toLowerCase() !== profile.email.trim().toLowerCase()) {
+        res
+          .status(403)
+          .type("html")
+          .send(
+            googleCalendarCompletionHtml({
+              success: false,
+              message: "Choose the Google account that matches your portal sign-in.",
+            }),
+          );
+        return;
+      }
+      const [existing] = await db
+        .select({ id: calendarConnectionsTable.id })
+        .from(calendarConnectionsTable)
+        .where(
+          and(
+            eq(calendarConnectionsTable.tutorProfileId, stateData.tutorProfileId),
+            eq(calendarConnectionsTable.provider, "google"),
+          ),
+        )
+        .limit(1);
+      const values = {
+        status: "connected",
+        calendarId: "primary",
+        encryptedAccessToken: encryptCalendarToken(tokens.accessToken),
+        encryptedRefreshToken: tokens.refreshToken
+          ? encryptCalendarToken(tokens.refreshToken)
+          : undefined,
+        accessTokenExpiresAt: tokens.expiresIn
+          ? new Date(Date.now() + tokens.expiresIn * 1000)
+          : null,
+        connectedAt: new Date(),
+        updatedAt: new Date(),
+      };
+      if (existing) {
+        await db
+          .update(calendarConnectionsTable)
+          .set(values)
+          .where(eq(calendarConnectionsTable.id, existing.id));
+      } else {
+        await db.insert(calendarConnectionsTable).values({
+          tutorProfileId: stateData.tutorProfileId,
+          provider: "google",
+          ...values,
+        });
+      }
+      await db
+        .update(tutorProfilesTable)
+        .set({ calendarStatus: "connected", updatedAt: new Date() })
+        .where(eq(tutorProfilesTable.id, stateData.tutorProfileId));
+      res.status(200).type("html").send(googleCalendarCompletionHtml());
+    } catch {
+      res
+        .status(502)
+        .type("html")
+        .send(
+          googleCalendarCompletionHtml({
+            success: false,
+            message: "Google Calendar authorization failed. Please try again.",
+          }),
+        );
     }
-    const [profile] = await db
-      .select({
-        id: tutorProfilesTable.id,
-        userId: tutorProfilesTable.userId,
-        email: tutorProfilesTable.email,
-      })
-      .from(tutorProfilesTable)
-      .where(
-        and(
-          eq(tutorProfilesTable.id, stateData.tutorProfileId),
-          eq(tutorProfilesTable.userId, req.appUser!.id),
-        ),
-      )
-      .limit(1);
-    if (!profile) {
-      res.status(403).send("Calendar authorization target is no longer available.");
-      return;
-    }
-    const tokens = await exchangeGoogleCode(code);
-    if (tokens.email.toLowerCase() !== profile.email.toLowerCase()) {
-      res.status(403).send("Choose the Google account that matches your signed-in portal account.");
-      return;
-    }
-    const [existing] = await db
-      .select({ id: calendarConnectionsTable.id })
-      .from(calendarConnectionsTable)
-      .where(
-        and(
-          eq(calendarConnectionsTable.tutorProfileId, stateData.tutorProfileId),
-          eq(calendarConnectionsTable.provider, "google"),
-        ),
-      )
-      .limit(1);
-    const values = {
-      status: "connected",
-      calendarId: "primary",
-      encryptedAccessToken: encryptCalendarToken(tokens.accessToken),
-      encryptedRefreshToken: tokens.refreshToken ? encryptCalendarToken(tokens.refreshToken) : undefined,
-      accessTokenExpiresAt: tokens.expiresIn ? new Date(Date.now() + tokens.expiresIn * 1000) : null,
-      connectedAt: new Date(),
-      updatedAt: new Date(),
-    };
-    if (existing) {
-      await db.update(calendarConnectionsTable).set(values).where(eq(calendarConnectionsTable.id, existing.id));
-    } else {
-      await db.insert(calendarConnectionsTable).values({
-        tutorProfileId: stateData.tutorProfileId,
-        provider: "google",
-        ...values,
-      });
-    }
-    await db
-      .update(tutorProfilesTable)
-      .set({ calendarStatus: "connected", updatedAt: new Date() })
-      .where(eq(tutorProfilesTable.id, stateData.tutorProfileId));
-    res.status(200).type("html").send(googleCalendarCompletionHtml());
-  } catch {
-    res.status(502).send("Google Calendar authorization failed. Please try again.");
-  }
   },
 );
 

@@ -38,3 +38,14 @@ test("calendar completion page notifies and closes the authorization window", ()
   assert.match(html, /accepted-admissions:calendar-connected/);
   assert.match(html, /window\.close/);
 });
+
+test("calendar completion page renders a safe rejected-authorization message", () => {
+  const html = googleCalendarCompletionHtml({
+    success: false,
+    message: 'Google account "<script>alert(1)</script>" was not accepted.',
+  });
+  assert.match(html, /Google Calendar connection not completed/);
+  assert.match(html, /accepted-admissions:calendar-connection-failed/);
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+});

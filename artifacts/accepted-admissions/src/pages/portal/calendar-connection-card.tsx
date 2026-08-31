@@ -28,12 +28,22 @@ export function CalendarConnectionCard() {
     const receiveCalendarConnection = (event: MessageEvent) => {
       if (
         event.origin !== window.location.origin ||
-        event.data?.type !== "accepted-admissions:calendar-connected"
+        ![
+          "accepted-admissions:calendar-connected",
+          "accepted-admissions:calendar-connection-failed",
+        ].includes(event.data?.type)
       ) {
         return;
       }
-      void refetchConnections();
-      setMessage("Google Calendar connected successfully.");
+      if (event.data.type === "accepted-admissions:calendar-connected") {
+        setShowConnectFallback(false);
+        void refetchConnections();
+        setMessage("Google Calendar connected successfully.");
+      } else {
+        setMessage(
+          "Google Calendar authorization was not completed. Check the authorization window and try again.",
+        );
+      }
     };
     window.addEventListener("message", receiveCalendarConnection);
     return () => window.removeEventListener("message", receiveCalendarConnection);
