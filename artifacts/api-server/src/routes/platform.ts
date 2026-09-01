@@ -170,6 +170,7 @@ import {
 } from "@workspace/api-zod";
 import {
   configuredAccess,
+  configuredAccessConflicts,
   normalizeProvisionedEmail,
   type ConfiguredAccess,
   verifiedPrimaryEmail,
@@ -5985,6 +5986,7 @@ router.get(
       })),
       audit,
       loginActivity,
+      accessConflicts: configuredAccessConflicts(),
       platform: {
         totalUsers: Number(platform[0][0]?.count ?? 0),
         clients: Number(platform[1][0]?.count ?? 0),

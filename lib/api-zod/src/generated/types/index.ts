@@ -34,6 +34,8 @@ export * from './adminCurriculumTutorsItemCalendarStatus';
 export * from './adminFinancials';
 export * from './adminLoginActivity';
 export * from './adminOverview';
+export * from './adminOverviewAccessConflictsItem';
+export * from './adminOverviewAccessConflictsItemRoleCategoriesItem';
 export * from './adminOverviewAssignmentsItem';
 export * from './adminOverviewAuditItem';
 export * from './adminOverviewAuditItemMetadata';

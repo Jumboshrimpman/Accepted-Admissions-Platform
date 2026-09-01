@@ -7,7 +7,6 @@
  */
 import * as zod from 'zod';
 
-
 /**
  * Returns server health status
  * @summary Health check
@@ -15,8 +14,6 @@ import * as zod from 'zod';
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
-
-
 /**
  * @summary Get the signed-in application user
  */
@@ -32,6 +29,10 @@ export const GetCurrentUserResponse = zod.object({
 /**
  * @summary Get administrator-only access and audit information
  */
+export const getAdminOverviewResponseAccessConflictsItemRoleCategoriesMin = 2;
+
+
+
 export const GetAdminOverviewResponse = zod.object({
   "users": zod.array(zod.object({
   "id": zod.string(),
@@ -75,7 +76,10 @@ export const GetAdminOverviewResponse = zod.object({
   "userEmail": zod.string(),
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "signedInAt": zod.coerce.date()
-}))
+})),
+  "accessConflicts": zod.array(zod.object({
+  "roleCategories": zod.array(zod.enum(['administrator', 'sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer'])).min(getAdminOverviewResponseAccessConflictsItemRoleCategoriesMin)
+})).describe('Conflicting role categories only; identity values are intentionally omitted.')
 })
 
 

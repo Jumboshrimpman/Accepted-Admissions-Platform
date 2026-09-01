@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   overview: {
     audit: [],
+    accessConflicts: [] as Array<{ roleCategories: string[] }>,
     loginActivity: [
       {
         id: "login-1",
@@ -57,7 +58,10 @@ vi.mock("@tanstack/react-query", () => ({
 import AdminDashboard from "./dashboard";
 import AdminCurriculum from "./curriculum";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  mocks.overview.accessConflicts = [];
+});
 
 describe("administrator overview", () => {
   test("removes attention surfaces and keeps login activity collapsed by default", () => {
@@ -66,6 +70,7 @@ describe("administrator overview", () => {
     expect(screen.queryByText(/Attention queue|Needs attention/i)).toBeNull();
     const summary = screen.getByText("Login activity").closest("summary");
     const disclosure = summary?.parentElement as HTMLDetailsElement;
+
     expect(disclosure.open).toBe(false);
     expect(summary?.textContent).toContain("Latest: Taito Goto");
 
@@ -83,5 +88,19 @@ describe("administrator overview", () => {
 
     const previewLink = screen.getByRole("link", { name: /View client/i });
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+  });
+
+  test("shows role categories and remediation when portal allowlists conflict", () => {
+    mocks.overview.accessConflicts.push({
+      roleCategories: ["administrator", "student"],
+    });
+
+    render(<AdminDashboard />);
+
+    const warning = screen.getByRole("alert");
+    expect(warning.textContent).toContain("Administrator, Student");
+    expect(warning.textContent).toContain(
+      "Remove each overlapping identity from all but one role allowlist",
+    );
   });
 });

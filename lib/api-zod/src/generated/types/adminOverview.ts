@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminLoginActivity } from './adminLoginActivity';
+import type { AdminOverviewAccessConflictsItem } from './adminOverviewAccessConflictsItem';
 import type { AdminOverviewAssignmentsItem } from './adminOverviewAssignmentsItem';
 import type { AdminOverviewAuditItem } from './adminOverviewAuditItem';
 import type { AdminOverviewMembershipsItem } from './adminOverviewMembershipsItem';
@@ -17,4 +18,6 @@ export interface AdminOverview {
   assignments: AdminOverviewAssignmentsItem[];
   audit: AdminOverviewAuditItem[];
   loginActivity: AdminLoginActivity[];
+  /** Conflicting role categories only; identity values are intentionally omitted. */
+  accessConflicts: AdminOverviewAccessConflictsItem[];
 }

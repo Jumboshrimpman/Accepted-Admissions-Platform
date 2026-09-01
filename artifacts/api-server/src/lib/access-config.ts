@@ -10,6 +10,21 @@ export type AccessDecision = {
   conflict: boolean;
 };
 
+export const ACCESS_ROLE_CATEGORIES = [
+  "administrator",
+  "sat_tutor",
+  "english_tutor",
+  "tutor",
+  "student",
+  "viewer",
+] as const;
+
+export type AccessRoleCategory = (typeof ACCESS_ROLE_CATEGORIES)[number];
+
+export type AccessConfigurationConflict = {
+  roleCategories: AccessRoleCategory[];
+};
+
 function configuredSet(
   env: NodeJS.ProcessEnv,
   name: string,
@@ -33,6 +48,119 @@ export function verifiedPrimaryEmail(user: {
   return primaryEmail.emailAddress
     ? normalizeProvisionedEmail(primaryEmail.emailAddress)
     : undefined;
+}
+
+const accessAllowlistDefinitions: Array<{
+  kind: "clerkId" | "email";
+  envName: string;
+  roleCategory: AccessRoleCategory;
+  normalize?: (value: string) => string;
+}> = [
+  {
+    kind: "clerkId",
+    envName: "ACCEPTED_ADMIN_CLERK_USER_IDS",
+    roleCategory: "administrator",
+  },
+  {
+    kind: "clerkId",
+    envName: "ACCEPTED_SAT_TUTOR_CLERK_USER_IDS",
+    roleCategory: "sat_tutor",
+  },
+  {
+    kind: "clerkId",
+    envName: "ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS",
+    roleCategory: "english_tutor",
+  },
+  {
+    kind: "clerkId",
+    envName: "ACCEPTED_TUTOR_CLERK_USER_IDS",
+    roleCategory: "tutor",
+  },
+  {
+    kind: "clerkId",
+    envName: "ACCEPTED_STUDENT_CLERK_USER_IDS",
+    roleCategory: "student",
+  },
+  {
+    kind: "clerkId",
+    envName: "ACCEPTED_VIEWER_CLERK_USER_IDS",
+    roleCategory: "viewer",
+  },
+  {
+    kind: "email",
+    envName: "ACCEPTED_ADMIN_EMAILS",
+    roleCategory: "administrator",
+    normalize: normalizeProvisionedEmail,
+  },
+  {
+    kind: "email",
+    envName: "ACCEPTED_SAT_TUTOR_EMAILS",
+    roleCategory: "sat_tutor",
+    normalize: normalizeProvisionedEmail,
+  },
+  {
+    kind: "email",
+    envName: "ACCEPTED_ENGLISH_TUTOR_EMAILS",
+    roleCategory: "english_tutor",
+    normalize: normalizeProvisionedEmail,
+  },
+  {
+    kind: "email",
+    envName: "ACCEPTED_TUTOR_EMAILS",
+    roleCategory: "tutor",
+    normalize: normalizeProvisionedEmail,
+  },
+  {
+    kind: "email",
+    envName: "ACCEPTED_STUDENT_EMAILS",
+    roleCategory: "student",
+    normalize: normalizeProvisionedEmail,
+  },
+  {
+    kind: "email",
+    envName: "ACCEPTED_VIEWER_EMAILS",
+    roleCategory: "viewer",
+    normalize: normalizeProvisionedEmail,
+  },
+];
+
+export function configuredAccessConflicts(
+  env: NodeJS.ProcessEnv = process.env,
+): AccessConfigurationConflict[] {
+  const valuesByKind = new Map<
+    "clerkId" | "email",
+    Map<string, Set<AccessRoleCategory>>
+  >([
+    ["clerkId", new Map()],
+    ["email", new Map()],
+  ]);
+
+  for (const definition of accessAllowlistDefinitions) {
+    const values = configuredSet(
+      env,
+      definition.envName,
+      definition.normalize,
+    );
+    const valuesForKind = valuesByKind.get(definition.kind)!;
+    for (const value of values) {
+      const roleCategories =
+        valuesForKind.get(value) ?? new Set<AccessRoleCategory>();
+      roleCategories.add(definition.roleCategory);
+      valuesForKind.set(value, roleCategories);
+    }
+  }
+
+  const categoryOrder = new Map(
+    ACCESS_ROLE_CATEGORIES.map((category, index) => [category, index]),
+  );
+  return [...valuesByKind.values()]
+    .flatMap((values) => [...values.values()])
+    .filter((roleCategories) => roleCategories.size > 1)
+    .map((roleCategories) => ({
+      roleCategories: [...roleCategories].sort(
+        (left, right) => categoryOrder.get(left)! - categoryOrder.get(right)!,
+      ),
+    }));
 }
 
 export function configuredAccess(

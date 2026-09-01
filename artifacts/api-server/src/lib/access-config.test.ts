@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-const { configuredAccess, normalizeProvisionedEmail, verifiedPrimaryEmail } =
+const {
+  configuredAccess,
+  configuredAccessConflicts,
+  normalizeProvisionedEmail,
+  verifiedPrimaryEmail,
+} =
   // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
   await import("./access-config.ts");
 
@@ -130,6 +135,31 @@ test("fails closed when a Clerk ID is provisioned for conflicting roles", () => 
     access: null,
     conflict: true,
   });
+});
+
+test("reports conflicting allowlists without returning the configured identities", () => {
+  const conflicts = configuredAccessConflicts({
+    ...baseEnv,
+    ACCEPTED_ADMIN_EMAILS: "conflict@example.com",
+    ACCEPTED_STUDENT_EMAILS: " conflict@example.com ",
+    ACCEPTED_ADMIN_CLERK_USER_IDS: "id-admin,id-conflict",
+    ACCEPTED_STUDENT_CLERK_USER_IDS: "id-conflict",
+  });
+
+  assert.deepEqual(conflicts, [
+    { roleCategories: ["administrator", "student"] },
+    { roleCategories: ["administrator", "student"] },
+  ]);
+  assert.doesNotMatch(JSON.stringify(conflicts), /conflict@example\.com|id-conflict/);
+});
+
+test("does not treat duplicate entries in one allowlist as conflicts", () => {
+  assert.deepEqual(
+    configuredAccessConflicts({
+      ACCEPTED_ADMIN_EMAILS: "admin@example.com, ADMIN@example.com ",
+    }),
+    [],
+  );
 });
 
 test("denies emails that are not provisioned", () => {

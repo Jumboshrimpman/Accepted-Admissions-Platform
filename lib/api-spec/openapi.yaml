@@ -1719,7 +1719,7 @@ components:
         avatarUrl: { type: ["string", "null"] }
     AdminOverview:
       type: object
-      required: [users, memberships, assignments, audit, loginActivity]
+      required: [users, memberships, assignments, audit, loginActivity, accessConflicts]
       properties:
         users:
           type: array
@@ -1775,6 +1775,19 @@ components:
         loginActivity:
           type: array
           items: { $ref: "#/components/schemas/AdminLoginActivity" }
+        accessConflicts:
+          type: array
+          description: Conflicting role categories only; identity values are intentionally omitted.
+          items:
+            type: object
+            required: [roleCategories]
+            properties:
+              roleCategories:
+                type: array
+                minItems: 2
+                items:
+                  type: string
+                  enum: [administrator, sat_tutor, english_tutor, tutor, student, viewer]
     AdminLoginActivity:
       type: object
       required: [id, userId, userName, userEmail, role, signedInAt]

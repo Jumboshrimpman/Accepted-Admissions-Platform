@@ -8,7 +8,6 @@
 export interface HealthStatus {
   status: string;
 }
-
 export interface Error {
   error: string;
   code?: string;
@@ -29,7 +28,6 @@ export const FinancialStatus = {
   refunded: 'refunded',
   partially_refunded: 'partially_refunded',
 } as const;
-
 export interface SatProduct {
   id: string;
   slug: string;
@@ -148,7 +146,6 @@ export type CheckoutSessionStatus = typeof CheckoutSessionStatus[keyof typeof Ch
 export const CheckoutSessionStatus = {
   pending: 'pending',
 } as const;
-
 export interface CheckoutSession {
   paymentId: string;
   invoiceId: string;
@@ -535,6 +532,23 @@ export type AdminOverviewAuditItem = {
   createdAt: string;
 };
 
+export type AdminOverviewAccessConflictsItemRoleCategoriesItem = typeof AdminOverviewAccessConflictsItemRoleCategoriesItem[keyof typeof AdminOverviewAccessConflictsItemRoleCategoriesItem];
+
+
+export const AdminOverviewAccessConflictsItemRoleCategoriesItem = {
+  administrator: 'administrator',
+  sat_tutor: 'sat_tutor',
+  english_tutor: 'english_tutor',
+  tutor: 'tutor',
+  student: 'student',
+  viewer: 'viewer',
+} as const;
+
+export type AdminOverviewAccessConflictsItem = {
+  /** @minItems 2 */
+  roleCategories: AdminOverviewAccessConflictsItemRoleCategoriesItem[];
+};
+
 export interface AdminLoginActivity {
   id: string;
   userId: string;
@@ -550,6 +564,8 @@ export interface AdminOverview {
   assignments: AdminOverviewAssignmentsItem[];
   audit: AdminOverviewAuditItem[];
   loginActivity: AdminLoginActivity[];
+  /** Conflicting role categories only; identity values are intentionally omitted. */
+  accessConflicts: AdminOverviewAccessConflictsItem[];
 }
 
 export type AdminProgramStatus = typeof AdminProgramStatus[keyof typeof AdminProgramStatus];
