@@ -2232,9 +2232,15 @@ components:
         feedback: { type: string }
     AttemptResult:
       type: object
-      required: [attemptId, status, score, correctCount, totalCount, activeSeconds, pausedSeconds, breakdown, items, analysis, studentFeedback]
+      required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, sessionId, sessionDateTime, status, score, correctCount, totalCount, activeSeconds, pausedSeconds, breakdown, items, analysis, studentFeedback]
       properties:
         attemptId: { type: string }
+        assignmentId: { type: string }
+        assignmentTitle: { type: string }
+        studentUserId: { type: string }
+        studentName: { type: string }
+        sessionId: { type: ["string", "null"] }
+        sessionDateTime: { type: ["string", "null"], format: date-time }
         status: { type: string, enum: [submitted, expired] }
         submittedAt: { type: ["string", "null"], format: date-time }
         score: { type: number }
@@ -2254,13 +2260,15 @@ components:
         reviewStatus: { type: string, enum: [new, in_review, reviewed] }
     ReviewSubmission:
       type: object
-      required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, status, score, submittedAt, reviewStatus]
+      required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, sessionId, sessionDateTime, status, score, submittedAt, reviewStatus]
       properties:
         attemptId: { type: string }
         assignmentId: { type: string }
         assignmentTitle: { type: string }
         studentUserId: { type: string }
         studentName: { type: string }
+        sessionId: { type: ["string", "null"] }
+        sessionDateTime: { type: ["string", "null"], format: date-time }
         status: { type: string, enum: [submitted, expired] }
         score: { type: number }
         submittedAt: { type: string, format: date-time }

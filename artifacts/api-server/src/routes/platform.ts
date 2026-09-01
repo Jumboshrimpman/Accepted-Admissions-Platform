@@ -593,6 +593,202 @@ const SAT_HOMEWORK_SETS = [
       },
     ],
   },
+  {
+    dateKey: "2026-11-06",
+    title: "SAT Homework — Sentence Structure Check",
+    instructions:
+      "Complete this original mini-section before the session. Focus on complete clauses and subject-verb agreement.",
+    questions: [
+      {
+        prompt: "The robotics team tested the new sensor twice _____ both trials produced the same reading.",
+        domain: "Standard English Conventions",
+        skill: "Boundaries",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "twice, both" },
+          { id: "b", label: "B", text: "twice; both" },
+          { id: "c", label: "C", text: "twice both" },
+          { id: "d", label: "D", text: "twice and both" },
+        ],
+        correctAnswer: "b",
+        explanation: "A semicolon correctly joins the two complete, closely related clauses.",
+      },
+      {
+        prompt: "A collection of field notes _____ how the shoreline changed over three decades.",
+        domain: "Standard English Conventions",
+        skill: "Subject-Verb Agreement",
+        difficulty: "foundational",
+        choices: [
+          { id: "a", label: "A", text: "show" },
+          { id: "b", label: "B", text: "shows" },
+          { id: "c", label: "C", text: "have shown" },
+          { id: "d", label: "D", text: "showing" },
+        ],
+        correctAnswer: "b",
+        explanation: "The singular subject “collection” takes the singular verb “shows.”",
+      },
+    ],
+  },
+  {
+    dateKey: "2026-11-20",
+    title: "SAT Homework — Main Ideas and Evidence",
+    instructions:
+      "Complete this original mini-section before the session. Choose only conclusions that stay within the evidence.",
+    questions: [
+      {
+        prompt: "Which choice best states the main idea of the text?",
+        stimulus:
+          "A neighborhood theater began offering captioned performances twice each month. Attendance increased, and several patrons reported that they could follow the dialogue more easily.",
+        domain: "Information and Ideas",
+        skill: "Central Ideas and Details",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "Captioned performances improved access for some patrons." },
+          { id: "b", label: "B", text: "The theater stopped presenting live performances." },
+          { id: "c", label: "C", text: "Every patron prefers captions at all times." },
+          { id: "d", label: "D", text: "Attendance declined after captions were introduced." },
+        ],
+        correctAnswer: "a",
+        explanation: "The text connects captions with increased access without making an absolute claim.",
+      },
+      {
+        prompt: "Which conclusion is best supported by the observation?",
+        stimulus:
+          "During a month-long trial, buses using a dedicated lane arrived more consistently than buses traveling in mixed traffic on the same route.",
+        domain: "Information and Ideas",
+        skill: "Command of Evidence",
+        difficulty: "hard",
+        choices: [
+          { id: "a", label: "A", text: "Dedicated lanes may improve bus arrival consistency." },
+          { id: "b", label: "B", text: "Mixed traffic prevents every bus from arriving." },
+          { id: "c", label: "C", text: "All transit routes need identical schedules." },
+          { id: "d", label: "D", text: "The trial measured passenger satisfaction only." },
+        ],
+        correctAnswer: "a",
+        explanation: "The comparison supports a cautious conclusion about arrival consistency.",
+      },
+    ],
+  },
+  {
+    dateKey: "2026-11-27",
+    title: "SAT Homework — Words in Context",
+    instructions:
+      "Complete this original mini-section before the session. Use the surrounding sentence to test each word's precise meaning.",
+    questions: [
+      {
+        prompt: "As used in the text, what does “reserved” most nearly mean?",
+        stimulus:
+          "Although the architect was enthusiastic about the early sketches, she remained reserved until the safety review was complete.",
+        domain: "Craft and Structure",
+        skill: "Words in Context",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "cautious" },
+          { id: "b", label: "B", text: "scheduled" },
+          { id: "c", label: "C", text: "isolated" },
+          { id: "d", label: "D", text: "celebratory" },
+        ],
+        correctAnswer: "a",
+        explanation: "Waiting for the safety review shows that “reserved” means cautious or restrained.",
+      },
+      {
+        prompt: "As used in the text, what does “sustain” most nearly mean?",
+        stimulus:
+          "The organizers needed a funding plan that could sustain the free concert series for more than one season.",
+        domain: "Craft and Structure",
+        skill: "Words in Context",
+        difficulty: "foundational",
+        choices: [
+          { id: "a", label: "A", text: "criticize" },
+          { id: "b", label: "B", text: "maintain" },
+          { id: "c", label: "C", text: "shorten" },
+          { id: "d", label: "D", text: "announce" },
+        ],
+        correctAnswer: "b",
+        explanation: "The plan must keep the concert series operating, so “sustain” means maintain.",
+      },
+    ],
+  },
+  {
+    dateKey: "2026-12-11",
+    title: "SAT Homework — Rhetorical Synthesis",
+    instructions:
+      "Complete this original mini-section before the session. Use only the notes relevant to the stated writing goal.",
+    questions: [
+      {
+        prompt: "Which choice most effectively emphasizes the program's growth?",
+        stimulus:
+          "Notes: The garden program began in 2022 with 12 volunteers. In 2026, 46 volunteers maintained six neighborhood plots.",
+        domain: "Expression of Ideas",
+        skill: "Rhetorical Synthesis",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "The program uses neighborhood plots." },
+          { id: "b", label: "B", text: "From 12 volunteers in 2022, the program grew to 46 volunteers maintaining six plots in 2026." },
+          { id: "c", label: "C", text: "Some volunteers enjoy gardening." },
+          { id: "d", label: "D", text: "The year 2026 followed the year 2022." },
+        ],
+        correctAnswer: "b",
+        explanation: "Choice B uses both dates and volunteer counts to make the growth clear.",
+      },
+      {
+        prompt: "Which choice most effectively introduces the researcher's method?",
+        stimulus:
+          "Notes: Dr. Lin compared temperature readings from shaded and unshaded roofs. Sensors recorded data every ten minutes for eight weeks.",
+        domain: "Expression of Ideas",
+        skill: "Rhetorical Synthesis",
+        difficulty: "hard",
+        choices: [
+          { id: "a", label: "A", text: "Dr. Lin likes several kinds of buildings." },
+          { id: "b", label: "B", text: "Roof temperatures can change." },
+          { id: "c", label: "C", text: "For eight weeks, Dr. Lin used sensors to compare shaded and unshaded roof temperatures at ten-minute intervals." },
+          { id: "d", label: "D", text: "The study ended after the sensors were purchased." },
+        ],
+        correctAnswer: "c",
+        explanation: "Choice C accurately combines the comparison, recording interval, and study duration.",
+      },
+    ],
+  },
+  {
+    dateKey: "2026-12-18",
+    title: "SAT Homework — Fall Mixed Review",
+    instructions:
+      "Complete this original cumulative mini-section before the final Fall session. Note the reasoning step you most want to review.",
+    questions: [
+      {
+        prompt: "Which choice completes the text with the most logical transition?",
+        stimulus:
+          "The first map showed only major roads. _____, the revised map included walking paths and public stairways.",
+        domain: "Expression of Ideas",
+        skill: "Transitions",
+        difficulty: "medium",
+        choices: [
+          { id: "a", label: "A", text: "By contrast" },
+          { id: "b", label: "B", text: "For example" },
+          { id: "c", label: "C", text: "Therefore" },
+          { id: "d", label: "D", text: "Likewise" },
+        ],
+        correctAnswer: "a",
+        explanation: "The revised map contains information the first map omitted, so a contrast is needed.",
+      },
+      {
+        prompt: "Which inference is best supported by the text?",
+        stimulus:
+          "After the library moved its returns desk closer to the entrance, the average line became shorter even though daily visitor totals stayed about the same.",
+        domain: "Information and Ideas",
+        skill: "Inferences",
+        difficulty: "hard",
+        choices: [
+          { id: "a", label: "A", text: "The new desk location may have made returns more efficient." },
+          { id: "b", label: "B", text: "The library had no visitors before the change." },
+          { id: "c", label: "C", text: "Every visitor returned a book." },
+          { id: "d", label: "D", text: "Daily visitor totals doubled." },
+        ],
+        correctAnswer: "a",
+        explanation: "Shorter lines with similar visitor totals support a cautious inference about efficiency.",
+      },
+    ],
+  },
 ] as const;
 
 type SeedSatQuestion = {
@@ -668,6 +864,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
         .update(assignmentsTable)
         .set({
           sessionId: session.id,
+          deliveryPhase: "before_session",
           title,
           instructions,
           status: "published",
@@ -748,11 +945,14 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
         homework.title,
         homework.instructions,
         15,
-        null,
+        new Date(session.dateTime.getTime() - 24 * 60 * 60 * 1000),
         2,
         homework.questions,
       );
     }
+  }
+  for (const session of satSessions.values()) {
+    await ensureDuringSessionAssignment(session);
   }
 }
 
@@ -1710,6 +1910,26 @@ async function canAccessStudent(
   return Boolean(assignment);
 }
 
+async function canAccessSession(
+  user: AppUser,
+  session: typeof sessionsTable.$inferSelect,
+): Promise<boolean> {
+  if (!(await canAccessCourse(user, session.courseId, session.subject))) {
+    return false;
+  }
+  if (user.role === "administrator") return true;
+  if (user.role === "student" || user.role === "viewer") {
+    return session.clientUserId === (await dataSubjectUserId(user));
+  }
+  if (user.role === "tutor") {
+    if (session.tutorUserId === user.id) return true;
+    return session.clientUserId
+      ? canAccessStudent(user, session.courseId, session.clientUserId, session.subject)
+      : false;
+  }
+  return false;
+}
+
 async function studentShape(studentUserId: string) {
   const [student] = await db
     .select({ id: usersTable.id, name: usersTable.displayName })
@@ -2009,6 +2229,12 @@ type AttemptAnalysisPayload = {
 
 type AttemptResultPayload = {
   attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentUserId: string;
+  studentName: string;
+  sessionId: string | null;
+  sessionDateTime: Date | null;
   status: "submitted" | "expired";
   submittedAt: Date | null;
   score: number;
@@ -2051,13 +2277,28 @@ async function storedAttemptResult(
       result: attemptsTable.result,
       tutorNotes: attemptsTable.tutorNotes,
       reviewStatus: attemptsTable.reviewStatus,
+      assignmentId: assignmentsTable.id,
+      assignmentTitle: assignmentsTable.title,
+      studentUserId: usersTable.id,
+      studentName: usersTable.displayName,
+      sessionId: sessionsTable.id,
+      sessionDateTime: sessionsTable.dateTime,
     })
     .from(attemptsTable)
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+    .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+    .leftJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
     .where(eq(attemptsTable.id, attemptId))
     .limit(1);
   if (!attempt?.result) return null;
   return {
     ...(attempt.result as Record<string, unknown>),
+    assignmentId: attempt.assignmentId,
+    assignmentTitle: attempt.assignmentTitle,
+    studentUserId: attempt.studentUserId,
+    studentName: attempt.studentName,
+    sessionId: attempt.sessionId,
+    sessionDateTime: attempt.sessionDateTime,
     ...(includeTutorFields
       ? {
           tutorNotes: attempt.tutorNotes,
@@ -2121,12 +2362,30 @@ async function finalizeAttemptResult(
   status: "submitted" | "expired",
 ): Promise<AttemptResultPayload | null> {
   const [attempt] = await db
-    .select()
+    .select({
+      attempt: attemptsTable,
+      assignment: assignmentsTable,
+      student: usersTable,
+      session: sessionsTable,
+    })
     .from(attemptsTable)
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+    .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+    .leftJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
     .where(eq(attemptsTable.id, attemptId))
     .limit(1);
   if (!attempt) return null;
-  if (attempt.result) return attempt.result as AttemptResultPayload;
+  if (attempt.attempt.result) {
+    return {
+      ...(attempt.attempt.result as AttemptResultPayload),
+      assignmentId: attempt.assignment.id,
+      assignmentTitle: attempt.assignment.title,
+      studentUserId: attempt.student.id,
+      studentName: attempt.student.displayName,
+      sessionId: attempt.session?.id ?? null,
+      sessionDateTime: attempt.session?.dateTime ?? null,
+    };
+  }
 
   const assignedQuestions = await db
     .select({ question: questionsTable })
@@ -2135,12 +2394,12 @@ async function finalizeAttemptResult(
       questionsTable,
       eq(questionsTable.id, assignmentQuestionsTable.questionId),
     )
-    .where(eq(assignmentQuestionsTable.assignmentId, attempt.assignmentId))
+    .where(eq(assignmentQuestionsTable.assignmentId, attempt.attempt.assignmentId))
     .orderBy(asc(assignmentQuestionsTable.position));
   const submittedResponses = await db
     .select()
     .from(responsesTable)
-    .where(eq(responsesTable.attemptId, attempt.id));
+    .where(eq(responsesTable.attemptId, attempt.attempt.id));
   const joined = assignedQuestions.map(({ question }) => ({
     question,
     response:
@@ -2160,7 +2419,7 @@ async function finalizeAttemptResult(
   }
   const totalCount = joined.length;
   const score = totalCount === 0 ? 0 : (correctCount / totalCount) * 100;
-  const timing = await timerSummary(attempt.id);
+  const timing = await timerSummary(attempt.attempt.id);
   const bySkill = new Map<string, { correct: number; total: number }>();
   for (const item of joined) {
     const current = bySkill.get(item.question.skill) ?? { correct: 0, total: 0 };
@@ -2191,7 +2450,13 @@ async function finalizeAttemptResult(
   }));
   const analysis = deterministicAnalysis(breakdown, items, score);
   const result: AttemptResultPayload = {
-    attemptId: attempt.id,
+    attemptId: attempt.attempt.id,
+    assignmentId: attempt.assignment.id,
+    assignmentTitle: attempt.assignment.title,
+    studentUserId: attempt.student.id,
+    studentName: attempt.student.displayName,
+    sessionId: attempt.session?.id ?? null,
+    sessionDateTime: attempt.session?.dateTime ?? null,
     status,
     submittedAt: new Date(),
     score,
@@ -2215,13 +2480,13 @@ async function finalizeAttemptResult(
       studentFeedback: analysis.feedback,
       reviewStatus: "new",
     })
-    .where(eq(attemptsTable.id, attempt.id));
+    .where(eq(attemptsTable.id, attempt.attempt.id));
   if (status === "submitted") {
     await db
       .insert(timerEventsTable)
-      .values({ attemptId: attempt.id, type: "submitted" });
+      .values({ attemptId: attempt.attempt.id, type: "submitted" });
   }
-  await deriveAdaptiveRecommendations(attempt.id);
+  await deriveAdaptiveRecommendations(attempt.attempt.id);
   return result;
 }
 
@@ -5580,10 +5845,12 @@ async function reviewSubmissionsForUser(user: AppUser) {
             attempt: attemptsTable,
             assignment: assignmentsTable,
             student: usersTable,
+            session: sessionsTable,
           })
           .from(attemptsTable)
           .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
           .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+          .leftJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
           .where(
             and(
               inArray(assignmentsTable.courseId, courseIds),
@@ -5609,12 +5876,14 @@ async function reviewSubmissionsForUser(user: AppUser) {
   ).filter((row): row is (typeof rows)[number] => Boolean(row));
   return visibleRows
     .filter((row) => Boolean(row.attempt.submittedAt))
-    .map(({ attempt, assignment, student }) => ({
+    .map(({ attempt, assignment, student, session }) => ({
       attemptId: attempt.id,
       assignmentId: assignment.id,
       assignmentTitle: assignment.title,
       studentUserId: student.id,
       studentName: student.displayName,
+      sessionId: session?.id ?? null,
+      sessionDateTime: session?.dateTime ?? null,
       status: attempt.status,
       score: attempt.score ?? 0,
       submittedAt: attempt.submittedAt!,
@@ -5812,35 +6081,11 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.id, params.data.sessionId));
-  if (
-    !session ||
-    !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
-  ) {
+  if (!session || !(await canAccessSession(req.appUser!, session))) {
     res.status(404).json({ error: "Session not found" });
     return;
   }
   const subjectUserId = await dataSubjectUserId(req.appUser!);
-  if (
-    (req.appUser!.role === "student" || req.appUser!.role === "viewer") &&
-    session.clientUserId !== subjectUserId
-  ) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
-  if (
-    req.appUser!.role === "tutor" &&
-    session.tutorUserId !== req.appUser!.id &&
-    (!session.clientUserId ||
-      !(await canAccessStudent(
-        req.appUser!,
-        session.courseId,
-        session.clientUserId,
-        session.subject,
-      )))
-  ) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
   const [course] = await db
     .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
     .from(coursesTable)
@@ -6035,7 +6280,7 @@ async function ensureDuringSessionAssignment(
       subject: session.subject,
       instructions:
         "Work through this original practice sequence with your tutor during the session.",
-      status: "published",
+      status: "draft",
       timeLimitMinutes: 30,
       maxAttempts: 1,
     })
@@ -6195,10 +6440,7 @@ router.get(
       .from(sessionsTable)
       .where(eq(sessionsTable.id, params.data.sessionId))
       .limit(1);
-    if (
-      !session ||
-      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
-    ) {
+    if (!session || !(await canAccessSession(req.appUser!, session))) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
@@ -6224,15 +6466,7 @@ router.post(
       .from(sessionsTable)
       .where(eq(sessionsTable.id, params.data.sessionId))
       .limit(1);
-    if (
-      !session ||
-      !(await canAccessStudent(
-        req.appUser!,
-        session.courseId,
-        session.clientUserId ?? "",
-        session.subject,
-      ))
-    ) {
+    if (!session || !(await canAccessSession(req.appUser!, session))) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
@@ -6328,6 +6562,14 @@ router.get(
       )
       .where(eq(assignmentQuestionsTable.assignmentId, assignment.id))
       .orderBy(asc(assignmentQuestionsTable.position));
+    const visibleQuestions =
+      req.appUser!.role === "student" || req.appUser!.role === "viewer"
+        ? joined.filter(
+            ({ question }) =>
+              question.reviewStatus === "reviewed" ||
+              question.reviewStatus === "approved",
+          )
+        : joined;
     const [latestAttempt] = await db
       .select()
       .from(attemptsTable)
@@ -6355,7 +6597,7 @@ router.get(
       GetAssignmentResponse.parse({
         ...summary,
         instructions: assignment.instructions,
-        questions: joined.map(({ assignmentQuestion, question }) => ({
+        questions: visibleQuestions.map(({ assignmentQuestion, question }) => ({
           id: question.id,
           position: assignmentQuestion.position,
           subject: question.subject,
@@ -6727,10 +6969,12 @@ router.get(
               attempt: attemptsTable,
               assignment: assignmentsTable,
               student: usersTable,
+              session: sessionsTable,
             })
             .from(attemptsTable)
             .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
             .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+            .leftJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
             .where(
               and(
                 inArray(assignmentsTable.courseId, courseIds),
@@ -6758,12 +7002,14 @@ router.get(
       ListReviewSubmissionsResponse.parse(
         visibleRows
           .filter((row) => Boolean(row.attempt.submittedAt))
-          .map(({ attempt, assignment, student }) => ({
+          .map(({ attempt, assignment, student, session }) => ({
             attemptId: attempt.id,
             assignmentId: assignment.id,
             assignmentTitle: assignment.title,
             studentUserId: student.id,
             studentName: student.displayName,
+            sessionId: session?.id ?? null,
+            sessionDateTime: session?.dateTime ?? null,
             status: attempt.status,
             score: attempt.score ?? 0,
             submittedAt: attempt.submittedAt!,
@@ -6845,10 +7091,7 @@ router.post(
       .select()
       .from(sessionsTable)
       .where(eq(sessionsTable.id, params.data.sessionId));
-    if (
-      !session ||
-      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
-    ) {
+    if (!session || !(await canAccessSession(req.appUser!, session))) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
@@ -6884,8 +7127,7 @@ router.patch(
     const [visibleBlock] = await db
       .select({
         id: curriculumBlocksTable.id,
-        courseId: sessionsTable.courseId,
-        subject: sessionsTable.subject,
+        session: sessionsTable,
       })
       .from(curriculumBlocksTable)
       .innerJoin(
@@ -6893,14 +7135,7 @@ router.patch(
         eq(sessionsTable.id, curriculumBlocksTable.sessionId),
       )
       .where(eq(curriculumBlocksTable.id, params.data.blockId));
-    if (
-      !visibleBlock ||
-      !(await canAccessCourse(
-        req.appUser!,
-        visibleBlock.courseId,
-        visibleBlock.subject,
-      ))
-    ) {
+    if (!visibleBlock || !(await canAccessSession(req.appUser!, visibleBlock.session))) {
       res.status(404).json({ error: "Block not found" });
       return;
     }
@@ -7503,6 +7738,12 @@ router.post(
         predictionFirst: body.data.predictionFirst ?? false,
       })
       .onConflictDoNothing();
+    if (assignment.deliveryPhase === "during_session") {
+      await db
+        .update(assignmentsTable)
+        .set({ status: "published" })
+        .where(eq(assignmentsTable.id, assignment.id));
+    }
     await db.insert(auditLogsTable).values({
       actorUserId: req.appUser!.id,
       action: "practice_question.attached",
@@ -7698,6 +7939,10 @@ router.patch(
           position: body.data.position ?? Number(count),
         })
         .onConflictDoNothing();
+      await db
+        .update(assignmentsTable)
+        .set({ status: "published" })
+        .where(eq(assignmentsTable.id, assignment.id));
     }
     const [updated] = await db
       .update(adaptiveRecommendationsTable)
@@ -7750,10 +7995,7 @@ router.get(
       .select()
       .from(sessionsTable)
       .where(eq(sessionsTable.id, params.data.sessionId));
-    if (
-      !session ||
-      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
-    ) {
+    if (!session || !(await canAccessSession(req.appUser!, session))) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
@@ -7793,10 +8035,7 @@ router.put(
       .select()
       .from(sessionsTable)
       .where(eq(sessionsTable.id, params.data.sessionId));
-    if (
-      !session ||
-      !(await canAccessCourse(req.appUser!, session.courseId, session.subject))
-    ) {
+    if (!session || !(await canAccessSession(req.appUser!, session))) {
       res.status(404).json({ error: "Session not found" });
       return;
     }

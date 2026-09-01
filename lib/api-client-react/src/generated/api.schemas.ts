@@ -1510,6 +1510,14 @@ export const AttemptResultReviewStatus = {
 
 export interface AttemptResult {
   attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentUserId: string;
+  studentName: string;
+  /** @nullable */
+  sessionId: string | null;
+  /** @nullable */
+  sessionDateTime: string | null;
   status: AttemptResultStatus;
   /** @nullable */
   submittedAt?: string | null;
@@ -1568,6 +1576,10 @@ export interface ReviewSubmission {
   assignmentTitle: string;
   studentUserId: string;
   studentName: string;
+  /** @nullable */
+  sessionId: string | null;
+  /** @nullable */
+  sessionDateTime: string | null;
   status: ReviewSubmissionStatus;
   score: number;
   submittedAt: string;

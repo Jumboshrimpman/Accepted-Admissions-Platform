@@ -14,6 +14,10 @@ export interface ReviewSubmission {
   assignmentTitle: string;
   studentUserId: string;
   studentName: string;
+  /** @nullable */
+  sessionId: string | null;
+  /** @nullable */
+  sessionDateTime: Date | null;
   status: ReviewSubmissionStatus;
   score: number;
   submittedAt: Date;

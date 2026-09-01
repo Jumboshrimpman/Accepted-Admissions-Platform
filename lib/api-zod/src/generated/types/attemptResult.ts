@@ -13,6 +13,14 @@ import type { ScoreBreakdown } from './scoreBreakdown';
 
 export interface AttemptResult {
   attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentUserId: string;
+  studentName: string;
+  /** @nullable */
+  sessionId: string | null;
+  /** @nullable */
+  sessionDateTime: Date | null;
   status: AttemptResultStatus;
   /** @nullable */
   submittedAt?: Date | null;

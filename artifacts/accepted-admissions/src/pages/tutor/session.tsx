@@ -792,7 +792,7 @@ export default function TutorSession() {
                   <p className="text-sm text-muted-foreground">
                     {duringAssignment
                       ? duringAssignment.title
-                      : "Refresh or accept a recommendation to create the in-session sequence."}
+                      : "The in-session workspace will appear after the Fall materials refresh."}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Only approved original practice can enter this sequence.
@@ -945,7 +945,7 @@ export default function TutorSession() {
                 <div className="space-y-3 rounded-xl border bg-background p-4">
                   <div className="flex items-center gap-2">
                     <ListChecks className="h-4 w-4 text-primary" />
-                    <p className="font-semibold">Published in-session sequence</p>
+                    <p className="font-semibold">{duringAssignment.status === "published" ? "Published in-session sequence" : "Draft in-session sequence"}</p>
                   </div>
                   {duringAssignment.questions.map((question, index) => (
                     <div key={question.id} className="flex items-center gap-2 rounded-lg border p-3">

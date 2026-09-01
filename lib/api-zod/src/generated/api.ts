@@ -1035,6 +1035,8 @@ export const GetDashboardResponse = zod.object({
   "assignmentTitle": zod.string(),
   "studentUserId": zod.string(),
   "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "score": zod.number(),
   "submittedAt": zod.coerce.date(),
@@ -1772,6 +1774,12 @@ export const StartAttemptResponse = zod.object({
 })).optional(),
   "result": zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -1852,6 +1860,12 @@ export const GetAttemptResponse = zod.object({
 })).optional(),
   "result": zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -1911,6 +1925,12 @@ export const GetAttemptResultParams = zod.object({
 
 export const GetAttemptResultResponse = zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -1977,6 +1997,12 @@ export const UpdateAttemptReviewBody = zod.object({
 
 export const UpdateAttemptReviewResponse = zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -2089,6 +2115,12 @@ export const PauseAttemptResponse = zod.object({
 })).optional(),
   "result": zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -2169,6 +2201,12 @@ export const ResumeAttemptResponse = zod.object({
 })).optional(),
   "result": zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -2232,6 +2270,12 @@ export const SubmitAttemptBody = zod.object({
 
 export const SubmitAttemptResponse = zod.object({
   "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "submittedAt": zod.coerce.date().nullish(),
   "score": zod.number(),
@@ -2308,6 +2352,8 @@ export const ListReviewSubmissionsResponseItem = zod.object({
   "assignmentTitle": zod.string(),
   "studentUserId": zod.string(),
   "studentName": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "sessionDateTime": zod.coerce.date().nullable(),
   "status": zod.enum(['submitted', 'expired']),
   "score": zod.number(),
   "submittedAt": zod.coerce.date(),
@@ -2703,4 +2749,3 @@ export const UpsertSessionArtifactResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
-

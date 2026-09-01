@@ -76,6 +76,7 @@ export default function TutorDashboard() {
     score: number | null;
     mistakeCount: number;
     submittedAt: string | null;
+    sessionDateTime: string | null;
     reviewStatus: string;
     queueItems: typeof openQueue;
   };
@@ -91,6 +92,7 @@ export default function TutorDashboard() {
       score: submission.score,
       mistakeCount: submission.mistakeCount ?? 0,
       submittedAt: submission.submittedAt,
+      sessionDateTime: submission.sessionDateTime,
       reviewStatus: submission.reviewStatus,
       queueItems: [],
     });
@@ -111,6 +113,7 @@ export default function TutorDashboard() {
       score: null,
       mistakeCount: 1,
       submittedAt: null,
+      sessionDateTime: null,
       reviewStatus: "in_review",
       queueItems: [item],
     });
@@ -269,6 +272,9 @@ export default function TutorDashboard() {
                     <p className="mt-1 truncate text-sm">{item.assignmentTitle}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {item.status === "expired" ? "Time expired" : "Submitted"}
+                      {item.sessionDateTime
+                        ? ` · Meeting ${format(parseISO(item.sessionDateTime), "MMM d, yyyy")}`
+                        : ""}
                       {item.submittedAt
                         ? ` · ${format(parseISO(item.submittedAt), "MMM d, h:mm a")}`
                         : ""}

@@ -8,6 +8,7 @@ import {
   useUpdateAttemptReview,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,7 @@ export default function TutorAttempt() {
         <Link href="/tutor" className="hover:text-primary">Dashboard</Link><ChevronRight className="h-4 w-4" /><span>Submission review</span>
       </div>
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h1 className="text-3xl font-bold">SAT submission review</h1><p className="mt-1 text-muted-foreground">Consolidated result · {result.correctCount} / {result.totalCount} correct</p></div>
+        <div><h1 className="text-3xl font-bold">{result.assignmentTitle}</h1><p className="mt-1 text-muted-foreground">{result.studentName} · {result.sessionDateTime ? `Meeting ${format(parseISO(result.sessionDateTime), "MMMM d, yyyy")} · ` : ""}Consolidated result · {result.correctCount} / {result.totalCount} correct</p></div>
         <Badge variant={result.reviewStatus === "reviewed" ? "default" : "outline"}>{result.reviewStatus ?? "new"}</Badge>
       </div>
       <div className="grid gap-4 md:grid-cols-4">
