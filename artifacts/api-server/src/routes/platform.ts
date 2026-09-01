@@ -66,9 +66,15 @@ import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
   createCheckoutSession,
   createHostedInvoice,
+  reconcileTutorTransfer,
   stripeErrorMessage,
   voidHostedInvoice,
 } from "../lib/payment-service";
+import {
+  createStripeConnectAccount,
+  createStripeConnectAccountLink,
+  retrieveStripeConnectAccount,
+} from "../lib/stripe-client";
 import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
@@ -192,8 +198,10 @@ import {
   satProductsTable,
   sessionArtifactsTable,
   sessionsTable,
+  stripeTransfersTable,
   timerEventsTable,
   tutorProfilesTable,
+  tutorCompensationRatesTable,
   tutorAssignmentsTable,
   usersTable,
   viewerLinksTable,
@@ -203,6 +211,10 @@ import {
 type AuthedRequest = Request & { appUser?: AppUser };
 
 const router: IRouter = Router();
+const XAVIER_NAME = "Xavier Morales";
+const XAVIER_OFFER_SLUG = "single-sat-session";
+const XAVIER_OFFER_PRICE_CENTS = 15_000;
+const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 
 function claimString(claims: unknown, key: string): string | undefined {
   if (!claims || typeof claims !== "object") return undefined;
@@ -1180,35 +1192,11 @@ async function ensureUpgradeSeedData(): Promise<void> {
     .values([
       {
         slug: "single-sat-session",
-        name: "Single SAT session",
-        description: "One focused 60-minute SAT tutoring session.",
+        name: "Xavier Morales SAT tutoring session",
+        description: "One focused 60-minute SAT tutoring session with Xavier Morales.",
         durationHours: 1,
-        totalPriceCents: 17500,
-        effectiveHourlyRateCents: 17500,
-      },
-      {
-        slug: "sat-5-hour-package",
-        name: "SAT 5-hour package",
-        description: "Five hours of focused SAT tutoring with a shared balance.",
-        durationHours: 5,
-        totalPriceCents: 80000,
-        effectiveHourlyRateCents: 16000,
-      },
-      {
-        slug: "sat-10-hour-package",
-        name: "SAT 10-hour package",
-        description: "Ten hours of flexible SAT tutoring with one shared balance.",
-        durationHours: 10,
-        totalPriceCents: 150000,
+        totalPriceCents: 15000,
         effectiveHourlyRateCents: 15000,
-      },
-      {
-        slug: "sat-20-hour-package",
-        name: "SAT 20-hour package",
-        description: "Twenty hours of flexible SAT tutoring with one shared balance.",
-        durationHours: 20,
-        totalPriceCents: 240000,
-        effectiveHourlyRateCents: 12000,
       },
     ])
     .onConflictDoNothing();
@@ -1218,6 +1206,28 @@ async function ensureUpgradeSeedData(): Promise<void> {
     .from(satProductsTable)
     .where(eq(satProductsTable.slug, "single-sat-session"))
     .limit(1);
+  if (singleSession) {
+    const priceChanged =
+      singleSession.totalPriceCents !== XAVIER_OFFER_PRICE_CENTS ||
+      singleSession.effectiveHourlyRateCents !== XAVIER_OFFER_PRICE_CENTS;
+    await db
+      .update(satProductsTable)
+      .set({
+        name: "Xavier Morales SAT tutoring session",
+        description: "One focused 60-minute SAT tutoring session with Xavier Morales.",
+        durationHours: 1,
+        totalPriceCents: 15000,
+        effectiveHourlyRateCents: 15000,
+        stripePriceId: priceChanged ? null : singleSession.stripePriceId,
+        active: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(satProductsTable.id, singleSession.id));
+  }
+  await db
+    .update(satProductsTable)
+    .set({ active: false, updatedAt: new Date() })
+    .where(sql`${satProductsTable.slug} <> 'single-sat-session'`);
   const [pendingMichelle] = await db
     .select()
     .from(usersTable)
@@ -1274,6 +1284,36 @@ async function ensureUpgradeSeedData(): Promise<void> {
     .from(tutorProfilesTable)
     .where(inArray(tutorProfilesTable.name, ["Xavier Morales", "Eunice Chon"]));
   for (const tutor of seededTutors) {
+    if (tutor.name === XAVIER_NAME) {
+      await db
+        .update(tutorCompensationRatesTable)
+        .set({ endedAt: new Date() })
+        .where(
+          and(
+            eq(tutorCompensationRatesTable.tutorProfileId, tutor.id),
+            isNull(tutorCompensationRatesTable.endedAt),
+            sql`${tutorCompensationRatesTable.hourlyRateCents} <> ${XAVIER_TUTOR_SHARE_CENTS}`,
+          ),
+        );
+      const [currentRate] = await db
+        .select({ id: tutorCompensationRatesTable.id })
+        .from(tutorCompensationRatesTable)
+        .where(
+          and(
+            eq(tutorCompensationRatesTable.tutorProfileId, tutor.id),
+            eq(tutorCompensationRatesTable.hourlyRateCents, XAVIER_TUTOR_SHARE_CENTS),
+            isNull(tutorCompensationRatesTable.endedAt),
+          ),
+        )
+        .limit(1);
+      if (!currentRate) {
+        await db.insert(tutorCompensationRatesTable).values({
+          tutorProfileId: tutor.id,
+          hourlyRateCents: XAVIER_TUTOR_SHARE_CENTS,
+          effectiveFrom: new Date(),
+        });
+      }
+    }
     const [rule] = await db
       .select({ id: availabilityRulesTable.id })
       .from(availabilityRulesTable)
@@ -2858,6 +2898,58 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
+async function xavierTutorProfile() {
+  await ensureUpgradeSeedData();
+  const [profile] = await db
+    .select()
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.name, XAVIER_NAME))
+    .limit(1);
+  if (!profile) throw new Error("Xavier Morales' tutor profile is not configured");
+  return profile;
+}
+
+function connectStatusFor(profile: typeof tutorProfilesTable.$inferSelect) {
+  return {
+    tutorProfileId: profile.id,
+    tutorName: profile.name,
+    accountId: profile.stripeConnectAccountId,
+    status: profile.stripeConnectStatus,
+    detailsSubmitted: profile.stripeConnectDetailsSubmitted,
+    chargesEnabled: profile.stripeConnectChargesEnabled,
+    payoutsEnabled: profile.stripeConnectPayoutsEnabled,
+    ready:
+      profile.stripeConnectStatus === "ready" &&
+      profile.stripeConnectPayoutsEnabled,
+  };
+}
+
+async function refreshXavierConnectStatus() {
+  const profile = await xavierTutorProfile();
+  if (!profile.stripeConnectAccountId) return profile;
+  const account = await retrieveStripeConnectAccount(profile.stripeConnectAccountId);
+  const status =
+    account.detailsSubmitted &&
+    account.payoutsEnabled &&
+    account.transfersCapability === "active"
+      ? "ready"
+      : account.requirementsCurrentlyDue.length > 0
+        ? "requirements_due"
+        : "onboarding";
+  const [updated] = await db
+    .update(tutorProfilesTable)
+    .set({
+      stripeConnectStatus: status,
+      stripeConnectDetailsSubmitted: account.detailsSubmitted,
+      stripeConnectChargesEnabled: account.chargesEnabled,
+      stripeConnectPayoutsEnabled: account.payoutsEnabled,
+      updatedAt: new Date(),
+    })
+    .where(eq(tutorProfilesTable.id, profile.id))
+    .returning();
+  return updated ?? profile;
+}
+
 function safePublicUrl(value: unknown): boolean {
   if (typeof value !== "string" || value.length > 2048) return false;
   try {
@@ -3020,16 +3112,19 @@ async function calendarAccessForUser(tutorUserId: string) {
   return calendarAccess(profile.id);
 }
 
-async function bookingTutor(tutorProfileId: string) {
+async function bookingTutor(tutorProfileId: string, allowExistingSessionTutor = false) {
   const [tutor] = await db
     .select()
     .from(tutorProfilesTable)
     .where(
-      and(
-        eq(tutorProfilesTable.id, tutorProfileId),
-        eq(tutorProfilesTable.active, true),
-        eq(tutorProfilesTable.bookingEligible, true),
-      ),
+      allowExistingSessionTutor
+        ? eq(tutorProfilesTable.id, tutorProfileId)
+        : and(
+            eq(tutorProfilesTable.id, tutorProfileId),
+            eq(tutorProfilesTable.active, true),
+            eq(tutorProfilesTable.bookingEligible, true),
+            eq(tutorProfilesTable.name, XAVIER_NAME),
+          ),
     )
     .limit(1);
   if (!tutor) throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
@@ -3048,11 +3143,12 @@ async function slotsForTutor(
   to: Date,
   durationMinutes: number,
   excludeSessionId?: string,
+  allowExistingSessionTutor = false,
 ) {
   if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
     throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
   }
-  const { tutor, rule } = await bookingTutor(tutorProfileId);
+  const { tutor, rule } = await bookingTutor(tutorProfileId, allowExistingSessionTutor);
   const access = await calendarAccess(tutorProfileId);
   if (!access) {
     return { tutor, rule, access: null, slots: [] as string[] };
@@ -3313,7 +3409,12 @@ router.get("/public/products", async (_req, res): Promise<void> => {
   const products = await db
     .select()
     .from(satProductsTable)
-    .where(eq(satProductsTable.active, true))
+    .where(
+      and(
+        eq(satProductsTable.active, true),
+        eq(satProductsTable.slug, XAVIER_OFFER_SLUG),
+      ),
+    )
     .orderBy(asc(satProductsTable.durationHours));
   res.json(
     products.map((product) => ({
@@ -3797,6 +3898,7 @@ router.get("/booking/tutors", async (_req: AuthedRequest, res): Promise<void> =>
       and(
         eq(tutorProfilesTable.active, true),
         eq(tutorProfilesTable.bookingEligible, true),
+        eq(tutorProfilesTable.name, XAVIER_NAME),
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
@@ -3815,8 +3917,33 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
     const from = asDate(req.query.from);
     const to = asDate(req.query.to);
     const durationMinutes = durationFromBody(req.query.durationMinutes);
+    const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : "";
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
-    const result = await slotsForTutor(tutorProfileId, from, to, durationMinutes);
+    let existingSession: Awaited<ReturnType<typeof sessionForActor>> | undefined;
+    if (sessionId) {
+      existingSession = await sessionForActor(sessionId, req.appUser!);
+      const [requestedTutor] = await db
+        .select({ userId: tutorProfilesTable.userId })
+        .from(tutorProfilesTable)
+        .where(eq(tutorProfilesTable.id, tutorProfileId))
+        .limit(1);
+      if (!requestedTutor || requestedTutor.userId !== existingSession.tutorUserId) {
+        throw new BookingError(400, "INVALID_TUTOR", "The requested tutor does not match this existing session.");
+      }
+      if (existingSession.durationMinutes !== durationMinutes) {
+        throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
+      }
+    } else if (durationMinutes !== 60) {
+      throw new BookingError(400, "INVALID_DURATION", "Xavier sessions must be exactly 60 minutes.");
+    }
+    const result = await slotsForTutor(
+      tutorProfileId,
+      from,
+      to,
+      durationMinutes,
+      existingSession?.id,
+      Boolean(existingSession),
+    );
     res.json({
       tutor: {
         id: result.tutor.id,
@@ -3880,6 +4007,9 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     const start = asDate(body.startTime);
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
+    if (durationMinutes !== 60) {
+      throw new BookingError(400, "INVALID_DURATION", "Xavier sessions must be exactly 60 minutes.");
+    }
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
       new Date(start.getTime() - 1),
@@ -4131,6 +4261,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       new Date(start.getTime() + session.durationMinutes * 60_000 + 1),
       session.durationMinutes,
       session.id,
+      true,
     );
     if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
     if (!slots.includes(start.toISOString())) {
@@ -4299,18 +4430,128 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
   });
 });
 
+router.get(
+  "/admin/xavier-payout",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    try {
+      const profile = await refreshXavierConnectStatus();
+      res.json(connectStatusFor(profile));
+    } catch (error) {
+      res.status(502).json({ error: stripeErrorMessage(error) });
+    }
+  },
+);
+
+router.post(
+  "/admin/xavier-payout/onboarding",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    try {
+      let profile = await xavierTutorProfile();
+      if (!profile.stripeConnectAccountId) {
+        const account = await createStripeConnectAccount({
+          tutorProfileId: profile.id,
+          name: profile.name,
+          email: profile.email,
+        });
+        const [updated] = await db
+          .update(tutorProfilesTable)
+          .set({
+            stripeConnectAccountId: account.id,
+            stripeConnectStatus: "onboarding",
+            updatedAt: new Date(),
+          })
+          .where(eq(tutorProfilesTable.id, profile.id))
+          .returning();
+        profile = updated ?? profile;
+      }
+      const origin = publicAppOrigin();
+      const url = await createStripeConnectAccountLink({
+        accountId: profile.stripeConnectAccountId!,
+        refreshUrl: `${origin}/admin/financials?connect=refresh`,
+        returnUrl: `${origin}/admin/financials?connect=return`,
+      });
+      res.status(201).json({ url, ...connectStatusFor(profile) });
+    } catch (error) {
+      res.status(502).json({ error: stripeErrorMessage(error) });
+    }
+  },
+);
+
+router.post(
+  "/admin/transfers/:paymentId/reconcile",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const paymentId = typeof req.params.paymentId === "string" ? req.params.paymentId : "";
+    if (!paymentId) {
+      res.status(400).json({ error: "A payment is required." });
+      return;
+    }
+    try {
+      await reconcileTutorTransfer(paymentId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(502).json({ error: stripeErrorMessage(error) });
+    }
+  },
+);
+
 router.post(
   "/payments/checkout",
   ensureRole(["student"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    await ensureUpgradeSeedData();
     const productId = stringField((req.body ?? {}) as Record<string, unknown>, "productId");
     const [product] = await db
       .select()
       .from(satProductsTable)
-      .where(and(eq(satProductsTable.id, productId), eq(satProductsTable.active, true)))
+      .where(
+        and(
+          eq(satProductsTable.id, productId),
+          eq(satProductsTable.active, true),
+          eq(satProductsTable.slug, XAVIER_OFFER_SLUG),
+          eq(satProductsTable.durationHours, 1),
+          eq(satProductsTable.totalPriceCents, XAVIER_OFFER_PRICE_CENTS),
+        ),
+      )
       .limit(1);
     if (!product) {
       res.status(404).json({ error: "SAT product not found" });
+      return;
+    }
+    let xavier;
+    try {
+      xavier = await refreshXavierConnectStatus();
+    } catch (error) {
+      res.status(502).json({
+        error: `Xavier's payout status could not be verified. An administrator must check Stripe Connect before checkout. ${stripeErrorMessage(error)}`,
+      });
+      return;
+    }
+    if (!connectStatusFor(xavier).ready) {
+      res.status(409).json({
+        error:
+          "Checkout is not open yet because Xavier's Stripe Connect account cannot receive transfers. An administrator must complete or refresh payout onboarding.",
+      });
+      return;
+    }
+    const [compensationRate] = await db
+      .select()
+      .from(tutorCompensationRatesTable)
+      .where(
+        and(
+          eq(tutorCompensationRatesTable.tutorProfileId, xavier.id),
+          isNull(tutorCompensationRatesTable.endedAt),
+        ),
+      )
+      .orderBy(desc(tutorCompensationRatesTable.effectiveFrom))
+      .limit(1);
+    if (compensationRate?.hourlyRateCents !== XAVIER_TUTOR_SHARE_CENTS) {
+      res.status(409).json({
+        error:
+          "Checkout is not open because Xavier's $65 compensation rate is not configured. An administrator must reconcile the payout setup.",
+      });
       return;
     }
     const [invoice, payment] = await db.transaction(async (tx) => {
@@ -4341,8 +4582,17 @@ router.post(
           invoiceId: createdInvoice!.id,
           productId: product.id,
           amountCents: product.totalPriceCents,
+          tutorProfileId: xavier.id,
+          tutorShareCents: compensationRate.hourlyRateCents,
+          platformShareCents: product.totalPriceCents - compensationRate.hourlyRateCents,
           status: "pending",
           method: "stripe_checkout",
+          auditMetadata: {
+            offer: XAVIER_OFFER_SLUG,
+            tutor: XAVIER_NAME,
+            tutorShareCents: compensationRate.hourlyRateCents,
+            platformShareCents: product.totalPriceCents - compensationRate.hourlyRateCents,
+          },
         })
         .returning();
       return [createdInvoice!, createdPayment!];
@@ -4533,7 +4783,7 @@ router.get(
   "/admin/financials",
   ensureRole(["administrator"]),
   async (_req: AuthedRequest, res): Promise<void> => {
-    const [clients, products, invoices, payments, credits] = await Promise.all([
+    const [clients, products, invoices, payments, credits, transfers] = await Promise.all([
       db
         .select({
           id: usersTable.id,
@@ -4593,6 +4843,8 @@ router.get(
           productId: paymentsTable.productId,
           productName: satProductsTable.name,
           amountCents: paymentsTable.amountCents,
+          tutorShareCents: paymentsTable.tutorShareCents,
+          platformShareCents: paymentsTable.platformShareCents,
           refundedAmountCents: paymentsTable.refundedAmountCents,
           status: paymentsTable.status,
           method: paymentsTable.method,
@@ -4623,8 +4875,25 @@ router.get(
         .innerJoin(usersTable, eq(usersTable.id, creditLedgerTable.clientUserId))
         .orderBy(desc(creditLedgerTable.createdAt))
         .limit(100),
+      db
+        .select({
+          id: stripeTransfersTable.id,
+          paymentId: stripeTransfersTable.paymentId,
+          clientName: usersTable.displayName,
+          tutorName: tutorProfilesTable.name,
+          amountCents: stripeTransfersTable.amountCents,
+          reversedAmountCents: stripeTransfersTable.reversedAmountCents,
+          status: stripeTransfersTable.status,
+          failureReason: stripeTransfersTable.failureReason,
+          createdAt: stripeTransfersTable.createdAt,
+        })
+        .from(stripeTransfersTable)
+        .leftJoin(paymentsTable, eq(paymentsTable.id, stripeTransfersTable.paymentId))
+        .leftJoin(usersTable, eq(usersTable.id, paymentsTable.clientUserId))
+        .leftJoin(tutorProfilesTable, eq(tutorProfilesTable.id, stripeTransfersTable.tutorProfileId))
+        .orderBy(desc(stripeTransfersTable.createdAt)),
     ]);
-    res.json({ clients, products, invoices, payments, credits });
+    res.json({ clients, products, invoices, payments, credits, transfers });
   },
 );
 
@@ -4740,6 +5009,44 @@ router.post(
               .limit(1)
           )[0]
       : undefined;
+    let stripeInvoiceAllocation:
+      | { tutorProfileId: string; tutorShareCents: number; platformShareCents: number }
+      | undefined;
+    if (provider === "stripe_invoice") {
+      if (
+        product?.slug !== XAVIER_OFFER_SLUG ||
+        product.durationHours !== 1 ||
+        product.totalPriceCents !== XAVIER_OFFER_PRICE_CENTS
+      ) {
+        res.status(400).json({ error: "Stripe invoices are available only for Xavier's $150 session." });
+        return;
+      }
+      const xavier = await refreshXavierConnectStatus();
+      if (!connectStatusFor(xavier).ready) {
+        res.status(409).json({ error: "Xavier's Stripe Connect account must be payout-ready before sending this invoice." });
+        return;
+      }
+      const [rate] = await db
+        .select()
+        .from(tutorCompensationRatesTable)
+        .where(
+          and(
+            eq(tutorCompensationRatesTable.tutorProfileId, xavier.id),
+            isNull(tutorCompensationRatesTable.endedAt),
+          ),
+        )
+        .orderBy(desc(tutorCompensationRatesTable.effectiveFrom))
+        .limit(1);
+      if (rate?.hourlyRateCents !== XAVIER_TUTOR_SHARE_CENTS) {
+        res.status(409).json({ error: "Xavier's $65 compensation rate must be configured before sending this invoice." });
+        return;
+      }
+      stripeInvoiceAllocation = {
+        tutorProfileId: xavier.id,
+        tutorShareCents: XAVIER_TUTOR_SHARE_CENTS,
+        platformShareCents: XAVIER_OFFER_PRICE_CENTS - XAVIER_TUTOR_SHARE_CENTS,
+      };
+    }
     const [invoice, payment] = await db.transaction(async (tx) => {
       const [createdInvoice] = await tx
         .insert(invoicesTable)
@@ -4771,8 +5078,12 @@ router.post(
           invoiceId: createdInvoice!.id,
           productId: creditProduct?.id,
           amountCents: totals.totalCents,
+          ...stripeInvoiceAllocation,
           status: "pending",
           method: provider,
+          auditMetadata: stripeInvoiceAllocation
+            ? { offer: XAVIER_OFFER_SLUG, tutor: XAVIER_NAME, ...stripeInvoiceAllocation }
+            : undefined,
         })
         .returning();
       return [createdInvoice!, createdPayment!];
@@ -4878,6 +5189,12 @@ router.post(
     }
     if (!product) {
       res.status(404).json({ error: "SAT product or invoice line with a product is required" });
+      return;
+    }
+    if (product.slug === XAVIER_OFFER_SLUG) {
+      res.status(400).json({
+        error: "Offline payment reconciliation cannot fulfill Xavier's Connect-settled SAT session.",
+      });
       return;
     }
     const amountCents = Number(body.amountCents ?? requestedInvoice?.totalCents ?? product.totalPriceCents);

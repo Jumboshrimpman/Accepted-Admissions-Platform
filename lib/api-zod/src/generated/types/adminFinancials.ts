@@ -10,6 +10,7 @@ import type { FinancialClient } from './financialClient';
 import type { InvoiceRecord } from './invoiceRecord';
 import type { PaymentRecord } from './paymentRecord';
 import type { SatProduct } from './satProduct';
+import type { TutorTransferRecord } from './tutorTransferRecord';
 
 export interface AdminFinancials {
   clients: FinancialClient[];
@@ -17,4 +18,5 @@ export interface AdminFinancials {
   invoices: InvoiceRecord[];
   payments: PaymentRecord[];
   credits: CreditLedgerEntry[];
+  transfers: TutorTransferRecord[];
 }

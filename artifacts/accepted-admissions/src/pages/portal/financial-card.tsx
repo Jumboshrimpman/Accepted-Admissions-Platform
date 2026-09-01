@@ -45,7 +45,7 @@ export function FinancialCard() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <WalletCards className="h-5 w-5 text-primary" />
-              Payments, invoices & credits
+               Your SAT session payment
             </CardTitle>
             <CardDescription className="mt-2">
               Stripe payment pages handle card details. This portal shows only verified account records.
@@ -59,7 +59,7 @@ export function FinancialCard() {
       <CardContent className="space-y-6">
         {!readOnly && (
           <Button asChild className="rounded-full">
-            <a href="/sat">Purchase SAT hours</a>
+             <a href="/sat">Purchase a session with Xavier</a>
           </Button>
         )}
         <div>

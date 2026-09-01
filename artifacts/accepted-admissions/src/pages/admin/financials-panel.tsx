@@ -2,16 +2,20 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateAdminProduct,
+  useCreateAdminXavierPayoutOnboarding,
   getGetAdminFinancialsQueryKey,
+  getGetAdminXavierPayoutQueryKey,
   getGetAdminOverviewQueryKey,
   useCreateCreditAdjustment,
   useCreateHostedInvoice,
   useCreateOfflinePayment,
   useGetAdminFinancials,
+  useGetAdminXavierPayout,
+  useReconcileAdminTutorTransfer,
   useUpdateAdminProduct,
   useUpdateInvoice,
 } from "@workspace/api-client-react";
-import { Check, Edit3, ExternalLink, Loader2, ReceiptText, WalletCards } from "lucide-react";
+import { Check, Edit3, ExternalLink, Loader2, RefreshCw, ReceiptText, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +35,11 @@ export function AdminFinancialsPanel() {
   const financials = useGetAdminFinancials({
     query: { queryKey: getGetAdminFinancialsQueryKey(), staleTime: 10_000 },
   });
+  const payout = useGetAdminXavierPayout({
+    query: { queryKey: getGetAdminXavierPayoutQueryKey(), staleTime: 10_000 },
+  });
+  const payoutOnboarding = useCreateAdminXavierPayoutOnboarding();
+  const reconcileTransfer = useReconcileAdminTutorTransfer();
   const hostedInvoice = useCreateHostedInvoice();
   const offlinePayment = useCreateOfflinePayment();
   const adjustment = useCreateCreditAdjustment();
@@ -68,6 +77,7 @@ export function AdminFinancialsPanel() {
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getGetAdminFinancialsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetAdminXavierPayoutQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
   };
   const complete = (text: string) => {
@@ -81,7 +91,9 @@ export function AdminFinancialsPanel() {
     adjustment.isPending ||
     updateInvoice.isPending ||
     createProduct.isPending ||
-    updateProduct.isPending;
+    updateProduct.isPending ||
+    payoutOnboarding.isPending ||
+    reconcileTransfer.isPending;
 
   if (financials.isLoading) return <Skeleton className="h-96 rounded-2xl" />;
   if (!financials.data) return null;
@@ -125,19 +137,57 @@ export function AdminFinancialsPanel() {
         <CardDescription>Manage SAT pricing, create transparent invoices, reconcile verified payments, and audit credits.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-7">
+        <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="font-semibold">Xavier Morales · Stripe Connect payouts</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Checkout stays blocked until Stripe confirms Xavier can receive the fixed $65 tutor allocation.
+              </p>
+            </div>
+            <Badge variant={payout.data?.ready ? "secondary" : "outline"} className="w-fit capitalize">
+              {payout.isLoading ? "Checking…" : payout.data?.ready ? "Ready for checkout" : payout.data?.status?.replaceAll("_", " ") ?? "Unavailable"}
+            </Badge>
+          </div>
+          {payout.data && (
+            <div className="grid gap-3 text-sm sm:grid-cols-3">
+              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Tutor allocation</p><p className="mt-1 font-semibold">{money(6500)} per purchase</p></div>
+              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Platform gross share</p><p className="mt-1 font-semibold">{money(8500)} before Stripe fees</p></div>
+              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Connected account</p><p className="mt-1 font-semibold">{payout.data.accountId ? `••••${payout.data.accountId.slice(-6)}` : "Not created"}</p></div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={busy}
+              onClick={() =>
+                payoutOnboarding.mutate(undefined, {
+                  onSuccess: (result) => window.location.assign(result.url),
+                  onError: fail,
+                })
+              }
+            >
+              {payoutOnboarding.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {payout.data?.accountId ? "Continue Stripe onboarding" : "Start Stripe onboarding"}
+            </Button>
+            <Button variant="outline" disabled={payout.isFetching} onClick={() => payout.refetch()}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${payout.isFetching ? "animate-spin" : ""}`} />
+              Refresh status
+            </Button>
+          </div>
+        </section>
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
-            <h3 className="font-semibold">SAT product catalog</h3>
-            <p className="text-sm text-muted-foreground">Prices are saved in cents and new Stripe prices are created when a catalog price changes.</p>
+            <h3 className="font-semibold">Authoritative SAT offer</h3>
+            <p className="text-sm text-muted-foreground">The public offer is fixed at one 60-minute Xavier session for $150. Legacy packages remain inactive for audit history.</p>
           </div>
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
             <Input placeholder="Product name" value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} />
             <Input placeholder="Description" value={productDraft.description} onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })} />
             <Input type="number" min="0.25" step="0.25" placeholder="Hours" value={productDraft.durationHours} onChange={(event) => setProductDraft({ ...productDraft, durationHours: event.target.value })} />
             <Input type="number" min="0.01" step="0.01" placeholder="Price ($)" value={productDraft.totalPrice} onChange={(event) => setProductDraft({ ...productDraft, totalPrice: event.target.value })} />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="hidden flex-wrap gap-2">
             <Button
               disabled={busy || !productPayload.slug || !productPayload.name || !productPayload.description || !productPayload.durationHours || !productPayload.totalPriceCents}
               onClick={() => {
@@ -160,14 +210,14 @@ export function AdminFinancialsPanel() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-2">Product</th><th className="p-2">Hours</th><th className="p-2">Price</th><th className="p-2">Status</th><th className="p-2">Action</th></tr></thead>
+              <thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-2">Product</th><th className="p-2">Hours</th><th className="p-2">Price</th><th className="p-2">Status</th><th className="hidden p-2">Action</th></tr></thead>
               <tbody>{data.products.map((product) => (
                 <tr key={product.id} className="border-b">
                   <td className="p-2"><p className="font-medium">{product.name}</p><p className="text-xs text-muted-foreground">{product.slug}</p></td>
                   <td className="p-2">{product.durationHours}</td>
                   <td className="p-2">{money(product.totalPriceCents)} <span className="text-xs text-muted-foreground">({money(product.effectiveHourlyRateCents)}/hr)</span></td>
                   <td className="p-2"><Badge variant={product.active ? "secondary" : "outline"}>{product.active ? "Active" : "Inactive"}</Badge></td>
-                  <td className="p-2"><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => { setEditingProductId(product.id); setProductDraft({ slug: product.slug, name: product.name, description: product.description, durationHours: String(product.durationHours), totalPrice: (product.totalPriceCents / 100).toFixed(2) }); }}><Edit3 className="mr-1 h-3 w-3" /> Edit</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => updateProduct.mutate({ productId: product.id, data: { active: !product.active } }, { onSuccess: () => complete(product.active ? "Product deactivated." : "Product reactivated."), onError: fail })}>{product.active ? "Deactivate" : "Activate"}</Button></div></td>
+                  <td className="hidden p-2"><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => { setEditingProductId(product.id); setProductDraft({ slug: product.slug, name: product.name, description: product.description, durationHours: String(product.durationHours), totalPrice: (product.totalPriceCents / 100).toFixed(2) }); }}><Edit3 className="mr-1 h-3 w-3" /> Edit</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => updateProduct.mutate({ productId: product.id, data: { active: !product.active } }, { onSuccess: () => complete(product.active ? "Product deactivated." : "Product reactivated."), onError: fail })}>{product.active ? "Deactivate" : "Activate"}</Button></div></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -255,6 +305,47 @@ export function AdminFinancialsPanel() {
             </tbody>
           </table>
           {data.invoices.length === 0 && <p className="py-5 text-sm text-muted-foreground">No invoices recorded.</p>}
+        </div>
+        <div className="overflow-x-auto">
+          <h3 className="mb-3 font-semibold">Xavier transfer and reversal audit</h3>
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="border-b text-xs uppercase text-muted-foreground">
+              <tr><th className="p-3">Client</th><th className="p-3">Tutor</th><th className="p-3">Allocated</th><th className="p-3">Reversed</th><th className="p-3">Status</th><th className="p-3">Recorded</th><th className="p-3">Action</th></tr>
+            </thead>
+            <tbody>
+              {data.transfers.map((transfer) => (
+                <tr key={transfer.id} className="border-b">
+                  <td className="p-3">{transfer.clientName ?? "Unknown client"}</td>
+                  <td className="p-3">{transfer.tutorName ?? "Xavier Morales"}</td>
+                  <td className="p-3 font-medium">{money(transfer.amountCents)}</td>
+                  <td className="p-3">{money(transfer.reversedAmountCents)}</td>
+                  <td className="p-3">
+                    <Badge variant="outline" className="capitalize">{transfer.status.replaceAll("_", " ")}</Badge>
+                    {transfer.failureReason && <p className="mt-1 max-w-xs text-xs text-destructive">{transfer.failureReason}</p>}
+                  </td>
+                  <td className="p-3 text-muted-foreground">{new Date(transfer.createdAt).toLocaleDateString()}</td>
+                  <td className="p-3">
+                    {["transfer_failed", "reversal_failed"].includes(transfer.status) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          reconcileTransfer.mutate(
+                            { paymentId: transfer.paymentId },
+                            { onSuccess: () => complete("Tutor reversal reconciled."), onError: fail },
+                          )
+                        }
+                      >
+                        Retry payout
+                      </Button>
+                    ) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data.transfers.length === 0 && <p className="py-5 text-sm text-muted-foreground">No Stripe Connect transfers recorded yet.</p>}
         </div>
         <div className="overflow-x-auto">
           <h3 className="mb-3 font-semibold">Credit ledger history</h3>

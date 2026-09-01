@@ -126,6 +126,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/assignments:
     post:
       operationId: createAdminAssignment
@@ -244,6 +245,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/financials:
     get:
       operationId: getAdminFinancials
@@ -257,6 +259,34 @@ paths:
               schema: { $ref: "#/components/schemas/AdminFinancials" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/xavier-payout:
+    get:
+      operationId: getAdminXavierPayout
+      tags: [administration]
+      summary: Refresh and return Xavier Morales' Stripe Connect payout readiness
+      responses:
+        "200":
+          description: Current Stripe Connect payout readiness
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TutorPayoutStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+  /admin/xavier-payout/onboarding:
+    post:
+      operationId: createAdminXavierPayoutOnboarding
+      tags: [administration]
+      summary: Create or continue Xavier Morales' Stripe Connect onboarding
+      responses:
+        "201":
+          description: Stripe-hosted onboarding link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TutorPayoutOnboarding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
   /admin/products:
     get:
       operationId: listAdminProducts
@@ -445,6 +475,10 @@ paths:
         - name: durationMinutes
           in: query
           schema: { type: number, default: 60 }
+        - name: sessionId
+          in: query
+          description: Existing session being rescheduled; permits preserving its legacy duration.
+          schema: { type: string }
       responses:
         "200":
           description: Available times without private event details
@@ -674,6 +708,22 @@ paths:
               schema: { $ref: "#/components/schemas/AdaptiveCurriculum" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/transfers/{paymentId}/reconcile:
+    post:
+      operationId: reconcileAdminTutorTransfer
+      tags: [administration]
+      summary: Retry and reconcile a tutor transfer or refund reversal
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Transfer state reconciled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "404": { $ref: "#/components/responses/NotFound" }
   /adaptive-recommendations/{recommendationId}:
     patch:
@@ -1297,6 +1347,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+    BadGateway:
+      description: Upstream payment provider unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
     HealthStatus:
       type: object
@@ -1375,6 +1431,8 @@ components:
         productId: { type: ["string", "null"] }
         productName: { type: ["string", "null"] }
         amountCents: { type: number }
+        tutorShareCents: { type: number }
+        platformShareCents: { type: number }
         refundedAmountCents: { type: number }
         status: { $ref: "#/components/schemas/FinancialStatus" }
         method: { type: string }
@@ -1435,7 +1493,7 @@ components:
         email: { type: string }
     AdminFinancials:
       type: object
-      required: [clients, products, invoices, payments, credits]
+      required: [clients, products, invoices, payments, credits, transfers]
       properties:
         clients:
           type: array
@@ -1452,6 +1510,42 @@ components:
         credits:
           type: array
           items: { $ref: "#/components/schemas/CreditLedgerEntry" }
+        transfers:
+          type: array
+          items: { $ref: "#/components/schemas/TutorTransferRecord" }
+    TutorPayoutStatus:
+      type: object
+      required:
+        [tutorProfileId, tutorName, status, detailsSubmitted, chargesEnabled, payoutsEnabled, ready]
+      properties:
+        tutorProfileId: { type: string }
+        tutorName: { type: string }
+        accountId: { type: ["string", "null"] }
+        status: { type: string }
+        detailsSubmitted: { type: boolean }
+        chargesEnabled: { type: boolean }
+        payoutsEnabled: { type: boolean }
+        ready: { type: boolean }
+    TutorPayoutOnboarding:
+      allOf:
+        - { $ref: "#/components/schemas/TutorPayoutStatus" }
+        - type: object
+          required: [url]
+          properties:
+            url: { type: string }
+    TutorTransferRecord:
+      type: object
+      required: [id, paymentId, amountCents, reversedAmountCents, status, createdAt]
+      properties:
+        id: { type: string }
+        paymentId: { type: string }
+        clientName: { type: ["string", "null"] }
+        tutorName: { type: ["string", "null"] }
+        amountCents: { type: number }
+        reversedAmountCents: { type: number }
+        status: { type: string }
+        failureReason: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
     HostedInvoiceInput:
       type: object
       required: [clientUserId]
@@ -1591,7 +1685,7 @@ components:
       properties:
         tutorProfileId: { type: string }
         startTime: { type: string, format: date-time }
-        durationMinutes: { type: number, default: 60 }
+        durationMinutes: { type: number, enum: [60], default: 60 }
     CancelBookingInput:
       type: object
       properties:

@@ -20,3 +20,15 @@ Stripe's current invoice-item endpoint accepts a catalog price through `pricing[
 **Why:** The connected Stripe test-mode API has moved the invoice-item request shape while preserving price-based invoice lines.
 
 **How to apply:** Verify provider request parameters against a test-mode fixture before changing hosted invoice creation, and keep the test-mode invoice-isolation case running.
+
+Treat provider idempotency keys as a short-term retry guard, not a permanent exact-once ledger. Reconcile the provider by stable business identity before retrying a financial side effect.
+
+**Why:** Stripe may accept a financial operation before the local database transaction commits, while provider idempotency keys can later expire; a delayed retry must recover the accepted operation instead of duplicating it.
+
+**How to apply:** Give each transfer or cumulative reversal target a durable business identity that both local records and the provider can query after ambiguous failures.
+
+Persist immutable provider payment and refund outcomes even when the related Connect transfer or reversal fails; surface payout failure separately and make it explicitly retryable.
+
+**Why:** A card charge or refund has already happened at Stripe and cannot be rolled back just because the related destination transfer cannot settle immediately.
+
+**How to apply:** Commit payment, invoice, credit, and audit state; mark the transfer or reversal failed with a safe operator message; retry through an administrator-only reconciliation action.

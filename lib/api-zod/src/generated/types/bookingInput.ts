@@ -5,9 +5,10 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { BookingInputDurationMinutes } from './bookingInputDurationMinutes';
 
 export interface BookingInput {
   tutorProfileId: string;
   startTime: Date;
-  durationMinutes?: number;
+  durationMinutes?: BookingInputDurationMinutes;
 }

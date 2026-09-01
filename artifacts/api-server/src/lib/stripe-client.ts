@@ -67,6 +67,80 @@ export function formData(
   return body;
 }
 
+export async function createStripeConnectAccount(args: {
+  tutorProfileId: string;
+  name: string;
+  email: string;
+}): Promise<{ id: string }> {
+  const account = await stripeRequest<Record<string, unknown>>("/v1/accounts", {
+    method: "POST",
+    idempotencyKey: `accepted-admissions-connect-account-${args.tutorProfileId}`,
+    body: formData({
+      type: "express",
+      country: "US",
+      email: args.email,
+      "capabilities[transfers][requested]": true,
+      "business_profile[name]": args.name,
+      "metadata[tutor_profile_id]": args.tutorProfileId,
+    }),
+  });
+  const id = typeof account.id === "string" ? account.id : "";
+  if (!id) throw new Error("Stripe did not return a connected account id");
+  return { id };
+}
+
+export async function createStripeConnectAccountLink(args: {
+  accountId: string;
+  refreshUrl: string;
+  returnUrl: string;
+}): Promise<string> {
+  const link = await stripeRequest<Record<string, unknown>>("/v1/account_links", {
+    method: "POST",
+    idempotencyKey: `accepted-admissions-connect-onboarding-${args.accountId}-${Date.now()}`,
+    body: formData({
+      account: args.accountId,
+      refresh_url: args.refreshUrl,
+      return_url: args.returnUrl,
+      type: "account_onboarding",
+    }),
+  });
+  const url = typeof link.url === "string" ? link.url : "";
+  if (!url) throw new Error("Stripe did not return a connected account onboarding URL");
+  return url;
+}
+
+export type StripeConnectAccountStatus = {
+  id: string;
+  detailsSubmitted: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  transfersCapability: string;
+  requirementsCurrentlyDue: string[];
+};
+
+export async function retrieveStripeConnectAccount(
+  accountId: string,
+): Promise<StripeConnectAccountStatus> {
+  const account = await stripeRequest<Record<string, unknown>>(`/v1/accounts/${accountId}`);
+  const requirements = account.requirements && typeof account.requirements === "object"
+    ? (account.requirements as Record<string, unknown>)
+    : {};
+  const capabilities = account.capabilities && typeof account.capabilities === "object"
+    ? (account.capabilities as Record<string, unknown>)
+    : {};
+  return {
+    id: accountId,
+    detailsSubmitted: account.details_submitted === true,
+    chargesEnabled: account.charges_enabled === true,
+    payoutsEnabled: account.payouts_enabled === true,
+    transfersCapability:
+      typeof capabilities.transfers === "string" ? capabilities.transfers : "inactive",
+    requirementsCurrentlyDue: Array.isArray(requirements.currently_due)
+      ? requirements.currently_due.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+}
+
 export function verifyStripeSignature(payload: Buffer, signature: string): void {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) {

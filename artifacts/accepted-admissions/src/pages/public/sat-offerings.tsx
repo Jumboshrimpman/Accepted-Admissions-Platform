@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
 import { useCreatePaymentCheckout } from "@workspace/api-client-react";
 import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
@@ -29,14 +29,6 @@ export default function SatOfferings() {
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
   const checkout = useCreatePaymentCheckout();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-  const featuredProductId = useMemo(() => {
-    return (
-      products.find((product) => product.slug === "sat-5-hour-package")?.id ??
-      products.find((product) => product.durationHours === 5)?.id ??
-      null
-    );
-  }, [products]);
 
   useEffect(() => {
     const storedProductId = window.sessionStorage.getItem("accepted:pending-product");
@@ -91,9 +83,9 @@ export default function SatOfferings() {
 
   return (
     <PublicSiteShell
-      eyebrow="Fall 2026 · SAT and IELTS program"
+      eyebrow="Private SAT tutoring"
       title="SAT tutoring | Accepted Admissions"
-      description="Focused SAT tutoring with flexible session products and a clear credit-based scheduling flow."
+      description="Book one focused 60-minute SAT tutoring session with Xavier Morales for $150."
     >
       <main>
         <section className="relative overflow-hidden border-b">
@@ -107,7 +99,7 @@ export default function SatOfferings() {
                 A sharper plan for your <span className="text-gradient-brand">next score.</span>
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                Targeted tutoring, reusable practice, and a clear hour-based scheduling flow for students who want every session to count.
+                 Work one-on-one with Xavier Morales in a focused 60-minute SAT session, then choose a time from his live calendar.
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link href="/client-request">
@@ -123,14 +115,14 @@ export default function SatOfferings() {
             <Card className="border-primary/10 bg-card/80 shadow-2xl shadow-primary/10">
               <CardHeader>
                 <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="h-5 w-5" /></div>
-                <CardTitle className="text-2xl">How hours work</CardTitle>
+                <CardTitle className="text-2xl">How your session works</CardTitle>
                 <CardDescription>Simple, transparent, and designed around the student.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  ["Choose an offering", "Buy a single hour or a package that matches your plan."],
-                  ["Reserve your time", "Use eligible hours to request a time with an available tutor."],
-                  ["Keep building", "Your balance and session history stay visible in the portal."],
+                 {[
+                   ["Purchase one session", "Pay $150 securely through Stripe for one 60-minute SAT session."],
+                   ["Choose Xavier’s time", "Use the prepaid hour to reserve an open time on Xavier’s connected calendar."],
+                   ["Meet and keep track", "Your booking, payment, and credit history stay visible in the portal."],
                 ].map(([title, description], index) => (
                   <div key={title} className="flex gap-4 rounded-2xl border bg-background/70 p-4">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{index + 1}</span>
@@ -139,7 +131,7 @@ export default function SatOfferings() {
                 ))}
                 <div className="flex items-start gap-3 rounded-2xl bg-muted/60 p-4 text-sm text-muted-foreground">
                   <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                  <span>Calendar availability will appear once a tutor connects an approved calendar provider.</span>
+                   <span>Xavier’s live availability appears in the student portal after payment is verified.</span>
                 </div>
               </CardContent>
             </Card>
@@ -148,9 +140,9 @@ export default function SatOfferings() {
 
         <section className="container mx-auto px-6 py-20">
           <div className="mb-10 max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">SAT offerings</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">Choose the pace that fits.</h2>
-            <p className="mt-3 text-muted-foreground">Every option shows its total price and effective hourly rate before checkout.</p>
+             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">One focused offer</p>
+             <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">60 minutes with Xavier Morales.</h2>
+             <p className="mt-3 text-muted-foreground">One SAT tutoring session for $150. No package commitment.</p>
           </div>
           {loading ? (
             <div className="grid gap-5 md:grid-cols-3">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-64 rounded-3xl" />)}</div>
@@ -163,25 +155,24 @@ export default function SatOfferings() {
               <Link href="/client-request"><Button variant="outline" className="mt-5 rounded-full">Start a conversation</Button></Link>
             </div>
           ) : (
-            <div className="grid gap-5 md:grid-cols-3">
+             <div className="max-w-2xl">
               {products.map((product) => {
-                const isFeatured = product.id === featuredProductId;
                 return (
-                <Card key={product.id} className={`relative overflow-hidden rounded-3xl ${isFeatured ? "border-accent/40 shadow-lg shadow-accent/10" : ""}`}>
-                  {isFeatured && <Badge className="absolute right-5 top-5 rounded-full bg-accent text-white">Most flexible</Badge>}
+                 <Card key={product.id} className="relative overflow-hidden rounded-3xl border-accent/40 shadow-lg shadow-accent/10">
+                   <Badge className="absolute right-5 top-5 rounded-full bg-accent text-white">60 minutes</Badge>
                   <CardHeader className="pb-4">
-                    <p className="text-sm font-medium text-muted-foreground">{product.durationHours === 1 ? "Start here" : "Package"}</p>
+                     <p className="text-sm font-medium text-muted-foreground">Private SAT tutoring</p>
                     <CardTitle className="mt-2 text-2xl">{product.name}</CardTitle>
                     <CardDescription className="min-h-10 leading-relaxed">{product.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="mb-5">
                       <span className="text-4xl font-bold">${(product.totalPriceCents / 100).toLocaleString()}</span>
-                      <span className="ml-2 text-sm text-muted-foreground">total</span>
-                      <p className="mt-1 text-sm font-medium text-accent">${(product.effectiveHourlyRateCents / 100).toLocaleString()}/hour effective rate</p>
+                       <span className="ml-2 text-sm text-muted-foreground">for one session</span>
+                       <p className="mt-1 text-sm font-medium text-accent">One prepaid 60-minute booking with Xavier</p>
                     </div>
                      <Button
-                        variant={isFeatured ? "default" : "outline"}
+                         variant="default"
                        className="w-full rounded-full"
                        onClick={() => startCheckout(product.id)}
                        disabled={checkout.isPending}

@@ -77,8 +77,17 @@ export function BookingCard() {
   const sessionsQuery = useListBookingSessions();
   const tutors = tutorsQuery.data ?? [];
   const sessions = sessionsQuery.data ?? [];
-  const selectedTutor = tutors.find((tutor) => tutor.id === selectedTutorId);
   const activeSession = sessions.find((session) => session.id === reschedulingSessionId);
+  const selectedTutor =
+    tutors.find((tutor) => tutor.id === selectedTutorId) ??
+    (activeSession?.tutorProfileId === selectedTutorId
+      ? {
+          id: selectedTutorId,
+          name: activeSession.tutorName ?? "Your tutor",
+          title: "Existing session tutor",
+          providerStatus: "connected" as const,
+        }
+      : undefined);
   const durationMinutes = activeSession?.durationMinutes ?? 60;
   const range = useMemo(() => {
     const from = new Date();
@@ -91,6 +100,7 @@ export function BookingCard() {
       from: range.from,
       to: range.to,
       durationMinutes,
+      sessionId: activeSession?.id,
     },
     {
       query: {
@@ -101,6 +111,7 @@ export function BookingCard() {
           from: range.from,
           to: range.to,
           durationMinutes,
+          sessionId: activeSession?.id,
         }),
       },
     },
@@ -125,6 +136,12 @@ export function BookingCard() {
   useEffect(() => {
     refreshCredits();
   }, []);
+
+  useEffect(() => {
+    if (!selectedTutorId && tutors.length === 1) {
+      setSelectedTutorId(tutors[0]!.id);
+    }
+  }, [selectedTutorId, tutors]);
 
   const invalidateBookingData = () => {
     queryClient.invalidateQueries({ queryKey: getListBookingSessionsQueryKey() });
@@ -220,10 +237,10 @@ export function BookingCard() {
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarClock className="h-5 w-5 text-primary" />
-              Reserve a prepaid SAT hour
+               Book your session with Xavier
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-              Pick an eligible tutor and a time verified against their availability and Google Calendar.
+               Use your prepaid hour to choose a 60-minute time verified against Xavier’s live Google Calendar.
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -237,11 +254,11 @@ export function BookingCard() {
           <p className="text-sm text-muted-foreground">Loading eligible tutors…</p>
         ) : tutors.length === 0 ? (
           <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-            No SAT tutors are currently eligible for prepaid-hour booking.
+             Xavier’s booking calendar is not available right now.
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3">
               {tutors.map((tutor) => (
                 <button
                   key={tutor.id}
@@ -274,7 +291,7 @@ export function BookingCard() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-semibold">
-                      {reschedulingSessionId ? "Choose a new time" : `Available times with ${selectedTutor.name}`}
+                     {reschedulingSessionId ? `Choose a new time with ${selectedTutor.name}` : `Available times with ${selectedTutor.name}`}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Showing the next 14 days in {availabilityQuery.data?.tutor.timezone ?? "the tutor’s timezone"}.
@@ -292,7 +309,7 @@ export function BookingCard() {
                     <span>This tutor needs to reconnect Google Calendar before times can be displayed.</span>
                   </div>
                 ) : availableSlots.length === 0 ? (
-                  <p className="mt-4 text-sm text-muted-foreground">No times are open in this window. Try another tutor.</p>
+                   <p className="mt-4 text-sm text-muted-foreground">Xavier has no open times in this window. Please check again soon.</p>
                 ) : (
                   <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
                     <div className="rounded-xl border bg-background p-2 sm:p-3">

@@ -95,6 +95,8 @@ export interface PaymentRecord {
   /** @nullable */
   productName?: string | null;
   amountCents: number;
+  tutorShareCents?: number;
+  platformShareCents?: number;
   refundedAmountCents: number;
   status: FinancialStatus;
   method: string;
@@ -160,14 +162,40 @@ export interface FinancialClient {
   email: string;
 }
 
+export interface TutorTransferRecord {
+  id: string;
+  paymentId: string;
+  /** @nullable */
+  clientName?: string | null;
+  /** @nullable */
+  tutorName?: string | null;
+  amountCents: number;
+  reversedAmountCents: number;
+  status: string;
+  /** @nullable */
+  failureReason?: string | null;
+  createdAt: string;
+}
 export interface AdminFinancials {
   clients: FinancialClient[];
   products: SatProduct[];
   invoices: InvoiceRecord[];
   payments: PaymentRecord[];
   credits: CreditLedgerEntry[];
+  transfers: TutorTransferRecord[];
 }
 
+export interface TutorPayoutStatus {
+  tutorProfileId: string;
+  tutorName: string;
+  /** @nullable */
+  accountId?: string | null;
+  status: string;
+  detailsSubmitted: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  ready: boolean;
+}
 export type HostedInvoiceInputProvider = typeof HostedInvoiceInputProvider[keyof typeof HostedInvoiceInputProvider];
 
 
@@ -411,10 +439,11 @@ export interface BookingSession {
   cancellationReason?: string | null;
 }
 
+export type BookingInputDurationMinutes = typeof BookingInputDurationMinutes[keyof typeof BookingInputDurationMinutes];
 export interface BookingInput {
   tutorProfileId: string;
   startTime: string;
-  durationMinutes?: number;
+  durationMinutes?: BookingInputDurationMinutes;
 }
 
 export interface CancelBookingInput {
@@ -2013,6 +2042,10 @@ export type NotFoundResponse = Error;
  */
 export type ConflictResponse = Error;
 
+/**
+ * Upstream payment provider unavailable
+ */
+export type BadGatewayResponse = Error;
 export type GetAdminCurriculumParams = {
 courseId?: string;
 };
@@ -2022,6 +2055,10 @@ tutorProfileId: string;
 from: string;
 to: string;
 durationMinutes?: number;
+/**
+ * Existing session being rescheduled; permits preserving its legacy duration.
+ */
+sessionId?: string;
 };
 
 export type GetCalendarConnectUrlParams = {
@@ -2063,4 +2100,12 @@ export const ListQuestionBankReviewStatus = {
   draft: 'draft',
   approved: 'approved',
   rejected: 'rejected',
+} as const;
+
+export type TutorPayoutOnboarding = TutorPayoutStatus & {
+  url: string;
+};
+
+export const BookingInputDurationMinutes = {
+  NUMBER_60: 60,
 } as const;

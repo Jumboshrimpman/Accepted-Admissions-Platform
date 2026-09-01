@@ -365,6 +365,11 @@ export const tutorProfilesTable = pgTable(
     active: boolean("active").notNull().default(true),
     bookingEligible: boolean("booking_eligible").notNull().default(false),
     calendarStatus: text("calendar_status").notNull().default("disconnected"),
+    stripeConnectAccountId: text("stripe_connect_account_id"),
+    stripeConnectStatus: text("stripe_connect_status").notNull().default("not_started"),
+    stripeConnectDetailsSubmitted: boolean("stripe_connect_details_submitted").notNull().default(false),
+    stripeConnectChargesEnabled: boolean("stripe_connect_charges_enabled").notNull().default(false),
+    stripeConnectPayoutsEnabled: boolean("stripe_connect_payouts_enabled").notNull().default(false),
     internalNotes: text("internal_notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -450,10 +455,14 @@ export const paymentsTable = pgTable(
     invoiceId: uuid("invoice_id").references(() => invoicesTable.id),
     productId: uuid("product_id").references(() => satProductsTable.id),
     amountCents: numeric("amount_cents", { mode: "number" }).notNull(),
+    tutorProfileId: uuid("tutor_profile_id").references(() => tutorProfilesTable.id),
+    tutorShareCents: numeric("tutor_share_cents", { mode: "number" }).notNull().default(0),
+    platformShareCents: numeric("platform_share_cents", { mode: "number" }).notNull().default(0),
     status: text("status").notNull().default("pending"),
     method: text("method").notNull().default("stripe"),
     providerEventId: text("provider_event_id"),
     providerPaymentIntentId: text("provider_payment_intent_id"),
+    providerChargeId: text("provider_charge_id"),
     providerCheckoutSessionId: text("provider_checkout_session_id"),
     refundedAmountCents: numeric("refunded_amount_cents", { mode: "number" }).notNull().default(0),
     failureReason: text("failure_reason"),
@@ -473,6 +482,25 @@ export const paymentsTable = pgTable(
   ],
 );
 
+export const stripeTransfersTable = pgTable(
+  "stripe_transfers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    paymentId: uuid("payment_id").notNull().references(() => paymentsTable.id),
+    tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
+    amountCents: numeric("amount_cents", { mode: "number" }).notNull(),
+    status: text("status").notNull().default("pending"),
+    providerTransferId: text("provider_transfer_id"),
+    reversedAmountCents: numeric("reversed_amount_cents", { mode: "number" }).notNull().default(0),
+    failureReason: text("failure_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("stripe_transfer_payment_unique_idx").on(table.paymentId),
+    uniqueIndex("stripe_transfer_provider_id_idx").on(table.providerTransferId),
+  ],
+);
 export const stripeWebhookEventsTable = pgTable(
   "stripe_webhook_events",
   {

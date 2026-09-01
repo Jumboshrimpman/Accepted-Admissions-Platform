@@ -11,4 +11,8 @@ tutorProfileId: string;
 from: Date;
 to: Date;
 durationMinutes?: number;
+/**
+ * Existing session being rescheduled; permits preserving its legacy duration.
+ */
+sessionId?: string;
 };

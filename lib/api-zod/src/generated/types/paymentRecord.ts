@@ -20,6 +20,8 @@ export interface PaymentRecord {
   /** @nullable */
   productName?: string | null;
   amountCents: number;
+  tutorShareCents?: number;
+  platformShareCents?: number;
   refundedAmountCents: number;
   status: FinancialStatus;
   method: string;
