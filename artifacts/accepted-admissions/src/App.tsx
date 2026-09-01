@@ -33,6 +33,9 @@ import TutorCourse from '@/pages/tutor/course';
 import TutorSession from '@/pages/tutor/session';
 import TutorAttempt from '@/pages/tutor/attempt';
 import AdminDashboard from '@/pages/admin/dashboard';
+import AdminCurriculum from '@/pages/admin/curriculum';
+import { AdminFinancialsPanel } from '@/pages/admin/financials-panel';
+import { PublicContentPanel } from '@/pages/admin/public-content-panel';
 import SatOfferings from '@/pages/public/sat-offerings';
 import OurTeam from '@/pages/public/our-team';
 import PastSuccess from '@/pages/public/past-success';
@@ -251,6 +254,13 @@ function Router() {
               <Shell>
               <Switch>
                 <Route path="/admin" component={AdminDashboard} />
+                <Route path="/admin/curriculum" component={AdminCurriculum} />
+                <Route path="/admin/financials">
+                  <div className="mx-auto max-w-7xl"><AdminFinancialsPanel /></div>
+                </Route>
+                <Route path="/admin/content">
+                  <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
+                </Route>
                 <Route component={NotFound} />
               </Switch>
               </Shell>

@@ -59,8 +59,14 @@ import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
   AttachQuestionToAssignmentResponse,
+  CreateAdminAssignmentBody,
+  CreateAdminAssignmentResponse,
+  CreateAdminSessionBody,
+  CreateAdminSessionResponse,
   GetAdaptiveCurriculumParams,
   GetAdaptiveCurriculumResponse,
+  GetAdminCurriculumQueryParams,
+  GetAdminCurriculumResponse,
   CreateContentSourceBody,
   CreateContentSourceResponse,
   CreateCurriculumBlockBody,
@@ -97,6 +103,15 @@ import {
   UpdateAdaptiveRecommendationBody,
   UpdateAdaptiveRecommendationParams,
   UpdateAdaptiveRecommendationResponse,
+  UpdateAdminAssignmentBody,
+  UpdateAdminAssignmentParams,
+  UpdateAdminAssignmentResponse,
+  UpdateAdminProgramBody,
+  UpdateAdminProgramParams,
+  UpdateAdminProgramResponse,
+  UpdateAdminSessionBody,
+  UpdateAdminSessionParams,
+  UpdateAdminSessionResponse,
   UpdateAssignmentQuestionBody,
   UpdateAssignmentQuestionParams,
   UpdateAssignmentQuestionResponse,
@@ -4748,6 +4763,533 @@ router.get(
         },
       },
     });
+  },
+);
+
+async function adminProgramShape(course: typeof coursesTable.$inferSelect) {
+  const [counts] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      completed: sql<number>`count(*) filter (where ${sessionsTable.status} = 'completed')`,
+    })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.courseId, course.id));
+  return {
+    id: course.id,
+    title: course.title,
+    subject: course.subject,
+    term: course.term,
+    status: course.status,
+    goalSummary: course.goalSummary,
+    meetUrl: course.meetUrl,
+    driveUrl: course.driveUrl,
+    sessionCount: Number(counts?.total ?? 0),
+    completedSessionCount: Number(counts?.completed ?? 0),
+  };
+}
+
+async function adminSessionConflicts(
+  payload: {
+    tutorUserId?: string | null;
+    clientUserId?: string | null;
+    dateTime: Date;
+    durationMinutes: number;
+  },
+  excludeSessionId?: string,
+) {
+  const end = new Date(payload.dateTime.getTime() + payload.durationMinutes * 60_000);
+  const rows = await db
+    .select({
+      id: sessionsTable.id,
+      title: sessionsTable.title,
+      dateTime: sessionsTable.dateTime,
+      durationMinutes: sessionsTable.durationMinutes,
+      tutorUserId: sessionsTable.tutorUserId,
+      clientUserId: sessionsTable.clientUserId,
+    })
+    .from(sessionsTable)
+    .where(
+      and(
+        sql`${sessionsTable.status} <> 'archived'`,
+        sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
+        sql`${sessionsTable.dateTime} < ${end}`,
+        sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${payload.dateTime}`,
+        excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
+      ),
+    );
+  return rows
+    .filter(
+      (row) =>
+        (payload.tutorUserId && row.tutorUserId === payload.tutorUserId) ||
+        (payload.clientUserId && row.clientUserId === payload.clientUserId),
+    )
+    .map(
+      (row) =>
+        `${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`,
+    );
+}
+
+async function adminSessionShape(
+  session: typeof sessionsTable.$inferSelect,
+  conflictWith: string[] = [],
+) {
+  const [[course], people] = await Promise.all([
+    db
+      .select()
+      .from(coursesTable)
+      .where(eq(coursesTable.id, session.courseId))
+      .limit(1),
+    db
+      .select({ id: usersTable.id, name: usersTable.displayName })
+      .from(usersTable)
+      .where(
+        inArray(
+          usersTable.id,
+          [session.clientUserId, session.tutorUserId].filter(
+            (id): id is string => Boolean(id),
+          ),
+        ),
+      ),
+  ]);
+  const personById = new Map(people.map((person) => [person.id, person.name]));
+  return {
+    id: session.id,
+    courseId: session.courseId,
+    programTitle: course?.title ?? "Unknown program",
+    dateTime: session.dateTime,
+    timezone: session.timezone,
+    subject: session.subject,
+    title: session.title,
+    status: session.status,
+    durationMinutes: session.durationMinutes,
+    bookingStatus: session.bookingStatus,
+    meetingUrl: course?.meetUrl ?? null,
+    student: session.clientUserId
+      ? { id: session.clientUserId, name: personById.get(session.clientUserId) ?? "Unknown student" }
+      : null,
+    tutor: session.tutorUserId
+      ? { id: session.tutorUserId, name: personById.get(session.tutorUserId) ?? "Unknown tutor" }
+      : null,
+    hasHomework: session.hasHomework,
+    hasReport: session.hasReport,
+    conflict: session.status !== "archived" && session.bookingStatus !== "cancelled" && conflictWith.length > 0,
+    conflictWith: session.status !== "archived" && session.bookingStatus !== "cancelled" ? conflictWith : [],
+  };
+}
+
+async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSelect) {
+  const [[course], [session], [questionCount], [submissionCount]] = await Promise.all([
+    db.select({ title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, assignment.courseId)).limit(1),
+    assignment.sessionId
+      ? db.select({ title: sessionsTable.title }).from(sessionsTable).where(eq(sessionsTable.id, assignment.sessionId)).limit(1)
+      : Promise.resolve([]),
+    db.select({ count: sql<number>`count(*)` }).from(assignmentQuestionsTable).where(eq(assignmentQuestionsTable.assignmentId, assignment.id)),
+    db.select({ count: sql<number>`count(*)` }).from(attemptsTable).where(and(eq(attemptsTable.assignmentId, assignment.id), inArray(attemptsTable.status, ["submitted", "expired"]))),
+  ]);
+  return {
+    id: assignment.id,
+    courseId: assignment.courseId,
+    sessionId: assignment.sessionId,
+    programTitle: course?.title ?? "Unknown program",
+    sessionTitle: session?.title ?? null,
+    deliveryPhase: assignment.deliveryPhase,
+    title: assignment.title,
+    subject: assignment.subject,
+    instructions: assignment.instructions,
+    status: assignment.status,
+    deadline: assignment.deadline,
+    timeLimitMinutes: assignment.timeLimitMinutes,
+    maxAttempts: assignment.maxAttempts,
+    questionCount: Number(questionCount?.count ?? 0),
+    submissionCount: Number(submissionCount?.count ?? 0),
+  };
+}
+
+function adminMutationError(res: Response, message: string): void {
+  res.status(400).json({ error: message });
+}
+
+router.get(
+  "/admin/curriculum",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    await ensureSeedData();
+    await ensureUpgradeSeedData();
+    const query = GetAdminCurriculumQueryParams.safeParse(req.query);
+    if (!query.success) {
+      adminMutationError(res, query.error.message);
+      return;
+    }
+    const courseFilter = query.data.courseId
+      ? eq(coursesTable.id, query.data.courseId)
+      : undefined;
+    const [courses, allSessions, allAssignments, blocks, questions, submissions, tutorProfiles, clients] =
+      await Promise.all([
+        db.select().from(coursesTable).where(courseFilter ?? sql`true`).orderBy(asc(coursesTable.title)),
+        db
+          .select({ session: sessionsTable })
+          .from(sessionsTable)
+          .innerJoin(coursesTable, eq(coursesTable.id, sessionsTable.courseId))
+          .where(courseFilter ?? sql`true`)
+          .orderBy(asc(sessionsTable.dateTime)),
+        db
+          .select({ assignment: assignmentsTable })
+          .from(assignmentsTable)
+          .innerJoin(coursesTable, eq(coursesTable.id, assignmentsTable.courseId))
+          .where(courseFilter ?? sql`true`)
+          .orderBy(asc(assignmentsTable.deadline)),
+        db
+          .select({ block: curriculumBlocksTable })
+          .from(curriculumBlocksTable)
+          .innerJoin(sessionsTable, eq(sessionsTable.id, curriculumBlocksTable.sessionId))
+          .where(courseFilter ? eq(sessionsTable.courseId, query.data.courseId!) : sql`true`)
+          .orderBy(asc(curriculumBlocksTable.position)),
+        db.select().from(questionsTable).orderBy(desc(questionsTable.createdAt)),
+        db
+          .select({ attempt: attemptsTable, assignment: assignmentsTable, student: usersTable })
+          .from(attemptsTable)
+          .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+          .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+          .where(
+            and(
+              inArray(attemptsTable.status, ["submitted", "expired"]),
+              isNotNull(attemptsTable.submittedAt),
+              courseFilter ? eq(assignmentsTable.courseId, query.data.courseId!) : sql`true`,
+            ),
+          )
+          .orderBy(desc(attemptsTable.submittedAt))
+          .limit(100),
+        db
+          .select({
+            id: usersTable.id,
+            name: tutorProfilesTable.name,
+            email: tutorProfilesTable.email,
+            subjects: tutorProfilesTable.subjects,
+            active: tutorProfilesTable.active,
+          })
+          .from(tutorProfilesTable)
+          .innerJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
+          .orderBy(asc(tutorProfilesTable.name)),
+        db
+          .select({ id: usersTable.id, name: usersTable.displayName, email: usersTable.email })
+          .from(usersTable)
+          .where(eq(usersTable.role, "student"))
+          .orderBy(asc(usersTable.displayName)),
+      ]);
+    const sessions = await Promise.all(
+      allSessions.map(async ({ session }) => {
+        const conflictWith = await adminSessionConflicts({
+          tutorUserId: session.tutorUserId,
+          clientUserId: session.clientUserId,
+          dateTime: session.dateTime,
+          durationMinutes: session.durationMinutes,
+        }, session.id);
+        return adminSessionShape(session, conflictWith);
+      }),
+    );
+    const assignments = await Promise.all(allAssignments.map(({ assignment }) => adminAssignmentShape(assignment)));
+    const tutors = await Promise.all(
+      tutorProfiles.map(async (tutor) => {
+        const [counts] = await db
+          .select({
+            total: sql<number>`count(*)`,
+            upcoming: sql<number>`count(*) filter (where ${sessionsTable.dateTime} >= now() and ${sessionsTable.status} <> 'archived')`,
+          })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.tutorUserId, tutor.id));
+        return {
+          ...tutor,
+          sessionCount: Number(counts?.total ?? 0),
+          upcomingSessionCount: Number(counts?.upcoming ?? 0),
+        };
+      }),
+    );
+    const questionBySubject = new Map<string, { total: number; draft: number; approved: number; rejected: number }>();
+    for (const question of questions) {
+      const entry = questionBySubject.get(question.subject) ?? { total: 0, draft: 0, approved: 0, rejected: 0 };
+      entry.total += 1;
+      if (question.reviewStatus === "draft" || question.reviewStatus === "approved" || question.reviewStatus === "rejected") entry[question.reviewStatus] += 1;
+      questionBySubject.set(question.subject, entry);
+    }
+    const attention: Array<{ kind: string; label: string; detail: string; severity: "info" | "warning" | "urgent" }> = [];
+    for (const assignment of assignments.filter((item) => item.status === "draft")) {
+      attention.push({ kind: "assignment", label: "Draft assignment", detail: `${assignment.title} still needs publication.`, severity: "warning" });
+    }
+    for (const item of [...questionBySubject.entries()].filter(([, value]) => value.draft > 0 || value.rejected > 0)) {
+      attention.push({ kind: "question-bank", label: "Question review", detail: `${item[0]} has ${item[1].draft} draft and ${item[1].rejected} rejected item(s).`, severity: "warning" });
+    }
+    for (const session of sessions.filter((item) => item.conflict)) {
+      attention.push({ kind: "conflict", label: "Scheduling conflict", detail: `${session.title} overlaps another internal session.`, severity: "urgent" });
+    }
+    for (const session of sessions.filter((item) => !item.tutor || !item.student)) {
+      attention.push({ kind: "session", label: "Incomplete session assignment", detail: `${session.title} needs a ${!session.tutor ? "tutor" : "student"}.`, severity: "warning" });
+    }
+    res.json(
+      GetAdminCurriculumResponse.parse({
+        programs: await Promise.all(courses.map(adminProgramShape)),
+        sessions,
+        assignments,
+        blocks: blocks.map(({ block }) => block),
+        questionStatus: [...questionBySubject.entries()].map(([subject, value]) => ({ subject, ...value })),
+        submissions: submissions.map(({ attempt, assignment, student }) => ({
+          attemptId: attempt.id,
+          assignmentId: assignment.id,
+          assignmentTitle: assignment.title,
+          studentUserId: student.id,
+          studentName: student.displayName,
+          status: attempt.status,
+          score: attempt.score ?? 0,
+          submittedAt: attempt.submittedAt!,
+          reviewStatus: attempt.reviewStatus,
+          mistakeCount: Array.isArray((attempt.result as Record<string, unknown> | null)?.items)
+            ? ((attempt.result as { items: Array<{ correct: boolean }> }).items.filter((item) => !item.correct).length)
+            : 0,
+        })),
+        tutors,
+        clients,
+        attention,
+      }),
+    );
+  },
+);
+
+router.patch(
+  "/admin/programs/:programId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminProgramParams.safeParse(req.params);
+    const body = UpdateAdminProgramBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "Invalid program update.");
+      return;
+    }
+    const [existing] = await db.select().from(coursesTable).where(eq(coursesTable.id, params.data.programId)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Program not found" });
+      return;
+    }
+    const updates = {
+      ...(body.data.title === undefined ? {} : { title: body.data.title.trim() }),
+      ...(body.data.subject === undefined ? {} : { subject: body.data.subject.trim() }),
+      ...(body.data.term === undefined ? {} : { term: body.data.term.trim() }),
+      ...(body.data.status === undefined ? {} : { status: body.data.status }),
+      ...(body.data.goalSummary === undefined ? {} : { goalSummary: body.data.goalSummary?.trim() || null }),
+      ...(body.data.meetUrl === undefined ? {} : { meetUrl: body.data.meetUrl?.trim() || null }),
+      ...(body.data.driveUrl === undefined ? {} : { driveUrl: body.data.driveUrl?.trim() || null }),
+    };
+    const [updated] = await db.update(coursesTable).set(updates).where(eq(coursesTable.id, existing.id)).returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: updated!.status === "archived" ? "program.archived" : "program.updated",
+      entityType: "course",
+      entityId: updated!.id,
+      metadata: { status: updated!.status },
+    });
+    res.json(UpdateAdminProgramResponse.parse(await adminProgramShape(updated!)));
+  },
+);
+
+router.post(
+  "/admin/assignments",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateAdminAssignmentBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, "Invalid assignment details.");
+      return;
+    }
+    const [course] = await db.select().from(coursesTable).where(eq(coursesTable.id, body.data.courseId)).limit(1);
+    if (!course) {
+      res.status(404).json({ error: "Program not found" });
+      return;
+    }
+    if (body.data.sessionId) {
+      const [session] = await db.select({ id: sessionsTable.id, courseId: sessionsTable.courseId }).from(sessionsTable).where(eq(sessionsTable.id, body.data.sessionId)).limit(1);
+      if (!session || session.courseId !== body.data.courseId) {
+        res.status(404).json({ error: "Session not found in this program" });
+        return;
+      }
+    }
+    const [created] = await db.insert(assignmentsTable).values({
+      courseId: body.data.courseId,
+      sessionId: body.data.sessionId ?? null,
+      deliveryPhase: body.data.deliveryPhase,
+      title: body.data.title.trim(),
+      subject: body.data.subject.trim(),
+      instructions: body.data.instructions.trim(),
+      status: body.data.status ?? "draft",
+      deadline: body.data.deadline ?? null,
+      timeLimitMinutes: body.data.timeLimitMinutes,
+      maxAttempts: body.data.maxAttempts ?? 1,
+    }).returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "assignment.created",
+      entityType: "assignment",
+      entityId: created!.id,
+      metadata: { courseId: created!.courseId, sessionId: created!.sessionId, status: created!.status },
+    });
+    res.status(201).json(CreateAdminAssignmentResponse.parse(await adminAssignmentShape(created!)));
+  },
+);
+
+router.patch(
+  "/admin/assignments/:assignmentId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminAssignmentParams.safeParse(req.params);
+    const body = UpdateAdminAssignmentBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "Invalid assignment update.");
+      return;
+    }
+    const [existing] = await db.select().from(assignmentsTable).where(eq(assignmentsTable.id, params.data.assignmentId)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    const courseId = body.data.courseId ?? existing.courseId;
+    const sessionId = body.data.sessionId === undefined ? existing.sessionId : body.data.sessionId;
+    const [course] = await db.select({ id: coursesTable.id }).from(coursesTable).where(eq(coursesTable.id, courseId)).limit(1);
+    if (!course) {
+      res.status(404).json({ error: "Program not found" });
+      return;
+    }
+    if (sessionId) {
+      const [session] = await db.select({ courseId: sessionsTable.courseId }).from(sessionsTable).where(eq(sessionsTable.id, sessionId)).limit(1);
+      if (!session || session.courseId !== courseId) {
+        res.status(404).json({ error: "Session not found in this program" });
+        return;
+      }
+    }
+    const [updated] = await db.update(assignmentsTable).set({
+      courseId,
+      sessionId,
+      ...(body.data.deliveryPhase === undefined ? {} : { deliveryPhase: body.data.deliveryPhase }),
+      ...(body.data.title === undefined ? {} : { title: body.data.title.trim() }),
+      ...(body.data.subject === undefined ? {} : { subject: body.data.subject.trim() }),
+      ...(body.data.instructions === undefined ? {} : { instructions: body.data.instructions.trim() }),
+      ...(body.data.status === undefined ? {} : { status: body.data.status }),
+      ...(body.data.deadline === undefined ? {} : { deadline: body.data.deadline }),
+      ...(body.data.timeLimitMinutes === undefined ? {} : { timeLimitMinutes: body.data.timeLimitMinutes }),
+      ...(body.data.maxAttempts === undefined ? {} : { maxAttempts: body.data.maxAttempts }),
+    }).where(eq(assignmentsTable.id, existing.id)).returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: updated!.status === "archived" ? "assignment.archived" : "assignment.updated",
+      entityType: "assignment",
+      entityId: updated!.id,
+      metadata: { courseId: updated!.courseId, sessionId: updated!.sessionId, status: updated!.status },
+    });
+    res.json(UpdateAdminAssignmentResponse.parse(await adminAssignmentShape(updated!)));
+  },
+);
+
+async function validateAdminSessionPeople(clientUserId: string | null | undefined, tutorUserId: string | null | undefined) {
+  const ids = [clientUserId, tutorUserId].filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return true;
+  const people = await db.select({ id: usersTable.id, role: usersTable.role }).from(usersTable).where(inArray(usersTable.id, ids));
+  return people.length === ids.length && people.every((person) =>
+    (clientUserId ? person.id !== clientUserId || person.role === "student" : true) &&
+    (tutorUserId ? person.id !== tutorUserId || person.role === "tutor" : true),
+  );
+}
+
+router.post(
+  "/admin/sessions",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateAdminSessionBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, "Invalid session details.");
+      return;
+    }
+    const [course] = await db.select({ id: coursesTable.id }).from(coursesTable).where(eq(coursesTable.id, body.data.courseId)).limit(1);
+    if (!course || !(await validateAdminSessionPeople(body.data.clientUserId, body.data.tutorUserId))) {
+      res.status(404).json({ error: "Program or assigned person not found" });
+      return;
+    }
+    const conflictWith = await adminSessionConflicts({
+      tutorUserId: body.data.tutorUserId,
+      clientUserId: body.data.clientUserId,
+      dateTime: body.data.dateTime,
+      durationMinutes: body.data.durationMinutes,
+    });
+    if (conflictWith.length > 0) {
+      res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session overlaps another internal session.", conflicts: conflictWith });
+      return;
+    }
+    const [created] = await db.insert(sessionsTable).values({
+      courseId: body.data.courseId,
+      clientUserId: body.data.clientUserId ?? null,
+      tutorUserId: body.data.tutorUserId ?? null,
+      dateTime: body.data.dateTime,
+      timezone: body.data.timezone.trim(),
+      subject: body.data.subject.trim(),
+      title: body.data.title.trim(),
+      status: body.data.status ?? "draft",
+      durationMinutes: body.data.durationMinutes,
+      bookingStatus: body.data.bookingStatus ?? "confirmed",
+    }).returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "session.created",
+      entityType: "session",
+      entityId: created!.id,
+      metadata: { courseId: created!.courseId, status: created!.status },
+    });
+    res.status(201).json(CreateAdminSessionResponse.parse(await adminSessionShape(created!)));
+  },
+);
+
+router.patch(
+  "/admin/sessions/:sessionId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminSessionParams.safeParse(req.params);
+    const body = UpdateAdminSessionBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "Invalid session update.");
+      return;
+    }
+    const [existing] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, params.data.sessionId)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const next = {
+      courseId: body.data.courseId ?? existing.courseId,
+      clientUserId: body.data.clientUserId === undefined ? existing.clientUserId : body.data.clientUserId,
+      tutorUserId: body.data.tutorUserId === undefined ? existing.tutorUserId : body.data.tutorUserId,
+      dateTime: body.data.dateTime ?? existing.dateTime,
+      timezone: body.data.timezone?.trim() ?? existing.timezone,
+      subject: body.data.subject?.trim() ?? existing.subject,
+      title: body.data.title?.trim() ?? existing.title,
+      status: body.data.status ?? existing.status,
+      durationMinutes: body.data.durationMinutes ?? existing.durationMinutes,
+      bookingStatus: body.data.bookingStatus ?? existing.bookingStatus,
+    };
+    const [course] = await db.select({ id: coursesTable.id }).from(coursesTable).where(eq(coursesTable.id, next.courseId)).limit(1);
+    if (!course || !(await validateAdminSessionPeople(next.clientUserId, next.tutorUserId))) {
+      res.status(404).json({ error: "Program or assigned person not found" });
+      return;
+    }
+    const conflictWith = next.status === "archived" || next.bookingStatus === "cancelled"
+      ? []
+      : await adminSessionConflicts(next, existing.id);
+    if (conflictWith.length > 0) {
+      res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session overlaps another internal session.", conflicts: conflictWith });
+      return;
+    }
+    const [updated] = await db.update(sessionsTable).set({ ...next, updatedAt: new Date() }).where(eq(sessionsTable.id, existing.id)).returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: updated!.status === "archived" ? "session.archived" : "session.updated",
+      entityType: "session",
+      entityId: updated!.id,
+      metadata: { courseId: updated!.courseId, status: updated!.status },
+    });
+    res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated!)));
   },
 );
 

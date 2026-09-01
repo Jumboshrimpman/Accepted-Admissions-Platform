@@ -502,6 +502,502 @@ export interface AdminOverview {
   audit: AdminOverviewAuditItem[];
 }
 
+export type AdminProgramStatus = typeof AdminProgramStatus[keyof typeof AdminProgramStatus];
+
+
+export const AdminProgramStatus = {
+  draft: 'draft',
+  active: 'active',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export interface AdminProgram {
+  id: string;
+  title: string;
+  subject: string;
+  term: string;
+  status: AdminProgramStatus;
+  /** @nullable */
+  goalSummary: string | null;
+  /** @nullable */
+  meetUrl: string | null;
+  /** @nullable */
+  driveUrl: string | null;
+  sessionCount: number;
+  completedSessionCount: number;
+}
+
+export type AdminProgramUpdateStatus = typeof AdminProgramUpdateStatus[keyof typeof AdminProgramUpdateStatus];
+
+
+export const AdminProgramUpdateStatus = {
+  draft: 'draft',
+  active: 'active',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export interface AdminProgramUpdate {
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title?: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  subject?: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  term?: string;
+  status?: AdminProgramUpdateStatus;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  goalSummary?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  meetUrl?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  driveUrl?: string | null;
+}
+
+export type AdminSessionStatus = typeof AdminSessionStatus[keyof typeof AdminSessionStatus];
+
+
+export const AdminSessionStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminSessionStudent = {
+  id: string;
+  name: string;
+} | null;
+
+/**
+ * @nullable
+ */
+export type AdminSessionTutor = {
+  id: string;
+  name: string;
+} | null;
+
+export interface AdminSession {
+  id: string;
+  courseId: string;
+  programTitle: string;
+  dateTime: string;
+  timezone: string;
+  subject: string;
+  title: string;
+  status: AdminSessionStatus;
+  durationMinutes: number;
+  bookingStatus: string;
+  /** @nullable */
+  meetingUrl: string | null;
+  /** @nullable */
+  student: AdminSessionStudent;
+  /** @nullable */
+  tutor: AdminSessionTutor;
+  hasHomework: boolean;
+  hasReport: boolean;
+  conflict: boolean;
+  conflictWith: string[];
+}
+
+export type AdminSessionInputStatus = typeof AdminSessionInputStatus[keyof typeof AdminSessionInputStatus];
+
+
+export const AdminSessionInputStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export type AdminSessionInputBookingStatus = typeof AdminSessionInputBookingStatus[keyof typeof AdminSessionInputBookingStatus];
+
+
+export const AdminSessionInputBookingStatus = {
+  confirmed: 'confirmed',
+  pending: 'pending',
+  cancelled: 'cancelled',
+  rescheduled: 'rescheduled',
+} as const;
+
+export interface AdminSessionInput {
+  courseId: string;
+  /** @nullable */
+  clientUserId?: string | null;
+  /** @nullable */
+  tutorUserId?: string | null;
+  dateTime: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  timezone: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  subject: string;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title: string;
+  status?: AdminSessionInputStatus;
+  /**
+     * @minimum 15
+     * @maximum 480
+     */
+  durationMinutes: number;
+  bookingStatus?: AdminSessionInputBookingStatus;
+}
+
+export type AdminSessionUpdateStatus = typeof AdminSessionUpdateStatus[keyof typeof AdminSessionUpdateStatus];
+
+
+export const AdminSessionUpdateStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export type AdminSessionUpdateBookingStatus = typeof AdminSessionUpdateBookingStatus[keyof typeof AdminSessionUpdateBookingStatus];
+
+
+export const AdminSessionUpdateBookingStatus = {
+  confirmed: 'confirmed',
+  pending: 'pending',
+  cancelled: 'cancelled',
+  rescheduled: 'rescheduled',
+} as const;
+
+export interface AdminSessionUpdate {
+  courseId?: string;
+  /** @nullable */
+  clientUserId?: string | null;
+  /** @nullable */
+  tutorUserId?: string | null;
+  dateTime?: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  timezone?: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  subject?: string;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title?: string;
+  status?: AdminSessionUpdateStatus;
+  /**
+     * @minimum 15
+     * @maximum 480
+     */
+  durationMinutes?: number;
+  bookingStatus?: AdminSessionUpdateBookingStatus;
+}
+
+export type AdminAssignmentDeliveryPhase = typeof AdminAssignmentDeliveryPhase[keyof typeof AdminAssignmentDeliveryPhase];
+
+
+export const AdminAssignmentDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
+export type AdminAssignmentStatus = typeof AdminAssignmentStatus[keyof typeof AdminAssignmentStatus];
+
+
+export const AdminAssignmentStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export interface AdminAssignment {
+  id: string;
+  courseId: string;
+  /** @nullable */
+  sessionId: string | null;
+  programTitle: string;
+  /** @nullable */
+  sessionTitle: string | null;
+  deliveryPhase: AdminAssignmentDeliveryPhase;
+  title: string;
+  subject: string;
+  instructions: string;
+  status: AdminAssignmentStatus;
+  /** @nullable */
+  deadline: string | null;
+  timeLimitMinutes: number;
+  maxAttempts: number;
+  questionCount: number;
+  submissionCount: number;
+}
+
+export type AdminAssignmentInputDeliveryPhase = typeof AdminAssignmentInputDeliveryPhase[keyof typeof AdminAssignmentInputDeliveryPhase];
+
+
+export const AdminAssignmentInputDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
+export type AdminAssignmentInputStatus = typeof AdminAssignmentInputStatus[keyof typeof AdminAssignmentInputStatus];
+
+
+export const AdminAssignmentInputStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export interface AdminAssignmentInput {
+  courseId: string;
+  /** @nullable */
+  sessionId?: string | null;
+  deliveryPhase: AdminAssignmentInputDeliveryPhase;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  instructions: string;
+  status?: AdminAssignmentInputStatus;
+  /** @nullable */
+  deadline?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 480
+     */
+  timeLimitMinutes: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  maxAttempts?: number;
+}
+
+export type AdminAssignmentUpdateDeliveryPhase = typeof AdminAssignmentUpdateDeliveryPhase[keyof typeof AdminAssignmentUpdateDeliveryPhase];
+
+
+export const AdminAssignmentUpdateDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
+export type AdminAssignmentUpdateStatus = typeof AdminAssignmentUpdateStatus[keyof typeof AdminAssignmentUpdateStatus];
+
+
+export const AdminAssignmentUpdateStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+export interface AdminAssignmentUpdate {
+  courseId?: string;
+  /** @nullable */
+  sessionId?: string | null;
+  deliveryPhase?: AdminAssignmentUpdateDeliveryPhase;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title?: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  subject?: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  instructions?: string;
+  status?: AdminAssignmentUpdateStatus;
+  /** @nullable */
+  deadline?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 480
+     */
+  timeLimitMinutes?: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  maxAttempts?: number;
+}
+
+export interface AdminQuestionStatus {
+  subject: string;
+  total: number;
+  draft: number;
+  approved: number;
+  rejected: number;
+}
+
+export type AdminSubmissionStatus = typeof AdminSubmissionStatus[keyof typeof AdminSubmissionStatus];
+
+
+export const AdminSubmissionStatus = {
+  active: 'active',
+  paused: 'paused',
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export interface AdminSubmission {
+  attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentUserId: string;
+  studentName: string;
+  status: AdminSubmissionStatus;
+  score: number;
+  submittedAt: string;
+  reviewStatus: string;
+  mistakeCount: number;
+}
+
+export type AdminCurriculumTutorsItem = {
+  id: string;
+  name: string;
+  email: string;
+  subjects: string[];
+  active: boolean;
+  sessionCount: number;
+  upcomingSessionCount: number;
+};
+
+export type AdminCurriculumClientsItem = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+export type AdminCurriculumAttentionItemSeverity = typeof AdminCurriculumAttentionItemSeverity[keyof typeof AdminCurriculumAttentionItemSeverity];
+
+
+export const AdminCurriculumAttentionItemSeverity = {
+  info: 'info',
+  warning: 'warning',
+  urgent: 'urgent',
+} as const;
+
+export type AdminCurriculumAttentionItem = {
+  kind: string;
+  label: string;
+  detail: string;
+  severity: AdminCurriculumAttentionItemSeverity;
+};
+
+export type CurriculumBlockKind = typeof CurriculumBlockKind[keyof typeof CurriculumBlockKind];
+
+
+export const CurriculumBlockKind = {
+  heading: 'heading',
+  rich_text: 'rich_text',
+  callout: 'callout',
+  objectives: 'objectives',
+  timeline: 'timeline',
+  tutor_instructions: 'tutor_instructions',
+  student_notes: 'student_notes',
+  formula: 'formula',
+  strategy: 'strategy',
+  external_link: 'external_link',
+  multiple_choice: 'multiple_choice',
+  numeric_response: 'numeric_response',
+  long_response: 'long_response',
+  writing_response: 'writing_response',
+  checklist: 'checklist',
+  homework: 'homework',
+  timer: 'timer',
+  file_link: 'file_link',
+  divider: 'divider',
+} as const;
+
+export type CurriculumBlockVisibility = typeof CurriculumBlockVisibility[keyof typeof CurriculumBlockVisibility];
+
+
+export const CurriculumBlockVisibility = {
+  student: 'student',
+  tutor: 'tutor',
+  both: 'both',
+} as const;
+
+export type CurriculumBlockStatus = typeof CurriculumBlockStatus[keyof typeof CurriculumBlockStatus];
+
+
+export const CurriculumBlockStatus = {
+  draft: 'draft',
+  published: 'published',
+  archived: 'archived',
+} as const;
+
+export type CurriculumBlockConfig = { [key: string]: unknown };
+
+export interface CurriculumBlock {
+  id: string;
+  sessionId: string;
+  kind: CurriculumBlockKind;
+  position: number;
+  visibility: CurriculumBlockVisibility;
+  status: CurriculumBlockStatus;
+  config: CurriculumBlockConfig;
+}
+
+export interface AdminCurriculum {
+  programs: AdminProgram[];
+  sessions: AdminSession[];
+  assignments: AdminAssignment[];
+  blocks: CurriculumBlock[];
+  questionStatus: AdminQuestionStatus[];
+  submissions: AdminSubmission[];
+  tutors: AdminCurriculumTutorsItem[];
+  clients: AdminCurriculumClientsItem[];
+  attention: AdminCurriculumAttentionItem[];
+}
+
 export interface Tutor {
   id: string;
   name: string;
@@ -571,61 +1067,6 @@ export type CourseDetail = Course & ({
   goalSummary?: string | null;
   sessions: Session[];
 });
-
-export type CurriculumBlockKind = typeof CurriculumBlockKind[keyof typeof CurriculumBlockKind];
-
-
-export const CurriculumBlockKind = {
-  heading: 'heading',
-  rich_text: 'rich_text',
-  callout: 'callout',
-  objectives: 'objectives',
-  timeline: 'timeline',
-  tutor_instructions: 'tutor_instructions',
-  student_notes: 'student_notes',
-  formula: 'formula',
-  strategy: 'strategy',
-  external_link: 'external_link',
-  multiple_choice: 'multiple_choice',
-  numeric_response: 'numeric_response',
-  long_response: 'long_response',
-  writing_response: 'writing_response',
-  checklist: 'checklist',
-  homework: 'homework',
-  timer: 'timer',
-  file_link: 'file_link',
-  divider: 'divider',
-} as const;
-
-export type CurriculumBlockVisibility = typeof CurriculumBlockVisibility[keyof typeof CurriculumBlockVisibility];
-
-
-export const CurriculumBlockVisibility = {
-  student: 'student',
-  tutor: 'tutor',
-  both: 'both',
-} as const;
-
-export type CurriculumBlockStatus = typeof CurriculumBlockStatus[keyof typeof CurriculumBlockStatus];
-
-
-export const CurriculumBlockStatus = {
-  draft: 'draft',
-  published: 'published',
-  archived: 'archived',
-} as const;
-
-export type CurriculumBlockConfig = { [key: string]: unknown };
-
-export interface CurriculumBlock {
-  id: string;
-  sessionId: string;
-  kind: CurriculumBlockKind;
-  position: number;
-  visibility: CurriculumBlockVisibility;
-  status: CurriculumBlockStatus;
-  config: CurriculumBlockConfig;
-}
 
 export type CurriculumBlockInputKind = typeof CurriculumBlockInputKind[keyof typeof CurriculumBlockInputKind];
 
@@ -1552,6 +1993,15 @@ export type BadRequestResponse = Error;
  * Record not found
  */
 export type NotFoundResponse = Error;
+
+/**
+ * Operation conflicts with existing scheduling data
+ */
+export type ConflictResponse = Error;
+
+export type GetAdminCurriculumParams = {
+courseId?: string;
+};
 
 export type GetBookingAvailabilityParams = {
 tutorProfileId: string;

@@ -72,6 +72,379 @@ export const GetAdminOverviewResponse = zod.object({
 
 
 /**
+ * @summary Get administrator curriculum and session operations data
+ */
+export const GetAdminCurriculumQueryParams = zod.object({
+  "courseId": zod.coerce.string().optional()
+})
+
+export const GetAdminCurriculumResponse = zod.object({
+  "programs": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "term": zod.string(),
+  "status": zod.enum(['draft', 'active', 'completed', 'archived']),
+  "goalSummary": zod.string().nullable(),
+  "meetUrl": zod.string().nullable(),
+  "driveUrl": zod.string().nullable(),
+  "sessionCount": zod.number(),
+  "completedSessionCount": zod.number()
+})),
+  "sessions": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "programTitle": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.string(),
+  "meetingUrl": zod.string().nullable(),
+  "student": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "tutor": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "hasHomework": zod.boolean(),
+  "hasReport": zod.boolean(),
+  "conflict": zod.boolean(),
+  "conflictWith": zod.array(zod.string())
+})),
+  "assignments": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "programTitle": zod.string(),
+  "sessionTitle": zod.string().nullable(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "instructions": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullable(),
+  "timeLimitMinutes": zod.number(),
+  "maxAttempts": zod.number(),
+  "questionCount": zod.number(),
+  "submissionCount": zod.number()
+})),
+  "blocks": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "position": zod.number(),
+  "visibility": zod.enum(['student', 'tutor', 'both']),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "config": zod.record(zod.string(), zod.unknown())
+})),
+  "questionStatus": zod.array(zod.object({
+  "subject": zod.string(),
+  "total": zod.number(),
+  "draft": zod.number(),
+  "approved": zod.number(),
+  "rejected": zod.number()
+})),
+  "submissions": zod.array(zod.object({
+  "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "status": zod.enum(['active', 'paused', 'submitted', 'expired']),
+  "score": zod.number(),
+  "submittedAt": zod.coerce.date(),
+  "reviewStatus": zod.string(),
+  "mistakeCount": zod.number()
+})),
+  "tutors": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "subjects": zod.array(zod.string()),
+  "active": zod.boolean(),
+  "sessionCount": zod.number(),
+  "upcomingSessionCount": zod.number()
+})),
+  "clients": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "email": zod.string()
+})),
+  "attention": zod.array(zod.object({
+  "kind": zod.string(),
+  "label": zod.string(),
+  "detail": zod.string(),
+  "severity": zod.enum(['info', 'warning', 'urgent'])
+}))
+})
+
+
+/**
+ * @summary Edit, publish, or archive a program
+ */
+export const UpdateAdminProgramParams = zod.object({
+  "programId": zod.coerce.string()
+})
+
+export const updateAdminProgramBodyTitleMin = 2;
+export const updateAdminProgramBodyTitleMax = 200;
+
+export const updateAdminProgramBodySubjectMax = 100;
+
+export const updateAdminProgramBodyTermMax = 100;
+
+export const updateAdminProgramBodyGoalSummaryMax = 2000;
+
+export const updateAdminProgramBodyMeetUrlMax = 500;
+
+export const updateAdminProgramBodyDriveUrlMax = 500;
+
+
+
+export const UpdateAdminProgramBody = zod.object({
+  "title": zod.string().min(updateAdminProgramBodyTitleMin).max(updateAdminProgramBodyTitleMax).optional(),
+  "subject": zod.string().min(1).max(updateAdminProgramBodySubjectMax).optional(),
+  "term": zod.string().min(1).max(updateAdminProgramBodyTermMax).optional(),
+  "status": zod.enum(['draft', 'active', 'completed', 'archived']).optional(),
+  "goalSummary": zod.string().max(updateAdminProgramBodyGoalSummaryMax).nullish(),
+  "meetUrl": zod.string().max(updateAdminProgramBodyMeetUrlMax).nullish(),
+  "driveUrl": zod.string().max(updateAdminProgramBodyDriveUrlMax).nullish()
+})
+
+export const UpdateAdminProgramResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "term": zod.string(),
+  "status": zod.enum(['draft', 'active', 'completed', 'archived']),
+  "goalSummary": zod.string().nullable(),
+  "meetUrl": zod.string().nullable(),
+  "driveUrl": zod.string().nullable(),
+  "sessionCount": zod.number(),
+  "completedSessionCount": zod.number()
+})
+
+
+/**
+ * @summary Create an administrator-managed assignment
+ */
+export const createAdminAssignmentBodyTitleMin = 2;
+export const createAdminAssignmentBodyTitleMax = 200;
+
+export const createAdminAssignmentBodySubjectMax = 100;
+
+export const createAdminAssignmentBodyInstructionsMax = 10000;
+
+export const createAdminAssignmentBodyTimeLimitMinutesMax = 480;
+
+export const createAdminAssignmentBodyMaxAttemptsMax = 20;
+
+
+
+export const CreateAdminAssignmentBody = zod.object({
+  "courseId": zod.string(),
+  "sessionId": zod.string().nullish(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']),
+  "title": zod.string().min(createAdminAssignmentBodyTitleMin).max(createAdminAssignmentBodyTitleMax),
+  "subject": zod.string().min(1).max(createAdminAssignmentBodySubjectMax),
+  "instructions": zod.string().min(1).max(createAdminAssignmentBodyInstructionsMax),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
+  "deadline": zod.coerce.date().nullish(),
+  "timeLimitMinutes": zod.number().min(1).max(createAdminAssignmentBodyTimeLimitMinutesMax),
+  "maxAttempts": zod.number().min(1).max(createAdminAssignmentBodyMaxAttemptsMax).optional()
+})
+
+export const CreateAdminAssignmentResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "programTitle": zod.string(),
+  "sessionTitle": zod.string().nullable(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "instructions": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullable(),
+  "timeLimitMinutes": zod.number(),
+  "maxAttempts": zod.number(),
+  "questionCount": zod.number(),
+  "submissionCount": zod.number()
+})
+
+
+/**
+ * @summary Edit, publish, or archive an assignment
+ */
+export const UpdateAdminAssignmentParams = zod.object({
+  "assignmentId": zod.coerce.string()
+})
+
+export const updateAdminAssignmentBodyTitleMin = 2;
+export const updateAdminAssignmentBodyTitleMax = 200;
+
+export const updateAdminAssignmentBodySubjectMax = 100;
+
+export const updateAdminAssignmentBodyInstructionsMax = 10000;
+
+export const updateAdminAssignmentBodyTimeLimitMinutesMax = 480;
+
+export const updateAdminAssignmentBodyMaxAttemptsMax = 20;
+
+
+
+export const UpdateAdminAssignmentBody = zod.object({
+  "courseId": zod.string().optional(),
+  "sessionId": zod.string().nullish(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
+  "title": zod.string().min(updateAdminAssignmentBodyTitleMin).max(updateAdminAssignmentBodyTitleMax).optional(),
+  "subject": zod.string().min(1).max(updateAdminAssignmentBodySubjectMax).optional(),
+  "instructions": zod.string().min(1).max(updateAdminAssignmentBodyInstructionsMax).optional(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
+  "deadline": zod.coerce.date().nullish(),
+  "timeLimitMinutes": zod.number().min(1).max(updateAdminAssignmentBodyTimeLimitMinutesMax).optional(),
+  "maxAttempts": zod.number().min(1).max(updateAdminAssignmentBodyMaxAttemptsMax).optional()
+})
+
+export const UpdateAdminAssignmentResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "programTitle": zod.string(),
+  "sessionTitle": zod.string().nullable(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "instructions": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullable(),
+  "timeLimitMinutes": zod.number(),
+  "maxAttempts": zod.number(),
+  "questionCount": zod.number(),
+  "submissionCount": zod.number()
+})
+
+
+/**
+ * @summary Create an administrator-managed session with conflict detection
+ */
+export const createAdminSessionBodyTimezoneMax = 100;
+
+export const createAdminSessionBodySubjectMax = 100;
+
+export const createAdminSessionBodyTitleMin = 2;
+export const createAdminSessionBodyTitleMax = 200;
+
+export const createAdminSessionBodyDurationMinutesMin = 15;
+export const createAdminSessionBodyDurationMinutesMax = 480;
+
+
+
+export const CreateAdminSessionBody = zod.object({
+  "courseId": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "tutorUserId": zod.string().nullish(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string().min(1).max(createAdminSessionBodyTimezoneMax),
+  "subject": zod.string().min(1).max(createAdminSessionBodySubjectMax),
+  "title": zod.string().min(createAdminSessionBodyTitleMin).max(createAdminSessionBodyTitleMax),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
+  "durationMinutes": zod.number().min(createAdminSessionBodyDurationMinutesMin).max(createAdminSessionBodyDurationMinutesMax),
+  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()
+})
+
+export const CreateAdminSessionResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "programTitle": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.string(),
+  "meetingUrl": zod.string().nullable(),
+  "student": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "tutor": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "hasHomework": zod.boolean(),
+  "hasReport": zod.boolean(),
+  "conflict": zod.boolean(),
+  "conflictWith": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Edit, publish, archive, or reassign a session with conflict detection
+ */
+export const UpdateAdminSessionParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const updateAdminSessionBodyTimezoneMax = 100;
+
+export const updateAdminSessionBodySubjectMax = 100;
+
+export const updateAdminSessionBodyTitleMin = 2;
+export const updateAdminSessionBodyTitleMax = 200;
+
+export const updateAdminSessionBodyDurationMinutesMin = 15;
+export const updateAdminSessionBodyDurationMinutesMax = 480;
+
+
+
+export const UpdateAdminSessionBody = zod.object({
+  "courseId": zod.string().optional(),
+  "clientUserId": zod.string().nullish(),
+  "tutorUserId": zod.string().nullish(),
+  "dateTime": zod.coerce.date().optional(),
+  "timezone": zod.string().min(1).max(updateAdminSessionBodyTimezoneMax).optional(),
+  "subject": zod.string().min(1).max(updateAdminSessionBodySubjectMax).optional(),
+  "title": zod.string().min(updateAdminSessionBodyTitleMin).max(updateAdminSessionBodyTitleMax).optional(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
+  "durationMinutes": zod.number().min(updateAdminSessionBodyDurationMinutesMin).max(updateAdminSessionBodyDurationMinutesMax).optional(),
+  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()
+})
+
+export const UpdateAdminSessionResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "programTitle": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.string(),
+  "meetingUrl": zod.string().nullable(),
+  "student": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "tutor": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "hasHomework": zod.boolean(),
+  "hasReport": zod.boolean(),
+  "conflict": zod.boolean(),
+  "conflictWith": zod.array(zod.string())
+})
+
+
+/**
  * @summary Get invoices, payments, and credits visible to the signed-in client
  */
 export const GetFinancialsResponse = zod.object({

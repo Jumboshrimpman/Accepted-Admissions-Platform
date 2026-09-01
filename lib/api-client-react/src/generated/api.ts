@@ -23,8 +23,17 @@ import type {
   AdaptiveCurriculum,
   AdaptiveRecommendation,
   AdaptiveRecommendationUpdate,
+  AdminAssignment,
+  AdminAssignmentInput,
+  AdminAssignmentUpdate,
+  AdminCurriculum,
   AdminFinancials,
   AdminOverview,
+  AdminProgram,
+  AdminProgramUpdate,
+  AdminSession,
+  AdminSessionInput,
+  AdminSessionUpdate,
   AssignmentDetail,
   AssignmentQuestion,
   AssignmentQuestionUpdate,
@@ -46,6 +55,7 @@ import type {
   CancelBookingInput,
   CheckoutInput,
   CheckoutSession,
+  ConflictResponse,
   ContentSource,
   ContentSourceInput,
   Course,
@@ -61,6 +71,7 @@ import type {
   FinancialSummary,
   ForbiddenResponse,
   GenerateQuestionsInput,
+  GetAdminCurriculumParams,
   GetBookingAvailabilityParams,
   GetCalendarConnectUrl200,
   GetCalendarConnectUrlParams,
@@ -347,6 +358,448 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
 
 
 
+
+export const getGetAdminCurriculumUrl = (params?: GetAdminCurriculumParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/curriculum?${stringifiedParams}` : `/api/admin/curriculum`
+}
+
+/**
+ * @summary Get administrator curriculum and session operations data
+ */
+export const getAdminCurriculum = async (params?: GetAdminCurriculumParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminCurriculum> => {
+
+  return customFetch<AdminCurriculum>(getGetAdminCurriculumUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminCurriculumQueryKey = (params?: GetAdminCurriculumParams,) => {
+    return [
+    `/api/admin/curriculum`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminCurriculumQueryOptions = <TData = Awaited<ReturnType<typeof getAdminCurriculum>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params?: GetAdminCurriculumParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminCurriculum>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminCurriculumQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminCurriculum>>> = ({ signal }) => getAdminCurriculum(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminCurriculum>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminCurriculumQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminCurriculum>>>
+export type GetAdminCurriculumQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Get administrator curriculum and session operations data
+ */
+
+export function useGetAdminCurriculum<TData = Awaited<ReturnType<typeof getAdminCurriculum>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params?: GetAdminCurriculumParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminCurriculum>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminCurriculumQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminProgramUrl = (programId: string,) => {
+
+
+
+
+  return `/api/admin/programs/${programId}`
+}
+
+/**
+ * @summary Edit, publish, or archive a program
+ */
+export const updateAdminProgram = async (programId: string,
+    adminProgramUpdate: AdminProgramUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminProgram> => {
+
+  return customFetch<AdminProgram>(getUpdateAdminProgramUrl(programId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminProgramUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminProgramMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminProgram>>, TError,{programId: string;data: BodyType<AdminProgramUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminProgram>>, TError,{programId: string;data: BodyType<AdminProgramUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminProgram'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminProgram>>, {programId: string;data: BodyType<AdminProgramUpdate>}> = (props) => {
+          const {programId,data} = props ?? {};
+
+          return  updateAdminProgram(programId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminProgramMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminProgram>>>
+    export type UpdateAdminProgramMutationBody = BodyType<AdminProgramUpdate>
+    export type UpdateAdminProgramMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Edit, publish, or archive a program
+ */
+export const useUpdateAdminProgram = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminProgram>>, TError,{programId: string;data: BodyType<AdminProgramUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminProgram>>,
+        TError,
+        {programId: string;data: BodyType<AdminProgramUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminProgramMutationOptions(options));
+    }
+
+export const getCreateAdminAssignmentUrl = () => {
+
+
+
+
+  return `/api/admin/assignments`
+}
+
+/**
+ * @summary Create an administrator-managed assignment
+ */
+export const createAdminAssignment = async (adminAssignmentInput: AdminAssignmentInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAssignment> => {
+
+  return customFetch<AdminAssignment>(getCreateAdminAssignmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminAssignmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminAssignmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminAssignment>>, TError,{data: BodyType<AdminAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminAssignment>>, TError,{data: BodyType<AdminAssignmentInput>}, TContext> => {
+
+const mutationKey = ['createAdminAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminAssignment>>, {data: BodyType<AdminAssignmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminAssignment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminAssignment>>>
+    export type CreateAdminAssignmentMutationBody = BodyType<AdminAssignmentInput>
+    export type CreateAdminAssignmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Create an administrator-managed assignment
+ */
+export const useCreateAdminAssignment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminAssignment>>, TError,{data: BodyType<AdminAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminAssignment>>,
+        TError,
+        {data: BodyType<AdminAssignmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminAssignmentMutationOptions(options));
+    }
+
+export const getUpdateAdminAssignmentUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/admin/assignments/${assignmentId}`
+}
+
+/**
+ * @summary Edit, publish, or archive an assignment
+ */
+export const updateAdminAssignment = async (assignmentId: string,
+    adminAssignmentUpdate: AdminAssignmentUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminAssignment> => {
+
+  return customFetch<AdminAssignment>(getUpdateAdminAssignmentUrl(assignmentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminAssignmentUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminAssignmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAssignment>>, TError,{assignmentId: string;data: BodyType<AdminAssignmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminAssignment>>, TError,{assignmentId: string;data: BodyType<AdminAssignmentUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminAssignment>>, {assignmentId: string;data: BodyType<AdminAssignmentUpdate>}> = (props) => {
+          const {assignmentId,data} = props ?? {};
+
+          return  updateAdminAssignment(assignmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminAssignment>>>
+    export type UpdateAdminAssignmentMutationBody = BodyType<AdminAssignmentUpdate>
+    export type UpdateAdminAssignmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Edit, publish, or archive an assignment
+ */
+export const useUpdateAdminAssignment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAssignment>>, TError,{assignmentId: string;data: BodyType<AdminAssignmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminAssignment>>,
+        TError,
+        {assignmentId: string;data: BodyType<AdminAssignmentUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminAssignmentMutationOptions(options));
+    }
+
+export const getCreateAdminSessionUrl = () => {
+
+
+
+
+  return `/api/admin/sessions`
+}
+
+/**
+ * @summary Create an administrator-managed session with conflict detection
+ */
+export const createAdminSession = async (adminSessionInput: AdminSessionInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminSession> => {
+
+  return customFetch<AdminSession>(getCreateAdminSessionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminSessionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminSessionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminSession>>, TError,{data: BodyType<AdminSessionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminSession>>, TError,{data: BodyType<AdminSessionInput>}, TContext> => {
+
+const mutationKey = ['createAdminSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminSession>>, {data: BodyType<AdminSessionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminSession(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminSession>>>
+    export type CreateAdminSessionMutationBody = BodyType<AdminSessionInput>
+    export type CreateAdminSessionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Create an administrator-managed session with conflict detection
+ */
+export const useCreateAdminSession = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminSession>>, TError,{data: BodyType<AdminSessionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminSession>>,
+        TError,
+        {data: BodyType<AdminSessionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminSessionMutationOptions(options));
+    }
+
+export const getUpdateAdminSessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/admin/sessions/${sessionId}`
+}
+
+/**
+ * @summary Edit, publish, archive, or reassign a session with conflict detection
+ */
+export const updateAdminSession = async (sessionId: string,
+    adminSessionUpdate: AdminSessionUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminSession> => {
+
+  return customFetch<AdminSession>(getUpdateAdminSessionUrl(sessionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminSessionUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminSessionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSession>>, TError,{sessionId: string;data: BodyType<AdminSessionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminSession>>, TError,{sessionId: string;data: BodyType<AdminSessionUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminSession>>, {sessionId: string;data: BodyType<AdminSessionUpdate>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  updateAdminSession(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminSessionMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminSession>>>
+    export type UpdateAdminSessionMutationBody = BodyType<AdminSessionUpdate>
+    export type UpdateAdminSessionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Edit, publish, archive, or reassign a session with conflict detection
+ */
+export const useUpdateAdminSession = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSession>>, TError,{sessionId: string;data: BodyType<AdminSessionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminSession>>,
+        TError,
+        {sessionId: string;data: BodyType<AdminSessionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminSessionMutationOptions(options));
+    }
 
 export const getGetFinancialsUrl = () => {
 
