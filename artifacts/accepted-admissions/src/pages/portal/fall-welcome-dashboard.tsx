@@ -12,6 +12,7 @@ import {
   Video,
 } from "lucide-react";
 import { Link } from "wouter";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   displaySessionTitle,
+  disclosedSessions,
   formatSessionDate,
   formatSessionTimeRange,
   sessionDateKey,
@@ -49,6 +51,7 @@ function assignmentStatus(
 }
 
 export default function FallWelcomeDashboard() {
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const { data: dashboard, isLoading, error } = useGetDashboard();
 
   if (isLoading) {
@@ -86,6 +89,7 @@ export default function FallWelcomeDashboard() {
     })
     .sort((first, second) => parseISO(first.dateTime).getTime() - parseISO(second.dateTime).getTime());
   const nextSession = fallSessions[0];
+  const visibleFallSessions = disclosedSessions(fallSessions, showAllSessions);
   const homework = dashboard.assignments
     .filter((assignment) => assignment.deliveryPhase !== "during_session")
     .slice(0, 4);
@@ -233,7 +237,7 @@ export default function FallWelcomeDashboard() {
       <Card className="overflow-hidden shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7"><CardTitle className="flex items-center gap-3 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Fall schedule<span className="ml-auto text-sm font-normal text-muted-foreground">October – December</span></CardTitle></CardHeader>
         <CardContent className="p-0">
-          {fallSessions.length > 0 ? <div className="divide-y">{fallSessions.map((session) => <Link key={session.id} href={`/portal/courses/${session.courseId}/sessions/${session.id}`}><div className="flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-medium">{formatSessionDate(session)}</p><p className="text-sm text-muted-foreground">{formatSessionTimeRange(session)} · {session.tutor?.name ?? "Tutor to be confirmed"}</p></div><div className="flex items-center gap-2"><Badge variant="outline">{sessionSubjectLabel(session.subject)}</Badge><ArrowRight className="h-4 w-4 text-muted-foreground" /></div></div></Link>)}</div> : <p className="px-6 py-10 text-center text-sm text-muted-foreground sm:px-7">Your Fall dates will appear here soon.</p>}
+          {fallSessions.length > 0 ? <><div className="divide-y">{visibleFallSessions.map((session) => <Link key={session.id} href={`/portal/courses/${session.courseId}/sessions/${session.id}`}><div className="flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="text-sm text-muted-foreground">{formatSessionDate(session)} · {formatSessionTimeRange(session)}</p></div><div className="flex items-center gap-2"><Badge variant="outline">{sessionSubjectLabel(session.subject)}</Badge><ArrowRight className="h-4 w-4 text-muted-foreground" /></div></div></Link>)}</div>{fallSessions.length > 3 && <div className="border-t px-6 py-4 sm:px-7"><Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowAllSessions((value) => !value)} aria-expanded={showAllSessions}>{showAllSessions ? "View less" : `View more (${fallSessions.length - 3})`}</Button></div>}</> : <p className="px-6 py-10 text-center text-sm text-muted-foreground sm:px-7">Your Fall dates will appear here soon.</p>}
         </CardContent>
       </Card>
     </div>

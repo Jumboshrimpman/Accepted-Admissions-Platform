@@ -91,7 +91,11 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       dateTime,
       timezone: TAITO_SESSION_TIMEZONE,
       subject: scheduled.subject,
-      title: sessionTitle(scheduled.subject, scheduled.tutorName),
+      title: sessionTitle(
+        TAITO_STUDENT_DISPLAY_NAME,
+        scheduled.subject,
+        scheduled.tutorName,
+      ),
       status: "published" as const,
       durationMinutes: 60,
       hasHomework: scheduled.subject === "SAT",
@@ -180,7 +184,7 @@ export async function visibleSessionsForUser(
   return (
     await Promise.all(
       sessions.map(async (session) =>
-        (await canAccessCourse(user, session.courseId, session.subject))
+        (await canViewSession(user, session))
           ? session
           : null,
       ),
@@ -188,6 +192,32 @@ export async function visibleSessionsForUser(
   ).filter(
     (session): session is (typeof sessions)[number] => Boolean(session),
   );
+}
+
+export async function canViewSession(
+  user: AppUser,
+  session: typeof sessionsTable.$inferSelect,
+): Promise<boolean> {
+  if (!(await canAccessCourse(user, session.courseId, session.subject))) {
+    return false;
+  }
+  if (user.role === "administrator") return true;
+  if (user.role === "student") return session.clientUserId === user.id;
+  if (user.role === "tutor") return session.tutorUserId === user.id;
+  if (user.role === "viewer") {
+    const [link] = await db
+      .select({ studentUserId: viewerLinksTable.studentUserId })
+      .from(viewerLinksTable)
+      .where(
+        and(
+          eq(viewerLinksTable.viewerUserId, user.id),
+          eq(viewerLinksTable.active, true),
+        ),
+      )
+      .limit(1);
+    return Boolean(link && session.clientUserId === link.studentUserId);
+  }
+  return false;
 }
 
 type PublicSessionSource = Pick<
@@ -204,7 +234,10 @@ type PublicSessionSource = Pick<
   | "hasReport"
 >;
 
-export function publicSessionShape(session: PublicSessionSource) {
+export function publicSessionShape(
+  session: PublicSessionSource,
+  title = session.title,
+) {
   return {
     id: session.id,
     courseId: session.courseId,
@@ -212,7 +245,7 @@ export function publicSessionShape(session: PublicSessionSource) {
     timezone: session.timezone,
     durationMinutes: session.durationMinutes,
     subject: session.subject,
-    title: session.title,
+    title,
     status: session.status,
     hasHomework: session.hasHomework,
     hasReport: session.hasReport,

@@ -52,6 +52,7 @@ import {
   taitoSessionDateTime,
 } from "../lib/session-schedule";
 import {
+  canViewSession,
   publicSessionShape,
   reconcileTaitoSessions,
   visibleSessionsForUser,
@@ -990,7 +991,7 @@ async function ensureSeedData(): Promise<string> {
         dateTime: taitoSessionDateTime(dateKey),
         timezone: TAITO_SESSION_TIMEZONE,
         subject,
-        title: sessionTitle(subject, tutorName),
+        title: sessionTitle(TAITO_STUDENT_DISPLAY_NAME, subject, tutorName),
         status: "published" as const,
         hasHomework: subject === "SAT",
       })),
@@ -1914,20 +1915,7 @@ async function canAccessSession(
   user: AppUser,
   session: typeof sessionsTable.$inferSelect,
 ): Promise<boolean> {
-  if (!(await canAccessCourse(user, session.courseId, session.subject))) {
-    return false;
-  }
-  if (user.role === "administrator") return true;
-  if (user.role === "student" || user.role === "viewer") {
-    return session.clientUserId === (await dataSubjectUserId(user));
-  }
-  if (user.role === "tutor") {
-    if (session.tutorUserId === user.id) return true;
-    return session.clientUserId
-      ? canAccessStudent(user, session.courseId, session.clientUserId, session.subject)
-      : false;
-  }
-  return false;
+  return canViewSession(user, session);
 }
 
 async function studentShape(studentUserId: string) {
@@ -1937,6 +1925,41 @@ async function studentShape(studentUserId: string) {
     .where(eq(usersTable.id, studentUserId))
     .limit(1);
   return student ?? null;
+}
+
+async function canonicalSessionTitleForPeople(
+  clientUserId: string | null | undefined,
+  subject: string,
+  tutorUserId: string | null | undefined,
+): Promise<string> {
+  const ids = [clientUserId, tutorUserId].filter(
+    (id): id is string => Boolean(id),
+  );
+  const people =
+    ids.length > 0
+      ? await db
+          .select({ id: usersTable.id, name: usersTable.displayName })
+          .from(usersTable)
+          .where(inArray(usersTable.id, ids))
+      : [];
+  const names = new Map(people.map((person) => [person.id, person.name]));
+  return sessionTitle(
+    clientUserId ? names.get(clientUserId) : null,
+    subject,
+    tutorUserId ? names.get(tutorUserId) : null,
+  );
+}
+
+async function canonicalSessionTitleForSession(session: {
+  clientUserId: string | null;
+  tutorUserId: string | null;
+  subject: string;
+}): Promise<string> {
+  return canonicalSessionTitleForPeople(
+    session.clientUserId,
+    session.subject,
+    session.tutorUserId,
+  );
 }
 
 async function sessionStudentShape(session: {
@@ -3953,7 +3976,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
           dateTime: start,
           timezone: rule.timezone,
           subject: "SAT",
-          title: `SAT session with ${tutor.name}`,
+          title: sessionTitle(req.appUser!.displayName, "SAT", tutor.name),
           status: "published",
           durationMinutes,
           bookingStatus: "confirmed",
@@ -5442,6 +5465,11 @@ async function adminSessionShape(
       ),
   ]);
   const personById = new Map(people.map((person) => [person.id, person.name]));
+  const canonicalTitle = sessionTitle(
+    session.clientUserId ? personById.get(session.clientUserId) : null,
+    session.subject,
+    session.tutorUserId ? personById.get(session.tutorUserId) : null,
+  );
   return {
     id: session.id,
     courseId: session.courseId,
@@ -5449,7 +5477,7 @@ async function adminSessionShape(
     dateTime: session.dateTime,
     timezone: session.timezone,
     subject: session.subject,
-    title: session.title,
+    title: canonicalTitle,
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
@@ -5827,6 +5855,11 @@ router.post(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
+    const title = await canonicalSessionTitleForPeople(
+      body.data.clientUserId,
+      body.data.subject,
+      body.data.tutorUserId,
+    );
     const [created] = await db.insert(sessionsTable).values({
       courseId: body.data.courseId,
       clientUserId: body.data.clientUserId ?? null,
@@ -5834,7 +5867,7 @@ router.post(
       dateTime: body.data.dateTime,
       timezone: body.data.timezone.trim(),
       subject: body.data.subject.trim(),
-      title: body.data.title.trim(),
+      title,
       status: body.data.status ?? "draft",
       durationMinutes: body.data.durationMinutes,
       bookingStatus: body.data.bookingStatus ?? "confirmed",
@@ -5865,14 +5898,22 @@ router.patch(
       res.status(404).json({ error: "Session not found" });
       return;
     }
-    const next = {
-      courseId: body.data.courseId ?? existing.courseId,
+    const nextPeople = {
       clientUserId: body.data.clientUserId === undefined ? existing.clientUserId : body.data.clientUserId,
       tutorUserId: body.data.tutorUserId === undefined ? existing.tutorUserId : body.data.tutorUserId,
+    };
+    const nextSubject = body.data.subject?.trim() ?? existing.subject;
+    const next = {
+      courseId: body.data.courseId ?? existing.courseId,
+      ...nextPeople,
       dateTime: body.data.dateTime ?? existing.dateTime,
       timezone: body.data.timezone?.trim() ?? existing.timezone,
-      subject: body.data.subject?.trim() ?? existing.subject,
-      title: body.data.title?.trim() ?? existing.title,
+      subject: nextSubject,
+      title: await canonicalSessionTitleForPeople(
+        nextPeople.clientUserId,
+        nextSubject,
+        nextPeople.tutorUserId,
+      ),
       status: body.data.status ?? existing.status,
       durationMinutes: body.data.durationMinutes ?? existing.durationMinutes,
       bookingStatus: body.data.bookingStatus ?? existing.bookingStatus,
@@ -5965,7 +6006,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
   const resolvedSessions = (
     await Promise.all(
       courseSessions.map(async (session) =>
-        (await canAccessCourse(req.appUser!, session.courseId, session.subject))
+        (await canAccessSession(req.appUser!, session))
           ? session
           : null,
       ),
@@ -5978,11 +6019,18 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
       driveUrl: course?.driveUrl ?? null,
       goalSummary: course?.goalSummary ?? null,
       sessions: await Promise.all(
-        resolvedSessions.map(async (session) => ({
-          ...publicSessionShape(session),
-          tutor: await sessionTutorShape(session),
-           meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
-        })),
+        resolvedSessions.map(async (session) => {
+          const tutor = await sessionTutorShape(session);
+          const student = await sessionStudentShape(session);
+          return {
+            ...publicSessionShape(
+              session,
+              sessionTitle(student?.name, session.subject, tutor?.name),
+            ),
+            tutor,
+            meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
+          };
+        }),
       ),
     }),
   );
@@ -6177,18 +6225,20 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
       welcomeMessage: "Your Fall program is ready. Keep building on each session.",
       courses,
       upcomingSessions: await Promise.all(
-        scopedSessions.map(async (session) =>
-          dashboardSessionShape(
+        scopedSessions.map(async (session) => {
+          const student = session.clientUserId
+            ? await studentShape(session.clientUserId)
+            : null;
+          return dashboardSessionShape(
             session,
             await sessionTutorShape(session),
-             meetingUrls.get(session.courseId) ?? null,
+            meetingUrls.get(session.courseId) ?? null,
             user.role === "tutor" || user.role === "administrator"
-              ? session.clientUserId
-                ? await studentShape(session.clientUserId)
-                : null
+              ? student
               : undefined,
-          ),
-        ),
+            student?.name ?? null,
+          );
+        }),
       ),
       assignments: assignmentSummaries,
       recentScores: attempts

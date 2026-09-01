@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   displaySessionTitle,
+  disclosedSessions,
   formatSessionDate,
   formatSessionTimeRange,
   sessionDateKey,
@@ -48,6 +49,12 @@ test("formats every approved Fall meeting in its declared timezone", () => {
     assert.equal(formatSessionTimeRange(session), "9:00–10:00 PM JST");
     assert.equal(formatSessionDate(session), FALL_DISPLAY_DATES[index]);
   }
+});
+
+test("discloses three sessions before expansion without reordering", () => {
+  const sessions = ["first", "second", "third", "fourth", "fifth"];
+  assert.deepEqual(disclosedSessions(sessions, false), sessions.slice(0, 3));
+  assert.deepEqual(disclosedSessions(sessions, true), sessions);
 });
 
 test("keeps English as the user-facing label for IELTS sessions", () => {

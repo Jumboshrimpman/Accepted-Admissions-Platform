@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, isTaitoFallSession, meetingUrlForTerm, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -35,10 +35,25 @@ test("defines Taito's 12 unique Fall 2026 sessions with the requested tutors", (
       session.subject === "SAT" ? "Eunice Chon" : "Nika Raiffe",
     );
     assert.equal(
-      sessionTitle(session.subject, session.tutorName),
-      `${session.subject} session with ${session.tutorName}`,
+      sessionTitle("Taito Goto", session.subject, session.tutorName),
+      session.subject === "SAT"
+        ? "Taito’s SAT Session with Eunice"
+        : "Taito’s English Session with Nika",
     );
   }
+});
+
+test("builds participant-driven appointment names with normalized subjects and fallbacks", () => {
+  assert.equal(normalizedSessionSubject("IELTS"), "English");
+  assert.equal(normalizedSessionSubject("English conversation"), "English");
+  assert.equal(
+    sessionTitle("Michelle Lee", "SAT Reading & Writing", "Xavier Morales"),
+    "Michelle’s SAT Session with Xavier",
+  );
+  assert.equal(
+    sessionTitle(null, "Math", null),
+    "Client’s Math Session with Tutor",
+  );
 });
 
 test("uses one exact shared Meet room for Fall sessions", () => {

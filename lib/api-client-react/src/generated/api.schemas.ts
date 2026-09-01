@@ -657,11 +657,6 @@ export interface AdminSessionInput {
      * @maxLength 100
      */
   subject: string;
-  /**
-     * @minLength 2
-     * @maxLength 200
-     */
-  title: string;
   status?: AdminSessionInputStatus;
   /**
      * @minimum 15

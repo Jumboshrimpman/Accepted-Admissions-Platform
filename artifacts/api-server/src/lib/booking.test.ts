@@ -64,13 +64,13 @@ test("honors booking notice and blackout dates", () => {
 
 test("event payload contains only the approved session details", () => {
   const event = calendarEventPayload(
-    "SAT session with Xavier Morales",
+    "Michelle’s SAT Session with Xavier",
     new Date("2026-08-31T13:00:00.000Z"),
     60,
     "America/New_York",
     "michelle@example.com",
   );
-  assert.equal(event.summary, "SAT session with Xavier Morales");
+  assert.equal(event.summary, "Michelle’s SAT Session with Xavier");
   assert.equal(event.start.dateTime, "2026-08-31T13:00:00.000Z");
   assert.deepEqual(event.attendees, [{ email: "michelle@example.com" }]);
   assert.equal("privateEventDetails" in event, false);

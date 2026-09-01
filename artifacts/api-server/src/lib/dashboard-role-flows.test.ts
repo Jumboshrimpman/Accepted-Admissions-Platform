@@ -51,8 +51,14 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
       satSession!,
       { id: fixture.satTutor.id, name: fixture.satTutor.displayName, specialty: "SAT", avatarUrl: null },
       SHARED_FALL_MEETING_URL,
+      undefined,
+      fixture.student.displayName,
     );
     assert.equal(studentSessionResponse.meetingUrl, SHARED_FALL_MEETING_URL);
+    assert.equal(
+      studentSessionResponse.title,
+      "Dashboard’s SAT Session with SAT",
+    );
     assert.equal("providerEventId" in studentSessionResponse, false);
     assert.deepEqual(Object.keys(studentSessionResponse).sort(), [
       "courseId",

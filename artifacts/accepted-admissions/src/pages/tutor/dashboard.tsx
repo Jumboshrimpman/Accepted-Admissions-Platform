@@ -8,6 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Link } from "wouter";
+import { useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -32,12 +33,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import {
   displaySessionTitle,
+  disclosedSessions,
   formatSessionDate,
   formatSessionTimeRange,
-  sessionStudentLabel,
 } from "@/lib/session-display";
 
 export default function TutorDashboard() {
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const queryClient = useQueryClient();
   const { data: dashboard, isLoading: loadingDashboard, error } = useGetDashboard();
   const { data: queue, isLoading: loadingQueue } = useListReviewQueue();
@@ -63,7 +65,10 @@ export default function TutorDashboard() {
   }
 
   const openQueue = queue?.filter((item) => item.status === "open") ?? [];
-  const upcomingSessions = dashboard.upcomingSessions.slice(0, 6);
+  const upcomingSessions = disclosedSessions(
+    dashboard.upcomingSessions,
+    showAllSessions,
+  );
   const fallCourse =
     dashboard.courses.find((course) => /fall/i.test(course.title)) ??
     dashboard.courses[0];
@@ -190,8 +195,7 @@ export default function TutorDashboard() {
                       <CalendarDays className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="font-semibold">{sessionStudentLabel(session)}</p>
-                      <p className="mt-1 text-sm">
+                      <p className="font-semibold">
                         {displaySessionTitle(session.title, session.subject)}
                       </p>
                       <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -226,6 +230,19 @@ export default function TutorDashboard() {
                   </div>
                 </div>
               ))}
+              {dashboard.upcomingSessions.length > 3 && (
+                <div className="px-6 py-4 sm:px-7">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAllSessions((value) => !value)}
+                    aria-expanded={showAllSessions}
+                  >
+                    {showAllSessions
+                      ? "View less"
+                      : `View more (${dashboard.upcomingSessions.length - 3})`}
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <p className="px-6 py-10 text-center text-sm text-muted-foreground">

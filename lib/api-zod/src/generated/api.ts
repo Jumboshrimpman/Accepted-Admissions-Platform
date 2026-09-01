@@ -334,10 +334,6 @@ export const UpdateAdminAssignmentResponse = zod.object({
 export const createAdminSessionBodyTimezoneMax = 100;
 
 export const createAdminSessionBodySubjectMax = 100;
-
-export const createAdminSessionBodyTitleMin = 2;
-export const createAdminSessionBodyTitleMax = 200;
-
 export const createAdminSessionBodyDurationMinutesMin = 15;
 export const createAdminSessionBodyDurationMinutesMax = 480;
 
@@ -349,7 +345,6 @@ export const CreateAdminSessionBody = zod.object({
   "dateTime": zod.coerce.date(),
   "timezone": zod.string().min(1).max(createAdminSessionBodyTimezoneMax),
   "subject": zod.string().min(1).max(createAdminSessionBodySubjectMax),
-  "title": zod.string().min(createAdminSessionBodyTitleMin).max(createAdminSessionBodyTitleMax),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(createAdminSessionBodyDurationMinutesMin).max(createAdminSessionBodyDurationMinutesMax),
   "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()

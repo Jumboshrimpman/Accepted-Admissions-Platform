@@ -101,6 +101,14 @@ export function displaySessionTitle(title: string, subject: string): string {
   return `English${title.slice("IELTS".length)}`;
 }
 
+export function disclosedSessions<T>(
+  sessions: readonly T[],
+  expanded: boolean,
+  initialCount = 3,
+): readonly T[] {
+  return expanded ? sessions : sessions.slice(0, initialCount);
+}
+
 export function sessionStudentLabel(
   session: Pick<DisplaySession, "dateTime" | "timezone" | "subject" | "student">,
 ): string {

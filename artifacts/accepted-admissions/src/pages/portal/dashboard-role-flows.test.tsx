@@ -93,7 +93,7 @@ function dashboardForRole(
             timezone: "Asia/Tokyo",
             durationMinutes: 60,
             subject: "SAT",
-            title: "SAT session with Taito",
+            title: "Taito’s SAT Session with Eunice",
             status: "published",
             meetingUrl: "https://meet.google.com/sat-room",
             tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
@@ -108,7 +108,7 @@ function dashboardForRole(
             timezone: "Asia/Tokyo",
             durationMinutes: 60,
             subject: "SAT",
-            title: "SAT session with Eunice",
+            title: "Taito’s SAT Session with Eunice",
             status: "published",
             meetingUrl: "https://meet.google.com/sat-room",
             tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
@@ -120,7 +120,7 @@ function dashboardForRole(
             timezone: "Asia/Tokyo",
             durationMinutes: 60,
             subject: "IELTS",
-            title: "IELTS session with Nika",
+            title: "Taito’s English Session with Nika",
             status: "published",
             meetingUrl: "https://meet.google.com/ielts-room",
             tutor: { id: "tutor-2", name: "Nika Raiffe", specialty: "IELTS Tutor", avatarUrl: null },
@@ -240,7 +240,7 @@ describe("authenticated role dashboard flows", () => {
     mocks.dashboard = dashboardForRole("student");
     render(<FallWelcomeDashboard />);
 
-    expect(screen.getByText("SAT session with Eunice")).toBeTruthy();
+    expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getByText("English")).toBeTruthy();
     expect(screen.getAllByText("9:00–10:00 PM JST").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Join meeting/i })).toHaveLength(1);
@@ -255,7 +255,7 @@ describe("authenticated role dashboard flows", () => {
     render(<FallWelcomeDashboard />);
 
     expect(screen.getByRole("status").textContent).toContain("view-only mode");
-    expect(screen.getByText("SAT session with Eunice")).toBeTruthy();
+    expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
     );

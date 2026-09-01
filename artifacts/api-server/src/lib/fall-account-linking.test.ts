@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   courseMembershipsTable,
   coursesTable,
   db,
   sessionsTable,
   usersTable,
+  viewerLinksTable,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 const privacyModule = await import("./session-privacy.ts");
@@ -37,7 +38,7 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
   const findOrCreateUser = async (
     email: string,
     displayName: string,
-    role: "student" | "tutor",
+    role: "student" | "tutor" | "viewer",
     clerkUserId: string,
   ) => {
     const [existing] = await db
@@ -103,6 +104,10 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
         title: `PRIVATE imported event ${suffix}`,
         status: "published" as const,
         hasHomework: false,
+        providerEventId:
+          index === 0 ? `linked-provider-event:${suffix}` : null,
+        providerEventUrl:
+          index === 0 ? "https://calendar.google.com/calendar/event?linked" : null,
       })),
     );
 
@@ -138,6 +143,20 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
         durationMinutes: 60,
       })),
     );
+    assert.equal(reconciled[0]?.title, "Taito’s SAT Session with Eunice");
+    assert.equal(
+      reconciled.find((session) => session.subject === "IELTS")?.title,
+      "Taito’s English Session with Nika",
+    );
+    assert.equal(
+      reconciled[0]?.providerEventId,
+      `linked-provider-event:${suffix}`,
+      "reconciliation must preserve the linked provider event",
+    );
+    assert.equal(
+      reconciled[0]?.providerEventUrl,
+      "https://calendar.google.com/calendar/event?linked",
+    );
     const displayOnlyDashboardSession = dashboardSessionShape(
       { ...reconciled[0]!, clientUserId: null },
       { id: eunice!.id, name: eunice!.displayName, specialty: "SAT", avatarUrl: null },
@@ -161,6 +180,62 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
     assert.equal(nikaSessions.length, 3);
     assert.ok(euniceSessions.every((session) => session.subject === "SAT"));
     assert.ok(nikaSessions.every((session) => session.subject === "IELTS"));
+
+    const otherStudent = await findOrCreateUser(
+      `other-student-${suffix}@example.com`,
+      "Other Student",
+      "student",
+      `fall-privacy-other-student:${suffix}`,
+    );
+    const viewer = await findOrCreateUser(
+      `viewer-${suffix}@example.com`,
+      "Taito Viewer",
+      "viewer",
+      `fall-privacy-viewer:${suffix}`,
+    );
+    await db.insert(courseMembershipsTable).values({
+      courseId,
+      userId: otherStudent.id,
+      membershipRole: "student",
+      subject: "all",
+    });
+    await db.insert(viewerLinksTable).values({
+      viewerUserId: viewer.id,
+      studentUserId: student.id,
+      relationship: "parent",
+      active: true,
+    });
+    const [otherSession] = await db
+      .insert(sessionsTable)
+      .values({
+        courseId,
+        clientUserId: otherStudent.id,
+        tutorUserId: eunice.id,
+        dateTime: new Date("2026-12-20T12:00:00.000Z"),
+        timezone: "Asia/Tokyo",
+        subject: "SAT",
+        title: "Other’s SAT Session with Eunice",
+        status: "published",
+        bookingStatus: "confirmed",
+      })
+      .returning();
+
+    const [studentScoped, viewerScoped, tutorScoped, adminScoped] =
+      await Promise.all([
+        visibleSessionsForUser(student, courseId),
+        visibleSessionsForUser(viewer, courseId),
+        visibleSessionsForUser(eunice, courseId),
+        visibleSessionsForUser(
+          { ...viewer, role: "administrator" as const },
+          courseId,
+        ),
+      ]);
+    assert.equal(studentScoped.some((session) => session.id === otherSession!.id), false);
+    assert.equal(viewerScoped.some((session) => session.id === otherSession!.id), false);
+    assert.equal(tutorScoped.some((session) => session.id === otherSession!.id), true);
+    assert.equal(adminScoped.some((session) => session.id === otherSession!.id), true);
+    assert.ok(studentScoped.every((session) => session.clientUserId === student.id));
+    assert.ok(viewerScoped.every((session) => session.clientUserId === student.id));
 
     const privateCalendarFields = {
       eventTitle: `Private event title ${suffix}`,
@@ -193,6 +268,9 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
       assert.equal(serialized.includes(privateCalendarFields.location), false);
     }
   } finally {
+    await db
+      .delete(viewerLinksTable)
+      .where(inArray(viewerLinksTable.viewerUserId, createdUserIds));
     await db
       .delete(courseMembershipsTable)
       .where(eq(courseMembershipsTable.courseId, courseId));

@@ -47,6 +47,27 @@ export function isTaitoFallSession(session: {
   );
 }
 
-export function sessionTitle(subject: string, tutorName: string): string {
-  return `${subject} session with ${tutorName}`;
+function participantFirstName(
+  displayName: string | null | undefined,
+  fallback: string,
+): string {
+  return displayName?.trim().split(/\s+/)[0] || fallback;
+}
+
+export function normalizedSessionSubject(subject: string): string {
+  const normalized = subject.trim();
+  const lower = normalized.toLowerCase();
+  if (lower.startsWith("sat")) return "SAT";
+  if (lower.startsWith("ielts") || lower.startsWith("english")) return "English";
+  return normalized || "Tutoring";
+}
+
+export function sessionTitle(
+  clientName: string | null | undefined,
+  subject: string,
+  tutorName: string | null | undefined,
+): string {
+  const client = participantFirstName(clientName, "Client");
+  const tutor = participantFirstName(tutorName, "Tutor");
+  return `${client}’s ${normalizedSessionSubject(subject)} Session with ${tutor}`;
 }
