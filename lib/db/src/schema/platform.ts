@@ -320,6 +320,19 @@ export const auditLogsTable = pgTable("audit_logs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const loginActivityTable = pgTable(
+  "login_activity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => usersTable.id),
+    clerkSessionId: text("clerk_session_id").notNull(),
+    signedInAt: timestamp("signed_in_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("login_activity_clerk_session_unique_idx").on(table.clerkSessionId),
+  ],
+);
+
 export const viewerLinksTable = pgTable(
   "viewer_links",
   {

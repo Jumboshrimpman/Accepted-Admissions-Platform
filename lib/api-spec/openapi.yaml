@@ -57,7 +57,7 @@ paths:
       summary: Get administrator-only access and audit information
       responses:
         "200":
-          description: Provisioned users, memberships, tutor assignments, and audit events
+          description: Provisioned users, memberships, tutor assignments, audit events, and login activity
           content:
             application/json:
               schema:
@@ -76,12 +76,31 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Programs, sessions, assignments, materials, question status, submissions, and attention items
+          description: Programs, sessions, assignments, materials, question status, and submissions
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminCurriculum" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/clients/{clientId}/dashboard:
+    get:
+      operationId: getAdminClientDashboard
+      tags: [administration]
+      summary: Get an administrator-authorized read-only client dashboard preview
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Client dashboard data marked as an administrator preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminClientDashboard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/programs/{programId}:
     patch:
       operationId: updateAdminProgram
@@ -1605,7 +1624,7 @@ components:
         avatarUrl: { type: ["string", "null"] }
     AdminOverview:
       type: object
-      required: [users, memberships, assignments, audit]
+      required: [users, memberships, assignments, audit, loginActivity]
       properties:
         users:
           type: array
@@ -1658,6 +1677,19 @@ components:
               entityId: { type: string }
               metadata: { type: object, additionalProperties: true }
               createdAt: { type: string, format: date-time }
+        loginActivity:
+          type: array
+          items: { $ref: "#/components/schemas/AdminLoginActivity" }
+    AdminLoginActivity:
+      type: object
+      required: [id, userId, userName, userEmail, role, signedInAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        userName: { type: string }
+        userEmail: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        signedInAt: { type: string, format: date-time }
     AdminProgram:
       type: object
       required: [id, title, subject, term, status, goalSummary, meetUrl, driveUrl, sessionCount, completedSessionCount]
@@ -1812,7 +1844,7 @@ components:
         mistakeCount: { type: number }
     AdminCurriculum:
       type: object
-      required: [programs, sessions, assignments, blocks, questionStatus, submissions, tutors, clients, attention]
+      required: [programs, sessions, assignments, blocks, questionStatus, submissions, tutors, clients]
       properties:
         programs:
           type: array
@@ -1857,16 +1889,13 @@ components:
               id: { type: string }
               name: { type: string }
               email: { type: string }
-        attention:
-          type: array
-          items:
-            type: object
-            required: [kind, label, detail, severity]
-            properties:
-              kind: { type: string }
-              label: { type: string }
-              detail: { type: string }
-              severity: { type: string, enum: [info, warning, urgent] }
+    AdminClientDashboard:
+      allOf:
+        - $ref: "#/components/schemas/Dashboard"
+        - type: object
+          required: [adminPreview]
+          properties:
+            adminPreview: { type: boolean, const: true }
     Tutor:
       type: object
       required: [id, name, specialty]

@@ -6,7 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminAssignment } from './adminAssignment';
-import type { AdminCurriculumAttentionItem } from './adminCurriculumAttentionItem';
 import type { AdminCurriculumClientsItem } from './adminCurriculumClientsItem';
 import type { AdminCurriculumTutorsItem } from './adminCurriculumTutorsItem';
 import type { AdminProgram } from './adminProgram';
@@ -24,5 +23,4 @@ export interface AdminCurriculum {
   submissions: AdminSubmission[];
   tutors: AdminCurriculumTutorsItem[];
   clients: AdminCurriculumClientsItem[];
-  attention: AdminCurriculumAttentionItem[];
 }

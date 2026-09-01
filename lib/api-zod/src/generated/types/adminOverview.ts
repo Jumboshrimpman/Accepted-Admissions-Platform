@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminLoginActivity } from './adminLoginActivity';
 import type { AdminOverviewAssignmentsItem } from './adminOverviewAssignmentsItem';
 import type { AdminOverviewAuditItem } from './adminOverviewAuditItem';
 import type { AdminOverviewMembershipsItem } from './adminOverviewMembershipsItem';
@@ -15,4 +16,5 @@ export interface AdminOverview {
   memberships: AdminOverviewMembershipsItem[];
   assignments: AdminOverviewAssignmentsItem[];
   audit: AdminOverviewAuditItem[];
+  loginActivity: AdminLoginActivity[];
 }

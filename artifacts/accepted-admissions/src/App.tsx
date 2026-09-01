@@ -34,6 +34,7 @@ import TutorSession from '@/pages/tutor/session';
 import TutorAttempt from '@/pages/tutor/attempt';
 import AdminDashboard from '@/pages/admin/dashboard';
 import AdminCurriculum from '@/pages/admin/curriculum';
+import AdminClientPreview from '@/pages/admin/client-preview';
 import { AdminFinancialsPanel } from '@/pages/admin/financials-panel';
 import { PublicContentPanel } from '@/pages/admin/public-content-panel';
 import SatOfferings from '@/pages/public/sat-offerings';
@@ -262,12 +263,65 @@ function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/admin/clients/:clientId/preview">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <AdminClientPreview />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/admin/curriculum">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <AdminCurriculum />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/admin/financials">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <div className="mx-auto max-w-7xl"><AdminFinancialsPanel /></div>
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/admin/content">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/admin*">
           <SignedIn>
             <RoleBoundary roles={["administrator"]}>
               <Shell>
               <Switch>
                 <Route path="/admin" component={AdminDashboard} />
+                <Route path="/admin/clients/:clientId/preview" component={AdminClientPreview} />
                 <Route path="/admin/curriculum" component={AdminCurriculum} />
                 <Route path="/admin/financials">
                   <div className="mx-auto max-w-7xl"><AdminFinancialsPanel /></div>

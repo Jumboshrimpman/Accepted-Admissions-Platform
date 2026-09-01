@@ -22,7 +22,7 @@ import type {
   AdminSessionInput,
   AdminSessionUpdate,
 } from "@workspace/api-client-react";
-import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, FileText, GraduationCap, Library, Mail, Plus, Save, Users } from "lucide-react";
+import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, FileText, GraduationCap, Library, Mail, Plus, Save, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,15 +114,6 @@ export default function AdminCurriculum() {
         ))}
       </nav>
 
-      {data.attention.length > 0 && (
-        <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-4 w-4 text-amber-600" /> Needs attention <Badge variant="outline">{data.attention.length}</Badge></CardTitle></CardHeader>
-          <CardContent className="grid gap-2 md:grid-cols-2">
-            {data.attention.slice(0, 6).map((item, index) => <div key={`${item.kind}-${index}`} className="rounded-xl border bg-background p-3 text-sm"><div className="flex items-center gap-2"><Badge variant={item.severity === "urgent" ? "destructive" : "outline"}>{item.label}</Badge></div><p className="mt-2 text-muted-foreground">{item.detail}</p></div>)}
-          </CardContent>
-        </Card>
-      )}
-
       {section === "people" && <PeopleSection data={data} search={search} />}
       {section === "programs" && <ProgramsSection programs={data.programs.filter((item) => filtered(item.title) || filtered(item.subject) || filtered(item.term))} onSaved={refresh} />}
       {section === "curriculum" && <CurriculumSection data={data} search={search} onChanged={refresh} />}
@@ -136,7 +127,7 @@ function PeopleSection({ data, search }: { data: AdminCurriculum; search: string
   const tutors = data?.tutors.filter((item) => !term || `${item.name} ${item.email} ${item.subjects.join(" ")}`.toLowerCase().includes(term)) ?? [];
   const clients = data?.clients.filter((item) => !term || `${item.name} ${item.email}`.toLowerCase().includes(term)) ?? [];
   return <div className="grid gap-6 lg:grid-cols-2">
-    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Clients / students</CardTitle><CardDescription>Identity and program operations only. Financial details stay in administrator-only finance.</CardDescription></CardHeader><CardContent className="space-y-2">{clients.map((client) => <div key={client.id} className="flex items-center justify-between rounded-xl border p-3"><div><p className="font-medium">{client.name}</p><p className="text-sm text-muted-foreground">{client.email}</p></div><Badge variant="outline">Student</Badge></div>)}{clients.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>}</CardContent></Card>
+    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Clients / students</CardTitle><CardDescription>Identity and program operations only. Financial details stay in administrator-only finance.</CardDescription></CardHeader><CardContent className="space-y-2">{clients.map((client) => <div key={client.id} className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="font-medium">{client.name}</p><p className="truncate text-sm text-muted-foreground">{client.email}</p></div><div className="flex items-center gap-2"><Badge variant="outline">Student</Badge><Button asChild variant="outline" size="sm"><Link href={`/admin/clients/${client.id}/preview`}><Eye className="mr-2 h-4 w-4" /> View as client</Link></Button></div></div>)}{clients.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>}</CardContent></Card>
     <Card><CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary" /> Tutors</CardTitle><CardDescription>Subject access and activity. Compensation is never returned by this operational view.</CardDescription></CardHeader><CardContent className="space-y-2">{tutors.map((tutor) => <div key={tutor.id} className="flex items-center justify-between rounded-xl border p-3"><div><p className="font-medium">{tutor.name}</p><p className="text-sm text-muted-foreground">{tutor.email}</p><div className="mt-2 flex flex-wrap gap-1">{tutor.subjects.map((subject) => <Badge key={subject} variant="secondary">{subject}</Badge>)}</div><p className="mt-2 text-xs text-muted-foreground">{tutor.sessionCount} total sessions · {tutor.upcomingSessionCount} upcoming</p></div><Badge variant={tutor.active ? "default" : "outline"}>{tutor.active ? "Active" : "Inactive"}</Badge></div>)}{tutors.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching tutors.</p>}</CardContent></Card>
   </div>;
 }

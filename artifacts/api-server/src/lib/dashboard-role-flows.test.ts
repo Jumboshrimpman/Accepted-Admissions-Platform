@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { eq } from "drizzle-orm";
 import {
@@ -7,7 +8,7 @@ import {
   sessionsTable,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { dashboardSessionShape, dashboardSessionsForUser } from "./dashboard-data.ts";
+import { clientForAdminPreview, dashboardSessionShape, dashboardSessionsForUser } from "./dashboard-data.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { createDashboardRoleFixture } from "./dashboard-fixtures.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -111,6 +112,32 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
       visibleAssignments.filter((assignment) => assignment.status === "draft").map((assignment) => assignment.id),
       [fixture.assignmentIds.draft],
       "draft status remains distinct from the published student surface",
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("client preview lookup is administrator-only and limited to student accounts", async () => {
+  const fixture = await createDashboardRoleFixture();
+  try {
+    const administrator = {
+      ...fixture.satTutor,
+      role: "administrator" as const,
+    };
+    const client = await clientForAdminPreview(administrator, fixture.student.id);
+    assert.equal(client?.id, fixture.student.id);
+    assert.equal(
+      await clientForAdminPreview(fixture.satTutor, fixture.student.id),
+      null,
+    );
+    assert.equal(
+      await clientForAdminPreview(administrator, fixture.satTutor.id),
+      null,
+    );
+    assert.equal(
+      await clientForAdminPreview(administrator, randomUUID()),
+      null,
     );
   } finally {
     await fixture.cleanup();

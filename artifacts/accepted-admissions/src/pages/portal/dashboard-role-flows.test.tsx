@@ -56,7 +56,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => mocks.queryClient,
 }));
 
-import FallWelcomeDashboard from "./fall-welcome-dashboard";
+import FallWelcomeDashboard, { ClientDashboardView } from "./fall-welcome-dashboard";
 import TutorDashboard from "@/pages/tutor/dashboard";
 
 function dashboardForRole(
@@ -260,6 +260,18 @@ describe("authenticated role dashboard flows", () => {
       "https://meet.google.com/sat-room",
     );
     expect(screen.queryByRole("button", { name: /Mark reviewed/i })).toBeNull();
+  });
+
+  test("administrator preview keeps client data visible without client actions", () => {
+    mocks.dashboard = dashboardForRole("student");
+    render(<ClientDashboardView dashboard={mocks.dashboard} adminPreview />);
+
+    expect(screen.getByRole("status").textContent).toContain("Read-only client preview");
+    expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Read only" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /Open session/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Join meeting/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Start|Continue|View result/i })).toBeNull();
   });
 
   test("tutor sees only tutor workspace controls and can review assigned work", () => {

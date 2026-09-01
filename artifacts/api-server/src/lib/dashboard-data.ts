@@ -4,6 +4,7 @@ import {
   db,
   coursesTable,
   sessionsTable,
+  usersTable,
   viewerLinksTable,
   type AppUser,
 } from "@workspace/db";
@@ -87,6 +88,24 @@ export async function dashboardSessionsForUser(user: AppUser) {
     .filter((session) => session.dateTime.getTime() >= Date.now())
     .sort((left, right) => left.dateTime.getTime() - right.dateTime.getTime())
     .slice(0, 12);
+}
+
+export async function clientForAdminPreview(
+  requester: AppUser,
+  clientId: string,
+): Promise<AppUser | null> {
+  if (requester.role !== "administrator") return null;
+  const [client] = await db
+    .select()
+    .from(usersTable)
+    .where(
+      and(
+        eq(usersTable.id, clientId),
+        eq(usersTable.role, "student"),
+      ),
+    )
+    .limit(1);
+  return client ?? null;
 }
 
 type DashboardTutor = {

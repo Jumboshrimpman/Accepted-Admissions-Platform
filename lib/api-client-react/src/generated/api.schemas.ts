@@ -494,11 +494,21 @@ export type AdminOverviewAuditItem = {
   createdAt: string;
 };
 
+export interface AdminLoginActivity {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: Role;
+  signedInAt: string;
+}
+
 export interface AdminOverview {
   users: AdminOverviewUsersItem[];
   memberships: AdminOverviewMembershipsItem[];
   assignments: AdminOverviewAssignmentsItem[];
   audit: AdminOverviewAuditItem[];
+  loginActivity: AdminLoginActivity[];
 }
 
 export type AdminProgramStatus = typeof AdminProgramStatus[keyof typeof AdminProgramStatus];
@@ -919,22 +929,6 @@ export type AdminCurriculumClientsItem = {
   email: string;
 };
 
-export type AdminCurriculumAttentionItemSeverity = typeof AdminCurriculumAttentionItemSeverity[keyof typeof AdminCurriculumAttentionItemSeverity];
-
-
-export const AdminCurriculumAttentionItemSeverity = {
-  info: 'info',
-  warning: 'warning',
-  urgent: 'urgent',
-} as const;
-
-export type AdminCurriculumAttentionItem = {
-  kind: string;
-  label: string;
-  detail: string;
-  severity: AdminCurriculumAttentionItemSeverity;
-};
-
 export type CurriculumBlockKind = typeof CurriculumBlockKind[keyof typeof CurriculumBlockKind];
 
 
@@ -999,15 +993,6 @@ export interface AdminCurriculum {
   submissions: AdminSubmission[];
   tutors: AdminCurriculumTutorsItem[];
   clients: AdminCurriculumClientsItem[];
-  attention: AdminCurriculumAttentionItem[];
-}
-
-export interface Tutor {
-  id: string;
-  name: string;
-  specialty: string;
-  /** @nullable */
-  avatarUrl?: string | null;
 }
 
 export type CourseStatus = typeof CourseStatus[keyof typeof CourseStatus];
@@ -1019,6 +1004,14 @@ export const CourseStatus = {
   completed: 'completed',
   archived: 'archived',
 } as const;
+
+export interface Tutor {
+  id: string;
+  name: string;
+  specialty: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
 
 export interface Course {
   id: string;
@@ -1062,6 +1055,140 @@ export interface Session {
   hasHomework?: boolean;
   hasReport?: boolean;
 }
+
+export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPhase[keyof typeof AssignmentSummaryDeliveryPhase];
+
+
+export const AssignmentSummaryDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
+export type AssignmentSummaryStatus = typeof AssignmentSummaryStatus[keyof typeof AssignmentSummaryStatus];
+
+
+export const AssignmentSummaryStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AssignmentSummaryLatestAttemptStatus = typeof AssignmentSummaryLatestAttemptStatus[keyof typeof AssignmentSummaryLatestAttemptStatus] | null;
+
+
+export const AssignmentSummaryLatestAttemptStatus = {
+  active: 'active',
+  paused: 'paused',
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export interface AssignmentSummary {
+  id: string;
+  deliveryPhase?: AssignmentSummaryDeliveryPhase;
+  title: string;
+  subject: string;
+  status: AssignmentSummaryStatus;
+  /** @nullable */
+  deadline?: string | null;
+  questionCount: number;
+  timeLimitMinutes: number;
+  attemptCount: number;
+  maxAttempts: number;
+  /** @nullable */
+  latestScore?: number | null;
+  /** @nullable */
+  latestAttemptId?: string | null;
+  /** @nullable */
+  latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
+}
+
+export interface DashboardCredits {
+  remainingHours: number;
+  readOnly: boolean;
+}
+
+export interface DashboardProgress {
+  totalSessions: number;
+  completedSessions: number;
+  /** @nullable */
+  averageScore: number | null;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+export interface DashboardStudent {
+  id: string;
+  name: string;
+  courseId: string;
+  courseTitle: string;
+  subject: string;
+}
+
+export type ReviewSubmissionStatus = typeof ReviewSubmissionStatus[keyof typeof ReviewSubmissionStatus];
+
+
+export const ReviewSubmissionStatus = {
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export type ReviewSubmissionReviewStatus = typeof ReviewSubmissionReviewStatus[keyof typeof ReviewSubmissionReviewStatus];
+
+
+export const ReviewSubmissionReviewStatus = {
+  new: 'new',
+  in_review: 'in_review',
+  reviewed: 'reviewed',
+} as const;
+
+export interface ReviewSubmission {
+  attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  studentUserId: string;
+  studentName: string;
+  /** @nullable */
+  sessionId: string | null;
+  /** @nullable */
+  sessionDateTime: string | null;
+  status: ReviewSubmissionStatus;
+  score: number;
+  submittedAt: string;
+  reviewStatus: ReviewSubmissionReviewStatus;
+  mistakeCount?: number;
+  /** @nullable */
+  tutorNotes?: string | null;
+}
+
+export type DashboardRecentScoresItem = {
+  label: string;
+  score: number;
+  date: string;
+};
+
+export interface Dashboard {
+  user: CurrentUser;
+  welcomeMessage?: string;
+  courses: Course[];
+  upcomingSessions: Session[];
+  assignments: AssignmentSummary[];
+  recentScores: DashboardRecentScoresItem[];
+  reviewSkills: string[];
+  credits: DashboardCredits;
+  progress: DashboardProgress;
+  assignedStudents: DashboardStudent[];
+  newSubmissions: ReviewSubmission[];
+  openReviewCount: number;
+}
+
+export type AdminClientDashboard = Dashboard & {
+  adminPreview: true;
+};
 
 export type CourseDetail = Course & ({
   /** @nullable */
@@ -1169,57 +1296,6 @@ export interface CurriculumBlockUpdate {
   position?: number;
   status?: CurriculumBlockUpdateStatus;
   config?: CurriculumBlockUpdateConfig;
-}
-
-export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPhase[keyof typeof AssignmentSummaryDeliveryPhase];
-
-
-export const AssignmentSummaryDeliveryPhase = {
-  before_session: 'before_session',
-  during_session: 'during_session',
-} as const;
-
-export type AssignmentSummaryStatus = typeof AssignmentSummaryStatus[keyof typeof AssignmentSummaryStatus];
-
-
-export const AssignmentSummaryStatus = {
-  draft: 'draft',
-  published: 'published',
-  completed: 'completed',
-  archived: 'archived',
-} as const;
-
-/**
- * @nullable
- */
-export type AssignmentSummaryLatestAttemptStatus = typeof AssignmentSummaryLatestAttemptStatus[keyof typeof AssignmentSummaryLatestAttemptStatus] | null;
-
-
-export const AssignmentSummaryLatestAttemptStatus = {
-  active: 'active',
-  paused: 'paused',
-  submitted: 'submitted',
-  expired: 'expired',
-} as const;
-
-export interface AssignmentSummary {
-  id: string;
-  deliveryPhase?: AssignmentSummaryDeliveryPhase;
-  title: string;
-  subject: string;
-  status: AssignmentSummaryStatus;
-  /** @nullable */
-  deadline?: string | null;
-  questionCount: number;
-  timeLimitMinutes: number;
-  attemptCount: number;
-  maxAttempts: number;
-  /** @nullable */
-  latestScore?: number | null;
-  /** @nullable */
-  latestAttemptId?: string | null;
-  /** @nullable */
-  latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
 }
 
 export type SessionHomeworkStatus = typeof SessionHomeworkStatus[keyof typeof SessionHomeworkStatus];
@@ -1546,42 +1622,6 @@ export interface Attempt {
 
 export interface AttemptSubmission {
   confirm: boolean;
-}
-
-export type ReviewSubmissionStatus = typeof ReviewSubmissionStatus[keyof typeof ReviewSubmissionStatus];
-
-
-export const ReviewSubmissionStatus = {
-  submitted: 'submitted',
-  expired: 'expired',
-} as const;
-
-export type ReviewSubmissionReviewStatus = typeof ReviewSubmissionReviewStatus[keyof typeof ReviewSubmissionReviewStatus];
-
-
-export const ReviewSubmissionReviewStatus = {
-  new: 'new',
-  in_review: 'in_review',
-  reviewed: 'reviewed',
-} as const;
-
-export interface ReviewSubmission {
-  attemptId: string;
-  assignmentId: string;
-  assignmentTitle: string;
-  studentUserId: string;
-  studentName: string;
-  /** @nullable */
-  sessionId: string | null;
-  /** @nullable */
-  sessionDateTime: string | null;
-  status: ReviewSubmissionStatus;
-  score: number;
-  submittedAt: string;
-  reviewStatus: ReviewSubmissionReviewStatus;
-  mistakeCount?: number;
-  /** @nullable */
-  tutorNotes?: string | null;
 }
 
 export type AttemptReviewUpdateReviewStatus = typeof AttemptReviewUpdateReviewStatus[keyof typeof AttemptReviewUpdateReviewStatus];
@@ -1941,49 +1981,6 @@ export interface SessionArtifactInput {
   content: string;
   visibility?: SessionArtifactInputVisibility;
   status?: SessionArtifactInputStatus;
-}
-
-export interface DashboardCredits {
-  remainingHours: number;
-  readOnly: boolean;
-}
-
-export interface DashboardProgress {
-  totalSessions: number;
-  completedSessions: number;
-  /** @nullable */
-  averageScore: number | null;
-  strengths: string[];
-  weaknesses: string[];
-}
-
-export interface DashboardStudent {
-  id: string;
-  name: string;
-  courseId: string;
-  courseTitle: string;
-  subject: string;
-}
-
-export type DashboardRecentScoresItem = {
-  label: string;
-  score: number;
-  date: string;
-};
-
-export interface Dashboard {
-  user: CurrentUser;
-  welcomeMessage?: string;
-  courses: Course[];
-  upcomingSessions: Session[];
-  assignments: AssignmentSummary[];
-  recentScores: DashboardRecentScoresItem[];
-  reviewSkills: string[];
-  credits: DashboardCredits;
-  progress: DashboardProgress;
-  assignedStudents: DashboardStudent[];
-  newSubmissions: ReviewSubmission[];
-  openReviewCount: number;
 }
 
 /**

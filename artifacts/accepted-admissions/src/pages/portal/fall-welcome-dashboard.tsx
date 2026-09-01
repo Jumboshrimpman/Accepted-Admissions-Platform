@@ -1,4 +1,4 @@
-import { useGetDashboard } from "@workspace/api-client-react";
+import { useGetDashboard, type Dashboard } from "@workspace/api-client-react";
 import { format, isPast, parseISO } from "date-fns";
 import {
   ArrowRight,
@@ -51,7 +51,6 @@ function assignmentStatus(
 }
 
 export default function FallWelcomeDashboard() {
-  const [showAllSessions, setShowAllSessions] = useState(false);
   const { data: dashboard, isLoading, error } = useGetDashboard();
 
   if (isLoading) {
@@ -77,7 +76,18 @@ export default function FallWelcomeDashboard() {
     );
   }
 
-  const viewer = dashboard.user.role === "viewer";
+  return <ClientDashboardView dashboard={dashboard} />;
+}
+
+export function ClientDashboardView({
+  dashboard,
+  adminPreview = false,
+}: {
+  dashboard: Dashboard;
+  adminPreview?: boolean;
+}) {
+  const [showAllSessions, setShowAllSessions] = useState(false);
+  const viewer = dashboard.user.role === "viewer" || adminPreview;
   const fallSessions = dashboard.upcomingSessions
     .filter((session) => {
       const dateKey = sessionDateKey(session);
@@ -99,7 +109,7 @@ export default function FallWelcomeDashboard() {
       : 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-12">
+    <div className="mx-auto min-w-0 max-w-6xl space-y-6 pb-12">
       <section className="rounded-3xl bg-gradient-brand px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-10 sm:py-10">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
@@ -122,8 +132,14 @@ export default function FallWelcomeDashboard() {
         <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100" role="status">
           <GraduationCap className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
-            <p className="font-semibold">Viewing Taito&apos;s dashboard in view-only mode</p>
-            <p className="mt-1 text-amber-800 dark:text-amber-200">You can review schedule, homework, and progress, but nothing can be changed from this account.</p>
+            <p className="font-semibold">
+              {adminPreview
+                ? `Read-only client preview for ${dashboard.user.displayName}`
+                : "Viewing Taito's dashboard in view-only mode"}
+            </p>
+            <p className="mt-1 text-amber-800 dark:text-amber-200">
+              You can review sessions, homework, results, progress, and credits, but nothing can be changed here.
+            </p>
           </div>
         </div>
       )}
@@ -180,10 +196,10 @@ export default function FallWelcomeDashboard() {
                     <p className="flex items-center gap-2"><GraduationCap className="h-4 w-4 text-primary" />{nextSession.tutor?.name ?? "Tutor to be confirmed"}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                {!adminPreview && <div className="flex flex-wrap gap-3">
                   <Button asChild><Link href={`/portal/courses/${nextSession.courseId}/sessions/${nextSession.id}`}>Open session <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
                   {nextSession.meetingUrl && <Button asChild variant="outline"><a href={nextSession.meetingUrl} target="_blank" rel="noopener noreferrer"><Video className="mr-2 h-4 w-4" />Join meeting</a></Button>}
-                </div>
+                </div>}
               </div>
             ) : (
               <p className="py-6 text-sm text-muted-foreground">Your next session will appear here when it is scheduled.</p>
@@ -210,7 +226,9 @@ export default function FallWelcomeDashboard() {
                     <div className="min-w-0"><p className="truncate font-medium">{assignment.title}</p><p className="mt-1 text-xs text-muted-foreground">{assignment.deadline ? `Due ${format(parseISO(assignment.deadline), "MMM d, yyyy")}` : "No due date"}</p></div>
                     <Badge variant={state.variant}>{state.label}</Badge>
                   </div>
-                  <Button asChild size="sm" variant="outline" className="mt-3 w-full"><Link href={`/portal/assignments/${assignment.id}`}>{action}<ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button>
+                  {adminPreview
+                    ? <Button size="sm" variant="outline" className="mt-3 w-full" disabled>Read only</Button>
+                    : <Button asChild size="sm" variant="outline" className="mt-3 w-full"><Link href={`/portal/assignments/${assignment.id}`}>{action}<ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button>}
                 </div>
               );
             }) : <p className="py-5 text-sm text-muted-foreground">No homework is assigned yet.</p>}
@@ -235,9 +253,14 @@ export default function FallWelcomeDashboard() {
       </div>
 
       <Card className="overflow-hidden shadow-sm">
-        <CardHeader className="border-b px-6 py-5 sm:px-7"><CardTitle className="flex items-center gap-3 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Fall schedule<span className="ml-auto text-sm font-normal text-muted-foreground">October – December</span></CardTitle></CardHeader>
+        <CardHeader className="border-b px-6 py-5 sm:px-7"><CardTitle className="flex flex-wrap items-center gap-3 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Fall schedule<span className="w-full text-sm font-normal text-muted-foreground sm:ml-auto sm:w-auto">October – December</span></CardTitle></CardHeader>
         <CardContent className="p-0">
-          {fallSessions.length > 0 ? <><div className="divide-y">{visibleFallSessions.map((session) => <Link key={session.id} href={`/portal/courses/${session.courseId}/sessions/${session.id}`}><div className="flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="text-sm text-muted-foreground">{formatSessionDate(session)} · {formatSessionTimeRange(session)}</p></div><div className="flex items-center gap-2"><Badge variant="outline">{sessionSubjectLabel(session.subject)}</Badge><ArrowRight className="h-4 w-4 text-muted-foreground" /></div></div></Link>)}</div>{fallSessions.length > 3 && <div className="border-t px-6 py-4 sm:px-7"><Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowAllSessions((value) => !value)} aria-expanded={showAllSessions}>{showAllSessions ? "View less" : `View more (${fallSessions.length - 3})`}</Button></div>}</> : <p className="px-6 py-10 text-center text-sm text-muted-foreground sm:px-7">Your Fall dates will appear here soon.</p>}
+          {fallSessions.length > 0 ? <><div className="divide-y">{visibleFallSessions.map((session) => {
+            const content = <div className="flex flex-col gap-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="text-sm text-muted-foreground">{formatSessionDate(session)} · {formatSessionTimeRange(session)}</p></div><div className="flex items-center gap-2"><Badge variant="outline">{sessionSubjectLabel(session.subject)}</Badge>{!adminPreview && <ArrowRight className="h-4 w-4 text-muted-foreground" />}</div></div>;
+            return adminPreview
+              ? <div key={session.id}>{content}</div>
+              : <Link key={session.id} href={`/portal/courses/${session.courseId}/sessions/${session.id}`} className="block transition-colors hover:bg-muted/30">{content}</Link>;
+          })}</div>{fallSessions.length > 3 && <div className="border-t px-6 py-4 sm:px-7"><Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowAllSessions((value) => !value)} aria-expanded={showAllSessions}>{showAllSessions ? "View less" : `View more (${fallSessions.length - 3})`}</Button></div>}</> : <p className="px-6 py-10 text-center text-sm text-muted-foreground sm:px-7">Your Fall dates will appear here soon.</p>}
         </CardContent>
       </Card>
     </div>

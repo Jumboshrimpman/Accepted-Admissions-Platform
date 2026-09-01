@@ -26,6 +26,7 @@ import type {
   AdminAssignment,
   AdminAssignmentInput,
   AdminAssignmentUpdate,
+  AdminClientDashboard,
   AdminCurriculum,
   AdminFinancials,
   AdminOverview,
@@ -431,6 +432,83 @@ export function useGetAdminCurriculum<TData = Awaited<ReturnType<typeof getAdmin
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminCurriculumQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminClientDashboardUrl = (clientId: string,) => {
+
+
+
+
+  return `/api/admin/clients/${clientId}/dashboard`
+}
+
+/**
+ * @summary Get an administrator-authorized read-only client dashboard preview
+ */
+export const getAdminClientDashboard = async (clientId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminClientDashboard> => {
+
+  return customFetch<AdminClientDashboard>(getGetAdminClientDashboardUrl(clientId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminClientDashboardQueryKey = (clientId: string,) => {
+    return [
+    `/api/admin/clients/${clientId}/dashboard`
+    ] as const;
+    }
+
+
+export const getGetAdminClientDashboardQueryOptions = <TData = Awaited<ReturnType<typeof getAdminClientDashboard>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(clientId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminClientDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminClientDashboardQueryKey(clientId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminClientDashboard>>> = ({ signal }) => getAdminClientDashboard(clientId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: clientId !== null && clientId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminClientDashboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminClientDashboardQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminClientDashboard>>>
+export type GetAdminClientDashboardQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+/**
+ * @summary Get an administrator-authorized read-only client dashboard preview
+ */
+
+export function useGetAdminClientDashboard<TData = Awaited<ReturnType<typeof getAdminClientDashboard>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ clientId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminClientDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminClientDashboardQueryOptions(clientId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

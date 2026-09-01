@@ -58,9 +58,11 @@ import {
   visibleSessionsForUser,
 } from "../lib/session-privacy";
 import {
+  clientForAdminPreview,
   dashboardSessionShape,
   dashboardSessionsForUser,
 } from "../lib/dashboard-data";
+import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
   createCheckoutSession,
   createHostedInvoice,
@@ -75,6 +77,8 @@ import {
   CreateAdminAssignmentResponse,
   CreateAdminSessionBody,
   CreateAdminSessionResponse,
+  GetAdminClientDashboardParams,
+  GetAdminClientDashboardResponse,
   GetAdaptiveCurriculumParams,
   GetAdaptiveCurriculumResponse,
   GetAdminCurriculumQueryParams,
@@ -179,6 +183,7 @@ import {
   creditLedgerTable,
   db,
   invoicesTable,
+  loginActivityTable,
   paymentsTable,
   publicContentTable,
   questionsTable,
@@ -1681,6 +1686,9 @@ async function requireAppUser(
     return;
   }
   await syncConfiguredAccess(appUser, configured);
+  const clerkSessionId =
+    auth.sessionId ?? claimString(auth.sessionClaims, "sid");
+  await recordSuccessfulLogin(appUser.id, clerkSessionId);
   req.appUser = appUser;
   next();
 }
@@ -5214,7 +5222,7 @@ router.get(
   async (_req: AuthedRequest, res): Promise<void> => {
     await ensureSeedData();
     await ensureUpgradeSeedData();
-    const [users, memberships, assignments, audit, platform, connectedCalendars] =
+    const [users, memberships, assignments, audit, loginActivity, platform, connectedCalendars] =
       await Promise.all([
       db
         .select({
@@ -5264,6 +5272,18 @@ router.get(
         .from(auditLogsTable)
         .orderBy(desc(auditLogsTable.createdAt))
         .limit(100),
+      db
+        .select({
+          id: loginActivityTable.id,
+          userId: usersTable.id,
+          userName: usersTable.displayName,
+          userEmail: usersTable.email,
+          role: usersTable.role,
+          signedInAt: loginActivityTable.signedInAt,
+        })
+        .from(loginActivityTable)
+        .innerJoin(usersTable, eq(usersTable.id, loginActivityTable.userId))
+        .orderBy(desc(loginActivityTable.signedInAt)),
       Promise.all([
         db.select({ count: sql<number>`count(*)` }).from(usersTable),
         db
@@ -5316,6 +5336,7 @@ router.get(
         studentName: userById.get(assignment.studentUserId)?.displayName ?? "Unknown student",
       })),
       audit,
+      loginActivity,
       platform: {
         totalUsers: Number(platform[0][0]?.count ?? 0),
         clients: Number(platform[1][0]?.count ?? 0),
@@ -5633,19 +5654,6 @@ router.get(
       if (question.reviewStatus === "draft" || question.reviewStatus === "approved" || question.reviewStatus === "rejected") entry[question.reviewStatus] += 1;
       questionBySubject.set(question.subject, entry);
     }
-    const attention: Array<{ kind: string; label: string; detail: string; severity: "info" | "warning" | "urgent" }> = [];
-    for (const assignment of assignments.filter((item) => item.status === "draft")) {
-      attention.push({ kind: "assignment", label: "Draft assignment", detail: `${assignment.title} still needs publication.`, severity: "warning" });
-    }
-    for (const item of [...questionBySubject.entries()].filter(([, value]) => value.draft > 0 || value.rejected > 0)) {
-      attention.push({ kind: "question-bank", label: "Question review", detail: `${item[0]} has ${item[1].draft} draft and ${item[1].rejected} rejected item(s).`, severity: "warning" });
-    }
-    for (const session of sessions.filter((item) => item.conflict)) {
-      attention.push({ kind: "conflict", label: "Scheduling conflict", detail: `${session.title} overlaps another internal session.`, severity: "urgent" });
-    }
-    for (const session of sessions.filter((item) => !item.tutor || !item.student)) {
-      attention.push({ kind: "session", label: "Incomplete session assignment", detail: `${session.title} needs a ${!session.tutor ? "tutor" : "student"}.`, severity: "warning" });
-    }
     res.json(
       GetAdminCurriculumResponse.parse({
         programs: await Promise.all(courses.map(adminProgramShape)),
@@ -5669,7 +5677,6 @@ router.get(
         })),
         tutors,
         clients,
-        attention,
       }),
     );
   },
@@ -6102,9 +6109,8 @@ async function reviewSubmissionsForUser(user: AppUser) {
     }));
 }
 
-router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
+async function dashboardDataForUser(user: AppUser) {
   await ensureSeedData();
-  const user = req.appUser!;
   const ids = await visibleCourseIds(user);
   const subjectUserId = await dataSubjectUserId(user);
   const courses = (
@@ -6213,8 +6219,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
     const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
     return total + (positive ? entry.hours : -entry.hours);
   }, 0);
-  res.json(
-    GetDashboardResponse.parse({
+  return GetDashboardResponse.parse({
       user: {
         id: user.id,
         displayName: user.displayName,
@@ -6270,8 +6275,42 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
         (submission) => submission.reviewStatus !== "reviewed",
       ),
       openReviewCount: openReviewItems.length,
-    }),
-  );
+    });
+}
+
+router.get(
+  "/admin/clients/:clientId/dashboard",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = GetAdminClientDashboardParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const client = await clientForAdminPreview(
+      req.appUser!,
+      params.data.clientId,
+    );
+    if (!client) {
+      res.status(404).json({ error: "Client not found" });
+      return;
+    }
+    const dashboard = await dashboardDataForUser(client);
+    res.json(
+      GetAdminClientDashboardResponse.parse({
+        ...dashboard,
+        adminPreview: true,
+        credits: {
+          ...dashboard.credits,
+          readOnly: true,
+        },
+      }),
+    );
+  },
+);
+
+router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
+  res.json(await dashboardDataForUser(req.appUser!));
 });
 
 router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void> => {
