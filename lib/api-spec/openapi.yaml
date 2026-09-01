@@ -1837,7 +1837,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, name, email, subjects, active, sessionCount, upcomingSessionCount]
+            required: [id, name, email, subjects, active, calendarStatus, sessionCount, upcomingSessionCount]
             properties:
               id: { type: string }
               name: { type: string }
@@ -1846,6 +1846,7 @@ components:
                 type: array
                 items: { type: string }
               active: { type: boolean }
+              calendarStatus: { type: string, enum: [connected, disconnected, unavailable] }
               sessionCount: { type: number }
               upcomingSessionCount: { type: number }
         clients:

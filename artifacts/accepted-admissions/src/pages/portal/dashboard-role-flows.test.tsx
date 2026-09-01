@@ -37,6 +37,18 @@ vi.mock("@workspace/api-client-react", () => ({
     isLoading: false,
   }),
   useUpdateReviewQueueItem: () => mocks.updateReview,
+  useGetCurrentUser: () => ({
+    data: { role: "tutor" },
+  }),
+  useListCalendarConnections: () => ({
+    data: [],
+    isLoading: false,
+    refetch: vi.fn(async () => undefined),
+  }),
+  useDisconnectCalendar: () => ({
+    isPending: false,
+    mutate: vi.fn(),
+  }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({

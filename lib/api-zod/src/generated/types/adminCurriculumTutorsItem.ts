@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminCurriculumTutorsItemCalendarStatus } from './adminCurriculumTutorsItemCalendarStatus';
 
 export type AdminCurriculumTutorsItem = {
   id: string;
@@ -12,6 +13,7 @@ export type AdminCurriculumTutorsItem = {
   email: string;
   subjects: string[];
   active: boolean;
+  calendarStatus: AdminCurriculumTutorsItemCalendarStatus;
   sessionCount: number;
   upcomingSessionCount: number;
 };

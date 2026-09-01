@@ -21,6 +21,7 @@ import {
   getGoogleCalendarConfig,
   googleCalendarCompletionHtml,
   googleCalendarAuthorizationUrl,
+  normalizeGoogleCalendarStatus,
   listGoogleBusyWindows,
   readCalendarOAuthState,
   refreshGoogleAccessToken,
@@ -2608,11 +2609,17 @@ async function calendarAccess(tutorProfileId: string) {
 
 async function calendarAccessForUser(tutorUserId: string) {
   const [profile] = await db
-    .select({ id: tutorProfilesTable.id })
+    .select({
+      id: tutorProfilesTable.id,
+      calendarStatus: tutorProfilesTable.calendarStatus,
+    })
     .from(tutorProfilesTable)
     .where(eq(tutorProfilesTable.userId, tutorUserId))
     .limit(1);
-  return profile ? calendarAccess(profile.id) : null;
+  if (!profile || normalizeGoogleCalendarStatus(profile.calendarStatus) !== "connected") {
+    return null;
+  }
+  return calendarAccess(profile.id);
 }
 
 async function bookingTutor(tutorProfileId: string) {
@@ -4943,7 +4950,15 @@ async function adminSessionConflicts(
     );
   if (options.checkProvider === true && payload.tutorUserId) {
     const access = await calendarAccessForUser(payload.tutorUserId);
-    if (access) {
+    if (!access) {
+      if (options.strictProvider) {
+        throw new BookingError(
+          409,
+          "CALENDAR_DISCONNECTED",
+          "The tutor's Google Calendar is disconnected. Ask the tutor to reconnect before assigning this session.",
+        );
+      }
+    } else {
       try {
         const busyWindows = await listGoogleBusyWindows(
           access.accessToken,
@@ -5107,6 +5122,7 @@ router.get(
             email: tutorProfilesTable.email,
             subjects: tutorProfilesTable.subjects,
             active: tutorProfilesTable.active,
+            calendarStatus: tutorProfilesTable.calendarStatus,
           })
           .from(tutorProfilesTable)
           .innerJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
@@ -5140,6 +5156,7 @@ router.get(
           .where(eq(sessionsTable.tutorUserId, tutor.id));
         return {
           ...tutor,
+          calendarStatus: normalizeGoogleCalendarStatus(tutor.calendarStatus),
           sessionCount: Number(counts?.total ?? 0),
           upcomingSessionCount: Number(counts?.upcoming ?? 0),
         };

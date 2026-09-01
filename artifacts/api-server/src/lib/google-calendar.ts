@@ -7,6 +7,19 @@ export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.owned",
 ];
 
+export type GoogleCalendarConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "unavailable";
+
+export function normalizeGoogleCalendarStatus(
+  value: string | null | undefined,
+): GoogleCalendarConnectionStatus {
+  if (value === "connected") return "connected";
+  if (value === "unavailable") return "unavailable";
+  return "disconnected";
+}
+
 type GoogleCalendarConfig = {
   clientId: string;
   clientSecret: string;

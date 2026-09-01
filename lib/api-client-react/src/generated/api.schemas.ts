@@ -898,12 +898,22 @@ export interface AdminSubmission {
   mistakeCount: number;
 }
 
+export type AdminCurriculumTutorsItemCalendarStatus = typeof AdminCurriculumTutorsItemCalendarStatus[keyof typeof AdminCurriculumTutorsItemCalendarStatus];
+
+
+export const AdminCurriculumTutorsItemCalendarStatus = {
+  connected: 'connected',
+  disconnected: 'disconnected',
+  unavailable: 'unavailable',
+} as const;
+
 export type AdminCurriculumTutorsItem = {
   id: string;
   name: string;
   email: string;
   subjects: string[];
   active: boolean;
+  calendarStatus: AdminCurriculumTutorsItemCalendarStatus;
   sessionCount: number;
   upcomingSessionCount: number;
 };

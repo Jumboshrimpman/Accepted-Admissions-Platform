@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 
 export default function TutorDashboard() {
   const queryClient = useQueryClient();
@@ -74,6 +75,8 @@ export default function TutorDashboard() {
           <Badge className="border-white/20 bg-white/10 px-3 py-1.5 text-white">Tutor dashboard</Badge>
         </div>
       </section>
+
+      <CalendarConnectionCard location="tutor_dashboard" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card><CardContent className="flex items-center gap-4 p-5"><div className="rounded-2xl bg-primary/10 p-3 text-primary"><CalendarDays className="h-5 w-5" /></div><div><p className="text-xs uppercase tracking-wider text-muted-foreground">Upcoming sessions</p><p className="mt-1 text-2xl font-semibold">{dashboard.upcomingSessions.length}</p></div></CardContent></Card>

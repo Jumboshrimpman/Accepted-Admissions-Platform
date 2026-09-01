@@ -27,6 +27,7 @@ export * from './adminCurriculumAttentionItem';
 export * from './adminCurriculumAttentionItemSeverity';
 export * from './adminCurriculumClientsItem';
 export * from './adminCurriculumTutorsItem';
+export * from './adminCurriculumTutorsItemCalendarStatus';
 export * from './adminFinancials';
 export * from './adminOverview';
 export * from './adminOverviewAssignmentsItem';

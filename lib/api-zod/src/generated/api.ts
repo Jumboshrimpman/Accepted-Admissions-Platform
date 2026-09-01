@@ -167,6 +167,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "email": zod.string(),
   "subjects": zod.array(zod.string()),
   "active": zod.boolean(),
+  "calendarStatus": zod.enum(['connected', 'disconnected', 'unavailable']),
   "sessionCount": zod.number(),
   "upcomingSessionCount": zod.number()
 })),
