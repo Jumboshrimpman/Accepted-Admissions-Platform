@@ -108,11 +108,16 @@ function SignInPage() {
         routing="path"
         path={`${basePath}/login`}
         forceRedirectUrl={`${basePath}/portal`}
+        fallbackRedirectUrl={`${basePath}/portal`}
         withSignUp={false}
         appearance={{
           elements: {
             footerAction: { display: 'none' },
             footer: { display: 'none' },
+            socialButtonsBlockButton: { display: 'none' },
+            socialButtonsBlockButtonText: { display: 'none' },
+            socialButtonsProviderIcon: { display: 'none' },
+            dividerRow: { display: 'none' },
           },
         }}
       />
