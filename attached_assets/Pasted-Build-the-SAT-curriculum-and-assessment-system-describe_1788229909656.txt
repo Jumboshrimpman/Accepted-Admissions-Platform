@@ -1,0 +1,302 @@
+Build the SAT curriculum and assessment system described below inside the existing Accepted Admissions platform. This is the top priority. Build on the current authentication, dashboards, database, navigation, and design system. Do not rebuild working features or spend time redesigning the public website.
+
+## 1. Working approach
+
+Before making changes:
+
+1. Inspect the current codebase, database schema, authentication, roles, dashboards, and existing curriculum features.
+2. Identify what already works and reuse it.
+3. Give me a short implementation plan listing what will be added or changed.
+4. Then implement the features end to end.
+
+Do not create static dashboard mockups. Student submissions, grading, alerts, analysis, and curriculum materials must be saved in the database and work across accounts.
+
+Use the existing stack and components wherever possible. Do not restart the Google Calendar OAuth work during this phase. Store meeting dates, times, and links directly in the platform.
+
+## 2. Session schedule
+
+Create these sessions for 2026, without duplicating any sessions already in the database:
+
+* October 2 — SAT
+* October 9 — SAT
+* October 16 — SAT
+* October 23 — English
+* October 30 — SAT
+* November 6 — SAT
+* November 13 — English
+* November 20 — SAT
+* November 27 — SAT
+* December 4 — English
+* December 11 — SAT
+* December 18 — SAT
+
+Preserve any existing session times. If a time has not been entered, display “Time to be confirmed” instead of inventing one.
+
+English sessions should appear on the dashboards and calendar, but do not build the English curriculum yet. Focus this phase on the SAT sessions.
+
+## 3. Google Meet link and collision protection
+
+Use this meeting link for every session:
+
+https://meet.google.com/rih-iayt-okb
+
+The same link may only be used when no students or tutors have overlapping meetings.
+
+Before publishing, editing, or confirming a session, check its start and end time against all other sessions assigned to the same student, tutor, or shared meeting link.
+
+If an overlap exists:
+
+* Block confirmation of the conflicting session.
+* Clearly identify the conflicting session.
+* Ask the administrator to change the time or provide a different meeting link.
+* Never silently double-book the shared Meet room.
+
+Only show the “Join meeting” button for confirmed sessions with a date, start time, end time, and no meeting conflict.
+
+## 4. Simplified student/client dashboard
+
+Create a clean, easy-to-understand dashboard for Taito and other future students. It should prioritize:
+
+1. The next meeting, including date, time, tutor, session type, and Join Meeting button.
+2. The homework or assessment due before that meeting.
+3. Homework status: Not Started, In Progress, Submitted, Submitted Late, or Reviewed.
+4. The most recent assessment result and AI-generated feedback.
+5. A list of upcoming sessions and curriculum assignments.
+
+Add only two additional visual features:
+
+* A skill heatmap showing strengths and weaknesses by SAT domain.
+* A progress chart showing estimated total score and section performance over time.
+
+Do not overcrowd the dashboard.
+
+## 5. Simplified tutor dashboard
+
+The tutor dashboard should show:
+
+* Upcoming sessions.
+* Which students have or have not completed the required homework.
+* An unread submission-alert badge.
+* A prioritized list of new submissions.
+* The student’s score, skill breakdown, mistakes, time spent, and AI analysis.
+* A button to open the automatically prepared in-session lesson.
+* A Hard Question Bank for extra time.
+
+When Taito submits an assignment, create a persistent alert such as:
+
+“New submission: Taito — Homework for October 9 SAT session”
+
+The alert must link directly to that submission. Opening it should mark it as read without deleting it.
+
+## 6. Full baseline SAT diagnostic
+
+Before the October 2 session, assign Taito one full, timed digital SAT-style diagnostic within the website.
+
+Model the structure on the current digital SAT:
+
+* Reading and Writing: two separately timed 32-minute modules
+* Math: two separately timed 35-minute modules
+* Ten-minute break between sections
+* 98 questions total
+* Autosave answers and remaining time
+* Automatically move to the next module when time expires
+* Allow pausing only if an administrator has enabled an accommodation
+* Automatically submit unanswered questions when time expires
+
+The result page should show:
+
+* Estimated total SAT score on the 400–1600 scale
+* Estimated Reading and Writing score
+* Estimated Math score
+* Correct, incorrect, and omitted questions
+* Accuracy by domain, skill, and difficulty
+* Time used by module and, if available, by question
+* Strongest skills
+* Weakest skills
+* Recommended priorities for tutoring
+
+Because this is not an official College Board administration, label calculated scores as “Estimated SAT Score.” Do not present them as official scores unless an authorized official test and validated scoring table are being used.
+
+Use only original, licensed, authorized, or administrator-provided questions. Do not copy copyrighted College Board questions into the application without authorization.
+
+## 7. Pre-session SAT homework
+
+Before every SAT session after October 2, assign Taito a timed mini SAT section on the website.
+
+Each assignment should:
+
+* Be connected to a specific upcoming meeting.
+* Contain approximately 12–18 questions.
+* Take approximately 15–25 minutes.
+* Prioritize skills where Taito previously struggled.
+* Include a smaller number of mixed review questions.
+* Save progress automatically.
+* Grade objective questions automatically when submitted.
+* Record each answer, correctness, skill, difficulty, and time spent.
+
+Use deterministic answer-key grading for multiple-choice and numeric-response questions. AI must not decide whether an objective answer is correct.
+
+## 8. Submission feedback and AI analysis
+
+Immediately after submission:
+
+1. Grade the assignment.
+2. Save the result.
+3. Generate student-facing feedback.
+4. Generate more detailed tutor-facing analysis.
+5. Create a new-submission alert for the tutor.
+6. Prepare targeted in-session practice.
+
+Student feedback should include:
+
+* Overall performance
+* Skills demonstrated well
+* Two or three priority improvement areas
+* Clear explanations for incorrect answers
+* A short plan for the upcoming session
+* Encouraging but honest language
+
+Tutor analysis should include:
+
+* Question-by-question results
+* Error patterns
+* Likely misconceptions
+* Whether errors appear conceptual, procedural, careless, or time-related
+* Suggested discussion points
+* Recommended allocation of session time
+* Targeted questions to review together
+
+Do not send unnecessary identifying information to the AI provider. Use internal user IDs and only the information needed to analyze the assessment.
+
+If AI generation fails, the scored results must still be available. Show “AI analysis pending” and provide a safe retry action.
+
+## 9. Adaptive follow-up questions
+
+For every missed question, prepare similar practice questions testing the same underlying skill and error pattern.
+
+The new questions must:
+
+* Test the same concept without merely changing names or numbers.
+* Match or slightly increase the original difficulty.
+* Include the correct answer and a step-by-step explanation.
+* Be tagged to the original mistake and upcoming session.
+* Avoid duplicating copyrighted question language.
+
+AI-generated questions should be saved as tutor-review drafts. The tutor can approve, edit, replace, or remove them before the session. If no questions are approved, automatically use suitable questions from the reviewed question bank.
+
+Do not use unreviewed AI-generated questions in the scored baseline diagnostic.
+
+## 10. In-session lesson mode
+
+Create a separate in-session view connected to each SAT meeting.
+
+Its priority order should be:
+
+1. Review missed homework questions.
+2. Explain the relevant concept.
+3. Complete approved, targeted follow-up questions together.
+4. Review any questions where Taito was correct but unusually slow or uncertain.
+5. Use the Hard Question Bank if time remains.
+
+The tutor should be able to reveal answers and explanations one question at a time. Do not expose answers to the student before the tutor reveals them or before an independent assignment is submitted.
+
+If Taito did not complete the homework, the in-session lesson should automatically use that homework as the session activity.
+
+If Taito completed the homework and got every question correct, skip mistake review and prepare:
+
+* More difficult questions in the same domains
+* Questions from his broader historical weaknesses
+* Hard Question Bank materials
+
+For regular SAT sessions, organize the suggested 60-minute plan approximately as:
+
+* 10–20 minutes: targeted math drill or review
+* 40–50 minutes: Reading and Writing instruction and practice
+
+For October 2, use the full diagnostic as the homework and prepare:
+
+* 10 minutes: baseline results and progress review
+* 50 minutes: Reading and Writing weaknesses and targeted questions
+
+The tutor must be able to adjust the generated plan manually.
+
+## 11. Question-bank requirements
+
+Every question should store:
+
+* Section
+* Domain
+* Skill and subskill
+* Difficulty
+* Question type
+* Prompt and answer choices
+* Correct answer
+* Explanation
+* Distractor explanations when available
+* Source or ownership status
+* Whether it has been reviewed by a human
+* Whether it may be used in scored assessments
+
+Create a searchable Hard Question Bank for extra session time. Tutors should be able to filter by section, skill, and difficulty.
+
+Provide an administrator import option using a structured JSON or CSV template so we can add authorized questions efficiently without editing code.
+
+## 12. Administrative controls
+
+Administrators should be able to:
+
+* Assign students and tutors to sessions.
+* Set or change meeting times.
+* Detect meeting conflicts.
+* Assign assessments to students.
+* Set due dates.
+* Preview assignments.
+* Review and edit AI-generated questions.
+* Replace questions.
+* Reopen an assignment when necessary.
+* View student and tutor dashboards for troubleshooting.
+* Disable an inaccurate or defective question without deleting prior submission records.
+
+Do not hardcode Taito’s identity into the curriculum engine. Seed or connect his current user record, but make the system reusable for future students.
+
+## 13. Security and permissions
+
+Enforce role-based access on the server:
+
+* Students can only view their own assignments, results, meetings, and feedback.
+* Tutors can only view assigned students and submissions.
+* Administrators can manage all curriculum records.
+* Answer keys must never be included in student-facing API responses before submission or authorized reveal.
+* Alerts and results must not leak between students.
+* Validate permissions server-side, not only in the interface.
+
+## 14. Completion requirements
+
+Do not mark this work complete until this exact flow works:
+
+1. Taito logs in.
+2. He sees the October 2 SAT diagnostic and upcoming meeting.
+3. He starts the diagnostic and the timer works.
+4. Answers autosave.
+5. The diagnostic submits and grades successfully.
+6. Taito sees his estimated score, explanations, and AI feedback.
+7. The tutor receives a new-submission alert.
+8. The tutor opens the submission and sees detailed analysis.
+9. The October 2 in-session lesson is automatically prepared.
+10. Targeted questions are available for tutor review.
+11. The shared Google Meet link displays only when the session is confirmed and conflict-free.
+12. The following SAT session receives an adaptive mini-assignment based on prior performance.
+13. Student, tutor, and administrator permissions are tested.
+
+Add automated tests for scoring, timers, permissions, submission alerts, answer-key protection, and meeting-conflict detection.
+
+At the end, provide:
+
+* A concise list of features completed
+* Files and database tables changed
+* Any database migration or environment-variable instructions
+* Test results
+* Any remaining content that must be supplied or reviewed
+* Exact steps I should follow to test the student and tutor experience
+
+Prioritize a reliable curriculum and assessment workflow over visual polish, payments, public-site changes, calendar OAuth, email notifications, or unrelated features.
