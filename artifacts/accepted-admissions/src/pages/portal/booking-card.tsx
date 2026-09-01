@@ -20,6 +20,7 @@ import {
   useListBookingSessions,
   useListBookingTutors,
   useRescheduleBookingSession,
+  type AdminClientPreviewBooking,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -433,6 +434,200 @@ export function BookingCard() {
             <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Cancelled sessions restore their prepaid credit.
             </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ClientPreviewBookingCard({
+  previewBooking,
+  remainingHours,
+  hasVerifiedPayment,
+}: {
+  previewBooking: AdminClientPreviewBooking;
+  remainingHours: number;
+  hasVerifiedPayment: boolean;
+}) {
+  const [selectedDateKey, setSelectedDateKey] = useState("");
+  const availability = previewBooking.availability;
+  const availableSlots = availability?.slots ?? [];
+  const tutorTimezone = availability?.tutor.timezone ?? "UTC";
+  const availableDateKeys = useMemo(
+    () => new Set(availableSlots.map((slot) => dayKeyInTimeZone(slot, tutorTimezone))),
+    [availableSlots, tutorTimezone],
+  );
+  const selectedDateSlots = availableSlots.filter(
+    (slot) => dayKeyInTimeZone(slot, tutorTimezone) === selectedDateKey,
+  );
+  const selectedDate = selectedDateKey ? dateFromDayKey(selectedDateKey) : undefined;
+  const rangeStart = startOfDay(new Date());
+  const rangeEnd = endOfDay(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
+
+  useEffect(() => {
+    if (!selectedDateKey || !availableDateKeys.has(selectedDateKey)) {
+      const firstAvailableSlot = availableSlots[0];
+      setSelectedDateKey(
+        firstAvailableSlot ? dayKeyInTimeZone(firstAvailableSlot, tutorTimezone) : "",
+      );
+    }
+  }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
+
+  const hasBookedSession = previewBooking.sessions.some(
+    (session) => session.bookingStatus !== "cancelled",
+  );
+  const bookingState = !hasVerifiedPayment
+    ? "unpaid"
+    : hasBookedSession
+      ? "booked"
+      : remainingHours > 0
+        ? "ready"
+        : "no_credit";
+
+  return (
+    <Card className="border-primary/15 shadow-lg shadow-primary/5">
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <CalendarClock className="h-5 w-5 text-primary" />
+              Xavier booking experience
+            </CardTitle>
+            <CardDescription className="mt-2">
+              A client-safe view of the one-time, 60-minute booking journey. No changes can be made from this preview.
+            </CardDescription>
+          </div>
+          <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
+            {remainingHours} prepaid hour{remainingHours === 1 ? "" : "s"}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+          <p className="font-semibold">
+            {bookingState === "unpaid"
+              ? "Booking unavailable until payment is verified"
+              : bookingState === "booked"
+                ? "A Xavier session is booked"
+                : bookingState === "no_credit"
+                  ? "No prepaid hour is currently available"
+                  : "Payment verified — ready to book"}
+          </p>
+          <p className="mt-1 text-amber-800">
+            {bookingState === "unpaid"
+              ? "The student must complete the one-time SAT purchase before a prepaid hour can be reserved."
+              : bookingState === "booked"
+                ? "Booked, rescheduled, and cancelled sessions are listed below with their current status."
+                : bookingState === "no_credit"
+                  ? "The current payment and credit records do not leave an hour available for a new booking."
+                  : "The student can choose one available 60-minute time in the client portal."}
+          </p>
+        </div>
+
+        {previewBooking.calendarStatus === "unavailable" ? (
+          <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+            <p>Xavier&apos;s booking calendar is not available right now.</p>
+            <Button disabled variant="outline" className="mt-4 rounded-full">
+              Booking disabled in preview
+            </Button>
+          </div>
+        ) : previewBooking.calendarStatus === "disconnected" ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-start gap-2">
+              <Link2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Xavier&apos;s Google Calendar is disconnected, so no times can be displayed.</span>
+            </div>
+            <Button disabled variant="outline" className="mt-4 rounded-full">
+              Booking disabled in preview
+            </Button>
+          </div>
+        ) : availableSlots.length === 0 ? (
+          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+            Xavier has no open 60-minute times in the next 14 days.
+          </p>
+        ) : (
+          <div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">Available times with {availability?.tutor.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Showing the next 14 days in {tutorTimezone}.
+                </p>
+              </div>
+              <Badge variant="outline">Calendar connected</Badge>
+            </div>
+            <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
+              <div className="rounded-xl border bg-background p-2 sm:p-3">
+                <AvailabilityCalendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => setSelectedDateKey(date ? format(date, "yyyy-MM-dd") : "")}
+                  defaultMonth={rangeStart}
+                  fromDate={rangeStart}
+                  toDate={rangeEnd}
+                  disabled={(date) =>
+                    date < rangeStart ||
+                    date > rangeEnd ||
+                    !availableDateKeys.has(format(date, "yyyy-MM-dd"))
+                  }
+                  className="mx-auto w-full"
+                />
+                <p className="px-2 pb-2 text-center text-xs text-muted-foreground">
+                  Dates with open times are available to select.
+                </p>
+              </div>
+              <div className="rounded-xl border bg-background p-4">
+                <div className="flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-primary" />
+                  <p className="font-semibold">
+                    {selectedDate ? format(selectedDate, "EEEE, MMM d") : "Choose a date"}
+                  </p>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Available times are shown in Xavier&apos;s timezone.
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                  {selectedDateSlots.map((slot) => (
+                    <div key={slot} className="rounded-xl border bg-muted/20 px-3 py-3 text-sm">
+                      <span className="font-medium">{timeInTimeZone(slot, tutorTimezone)}</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">60-minute session</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <Button disabled variant="outline" className="mt-4 rounded-full">
+              Booking disabled in preview
+            </Button>
+          </div>
+        )}
+
+        <div className="border-t pt-5">
+          <h3 className="font-semibold">Booked sessions</h3>
+          {previewBooking.sessions.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">No prepaid sessions reserved yet.</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {previewBooking.sessions.map((session) => (
+                <div key={session.id} className="rounded-xl border p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-medium">{session.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {format(parseISO(session.dateTime), "EEE, MMM d · h:mm a")} · {session.timezone}
+                      </p>
+                    </div>
+                    <Badge variant={session.bookingStatus === "cancelled" ? "outline" : "secondary"}>
+                      {session.bookingStatus === "rescheduled" ? "Rescheduled" : session.bookingStatus === "cancelled" ? "Cancelled" : "Confirmed"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {session.durationMinutes}-minute session · Changes are disabled in administrator preview.
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </CardContent>

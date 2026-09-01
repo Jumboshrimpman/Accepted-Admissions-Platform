@@ -5,8 +5,14 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminClientPreviewBooking } from './adminClientPreviewBooking';
+import type { AdminClientPreviewOffer } from './adminClientPreviewOffer';
 import type { Dashboard } from './dashboard';
+import type { FinancialSummary } from './financialSummary';
 
 export type AdminClientDashboard = Dashboard & {
   adminPreview: true;
+  previewOffer: AdminClientPreviewOffer;
+  previewFinancials: FinancialSummary;
+  previewBooking: AdminClientPreviewBooking;
 };

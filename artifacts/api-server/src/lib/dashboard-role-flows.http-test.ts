@@ -106,6 +106,33 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.equal(preview.body.user.id, fixture.student.id);
     assert.equal(preview.body.user.displayName, fixture.student.displayName);
     assert.equal(preview.body.user.role, "student");
+    assert.deepEqual(preview.body.previewOffer, {
+      name: "One SAT session with Xavier",
+      description: "A one-time, 60-minute SAT tutoring session with Xavier Morales.",
+      priceCents: 15000,
+      durationMinutes: 60,
+    });
+    assert.equal(preview.body.previewFinancials.readOnly, true);
+    assert.equal(Array.isArray(preview.body.previewFinancials.payments), true);
+    assert.equal(Array.isArray(preview.body.previewFinancials.invoices), true);
+    assert.equal(Array.isArray(preview.body.previewFinancials.credits), true);
+    assert.equal(Array.isArray(preview.body.previewBooking.sessions), true);
+    assert.equal(
+      ["connected", "disconnected", "unavailable"].includes(
+        preview.body.previewBooking.calendarStatus,
+      ),
+      true,
+    );
+    if (preview.body.previewBooking.availability) {
+      assert.deepEqual(
+        Object.keys(preview.body.previewBooking.availability).sort(),
+        ["providerStatus", "slots", "tutor"],
+      );
+      assert.deepEqual(
+        Object.keys(preview.body.previewBooking.availability.tutor).sort(),
+        ["id", "name", "timezone", "title"],
+      );
+    }
     assert.deepEqual(
       preview.body.upcomingSessions.map(
         (session: { id: string }) => session.id,
@@ -126,6 +153,9 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.equal(serializedPreview.includes("private-event:"), false);
     assert.equal(serializedPreview.includes("private-sat-room"), false);
     assert.equal(serializedPreview.includes("providerEventId"), false);
+    assert.equal(serializedPreview.includes("tutorShareCents"), false);
+    assert.equal(serializedPreview.includes("platformShareCents"), false);
+    assert.equal(serializedPreview.includes("transfer"), false);
   } finally {
     await studentServer?.close();
     await administratorServer?.close();

@@ -176,6 +176,7 @@ export interface TutorTransferRecord {
   failureReason?: string | null;
   createdAt: string;
 }
+
 export interface AdminFinancials {
   clients: FinancialClient[];
   products: SatProduct[];
@@ -196,6 +197,11 @@ export interface TutorPayoutStatus {
   payoutsEnabled: boolean;
   ready: boolean;
 }
+
+export type TutorPayoutOnboarding = TutorPayoutStatus & {
+  url: string;
+};
+
 export type HostedInvoiceInputProvider = typeof HostedInvoiceInputProvider[keyof typeof HostedInvoiceInputProvider];
 
 
@@ -440,6 +446,12 @@ export interface BookingSession {
 }
 
 export type BookingInputDurationMinutes = typeof BookingInputDurationMinutes[keyof typeof BookingInputDurationMinutes];
+
+
+export const BookingInputDurationMinutes = {
+  NUMBER_60: 60,
+} as const;
+
 export interface BookingInput {
   tutorProfileId: string;
   startTime: string;
@@ -1086,6 +1098,16 @@ export interface Session {
 }
 
 export type CurriculumSessionReadiness = typeof CurriculumSessionReadiness[keyof typeof CurriculumSessionReadiness];
+
+
+export const CurriculumSessionReadiness = {
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  ready: 'ready',
+  complete: 'complete',
+  unavailable: 'unavailable',
+} as const;
+
 export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPhase[keyof typeof AssignmentSummaryDeliveryPhase];
 
 
@@ -1140,6 +1162,50 @@ export interface AssignmentSummary {
 }
 
 export type CurriculumSessionLatestResultStatus = typeof CurriculumSessionLatestResultStatus[keyof typeof CurriculumSessionLatestResultStatus];
+
+
+export const CurriculumSessionLatestResultStatus = {
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export type AttemptAnalysisSource = typeof AttemptAnalysisSource[keyof typeof AttemptAnalysisSource];
+
+
+export const AttemptAnalysisSource = {
+  deterministic: 'deterministic',
+  provider: 'provider',
+} as const;
+
+export interface AttemptAnalysis {
+  source: AttemptAnalysisSource;
+  label: string;
+  /** @nullable */
+  provider?: string | null;
+  strengths: string[];
+  weaknesses: string[];
+  mistakePatterns: string[];
+  nextFocus: string[];
+  feedback: string;
+}
+
+export type CurriculumSessionLatestResult = {
+  status: CurriculumSessionLatestResultStatus;
+  /** @nullable */
+  score: number | null;
+  attemptId: string;
+  analysis: AttemptAnalysis | null;
+} | null;
+
+export type CurriculumSession = Session & ({
+  readiness: CurriculumSessionReadiness;
+  nextAction: string;
+  /** @nullable */
+  currentFocus: string | null;
+  preparation: AssignmentSummary | null;
+  latestResult: CurriculumSessionLatestResult;
+});
+
 export interface DashboardCredits {
   remainingHours: number;
   readOnly: boolean;
@@ -1220,8 +1286,40 @@ export interface Dashboard {
   openReviewCount: number;
 }
 
+export type AdminClientPreviewOfferDurationMinutes = typeof AdminClientPreviewOfferDurationMinutes[keyof typeof AdminClientPreviewOfferDurationMinutes];
+
+
+export const AdminClientPreviewOfferDurationMinutes = {
+  NUMBER_60: 60,
+} as const;
+
+export interface AdminClientPreviewOffer {
+  name: string;
+  description: string;
+  priceCents: number;
+  durationMinutes: AdminClientPreviewOfferDurationMinutes;
+}
+
+export type AdminClientPreviewBookingCalendarStatus = typeof AdminClientPreviewBookingCalendarStatus[keyof typeof AdminClientPreviewBookingCalendarStatus];
+
+
+export const AdminClientPreviewBookingCalendarStatus = {
+  connected: 'connected',
+  disconnected: 'disconnected',
+  unavailable: 'unavailable',
+} as const;
+
+export interface AdminClientPreviewBooking {
+  calendarStatus: AdminClientPreviewBookingCalendarStatus;
+  availability: BookingAvailability | null;
+  sessions: BookingSession[];
+}
+
 export type AdminClientDashboard = Dashboard & {
   adminPreview: true;
+  previewOffer: AdminClientPreviewOffer;
+  previewFinancials: FinancialSummary;
+  previewBooking: AdminClientPreviewBooking;
 };
 
 export type CourseDetail = Course & ({
@@ -1354,33 +1452,7 @@ export const SessionHomeworkAttemptStatus = {
   submitted: 'submitted',
   expired: 'expired',
 } as const;
-export type AttemptAnalysisSource = typeof AttemptAnalysisSource[keyof typeof AttemptAnalysisSource];
 
-
-export const AttemptAnalysisSource = {
-  deterministic: 'deterministic',
-  provider: 'provider',
-} as const;
-
-export interface AttemptAnalysis {
-  source: AttemptAnalysisSource;
-  label: string;
-  /** @nullable */
-  provider?: string | null;
-  strengths: string[];
-  weaknesses: string[];
-  mistakePatterns: string[];
-  nextFocus: string[];
-  feedback: string;
-}
-
-export type CurriculumSessionLatestResult = {
-  status: CurriculumSessionLatestResultStatus;
-  /** @nullable */
-  score: number | null;
-  attemptId: string;
-  analysis: AttemptAnalysis | null;
-} | null;
 export interface SessionHomework {
   assignmentId: string;
   title: string;
@@ -2057,6 +2129,7 @@ export type ConflictResponse = Error;
  * Upstream payment provider unavailable
  */
 export type BadGatewayResponse = Error;
+
 export type GetAdminCurriculumParams = {
 courseId?: string;
 };
@@ -2113,32 +2186,3 @@ export const ListQuestionBankReviewStatus = {
   rejected: 'rejected',
 } as const;
 
-export type TutorPayoutOnboarding = TutorPayoutStatus & {
-  url: string;
-};
-
-export const BookingInputDurationMinutes = {
-  NUMBER_60: 60,
-} as const;
-
-export const CurriculumSessionLatestResultStatus = {
-  submitted: 'submitted',
-  expired: 'expired',
-} as const;
-
-export const CurriculumSessionReadiness = {
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  ready: 'ready',
-  complete: 'complete',
-  unavailable: 'unavailable',
-} as const;
-
-export type CurriculumSession = Session & ({
-  readiness: CurriculumSessionReadiness;
-  nextAction: string;
-  /** @nullable */
-  currentFocus: string | null;
-  preparation: AssignmentSummary | null;
-  latestResult: CurriculumSessionLatestResult;
-});

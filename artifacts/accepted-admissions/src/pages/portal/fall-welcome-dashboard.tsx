@@ -134,8 +134,8 @@ export function ClientDashboardView({
         <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
           <Eye className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
-            <p className="font-semibold">Curriculum in view-only mode</p>
-            <p className="mt-1 text-amber-800">You can review the complete plan, preparation, and published results. Only the student can complete work.</p>
+            <p className="font-semibold">{adminPreview ? "Read-only client preview" : "Curriculum in view-only mode"}</p>
+            <p className="mt-1 text-amber-800">{adminPreview ? "You can review the student&apos;s curriculum without opening student actions." : "You can review the complete plan, preparation, and published results. Only the student can complete work."}</p>
           </div>
         </div>
       )}

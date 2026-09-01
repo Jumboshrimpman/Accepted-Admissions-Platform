@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -28,7 +29,7 @@ const mocks = vi.hoisted(() => ({
     questionStatus: [],
     submissions: [],
     tutors: [],
-    clients: [],
+    clients: [] as Array<{ id: string; name: string; email: string }>,
   },
 }));
 
@@ -43,7 +44,18 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
 }));
 
+vi.mock("wouter", () => ({
+  Link: ({ href, children }: { href: string; children: ReactNode }) =>
+    createElement("a", { href }, children),
+  useLocation: () => ["/admin/curriculum?section=people", vi.fn()],
+}));
+
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
+
 import AdminDashboard from "./dashboard";
+import AdminCurriculum from "./curriculum";
 
 afterEach(() => cleanup());
 
@@ -61,5 +73,15 @@ describe("administrator overview", () => {
     expect(disclosure.open).toBe(true);
     expect(screen.getByText("taito@example.invalid")).toBeTruthy();
     expect(screen.getByText("student")).toBeTruthy();
+  });
+
+  test("exposes a client preview action for each student", () => {
+    mocks.curriculum.clients = [
+      { id: "student-1", name: "Taito Goto", email: "taito@example.invalid" },
+    ];
+    render(<AdminCurriculum />);
+
+    const previewLink = screen.getByRole("link", { name: /View client/i });
+    expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
   });
 });

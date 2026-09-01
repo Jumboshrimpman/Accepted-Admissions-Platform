@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { ExternalLink, ReceiptText, WalletCards } from "lucide-react";
-import { getGetFinancialsQueryKey, useGetFinancials } from "@workspace/api-client-react";
+import { getGetFinancialsQueryKey, useGetFinancials, type AdminClientPreviewOffer, type FinancialSummary } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,17 +17,27 @@ function statusLabel(status: string): string {
   return status.replaceAll("_", " ");
 }
 
-export function FinancialCard() {
+export function FinancialCard({
+  previewData,
+  previewOffer,
+  adminPreview = false,
+}: {
+  previewData?: FinancialSummary;
+  previewOffer?: AdminClientPreviewOffer;
+  adminPreview?: boolean;
+}) {
   const query = useGetFinancials({
     query: {
+      enabled: !previewData,
       queryKey: getGetFinancialsQueryKey(),
       staleTime: 10_000,
       refetchInterval: 30_000,
     },
   });
 
-  if (query.isLoading) return <Skeleton className="h-72 rounded-2xl" />;
-  if (!query.data) {
+  if (!previewData && query.isLoading) return <Skeleton className="h-72 rounded-2xl" />;
+  const data = previewData ?? query.data;
+  if (!data) {
     return (
       <Card>
         <CardContent className="p-6 text-sm text-muted-foreground">
@@ -37,15 +47,19 @@ export function FinancialCard() {
     );
   }
 
-  const { invoices, payments, credits, remainingHours, readOnly } = query.data;
+  const { invoices, payments, credits, remainingHours } = data;
+  const readOnly = adminPreview || data.readOnly;
+  const hasVerifiedPayment = payments.some(
+    (payment) => payment.verifiedAt || payment.status === "paid" || payment.status === "partially_paid",
+  );
   return (
     <Card className="border-primary/15 shadow-lg shadow-primary/5">
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <WalletCards className="h-5 w-5 text-primary" />
-               Your SAT session payment
+               <WalletCards className="h-5 w-5 text-primary" />
+                {adminPreview ? "SAT session payment and receipts" : "Your SAT session payment"}
             </CardTitle>
             <CardDescription className="mt-2">
               Stripe payment pages handle card details. This portal shows only verified account records.
@@ -57,10 +71,36 @@ export function FinancialCard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {!readOnly && (
+        {adminPreview && previewOffer && (
+          <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">One-time offer</p>
+                <p className="mt-1 font-semibold">{previewOffer.name}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{previewOffer.description}</p>
+              </div>
+              <p className="text-lg font-semibold">${(previewOffer.priceCents / 100).toFixed(2)}</p>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Checkout is unavailable in the administrator preview. A verified purchase provides one prepaid 60-minute session.
+            </p>
+            <Button disabled variant="outline" className="mt-4 rounded-full">Checkout disabled in preview</Button>
+          </div>
+        )}
+        {!readOnly && !adminPreview && (
           <Button asChild className="rounded-full">
              <a href="/sat">Purchase a session with Xavier</a>
           </Button>
+        )}
+        {adminPreview && (
+          <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-medium">{hasVerifiedPayment ? "Payment verified" : "No verified purchase yet"}</p>
+            <p className="mt-1 text-amber-800">
+              {hasVerifiedPayment
+                ? "This account has a payment record and its current prepaid balance is shown below."
+                : "The student has not completed a verified purchase, so booking remains unavailable."}
+            </p>
+          </div>
         )}
         <div>
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">

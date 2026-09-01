@@ -1988,9 +1988,32 @@ components:
       allOf:
         - $ref: "#/components/schemas/Dashboard"
         - type: object
-          required: [adminPreview]
+          required: [adminPreview, previewOffer, previewFinancials, previewBooking]
           properties:
             adminPreview: { type: boolean, const: true }
+            previewOffer: { $ref: "#/components/schemas/AdminClientPreviewOffer" }
+            previewFinancials: { $ref: "#/components/schemas/FinancialSummary" }
+            previewBooking: { $ref: "#/components/schemas/AdminClientPreviewBooking" }
+    AdminClientPreviewOffer:
+      type: object
+      required: [name, description, priceCents, durationMinutes]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        priceCents: { type: number }
+        durationMinutes: { type: number, enum: [60] }
+    AdminClientPreviewBooking:
+      type: object
+      required: [calendarStatus, availability, sessions]
+      properties:
+        calendarStatus: { type: string, enum: [connected, disconnected, unavailable] }
+        availability:
+          oneOf:
+            - $ref: "#/components/schemas/BookingAvailability"
+            - type: "null"
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/BookingSession" }
     Tutor:
       type: object
       required: [id, name, specialty]

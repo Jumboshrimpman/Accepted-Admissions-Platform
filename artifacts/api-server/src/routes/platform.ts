@@ -7040,10 +7040,103 @@ router.get(
       return;
     }
     const dashboard = await dashboardDataForUser(client);
+    const [xavierProfile] = await db
+      .select({
+        id: tutorProfilesTable.id,
+        name: tutorProfilesTable.name,
+        title: tutorProfilesTable.title,
+        active: tutorProfilesTable.active,
+        bookingEligible: tutorProfilesTable.bookingEligible,
+      })
+      .from(tutorProfilesTable)
+      .where(
+        and(
+          eq(tutorProfilesTable.name, XAVIER_NAME),
+          eq(tutorProfilesTable.active, true),
+          eq(tutorProfilesTable.bookingEligible, true),
+        ),
+      )
+      .limit(1);
+    const [bookingSessions, financials] = await Promise.all([
+      db
+        .select()
+        .from(sessionsTable)
+        .where(eq(sessionsTable.clientUserId, client.id))
+        .orderBy(asc(sessionsTable.dateTime)),
+      financialSummary(client.id),
+    ]);
+    let previewBooking: {
+      calendarStatus: "connected" | "disconnected" | "unavailable";
+      availability: {
+        tutor: {
+          id: string;
+          name: string;
+          title: string;
+          timezone: string;
+        };
+        providerStatus: "connected" | "disconnected";
+        slots: string[];
+      } | null;
+      sessions: Awaited<ReturnType<typeof bookingSessionShape>>[];
+    };
+    if (
+      !xavierProfile
+    ) {
+      previewBooking = {
+        calendarStatus: "unavailable",
+        availability: null,
+        sessions: await Promise.all(bookingSessions.map(bookingSessionShape)),
+      };
+    } else {
+      const from = new Date();
+      const to = new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
+      try {
+        const availability = await slotsForTutor(
+          xavierProfile.id,
+          from,
+          to,
+          60,
+        );
+        previewBooking = {
+          calendarStatus: availability.access ? "connected" : "disconnected",
+          availability: {
+            tutor: {
+              id: availability.tutor.id,
+              name: availability.tutor.name,
+              title: availability.tutor.title,
+              timezone: availability.rule.timezone,
+            },
+            providerStatus: availability.access ? "connected" : "disconnected",
+            slots: availability.slots,
+          },
+          sessions: await Promise.all(bookingSessions.map(bookingSessionShape)),
+        };
+      } catch {
+        previewBooking = {
+          calendarStatus: "unavailable",
+          availability: null,
+          sessions: await Promise.all(bookingSessions.map(bookingSessionShape)),
+        };
+      }
+    }
     res.json(
       GetAdminClientDashboardResponse.parse({
         ...dashboard,
         adminPreview: true,
+        previewOffer: {
+          name: "One SAT session with Xavier",
+          description: "A one-time, 60-minute SAT tutoring session with Xavier Morales.",
+          priceCents: XAVIER_OFFER_PRICE_CENTS,
+          durationMinutes: 60,
+        },
+        previewFinancials: {
+          ...financials,
+          readOnly: true,
+          providerStatus: process.env.STRIPE_WEBHOOK_SECRET
+            ? "connected"
+            : "connected_webhook_setup_required",
+        },
+        previewBooking,
         credits: {
           ...dashboard.credits,
           readOnly: true,
