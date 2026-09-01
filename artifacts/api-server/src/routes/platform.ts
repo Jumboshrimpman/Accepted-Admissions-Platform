@@ -7,6 +7,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
   notInArray,
   or,
   sql,
@@ -215,6 +216,10 @@ const XAVIER_NAME = "Xavier Morales";
 const XAVIER_OFFER_SLUG = "single-sat-session";
 const XAVIER_OFFER_PRICE_CENTS = 15_000;
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
+const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
+const RYO_VIEWER_EMAIL = "ryo@jaac.co.jp";
+const TAITO_VIEWER_RELATIONSHIP =
+  "view only mirror of Taito’s client account";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1451,19 +1456,35 @@ async function syncConfiguredAccess(
     const [student] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
-      .where(eq(usersTable.email, targetEmail))
+      .where(
+        and(
+          eq(usersTable.email, normalizeProvisionedEmail(targetEmail)),
+          eq(usersTable.role, "student"),
+        ),
+      )
       .limit(1);
+    await db
+      .update(viewerLinksTable)
+      .set({ active: false })
+      .where(
+        and(
+          eq(viewerLinksTable.viewerUserId, user.id),
+          ...(student
+            ? [ne(viewerLinksTable.studentUserId, student.id)]
+            : []),
+        ),
+      );
     if (!student) return;
     await db
       .insert(viewerLinksTable)
       .values({
         viewerUserId: user.id,
         studentUserId: student.id,
-        relationship: "read-only viewer",
+        relationship: TAITO_VIEWER_RELATIONSHIP,
       })
       .onConflictDoUpdate({
         target: [viewerLinksTable.viewerUserId, viewerLinksTable.studentUserId],
-        set: { active: true },
+        set: { active: true, relationship: TAITO_VIEWER_RELATIONSHIP },
       });
     return;
   }
@@ -1487,6 +1508,43 @@ async function syncConfiguredAccess(
       .update(tutorProfilesTable)
       .set({ userId: user.id, bookingEligible: true, updatedAt: new Date() })
       .where(eq(tutorProfilesTable.email, user.email));
+  }
+  if (
+    access.role === "student" &&
+    normalizeProvisionedEmail(user.email) === TAITO_STUDENT_EMAIL
+  ) {
+    const [viewer] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(
+        and(
+          eq(usersTable.email, RYO_VIEWER_EMAIL),
+          eq(usersTable.role, "viewer"),
+        ),
+      )
+      .limit(1);
+    if (viewer) {
+      await db
+        .update(viewerLinksTable)
+        .set({ active: false })
+        .where(
+          and(
+            eq(viewerLinksTable.viewerUserId, viewer.id),
+            ne(viewerLinksTable.studentUserId, user.id),
+          ),
+        );
+      await db
+        .insert(viewerLinksTable)
+        .values({
+          viewerUserId: viewer.id,
+          studentUserId: user.id,
+          relationship: TAITO_VIEWER_RELATIONSHIP,
+        })
+        .onConflictDoUpdate({
+          target: [viewerLinksTable.viewerUserId, viewerLinksTable.studentUserId],
+          set: { active: true, relationship: TAITO_VIEWER_RELATIONSHIP },
+        });
+    }
   }
 
   const students = await db
@@ -1641,6 +1699,17 @@ async function requireAppUser(
     });
     return;
   }
+  if (!appUser && !identity) {
+    try {
+      identity = await clerkIdentity(auth, clerkUserId, undefined, true);
+    } catch {
+      res.status(502).json({
+        code: "IDENTITY_LOOKUP_FAILED",
+        error: "The signed-in account could not be verified right now.",
+      });
+      return;
+    }
+  }
   if (
     !identity &&
     (!appUser ||
@@ -1648,7 +1717,7 @@ async function requireAppUser(
       !claimString(auth.sessionClaims, "email"))
   ) {
     try {
-      identity = await clerkIdentity(auth, clerkUserId, appUser);
+      identity = await clerkIdentity(auth, clerkUserId, appUser, true);
     } catch {
       res.status(502).json({
         code: "IDENTITY_LOOKUP_FAILED",

@@ -78,6 +78,33 @@ test("maps each provisioned email to its role", () => {
   );
 });
 
+test("maps the complete approved roster without overlapping roles", () => {
+  const rosterEnv = {
+    ACCEPTED_ADMIN_EMAILS: "admin@acceptedadmissions.org",
+    ACCEPTED_SAT_TUTOR_EMAILS:
+      "xsfam6@gmail.com, eunice_chon@berkeley.edu",
+    ACCEPTED_ENGLISH_TUTOR_EMAILS: "nika.raiffe@gmail.com",
+    ACCEPTED_TUTOR_EMAILS: "",
+    ACCEPTED_STUDENT_EMAILS: "taito0525@gmail.com",
+    ACCEPTED_VIEWER_EMAILS: "ryo@jaac.co.jp",
+  } satisfies NodeJS.ProcessEnv;
+  const expected = [
+    ["admin@acceptedadmissions.org", "administrator", "all"],
+    ["xsfam6@gmail.com", "tutor", "SAT"],
+    ["eunice_chon@berkeley.edu", "tutor", "SAT"],
+    ["taito0525@gmail.com", "student", "all"],
+    ["nika.raiffe@gmail.com", "tutor", "IELTS"],
+    ["ryo@jaac.co.jp", "viewer", "student:taito0525@gmail.com"],
+  ] as const;
+
+  for (const [email, role, subject] of expected) {
+    assert.deepEqual(configuredAccess(`new-id-${email}`, email, rosterEnv), {
+      access: { role, subject },
+      conflict: false,
+    });
+  }
+});
+
 test("fails closed when an email is provisioned for conflicting roles", () => {
   const env = {
     ...baseEnv,
@@ -91,6 +118,18 @@ test("fails closed when an email is provisioned for conflicting roles", () => {
       conflict: true,
     },
   );
+});
+
+test("fails closed when a Clerk ID is provisioned for conflicting roles", () => {
+  const env = {
+    ...baseEnv,
+    ACCEPTED_ADMIN_CLERK_USER_IDS: "id-admin,id-conflict",
+    ACCEPTED_STUDENT_CLERK_USER_IDS: "id-conflict",
+  };
+  assert.deepEqual(configuredAccess("id-conflict", undefined, env), {
+    access: null,
+    conflict: true,
+  });
 });
 
 test("denies emails that are not provisioned", () => {

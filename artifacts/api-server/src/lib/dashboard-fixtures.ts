@@ -114,7 +114,7 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
   await db.insert(viewerLinksTable).values({
     viewerUserId: viewer.id,
     studentUserId: student.id,
-    relationship: "parent",
+    relationship: "view only mirror of Taito’s client account",
     active: true,
   });
   await db.insert(tutorAssignmentsTable).values([

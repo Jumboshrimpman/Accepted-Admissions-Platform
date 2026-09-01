@@ -50,29 +50,31 @@ export function configuredAccess(
   const studentIds = configuredSet(env, "ACCEPTED_STUDENT_CLERK_USER_IDS");
   const viewerIds = configuredSet(env, "ACCEPTED_VIEWER_CLERK_USER_IDS");
 
+  const idMatches: ConfiguredAccess[] = [];
   if (adminIds.has(clerkUserId)) {
-    return {
-      access: { role: "administrator", subject: "all" },
-      conflict: false,
-    };
+    idMatches.push({ role: "administrator", subject: "all" });
   }
   if (satTutorIds.has(clerkUserId)) {
-    return { access: { role: "tutor", subject: "SAT" }, conflict: false };
+    idMatches.push({ role: "tutor", subject: "SAT" });
   }
   if (englishTutorIds.has(clerkUserId)) {
-    return { access: { role: "tutor", subject: "IELTS" }, conflict: false };
+    idMatches.push({ role: "tutor", subject: "IELTS" });
   }
   if (tutorIds.has(clerkUserId)) {
-    return { access: { role: "tutor", subject: "all" }, conflict: false };
+    idMatches.push({ role: "tutor", subject: "all" });
   }
   if (studentIds.has(clerkUserId)) {
-    return { access: { role: "student", subject: "all" }, conflict: false };
+    idMatches.push({ role: "student", subject: "all" });
   }
   if (viewerIds.has(clerkUserId)) {
-    return {
-      access: { role: "viewer", subject: "student:taito0525@gmail.com" },
-      conflict: false,
-    };
+    idMatches.push({
+      role: "viewer",
+      subject: "student:taito0525@gmail.com",
+    });
+  }
+  if (idMatches.length > 1) return { access: null, conflict: true };
+  if (idMatches.length === 1) {
+    return { access: idMatches[0]!, conflict: false };
   }
 
   const normalizedEmail = email ? normalizeProvisionedEmail(email) : "";

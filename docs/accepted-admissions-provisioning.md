@@ -2,7 +2,10 @@
 
 The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is provisioned with Clerk user IDs, never by public self-enrollment. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
 
-Set the following environment variables as comma-separated Clerk user IDs:
+Set the following environment variables as comma-separated Clerk user IDs. The
+shared development configuration also contains the approved email fallbacks
+listed below; email matching is performed only against Clerk's verified
+server-side primary email.
 
 - `ACCEPTED_ADMIN_CLERK_USER_IDS`: administrators; administrators can see all courses.
 - `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`: SAT tutors; they receive the SAT subject scope.
@@ -11,22 +14,31 @@ Set the following environment variables as comma-separated Clerk user IDs:
 - `ACCEPTED_STUDENT_CLERK_USER_IDS`: students enrolled in the seeded Fall 2026 course.
 - `ACCEPTED_VIEWER_CLERK_USER_IDS`: read-only viewers; the current viewer policy links to Taito’s student record when it exists.
 
-The intended roster is:
+The approved shared/development email roster is:
 
-- Taito Goto — `taito0525@gmail.com` — student/client
-- Xavier Morales — `xsfam6@gmail.com` — SAT tutor
-- Eunice Chon — `eunice_chon@berkeley.edu` — SAT tutor
-- Nika Raiffe — `nika.raiffe@gmail.com` — English/IELTS tutor
-- `admin@acceptedadmissions.org` — master administrator
+| Email | Role | Scope |
+| --- | --- | --- |
+| `admin@acceptedadmissions.org` | administrator | all courses |
+| `xsfam6@gmail.com` | SAT tutor | SAT |
+| `eunice_chon@berkeley.edu` | SAT tutor | SAT |
+| `taito0525@gmail.com` | student/client | Fall 2026 student course and sessions |
+| `nika.raiffe@gmail.com` | English/IELTS tutor | IELTS/English |
+| `ryo@jaac.co.jp` | viewer | read-only mirror of Taito’s client account |
+
+Ryo's viewer link uses the relationship **“view only mirror of Taito’s client
+account”** and is the only permitted active link for that viewer. The link is
+reconciled on either account's first authorized request, so it does not depend
+on whether Ryo or Taito signs in first. Viewer writes are rejected with
+`VIEW_ONLY`.
 
 Do not send invitations until the owner confirms these production addresses.
 
 ## Owner onboarding checklist
 
 1. In the Clerk Development or Production instance, create or invite the confirmed email addresses. Do not enable a public sign-up path for this private portal.
-2. After each invited user has a Clerk account, copy the Clerk user ID into the matching role-specific environment variable. Never use an email address as the authorization key.
-3. Restart the API workflow after changing the environment configuration.
-4. Have each invited user sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
+2. After each invited user has a Clerk account, copy the Clerk user ID into the matching role-specific environment variable. Never use an email address as the authorization key. The approved shared/development email roster remains as a fallback when a user ID changes between sign-in providers.
+3. Restart the **API Server** workflow after changing the environment configuration so the new allowlists are loaded.
+4. Reload the browser preview after the API restart, then have each invited user sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
 5. On the first authorized request, the API records the application user and the appropriate PostgreSQL course membership. Tutors also receive a subject-scoped tutor assignment to provisioned students in that course.
 6. Sign in as the administrator and review the **Access provisioning** and **Memberships & audit** panels at `/admin`.
 7. To revoke access, remove the Clerk user ID from the allowlist, restart the API workflow, and revoke the Clerk session/invitation. Remove old PostgreSQL memberships or tutor assignments as part of the offboarding review.
