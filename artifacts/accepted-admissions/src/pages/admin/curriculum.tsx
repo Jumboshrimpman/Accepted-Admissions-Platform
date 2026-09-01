@@ -31,6 +31,12 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  displaySessionTitle,
+  formatSessionDateTime,
+  sessionStudentLabel,
+  sessionSubjectLabel,
+} from "@/lib/session-display";
 
 type Section = "people" | "programs" | "curriculum" | "sessions";
 
@@ -210,7 +216,7 @@ function SessionsSection({ data, search, onChanged }: { data: AdminCurriculum; s
 }
 
 function SessionCard({ session, onEdit }: { session: AdminSession; onEdit: () => void }) {
-  return <Card className={session.conflict ? "border-destructive/50 bg-destructive/5" : ""}><CardContent className="p-4"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{session.title}</h3><Badge variant={statusVariant(session.status)}>{session.status}</Badge>{session.conflict && <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" /> Conflict</Badge>}</div><p className="mt-2 text-sm text-muted-foreground">{new Date(session.dateTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} · {session.timezone} · {session.durationMinutes} min</p><p className="mt-1 text-sm">{session.programTitle} · {session.subject}</p><div className="mt-3 flex flex-wrap gap-2 text-sm"><Badge variant="outline">Student: {session.student?.name ?? "Unassigned"}</Badge><Badge variant="outline">Tutor: {session.tutor?.name ?? "Unassigned"}</Badge>{session.meetingUrl && <Button asChild size="sm" variant="link" className="h-auto p-0"><a href={session.meetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3 w-3" /> Open Meet link</a></Button>}</div>{session.conflict && <div className="mt-3 rounded-lg border border-destructive/30 bg-background p-3 text-sm"><p className="font-medium text-destructive">Resolve before assigning this time</p>{session.conflictWith.map((item) => <p key={item} className="mt-1 text-muted-foreground">{item}</p>)}</div>}</div><Button variant="outline" size="sm" onClick={onEdit}><Edit3 className="mr-2 h-4 w-4" /> Edit / archive</Button></div></CardContent></Card>;
+  return <Card className={session.conflict ? "border-destructive/50 bg-destructive/5" : ""}><CardContent className="p-4"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{displaySessionTitle(session.title, session.subject)}</h3><Badge variant={statusVariant(session.status)}>{session.status}</Badge>{session.conflict && <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" /> Conflict</Badge>}</div><p className="mt-2 text-sm text-muted-foreground">{formatSessionDateTime(session)} · {session.durationMinutes} min</p><p className="mt-1 text-sm">{session.programTitle} · {sessionSubjectLabel(session.subject)}</p><div className="mt-3 flex flex-wrap gap-2 text-sm"><Badge variant="outline">Student: {sessionStudentLabel(session)}</Badge><Badge variant="outline">Tutor: {session.tutor?.name ?? "Unassigned"}</Badge>{session.meetingUrl && <Button asChild size="sm" variant="link" className="h-auto p-0"><a href={session.meetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3 w-3" /> Open Meet link</a></Button>}</div>{session.conflict && <div className="mt-3 rounded-lg border border-destructive/30 bg-background p-3 text-sm"><p className="font-medium text-destructive">Resolve before assigning this time</p>{session.conflictWith.map((item) => <p key={item} className="mt-1 text-muted-foreground">{item}</p>)}</div>}</div><Button variant="outline" size="sm" onClick={onEdit}><Edit3 className="mr-2 h-4 w-4" /> Edit / archive</Button></div></CardContent></Card>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

@@ -104,7 +104,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
   "student": zod.object({
-  "id": zod.string(),
+  "id": zod.string().optional(),
   "name": zod.string()
 }).nullable(),
   "tutor": zod.object({
@@ -206,7 +206,6 @@ export const updateAdminProgramBodyMeetUrlMax = 500;
 export const updateAdminProgramBodyDriveUrlMax = 500;
 
 
-
 export const UpdateAdminProgramBody = zod.object({
   "title": zod.string().min(updateAdminProgramBodyTitleMin).max(updateAdminProgramBodyTitleMax).optional(),
   "subject": zod.string().min(1).max(updateAdminProgramBodySubjectMax).optional(),
@@ -244,7 +243,6 @@ export const createAdminAssignmentBodyInstructionsMax = 10000;
 export const createAdminAssignmentBodyTimeLimitMinutesMax = 480;
 
 export const createAdminAssignmentBodyMaxAttemptsMax = 20;
-
 
 
 export const CreateAdminAssignmentBody = zod.object({
@@ -298,7 +296,6 @@ export const updateAdminAssignmentBodyTimeLimitMinutesMax = 480;
 export const updateAdminAssignmentBodyMaxAttemptsMax = 20;
 
 
-
 export const UpdateAdminAssignmentBody = zod.object({
   "courseId": zod.string().optional(),
   "sessionId": zod.string().nullish(),
@@ -345,7 +342,6 @@ export const createAdminSessionBodyDurationMinutesMin = 15;
 export const createAdminSessionBodyDurationMinutesMax = 480;
 
 
-
 export const CreateAdminSessionBody = zod.object({
   "courseId": zod.string(),
   "clientUserId": zod.string().nullish(),
@@ -372,7 +368,7 @@ export const CreateAdminSessionResponse = zod.object({
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
   "student": zod.object({
-  "id": zod.string(),
+  "id": zod.string().optional(),
   "name": zod.string()
 }).nullable(),
   "tutor": zod.object({
@@ -404,7 +400,6 @@ export const updateAdminSessionBodyDurationMinutesMin = 15;
 export const updateAdminSessionBodyDurationMinutesMax = 480;
 
 
-
 export const UpdateAdminSessionBody = zod.object({
   "courseId": zod.string().optional(),
   "clientUserId": zod.string().nullish(),
@@ -431,7 +426,7 @@ export const UpdateAdminSessionResponse = zod.object({
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
   "student": zod.object({
-  "id": zod.string(),
+  "id": zod.string().optional(),
   "name": zod.string()
 }).nullable(),
   "tutor": zod.object({
@@ -684,7 +679,6 @@ export const updateAdminProductBodyDurationHoursMax = 1000;
 export const updateAdminProductBodyTotalPriceCentsMax = 100000000;
 
 
-
 export const UpdateAdminProductBody = zod.object({
   "slug": zod.string().min(updateAdminProductBodySlugMin).max(updateAdminProductBodySlugMax).optional(),
   "name": zod.string().min(updateAdminProductBodyNameMin).max(updateAdminProductBodyNameMax).optional(),
@@ -739,7 +733,6 @@ export const createHostedInvoiceBodyPaymentInstructionsMax = 2000;
 
 export const createHostedInvoiceBodyDaysUntilDueDefault = 7;
 export const createHostedInvoiceBodyDaysUntilDueMax = 90;
-
 
 
 export const CreateHostedInvoiceBody = zod.object({
@@ -832,7 +825,6 @@ export const updateInvoiceBodyTaxCentsMin = 0;
 export const updateInvoiceBodyPaymentInstructionsMax = 2000;
 
 
-
 export const UpdateInvoiceBody = zod.object({
   "status": zod.enum(['pending', 'sent', 'overdue', 'partially_paid', 'paid', 'failed', 'canceled']).optional(),
   "description": zod.string().max(updateInvoiceBodyDescriptionMax).optional(),
@@ -891,7 +883,6 @@ export const UpdateInvoiceResponse = zod.object({
 export const createOfflinePaymentBodyNoteMax = 2000;
 
 
-
 export const CreateOfflinePaymentBody = zod.object({
   "clientUserId": zod.string(),
   "productId": zod.string().optional(),
@@ -927,7 +918,6 @@ export const createCreditAdjustmentBodyHoursMax = 100;
 
 export const createCreditAdjustmentBodyNoteMin = 3;
 export const createCreditAdjustmentBodyNoteMax = 2000;
-
 
 
 export const CreateCreditAdjustmentBody = zod.object({
@@ -982,6 +972,7 @@ export const GetDashboardResponse = zod.object({
   "courseId": zod.string(),
   "dateTime": zod.coerce.date(),
   "timezone": zod.string(),
+  "durationMinutes": zod.number(),
   "subject": zod.string(),
   "title": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -993,7 +984,7 @@ export const GetDashboardResponse = zod.object({
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
-  "id": zod.string(),
+  "id": zod.string().optional(),
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
@@ -1282,6 +1273,7 @@ export const GetCourseResponse = zod.object({
   "courseId": zod.string(),
   "dateTime": zod.coerce.date(),
   "timezone": zod.string(),
+  "durationMinutes": zod.number(),
   "subject": zod.string(),
   "title": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -1293,7 +1285,7 @@ export const GetCourseResponse = zod.object({
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
-  "id": zod.string(),
+  "id": zod.string().optional(),
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
@@ -1314,6 +1306,7 @@ export const GetSessionResponse = zod.object({
   "courseId": zod.string(),
   "dateTime": zod.coerce.date(),
   "timezone": zod.string(),
+  "durationMinutes": zod.number(),
   "subject": zod.string(),
   "title": zod.string(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']),
@@ -1325,7 +1318,7 @@ export const GetSessionResponse = zod.object({
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
-  "id": zod.string(),
+  "id": zod.string().optional(),
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
@@ -1389,7 +1382,6 @@ export const CreateCurriculumBlockParams = zod.object({
 })
 
 export const createCurriculumBlockBodyPositionMin = 0;
-
 
 
 export const CreateCurriculumBlockBody = zod.object({
@@ -1614,7 +1606,6 @@ export const UpdateAdaptiveRecommendationParams = zod.object({
 export const updateAdaptiveRecommendationBodyPositionMin = 0;
 
 
-
 export const UpdateAdaptiveRecommendationBody = zod.object({
   "status": zod.enum(['recommended', 'accepted', 'dismissed']),
   "assignmentId": zod.string().nullish(),
@@ -1662,7 +1653,6 @@ export const UpdateCurriculumBlockParams = zod.object({
 })
 
 export const updateCurriculumBlockBodyPositionMin = 0;
-
 
 
 export const UpdateCurriculumBlockBody = zod.object({
@@ -1980,7 +1970,6 @@ export const UpdateAttemptReviewParams = zod.object({
 export const updateAttemptReviewBodyTutorNotesMax = 10000;
 
 
-
 export const UpdateAttemptReviewBody = zod.object({
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "tutorNotes": zod.string().max(updateAttemptReviewBodyTutorNotesMax).nullish()
@@ -2049,7 +2038,6 @@ export const saveAttemptResponseBodyPredictionMax = 2000;
 export const saveAttemptResponseBodyFinalAnswerMax = 2000;
 
 export const saveAttemptResponseBodyTimeSpentSecondsMin = 0;
-
 
 
 export const SaveAttemptResponseBody = zod.object({
@@ -2340,7 +2328,6 @@ export const UpdateReviewQueueItemParams = zod.object({
 export const updateReviewQueueItemBodyTutorNoteMax = 5000;
 
 
-
 export const UpdateReviewQueueItemBody = zod.object({
   "status": zod.enum(['open', 'reviewed', 'archived']).optional(),
   "tutorNote": zod.string().max(updateReviewQueueItemBodyTutorNoteMax).nullish()
@@ -2399,7 +2386,6 @@ export const createContentSourceBodyAuthorizationNoteMax = 2000;
 export const createContentSourceBodyExtractedTextMax = 50000;
 
 
-
 export const CreateContentSourceBody = zod.object({
   "courseId": zod.string(),
   "subject": zod.string().max(createContentSourceBodySubjectMax).optional(),
@@ -2439,7 +2425,6 @@ export const generatePracticeQuestionsBodyFocusMin = 3;
 export const generatePracticeQuestionsBodyFocusMax = 500;
 
 export const generatePracticeQuestionsBodyCountMax = 10;
-
 
 
 export const GeneratePracticeQuestionsBody = zod.object({
@@ -2537,7 +2522,6 @@ export const updateQuestionBankItemBodyTagsItemMax = 80;
 export const updateQuestionBankItemBodyRejectionReasonMax = 2000;
 
 
-
 export const UpdateQuestionBankItemBody = zod.object({
   "subject": zod.string().min(1).max(updateQuestionBankItemBodySubjectMax).optional(),
   "domain": zod.string().min(1).max(updateQuestionBankItemBodyDomainMax).optional(),
@@ -2594,7 +2578,6 @@ export const AttachQuestionToAssignmentParams = zod.object({
 export const attachQuestionToAssignmentBodyPositionMin = 0;
 
 
-
 export const AttachQuestionToAssignmentBody = zod.object({
   "questionId": zod.string(),
   "position": zod.number().min(attachQuestionToAssignmentBodyPositionMin).optional(),
@@ -2637,7 +2620,6 @@ export const UpdateAssignmentQuestionParams = zod.object({
 })
 
 export const updateAssignmentQuestionBodyPositionMin = 0;
-
 
 
 export const UpdateAssignmentQuestionBody = zod.object({
@@ -2704,7 +2686,6 @@ export const UpsertSessionArtifactParams = zod.object({
 export const upsertSessionArtifactBodyContentMax = 30000;
 
 
-
 export const UpsertSessionArtifactBody = zod.object({
   "kind": zod.enum(['transcript', 'report', 'tutor_notes']),
   "content": zod.string().min(1).max(upsertSessionArtifactBodyContentMax),
@@ -2722,5 +2703,4 @@ export const UpsertSessionArtifactResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
-
 

@@ -10,6 +10,6 @@
  * @nullable
  */
 export type AdminSessionStudent = {
-  id: string;
+  id?: string;
   name: string;
 } | null;

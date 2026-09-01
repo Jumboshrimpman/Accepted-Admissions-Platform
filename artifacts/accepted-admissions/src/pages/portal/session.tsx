@@ -8,10 +8,15 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, parseISO } from "date-fns";
 import { Calendar, ChevronRight, Clock, BookOpen, Target, PenTool, ExternalLink, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { type CurriculumBlock } from "@workspace/api-client-react";
+import {
+  displaySessionTitle,
+  formatSessionDate,
+  formatSessionTimeRange,
+  sessionSubjectLabel,
+} from "@/lib/session-display";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
   const { kind, config } = block;
@@ -120,18 +125,18 @@ export default function PortalSession() {
         
         <div className="p-8 rounded-3xl bg-gradient-brand text-white shadow-xl">
           <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 mb-4 rounded-full">
-            {session.subject}
+             {sessionSubjectLabel(session.subject)}
           </Badge>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">{session.title}</h1>
+           <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">{displaySessionTitle(session.title, session.subject)}</h1>
           
           <div className="flex flex-wrap items-center gap-6 text-white/80">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5" />
-              <span>{format(parseISO(session.dateTime), "EEEE, MMMM d, yyyy")}</span>
+               <span>{formatSessionDate(session)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5" />
-              <span>{format(parseISO(session.dateTime), "h:mm a")}</span>
+               <span>{formatSessionTimeRange(session)}</span>
             </div>
              {session.meetingUrl && (
                <Button asChild variant="secondary" className="rounded-full">

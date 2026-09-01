@@ -9,6 +9,8 @@ import {
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { publicSessionShape, visibleSessionsForUser } from "./session-privacy.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isTaitoFallSession, TAITO_STUDENT_DISPLAY_NAME } from "./session-schedule.ts";
 
 async function visibleCourseIds(user: AppUser): Promise<string[]> {
   if (user.role === "administrator") {
@@ -95,7 +97,7 @@ type DashboardTutor = {
 } | null;
 
 type DashboardStudent = {
-  id: string;
+  id?: string;
   name: string;
 } | null;
 
@@ -109,6 +111,14 @@ export function dashboardSessionShape(
     ...publicSessionShape(session),
     tutor,
     meetingUrl,
-    ...(student === undefined ? {} : { student }),
+    ...(student === undefined
+      ? {}
+      : {
+          student:
+            student ??
+            (isTaitoFallSession(session)
+              ? { name: TAITO_STUDENT_DISPLAY_NAME }
+              : null),
+        }),
   };
 }

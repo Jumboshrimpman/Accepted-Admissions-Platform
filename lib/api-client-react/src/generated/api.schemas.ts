@@ -585,7 +585,7 @@ export const AdminSessionStatus = {
  * @nullable
  */
 export type AdminSessionStudent = {
-  id: string;
+  id?: string;
   name: string;
 } | null;
 
@@ -1047,7 +1047,7 @@ export const SessionStatus = {
 } as const;
 
 export interface SessionStudent {
-  id: string;
+  id?: string;
   name: string;
 }
 
@@ -1056,6 +1056,7 @@ export interface Session {
   courseId: string;
   dateTime: string;
   timezone: string;
+  durationMinutes: number;
   subject: string;
   title: string;
   status: SessionStatus;
@@ -2059,4 +2060,3 @@ export const ListQuestionBankReviewStatus = {
   approved: 'approved',
   rejected: 'rejected',
 } as const;
-

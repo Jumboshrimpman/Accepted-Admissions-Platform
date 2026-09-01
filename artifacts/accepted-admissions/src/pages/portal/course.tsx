@@ -3,9 +3,12 @@ import { useGetCourse, getGetCourseQueryKey } from "@workspace/api-client-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, parseISO } from "date-fns";
 import { Calendar, Video, FileText, ChevronRight, CheckCircle2, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  displaySessionTitle,
+  formatSessionDateTime,
+} from "@/lib/session-display";
 
 export default function PortalCourse() {
   const params = useParams();
@@ -100,12 +103,12 @@ export default function PortalCourse() {
                       </div>
                       <div>
                         <h3 className="text-xl font-semibold group-hover:text-primary transition-colors">
-                          {session.title}
+                           {displaySessionTitle(session.title, session.subject)}
                         </h3>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            {format(parseISO(session.dateTime), "EEEE, MMM d 'at' h:mm a")}
+                             {formatSessionDateTime(session)}
                           </span>
                           {session.tutor && (
                             <span>with {session.tutor.name}</span>
@@ -127,7 +130,7 @@ export default function PortalCourse() {
                            </a>
                          </Button>
                        )}
-                      {session.hasHomework && (
+                       {session.hasHomework && (
                         <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
                           Homework
                         </Badge>

@@ -44,6 +44,8 @@ import {
   SHARED_FALL_MEETING_URL,
   TAITO_FALL_2026_SESSIONS,
   TAITO_SESSION_TIMEZONE,
+  TAITO_STUDENT_DISPLAY_NAME,
+  isTaitoFallSession,
   isFall2026Term,
   meetingUrlForTerm,
   sessionTitle,
@@ -1715,6 +1717,20 @@ async function studentShape(studentUserId: string) {
     .where(eq(usersTable.id, studentUserId))
     .limit(1);
   return student ?? null;
+}
+
+async function sessionStudentShape(session: {
+  clientUserId: string | null;
+  dateTime: Date;
+  subject: string;
+}) {
+  const linkedStudent = session.clientUserId
+    ? await studentShape(session.clientUserId)
+    : null;
+  return (
+    linkedStudent ??
+    (isTaitoFallSession(session) ? { name: TAITO_STUDENT_DISPLAY_NAME } : null)
+  );
 }
 
 function tutorShape(user: AppUser | null) {
@@ -5020,9 +5036,11 @@ async function adminSessionShape(
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
     meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
-    student: session.clientUserId
-      ? { id: session.clientUserId, name: personById.get(session.clientUserId) ?? "Unknown student" }
-      : null,
+    student: personById.has(session.clientUserId ?? "")
+      ? { id: session.clientUserId!, name: personById.get(session.clientUserId!)! }
+      : isTaitoFallSession(session)
+        ? { name: TAITO_STUDENT_DISPLAY_NAME }
+        : null,
     tutor: session.tutorUserId
       ? { id: session.tutorUserId, name: personById.get(session.tutorUserId) ?? "Unknown tutor" }
       : null,
@@ -5894,9 +5912,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
-          ? session.clientUserId
-            ? await studentShape(session.clientUserId)
-            : null
+          ? await sessionStudentShape(session)
           : undefined,
       blocks:
         req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"

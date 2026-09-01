@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, meetingUrlForTerm, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, isTaitoFallSession, meetingUrlForTerm, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -56,6 +56,25 @@ test("stores every 9 PM JST session as noon UTC", () => {
       `${session.dateKey}T12:00:00.000Z`,
     );
   }
+});
+
+test("recognizes only the approved Fall date and subject pairs", () => {
+  for (const scheduled of TAITO_FALL_2026_SESSIONS) {
+    assert.equal(
+      isTaitoFallSession({
+        dateTime: taitoSessionDateTime(scheduled.dateKey),
+        subject: scheduled.subject,
+      }),
+      true,
+    );
+  }
+  assert.equal(
+    isTaitoFallSession({
+      dateTime: taitoSessionDateTime("2026-10-23"),
+      subject: "SAT",
+    }),
+    false,
+  );
 });
 
 test("Eastern display changes from 8 AM EDT to 7 AM EST after daylight saving time", () => {

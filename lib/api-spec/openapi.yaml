@@ -1699,7 +1699,7 @@ components:
         meetingUrl: { type: ["string", "null"] }
         student:
           type: ["object", "null"]
-          required: [id, name]
+          required: [name]
           properties:
             id: { type: string }
             name: { type: string }
@@ -1892,12 +1892,13 @@ components:
           items: { $ref: "#/components/schemas/Tutor" }
     Session:
       type: object
-      required: [id, courseId, dateTime, timezone, subject, title, status]
+      required: [id, courseId, dateTime, timezone, subject, title, status, durationMinutes]
       properties:
         id: { type: string }
         courseId: { type: string }
         dateTime: { type: string, format: date-time }
         timezone: { type: string }
+        durationMinutes: { type: number }
         subject: { type: string }
         title: { type: string }
         status: { type: string, enum: [draft, published, completed, archived] }
@@ -1914,7 +1915,7 @@ components:
         hasReport: { type: boolean }
     SessionStudent:
       type: object
-      required: [id, name]
+      required: [name]
       properties:
         id: { type: string }
         name: { type: string }

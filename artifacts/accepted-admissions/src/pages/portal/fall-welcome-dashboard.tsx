@@ -17,13 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const FALL_START = new Date("2026-10-01T00:00:00.000Z");
-const WINTER_START = new Date("2027-01-01T00:00:00.000Z");
-
-function subjectLabel(subject: string): string {
-  return subject === "IELTS" ? "English" : subject;
-}
+import {
+  displaySessionTitle,
+  formatSessionDate,
+  formatSessionTimeRange,
+  sessionDateKey,
+  sessionSubjectLabel,
+} from "@/lib/session-display";
 
 function firstName(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] || "there";
@@ -77,11 +77,11 @@ export default function FallWelcomeDashboard() {
   const viewer = dashboard.user.role === "viewer";
   const fallSessions = dashboard.upcomingSessions
     .filter((session) => {
-      const date = parseISO(session.dateTime);
+      const dateKey = sessionDateKey(session);
       return (
         (session.subject === "SAT" || session.subject === "IELTS") &&
-        date >= FALL_START &&
-        date < WINTER_START
+        dateKey >= "2026-10-01" &&
+        dateKey < "2027-01-01"
       );
     })
     .sort((first, second) => parseISO(first.dateTime).getTime() - parseISO(second.dateTime).getTime());
@@ -130,7 +130,7 @@ export default function FallWelcomeDashboard() {
             <div className="rounded-2xl bg-primary/10 p-3 text-primary"><CalendarDays className="h-5 w-5" /></div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Next session</p>
-              <p className="mt-1 font-semibold">{nextSession ? format(parseISO(nextSession.dateTime), "EEE, MMM d") : "Not scheduled"}</p>
+              <p className="mt-1 font-semibold">{nextSession ? formatSessionDate(nextSession) : "Not scheduled"}</p>
             </div>
           </CardContent>
         </Card>
@@ -162,17 +162,17 @@ export default function FallWelcomeDashboard() {
                 <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Next session</CardTitle>
                 <CardDescription className="mt-1">Your next scheduled step in the Fall plan.</CardDescription>
               </div>
-              {nextSession && <Badge variant="secondary">{subjectLabel(nextSession.subject)}</Badge>}
+               {nextSession && <Badge variant="secondary">{sessionSubjectLabel(nextSession.subject)}</Badge>}
             </div>
           </CardHeader>
           <CardContent className="p-6">
             {nextSession ? (
               <div className="space-y-5">
                 <div>
-                  <p className="text-2xl font-semibold">{nextSession.title}</p>
+                 <p className="text-2xl font-semibold">{displaySessionTitle(nextSession.title, nextSession.subject)}</p>
                   <div className="mt-3 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-                    <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" />{format(parseISO(nextSession.dateTime), "EEEE, MMMM d, yyyy")}</p>
-                    <p className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />{format(parseISO(nextSession.dateTime), "h:mm a")} · {nextSession.timezone}</p>
+                     <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" />{formatSessionDate(nextSession)}</p>
+                     <p className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />{formatSessionTimeRange(nextSession)}</p>
                     <p className="flex items-center gap-2"><GraduationCap className="h-4 w-4 text-primary" />{nextSession.tutor?.name ?? "Tutor to be confirmed"}</p>
                   </div>
                 </div>
@@ -233,7 +233,7 @@ export default function FallWelcomeDashboard() {
       <Card className="overflow-hidden shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7"><CardTitle className="flex items-center gap-3 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Fall schedule<span className="ml-auto text-sm font-normal text-muted-foreground">October – December</span></CardTitle></CardHeader>
         <CardContent className="p-0">
-          {fallSessions.length > 0 ? <div className="divide-y">{fallSessions.map((session) => <Link key={session.id} href={`/portal/courses/${session.courseId}/sessions/${session.id}`}><div className="flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-medium">{format(parseISO(session.dateTime), "MMMM d, yyyy")}</p><p className="text-sm text-muted-foreground">{format(parseISO(session.dateTime), "h:mm a")} · {session.tutor?.name ?? "Tutor to be confirmed"}</p></div><div className="flex items-center gap-2"><Badge variant="outline">{subjectLabel(session.subject)}</Badge><ArrowRight className="h-4 w-4 text-muted-foreground" /></div></div></Link>)}</div> : <p className="px-6 py-10 text-center text-sm text-muted-foreground sm:px-7">Your Fall dates will appear here soon.</p>}
+          {fallSessions.length > 0 ? <div className="divide-y">{fallSessions.map((session) => <Link key={session.id} href={`/portal/courses/${session.courseId}/sessions/${session.id}`}><div className="flex flex-col gap-2 px-6 py-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-medium">{formatSessionDate(session)}</p><p className="text-sm text-muted-foreground">{formatSessionTimeRange(session)} · {session.tutor?.name ?? "Tutor to be confirmed"}</p></div><div className="flex items-center gap-2"><Badge variant="outline">{sessionSubjectLabel(session.subject)}</Badge><ArrowRight className="h-4 w-4 text-muted-foreground" /></div></div></Link>)}</div> : <p className="px-6 py-10 text-center text-sm text-muted-foreground sm:px-7">Your Fall dates will appear here soon.</p>}
         </CardContent>
       </Card>
     </div>

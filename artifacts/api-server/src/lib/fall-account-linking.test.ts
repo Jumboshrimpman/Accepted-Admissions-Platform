@@ -14,6 +14,9 @@ const privacyModule = await import("./session-privacy.ts");
 const { publicSessionShape, reconcileTaitoSessions, visibleSessionsForUser } =
   privacyModule;
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+const dashboardModule = await import("./dashboard-data.ts");
+const { dashboardSessionShape } = dashboardModule;
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 const scheduleModule = await import("./session-schedule.ts");
 const { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, taitoSessionDateTime } = scheduleModule;
 
@@ -121,14 +124,27 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
         clientUserId: session.clientUserId,
         tutorUserId: session.tutorUserId,
         subject: session.subject,
+        dateKey: session.dateTime.toISOString().slice(0, 10),
+        timezone: session.timezone,
+        durationMinutes: session.durationMinutes,
       })),
       TAITO_FALL_2026_SESSIONS.map((scheduled) => ({
         clientUserId: student!.id,
         tutorUserId:
           scheduled.subject === "SAT" ? eunice!.id : nika!.id,
         subject: scheduled.subject,
+        dateKey: scheduled.dateKey,
+        timezone: "Asia/Tokyo",
+        durationMinutes: 60,
       })),
     );
+    const displayOnlyDashboardSession = dashboardSessionShape(
+      { ...reconciled[0]!, clientUserId: null },
+      { id: eunice!.id, name: eunice!.displayName, specialty: "SAT", avatarUrl: null },
+      SHARED_FALL_MEETING_URL,
+      null,
+    );
+    assert.deepEqual(displayOnlyDashboardSession.student, { name: "Taito" });
     const [reconciledCourse] = await db
       .select({ meetUrl: coursesTable.meetUrl })
       .from(coursesTable)
@@ -161,6 +177,7 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
       assert.deepEqual(Object.keys(response).sort(), [
         "courseId",
         "dateTime",
+        "durationMinutes",
         "hasHomework",
         "hasReport",
         "id",

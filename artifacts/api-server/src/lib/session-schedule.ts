@@ -3,6 +3,7 @@ import { zonedDateTimeToUtc } from "./booking.ts";
 
 export const TAITO_SESSION_TIMEZONE = "Asia/Tokyo";
 export const TAITO_SESSION_TIME = "21:00";
+export const TAITO_STUDENT_DISPLAY_NAME = "Taito";
 export const SHARED_FALL_MEETING_URL = "http://meet.google.com/rih-iayt-okb";
 
 export function isFall2026Term(term: string | null | undefined): boolean {
@@ -33,6 +34,17 @@ export const TAITO_FALL_2026_SESSIONS = [
 
 export function taitoSessionDateTime(dateKey: string): Date {
   return zonedDateTimeToUtc(dateKey, TAITO_SESSION_TIME, TAITO_SESSION_TIMEZONE);
+}
+
+export function isTaitoFallSession(session: {
+  dateTime: Date;
+  subject: string;
+}): boolean {
+  const dateKey = session.dateTime.toISOString().slice(0, 10);
+  return TAITO_FALL_2026_SESSIONS.some(
+    (scheduled) =>
+      scheduled.dateKey === dateKey && scheduled.subject === session.subject,
+  );
 }
 
 export function sessionTitle(subject: string, tutorName: string): string {

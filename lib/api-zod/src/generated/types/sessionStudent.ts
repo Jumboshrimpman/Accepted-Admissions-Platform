@@ -7,6 +7,6 @@
  */
 
 export interface SessionStudent {
-  id: string;
+  id?: string;
   name: string;
 }

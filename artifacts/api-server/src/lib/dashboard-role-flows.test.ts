@@ -57,6 +57,7 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
     assert.deepEqual(Object.keys(studentSessionResponse).sort(), [
       "courseId",
       "dateTime",
+      "durationMinutes",
       "hasHomework",
       "hasReport",
       "id",

@@ -3,9 +3,12 @@ import { useGetCourse, getGetCourseQueryKey } from "@workspace/api-client-react"
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, parseISO } from "date-fns";
 import { Calendar, Video, FileText, ChevronRight, Settings, Plus, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  displaySessionTitle,
+  formatSessionDateTime,
+} from "@/lib/session-display";
 
 export default function TutorCourse() {
   const params = useParams();
@@ -82,9 +85,9 @@ export default function TutorCourse() {
                       <span className="font-bold text-secondary-foreground">{index + 1}</span>
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold">{session.title}</h3>
+                       <h3 className="text-lg font-semibold">{displaySessionTitle(session.title, session.subject)}</h3>
                       <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-muted-foreground">
-                        <span>{format(parseISO(session.dateTime), "MMM d, h:mm a")}</span>
+                         <span>{formatSessionDateTime(session)}</span>
                         <Badge variant="outline" className="text-[10px] uppercase tracking-wider">{session.status}</Badge>
                       </div>
                     </div>

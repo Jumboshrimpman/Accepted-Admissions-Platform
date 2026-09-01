@@ -10,7 +10,7 @@ import {
   type AppUser,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_DISPLAY_NAME, isFall2026Term, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -196,6 +196,7 @@ type PublicSessionSource = Pick<
   | "courseId"
   | "dateTime"
   | "timezone"
+  | "durationMinutes"
   | "subject"
   | "title"
   | "status"
@@ -209,6 +210,7 @@ export function publicSessionShape(session: PublicSessionSource) {
     courseId: session.courseId,
     dateTime: session.dateTime,
     timezone: session.timezone,
+    durationMinutes: session.durationMinutes,
     subject: session.subject,
     title: session.title,
     status: session.status,

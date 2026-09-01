@@ -5,7 +5,6 @@ import {
   useUpdateReviewQueueItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
 import { Link } from "wouter";
 import {
   AlertCircle,
@@ -23,7 +22,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
-
+import {
+  displaySessionTitle,
+  formatSessionDate,
+  formatSessionTimeRange,
+  sessionStudentLabel,
+  sessionSubjectLabel,
+} from "@/lib/session-display";
 export default function TutorDashboard() {
   const queryClient = useQueryClient();
   const { data: dashboard, isLoading: loadingDashboard, error } = useGetDashboard();
@@ -96,7 +101,7 @@ export default function TutorDashboard() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {upcomingSessions.length > 0 ? <div className="divide-y">{upcomingSessions.map((session) => <div key={session.id} className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div className="flex items-start gap-4"><div className="rounded-2xl bg-primary/10 p-3 text-primary"><CalendarDays className="h-5 w-5" /></div><div><p className="font-semibold">{session.student?.name ?? "Student to be confirmed"}</p><p className="mt-1 text-sm">{session.title}</p><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{format(parseISO(session.dateTime), "EEE, MMM d, yyyy")}</span><span aria-hidden="true">·</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{format(parseISO(session.dateTime), "h:mm a")} · {session.timezone}</span></p></div></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button asChild className="flex-1 sm:flex-none"><Link href={`/tutor/sessions/${session.id}`}>Open workspace <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>{session.meetingUrl && <Button asChild variant="outline" className="flex-1 sm:flex-none"><a href={session.meetingUrl} target="_blank" rel="noopener noreferrer"><Video className="mr-2 h-4 w-4" />Join meeting</a></Button>}</div></div>)}</div> : <p className="px-6 py-10 text-center text-sm text-muted-foreground">No upcoming sessions are assigned yet.</p>}
+          {upcomingSessions.length > 0 ? <div className="divide-y">{upcomingSessions.map((session) => <div key={session.id} className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div className="flex items-start gap-4"><div className="rounded-2xl bg-primary/10 p-3 text-primary"><CalendarDays className="h-5 w-5" /></div><div><p className="font-semibold">{sessionStudentLabel(session)}</p><p className="mt-1 text-sm">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{formatSessionDate(session)}</span><span aria-hidden="true">·</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatSessionTimeRange(session)}</span></p></div></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button asChild className="flex-1 sm:flex-none"><Link href={`/tutor/sessions/${session.id}`}>Open workspace <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>{session.meetingUrl && <Button asChild variant="outline" className="flex-1 sm:flex-none"><a href={session.meetingUrl} target="_blank" rel="noopener noreferrer"><Video className="mr-2 h-4 w-4" />Join meeting</a></Button>}</div></div>)}</div> : <p className="px-6 py-10 text-center text-sm text-muted-foreground">No upcoming sessions are assigned yet.</p>}
         </CardContent>
       </Card>
 

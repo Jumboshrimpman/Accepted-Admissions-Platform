@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
 import {
   getGetSessionQueryKey,
   getGetAdaptiveCurriculumQueryKey,
@@ -27,7 +28,6 @@ import {
   useUpdateQuestionBankItem,
   useUpsertSessionArtifact,
 } from "@workspace/api-client-react";
-import { format, parseISO } from "date-fns";
 import {
   BookOpenCheck,
   ArrowDown,
@@ -54,6 +54,14 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  displaySessionTitle,
+  formatSessionDateTime,
+  formatSessionDate,
+  formatSessionTimeRange,
+  sessionStudentLabel,
+  sessionSubjectLabel,
+} from "@/lib/session-display";
 
 function QuestionReviewCard({
   question,
@@ -425,9 +433,9 @@ export default function TutorSession() {
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="mb-2 text-3xl font-bold tracking-tight">{session.title}</h1>
+            <h1 className="mb-2 text-3xl font-bold tracking-tight">{displaySessionTitle(session.title, session.subject)}</h1>
             <p className="text-muted-foreground">
-              {format(parseISO(session.dateTime), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+              {formatSessionDateTime(session)}
             </p>
           </div>
           <Badge variant="outline">{session.status}</Badge>
@@ -461,10 +469,10 @@ export default function TutorSession() {
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Student</p>
               <p className="mt-2 flex items-center gap-2 font-semibold">
                 <UserRound className="h-4 w-4 text-primary" />
-                {session.student?.name ?? "Student to be confirmed"}
+                {sessionStudentLabel(session)}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {format(parseISO(session.dateTime), "EEEE, MMMM d, yyyy 'at' h:mm a")} · {session.timezone}
+                {formatSessionDate(session)} · {formatSessionTimeRange(session)}
               </p>
             </div>
             <div className="rounded-xl border bg-background p-4">

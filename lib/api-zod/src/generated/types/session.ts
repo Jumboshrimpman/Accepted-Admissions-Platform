@@ -14,6 +14,7 @@ export interface Session {
   courseId: string;
   dateTime: Date;
   timezone: string;
+  durationMinutes: number;
   subject: string;
   title: string;
   status: SessionStatus;

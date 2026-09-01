@@ -88,8 +88,9 @@ function dashboardForRole(
           {
             id: "session-sat",
             courseId: "course-fall",
-            dateTime: "2026-10-10T12:00:00.000Z",
+            dateTime: "2026-10-02T12:00:00.000Z",
             timezone: "Asia/Tokyo",
+            durationMinutes: 60,
             subject: "SAT",
             title: "SAT session with Taito",
             status: "published",
@@ -102,8 +103,9 @@ function dashboardForRole(
           {
             id: "session-sat",
             courseId: "course-fall",
-            dateTime: "2026-10-10T12:00:00.000Z",
+            dateTime: "2026-10-02T12:00:00.000Z",
             timezone: "Asia/Tokyo",
+            durationMinutes: 60,
             subject: "SAT",
             title: "SAT session with Eunice",
             status: "published",
@@ -113,8 +115,9 @@ function dashboardForRole(
           {
             id: "session-ielts",
             courseId: "course-fall",
-            dateTime: "2026-10-17T12:00:00.000Z",
+            dateTime: "2026-10-23T12:00:00.000Z",
             timezone: "Asia/Tokyo",
+            durationMinutes: 60,
             subject: "IELTS",
             title: "IELTS session with Nika",
             status: "published",
@@ -238,6 +241,7 @@ describe("authenticated role dashboard flows", () => {
 
     expect(screen.getByText("SAT session with Eunice")).toBeTruthy();
     expect(screen.getByText("English")).toBeTruthy();
+    expect(screen.getAllByText("9:00–10:00 PM JST").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Join meeting/i })).toHaveLength(1);
     expect(screen.getByText("In progress")).toBeTruthy();
     expect(screen.getByText("85%")).toBeTruthy();
@@ -262,6 +266,7 @@ describe("authenticated role dashboard flows", () => {
     render(<TutorDashboard />);
 
     expect(screen.getAllByText("Taito Goto").length).toBeGreaterThan(0);
+    expect(screen.getByText("9:00–10:00 PM JST")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Open workspace/i })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
