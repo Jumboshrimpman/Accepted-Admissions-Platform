@@ -40,7 +40,7 @@ function assignmentStatus(
     return { label: "In progress", variant: "secondary" };
   }
   if (assignment.latestAttemptStatus === "submitted" || assignment.latestAttemptStatus === "expired") {
-    return { label: assignment.latestScore === null ? "Complete" : `${Math.round(assignment.latestScore ?? 0)}%`, variant: "default" };
+    return { label: assignment.latestScore == null ? "Complete" : `${Math.round(assignment.latestScore)}%`, variant: "default" };
   }
   if (assignment.deadline && isPast(parseISO(assignment.deadline))) {
     return { label: "Past due", variant: "destructive" };

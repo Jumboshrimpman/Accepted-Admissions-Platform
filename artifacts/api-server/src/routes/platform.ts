@@ -50,6 +50,10 @@ import {
   visibleSessionsForUser,
 } from "../lib/session-privacy";
 import {
+  dashboardSessionShape,
+  dashboardSessionsForUser,
+} from "../lib/dashboard-data";
+import {
   createCheckoutSession,
   createHostedInvoice,
   stripeErrorMessage,
@@ -5441,23 +5445,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
           .from(coursesTable)
           .where(inArray(coursesTable.id, ids));
   const meetingUrls = new Map(courseRows.map((course) => [course.id, course.meetUrl]));
-  const scopedSessions = (
-    await Promise.all(
-      ids.map((courseId) => visibleSessionsForUser(user, courseId)),
-    )
-  )
-    .flat()
-    .filter((session) => {
-      if (user.role === "student" || user.role === "viewer") {
-        return session.clientUserId === subjectUserId;
-      }
-      if (user.role === "tutor") return session.tutorUserId === user.id;
-      return true;
-    })
-    .sort((left, right) => left.dateTime.getTime() - right.dateTime.getTime())
-  const scopedUpcomingSessions = scopedSessions
-    .filter((session) => session.dateTime.getTime() >= Date.now())
-    .slice(0, 12);
+  const scopedSessions = await dashboardSessionsForUser(user);
   const attempts = await db
     .select({
       assignmentId: attemptsTable.assignmentId,
@@ -5559,18 +5547,18 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
       welcomeMessage: "Your Fall program is ready. Keep building on each session.",
       courses,
       upcomingSessions: await Promise.all(
-        scopedUpcomingSessions.map(async (session) => ({
-          ...publicSessionShape(session),
-          tutor: await sessionTutorShape(session),
-          meetingUrl: session.providerEventUrl ?? meetingUrls.get(session.courseId) ?? null,
-          ...(user.role === "tutor" || user.role === "administrator"
-            ? {
-                student: session.clientUserId
-                  ? await studentShape(session.clientUserId)
-                  : null,
-              }
-            : {}),
-        })),
+        scopedSessions.map(async (session) =>
+          dashboardSessionShape(
+            session,
+            await sessionTutorShape(session),
+            session.providerEventUrl ?? meetingUrls.get(session.courseId) ?? null,
+            user.role === "tutor" || user.role === "administrator"
+              ? session.clientUserId
+                ? await studentShape(session.clientUserId)
+                : null
+              : undefined,
+          ),
+        ),
       ),
       assignments: assignmentSummaries,
       recentScores: attempts
