@@ -10,3 +10,4 @@
 - [Assessment result finalization](assessment-result-finalization.md) — expiry must finalize and persist the same result contract as explicit submission.
 - [API HTTP test bundling](api-http-test-bundling.md) — route-level API tests need esbuild because native type stripping cannot resolve the server’s extensionless ESM graph.
 - [Public content seed preservation](public-content-seeding.md) — refresh untouched mirrored records only; administrator-managed publication remains the source of truth.
+- [Browser test runner availability](browser-test-runner-availability.md) — authenticated Playwright testing may be unavailable in Free mode; use direct checks and report the limitation rather than weakening auth.
