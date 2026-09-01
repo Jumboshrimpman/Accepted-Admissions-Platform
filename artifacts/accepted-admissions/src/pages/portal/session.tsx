@@ -1,16 +1,19 @@
-import { useParams, Link } from "wouter";
+import { Link, useParams } from "wouter";
 import {
-  useGetSession,
+  getGetAdaptiveCurriculumQueryKey,
   getGetSessionQueryKey,
   getListSessionArtifactsQueryKey,
+  type CurriculumBlock,
+  useGetAdaptiveCurriculum,
+  useGetCurrentUser,
+  useGetSession,
   useListSessionArtifacts,
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, ChevronRight, Clock, BookOpen, Target, PenTool, ExternalLink, Video } from "lucide-react";
+import { BookOpen, Calendar, CheckCircle2, ChevronRight, Clock, ExternalLink, FileText, PenTool, Sparkles, Target, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { type CurriculumBlock } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   displaySessionTitle,
   formatSessionDate,
@@ -20,229 +23,117 @@ import {
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
   const { kind, config } = block;
-  
-  switch(kind) {
-    case 'heading':
-      return <h3 className="text-xl font-bold mt-6 mb-3 text-foreground">{String(config.text || '')}</h3>;
-    case 'rich_text':
-      return <div className="prose prose-slate dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap">{String(config.html || '')}</div>;
-    case 'callout':
-      return (
-        <div className="my-4 p-4 rounded-xl bg-accent/10 border border-accent/20 flex gap-3 text-accent-foreground">
-          <BookOpen className="w-5 h-5 shrink-0 text-accent" />
-          <div>{String(config.text || '')}</div>
-        </div>
-      );
-    case 'objectives':
-      const items = Array.isArray(config.items) ? config.items : [];
-      return (
-        <Card className="my-6 border-primary/20 bg-primary/5 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2 text-primary">
-              <Target className="w-5 h-5" /> Objectives
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {items.map((item: any, i: number) => (
-                <li key={i} className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                  <span className="text-foreground">{String(item)}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      );
-    case 'external_link':
-      return (
-        <a href={String(config.url || '#')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 my-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors">
-          <ExternalLink className="w-4 h-4" />
-          {String(config.label || 'External Link')}
-        </a>
-      );
-    default:
-      return null;
+  if (kind === "heading") return <h3 className="text-lg font-semibold">{String(config.text || "")}</h3>;
+  if (kind === "rich_text") return <div className="prose prose-slate max-w-none whitespace-pre-wrap text-muted-foreground">{String(config.html || "")}</div>;
+  if (kind === "callout") return <div className="rounded-xl border border-accent/20 bg-accent/10 p-4"><BookOpen className="mr-2 inline h-4 w-4 text-accent" />{String(config.text || "")}</div>;
+  if (kind === "objectives") {
+    const items = Array.isArray(config.items) ? config.items : [];
+    return <ul className="space-y-2">{items.map((item, index) => <li key={index} className="flex gap-2 text-sm"><Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{String(item)}</li>)}</ul>;
   }
+  if (kind === "external_link") return <a href={String(config.url || "#")} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"><ExternalLink className="h-4 w-4" />{String(config.label || "Open resource")}</a>;
+  return null;
+}
+
+function assignmentAction(status?: string | null): string {
+  if (status === "submitted" || status === "expired") return "Review result";
+  if (status === "active" || status === "paused") return "Continue preparation";
+  return "Start preparation";
 }
 
 export default function PortalSession() {
-  const params = useParams();
-  const courseId = params.courseId as string;
-  const sessionId = params.sessionId as string;
-  const { data: session, isLoading, error } = useGetSession(sessionId, { query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) } });
+  const { courseId = "", sessionId = "" } = useParams<{ courseId: string; sessionId: string }>();
+  const { data: currentUser } = useGetCurrentUser();
+  const viewer = currentUser?.role === "viewer";
+  const { data: session, isLoading, error } = useGetSession(sessionId, {
+    query: { enabled: Boolean(sessionId), queryKey: getGetSessionQueryKey(sessionId) },
+  });
+  const { data: adaptive, isLoading: adaptiveLoading, isError: adaptiveUnavailable } = useGetAdaptiveCurriculum(sessionId, {
+    query: { enabled: Boolean(sessionId), queryKey: getGetAdaptiveCurriculumQueryKey(sessionId) },
+  });
   const { data: artifacts = [] } = useListSessionArtifacts(sessionId, {
-    query: {
-      enabled: Boolean(sessionId),
-      queryKey: getListSessionArtifactsQueryKey(sessionId),
-    },
+    query: { enabled: Boolean(sessionId), queryKey: getListSessionArtifactsQueryKey(sessionId) },
   });
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-1/4 rounded-lg" />
-        <Skeleton className="h-32 w-full rounded-2xl" />
-        <div className="space-y-4">
-          <Skeleton className="h-24 w-full rounded-xl" />
-          <Skeleton className="h-48 w-full rounded-xl" />
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="mx-auto max-w-4xl space-y-5"><Skeleton className="h-44 rounded-3xl" /><Skeleton className="h-80 rounded-2xl" /></div>;
+  if (error || !session) return <Card className="mx-auto max-w-xl"><CardContent className="p-8 text-center"><h1 className="text-xl font-semibold">Session unavailable</h1><p className="mt-2 text-sm text-muted-foreground">This session is not visible to your account.</p></CardContent></Card>;
 
-  if (error || !session) {
-    return (
-      <div className="p-8 text-center bg-destructive/10 text-destructive rounded-2xl">
-        <h2 className="text-xl font-bold mb-2">Could not load session</h2>
-        <p>Session not found.</p>
-      </div>
-    );
-  }
-
-  const studentBlocks = session.blocks.filter(b => b.visibility === 'student' || b.visibility === 'both');
-  const beforeSessionAssignments = session.assignments.filter(
-    (assignment) => assignment.deliveryPhase !== "during_session",
-  );
-  const duringSessionAssignments = session.assignments.filter(
-    (assignment) => assignment.deliveryPhase === "during_session",
-  );
+  const beforeAssignments = session.assignments.filter((item) => item.deliveryPhase !== "during_session");
+  const duringAssignments = session.assignments.filter((item) => item.deliveryPhase === "during_session");
+  const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
+  const reports = artifacts.filter((item) => item.kind === "report");
+  const analysis = session.homework?.find((item) => item.analysis)?.analysis;
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Link href="/portal" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-            Dashboard
-          </Link>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <Link href={`/portal/courses/${courseId}`} className="text-sm text-muted-foreground hover:text-primary transition-colors">
-            Course
-          </Link>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Session</span>
-        </div>
-        
-        <div className="p-8 rounded-3xl bg-gradient-brand text-white shadow-xl">
-          <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 mb-4 rounded-full">
-             {sessionSubjectLabel(session.subject)}
-          </Badge>
-           <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">{displaySessionTitle(session.title, session.subject)}</h1>
-          
-          <div className="flex flex-wrap items-center gap-6 text-white/80">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-               <span>{formatSessionDate(session)}</span>
+    <div className="mx-auto max-w-4xl space-y-6 pb-16">
+      <nav className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+        <Link href="/portal/curriculum" className="hover:text-primary">Curriculum</Link><ChevronRight className="h-4 w-4" />
+        <Link href={`/portal/courses/${courseId}`} className="hover:text-primary">Fall plan</Link><ChevronRight className="h-4 w-4" />
+        <span className="text-foreground">{formatSessionDate(session)}</span>
+      </nav>
+
+      <section className="rounded-3xl bg-gradient-brand p-6 text-white shadow-xl sm:p-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Badge className="border-0 bg-white/20 text-white">{sessionSubjectLabel(session.subject)}</Badge>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight">{displaySessionTitle(session.title, session.subject)}</h1>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/75">
+              <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatSessionDate(session)}</span>
+              <span className="flex items-center gap-2"><Clock className="h-4 w-4" />{formatSessionTimeRange(session)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5" />
-               <span>{formatSessionTimeRange(session)}</span>
-            </div>
-             {session.meetingUrl && (
-               <Button asChild variant="secondary" className="rounded-full">
-                 <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
-                   <Video className="mr-2 h-4 w-4" /> Join Meet
-                 </a>
-               </Button>
-             )}
           </div>
+          {session.meetingUrl && <Button asChild variant="secondary"><a href={session.meetingUrl} target="_blank" rel="noopener noreferrer"><Video className="mr-2 h-4 w-4" />Join meeting</a></Button>}
         </div>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-3" aria-label="Session learning loop">
+        <Card className="border-accent/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><PenTool className="h-4 w-4 text-accent" />Before</p><p className="mt-2 text-sm text-muted-foreground">Complete or review subject-specific preparation.</p></CardContent></Card>
+        <Card className="border-primary/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><BookOpen className="h-4 w-4 text-primary" />During</p><p className="mt-2 text-sm text-muted-foreground">Follow the tutor-approved session sequence.</p></CardContent></Card>
+        <Card><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4 text-emerald-600" />After</p><p className="mt-2 text-sm text-muted-foreground">Review feedback and the published report.</p></CardContent></Card>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_300px]">
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold border-b pb-2">During Session curriculum</h2>
-          {studentBlocks.length > 0 ? (
-            <div className="space-y-4">
-              {studentBlocks.map(block => (
-                <RenderBlock key={block.id} block={block} />
-              ))}
+      <Card className="border-accent/25">
+        <CardHeader><CardTitle className="flex items-center gap-2"><PenTool className="h-5 w-5 text-accent" />Before the session</CardTitle><CardDescription>{sessionSubjectLabel(session.subject)} preparation only.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {beforeAssignments.length ? beforeAssignments.map((assignment) => (
+            <div key={assignment.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="font-medium">{assignment.title}</p><p className="mt-1 text-sm text-muted-foreground">{assignment.questionCount} questions · {assignment.timeLimitMinutes} minutes{assignment.latestScore == null ? "" : ` · ${Math.round(assignment.latestScore)}%`}</p></div>
+              <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={`/portal/assignments/${assignment.id}`}>{viewer && !assignment.latestAttemptId ? "Not started" : assignmentAction(assignment.latestAttemptStatus)}<ArrowIcon /></Link></Button>
             </div>
-          ) : (
-            <p className="text-muted-foreground italic">No curriculum blocks published for this session yet.</p>
+          )) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No preparation is required for this meeting.</p>}
+          {analysis && (
+            <div className="grid gap-3 rounded-xl bg-muted/35 p-4 sm:grid-cols-3">
+              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-1 text-sm">{analysis.strengths[0] ?? "Building a baseline"}</p></div>
+              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-1 text-sm">{analysis.weaknesses[0] ?? "No repeated miss"}</p></div>
+              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-1 text-sm">{analysis.nextFocus[0] ?? "Continue the session plan"}</p></div>
+              <Badge variant="outline" className="w-fit sm:col-span-3">{analysis.label} · {analysis.source === "provider" ? analysis.provider ?? "AI provider" : "Deterministic fallback"}</Badge>
+            </div>
           )}
-          {duringSessionAssignments.length > 0 && (
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Practice with your tutor</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {duringSessionAssignments.map((assignment) => (
-                  <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
-                    <div>
-                      <p className="font-medium text-sm">{assignment.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {assignment.questionCount} original practice questions
-                      </p>
-                    </div>
-                    <Link href={`/portal/assignments/${assignment.id}`}>
-                      <Button size="sm" variant="secondary">
-                        Open
-                      </Button>
-                    </Link>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="space-y-6">
-          {beforeSessionAssignments.length > 0 && (
-            <Card className="border-accent/20 shadow-md">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <PenTool className="w-5 h-5 text-accent" />
-                  Before Session
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {beforeSessionAssignments.map(assignment => (
-                  <div key={assignment.id} className="p-3 rounded-lg bg-accent/5 border border-accent/10">
-                    <p className="font-medium text-sm mb-2">{assignment.title}</p>
-                    <Link href={`/portal/assignments/${assignment.id}`}>
-                      <Button size="sm" className="w-full bg-accent hover:bg-accent/90 text-white rounded-full">
-                        {assignment.latestAttemptStatus === "submitted" ||
-                        assignment.latestAttemptStatus === "expired"
-                          ? "View result"
-                          : "Start"}
-                      </Button>
-                    </Link>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+      <Card className="border-primary/25">
+        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-primary" />During the session</CardTitle><CardDescription>The sequence below is published or approved by the tutor.</CardDescription></CardHeader>
+        <CardContent className="space-y-5">
+          {studentBlocks.length ? studentBlocks.map((block) => <div key={block.id} className="rounded-xl border p-4"><RenderBlock block={block} /></div>) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">The tutor has not published this sequence yet.</p>}
+          {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-xl border bg-primary/[0.03] p-4"><div><p className="font-medium">{assignment.title}</p><p className="text-xs text-muted-foreground">{assignment.questionCount} approved original questions</p></div><Button asChild size="sm" variant="secondary"><Link href={`/portal/assignments/${assignment.id}`}>Open</Link></Button></div>)}
+          {adaptiveLoading && <p className="text-sm text-muted-foreground">Loading the approved adaptive sequence…</p>}
+          {adaptiveUnavailable && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground"><Sparkles className="mr-2 inline h-4 w-4" />Adaptive guidance is unavailable. The published tutor plan remains available.</p>}
+          {adaptive && adaptive.publishedBlocks.length === 0 && adaptive.recommendations.length === 0 && <p className="text-xs text-muted-foreground">No adaptive additions have been published for this meeting.</p>}
+        </CardContent>
+      </Card>
 
-          {session.studentNotes && (
-            <Card className="bg-secondary/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Tutor Notes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{session.studentNotes}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {artifacts.map((artifact) => (
-            <Card key={artifact.id} className="bg-secondary/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">
-                  {artifact.kind === "report"
-                    ? "Post-session report"
-                    : "Session transcript"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                  {artifact.content}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-emerald-600" />After the session</CardTitle><CardDescription>Feedback and reports appear only after they are published.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          {session.studentNotes && <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Tutor feedback</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{session.studentNotes}</p></details>}
+          {reports.map((report) => <details key={report.id} className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Published session report</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{report.content}</p></details>)}
+          {!session.studentNotes && reports.length === 0 && <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Feedback and the session report are not available yet.</p>}
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+function ArrowIcon() {
+  return <ChevronRight className="ml-2 h-4 w-4" />;
 }

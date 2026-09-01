@@ -22,7 +22,7 @@ import type {
   AdminSessionInput,
   AdminSessionUpdate,
 } from "@workspace/api-client-react";
-import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, FileText, GraduationCap, Library, Mail, Plus, Save, Users } from "lucide-react";
+import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, FileText, GraduationCap, Library, Mail, Plus, Save, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,13 +37,14 @@ import {
   sessionSubjectLabel,
 } from "@/lib/session-display";
 
-type Section = "people" | "programs" | "curriculum" | "sessions";
+type Section = "roadmap" | "people" | "programs" | "curriculum" | "sessions";
 
 const sectionLinks: Array<{ id: Section; label: string; icon: typeof Users }> = [
+  { id: "roadmap", label: "Fall roadmap", icon: CalendarDays },
   { id: "people", label: "Clients & tutors", icon: Users },
   { id: "programs", label: "Programs", icon: GraduationCap },
-  { id: "curriculum", label: "Curriculum", icon: Library },
-  { id: "sessions", label: "Sessions", icon: CalendarDays },
+  { id: "curriculum", label: "Content tools", icon: Library },
+  { id: "sessions", label: "Session controls", icon: CalendarDays },
 ];
 
 function errorText(error: unknown): string {
@@ -69,8 +70,8 @@ function statusVariant(status: string): "default" | "secondary" | "outline" {
 export default function AdminCurriculum() {
   const [location, setLocation] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] ?? "");
-  const initialSection = (params.get("section") as Section | null) ?? "curriculum";
-  const [section, setSection] = useState<Section>(sectionLinks.some((item) => item.id === initialSection) ? initialSection : "curriculum");
+  const initialSection = (params.get("section") as Section | null) ?? "roadmap";
+  const [section, setSection] = useState<Section>(sectionLinks.some((item) => item.id === initialSection) ? initialSection : "roadmap");
   const [search, setSearch] = useState("");
   const curriculum = useGetAdminCurriculum();
   const queryClient = useQueryClient();
@@ -106,7 +107,7 @@ export default function AdminCurriculum() {
         <Input className="w-full sm:w-72" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this section…" aria-label="Search operations" />
       </div>
 
-      <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-4" aria-label="Admin operation sections">
+      <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-5" aria-label="Admin operation sections">
         {sectionLinks.map(({ id, label, icon: Icon }) => (
           <Button key={id} variant={section === id ? "default" : "ghost"} className="justify-start gap-2" onClick={() => selectSection(id)}>
             <Icon className="h-4 w-4" /> {label}
@@ -114,6 +115,7 @@ export default function AdminCurriculum() {
         ))}
       </nav>
 
+      {section === "roadmap" && <RoadmapSection data={data} />}
       {section === "people" && <PeopleSection data={data} search={search} />}
       {section === "programs" && <ProgramsSection programs={data.programs.filter((item) => filtered(item.title) || filtered(item.subject) || filtered(item.term))} onSaved={refresh} />}
       {section === "curriculum" && <CurriculumSection data={data} search={search} onChanged={refresh} />}
@@ -122,12 +124,17 @@ export default function AdminCurriculum() {
   );
 }
 
+const fallDateOrder = [
+  "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
+  "2026-10-30", "2026-11-06", "2026-11-13", "2026-11-20",
+  "2026-11-27", "2026-12-04", "2026-12-11", "2026-12-18",
+];
 function PeopleSection({ data, search }: { data: AdminCurriculum; search: string }) {
   const term = search.trim().toLowerCase();
   const tutors = data?.tutors.filter((item) => !term || `${item.name} ${item.email} ${item.subjects.join(" ")}`.toLowerCase().includes(term)) ?? [];
   const clients = data?.clients.filter((item) => !term || `${item.name} ${item.email}`.toLowerCase().includes(term)) ?? [];
   return <div className="grid gap-6 lg:grid-cols-2">
-    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Clients / students</CardTitle><CardDescription>Identity and program operations only. Financial details stay in administrator-only finance.</CardDescription></CardHeader><CardContent className="space-y-2">{clients.map((client) => <div key={client.id} className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="font-medium">{client.name}</p><p className="truncate text-sm text-muted-foreground">{client.email}</p></div><div className="flex items-center gap-2"><Badge variant="outline">Student</Badge><Button asChild variant="outline" size="sm"><Link href={`/admin/clients/${client.id}/preview`}><Eye className="mr-2 h-4 w-4" /> View as client</Link></Button></div></div>)}{clients.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>}</CardContent></Card>
+    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Clients / students</CardTitle><CardDescription>Identity and program operations only. Financial details stay in administrator-only finance.</CardDescription></CardHeader><CardContent className="space-y-2">{clients.map((client) => <div key={client.id} className="flex items-center justify-between rounded-xl border p-3"><div><p className="font-medium">{client.name}</p><p className="text-sm text-muted-foreground">{client.email}</p></div><Badge variant="outline">Student</Badge></div>)}{clients.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>}</CardContent></Card>
     <Card><CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary" /> Tutors</CardTitle><CardDescription>Subject access and activity. Compensation is never returned by this operational view.</CardDescription></CardHeader><CardContent className="space-y-2">{tutors.map((tutor) => <div key={tutor.id} className="flex items-center justify-between rounded-xl border p-3"><div><p className="font-medium">{tutor.name}</p><p className="text-sm text-muted-foreground">{tutor.email}</p><div className="mt-2 flex flex-wrap gap-1">{tutor.subjects.map((subject) => <Badge key={subject} variant="secondary">{subject}</Badge>)}</div><p className="mt-2 text-xs text-muted-foreground">{tutor.sessionCount} total sessions · {tutor.upcomingSessionCount} upcoming</p></div><Badge variant={tutor.active ? "default" : "outline"}>{tutor.active ? "Active" : "Inactive"}</Badge></div>)}{tutors.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching tutors.</p>}</CardContent></Card>
   </div>;
 }
@@ -215,4 +222,61 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{text}</div>;
+}
+
+function RoadmapSection({ data }: { data: AdminCurriculum }) {
+  const sessions = data.sessions
+    .filter((session) => fallDateOrder.includes(session.dateTime.slice(0, 10)))
+    .sort((left, right) => fallDateOrder.indexOf(left.dateTime.slice(0, 10)) - fallDateOrder.indexOf(right.dateTime.slice(0, 10)));
+  const allExceptions = [
+    ...sessions.filter((session) => session.conflict).map((session) => ({
+      kind: "schedule",
+      severity: "urgent" as const,
+      label: "Schedule conflict",
+      detail: `${displaySessionTitle(session.title, session.subject)} has a scheduling conflict.`,
+    })),
+    ...sessions.filter((session) => !session.tutor || !session.student).map((session) => ({
+      kind: "staffing",
+      severity: "warning" as const,
+      label: "Assignment needed",
+      detail: `${displaySessionTitle(session.title, session.subject)} needs ${!session.tutor ? "a tutor" : "a student"}.`,
+    })),
+    ...data.assignments.filter((assignment) => assignment.status === "draft").map((assignment) => ({
+      kind: "assignment",
+      severity: "warning" as const,
+      label: "Draft preparation",
+      detail: `${assignment.title} is not published yet.`,
+    })),
+  ];
+  const exceptions = allExceptions.slice(0, 6);
+
+  return <div className="space-y-5">
+    <div className="grid gap-4 sm:grid-cols-3">
+      <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Fall meetings</p><p className="mt-2 text-3xl font-bold">{sessions.length} / 12</p></CardContent></Card>
+      <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">English / IELTS</p><p className="mt-2 text-3xl font-bold">{sessions.filter((session) => session.subject.toUpperCase() === "IELTS").length} / 3</p></CardContent></Card>
+      <Card className={exceptions.length ? "border-amber-400/40" : ""}><CardContent className="p-5"><p className="text-sm text-muted-foreground">Exceptions</p><p className="mt-2 text-3xl font-bold">{allExceptions.length}</p></CardContent></Card>
+    </div>
+    {exceptions.length > 0 && <details className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-4">
+      <summary className="cursor-pointer font-semibold"><AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />Review {allExceptions.length} exception{allExceptions.length === 1 ? "" : "s"}</summary>
+      <div className="mt-4 grid gap-2 md:grid-cols-2">{exceptions.map((item, index) => <div key={`${item.kind}-${index}`} className="rounded-xl border bg-background p-3 text-sm"><Badge variant={item.severity === "urgent" ? "destructive" : "outline"}>{item.label}</Badge><p className="mt-2 text-muted-foreground">{item.detail}</p></div>)}</div>
+    </details>}
+    <Card className="overflow-hidden">
+      <CardHeader className="border-b"><CardTitle>Twelve-date readiness</CardTitle><CardDescription>Scan the live Fall plan first. Open detailed content or session controls only when needed.</CardDescription></CardHeader>
+      <CardContent className="p-0">
+        {sessions.length ? <div className="divide-y">{sessions.map((session, index) => {
+          const assignments = data.assignments.filter((assignment) => assignment.sessionId === session.id);
+          const preparation = assignments.find((assignment) => assignment.deliveryPhase === "before_session");
+          const during = assignments.find((assignment) => assignment.deliveryPhase === "during_session");
+          const ready = session.status === "published" && Boolean(session.tutor) && Boolean(session.student);
+          return <div key={session.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
+            <div><p className="font-semibold">{new Date(session.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: session.timezone })}</p><Badge variant="outline" className="mt-1">{sessionSubjectLabel(session.subject)}</Badge></div>
+            <div><p className="text-sm font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-xs text-muted-foreground">Before: {preparation ? preparation.status : "not required"} · During: {during ? during.status : "no assignment"} · Report: {session.hasReport ? "ready" : "pending"}</p></div>
+            <Badge variant={ready ? "default" : "secondary"} className="w-fit">{ready ? "Ready" : "Needs setup"}</Badge>
+            <Button asChild size="sm" variant="outline"><Link href={`/tutor/sessions/${session.id}`}>Open brief <ChevronRight className="ml-2 h-4 w-4" /></Link></Button>
+          </div>;
+        })}</div> : <Empty text="No Fall curriculum dates are available." />}
+      </CardContent>
+    </Card>
+  </div>;
 }

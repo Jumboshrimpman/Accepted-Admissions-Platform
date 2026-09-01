@@ -433,6 +433,7 @@ export default function TutorSession() {
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
+            <Badge className="mb-3">{sessionSubjectLabel(session.subject)}</Badge>
             <h1 className="mb-2 text-3xl font-bold tracking-tight">{displaySessionTitle(session.title, session.subject)}</h1>
             <p className="text-muted-foreground">
               {formatSessionDateTime(session)}
@@ -516,7 +517,10 @@ export default function TutorSession() {
                       {homework.analysis && (
                         <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                           <p><span className="font-medium text-emerald-700">Strength:</span> {homework.analysis.strengths[0] ?? "No strength summary yet."}</p>
-                          <p><span className="font-medium text-amber-700">Next focus:</span> {homework.analysis.nextFocus[0] ?? homework.analysis.weaknesses[0] ?? "Keep practicing."}</p>
+                          <p><span className="font-medium text-amber-700">Recommended focus:</span> {homework.analysis.nextFocus[0] ?? homework.analysis.weaknesses[0] ?? "Keep practicing."}</p>
+                          <Badge variant="outline" className="w-fit sm:col-span-2">
+                            {homework.analysis.label} · {homework.analysis.source === "provider" ? homework.analysis.provider ?? "AI provider" : "Deterministic fallback"}
+                          </Badge>
                         </div>
                       )}
                       {homework.attemptId && (
@@ -558,11 +562,11 @@ export default function TutorSession() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="practice" className="space-y-6">
+      <Tabs defaultValue="curriculum" className="space-y-6">
         <TabsList className="grid h-auto w-full grid-cols-3">
-          <TabsTrigger value="practice">Practice studio</TabsTrigger>
-          <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
-          <TabsTrigger value="records">Session records</TabsTrigger>
+          <TabsTrigger value="curriculum">Live plan</TabsTrigger>
+          <TabsTrigger value="practice">Authoring tools</TabsTrigger>
+          <TabsTrigger value="records">Records</TabsTrigger>
         </TabsList>
 
         <TabsContent value="practice" className="space-y-6">
@@ -1060,12 +1064,20 @@ export default function TutorSession() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-between border-b pb-2">
-            <h2 className="text-2xl font-bold">Curriculum builder</h2>
-            <Button size="sm" onClick={() => setAddingBlock(true)} disabled={addingBlock}>
-              <Plus className="mr-2 h-4 w-4" /> Add block
-            </Button>
-          </div>
+          <details className="rounded-2xl border bg-card p-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold">
+              Curriculum blocks
+              <Badge variant="outline">{session.blocks.length} blocks</Badge>
+            </summary>
+            <div className="mt-5 flex items-center justify-between border-b pb-2">
+              <div>
+                <h2 className="text-xl font-bold">Block editor</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Secondary authoring tools for the published live plan.</p>
+              </div>
+              <Button size="sm" onClick={() => setAddingBlock(true)} disabled={addingBlock}>
+                <Plus className="mr-2 h-4 w-4" /> Add block
+              </Button>
+            </div>
           {session.blocks.map((block) => (
             <Card key={block.id}>
               <CardContent className="flex gap-4 p-4">
@@ -1139,6 +1151,7 @@ export default function TutorSession() {
               </CardContent>
             </Card>
           )}
+          </details>
         </TabsContent>
 
         <TabsContent value="records" className="grid gap-6 md:grid-cols-2">

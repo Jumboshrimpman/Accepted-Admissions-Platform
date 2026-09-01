@@ -56,16 +56,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
       case "tutor":
         return [
           { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
-          { href: "/portal", label: "Client preview", icon: BookOpen },
+          { href: "/portal/curriculum", label: "Client curriculum", icon: BookOpen },
         ];
       case "administrator":
         return [
           { href: "/admin", label: "Admin", icon: Settings },
+          { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
           { href: "/tutor", label: "Tutor View", icon: BookOpen },
         ];
       default:
         return [
-          { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
         ];
     }
   };

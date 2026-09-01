@@ -11,6 +11,8 @@ import type { AssignmentSummaryStatus } from './assignmentSummaryStatus';
 
 export interface AssignmentSummary {
   id: string;
+  /** @nullable */
+  sessionId?: string | null;
   deliveryPhase?: AssignmentSummaryDeliveryPhase;
   title: string;
   subject: string;

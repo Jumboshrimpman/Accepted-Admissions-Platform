@@ -166,6 +166,17 @@ function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/portal/curriculum">
+          <SignedIn>
+            <Shell>
+              <PortalDashboard />
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/portal/courses/:courseId/sessions/:sessionId">
           <SignedIn>
             <Shell>
@@ -193,6 +204,7 @@ function Router() {
             <Shell>
               <Switch>
                 <Route path="/portal" component={PortalEntry} />
+                <Route path="/portal/curriculum" component={PortalDashboard} />
                 <Route path="/portal/courses/:courseId" component={PortalCourse} />
                 <Route path="/portal/courses/:courseId/sessions/:sessionId" component={PortalSession} />
                 <Route path="/portal/assignments/:assignmentId" component={PortalAssignment} />
@@ -289,38 +301,11 @@ function Router() {
           </SignedOut>
         </Route>
 
-        <Route path="/admin/financials">
-          <SignedIn>
-            <RoleBoundary roles={["administrator"]}>
-              <Shell>
-                <div className="mx-auto max-w-7xl"><AdminFinancialsPanel /></div>
-              </Shell>
-            </RoleBoundary>
-          </SignedIn>
-          <SignedOut>
-            <Redirect to="/login" />
-          </SignedOut>
-        </Route>
-
-        <Route path="/admin/content">
-          <SignedIn>
-            <RoleBoundary roles={["administrator"]}>
-              <Shell>
-                <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
-              </Shell>
-            </RoleBoundary>
-          </SignedIn>
-          <SignedOut>
-            <Redirect to="/login" />
-          </SignedOut>
-        </Route>
-
         <Route path="/admin*">
           <SignedIn>
             <RoleBoundary roles={["administrator"]}>
               <Shell>
               <Switch>
-                <Route path="/admin" component={AdminDashboard} />
                 <Route path="/admin/clients/:clientId/preview" component={AdminClientPreview} />
                 <Route path="/admin/curriculum" component={AdminCurriculum} />
                 <Route path="/admin/financials">
@@ -329,6 +314,7 @@ function Router() {
                 <Route path="/admin/content">
                   <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
                 </Route>
+                <Route path="/admin" component={AdminDashboard} />
                 <Route component={NotFound} />
               </Switch>
               </Shell>

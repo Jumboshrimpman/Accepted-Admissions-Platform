@@ -2035,6 +2035,34 @@ components:
             - type: "null"
         hasHomework: { type: boolean }
         hasReport: { type: boolean }
+    CurriculumSession:
+      allOf:
+        - $ref: "#/components/schemas/Session"
+        - type: object
+          required: [readiness, nextAction, preparation, latestResult, currentFocus]
+          properties:
+            readiness:
+              type: string
+              enum: [not_started, in_progress, ready, complete, unavailable]
+            nextAction: { type: string }
+            currentFocus: { type: ["string", "null"] }
+            preparation:
+              allOf:
+                - $ref: "#/components/schemas/AssignmentSummary"
+              nullable: true
+            latestResult:
+              oneOf:
+                - type: object
+                  required: [status, score, attemptId, analysis]
+                  properties:
+                    status: { type: string, enum: [submitted, expired] }
+                    score: { type: ["number", "null"] }
+                    attemptId: { type: string }
+                    analysis:
+                      oneOf:
+                        - $ref: "#/components/schemas/AttemptAnalysis"
+                        - type: "null"
+                - type: "null"
     SessionStudent:
       type: object
       required: [name]
@@ -2196,6 +2224,7 @@ components:
       required: [id, title, subject, status, questionCount, timeLimitMinutes, attemptCount, maxAttempts]
       properties:
         id: { type: string }
+        sessionId: { type: ["string", "null"] }
         deliveryPhase: { type: string, enum: [before_session, during_session] }
         title: { type: string }
         subject: { type: string }
@@ -2576,7 +2605,7 @@ components:
         subject: { type: string }
     Dashboard:
       type: object
-      required: [user, courses, upcomingSessions, assignments, recentScores, reviewSkills, credits, progress, assignedStudents, newSubmissions, openReviewCount]
+      required: [user, courses, upcomingSessions, curriculumSessions, assignments, recentScores, reviewSkills, credits, progress, assignedStudents, newSubmissions, openReviewCount]
       properties:
         user: { $ref: "#/components/schemas/CurrentUser" }
         welcomeMessage: { type: string }
@@ -2586,6 +2615,9 @@ components:
         upcomingSessions:
           type: array
           items: { $ref: "#/components/schemas/Session" }
+        curriculumSessions:
+          type: array
+          items: { $ref: "#/components/schemas/CurriculumSession" }
         assignments:
           type: array
           items: { $ref: "#/components/schemas/AssignmentSummary" }

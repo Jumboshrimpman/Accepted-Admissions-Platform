@@ -6055,9 +6055,13 @@ router.post(
       return;
     }
     if (body.data.sessionId) {
-      const [session] = await db.select({ id: sessionsTable.id, courseId: sessionsTable.courseId }).from(sessionsTable).where(eq(sessionsTable.id, body.data.sessionId)).limit(1);
+      const [session] = await db.select({ id: sessionsTable.id, courseId: sessionsTable.courseId, subject: sessionsTable.subject }).from(sessionsTable).where(eq(sessionsTable.id, body.data.sessionId)).limit(1);
       if (!session || session.courseId !== body.data.courseId) {
         res.status(404).json({ error: "Session not found in this program" });
+        return;
+      }
+      if (subjectFamily(session.subject) !== subjectFamily(body.data.subject)) {
+        res.status(400).json({ error: "Assignment subject must match the linked session subject" });
         return;
       }
     }
@@ -6107,9 +6111,14 @@ router.patch(
       return;
     }
     if (sessionId) {
-      const [session] = await db.select({ courseId: sessionsTable.courseId }).from(sessionsTable).where(eq(sessionsTable.id, sessionId)).limit(1);
+      const [session] = await db.select({ courseId: sessionsTable.courseId, subject: sessionsTable.subject }).from(sessionsTable).where(eq(sessionsTable.id, sessionId)).limit(1);
       if (!session || session.courseId !== courseId) {
         res.status(404).json({ error: "Session not found in this program" });
+        return;
+      }
+      const assignmentSubject = body.data.subject ?? existing.subject;
+      if (subjectFamily(session.subject) !== subjectFamily(assignmentSubject)) {
+        res.status(400).json({ error: "Assignment subject must match the linked session subject" });
         return;
       }
     }
@@ -6449,7 +6458,9 @@ async function dashboardDataForUser(user: AppUser) {
   const scopedSessions = await dashboardSessionsForUser(user);
   const attempts = await db
     .select({
+      id: attemptsTable.id,
       assignmentId: attemptsTable.assignmentId,
+      status: attemptsTable.status,
       score: attemptsTable.score,
       startedAt: attemptsTable.startedAt,
       submittedAt: attemptsTable.submittedAt,
@@ -6461,6 +6472,83 @@ async function dashboardDataForUser(user: AppUser) {
     .orderBy(desc(attemptsTable.startedAt));
   const assignmentSummaries = await assignmentSummariesForUser(user);
   const assignmentById = new Map(assignmentSummaries.map((assignment) => [assignment.id, assignment]));
+  const curriculumSessions = await Promise.all(
+    scopedSessions.map(async (session) => {
+      const preparation =
+        assignmentSummaries.find(
+          (assignment) =>
+            assignment.sessionId === session.id &&
+            assignment.deliveryPhase === "before_session" &&
+            subjectFamily(assignment.subject) === subjectFamily(session.subject),
+        ) ?? null;
+      const latestAttempt = preparation
+        ? attempts.find((attempt) => attempt.assignmentId === preparation.id)
+        : undefined;
+      const latestResult =
+        latestAttempt &&
+        (latestAttempt.status === "submitted" || latestAttempt.status === "expired")
+          ? {
+              status: latestAttempt.status,
+              score: latestAttempt.score,
+              attemptId: latestAttempt.id,
+              analysis:
+                latestAttempt.analysis ??
+                (latestAttempt.result as { analysis?: Record<string, unknown> } | null)
+                  ?.analysis ??
+                null,
+            }
+          : null;
+      const analysis = latestResult?.analysis as
+        | { nextFocus?: unknown[]; weaknesses?: unknown[] }
+        | null
+        | undefined;
+      const currentFocus =
+        (analysis?.nextFocus ?? []).find(
+          (item): item is string => typeof item === "string",
+        ) ??
+        (analysis?.weaknesses ?? []).find(
+          (item): item is string => typeof item === "string",
+        ) ??
+        (session.subject.toUpperCase() === "IELTS"
+          ? "Build confident English communication across the next skill."
+          : "Strengthen evidence-based reasoning and precise conventions.");
+      const attemptStatus = preparation?.latestAttemptStatus;
+      const readiness =
+        session.status === "completed"
+          ? "complete"
+          : attemptStatus === "active" || attemptStatus === "paused"
+            ? "in_progress"
+            : latestResult
+              ? "ready"
+              : preparation
+                ? "not_started"
+                : "ready";
+      const nextAction = latestResult
+        ? "Review feedback"
+        : attemptStatus === "active" || attemptStatus === "paused"
+          ? "Continue preparation"
+          : preparation
+            ? "Start preparation"
+            : "Open session plan";
+      return {
+        ...dashboardSessionShape(
+          session,
+          await sessionTutorShape(session),
+          meetingUrls.get(session.courseId) ?? null,
+          user.role === "tutor" || user.role === "administrator"
+            ? session.clientUserId
+              ? await studentShape(session.clientUserId)
+              : null
+            : undefined,
+        ),
+        readiness,
+        nextAction,
+        preparation,
+        latestResult,
+        currentFocus,
+      };
+    }),
+  );
   const completedSessions = scopedSessions.filter(
     (session) => session.status === "completed",
   ).length;
@@ -6547,21 +6635,25 @@ async function dashboardDataForUser(user: AppUser) {
       welcomeMessage: "Your Fall program is ready. Keep building on each session.",
       courses,
       upcomingSessions: await Promise.all(
-        scopedSessions.map(async (session) => {
-          const student = session.clientUserId
-            ? await studentShape(session.clientUserId)
-            : null;
-          return dashboardSessionShape(
-            session,
-            await sessionTutorShape(session),
-            meetingUrls.get(session.courseId) ?? null,
-            user.role === "tutor" || user.role === "administrator"
-              ? student
-              : undefined,
-            student?.name ?? null,
-          );
-        }),
+        scopedSessions
+          .filter((session) => session.dateTime.getTime() >= Date.now())
+          .slice(0, 12)
+          .map(async (session) => {
+            const student = session.clientUserId
+              ? await studentShape(session.clientUserId)
+              : null;
+            return dashboardSessionShape(
+              session,
+              await sessionTutorShape(session),
+              meetingUrls.get(session.courseId) ?? null,
+              user.role === "tutor" || user.role === "administrator"
+                ? student
+                : undefined,
+              student?.name ?? null,
+            );
+          }),
       ),
+      curriculumSessions,
       assignments: assignmentSummaries,
       recentScores: attempts
         .filter((attempt) => attempt.score !== null)
@@ -6792,6 +6884,7 @@ async function assignmentSummariesForUser(
         .orderBy(desc(attemptsTable.startedAt));
       return {
         id: assignment.id,
+        sessionId: assignment.sessionId,
         deliveryPhase:
           assignment.deliveryPhase === "during_session"
             ? "during_session"

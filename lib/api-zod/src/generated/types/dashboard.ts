@@ -8,6 +8,7 @@
 import type { AssignmentSummary } from './assignmentSummary';
 import type { Course } from './course';
 import type { CurrentUser } from './currentUser';
+import type { CurriculumSession } from './curriculumSession';
 import type { DashboardCredits } from './dashboardCredits';
 import type { DashboardProgress } from './dashboardProgress';
 import type { DashboardRecentScoresItem } from './dashboardRecentScoresItem';
@@ -20,6 +21,7 @@ export interface Dashboard {
   welcomeMessage?: string;
   courses: Course[];
   upcomingSessions: Session[];
+  curriculumSessions: CurriculumSession[];
   assignments: AssignmentSummary[];
   recentScores: DashboardRecentScoresItem[];
   reviewSkills: string[];

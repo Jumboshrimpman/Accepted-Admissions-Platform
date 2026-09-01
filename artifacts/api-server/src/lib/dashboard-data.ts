@@ -85,9 +85,7 @@ export async function dashboardSessionsForUser(user: AppUser) {
             return true;
           });
   return sessions
-    .filter((session) => session.dateTime.getTime() >= Date.now())
     .sort((left, right) => left.dateTime.getTime() - right.dateTime.getTime())
-    .slice(0, 12);
 }
 
 export async function clientForAdminPreview(

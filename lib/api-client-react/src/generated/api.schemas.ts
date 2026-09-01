@@ -1085,6 +1085,7 @@ export interface Session {
   hasReport?: boolean;
 }
 
+export type CurriculumSessionReadiness = typeof CurriculumSessionReadiness[keyof typeof CurriculumSessionReadiness];
 export type AssignmentSummaryDeliveryPhase = typeof AssignmentSummaryDeliveryPhase[keyof typeof AssignmentSummaryDeliveryPhase];
 
 
@@ -1118,6 +1119,8 @@ export const AssignmentSummaryLatestAttemptStatus = {
 
 export interface AssignmentSummary {
   id: string;
+  /** @nullable */
+  sessionId?: string | null;
   deliveryPhase?: AssignmentSummaryDeliveryPhase;
   title: string;
   subject: string;
@@ -1136,6 +1139,7 @@ export interface AssignmentSummary {
   latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
 }
 
+export type CurriculumSessionLatestResultStatus = typeof CurriculumSessionLatestResultStatus[keyof typeof CurriculumSessionLatestResultStatus];
 export interface DashboardCredits {
   remainingHours: number;
   readOnly: boolean;
@@ -1205,6 +1209,7 @@ export interface Dashboard {
   welcomeMessage?: string;
   courses: Course[];
   upcomingSessions: Session[];
+  curriculumSessions: CurriculumSession[];
   assignments: AssignmentSummary[];
   recentScores: DashboardRecentScoresItem[];
   reviewSkills: string[];
@@ -1349,7 +1354,6 @@ export const SessionHomeworkAttemptStatus = {
   submitted: 'submitted',
   expired: 'expired',
 } as const;
-
 export type AttemptAnalysisSource = typeof AttemptAnalysisSource[keyof typeof AttemptAnalysisSource];
 
 
@@ -1370,6 +1374,13 @@ export interface AttemptAnalysis {
   feedback: string;
 }
 
+export type CurriculumSessionLatestResult = {
+  status: CurriculumSessionLatestResultStatus;
+  /** @nullable */
+  score: number | null;
+  attemptId: string;
+  analysis: AttemptAnalysis | null;
+} | null;
 export interface SessionHomework {
   assignmentId: string;
   title: string;
@@ -2109,3 +2120,25 @@ export type TutorPayoutOnboarding = TutorPayoutStatus & {
 export const BookingInputDurationMinutes = {
   NUMBER_60: 60,
 } as const;
+
+export const CurriculumSessionLatestResultStatus = {
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export const CurriculumSessionReadiness = {
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  ready: 'ready',
+  complete: 'complete',
+  unavailable: 'unavailable',
+} as const;
+
+export type CurriculumSession = Session & ({
+  readiness: CurriculumSessionReadiness;
+  nextAction: string;
+  /** @nullable */
+  currentFocus: string | null;
+  preparation: AssignmentSummary | null;
+  latestResult: CurriculumSessionLatestResult;
+});

@@ -241,8 +241,67 @@ export const GetAdminClientDashboardResponse = zod.object({
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional()
 })),
+  "curriculumSessions": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "durationMinutes": zod.number(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "tutor": zod.union([zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "specialty": zod.string(),
+  "avatarUrl": zod.string().nullish()
+}),zod.null()]).optional(),
+  "meetingUrl": zod.string().nullish(),
+  "student": zod.union([zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "hasHomework": zod.boolean().optional(),
+  "hasReport": zod.boolean().optional()
+}).and(zod.object({
+  "readiness": zod.enum(['not_started', 'in_progress', 'ready', 'complete', 'unavailable']),
+  "nextAction": zod.string(),
+  "currentFocus": zod.string().nullable(),
+  "preparation": zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string().nullish(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullish(),
+  "questionCount": zod.number(),
+  "timeLimitMinutes": zod.number(),
+  "attemptCount": zod.number(),
+  "maxAttempts": zod.number(),
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+}).nullable(),
+  "latestResult": zod.union([zod.object({
+  "status": zod.enum(['submitted', 'expired']),
+  "score": zod.number().nullable(),
+  "attemptId": zod.string(),
+  "analysis": zod.union([zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),zod.null()])
+}),zod.null()])
+}))),
   "assignments": zod.array(zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
@@ -1131,8 +1190,67 @@ export const GetDashboardResponse = zod.object({
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional()
 })),
+  "curriculumSessions": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "durationMinutes": zod.number(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "tutor": zod.union([zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "specialty": zod.string(),
+  "avatarUrl": zod.string().nullish()
+}),zod.null()]).optional(),
+  "meetingUrl": zod.string().nullish(),
+  "student": zod.union([zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string()
+}),zod.null()]).optional(),
+  "hasHomework": zod.boolean().optional(),
+  "hasReport": zod.boolean().optional()
+}).and(zod.object({
+  "readiness": zod.enum(['not_started', 'in_progress', 'ready', 'complete', 'unavailable']),
+  "nextAction": zod.string(),
+  "currentFocus": zod.string().nullable(),
+  "preparation": zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string().nullish(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullish(),
+  "questionCount": zod.number(),
+  "timeLimitMinutes": zod.number(),
+  "attemptCount": zod.number(),
+  "maxAttempts": zod.number(),
+  "latestScore": zod.number().nullish(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+}).nullable(),
+  "latestResult": zod.union([zod.object({
+  "status": zod.enum(['submitted', 'expired']),
+  "score": zod.number().nullable(),
+  "attemptId": zod.string(),
+  "analysis": zod.union([zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),zod.null()])
+}),zod.null()])
+}))),
   "assignments": zod.array(zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
@@ -1479,6 +1597,7 @@ export const GetSessionResponse = zod.object({
 })),
   "assignments": zod.array(zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
@@ -1557,6 +1676,7 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "sessionId": zod.string(),
   "homework": zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
@@ -1654,6 +1774,7 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "sessionId": zod.string(),
   "homework": zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
@@ -1833,6 +1954,7 @@ export const ListAssignmentsQueryParams = zod.object({
 
 export const ListAssignmentsResponseItem = zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
@@ -1858,6 +1980,7 @@ export const GetAssignmentParams = zod.object({
 
 export const GetAssignmentResponse = zod.object({
   "id": zod.string(),
+  "sessionId": zod.string().nullish(),
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "title": zod.string(),
   "subject": zod.string(),
