@@ -2,45 +2,15 @@ import { Link } from "wouter";
 import { Show } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, GraduationCap, Users } from "lucide-react";
+import { PublicSiteShell } from "@/components/public-site-shell";
 
 export default function Landing() {
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
-      <header className="container mx-auto px-6 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src={`${basePath}/logo.svg`} alt="Accepted Admissions" className="w-10 h-10 rounded-xl shadow-sm" />
-          <span className="font-bold text-xl tracking-tight text-foreground">
-            Accepted Admissions
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-            <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
-              <Link href="/sat" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">SAT tutoring</Link>
-              <Link href="/our-team" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Our team</Link>
-              <Link href="/past-success" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Past success</Link>
-              <Link href="/client-request" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Client request</Link>
-            </nav>
-            <Show when="signed-out">
-            <Link href="/login">
-              <Button variant="ghost" className="font-medium">Sign In</Button>
-            </Link>
-            <Link href="/login">
-              <Button className="bg-primary text-primary-foreground font-medium rounded-full px-6">
-                Client Portal
-              </Button>
-            </Link>
-            </Show>
-            <Show when="signed-in">
-            <Link href="/portal">
-              <Button className="bg-primary text-primary-foreground font-medium rounded-full px-6">
-                Go to Portal
-              </Button>
-            </Link>
-            </Show>
-        </div>
-      </header>
-
+    <PublicSiteShell
+      eyebrow="Personalized academic guidance"
+      title="Accepted Admissions | Personalized academic guidance"
+      description="Accepted Admissions provides thoughtful SAT tutoring and admissions guidance tailored to each student’s goals."
+    >
       <main className="flex-1">
         {/* Hero Section */}
         <section className="relative overflow-hidden pt-20 pb-32">
@@ -62,20 +32,25 @@ export default function Landing() {
             <p className="mt-8 text-xl text-muted-foreground max-w-2xl leading-relaxed">
               We provide high-touch, tailored tutoring and admissions consulting for students who aim higher. Your journey, our expertise.
             </p>
-            <div className="mt-12 flex flex-col sm:flex-row items-center gap-4">
-                <Show when="signed-out">
-                <Link href="/login">
-                  <Button size="lg" className="rounded-full px-8 h-14 text-base bg-gradient-brand text-white border-0 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                    Client Sign In <ArrowRight className="ml-2 w-5 h-5" />
+            <div className="mt-12 flex flex-col items-center gap-4 sm:flex-row">
+                <Link href="/client-request">
+                  <Button size="lg" className="h-14 rounded-full bg-gradient-brand px-8 text-base text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-xl">
+                    Start a private conversation <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 </Link>
+                <Show when="signed-out">
+                  <Link href="/login">
+                    <Button size="lg" variant="ghost" className="h-14 rounded-full px-6 text-base">
+                      Client sign in
+                    </Button>
+                  </Link>
                 </Show>
                 <Show when="signed-in">
-                <Link href="/portal">
-                  <Button size="lg" className="rounded-full px-8 h-14 text-base bg-gradient-brand text-white border-0 shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                    Enter Portal <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                </Link>
+                  <Link href="/portal">
+                    <Button size="lg" variant="ghost" className="h-14 rounded-full px-6 text-base">
+                      Open client portal
+                    </Button>
+                  </Link>
                 </Show>
             </div>
           </div>
@@ -117,17 +92,6 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="bg-background py-12 border-t mt-auto">
-        <div className="container mx-auto px-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-             <img src={`${basePath}/logo.svg`} alt="Accepted Admissions" className="w-6 h-6 rounded-md opacity-50 grayscale" />
-            <span className="font-semibold text-muted-foreground">Accepted Admissions</span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} Accepted Admissions. All rights reserved.
-          </p>
-        </div>
-      </footer>
-    </div>
+    </PublicSiteShell>
   );
 }

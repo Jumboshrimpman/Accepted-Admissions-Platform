@@ -43,6 +43,7 @@ import ClientRequest from '@/pages/public/client-request';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 import { ProvisioningReference } from '@/components/provisioning-reference';
+import { safeReturnPath } from '@/lib/safe-return-path';
 
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -94,6 +95,14 @@ function SignedOut({ children }: { children: ReactNode }) {
 }
 
 function SignInPage() {
+  const requestedReturnTo = new URLSearchParams(window.location.search).get("returnTo");
+  const safeReturnTo = safeReturnPath({
+    requested: requestedReturnTo,
+    basePath,
+    origin: window.location.origin,
+    fallback: `${basePath}/portal`,
+  });
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4">
       <div className="w-full max-w-[400px] mb-4">
@@ -107,8 +116,8 @@ function SignInPage() {
       <SignIn
         routing="path"
         path={`${basePath}/login`}
-        forceRedirectUrl={`${basePath}/portal`}
-        fallbackRedirectUrl={`${basePath}/portal`}
+        forceRedirectUrl={safeReturnTo}
+        fallbackRedirectUrl={safeReturnTo}
         withSignUp={false}
         appearance={{
           elements: {

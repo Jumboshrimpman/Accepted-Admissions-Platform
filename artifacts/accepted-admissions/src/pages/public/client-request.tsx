@@ -21,7 +21,7 @@ const fields = [
   ["currentReadingWriting", "Current Reading/Writing score (optional)", "text"],
   ["currentMath", "Current Math score (optional)", "text"],
   ["targetSatScore", "Target SAT score (optional)", "text"],
-  ["plannedTestDate", "Planned test date (optional)", "text"],
+  ["plannedTestDate", "Planned test date (optional)", "date"],
   ["referralSource", "How did you hear about Accepted Admissions?", "text"],
 ] as const;
 
@@ -64,6 +64,7 @@ export default function ClientRequest() {
               <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Your information is not published or shared from this page.</span></div>
               <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>There is no obligation to purchase or enroll.</span></div>
             </div>
+            <p className="mt-8 text-sm text-muted-foreground">After you submit, our team will review your note and follow up with next-step questions. Please allow time for a thoughtful reply.</p>
           </div>
           <Card className="rounded-3xl border-primary/10 shadow-xl shadow-primary/5">
             <CardHeader className="p-7 pb-2 md:p-9 md:pb-3"><CardTitle className="text-2xl">Request information</CardTitle></CardHeader>
@@ -75,28 +76,38 @@ export default function ClientRequest() {
                   <p className="mt-2 text-muted-foreground">{message}</p>
                 </div>
               ) : (
-                <form onSubmit={submit} className="space-y-6">
+                <form onSubmit={submit} className="space-y-6" autoComplete="on" aria-describedby="request-form-help">
+                  <p id="request-form-help" className="text-sm text-muted-foreground">Required fields are marked by your browser. Optional score and test-date fields can be left blank.</p>
                   <div className="grid gap-5 sm:grid-cols-2">
                     {fields.map(([key, label, type]) => (
                       <div key={key} className={key === "referralSource" ? "sm:col-span-2" : ""}>
                         <Label htmlFor={key}>{label}</Label>
-                        <Input id={key} type={type} required={!["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore", "plannedTestDate"].includes(key)} value={String(form[key] || "")} onChange={(event) => update(key, event.target.value)} className="mt-2 h-11 rounded-xl" />
+                        <Input
+                          id={key}
+                          name={key}
+                          type={type}
+                          autoComplete={key === "guardianName" ? "name" : key === "studentName" ? "off" : key === "email" ? "email" : key === "phone" ? "tel" : "on"}
+                          required={!["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore", "plannedTestDate"].includes(key)}
+                          value={String(form[key] || "")}
+                          onChange={(event) => update(key, event.target.value)}
+                          className="mt-2 h-11 rounded-xl"
+                        />
                       </div>
                     ))}
                   </div>
                   <div>
                     <Label htmlFor="goals">Goals and explanation of requested help</Label>
-                    <Textarea id="goals" required value={String(form.goals || "")} onChange={(event) => update("goals", event.target.value)} className="mt-2 min-h-28 rounded-xl" />
+                    <Textarea id="goals" name="goals" required value={String(form.goals || "")} onChange={(event) => update("goals", event.target.value)} className="mt-2 min-h-28 rounded-xl" />
                   </div>
                   <div>
                     <Label htmlFor="schedulingAvailability">General scheduling availability</Label>
-                    <Textarea id="schedulingAvailability" required value={String(form.schedulingAvailability || "")} onChange={(event) => update("schedulingAvailability", event.target.value)} className="mt-2 min-h-24 rounded-xl" />
+                    <Textarea id="schedulingAvailability" name="schedulingAvailability" required value={String(form.schedulingAvailability || "")} onChange={(event) => update("schedulingAvailability", event.target.value)} className="mt-2 min-h-24 rounded-xl" />
                   </div>
                   <div className="space-y-3 rounded-2xl bg-muted/60 p-5 text-sm">
                     <label className="flex items-start gap-3"><input type="checkbox" required checked={Boolean(form.consentToContact)} onChange={(event) => update("consentToContact", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I consent to being contacted about this request.</span></label>
-                    <label className="flex items-start gap-3"><input type="checkbox" required checked={Boolean(form.privacyAcknowledged)} onChange={(event) => update("privacyAcknowledged", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I acknowledge the privacy notice and understand this request is stored privately for follow-up.</span></label>
+                    <label className="flex items-start gap-3"><input type="checkbox" required checked={Boolean(form.privacyAcknowledged)} onChange={(event) => update("privacyAcknowledged", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I acknowledge the <a href="#privacy-notice" className="font-medium text-primary underline underline-offset-2">privacy notice</a> and understand this request is stored privately for follow-up.</span></label>
                   </div>
-                  {status === "error" && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
+                  {status === "error" && <div role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"><p>{message}</p><p className="mt-1">Your answers are still here. Check the highlighted requirements and try again.</p></div>}
                   <Button type="submit" disabled={status === "sending"} className="h-12 w-full rounded-full bg-gradient-brand text-white">
                     {status === "sending" ? "Sending request…" : "Send private request"} <Send className="ml-2 h-4 w-4" />
                   </Button>
@@ -105,6 +116,10 @@ export default function ClientRequest() {
             </CardContent>
           </Card>
         </div>
+        <section id="privacy-notice" className="mx-auto mt-12 max-w-3xl scroll-mt-28 rounded-2xl border bg-card/60 p-6 text-sm text-muted-foreground">
+          <h2 className="font-semibold text-foreground">Privacy notice</h2>
+          <p className="mt-2 leading-relaxed">We use the information in this form only to respond to your inquiry and coordinate a possible fit. It is stored for private follow-up by the Accepted Admissions administrator team and is not displayed on this public site.</p>
+        </section>
       </main>
     </PublicSiteShell>
   );

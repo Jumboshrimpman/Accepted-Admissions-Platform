@@ -2827,6 +2827,92 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
+function safePublicUrl(value: unknown): boolean {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function publicContentPublicationError(
+  pageType: string,
+  record: {
+    title: unknown;
+    seoTitle: unknown;
+    seoDescription: unknown;
+    body: unknown;
+  },
+): string | null {
+  if (typeof record.title !== "string" || !record.title.trim() || record.title.length > 120) {
+    return "A published page needs a title of 1–120 characters.";
+  }
+  if (typeof record.seoTitle !== "string" || !record.seoTitle.trim() || record.seoTitle.length > 70) {
+    return "A published page needs an SEO title of 1–70 characters.";
+  }
+  if (
+    typeof record.seoDescription !== "string" ||
+    !record.seoDescription.trim() ||
+    record.seoDescription.length > 180
+  ) {
+    return "A published page needs an SEO description of 1–180 characters.";
+  }
+  if (!record.body || typeof record.body !== "object" || Array.isArray(record.body)) {
+    return "A published page needs a valid content body.";
+  }
+
+  const body = record.body as Record<string, unknown>;
+  if (pageType === "success") {
+    if ("intro" in body && (typeof body.intro !== "string" || body.intro.length > 4000)) {
+      return "The success-page introduction must be 4,000 characters or fewer.";
+    }
+    const testimonial = body.testimonial;
+    if (testimonial !== undefined && testimonial !== null) {
+      if (typeof testimonial !== "object" || Array.isArray(testimonial)) {
+        return "Testimonial content must be an object.";
+      }
+      const item = testimonial as Record<string, unknown>;
+      if (item.quote !== undefined && (typeof item.quote !== "string" || item.quote.length > 3000)) {
+        return "A testimonial quote must be 3,000 characters or fewer.";
+      }
+      if (
+        item.attributionMode !== undefined &&
+        item.attributionMode !== "named" &&
+        item.attributionMode !== "anonymous"
+      ) {
+        return "Testimonial attribution must be named or anonymous.";
+      }
+      if (item.attributionMode === "named" && (typeof item.attribution !== "string" || !item.attribution.trim())) {
+        return "A named testimonial needs an attribution.";
+      }
+    }
+    const logos = body.schoolLogos;
+    if (logos !== undefined) {
+      if (!Array.isArray(logos) || logos.length > 30) return "School logos must be a list of 30 or fewer items.";
+      for (const logo of logos) {
+        const item = logo as Record<string, unknown>;
+        const name = item?.name;
+        const alt = item?.alt;
+        if (
+          !logo ||
+          typeof logo !== "object" ||
+          Array.isArray(logo) ||
+          typeof name !== "string" ||
+          !name.trim() ||
+          !safePublicUrl(item.src) ||
+          typeof alt !== "string" ||
+          !alt.trim()
+        ) {
+          return "Each school logo needs a name, safe http(s) image URL, and alt text.";
+        }
+      }
+    }
+  }
+  return null;
+}
+
 class BookingError extends Error {
   constructor(
     public readonly status: number,
@@ -3213,6 +3299,20 @@ router.get("/public/products", async (_req, res): Promise<void> => {
 
 router.get("/public/tutors", async (_req, res): Promise<void> => {
   await ensurePublicPlatformData();
+  const [teamPage] = await db
+    .select()
+    .from(publicContentTable)
+    .where(
+      and(
+        eq(publicContentTable.slug, "our-team"),
+        eq(publicContentTable.status, "published"),
+      ),
+    )
+    .limit(1);
+  if (!teamPage || publicContentPublicationError(teamPage.pageType, teamPage)) {
+    res.status(404).json({ error: "Published team content not found" });
+    return;
+  }
   const tutors = await db
     .select({
       id: tutorProfilesTable.id,
@@ -3223,8 +3323,6 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       biography: tutorProfilesTable.biography,
       subjects: tutorProfilesTable.subjects,
       linkedinUrl: tutorProfilesTable.linkedinUrl,
-      bookingEligible: tutorProfilesTable.bookingEligible,
-      calendarStatus: tutorProfilesTable.calendarStatus,
     })
     .from(tutorProfilesTable)
     .where(
@@ -3250,6 +3348,11 @@ router.get("/public/content/:slug", async (req, res): Promise<void> => {
     )
     .limit(1);
   if (!content) {
+    res.status(404).json({ error: "Published content not found" });
+    return;
+  }
+  const publicationError = publicContentPublicationError(content.pageType, content);
+  if (publicationError) {
     res.status(404).json({ error: "Published content not found" });
     return;
   }
@@ -3321,16 +3424,43 @@ router.patch(
     for (const field of ["publicApproved", "active", "bookingEligible"] as const) {
       if (field in body && typeof body[field] === "boolean") updates[field] = body[field];
     }
-    if (updates.publicApproved === true) {
-      const biography = updates.biography ?? (
-        await db
-          .select({ biography: tutorProfilesTable.biography })
-          .from(tutorProfilesTable)
-          .where(eq(tutorProfilesTable.id, tutorId))
-          .limit(1)
-      )[0]?.biography;
-      if (typeof biography !== "string" || !biography.trim()) {
+    const [existing] = await db
+      .select({
+        name: tutorProfilesTable.name,
+        title: tutorProfilesTable.title,
+        photoUrl: tutorProfilesTable.photoUrl,
+        photoAltText: tutorProfilesTable.photoAltText,
+        biography: tutorProfilesTable.biography,
+        linkedinUrl: tutorProfilesTable.linkedinUrl,
+        publicApproved: tutorProfilesTable.publicApproved,
+      })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.id, tutorId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const proposed = { ...existing, ...updates };
+    if (proposed.publicApproved === true) {
+      if (!existing || typeof proposed.name !== "string" || !proposed.name.trim() || typeof proposed.title !== "string" || !proposed.title.trim()) {
+        res.status(400).json({ error: "An approved tutor needs a name and title." });
+        return;
+      }
+      if (typeof proposed.biography !== "string" || !proposed.biography.trim()) {
         res.status(400).json({ error: "An approved tutor needs a biography." });
+        return;
+      }
+      if (proposed.photoUrl !== null && proposed.photoUrl !== undefined && !safePublicUrl(proposed.photoUrl)) {
+        res.status(400).json({ error: "A headshot URL must use http or https." });
+        return;
+      }
+      if (proposed.photoUrl && (typeof proposed.photoAltText !== "string" || !proposed.photoAltText.trim())) {
+        res.status(400).json({ error: "A public headshot needs alt text." });
+        return;
+      }
+      if (proposed.linkedinUrl !== null && proposed.linkedinUrl !== undefined && !safePublicUrl(proposed.linkedinUrl)) {
+        res.status(400).json({ error: "A LinkedIn URL must use http or https." });
         return;
       }
     }
@@ -3394,6 +3524,15 @@ router.patch(
       return;
     }
     const body = (req.body ?? {}) as Record<string, unknown>;
+    const [existing] = await db
+      .select()
+      .from(publicContentTable)
+      .where(eq(publicContentTable.slug, slug))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Public content not found" });
+      return;
+    }
     const updates: Record<string, unknown> = { updatedAt: new Date(), updatedBy: req.appUser!.id };
     for (const field of ["title", "seoTitle", "seoDescription"] as const) {
       if (field in body && (typeof body[field] === "string" || body[field] === null)) {
@@ -3406,6 +3545,20 @@ router.patch(
     if ("status" in body && ["draft", "published", "archived"].includes(String(body.status))) {
       updates.status = body.status;
       updates.publishedAt = body.status === "published" ? new Date() : null;
+    }
+    const proposed = {
+      pageType: existing.pageType,
+      title: updates.title ?? existing.title,
+      seoTitle: updates.seoTitle ?? existing.seoTitle,
+      seoDescription: updates.seoDescription ?? existing.seoDescription,
+      body: updates.body ?? existing.body,
+    };
+    if (updates.status === "published" || (updates.status === undefined && existing.status === "published")) {
+      const publicationError = publicContentPublicationError(existing.pageType, proposed);
+      if (publicationError) {
+        res.status(400).json({ error: publicationError });
+        return;
+      }
     }
     const [saved] = await db
       .update(publicContentTable)

@@ -1,2 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /portal
+Disallow: /sign-in
+Disallow: /t-g
+Disallow: /tutor
+
+Sitemap: https://accepted-admissions-platform.replit.app/sitemap.xml

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/react";
 import { useCreatePaymentCheckout } from "@workspace/api-client-react";
 import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
@@ -26,24 +26,51 @@ export default function SatOfferings() {
   const [error, setError] = useState(false);
   const [checkoutProductId, setCheckoutProductId] = useState("");
   const [checkoutMessage, setCheckoutMessage] = useState("");
+  const [pendingProductId, setPendingProductId] = useState<string | null>(null);
   const checkout = useCreatePaymentCheckout();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+  const featuredProductId = useMemo(() => {
+    return (
+      products.find((product) => product.slug === "sat-5-hour-package")?.id ??
+      products.find((product) => product.durationHours === 5)?.id ??
+      null
+    );
+  }, [products]);
+
   useEffect(() => {
+    const storedProductId = window.sessionStorage.getItem("accepted:pending-product");
+    if (storedProductId) setPendingProductId(storedProductId);
     fetch(publicApiPath("/api/public/products"))
       .then((response) => {
         if (!response.ok) throw new Error("Products unavailable");
         return response.json() as Promise<Product[]>;
       })
-      .then(setProducts)
+      .then((nextProducts) => {
+        setProducts(Array.isArray(nextProducts) ? nextProducts : []);
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!isSignedIn || !pendingProductId || loading || !products.length) return;
+    if (!products.some((product) => product.id === pendingProductId)) {
+      setPendingProductId(null);
+      window.sessionStorage.removeItem("accepted:pending-product");
+      return;
+    }
+    setPendingProductId(null);
+    window.sessionStorage.removeItem("accepted:pending-product");
+    startCheckout(pendingProductId);
+  }, [isSignedIn, pendingProductId, loading, products]);
+
   const startCheckout = (productId: string) => {
     setCheckoutMessage("");
     if (!isSignedIn) {
-      window.location.assign(`${basePath}/login`);
+      window.sessionStorage.setItem("accepted:pending-product", productId);
+      const returnTo = `${basePath}/sat`;
+      window.location.assign(`${basePath}/login?returnTo=${encodeURIComponent(returnTo)}`);
       return;
     }
     setCheckoutProductId(productId);
@@ -63,7 +90,11 @@ export default function SatOfferings() {
   };
 
   return (
-    <PublicSiteShell eyebrow="Fall 2026 · SAT and IELTS program">
+    <PublicSiteShell
+      eyebrow="Fall 2026 · SAT and IELTS program"
+      title="SAT tutoring | Accepted Admissions"
+      description="Focused SAT tutoring with flexible session products and a clear credit-based scheduling flow."
+    >
       <main>
         <section className="relative overflow-hidden border-b">
           <div className="absolute -right-24 -top-40 h-[520px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
@@ -125,11 +156,19 @@ export default function SatOfferings() {
             <div className="grid gap-5 md:grid-cols-3">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-64 rounded-3xl" />)}</div>
           ) : error ? (
             <div className="rounded-3xl border border-dashed p-10 text-center text-muted-foreground">Offerings are temporarily unavailable. Please use the client request form and we’ll help you directly.</div>
+          ) : products.length === 0 ? (
+            <div className="rounded-3xl border border-dashed p-10 text-center">
+              <h3 className="text-lg font-semibold">No offerings are available right now</h3>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">Tell us what you are working toward and we’ll help you find the right next step.</p>
+              <Link href="/client-request"><Button variant="outline" className="mt-5 rounded-full">Start a conversation</Button></Link>
+            </div>
           ) : (
             <div className="grid gap-5 md:grid-cols-3">
-              {products.map((product, index) => (
-                <Card key={product.id} className={`relative overflow-hidden rounded-3xl ${index === 1 ? "border-accent/40 shadow-lg shadow-accent/10" : ""}`}>
-                  {index === 1 && <Badge className="absolute right-5 top-5 rounded-full bg-accent text-white">Most flexible</Badge>}
+              {products.map((product) => {
+                const isFeatured = product.id === featuredProductId;
+                return (
+                <Card key={product.id} className={`relative overflow-hidden rounded-3xl ${isFeatured ? "border-accent/40 shadow-lg shadow-accent/10" : ""}`}>
+                  {isFeatured && <Badge className="absolute right-5 top-5 rounded-full bg-accent text-white">Most flexible</Badge>}
                   <CardHeader className="pb-4">
                     <p className="text-sm font-medium text-muted-foreground">{product.durationHours === 1 ? "Start here" : "Package"}</p>
                     <CardTitle className="mt-2 text-2xl">{product.name}</CardTitle>
@@ -142,7 +181,7 @@ export default function SatOfferings() {
                       <p className="mt-1 text-sm font-medium text-accent">${(product.effectiveHourlyRateCents / 100).toLocaleString()}/hour effective rate</p>
                     </div>
                      <Button
-                       variant={index === 1 ? "default" : "outline"}
+                        variant={isFeatured ? "default" : "outline"}
                        className="w-full rounded-full"
                        onClick={() => startCheckout(product.id)}
                        disabled={checkout.isPending}
@@ -155,7 +194,8 @@ export default function SatOfferings() {
                      </Button>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
            {checkoutMessage && (
@@ -163,7 +203,7 @@ export default function SatOfferings() {
                {checkoutMessage}
              </p>
            )}
-        </section>
+       </section>
 
         <section className="border-y bg-card">
           <div className="container mx-auto grid gap-8 px-6 py-16 md:grid-cols-3">
