@@ -215,6 +215,8 @@ const XAVIER_NAME = "Xavier Morales";
 const XAVIER_OFFER_SLUG = "single-sat-session";
 const XAVIER_OFFER_PRICE_CENTS = 15_000;
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function claimString(claims: unknown, key: string): string | undefined {
   if (!claims || typeof claims !== "object") return undefined;
@@ -6694,6 +6696,10 @@ router.get(
     const params = GetAdminClientDashboardParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!UUID_PATTERN.test(params.data.clientId)) {
+      res.status(400).json({ error: "Invalid client ID" });
       return;
     }
     const client = await clientForAdminPreview(

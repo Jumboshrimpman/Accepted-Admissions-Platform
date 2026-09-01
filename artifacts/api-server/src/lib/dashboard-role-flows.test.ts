@@ -121,22 +121,18 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
 test("client preview lookup is administrator-only and limited to student accounts", async () => {
   const fixture = await createDashboardRoleFixture();
   try {
-    const administrator = {
-      ...fixture.satTutor,
-      role: "administrator" as const,
-    };
-    const client = await clientForAdminPreview(administrator, fixture.student.id);
+    const client = await clientForAdminPreview(fixture.administrator, fixture.student.id);
     assert.equal(client?.id, fixture.student.id);
     assert.equal(
       await clientForAdminPreview(fixture.satTutor, fixture.student.id),
       null,
     );
     assert.equal(
-      await clientForAdminPreview(administrator, fixture.satTutor.id),
+      await clientForAdminPreview(fixture.administrator, fixture.satTutor.id),
       null,
     );
     assert.equal(
-      await clientForAdminPreview(administrator, randomUUID()),
+      await clientForAdminPreview(fixture.administrator, randomUUID()),
       null,
     );
   } finally {

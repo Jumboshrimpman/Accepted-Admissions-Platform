@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import {
   assignmentsTable,
   courseMembershipsTable,
   coursesTable,
   db,
+  loginActivityTable,
   sessionsTable,
   tutorAssignmentsTable,
   usersTable,
@@ -16,6 +17,7 @@ export type DashboardRoleFixture = {
   courseId: string;
   student: AppUser;
   otherStudent: AppUser;
+  administrator: AppUser;
   viewer: AppUser;
   satTutor: AppUser;
   englishTutor: AppUser;
@@ -50,6 +52,12 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
         role: "student",
       },
       {
+        clerkUserId: `dashboard-administrator:${suffix}`,
+        email: `dashboard-administrator-${suffix}@example.invalid`,
+        displayName: "Dashboard Administrator",
+        role: "administrator",
+      },
+      {
         clerkUserId: `dashboard-viewer:${suffix}`,
         email: `dashboard-viewer-${suffix}@example.invalid`,
         displayName: "Dashboard Viewer",
@@ -71,9 +79,10 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
     .returning();
   const student = users[0]!;
   const otherStudent = users[1]!;
-  const viewer = users[2]!;
-  const satTutor = users[3]!;
-  const englishTutor = users[4]!;
+  const administrator = users[2]!;
+  const viewer = users[3]!;
+  const satTutor = users[4]!;
+  const englishTutor = users[5]!;
 
   const [course] = await db
     .insert(coursesTable)
@@ -208,6 +217,7 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
     courseId,
     student,
     otherStudent,
+    administrator,
     viewer,
     satTutor,
     englishTutor,
@@ -217,6 +227,10 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
       draft: draftAssignment!.id,
     },
     cleanup: async () => {
+      const userIds = users.map((user) => user.id);
+      await db
+        .delete(loginActivityTable)
+        .where(inArray(loginActivityTable.userId, userIds));
       await db
         .delete(assignmentsTable)
         .where(inArray(assignmentsTable.id, [publishedAssignment!.id, draftAssignment!.id]));
@@ -225,17 +239,28 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
         .where(inArray(sessionsTable.id, Object.values(sessionIds)));
       await db
         .delete(tutorAssignmentsTable)
-        .where(eq(tutorAssignmentsTable.courseId, courseId));
+        .where(
+          or(
+            eq(tutorAssignmentsTable.courseId, courseId),
+            inArray(tutorAssignmentsTable.studentUserId, userIds),
+            inArray(tutorAssignmentsTable.tutorUserId, userIds),
+          ),
+        );
       await db
         .delete(viewerLinksTable)
         .where(eq(viewerLinksTable.viewerUserId, viewer.id));
       await db
         .delete(courseMembershipsTable)
-        .where(eq(courseMembershipsTable.courseId, courseId));
+        .where(
+          or(
+            eq(courseMembershipsTable.courseId, courseId),
+            inArray(courseMembershipsTable.userId, userIds),
+          ),
+        );
       await db.delete(coursesTable).where(eq(coursesTable.id, courseId));
       await db
         .delete(usersTable)
-        .where(inArray(usersTable.id, users.map((user) => user.id)));
+        .where(inArray(usersTable.id, userIds));
     },
   };
 }
