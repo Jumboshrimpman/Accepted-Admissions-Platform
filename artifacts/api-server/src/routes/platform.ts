@@ -1157,7 +1157,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         name: "Xavier Morales",
         title: "SAT & Math Tutor",
         photoUrl:
-          "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",
+          "https://static.wixstatic.com/media/2c8654_1be78ea7e5ea4c179eb57f8d77885aea~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1be78ea7e5ea4c179eb57f8d77885aea~mv2.jpg",
         photoAltText: "Xavier Morales, SAT and Math Tutor",
         biography:
           "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He is a 2024 Rhodes Scholar, studying Philosophy for his Masters at Oxford until 2026. Xavier is also an incoming member of the 2029 Harvard Law School class.",
@@ -1172,7 +1172,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         name: "Eunice Chon",
         title: "Scholarship Tutor",
         photoUrl:
-          "https://static.wixstatic.com/media/2c8654_3d3d703b8ea343ef8805961027f1406a~mv2.jpg/v1/crop/x_32,y_0,w_537,h_400/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Manuel.jpg",
+          "https://static.wixstatic.com/media/2c8654_cc6cc4127d6f4b479f89ba91c18ca457~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_cc6cc4127d6f4b479f89ba91c18ca457~mv2.jpg",
         photoAltText: "Eunice Chon, Scholarship Tutor",
         biography:
           "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
@@ -1185,14 +1185,218 @@ async function ensureUpgradeSeedData(): Promise<void> {
       {
         email: "nika.raiffe@gmail.com",
         name: "Nika Raiffe",
-        title: "English & IELTS Tutor",
-        subjects: ["English", "IELTS"],
-        publicApproved: false,
+        title: "Admissions Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png/v1/fill/w_457,h_685,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png",
+        photoAltText: "Nika Raiffe, Admissions Tutor",
+        subjects: ["College admissions"],
+        linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
+        publicApproved: true,
+        biography:
+          "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+        calendarStatus: "disconnected",
+        bookingEligible: true,
+      },
+      {
+        email: "public-rosanna-kataja@seed.invalid",
+        name: "Rosanna Kataja",
+        title: "Admissions Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_fb71dc7f45d049339b3696beb82a0e8f~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_fb71dc7f45d049339b3696beb82a0e8f~mv2.jpg",
+        photoAltText: "Rosanna Kataja, Admissions Tutor",
+        biography:
+          "Rosanna Kataja is a 2024 graduate of Harvard University, where she studied economics. She is a Fulbright Finland Scholar. Her essays were featured in the book Top 50 Harvard Essays. She has worked in finance for Citi and specialized in college admissions for 2+ years.",
+        subjects: ["College admissions"],
+        linkedinUrl: "https://www.linkedin.com/in/rosannakataja/",
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-sophia-lamas@seed.invalid",
+        name: "Sophia Lamas",
+        title: "Admissions Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_1e5008d296ca4b20bd2f46a6a483de2e~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1e5008d296ca4b20bd2f46a6a483de2e~mv2.jpg",
+        photoAltText: "Sophia Lamas, Admissions Tutor",
+        biography:
+          "Sophia Lamas is a 2024 graduate of Stanford with a degree in International Relations and Middle Eastern Studies. There, she served as the Vice President of Stanford's Questbridge College Program Chapter. She is now pursuing her Master’s in Middle East Studies at George Washington University, specializing in Arabic and Conflict Resolution.",
+        subjects: ["College admissions"],
+        linkedinUrl: "https://www.linkedin.com/in/sophia-lamas/",
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-aurelia-finch@seed.invalid",
+        name: "Aurelia Finch",
+        title: "Admissions Tutor - UK",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png/v1/fill/w_457,h_685,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png",
+        photoAltText: "Aurelia Finch, Admissions Tutor",
+        biography:
+          "Aurelia graduated with an MPhil in Modern Middle Eastern Studies from the University of Oxford in 2024, after completing her undergraduate studies in Arabic and Spanish at the University of Durham with first class honours. She is now Director of the UK-MENA Network.",
+        subjects: ["College admissions"],
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-kya-brooks@seed.invalid",
+        name: "Kya Brooks",
+        title: "Admissions Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_ab3655c726c846819c5eec1195af49bd~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_ab3655c726c846819c5eec1195af49bd~mv2.jpg",
+        photoAltText: "Kya Brooks, Admissions Tutor",
+        biography:
+          "Kya is a senior at Harvard studying economics and the History of Art and Literature. She works in investment finance and consulting, and is a professional model for Wilhelmina Co. Kya is a Coca-Cola Scholar.",
+        subjects: ["College admissions"],
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-michael-pecorara@seed.invalid",
+        name: "Michael Pecorara",
+        title: "SAT and LSAT Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_1ab78bc7f16a48559bc3b46364c94bcc~mv2.jpg/v1/fill/w_457,h_763,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1ab78bc7f16a48559bc3b46364c94bcc~mv2.jpg",
+        photoAltText: "Michael Pecorara, SAT and LSAT Tutor",
+        biography:
+          "Michael Pecorara is a senior at Harvard University with a concentration in Economics, Government Secondary, and Chinese Language Citation. He has previously worked for a law firm and led one of Harvard's International Relations organizations.",
+        subjects: ["SAT", "LSAT"],
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-kyle-englander@seed.invalid",
+        name: "Kyle Englander",
+        title: "Scholarship Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_72de1811814144689846123daff8471f~mv2.png/v1/fill/w_437,h_730,al_c,q_85,enc_avif,quality_auto/2c8654_72de1811814144689846123daff8471f~mv2.png",
+        photoAltText: "Kyle Englander, Scholarship Tutor",
+        biography:
+          "Kyle Englander is a 2024 graduate of Harvard University where he studied economics. Kyle has a background in finance, venture capital, and private equity. He received his commission from the U.S. Navy where he currently serves as an officer.",
+        subjects: ["Scholarships", "College admissions"],
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-daniel-salgado-alvarez@seed.invalid",
+        name: "Daniel Salgado-Alvarez",
+        title: "Admissions Tutor",
+        photoUrl:
+          "https://static.wixstatic.com/media/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg/v1/fill/w_457,h_763,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg",
+        photoAltText: "Daniel Salgado-Alvarez, Admissions Tutor",
+        biography:
+          "Daniel is a 2024 graduate of Harvard, who studied sociology and East Asian studies. He is a first-generation college student and the son of Mexican immigrants. In college, he worked at the Peace Corps and the U.S. Department of State. He is a 2024 Fulbright Recipient.",
+        subjects: ["College admissions"],
+        linkedinUrl: "https://www.linkedin.com/in/daniel-salgado-alvarez-249232191/",
+        publicApproved: true,
+        calendarStatus: "disconnected",
+        bookingEligible: false,
+      },
+      {
+        email: "public-sama-noori@seed.invalid",
+        name: "Sama Noori",
+        title: "Admissions Tutor",
+        photoAltText: "Sama Noori, Admissions Tutor",
+        biography:
+          "Sama is a member of Harvard's Class of 2024 with her Bachelor's and Master's in Middle East Studies. She has worked in finance for Bank of America and in government for 3 years at the U.S. Department of State. She has been a college admissions consultant for 5 years and Director of Admissions at a top 100 educational company. She also has professional experience teaching in the Virginia school system. Sama works on operations for Accepted.",
+        subjects: ["College admissions", "Operations"],
+        linkedinUrl: "https://www.linkedin.com/in/samanoori/",
+        publicApproved: true,
         calendarStatus: "disconnected",
         bookingEligible: false,
       },
     ])
     .onConflictDoNothing();
+
+  // Nika was part of the original private seed. Promote that untouched seed
+  // record once so the local roster matches the published team page without
+  // re-publishing a profile an administrator intentionally changed later.
+  await db
+    .update(tutorProfilesTable)
+    .set({
+      title: "Admissions Tutor",
+      photoUrl:
+        "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg",
+      photoAltText: "Nika Raiffe, Admissions Tutor",
+      biography:
+        "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+      subjects: ["College admissions"],
+      linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
+      publicApproved: true,
+      bookingEligible: true,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tutorProfilesTable.email, "nika.raiffe@gmail.com"),
+        eq(tutorProfilesTable.publicApproved, false),
+        isNull(tutorProfilesTable.photoUrl),
+      ),
+    );
+
+  const mirroredPortraitUpdates = [
+    {
+      email: "xsfam6@gmail.com",
+      previousPhotoUrl:
+        "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",
+      photoUrl:
+        "https://static.wixstatic.com/media/2c8654_1be78ea7e5ea4c179eb57f8d77885aea~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1be78ea7e5ea4c179eb57f8d77885aea~mv2.jpg",
+      photoAltText: "Xavier Morales, SAT and Math Tutor",
+    },
+    {
+      email: "eunice_chon@berkeley.edu",
+      previousPhotoUrl:
+        "https://static.wixstatic.com/media/2c8654_3d3d703b8ea343ef8805961027f1406a~mv2.jpg/v1/crop/x_32,y_0,w_537,h_400/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Manuel.jpg",
+      photoUrl:
+        "https://static.wixstatic.com/media/2c8654_cc6cc4127d6f4b479f89ba91c18ca457~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_cc6cc4127d6f4b479f89ba91c18ca457~mv2.jpg",
+      photoAltText: "Eunice Chon, Scholarship Tutor",
+    },
+    {
+      email: "public-rosanna-kataja@seed.invalid",
+      previousPhotoUrl:
+        "https://static.wixstatic.com/media/2c8654_1be78ea7e5ea4c179eb57f8d77885aea~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1be78ea7e5ea4c179eb57f8d77885aea~mv2.jpg",
+      photoUrl:
+        "https://static.wixstatic.com/media/2c8654_fb71dc7f45d049339b3696beb82a0e8f~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_fb71dc7f45d049339b3696beb82a0e8f~mv2.jpg",
+      photoAltText: "Rosanna Kataja, Admissions Tutor",
+    },
+    {
+      email: "public-sophia-lamas@seed.invalid",
+      previousPhotoUrl:
+        "https://static.wixstatic.com/media/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png/v1/fill/w_457,h_685,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png",
+      photoUrl:
+        "https://static.wixstatic.com/media/2c8654_1e5008d296ca4b20bd2f46a6a483de2e~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1e5008d296ca4b20bd2f46a6a483de2e~mv2.jpg",
+      photoAltText: "Sophia Lamas, Admissions Tutor",
+    },
+    {
+      email: "public-aurelia-finch@seed.invalid",
+      previousPhotoUrl:
+        "https://static.wixstatic.com/media/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png/v1/fill/w_457,h_685,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png",
+      photoUrl:
+        "https://static.wixstatic.com/media/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png/v1/fill/w_457,h_685,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png",
+      photoAltText: "Aurelia Finch, Admissions Tutor - UK",
+    },
+  ] as const;
+  for (const update of mirroredPortraitUpdates) {
+    await db
+      .update(tutorProfilesTable)
+      .set({
+        photoUrl: update.photoUrl,
+        photoAltText: update.photoAltText,
+      })
+      .where(
+        and(
+          eq(tutorProfilesTable.email, update.email),
+          isNull(tutorProfilesTable.userId),
+          eq(tutorProfilesTable.photoUrl, update.previousPhotoUrl),
+        ),
+      );
+  }
 
   await db
     .insert(satProductsTable)
@@ -1362,11 +1566,11 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT tutoring",
         seoTitle: "SAT tutoring | Accepted Admissions",
         seoDescription:
-          "Focused SAT tutoring with flexible session products and a clear credit-based scheduling flow.",
+          "Explore the current 60-minute SAT tutoring offer, see the approved price, and continue to secure checkout.",
         body: {
           sections: [
-            "Work with an SAT tutor around the skills and score goals that matter most.",
-            "Choose a single session or package, then use purchased hours to schedule eligible tutoring.",
+            "Review the single SAT tutoring session currently available online.",
+            "Sign in to purchase, then use the verified prepaid hour to schedule in the client portal.",
           ],
         },
         status: "published",
@@ -1375,10 +1579,10 @@ async function ensureUpgradeSeedData(): Promise<void> {
       {
         slug: "our-team",
         pageType: "team",
-        title: "Our Team",
-        seoTitle: "Our Team | Accepted Admissions",
+        title: "Meet Our Team",
+        seoTitle: "Meet Our Team | Accepted Admissions",
         seoDescription:
-          "Meet the tutors behind Accepted Admissions and learn how their experience shapes thoughtful student support.",
+          "Meet the approved public profiles behind Accepted Admissions and decide whether to request SAT or broader guidance.",
         body: {
           intro: "Choose the expert best fit for you.",
         },
@@ -1388,13 +1592,13 @@ async function ensureUpgradeSeedData(): Promise<void> {
       {
         slug: "past-success",
         pageType: "success",
-        title: "Past Success",
-        seoTitle: "Past Student Success | Accepted Admissions",
+        title: "Student Stories",
+        seoTitle: "Student Stories | Accepted Admissions",
         seoDescription:
-          "Read an approved student testimonial and explore a sample of schools Accepted Admissions students have been accepted to.",
+          "Read an approved student perspective and view destination details published by Accepted Admissions.",
         body: {
           intro:
-            "This is a sample of the schools our students have been accepted to. We work hard to get our students into the schools of their dreams. As recent students, we have a nuanced understanding of our modern world's competitive college application process landscape.",
+            "This page shares an approved student perspective and published destination examples. These records provide context, not a promise of a particular admission result.",
           testimonial: {
             quote:
               "Really happy with my experience with Accepted Admissions. It was an advantage to have on-the-ground Harvard students who are current with applications advising me for cheaper than huge firms. It was nice to work with tutors who all had an Ivy League backgrounds.",
@@ -1444,6 +1648,62 @@ async function ensureUpgradeSeedData(): Promise<void> {
       },
     ])
     .onConflictDoNothing();
+
+  // Refresh only untouched seed records. Admin-edited records retain their
+  // published content and remain the source of truth for the public site.
+  await db
+    .update(publicContentTable)
+    .set({
+      title: "Meet Our Team",
+      seoTitle: "Meet Our Team | Accepted Admissions",
+      body: { intro: "Choose the expert best fit for you." },
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(publicContentTable.slug, "our-team"),
+        eq(publicContentTable.title, "Meet the Team"),
+        isNull(publicContentTable.updatedBy),
+      ),
+    );
+
+  const [successSeed] = await db
+    .select()
+    .from(publicContentTable)
+    .where(
+      and(
+        eq(publicContentTable.slug, "past-success"),
+        isNull(publicContentTable.updatedBy),
+      ),
+    )
+    .limit(1);
+  const successBody =
+    successSeed?.body && typeof successSeed.body === "object" && !Array.isArray(successSeed.body)
+      ? (successSeed.body as Record<string, unknown>)
+      : null;
+  const successIntro =
+    typeof successBody?.intro === "string" ? successBody.intro : "";
+  if (
+    successSeed &&
+    (successIntro.includes("This is a sample of the schools") ||
+      successIntro.includes("get our students into the schools of their dreams"))
+  ) {
+    await db
+      .update(publicContentTable)
+      .set({
+        title: "Student Stories",
+        seoTitle: "Student Stories | Accepted Admissions",
+        seoDescription:
+          "Read an approved student perspective and view destination examples published by Accepted Admissions.",
+        body: {
+          ...successBody,
+          intro:
+            "This page shares an approved student perspective and published destination examples. These records provide context, not a promise of a particular admission result.",
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(publicContentTable.id, successSeed.id));
+  }
 }
 
 async function syncConfiguredAccess(

@@ -135,8 +135,8 @@ export function PublicContentPanel() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Public team & success content</h2>
-          <p className="text-sm text-muted-foreground">Edit source-approved copy and control what appears publicly without changing page code.</p>
+          <h2 className="text-2xl font-bold tracking-tight">Public team and student-story content</h2>
+          <p className="text-sm text-muted-foreground">Edit source-approved copy and control what appears publicly. Only published records are shown on the public site.</p>
         </div>
         {message && <p role="status" className="text-sm font-medium text-primary">{message}</p>}
       </div>
@@ -209,8 +209,8 @@ export function PublicContentPanel() {
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <CardTitle>Past Success page</CardTitle>
-                <CardDescription>Preserve the approved testimonial attribution and school image descriptions when editing.</CardDescription>
+                <CardTitle>Student Stories page</CardTitle>
+                <CardDescription>Preserve the approved testimonial attribution and destination image descriptions when editing. Published examples should not be framed as guarantees.</CardDescription>
               </div>
               <Badge variant={success.status === "published" ? "default" : "outline"} className="capitalize">{success.status}</Badge>
             </div>
@@ -275,7 +275,7 @@ export function PublicContentPanel() {
                 Approved and published
               </label>
               <Button onClick={() => void saveContent(success)} disabled={saving === success.slug}>
-                {saving === success.slug ? "Saving…" : "Save Past Success"}
+                {saving === success.slug ? "Saving…" : "Save Student Stories"}
               </Button>
             </div>
           </CardContent>

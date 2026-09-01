@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { CheckCircle2, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, CheckCircle2, Send } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,27 +10,50 @@ import { PublicSiteShell, publicApiPath } from "@/components/public-site-shell";
 
 type RequestForm = Record<string, string | boolean>;
 
-const fields = [
-  ["guardianName", "Parent / guardian or client full name", "text"],
-  ["studentName", "Student full name", "text"],
-  ["email", "Email address", "email"],
-  ["phone", "Phone number", "tel"],
-  ["gradeOrGraduationYear", "Student grade or graduation year", "text"],
-  ["currentSchool", "Current school", "text"],
-  ["serviceRequested", "Service requested", "text"],
-  ["currentSatTotal", "Current SAT total score (optional)", "text"],
-  ["currentReadingWriting", "Current Reading/Writing score (optional)", "text"],
-  ["currentMath", "Current Math score (optional)", "text"],
-  ["targetSatScore", "Target SAT score (optional)", "text"],
-  ["plannedTestDate", "Planned test date (optional)", "date"],
-  ["referralSource", "How did you hear about Accepted Admissions?", "text"],
+const fieldGroups = [
+  {
+    title: "Your contact details",
+    description: "Tell us who should receive the follow-up.",
+    fields: [
+      ["guardianName", "Parent / guardian or client full name", "text"],
+      ["email", "Email address", "email"],
+      ["phone", "Phone number", "tel"],
+    ],
+  },
+  {
+    title: "Student context",
+    description: "Share the basics that help us understand the student’s current stage.",
+    fields: [
+      ["studentName", "Student full name", "text"],
+      ["gradeOrGraduationYear", "Student grade or graduation year", "text"],
+      ["currentSchool", "Current school", "text"],
+    ],
+  },
+  {
+    title: "What you are looking for",
+    description: "Score and test-date details are optional. All other fields help us route the request.",
+    fields: [
+      ["serviceRequested", "Service or guidance requested", "text"],
+      ["currentSatTotal", "Current SAT total score (optional)", "text"],
+      ["currentReadingWriting", "Current Reading/Writing score (optional)", "text"],
+      ["currentMath", "Current Math score (optional)", "text"],
+      ["targetSatScore", "Target SAT score (optional)", "text"],
+      ["plannedTestDate", "Planned test date (optional)", "date"],
+      ["referralSource", "How did you hear about Accepted Admissions?", "text"],
+    ],
+  },
 ] as const;
 
 export default function ClientRequest() {
   const [form, setForm] = useState<RequestForm>({ consentToContact: false, privacyAcknowledged: false });
   const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const statusRef = useRef<HTMLDivElement>(null);
   const update = (key: string, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (status === "error" || status === "success") statusRef.current?.focus();
+  }, [status]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -52,64 +76,78 @@ export default function ClientRequest() {
   }
 
   return (
-    <PublicSiteShell eyebrow="A thoughtful first step">
+    <PublicSiteShell
+      eyebrow="Private guidance request"
+      title="Request guidance | Accepted Admissions"
+      description="Share student goals, service needs, and scheduling context privately so Accepted Admissions can review the right next step."
+    >
       <main className="container mx-auto px-6 py-16 md:py-24">
         <div className="grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:items-start">
           <div className="lg:sticky lg:top-32">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">Client request</p>
-            <h1 className="mt-4 text-5xl font-bold tracking-tight md:text-6xl">Tell us what would make the next step useful.</h1>
-            <p className="mt-6 text-lg leading-relaxed text-muted-foreground">Share a little context and the Accepted Admissions team can follow up with the right questions. Your submission is private and is only visible to the administrator team.</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">Get guidance</p>
+            <h1 className="mt-4 text-5xl font-bold tracking-tight md:text-6xl">Tell us what support you are looking for.</h1>
+            <p className="mt-6 text-lg leading-relaxed text-muted-foreground">Use this form when your needs go beyond the listed SAT offer, when you want to learn about our tutors, or when you want to confirm whether Accepted Admissions is the right fit before taking another step.</p>
+            <Link href="/sat" data-testid="link-request-sat" className="mt-6 inline-flex items-center text-sm font-semibold text-primary hover:underline">
+              Looking for the one-session SAT offer? View it here <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
             <div className="mt-8 space-y-4 text-sm text-muted-foreground">
-              <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>We validate contact details before saving a request.</span></div>
-              <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Your information is not published or shared from this page.</span></div>
-              <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>There is no obligation to purchase or enroll.</span></div>
+              <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Share contact information, student context, the support you are considering, and general availability.</span></div>
+              <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Your request is stored privately for follow-up by the administrator team.</span></div>
+              <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Submitting the form does not confirm availability, enrollment, or a purchase.</span></div>
             </div>
-            <p className="mt-8 text-sm text-muted-foreground">After you submit, our team will review your note and follow up with next-step questions. Please allow time for a thoughtful reply.</p>
+            <p className="mt-8 text-sm text-muted-foreground">After submission, the team will review your note and use the contact details you provided to follow up. The form does not promise a response time or service availability.</p>
           </div>
           <Card className="rounded-3xl border-primary/10 shadow-xl shadow-primary/5">
-            <CardHeader className="p-7 pb-2 md:p-9 md:pb-3"><CardTitle className="text-2xl">Request information</CardTitle></CardHeader>
+            <CardHeader className="p-7 pb-2 md:p-9 md:pb-3"><CardTitle className="text-2xl">Request guidance</CardTitle></CardHeader>
             <CardContent className="p-7 pt-5 md:p-9 md:pt-6">
               {status === "success" ? (
-                <div className="rounded-2xl bg-accent/10 p-8 text-center">
+                <div ref={statusRef} tabIndex={-1} className="rounded-2xl bg-accent/10 p-8 text-center outline-none" data-testid="status-request-success">
                   <CheckCircle2 className="mx-auto h-10 w-10 text-accent" />
                   <h2 className="mt-4 text-2xl font-bold">Request received</h2>
                   <p className="mt-2 text-muted-foreground">{message}</p>
                 </div>
               ) : (
                 <form onSubmit={submit} className="space-y-6" autoComplete="on" aria-describedby="request-form-help">
-                  <p id="request-form-help" className="text-sm text-muted-foreground">Required fields are marked by your browser. Optional score and test-date fields can be left blank.</p>
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    {fields.map(([key, label, type]) => (
-                      <div key={key} className={key === "referralSource" ? "sm:col-span-2" : ""}>
-                        <Label htmlFor={key}>{label}</Label>
-                        <Input
-                          id={key}
-                          name={key}
-                          type={type}
-                          autoComplete={key === "guardianName" ? "name" : key === "studentName" ? "off" : key === "email" ? "email" : key === "phone" ? "tel" : "on"}
-                          required={!["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore", "plannedTestDate"].includes(key)}
-                          value={String(form[key] || "")}
-                          onChange={(event) => update(key, event.target.value)}
-                          className="mt-2 h-11 rounded-xl"
-                        />
+                  <p id="request-form-help" className="text-sm text-muted-foreground">Required fields are marked by your browser. Optional score and test-date fields can be left blank. Your answers stay in place if a recoverable error occurs.</p>
+                  {fieldGroups.map((group) => (
+                    <fieldset key={group.title} className="space-y-4 rounded-2xl border p-5">
+                      <legend className="px-2 font-semibold">{group.title}</legend>
+                      <p className="text-sm text-muted-foreground">{group.description}</p>
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        {group.fields.map(([key, label, type]) => (
+                          <div key={key} className={key === "referralSource" || key === "serviceRequested" ? "sm:col-span-2" : ""}>
+                            <Label htmlFor={key}>{label}</Label>
+                            <Input
+                              id={key}
+                              data-testid={`input-request-${key}`}
+                              name={key}
+                              type={type}
+                              autoComplete={key === "guardianName" ? "name" : key === "studentName" ? "off" : key === "email" ? "email" : key === "phone" ? "tel" : "on"}
+                              required={!["currentSatTotal", "currentReadingWriting", "currentMath", "targetSatScore", "plannedTestDate"].includes(key)}
+                              value={String(form[key] || "")}
+                              onChange={(event) => update(key, event.target.value)}
+                              className="mt-2 h-11 rounded-xl"
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </fieldset>
+                  ))}
                   <div>
                     <Label htmlFor="goals">Goals and explanation of requested help</Label>
-                    <Textarea id="goals" name="goals" required value={String(form.goals || "")} onChange={(event) => update("goals", event.target.value)} className="mt-2 min-h-28 rounded-xl" />
+                    <Textarea id="goals" data-testid="input-request-goals" name="goals" required value={String(form.goals || "")} onChange={(event) => update("goals", event.target.value)} className="mt-2 min-h-28 rounded-xl" />
                   </div>
                   <div>
                     <Label htmlFor="schedulingAvailability">General scheduling availability</Label>
-                    <Textarea id="schedulingAvailability" name="schedulingAvailability" required value={String(form.schedulingAvailability || "")} onChange={(event) => update("schedulingAvailability", event.target.value)} className="mt-2 min-h-24 rounded-xl" />
+                    <Textarea id="schedulingAvailability" data-testid="input-request-availability" name="schedulingAvailability" required value={String(form.schedulingAvailability || "")} onChange={(event) => update("schedulingAvailability", event.target.value)} className="mt-2 min-h-24 rounded-xl" />
                   </div>
                   <div className="space-y-3 rounded-2xl bg-muted/60 p-5 text-sm">
-                    <label className="flex items-start gap-3"><input type="checkbox" required checked={Boolean(form.consentToContact)} onChange={(event) => update("consentToContact", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I consent to being contacted about this request.</span></label>
-                    <label className="flex items-start gap-3"><input type="checkbox" required checked={Boolean(form.privacyAcknowledged)} onChange={(event) => update("privacyAcknowledged", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I acknowledge the <a href="#privacy-notice" className="font-medium text-primary underline underline-offset-2">privacy notice</a> and understand this request is stored privately for follow-up.</span></label>
+                    <label className="flex items-start gap-3"><input data-testid="input-request-contact-consent" type="checkbox" required checked={Boolean(form.consentToContact)} onChange={(event) => update("consentToContact", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I consent to being contacted about this request.</span></label>
+                    <label className="flex items-start gap-3"><input data-testid="input-request-privacy" type="checkbox" required checked={Boolean(form.privacyAcknowledged)} onChange={(event) => update("privacyAcknowledged", event.target.checked)} className="mt-1 h-4 w-4 accent-primary" /><span>I acknowledge the <a href="#privacy-notice" className="font-medium text-primary underline underline-offset-2">privacy notice</a> and understand this request is stored privately for follow-up.</span></label>
                   </div>
-                  {status === "error" && <div role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"><p>{message}</p><p className="mt-1">Your answers are still here. Check the highlighted requirements and try again.</p></div>}
-                  <Button type="submit" disabled={status === "sending"} className="h-12 w-full rounded-full bg-gradient-brand text-white">
-                    {status === "sending" ? "Sending request…" : "Send private request"} <Send className="ml-2 h-4 w-4" />
+                  {status === "error" && <div ref={statusRef} tabIndex={-1} role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive outline-none" data-testid="status-request-error"><p>{message}</p><p className="mt-1">Your answers are still here. Review the contact details and required fields, then try again.</p></div>}
+                  <Button data-testid="button-request-submit" type="submit" disabled={status === "sending"} className="h-12 w-full rounded-full bg-gradient-brand text-white">
+                    {status === "sending" ? "Sending request…" : "Submit guidance request"} <Send className="ml-2 h-4 w-4" />
                   </Button>
                 </form>
               )}
@@ -118,7 +156,7 @@ export default function ClientRequest() {
         </div>
         <section id="privacy-notice" className="mx-auto mt-12 max-w-3xl scroll-mt-28 rounded-2xl border bg-card/60 p-6 text-sm text-muted-foreground">
           <h2 className="font-semibold text-foreground">Privacy notice</h2>
-          <p className="mt-2 leading-relaxed">We use the information in this form only to respond to your inquiry and coordinate a possible fit. It is stored for private follow-up by the Accepted Admissions administrator team and is not displayed on this public site.</p>
+          <p className="mt-2 leading-relaxed">We use the information in this form to respond to your inquiry and coordinate a possible fit. It is stored for private follow-up by the Accepted Admissions administrator team and is not displayed on this public site. Do not include passwords, payment details, or other credentials.</p>
         </section>
       </main>
     </PublicSiteShell>

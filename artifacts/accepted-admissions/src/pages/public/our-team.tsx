@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Linkedin, UserRound } from "lucide-react";
+import { ArrowRight, Linkedin, UserRound } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { PublicSiteShell, publicApiPath } from "@/components/public-site-shell";
 
 type Tutor = {
@@ -22,6 +21,38 @@ type TeamContent = {
   seoDescription: string | null;
   body: { intro?: string };
 };
+
+const liveTeamOrder = [
+  "Rosanna Kataja",
+  "Xavier Morales",
+  "Eunice Chon",
+  "Sophia Lamas",
+  "Aurelia Finch",
+  "Nika Raiffe",
+  "Kya Brooks",
+  "Michael Pecorara",
+  "Kyle Englander",
+  "Daniel Salgado-Alvarez",
+  "Sama Noori",
+];
+
+function orderTeam(tutors: Tutor[]) {
+  return [...tutors].sort((a, b) => {
+    const aIndex = liveTeamOrder.indexOf(a.name);
+    const bIndex = liveTeamOrder.indexOf(b.name);
+    if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
+}
+
+function profileImageAlt(tutor: Tutor) {
+  return (
+    tutor.photoAltText ||
+    `${tutor.name}, ${tutor.title || "Accepted Admissions tutor"}`
+  );
+}
 
 export default function OurTeam() {
   const [tutors, setTutors] = useState<Tutor[]>([]);
@@ -43,7 +74,7 @@ export default function OurTeam() {
       }),
     ])
       .then(([tutorResult, contentResult]) => {
-        setTutors(Array.isArray(tutorResult) ? tutorResult : []);
+        setTutors(Array.isArray(tutorResult) ? orderTeam(tutorResult) : []);
         setContent(contentResult);
       })
       .catch(() => {
@@ -60,65 +91,164 @@ export default function OurTeam() {
 
   return (
     <PublicSiteShell
-      eyebrow="People behind the plan"
-      title={content?.seoTitle || "Our team | Accepted Admissions"}
-      description={content?.seoDescription || "Meet the tutors behind Accepted Admissions and learn how their experience shapes thoughtful student support."}
+      eyebrow="Our team"
+      title={content?.seoTitle || "Meet Our Team | Accepted Admissions"}
+      description={
+        content?.seoDescription ||
+        "Meet the approved public profiles behind Accepted Admissions and choose the expert best fit for you."
+      }
     >
-      <main className="container mx-auto px-6 py-20 md:py-28">
-        <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">Our team</p>
-          <h1 className="mt-4 text-5xl font-bold tracking-tight md:text-6xl">{content?.title || "Thoughtful support, close at hand."}</h1>
-          <p className="mt-6 text-lg leading-relaxed text-muted-foreground">{content?.body.intro || "Choose the expert best fit for you. Every profile shown here has been reviewed for public display."}</p>
-        </div>
-        {loading && <div className="mt-14 rounded-2xl border bg-card p-6 text-sm text-muted-foreground" role="status">Loading our team…</div>}
+      <main className="container mx-auto px-6 py-20 md:py-24">
+        <header className="mx-auto max-w-3xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
+            Our team
+          </p>
+          <h1 className="mt-5 text-5xl font-bold tracking-tight md:text-7xl">
+            {content?.title || "Meet Our Team"}
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            {content?.body.intro || "Choose the expert best fit for you."}
+          </p>
+          <div
+            className="mx-auto mt-7 h-px w-8 bg-foreground/70"
+            aria-hidden="true"
+          />
+        </header>
+
+        {loading && (
+          <div
+            className="mx-auto mt-16 max-w-2xl rounded-2xl border bg-card p-6 text-sm text-muted-foreground"
+            role="status"
+            data-testid="status-team-loading"
+          >
+            Loading approved team profiles…
+          </div>
+        )}
+
         {error && (
-          <div className="mt-14 rounded-2xl border border-destructive/20 bg-card p-6 text-sm text-muted-foreground" role="alert">
-            <p>Our team profiles are temporarily unavailable.</p>
-            <Button type="button" variant="outline" className="mt-4 rounded-full" onClick={loadTutors}>Try again</Button>
+          <div
+            className="mx-auto mt-16 max-w-2xl rounded-2xl border border-destructive/20 bg-card p-6 text-sm text-muted-foreground"
+            role="alert"
+            data-testid="status-team-error"
+          >
+            <p>Approved team profiles are temporarily unavailable.</p>
+            <Button
+              data-testid="button-team-retry"
+              type="button"
+              variant="outline"
+              className="mt-4 rounded-full"
+              onClick={loadTutors}
+            >
+              Try again
+            </Button>
           </div>
         )}
+
         {!loading && !error && tutors.length === 0 && (
-          <div className="mt-14 rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-            Our approved team profiles will appear here soon. Start a conversation to learn how we can help.
+          <div
+            className="mx-auto mt-16 max-w-2xl rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground"
+            data-testid="status-team-empty"
+          >
+            <p>No approved team profiles are published right now.</p>
+            <p className="mx-auto mt-2 max-w-lg">
+              If you would like to discuss SAT tutoring or broader guidance, you
+              can still share your goals privately.
+            </p>
+            <Button asChild variant="outline" className="mt-5 rounded-full">
+              <Link
+                href="/client-request"
+                data-testid="link-team-empty-guidance"
+              >
+                Request guidance
+              </Link>
+            </Button>
           </div>
         )}
-        {!loading && !error && tutors.length > 0 && <div className="mt-14 grid gap-6 md:grid-cols-2">
-          {tutors.map((tutor) => (
-            <Card key={tutor.id} className="overflow-hidden rounded-3xl">
-              <CardContent className="flex flex-col gap-6 p-7 sm:flex-row">
-                <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted text-muted-foreground">
+
+        {!loading && !error && tutors.length > 0 && (
+          <section
+            className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-border sm:grid-cols-2 xl:grid-cols-4"
+            aria-label="Approved team profiles"
+          >
+            {tutors.map((tutor) => (
+              <article
+                key={tutor.id}
+                className="group relative isolate min-h-[31rem] overflow-hidden bg-muted"
+                data-testid={`card-team-${tutor.id}`}
+              >
+                <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
                   {tutor.photoUrl ? (
                     <img
                       src={tutor.photoUrl}
-                      alt={tutor.photoAltText || `${tutor.name}, ${tutor.title}`}
-                      width="112"
-                      height="112"
-                      className="h-full w-full object-cover"
+                      alt={profileImageAlt(tutor)}
+                      width="640"
+                      height="860"
+                      className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                      loading="lazy"
                       onError={(event) => {
-                        event.currentTarget.style.display = "none";
-                        event.currentTarget.nextElementSibling?.removeAttribute("hidden");
+                        event.currentTarget.classList.add("hidden");
+                        event.currentTarget.nextElementSibling?.classList.remove(
+                          "hidden",
+                        );
                       }}
                     />
                   ) : null}
-                  <span hidden={Boolean(tutor.photoUrl)}>
-                    <UserRound className="h-9 w-9" aria-hidden="true" />
+                  <span
+                    className={tutor.photoUrl ? "hidden" : "flex"}
+                    data-testid={`team-placeholder-${tutor.id}`}
+                  >
+                    <UserRound className="h-16 w-16" aria-hidden="true" />
                   </span>
                 </div>
-                <div>
-                  {tutor.title && <p className="text-sm font-medium text-accent">{tutor.title}</p>}
-                  <h2 className="mt-1 text-2xl font-bold">{tutor.name || "Accepted Admissions tutor"}</h2>
-                  {tutor.biography && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{tutor.biography}</p>}
-                  {tutor.subjects?.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{tutor.subjects.map((subject) => <span key={subject} className="rounded-full bg-muted px-3 py-1 text-xs font-medium">{subject}</span>)}</div>}
-                  {tutor.linkedinUrl && <a href={tutor.linkedinUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"><Linkedin className="h-4 w-4" /> LinkedIn</a>}
+
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent"
+                  aria-hidden="true"
+                />
+
+                {tutor.linkedinUrl && (
+                  <a
+                    href={tutor.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`View ${tutor.name} on LinkedIn`}
+                    className="absolute right-4 top-4 z-10 inline-flex h-8 w-8 items-center justify-center bg-[#0a66c2] text-white transition hover:bg-[#004182] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a66c2]"
+                  >
+                    <Linkedin className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                )}
+
+                <div className="absolute inset-x-0 bottom-0 z-10 p-5 text-white sm:p-6">
+                  {tutor.title && (
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/85">
+                      {tutor.title}
+                    </p>
+                  )}
+                  <h2 className="mt-3 text-2xl font-bold leading-tight">
+                    {tutor.name || "Accepted Admissions tutor"}
+                  </h2>
+                  {tutor.biography && (
+                    <p className="mt-3 text-sm leading-relaxed text-white/85">
+                      {tutor.biography}
+                    </p>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>}
-        <div className="mt-12 rounded-3xl border bg-card/60 p-8 text-center">
-          <p className="text-sm font-semibold">Find the right support</p>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Tell us what you are working toward, and we’ll help you choose the best next step.</p>
-          <Button asChild variant="outline" className="mt-5 rounded-full"><Link href="/client-request">Ask about working together</Link></Button>
+              </article>
+            ))}
+          </section>
+        )}
+
+        <div className="mx-auto mt-14 max-w-2xl text-center">
+          <p className="text-sm font-semibold">Not sure which path fits?</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Tell us what you are working toward. We will review your request
+            before discussing a possible next step.
+          </p>
+          <Button asChild className="mt-5 rounded-full">
+            <Link href="/client-request" data-testid="link-team-guidance">
+              Get guidance <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </main>
     </PublicSiteShell>

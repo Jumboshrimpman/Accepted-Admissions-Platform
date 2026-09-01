@@ -1,0 +1,36 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+
+vi.mock("@clerk/react", () => ({
+  Show: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => <a href={href} {...props}>{children}</a>,
+}));
+
+vi.mock("@/components/public-site-shell", () => ({
+  PublicSiteShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+import Landing from "./landing";
+
+afterEach(cleanup);
+
+describe("Landing visitor paths", () => {
+  it("separates the purchasable SAT offer from inquiry-only guidance", () => {
+    render(<Landing />);
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("A clear next step");
+    expect(screen.getByTestId("link-home-sat").getAttribute("href")).toBe("/sat");
+    expect(screen.getByTestId("link-home-guidance").getAttribute("href")).toBe("/client-request");
+    expect(screen.getByText(/one 60-minute SAT tutoring session is currently available/i)).toBeTruthy();
+    expect(screen.getAllByText(/meet the team to learn about our tutors/i)).not.toHaveLength(0);
+    expect(screen.queryByRole("heading", { name: /xavier/i })).toBeNull();
+    expect(screen.getByText(/starts with a private inquiry—not checkout/i)).toBeTruthy();
+
+    const main = within(screen.getByRole("main"));
+    expect(main.queryByText(/Fall 2026/i)).toBeNull();
+    expect(main.queryByText(/package/i)).toBeNull();
+  });
+});

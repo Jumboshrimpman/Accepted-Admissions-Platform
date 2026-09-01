@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Show } from "@clerk/react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
@@ -33,6 +33,8 @@ export function setPublicMetadata({
   setMeta("og:title", title, "property");
   setMeta("og:description", description, "property");
   setMeta("og:url", window.location.href.split("#")[0], "property");
+  setMeta("og:type", "website", "property");
+  setMeta("twitter:card", "summary_large_image");
   setMeta("twitter:title", title);
   setMeta("twitter:description", description);
 
@@ -58,8 +60,8 @@ function setMeta(name: string, content: string, attribute: "name" | "property" =
 export function PublicSiteShell({
   children,
   eyebrow,
-  title = "Accepted Admissions | Personalized academic guidance",
-  description = "Accepted Admissions provides thoughtful SAT tutoring and admissions guidance tailored to each student’s goals.",
+  title = "Accepted Admissions | SAT tutoring and admissions guidance",
+  description = "Accepted Admissions offers focused SAT tutoring and private guidance for students deciding what support they need next.",
 }: {
   children: React.ReactNode;
   eyebrow?: string;
@@ -68,11 +70,16 @@ export function PublicSiteShell({
 }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const firstMobileLink = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     setMenuOpen(false);
     setPublicMetadata({ title, description });
   }, [location, title, description]);
+
+  useEffect(() => {
+    if (menuOpen) firstMobileLink.current?.focus();
+  }, [menuOpen]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -90,27 +97,27 @@ export function PublicSiteShell({
           </Link>
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
             <PublicNavLink href="/sat">SAT tutoring</PublicNavLink>
-            <PublicNavLink href="/our-team">Our team</PublicNavLink>
-            <PublicNavLink href="/past-success">Past success</PublicNavLink>
-            <PublicNavLink href="/client-request">Client request</PublicNavLink>
+            <PublicNavLink href="/our-team">Meet the team</PublicNavLink>
+            <PublicNavLink href="/past-success">Student stories</PublicNavLink>
+            <PublicNavLink href="/client-request">Get guidance</PublicNavLink>
           </nav>
           <div className="flex min-w-0 items-center justify-end gap-2">
             <span className="hidden text-xs text-muted-foreground md:inline">{eyebrow}</span>
             <Show when="signed-out">
-              <Link href="/login">
-                <Button variant="ghost" className="hidden rounded-full sm:inline-flex">Sign in</Button>
-              </Link>
+              <Button asChild variant="ghost" className="hidden rounded-full sm:inline-flex">
+                <Link href="/login" data-testid="button-header-sign-in">Client sign in</Link>
+              </Button>
             </Show>
             <Show when="signed-in">
-              <Link href="/portal">
-                <Button variant="ghost" className="hidden rounded-full sm:inline-flex">Portal</Button>
-              </Link>
-            </Show>
-            <Link href="/client-request">
-              <Button className="rounded-full bg-primary px-4 text-sm text-primary-foreground sm:px-5">
-                Start a conversation <ArrowUpRight className="ml-2 h-4 w-4" />
+              <Button asChild variant="ghost" className="hidden rounded-full sm:inline-flex">
+                <Link href="/portal" data-testid="button-header-portal">Open client portal</Link>
               </Button>
-            </Link>
+            </Show>
+            <Button asChild className="rounded-full bg-primary px-4 text-sm text-primary-foreground sm:px-5">
+              <Link href="/client-request" data-testid="link-header-guidance">
+                Get guidance <ArrowUpRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -128,15 +135,15 @@ export function PublicSiteShell({
         {menuOpen && (
           <nav id="public-mobile-navigation" className="border-t bg-background px-6 py-4 lg:hidden" aria-label="Mobile navigation">
             <div className="container mx-auto grid gap-1 sm:grid-cols-2">
-              <PublicNavLink href="/sat">SAT tutoring</PublicNavLink>
-              <PublicNavLink href="/our-team">Our team</PublicNavLink>
-              <PublicNavLink href="/past-success">Past success</PublicNavLink>
-              <PublicNavLink href="/client-request">Client request</PublicNavLink>
+              <PublicNavLink reference={firstMobileLink} href="/sat">SAT tutoring</PublicNavLink>
+              <PublicNavLink href="/our-team">Meet the team</PublicNavLink>
+              <PublicNavLink href="/past-success">Student stories</PublicNavLink>
+              <PublicNavLink href="/client-request">Get guidance</PublicNavLink>
               <Show when="signed-out">
-                <Link href="/login" className="rounded-full px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Portal sign in</Link>
+                <Link href="/login" data-testid="link-mobile-sign-in" className="rounded-full px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Client sign in</Link>
               </Show>
               <Show when="signed-in">
-                <Link href="/portal" className="rounded-full px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Open portal</Link>
+                <Link href="/portal" data-testid="link-mobile-portal" className="rounded-full px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Open client portal</Link>
               </Show>
             </div>
           </nav>
@@ -147,14 +154,17 @@ export function PublicSiteShell({
         <div className="container mx-auto flex flex-col gap-6 px-6 py-10 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
             <img src={publicAssetPath("/logo.svg")} alt="" width="24" height="24" className="h-6 w-6 rounded-md opacity-50 grayscale" />
-            <span>Accepted Admissions</span>
+            <div>
+              <p className="font-medium text-foreground">Accepted Admissions</p>
+              <p className="mt-1 text-xs">Focused tutoring. Thoughtful guidance.</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <Link href="/sat" className="hover:text-foreground">SAT tutoring</Link>
-            <Link href="/our-team" className="hover:text-foreground">Our team</Link>
-            <Link href="/past-success" className="hover:text-foreground">Past success</Link>
-            <Link href="/client-request" className="hover:text-foreground">Client request</Link>
-            <Link href="/login" className="hover:text-foreground">Portal sign in</Link>
+            <Link href="/our-team" className="hover:text-foreground">Meet the team</Link>
+            <Link href="/past-success" className="hover:text-foreground">Student stories</Link>
+            <Link href="/client-request" className="hover:text-foreground">Get guidance</Link>
+            <Link href="/login" className="hover:text-foreground">Client sign in</Link>
           </div>
         </div>
       </footer>
@@ -162,9 +172,17 @@ export function PublicSiteShell({
   );
 }
 
-function PublicNavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function PublicNavLink({
+  href,
+  children,
+  reference,
+}: {
+  href: string;
+  children: React.ReactNode;
+  reference?: React.RefObject<HTMLAnchorElement | null>;
+}) {
   return (
-    <Link className="rounded-full px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground" href={href}>
+    <Link ref={reference} data-testid={`link-nav-${href.slice(1) || "home"}`} className="rounded-full px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground" href={href}>
       {children}
     </Link>
   );
