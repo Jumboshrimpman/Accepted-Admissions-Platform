@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  getGetDashboardQueryKey: () => ["dashboard"],
   getListReviewQueueQueryKey: () => ["review-queue"],
   useGetDashboard: () => ({
     data: mocks.dashboard,
@@ -262,7 +263,24 @@ describe("authenticated role dashboard flows", () => {
   });
 
   test("tutor sees only tutor workspace controls and can review assigned work", () => {
-    mocks.dashboard = dashboardForRole("tutor");
+    mocks.dashboard = {
+      ...dashboardForRole("tutor"),
+      newSubmissions: [
+        {
+          attemptId: "attempt-1",
+          assignmentId: "assignment-1",
+          assignmentTitle: "October 2 SAT diagnostic",
+          studentUserId: "student",
+          studentName: "Taito Goto",
+          status: "submitted",
+          score: 80,
+          submittedAt: "2026-09-30T12:00:00.000Z",
+          reviewStatus: "new",
+          mistakeCount: 2,
+          tutorNotes: null,
+        },
+      ],
+    } as Dashboard;
     render(<TutorDashboard />);
 
     expect(screen.getAllByText("Taito Goto").length).toBeGreaterThan(0);
@@ -271,7 +289,10 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
     );
-    fireEvent.click(screen.getByRole("button", { name: /Mark reviewed/i }));
+    expect(screen.getByText("Needs your attention")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /Review submission/i })).toHaveLength(1);
+    expect(screen.getByText("Flagged skills: Boundaries")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Clear flags/i }));
     expect(mocks.updateReview.mutate).toHaveBeenCalledWith(
       { itemId: "queue-1", data: { status: "reviewed", tutorNote: "Reviewed and approved." } },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
