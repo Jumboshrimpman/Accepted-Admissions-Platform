@@ -617,6 +617,11 @@ export const GetDashboardResponse = zod.object({
   "specialty": zod.string(),
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
+  "meetingUrl": zod.string().nullish(),
+  "student": zod.union([zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional()
 })),
@@ -640,7 +645,39 @@ export const GetDashboardResponse = zod.object({
   "score": zod.number(),
   "date": zod.coerce.date()
 })),
-  "reviewSkills": zod.array(zod.string())
+  "reviewSkills": zod.array(zod.string()),
+  "credits": zod.object({
+  "remainingHours": zod.number(),
+  "readOnly": zod.boolean()
+}),
+  "progress": zod.object({
+  "totalSessions": zod.number(),
+  "completedSessions": zod.number(),
+  "averageScore": zod.number().nullable(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string())
+}),
+  "assignedStudents": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "subject": zod.string()
+})),
+  "newSubmissions": zod.array(zod.object({
+  "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string(),
+  "status": zod.enum(['submitted', 'expired']),
+  "score": zod.number(),
+  "submittedAt": zod.coerce.date(),
+  "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
+  "mistakeCount": zod.number().optional(),
+  "tutorNotes": zod.string().nullish()
+})),
+  "openReviewCount": zod.number()
 })
 
 
@@ -884,6 +921,11 @@ export const GetCourseResponse = zod.object({
   "specialty": zod.string(),
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
+  "meetingUrl": zod.string().nullish(),
+  "student": zod.union([zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional()
 }))
@@ -910,6 +952,11 @@ export const GetSessionResponse = zod.object({
   "name": zod.string(),
   "specialty": zod.string(),
   "avatarUrl": zod.string().nullish()
+}),zod.null()]).optional(),
+  "meetingUrl": zod.string().nullish(),
+  "student": zod.union([zod.object({
+  "id": zod.string(),
+  "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional()
@@ -940,7 +987,27 @@ export const GetSessionResponse = zod.object({
 })),
   "studentNotes": zod.string().nullish(),
   "tutorNotes": zod.string().nullish(),
-  "postSessionReportId": zod.string().nullish()
+  "postSessionReportId": zod.string().nullish(),
+  "homework": zod.array(zod.object({
+  "assignmentId": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullable(),
+  "attemptId": zod.string().nullable(),
+  "attemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullable(),
+  "score": zod.number().nullable(),
+  "mistakeCount": zod.number(),
+  "analysis": zod.union([zod.object({
+  "source": zod.enum(['deterministic', 'provider']),
+  "label": zod.string(),
+  "provider": zod.string().nullish(),
+  "strengths": zod.array(zod.string()),
+  "weaknesses": zod.array(zod.string()),
+  "mistakePatterns": zod.array(zod.string()),
+  "nextFocus": zod.array(zod.string()),
+  "feedback": zod.string()
+}),zod.null()])
+})).optional()
 }))
 
 

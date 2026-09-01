@@ -1553,8 +1553,19 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Tutor"
             - type: "null"
+        meetingUrl: { type: ["string", "null"] }
+        student:
+          oneOf:
+            - $ref: "#/components/schemas/SessionStudent"
+            - type: "null"
         hasHomework: { type: boolean }
         hasReport: { type: boolean }
+    SessionStudent:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
     CourseDetail:
       allOf:
         - $ref: "#/components/schemas/Course"
@@ -1621,6 +1632,25 @@ components:
             studentNotes: { type: ["string", "null"] }
             tutorNotes: { type: ["string", "null"] }
             postSessionReportId: { type: ["string", "null"] }
+            homework:
+              type: array
+              items: { $ref: "#/components/schemas/SessionHomework" }
+    SessionHomework:
+      type: object
+      required: [assignmentId, title, status, deadline, attemptId, attemptStatus, score, mistakeCount, analysis]
+      properties:
+        assignmentId: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [draft, published, completed, archived] }
+        deadline: { type: ["string", "null"], format: date-time }
+        attemptId: { type: ["string", "null"] }
+        attemptStatus: { type: ["string", "null"], enum: [active, paused, submitted, expired, null] }
+        score: { type: ["number", "null"] }
+        mistakeCount: { type: number }
+        analysis:
+          oneOf:
+            - $ref: "#/components/schemas/AttemptAnalysis"
+            - type: "null"
     AdaptiveQuestion:
       allOf:
         - $ref: "#/components/schemas/AssignmentQuestion"
@@ -2033,9 +2063,37 @@ components:
         content: { type: string, minLength: 1, maxLength: 30000 }
         visibility: { type: string, enum: [course, tutor] }
         status: { type: string, enum: [draft, published] }
+    DashboardCredits:
+      type: object
+      required: [remainingHours, readOnly]
+      properties:
+        remainingHours: { type: number }
+        readOnly: { type: boolean }
+    DashboardProgress:
+      type: object
+      required: [totalSessions, completedSessions, averageScore, strengths, weaknesses]
+      properties:
+        totalSessions: { type: number }
+        completedSessions: { type: number }
+        averageScore: { type: ["number", "null"] }
+        strengths:
+          type: array
+          items: { type: string }
+        weaknesses:
+          type: array
+          items: { type: string }
+    DashboardStudent:
+      type: object
+      required: [id, name, courseId, courseTitle, subject]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        courseId: { type: string }
+        courseTitle: { type: string }
+        subject: { type: string }
     Dashboard:
       type: object
-      required: [user, courses, upcomingSessions, assignments, recentScores, reviewSkills]
+      required: [user, courses, upcomingSessions, assignments, recentScores, reviewSkills, credits, progress, assignedStudents, newSubmissions, openReviewCount]
       properties:
         user: { $ref: "#/components/schemas/CurrentUser" }
         welcomeMessage: { type: string }
@@ -2060,3 +2118,12 @@ components:
         reviewSkills:
           type: array
           items: { type: string }
+        credits: { $ref: "#/components/schemas/DashboardCredits" }
+        progress: { $ref: "#/components/schemas/DashboardProgress" }
+        assignedStudents:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardStudent" }
+        newSubmissions:
+          type: array
+          items: { $ref: "#/components/schemas/ReviewSubmission" }
+        openReviewCount: { type: number }

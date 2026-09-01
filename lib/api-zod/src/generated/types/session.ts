@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SessionStatus } from './sessionStatus';
+import type { SessionStudent } from './sessionStudent';
 import type { Tutor } from './tutor';
 
 export interface Session {
@@ -17,6 +18,9 @@ export interface Session {
   title: string;
   status: SessionStatus;
   tutor?: Tutor | null;
+  /** @nullable */
+  meetingUrl?: string | null;
+  student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;
 }

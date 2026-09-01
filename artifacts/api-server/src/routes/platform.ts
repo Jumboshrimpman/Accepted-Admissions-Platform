@@ -1684,6 +1684,15 @@ async function canAccessStudent(
   return Boolean(assignment);
 }
 
+async function studentShape(studentUserId: string) {
+  const [student] = await db
+    .select({ id: usersTable.id, name: usersTable.displayName })
+    .from(usersTable)
+    .where(eq(usersTable.id, studentUserId))
+    .limit(1);
+  return student ?? null;
+}
+
 function tutorShape(user: AppUser | null) {
   if (!user) return null;
   return {
@@ -4805,84 +4814,197 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
         resolvedSessions.map(async (session) => ({
           ...publicSessionShape(session),
           tutor: await sessionTutorShape(session),
+          meetingUrl: session.providerEventUrl ?? course.meetUrl ?? null,
         })),
       ),
     }),
   );
 });
 
+async function reviewSubmissionsForUser(user: AppUser) {
+  const courseIds = await visibleCourseIds(user);
+  const rows =
+    courseIds.length === 0
+      ? []
+      : await db
+          .select({
+            attempt: attemptsTable,
+            assignment: assignmentsTable,
+            student: usersTable,
+          })
+          .from(attemptsTable)
+          .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+          .innerJoin(usersTable, eq(usersTable.id, attemptsTable.userId))
+          .where(
+            and(
+              inArray(assignmentsTable.courseId, courseIds),
+              inArray(attemptsTable.status, ["submitted", "expired"]),
+              isNotNull(attemptsTable.result),
+              isNotNull(attemptsTable.submittedAt),
+            ),
+          )
+          .orderBy(desc(attemptsTable.submittedAt));
+  const visibleRows = (
+    await Promise.all(
+      rows.map(async (row) =>
+        (await canAccessStudent(
+          user,
+          row.assignment.courseId,
+          row.student.id,
+          row.assignment.subject,
+        ))
+          ? row
+          : null,
+      ),
+    )
+  ).filter((row): row is (typeof rows)[number] => Boolean(row));
+  return visibleRows
+    .filter((row) => Boolean(row.attempt.submittedAt))
+    .map(({ attempt, assignment, student }) => ({
+      attemptId: attempt.id,
+      assignmentId: assignment.id,
+      assignmentTitle: assignment.title,
+      studentUserId: student.id,
+      studentName: student.displayName,
+      status: attempt.status,
+      score: attempt.score ?? 0,
+      submittedAt: attempt.submittedAt!,
+      reviewStatus: attempt.reviewStatus,
+      mistakeCount: Array.isArray(
+        (attempt.result as Record<string, unknown> | null)?.items,
+      )
+        ? (
+            attempt.result as {
+              items: Array<{ correct: boolean }>;
+            }
+          ).items.filter((item) => !item.correct).length
+        : 0,
+      tutorNotes: attempt.tutorNotes,
+    }));
+}
+
 router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
   await ensureSeedData();
   const user = req.appUser!;
   const ids = await visibleCourseIds(user);
+  const subjectUserId = await dataSubjectUserId(user);
   const courses = (
     await Promise.all(ids.map((id) => courseShape(id, user)))
   ).filter(Boolean);
-  const scopedUpcomingSessions = (
+  const courseRows =
+    ids.length === 0
+      ? []
+      : await db
+          .select({ id: coursesTable.id, meetUrl: coursesTable.meetUrl })
+          .from(coursesTable)
+          .where(inArray(coursesTable.id, ids));
+  const meetingUrls = new Map(courseRows.map((course) => [course.id, course.meetUrl]));
+  const scopedSessions = (
     await Promise.all(
       ids.map((courseId) => visibleSessionsForUser(user, courseId)),
     )
   )
     .flat()
+    .filter((session) => {
+      if (user.role === "student" || user.role === "viewer") {
+        return session.clientUserId === subjectUserId;
+      }
+      if (user.role === "tutor") return session.tutorUserId === user.id;
+      return true;
+    })
     .sort((left, right) => left.dateTime.getTime() - right.dateTime.getTime())
+  const scopedUpcomingSessions = scopedSessions
+    .filter((session) => session.dateTime.getTime() >= Date.now())
     .slice(0, 12);
-  const assignments =
-    ids.length === 0
-      ? []
-      : await db
-          .select()
-          .from(assignmentsTable)
-          .where(inArray(assignmentsTable.courseId, ids))
-          .orderBy(asc(assignmentsTable.deadline));
-  const scopedAssignments = (
-    await Promise.all(
-      assignments.map(async (assignment) =>
-        (await canAccessCourse(user, assignment.courseId, assignment.subject))
-          ? assignment
-          : null,
-      ),
-    )
-  ).filter(
-    (assignment): assignment is (typeof assignments)[number] =>
-      assignment !== null &&
-      (user.role !== "student" ||
-        (assignment.status !== "draft" && assignment.status !== "archived")),
-  );
-  const assignmentIds = scopedAssignments.map((item) => item.id);
-  const counts =
-    assignmentIds.length === 0
-      ? []
-      : await db
-          .select({
-            assignmentId: assignmentQuestionsTable.assignmentId,
-            count: sql<number>`count(*)`,
-          })
-          .from(assignmentQuestionsTable)
-          .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds))
-          .groupBy(assignmentQuestionsTable.assignmentId);
-  const subjectUserId = await dataSubjectUserId(user);
   const attempts = await db
-    .select({ assignmentId: attemptsTable.assignmentId, score: attemptsTable.score })
+    .select({
+      assignmentId: attemptsTable.assignmentId,
+      score: attemptsTable.score,
+      startedAt: attemptsTable.startedAt,
+      submittedAt: attemptsTable.submittedAt,
+      result: attemptsTable.result,
+      analysis: attemptsTable.analysis,
+    })
     .from(attemptsTable)
     .where(eq(attemptsTable.userId, subjectUserId))
     .orderBy(desc(attemptsTable.startedAt));
-  const assignmentSummaries = scopedAssignments.map((assignment) => ({
-    id: assignment.id,
-    title: assignment.title,
-    subject: assignment.subject,
-    status: assignment.status,
-    deadline: assignment.deadline,
-    questionCount:
-      Number(counts.find((count) => count.assignmentId === assignment.id)?.count) ||
-      0,
-    timeLimitMinutes: assignment.timeLimitMinutes,
-    attemptCount: attempts.filter((attempt) => attempt.assignmentId === assignment.id)
-      .length,
-    maxAttempts: assignment.maxAttempts,
-    latestScore:
-      attempts.find((attempt) => attempt.assignmentId === assignment.id)?.score ??
-      null,
-  }));
+  const assignmentSummaries = await assignmentSummariesForUser(user);
+  const assignmentById = new Map(assignmentSummaries.map((assignment) => [assignment.id, assignment]));
+  const completedSessions = scopedSessions.filter(
+    (session) => session.status === "completed",
+  ).length;
+  const scoredAttempts = attempts.filter((attempt) => attempt.score !== null);
+  const analysisValues = attempts
+    .map((attempt) => attempt.analysis ?? (attempt.result as Record<string, unknown> | null)?.analysis)
+    .filter((analysis): analysis is Record<string, unknown> => Boolean(analysis));
+  const uniqueStrings = (values: unknown) =>
+    [...new Set(Array.isArray(values) ? values.filter((value): value is string => typeof value === "string") : [])];
+  const strengths = uniqueStrings(analysisValues.flatMap((analysis) => analysis.strengths)).slice(0, 3);
+  const weaknesses = uniqueStrings(analysisValues.flatMap((analysis) => analysis.weaknesses)).slice(0, 3);
+  const tutorAssignments =
+    user.role === "tutor"
+      ? await db
+          .select({
+            id: usersTable.id,
+            name: usersTable.displayName,
+            courseId: coursesTable.id,
+            courseTitle: coursesTable.title,
+            subject: tutorAssignmentsTable.subject,
+          })
+          .from(tutorAssignmentsTable)
+          .innerJoin(usersTable, eq(usersTable.id, tutorAssignmentsTable.studentUserId))
+          .innerJoin(coursesTable, eq(coursesTable.id, tutorAssignmentsTable.courseId))
+          .where(eq(tutorAssignmentsTable.tutorUserId, user.id))
+      : [];
+  const reviewSubmissions =
+    user.role === "tutor" || user.role === "administrator"
+      ? await reviewSubmissionsForUser(user)
+      : [];
+  const openReviewItems =
+    user.role === "tutor" || user.role === "administrator"
+      ? await db
+          .select({
+            id: reviewQueueTable.id,
+            studentUserId: reviewQueueTable.studentUserId,
+            courseId: assignmentsTable.courseId,
+            subject: assignmentsTable.subject,
+          })
+          .from(reviewQueueTable)
+          .innerJoin(attemptsTable, eq(attemptsTable.id, reviewQueueTable.attemptId))
+          .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+          .where(
+            and(
+              eq(reviewQueueTable.status, "open"),
+              inArray(assignmentsTable.courseId, ids),
+            ),
+          )
+          .then((items) =>
+            Promise.all(
+              items.map(async (item) =>
+                (await canAccessStudent(
+                  user,
+                  item.courseId,
+                  item.studentUserId,
+                  item.subject,
+                ))
+                  ? item
+                  : null,
+              ),
+            ),
+          )
+          .then((items) => items.filter(Boolean))
+      : [];
+  const creditEntries = await db
+    .select({
+      entryType: creditLedgerTable.entryType,
+      hours: creditLedgerTable.hours,
+    })
+    .from(creditLedgerTable)
+    .where(eq(creditLedgerTable.clientUserId, subjectUserId));
+  const remainingHours = creditEntries.reduce((total, entry) => {
+    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
+    return total + (positive ? entry.hours : -entry.hours);
+  }, 0);
   res.json(
     GetDashboardResponse.parse({
       user: {
@@ -4898,6 +5020,14 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
         scopedUpcomingSessions.map(async (session) => ({
           ...publicSessionShape(session),
           tutor: await sessionTutorShape(session),
+          meetingUrl: session.providerEventUrl ?? meetingUrls.get(session.courseId) ?? null,
+          ...(user.role === "tutor" || user.role === "administrator"
+            ? {
+                student: session.clientUserId
+                  ? await studentShape(session.clientUserId)
+                  : null,
+              }
+            : {}),
         })),
       ),
       assignments: assignmentSummaries,
@@ -4905,11 +5035,31 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
         .filter((attempt) => attempt.score !== null)
         .slice(0, 4)
         .map((attempt, index) => ({
-          label: `Mini-section ${attempts.length - index}`,
+          label: assignmentById.get(attempt.assignmentId)?.title ?? `Practice ${attempts.length - index}`,
           score: attempt.score!,
-          date: new Date(),
+          date: attempt.submittedAt ?? attempt.startedAt,
         })),
-      reviewSkills: ["Transitions", "Command of Evidence", "Pacing"],
+      reviewSkills: weaknesses.length > 0 ? weaknesses : ["Keep building consistency"],
+      credits: {
+        remainingHours,
+        readOnly: user.role === "viewer",
+      },
+      progress: {
+        totalSessions: scopedSessions.length,
+        completedSessions,
+        averageScore:
+          scoredAttempts.length > 0
+            ? scoredAttempts.reduce((total, attempt) => total + attempt.score!, 0) /
+              scoredAttempts.length
+            : null,
+        strengths,
+        weaknesses,
+      },
+      assignedStudents: tutorAssignments,
+      newSubmissions: reviewSubmissions.filter(
+        (submission) => submission.reviewStatus !== "reviewed",
+      ),
+      openReviewCount: openReviewItems.length,
     }),
   );
 });
@@ -4931,6 +5081,33 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     res.status(404).json({ error: "Session not found" });
     return;
   }
+  const subjectUserId = await dataSubjectUserId(req.appUser!);
+  if (
+    (req.appUser!.role === "student" || req.appUser!.role === "viewer") &&
+    session.clientUserId !== subjectUserId
+  ) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  if (
+    req.appUser!.role === "tutor" &&
+    session.tutorUserId !== req.appUser!.id &&
+    (!session.clientUserId ||
+      !(await canAccessStudent(
+        req.appUser!,
+        session.courseId,
+        session.clientUserId,
+        session.subject,
+      )))
+  ) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  const [course] = await db
+    .select({ meetUrl: coursesTable.meetUrl })
+    .from(coursesTable)
+    .where(eq(coursesTable.id, session.courseId))
+    .limit(1);
   const blocks = await db
     .select()
     .from(curriculumBlocksTable)
@@ -4941,10 +5118,66 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     session.courseId,
     session.id,
   );
+  const homeworkUserId = session.clientUserId ?? subjectUserId;
+  const homework = await Promise.all(
+    assignments.map(async (assignment) => {
+      const [attempt] = await db
+        .select({
+          id: attemptsTable.id,
+          status: attemptsTable.status,
+          score: attemptsTable.score,
+          result: attemptsTable.result,
+          analysis: attemptsTable.analysis,
+        })
+        .from(attemptsTable)
+        .where(
+          and(
+            eq(attemptsTable.assignmentId, assignment.id),
+            eq(attemptsTable.userId, homeworkUserId),
+          ),
+        )
+        .orderBy(desc(attemptsTable.startedAt))
+        .limit(1);
+      const result = attempt?.result as Record<string, unknown> | null | undefined;
+      const resultItems = Array.isArray(result?.items)
+        ? (result.items as Array<{ correct?: boolean }>)
+        : [];
+      const analysis = (attempt?.analysis ?? result?.analysis) as Record<string, unknown> | null | undefined;
+      return {
+        assignmentId: assignment.id,
+        title: assignment.title,
+        status: assignment.status,
+        deadline: assignment.deadline,
+        attemptId: attempt?.id ?? null,
+        attemptStatus: attempt?.status ?? null,
+        score: attempt?.score ?? null,
+        mistakeCount: resultItems.filter((item) => item.correct === false).length,
+        analysis: analysis ?? null,
+      };
+    }),
+  );
+  const [tutorNote] = await db
+    .select({ content: sessionArtifactsTable.content })
+    .from(sessionArtifactsTable)
+    .where(
+      and(
+        eq(sessionArtifactsTable.sessionId, session.id),
+        eq(sessionArtifactsTable.kind, "tutor_notes"),
+      ),
+    )
+    .orderBy(desc(sessionArtifactsTable.updatedAt))
+    .limit(1);
   res.json(
     GetSessionResponse.parse({
       ...publicSessionShape(session),
       tutor: await sessionTutorShape(session),
+      meetingUrl: session.providerEventUrl ?? course?.meetUrl ?? null,
+      student:
+        req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
+          ? session.clientUserId
+            ? await studentShape(session.clientUserId)
+            : null
+          : undefined,
       blocks:
         req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
           ? blocks.filter(
@@ -4957,8 +5190,9 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       tutorNotes:
         req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
           ? null
-          : "Review predictions before revealing answer choices.",
+          : tutorNote?.content ?? null,
       postSessionReportId: null,
+      homework,
     }),
   );
 });

@@ -541,6 +541,11 @@ export const SessionStatus = {
   archived: 'archived',
 } as const;
 
+export interface SessionStudent {
+  id: string;
+  name: string;
+}
+
 export interface Session {
   id: string;
   courseId: string;
@@ -550,6 +555,9 @@ export interface Session {
   title: string;
   status: SessionStatus;
   tutor?: Tutor | null;
+  /** @nullable */
+  meetingUrl?: string | null;
+  student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;
 }
@@ -768,6 +776,65 @@ export interface AssignmentSummary {
   latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
 }
 
+export type SessionHomeworkStatus = typeof SessionHomeworkStatus[keyof typeof SessionHomeworkStatus];
+
+
+export const SessionHomeworkStatus = {
+  draft: 'draft',
+  published: 'published',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+/**
+ * @nullable
+ */
+export type SessionHomeworkAttemptStatus = typeof SessionHomeworkAttemptStatus[keyof typeof SessionHomeworkAttemptStatus] | null;
+
+
+export const SessionHomeworkAttemptStatus = {
+  active: 'active',
+  paused: 'paused',
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
+export type AttemptAnalysisSource = typeof AttemptAnalysisSource[keyof typeof AttemptAnalysisSource];
+
+
+export const AttemptAnalysisSource = {
+  deterministic: 'deterministic',
+  provider: 'provider',
+} as const;
+
+export interface AttemptAnalysis {
+  source: AttemptAnalysisSource;
+  label: string;
+  /** @nullable */
+  provider?: string | null;
+  strengths: string[];
+  weaknesses: string[];
+  mistakePatterns: string[];
+  nextFocus: string[];
+  feedback: string;
+}
+
+export interface SessionHomework {
+  assignmentId: string;
+  title: string;
+  status: SessionHomeworkStatus;
+  /** @nullable */
+  deadline: string | null;
+  /** @nullable */
+  attemptId: string | null;
+  /** @nullable */
+  attemptStatus: SessionHomeworkAttemptStatus;
+  /** @nullable */
+  score: number | null;
+  mistakeCount: number;
+  analysis: AttemptAnalysis | null;
+}
+
 export type SessionDetail = Session & ({
   blocks: CurriculumBlock[];
   assignments: AssignmentSummary[];
@@ -777,6 +844,7 @@ export type SessionDetail = Session & ({
   tutorNotes?: string | null;
   /** @nullable */
   postSessionReportId?: string | null;
+  homework?: SessionHomework[];
 });
 
 export type AssignmentQuestionDifficulty = typeof AssignmentQuestionDifficulty[keyof typeof AssignmentQuestionDifficulty];
@@ -978,26 +1046,6 @@ export interface AttemptResultItem {
   /** @nullable */
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
-}
-
-export type AttemptAnalysisSource = typeof AttemptAnalysisSource[keyof typeof AttemptAnalysisSource];
-
-
-export const AttemptAnalysisSource = {
-  deterministic: 'deterministic',
-  provider: 'provider',
-} as const;
-
-export interface AttemptAnalysis {
-  source: AttemptAnalysisSource;
-  label: string;
-  /** @nullable */
-  provider?: string | null;
-  strengths: string[];
-  weaknesses: string[];
-  mistakePatterns: string[];
-  nextFocus: string[];
-  feedback: string;
 }
 
 export type AttemptResultReviewStatus = typeof AttemptResultReviewStatus[keyof typeof AttemptResultReviewStatus];
@@ -1437,6 +1485,28 @@ export interface SessionArtifactInput {
   status?: SessionArtifactInputStatus;
 }
 
+export interface DashboardCredits {
+  remainingHours: number;
+  readOnly: boolean;
+}
+
+export interface DashboardProgress {
+  totalSessions: number;
+  completedSessions: number;
+  /** @nullable */
+  averageScore: number | null;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+export interface DashboardStudent {
+  id: string;
+  name: string;
+  courseId: string;
+  courseTitle: string;
+  subject: string;
+}
+
 export type DashboardRecentScoresItem = {
   label: string;
   score: number;
@@ -1451,6 +1521,11 @@ export interface Dashboard {
   assignments: AssignmentSummary[];
   recentScores: DashboardRecentScoresItem[];
   reviewSkills: string[];
+  credits: DashboardCredits;
+  progress: DashboardProgress;
+  assignedStudents: DashboardStudent[];
+  newSubmissions: ReviewSubmission[];
+  openReviewCount: number;
 }
 
 /**

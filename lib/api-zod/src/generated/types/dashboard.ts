@@ -8,7 +8,11 @@
 import type { AssignmentSummary } from './assignmentSummary';
 import type { Course } from './course';
 import type { CurrentUser } from './currentUser';
+import type { DashboardCredits } from './dashboardCredits';
+import type { DashboardProgress } from './dashboardProgress';
 import type { DashboardRecentScoresItem } from './dashboardRecentScoresItem';
+import type { DashboardStudent } from './dashboardStudent';
+import type { ReviewSubmission } from './reviewSubmission';
 import type { Session } from './session';
 
 export interface Dashboard {
@@ -19,4 +23,9 @@ export interface Dashboard {
   assignments: AssignmentSummary[];
   recentScores: DashboardRecentScoresItem[];
   reviewSkills: string[];
+  credits: DashboardCredits;
+  progress: DashboardProgress;
+  assignedStudents: DashboardStudent[];
+  newSubmissions: ReviewSubmission[];
+  openReviewCount: number;
 }

@@ -8,6 +8,7 @@
 import type { AssignmentSummary } from './assignmentSummary';
 import type { CurriculumBlock } from './curriculumBlock';
 import type { Session } from './session';
+import type { SessionHomework } from './sessionHomework';
 
 export type SessionDetail = Session & ({
   blocks: CurriculumBlock[];
@@ -18,4 +19,5 @@ export type SessionDetail = Session & ({
   tutorNotes?: string | null;
   /** @nullable */
   postSessionReportId?: string | null;
+  homework?: SessionHomework[];
 });

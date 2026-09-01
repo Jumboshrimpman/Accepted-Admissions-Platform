@@ -42,6 +42,8 @@ import {
   Save,
   Sparkles,
   ListChecks,
+  UserRound,
+  Video,
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -431,6 +433,122 @@ export default function TutorSession() {
           <Badge variant="outline">{session.status}</Badge>
         </div>
       </div>
+
+      <Card className="border-primary/20 bg-primary/[0.03] shadow-sm">
+        <CardHeader className="border-b bg-card/80 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <BookOpenCheck className="h-5 w-5 text-primary" />
+                Session workspace
+              </CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review the student&apos;s readiness, results, focus areas, and session plan together.
+              </p>
+            </div>
+            {session.meetingUrl && (
+              <Button asChild>
+                <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
+                  <Video className="mr-2 h-4 w-4" /> Join meeting
+                </a>
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 p-6 md:grid-cols-[0.8fr_1.2fr]">
+          <div className="space-y-4">
+            <div className="rounded-xl border bg-background p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Student</p>
+              <p className="mt-2 flex items-center gap-2 font-semibold">
+                <UserRound className="h-4 w-4 text-primary" />
+                {session.student?.name ?? "Student to be confirmed"}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {format(parseISO(session.dateTime), "EEEE, MMMM d, yyyy 'at' h:mm a")} · {session.timezone}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-background p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Meeting</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {session.meetingUrl ? "Meeting link is ready." : "No meeting link has been added yet."}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-background p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Notes</p>
+              <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                {session.tutorNotes ?? tutorNotes ?? "No tutor notes saved yet."}
+              </p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="rounded-xl border bg-background p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold">Homework status & results</p>
+                <Badge variant="outline">{session.homework?.length ?? 0} assignment{session.homework?.length === 1 ? "" : "s"}</Badge>
+              </div>
+              {session.homework && session.homework.length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  {session.homework.map((homework) => (
+                    <div key={homework.assignmentId} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{homework.title}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {homework.deadline ? `Due ${format(parseISO(homework.deadline), "MMM d, yyyy")}` : "No due date"}
+                          </p>
+                        </div>
+                        <Badge variant={homework.attemptStatus === "submitted" || homework.attemptStatus === "expired" ? "default" : "secondary"}>
+                          {homework.attemptStatus === "submitted" || homework.attemptStatus === "expired" ? "Complete" : homework.attemptStatus === "active" || homework.attemptStatus === "paused" ? "In progress" : "Not started"}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                        <span>Score: {homework.score === null ? "—" : `${Math.round(homework.score)}%`}</span>
+                        <span>Mistakes: {homework.mistakeCount}</span>
+                      </div>
+                      {homework.analysis && (
+                        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                          <p><span className="font-medium text-emerald-700">Strength:</span> {homework.analysis.strengths[0] ?? "No strength summary yet."}</p>
+                          <p><span className="font-medium text-amber-700">Next focus:</span> {homework.analysis.nextFocus[0] ?? homework.analysis.weaknesses[0] ?? "Keep practicing."}</p>
+                        </div>
+                      )}
+                      {homework.attemptId && (
+                        <Link href={`/tutor/attempts/${homework.attemptId}`}>
+                          <Button size="sm" variant="outline" className="mt-3">
+                            Open detailed result
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">No homework is linked to this session yet.</p>
+              )}
+            </div>
+            <div className="rounded-xl border bg-background p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-semibold">Recommended practice</p>
+                <Badge variant="outline">{adaptive?.recommendations.filter((item) => item.status === "recommended").length ?? 0} suggested</Badge>
+              </div>
+              <div className="mt-3 space-y-2">
+                {adaptive?.recommendations.filter((item) => item.status === "recommended").slice(0, 3).map((item) => (
+                  <div key={item.id} className="rounded-lg bg-muted/50 p-3 text-sm">
+                    <span className="font-medium">{item.skill}</span>
+                    <span className="text-muted-foreground"> · {item.reason}</span>
+                  </div>
+                ))}
+                {!adaptive || adaptive.recommendations.filter((item) => item.status === "recommended").length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Recommendations will appear after a completed result.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background p-4">
+              <p className="font-semibold">Curriculum</p>
+              <p className="mt-1 text-sm text-muted-foreground">{session.blocks.filter((block) => block.status === "published").length} published blocks are available for this session.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="practice" className="space-y-6">
         <TabsList className="grid h-auto w-full grid-cols-3">
