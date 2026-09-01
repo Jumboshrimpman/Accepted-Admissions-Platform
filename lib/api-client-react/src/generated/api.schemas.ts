@@ -12,6 +12,7 @@ export interface HealthStatus {
 export interface Error {
   error: string;
   code?: string;
+  conflicts?: string[];
 }
 
 export type FinancialStatus = typeof FinancialStatus[keyof typeof FinancialStatus];
@@ -405,9 +406,7 @@ export interface BookingSession {
   durationMinutes: number;
   bookingStatus: BookingSessionBookingStatus;
   /** @nullable */
-  providerEventId?: string | null;
-  /** @nullable */
-  providerEventUrl?: string | null;
+  meetingUrl: string | null;
   /** @nullable */
   cancellationReason?: string | null;
 }

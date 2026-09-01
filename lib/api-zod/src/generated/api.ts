@@ -1108,8 +1108,7 @@ export const ListBookingSessionsResponseItem = zod.object({
   "title": zod.string(),
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
-  "providerEventId": zod.string().nullish(),
-  "providerEventUrl": zod.string().nullish(),
+  "meetingUrl": zod.string().nullable(),
   "cancellationReason": zod.string().nullish()
 })
 export const ListBookingSessionsResponse = zod.array(ListBookingSessionsResponseItem)
@@ -1137,8 +1136,7 @@ export const CreateBookingSessionResponse = zod.object({
   "title": zod.string(),
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
-  "providerEventId": zod.string().nullish(),
-  "providerEventUrl": zod.string().nullish(),
+  "meetingUrl": zod.string().nullable(),
   "cancellationReason": zod.string().nullish()
 })
 
@@ -1165,8 +1163,7 @@ export const CancelBookingSessionResponse = zod.object({
   "title": zod.string(),
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
-  "providerEventId": zod.string().nullish(),
-  "providerEventUrl": zod.string().nullish(),
+  "meetingUrl": zod.string().nullable(),
   "cancellationReason": zod.string().nullish()
 })
 
@@ -1193,8 +1190,7 @@ export const RescheduleBookingSessionResponse = zod.object({
   "title": zod.string(),
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
-  "providerEventId": zod.string().nullish(),
-  "providerEventUrl": zod.string().nullish(),
+  "meetingUrl": zod.string().nullable(),
   "cancellationReason": zod.string().nullish()
 })
 

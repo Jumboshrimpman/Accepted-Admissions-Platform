@@ -8,6 +8,7 @@ import {
   isNotNull,
   isNull,
   notInArray,
+  or,
   sql,
 } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
@@ -39,8 +40,11 @@ import {
   type BusyWindow,
 } from "../lib/booking";
 import {
+  SHARED_FALL_MEETING_URL,
   TAITO_FALL_2026_SESSIONS,
   TAITO_SESSION_TIMEZONE,
+  isFall2026Term,
+  meetingUrlForTerm,
   sessionTitle,
   taitoSessionDateTime,
 } from "../lib/session-schedule";
@@ -770,7 +774,7 @@ async function ensureSeedData(): Promise<string> {
       status: "active",
       goalSummary:
         "Build SAT Reading & Writing accuracy, pacing, and IELTS confidence through focused weekly practice.",
-      meetUrl: "https://meet.google.com/",
+      meetUrl: SHARED_FALL_MEETING_URL,
       driveUrl: "https://drive.google.com/",
     })
     .returning();
@@ -2602,6 +2606,15 @@ async function calendarAccess(tutorProfileId: string) {
   }
 }
 
+async function calendarAccessForUser(tutorUserId: string) {
+  const [profile] = await db
+    .select({ id: tutorProfilesTable.id })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, tutorUserId))
+    .limit(1);
+  return profile ? calendarAccess(profile.id) : null;
+}
+
 async function bookingTutor(tutorProfileId: string) {
   const [tutor] = await db
     .select()
@@ -2629,6 +2642,7 @@ async function slotsForTutor(
   from: Date,
   to: Date,
   durationMinutes: number,
+  excludeSessionId?: string,
 ) {
   if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
     throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
@@ -2656,6 +2670,7 @@ async function slotsForTutor(
   const [bookedSessions] = await Promise.all([
     db
       .select({
+        id: sessionsTable.id,
         dateTime: sessionsTable.dateTime,
         durationMinutes: sessionsTable.durationMinutes,
       })
@@ -2664,8 +2679,10 @@ async function slotsForTutor(
         and(
           eq(sessionsTable.tutorUserId, tutor.userId ?? ""),
           inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
+          sql`${sessionsTable.status} <> 'archived'`,
           sql`${sessionsTable.dateTime} < ${to}`,
           sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
+          excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
         ),
       ),
   ]);
@@ -2708,6 +2725,30 @@ async function studentCourseForBooking(userId: string): Promise<{ id: string; su
   const membership = memberships.find((item) => subjectFamily(item.subject) === "sat" || item.subject === "all");
   if (!membership) throw new BookingError(409, "SAT_MEMBERSHIP_REQUIRED", "An active SAT student membership is required to book.");
   return { id: membership.id, subject: membership.subject === "all" ? "SAT" : membership.subject };
+}
+
+async function bookingSessionShape(session: typeof sessionsTable.$inferSelect) {
+  const [tutorProfile] = session.tutorUserId
+    ? await db
+        .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
+        .from(tutorProfilesTable)
+        .where(eq(tutorProfilesTable.userId, session.tutorUserId))
+        .limit(1)
+    : [];
+  return {
+    id: session.id,
+    courseId: session.courseId,
+    tutorProfileId: tutorProfile?.id ?? null,
+    tutorName: tutorProfile?.name ?? null,
+    dateTime: session.dateTime,
+    timezone: session.timezone,
+    subject: session.subject,
+    title: session.title,
+    durationMinutes: session.durationMinutes,
+    bookingStatus: session.bookingStatus,
+    meetingUrl: SHARED_FALL_MEETING_URL,
+    cancellationReason: session.cancellationReason,
+  };
 }
 
 async function sessionForActor(sessionId: string, user: AppUser) {
@@ -3333,15 +3374,28 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       title: sessionsTable.title,
       durationMinutes: sessionsTable.durationMinutes,
       bookingStatus: sessionsTable.bookingStatus,
-      providerEventId: sessionsTable.providerEventId,
-      providerEventUrl: sessionsTable.providerEventUrl,
       cancellationReason: sessionsTable.cancellationReason,
     })
     .from(sessionsTable)
     .leftJoin(tutorProfilesTable, eq(tutorProfilesTable.userId, sessionsTable.tutorUserId))
     .where(eq(sessionsTable.clientUserId, subjectUserId))
     .orderBy(asc(sessionsTable.dateTime));
-  res.json(sessions);
+  res.json(
+    sessions.map((session) => ({
+      id: session.id,
+      courseId: session.courseId,
+      tutorProfileId: session.tutorProfileId,
+      tutorName: session.tutorName,
+      dateTime: session.dateTime,
+      timezone: session.timezone,
+      subject: session.subject,
+      title: session.title,
+      durationMinutes: session.durationMinutes,
+      bookingStatus: session.bookingStatus,
+      meetingUrl: SHARED_FALL_MEETING_URL,
+      cancellationReason: session.cancellationReason,
+    })),
+  );
 });
 
 router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> => {
@@ -3366,22 +3420,46 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     }
     const course = await studentCourseForBooking(req.appUser!.id);
     const created = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext(${`booking:${tutorProfileId}:${start.toISOString()}`}))`,
+      const lockKeys = [
+        tutor.userId ? `participant:${tutor.userId}` : null,
+        `participant:${req.appUser!.id}`,
+      ]
+        .filter((key): key is string => Boolean(key))
+        .sort();
+      for (const lockKey of lockKeys) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`${lockKey}:${start.toISOString()}`}))`,
+        );
+      }
+      const end = new Date(start.getTime() + durationMinutes * 60_000);
+      const participantIds = [tutor.userId, req.appUser!.id].filter(
+        (id): id is string => Boolean(id),
       );
       const [conflict] = await tx
         .select({ id: sessionsTable.id })
         .from(sessionsTable)
         .where(
           and(
-            eq(sessionsTable.tutorUserId, tutor.userId ?? ""),
-            inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
-            sql`${sessionsTable.dateTime} < ${start}`,
+            sql`${sessionsTable.status} <> 'archived'`,
+            sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
+            sql`${sessionsTable.dateTime} < ${end}`,
             sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${start}`,
+            or(
+              ...participantIds.flatMap((id) => [
+                eq(sessionsTable.tutorUserId, id),
+                eq(sessionsTable.clientUserId, id),
+              ]),
+          ),
           ),
         )
         .limit(1);
-      if (conflict) throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
+      if (conflict) {
+        throw new BookingError(
+          409,
+          "SCHEDULE_CONFLICT",
+          "That time overlaps another active meeting for you or the tutor. Choose a different slot.",
+        );
+      }
       let liveBusyWindows: BusyWindow[];
       try {
         liveBusyWindows = await listGoogleBusyWindows(
@@ -3402,7 +3480,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
           start,
           new Date(start.getTime() + durationMinutes * 60_000),
           liveBusyWindows,
-          rule.bufferMinutes,
+          0,
         )
       ) {
         throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
@@ -3473,7 +3551,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         })
         .where(eq(sessionsTable.id, created.id))
         .returning();
-      res.status(201).json(updated ?? created);
+      res.status(201).json(await bookingSessionShape(updated ?? created));
     } catch {
       await db.transaction(async (tx) => {
         await tx
@@ -3507,7 +3585,7 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
     const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId : "";
     const session = await sessionForActor(sessionId, req.appUser!);
     if (session.bookingStatus === "cancelled") {
-      res.json(session);
+      res.json(await bookingSessionShape(session));
       return;
     }
     if (session.dateTime <= new Date()) {
@@ -3552,7 +3630,7 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
       });
       return [saved];
     });
-    res.json(updated);
+    res.json(await bookingSessionShape(updated ?? session));
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -3580,10 +3658,41 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       new Date(start.getTime() - 1),
       new Date(start.getTime() + session.durationMinutes * 60_000 + 1),
       session.durationMinutes,
+      session.id,
     );
     if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
     if (!slots.includes(start.toISOString())) {
       throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
+    }
+    const end = new Date(start.getTime() + session.durationMinutes * 60_000);
+    const participantIds = [session.clientUserId, session.tutorUserId].filter(
+      (id): id is string => Boolean(id),
+    );
+    const [internalConflict] = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(
+        and(
+          sql`${sessionsTable.id} <> ${session.id}`,
+          sql`${sessionsTable.status} <> 'archived'`,
+          sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
+          sql`${sessionsTable.dateTime} < ${end}`,
+          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${start}`,
+          or(
+            ...participantIds.flatMap((id) => [
+              eq(sessionsTable.tutorUserId, id),
+              eq(sessionsTable.clientUserId, id),
+            ]),
+          ),
+        ),
+      )
+      .limit(1);
+    if (internalConflict) {
+      throw new BookingError(
+        409,
+        "SCHEDULE_CONFLICT",
+        "That time overlaps another active meeting for you or the tutor. Choose a different slot.",
+      );
     }
     const previousStart = session.dateTime;
     const event = session.providerEventId
@@ -3623,7 +3732,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       }
       throw new BookingError(500, "RESCHEDULE_FAILED", "The session could not be rescheduled.");
     }
-    res.json(updated);
+    res.json(await bookingSessionShape(updated ?? session));
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -4785,7 +4894,7 @@ async function adminProgramShape(course: typeof coursesTable.$inferSelect) {
     term: course.term,
     status: course.status,
     goalSummary: course.goalSummary,
-    meetUrl: course.meetUrl,
+    meetUrl: meetingUrlForTerm(course.term, course.meetUrl),
     driveUrl: course.driveUrl,
     sessionCount: Number(counts?.total ?? 0),
     completedSessionCount: Number(counts?.completed ?? 0),
@@ -4800,6 +4909,7 @@ async function adminSessionConflicts(
     durationMinutes: number;
   },
   excludeSessionId?: string,
+  options: { checkProvider?: boolean; strictProvider?: boolean } = {},
 ) {
   const end = new Date(payload.dateTime.getTime() + payload.durationMinutes * 60_000);
   const rows = await db
@@ -4821,16 +4931,43 @@ async function adminSessionConflicts(
         excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
       ),
     );
-  return rows
+  const conflicts = rows
     .filter(
       (row) =>
         (payload.tutorUserId && row.tutorUserId === payload.tutorUserId) ||
         (payload.clientUserId && row.clientUserId === payload.clientUserId),
     )
-    .map(
+     .map(
       (row) =>
         `${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`,
     );
+  if (options.checkProvider === true && payload.tutorUserId) {
+    const access = await calendarAccessForUser(payload.tutorUserId);
+    if (access) {
+      try {
+        const busyWindows = await listGoogleBusyWindows(
+          access.accessToken,
+          access.connection.calendarId!,
+          payload.dateTime,
+          end,
+        );
+        if (overlapsBusyWindow(payload.dateTime, end, busyWindows, 0)) {
+          conflicts.push(
+            `Tutor's connected calendar is busy during ${payload.dateTime.toISOString()}–${end.toISOString()}.`,
+          );
+        }
+      } catch {
+        if (options.strictProvider) {
+          throw new BookingError(
+            503,
+            "CALENDAR_UNAVAILABLE",
+            "The tutor calendar could not be checked. No session was assigned.",
+          );
+        }
+      }
+    }
+  }
+  return conflicts;
 }
 
 async function adminSessionShape(
@@ -4867,7 +5004,7 @@ async function adminSessionShape(
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: course?.meetUrl ?? null,
+    meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
     student: session.clientUserId
       ? { id: session.clientUserId, name: personById.get(session.clientUserId) ?? "Unknown student" }
       : null,
@@ -5072,13 +5209,18 @@ router.patch(
       res.status(404).json({ error: "Program not found" });
       return;
     }
+    const nextTerm = body.data.term === undefined ? existing.term : body.data.term.trim();
     const updates = {
       ...(body.data.title === undefined ? {} : { title: body.data.title.trim() }),
       ...(body.data.subject === undefined ? {} : { subject: body.data.subject.trim() }),
-      ...(body.data.term === undefined ? {} : { term: body.data.term.trim() }),
+      ...(body.data.term === undefined ? {} : { term: nextTerm }),
       ...(body.data.status === undefined ? {} : { status: body.data.status }),
       ...(body.data.goalSummary === undefined ? {} : { goalSummary: body.data.goalSummary?.trim() || null }),
-      ...(body.data.meetUrl === undefined ? {} : { meetUrl: body.data.meetUrl?.trim() || null }),
+      ...(isFall2026Term(nextTerm)
+        ? { meetUrl: SHARED_FALL_MEETING_URL }
+        : body.data.meetUrl === undefined
+          ? {}
+          : { meetUrl: body.data.meetUrl?.trim() || null }),
       ...(body.data.driveUrl === undefined ? {} : { driveUrl: body.data.driveUrl?.trim() || null }),
     };
     const [updated] = await db.update(coursesTable).set(updates).where(eq(coursesTable.id, existing.id)).returning();
@@ -5213,14 +5355,23 @@ router.post(
       res.status(404).json({ error: "Program or assigned person not found" });
       return;
     }
-    const conflictWith = await adminSessionConflicts({
-      tutorUserId: body.data.tutorUserId,
-      clientUserId: body.data.clientUserId,
-      dateTime: body.data.dateTime,
-      durationMinutes: body.data.durationMinutes,
-    });
+    let conflictWith: string[];
+    try {
+      conflictWith = await adminSessionConflicts({
+        tutorUserId: body.data.tutorUserId,
+        clientUserId: body.data.clientUserId,
+        dateTime: body.data.dateTime,
+        durationMinutes: body.data.durationMinutes,
+      }, undefined, { checkProvider: true, strictProvider: true });
+    } catch (error) {
+      if (error instanceof BookingError) {
+        sendBookingError(error, res);
+        return;
+      }
+      throw error;
+    }
     if (conflictWith.length > 0) {
-      res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session overlaps another internal session.", conflicts: conflictWith });
+      res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
     const [created] = await db.insert(sessionsTable).values({
@@ -5273,16 +5424,33 @@ router.patch(
       durationMinutes: body.data.durationMinutes ?? existing.durationMinutes,
       bookingStatus: body.data.bookingStatus ?? existing.bookingStatus,
     };
-    const [course] = await db.select({ id: coursesTable.id }).from(coursesTable).where(eq(coursesTable.id, next.courseId)).limit(1);
+    const [course] = await db.select({ id: coursesTable.id, term: coursesTable.term }).from(coursesTable).where(eq(coursesTable.id, next.courseId)).limit(1);
     if (!course || !(await validateAdminSessionPeople(next.clientUserId, next.tutorUserId))) {
       res.status(404).json({ error: "Program or assigned person not found" });
       return;
     }
-    const conflictWith = next.status === "archived" || next.bookingStatus === "cancelled"
-      ? []
-      : await adminSessionConflicts(next, existing.id);
+    let conflictWith: string[];
+    try {
+      const unchangedCalendarMeeting =
+        Boolean(existing.providerEventId) &&
+        existing.tutorUserId === next.tutorUserId &&
+        existing.dateTime.getTime() === next.dateTime.getTime() &&
+        existing.durationMinutes === next.durationMinutes;
+      conflictWith = next.status === "archived" || next.bookingStatus === "cancelled"
+        ? []
+        : await adminSessionConflicts(next, existing.id, {
+            checkProvider: !unchangedCalendarMeeting,
+            strictProvider: true,
+          });
+    } catch (error) {
+      if (error instanceof BookingError) {
+        sendBookingError(error, res);
+        return;
+      }
+      throw error;
+    }
     if (conflictWith.length > 0) {
-      res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session overlaps another internal session.", conflicts: conflictWith });
+      res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
     const [updated] = await db.update(sessionsTable).set({ ...next, updatedAt: new Date() }).where(eq(sessionsTable.id, existing.id)).returning();
@@ -5353,14 +5521,14 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
   res.json(
     GetCourseResponse.parse({
       ...base,
-      meetUrl: course?.meetUrl ?? null,
+       meetUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
       driveUrl: course?.driveUrl ?? null,
       goalSummary: course?.goalSummary ?? null,
       sessions: await Promise.all(
         resolvedSessions.map(async (session) => ({
           ...publicSessionShape(session),
           tutor: await sessionTutorShape(session),
-          meetingUrl: session.providerEventUrl ?? course.meetUrl ?? null,
+           meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
         })),
       ),
     }),
@@ -5441,10 +5609,15 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
     ids.length === 0
       ? []
       : await db
-          .select({ id: coursesTable.id, meetUrl: coursesTable.meetUrl })
+           .select({ id: coursesTable.id, term: coursesTable.term, meetUrl: coursesTable.meetUrl })
           .from(coursesTable)
           .where(inArray(coursesTable.id, ids));
-  const meetingUrls = new Map(courseRows.map((course) => [course.id, course.meetUrl]));
+  const meetingUrls = new Map(
+    courseRows.map((course) => [
+      course.id,
+      meetingUrlForTerm(course.term, course.meetUrl),
+    ]),
+  );
   const scopedSessions = await dashboardSessionsForUser(user);
   const attempts = await db
     .select({
@@ -5551,7 +5724,7 @@ router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
           dashboardSessionShape(
             session,
             await sessionTutorShape(session),
-            session.providerEventUrl ?? meetingUrls.get(session.courseId) ?? null,
+             meetingUrls.get(session.courseId) ?? null,
             user.role === "tutor" || user.role === "administrator"
               ? session.clientUserId
                 ? await studentShape(session.clientUserId)
@@ -5634,7 +5807,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     return;
   }
   const [course] = await db
-    .select({ meetUrl: coursesTable.meetUrl })
+    .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
     .from(coursesTable)
     .where(eq(coursesTable.id, session.courseId))
     .limit(1);
@@ -5701,7 +5874,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     GetSessionResponse.parse({
       ...publicSessionShape(session),
       tutor: await sessionTutorShape(session),
-      meetingUrl: session.providerEventUrl ?? course?.meetUrl ?? null,
+      meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
           ? session.clientUserId

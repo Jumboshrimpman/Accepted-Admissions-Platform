@@ -42,7 +42,9 @@ const sectionLinks: Array<{ id: Section; label: string; icon: typeof Users }> = 
 ];
 
 function errorText(error: unknown): string {
-  return (error as { data?: { error?: string } } | null)?.data?.error ?? "The operation could not be completed.";
+  const data = (error as { data?: { error?: string; conflicts?: string[] } } | null)?.data;
+  if (!data) return "The operation could not be completed.";
+  return [data.error, ...(data.conflicts ?? [])].filter(Boolean).join(" ");
 }
 
 function dateInput(value: string | null | undefined): string {

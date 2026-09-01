@@ -10,6 +10,8 @@ import {
 import { dashboardSessionShape, dashboardSessionsForUser } from "./dashboard-data.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { createDashboardRoleFixture } from "./dashboard-fixtures.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { SHARED_FALL_MEETING_URL } from "./session-schedule.ts";
 
 test("role fixtures keep dashboard sessions, assignments, and meeting data scoped", async () => {
   const fixture = await createDashboardRoleFixture();
@@ -48,9 +50,9 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
     const studentSessionResponse = dashboardSessionShape(
       satSession!,
       { id: fixture.satTutor.id, name: fixture.satTutor.displayName, specialty: "SAT", avatarUrl: null },
-      "https://meet.google.com/private-sat-room",
+      SHARED_FALL_MEETING_URL,
     );
-    assert.equal(studentSessionResponse.meetingUrl, "https://meet.google.com/private-sat-room");
+    assert.equal(studentSessionResponse.meetingUrl, SHARED_FALL_MEETING_URL);
     assert.equal("providerEventId" in studentSessionResponse, false);
     assert.deepEqual(Object.keys(studentSessionResponse).sort(), [
       "courseId",

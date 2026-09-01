@@ -3,6 +3,18 @@ import { zonedDateTimeToUtc } from "./booking.ts";
 
 export const TAITO_SESSION_TIMEZONE = "Asia/Tokyo";
 export const TAITO_SESSION_TIME = "21:00";
+export const SHARED_FALL_MEETING_URL = "http://meet.google.com/rih-iayt-okb";
+
+export function isFall2026Term(term: string | null | undefined): boolean {
+  return term?.trim().toLowerCase() === "fall 2026";
+}
+
+export function meetingUrlForTerm(
+  term: string | null | undefined,
+  fallback: string | null = null,
+): string | null {
+  return isFall2026Term(term) ? SHARED_FALL_MEETING_URL : fallback;
+}
 
 export const TAITO_FALL_2026_SESSIONS = [
   { dateKey: "2026-10-02", subject: "SAT", tutorName: "Eunice Chon", tutorEmail: "eunice_chon@berkeley.edu" },

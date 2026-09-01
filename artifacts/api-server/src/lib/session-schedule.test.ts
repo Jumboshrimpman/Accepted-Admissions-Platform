@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, meetingUrlForTerm, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -39,6 +39,13 @@ test("defines Taito's 12 unique Fall 2026 sessions with the requested tutors", (
       `${session.subject} session with ${session.tutorName}`,
     );
   }
+});
+
+test("uses one exact shared Meet room for Fall sessions", () => {
+  assert.equal(SHARED_FALL_MEETING_URL, "http://meet.google.com/rih-iayt-okb");
+  assert.equal(isFall2026Term("Fall 2026"), true);
+  assert.equal(meetingUrlForTerm("Fall 2026", "https://meet.google.com/provider-event"), SHARED_FALL_MEETING_URL);
+  assert.equal(meetingUrlForTerm("Spring 2027", "https://meet.google.com/provider-event"), "https://meet.google.com/provider-event");
 });
 
 test("stores every 9 PM JST session as noon UTC", () => {

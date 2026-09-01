@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
-import { Calendar, ChevronRight, Clock, BookOpen, Target, PenTool, ExternalLink } from "lucide-react";
+import { Calendar, ChevronRight, Clock, BookOpen, Target, PenTool, ExternalLink, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { type CurriculumBlock } from "@workspace/api-client-react";
 
@@ -133,6 +133,13 @@ export default function PortalSession() {
               <Clock className="w-5 h-5" />
               <span>{format(parseISO(session.dateTime), "h:mm a")}</span>
             </div>
+             {session.meetingUrl && (
+               <Button asChild variant="secondary" className="rounded-full">
+                 <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
+                   <Video className="mr-2 h-4 w-4" /> Join Meet
+                 </a>
+               </Button>
+             )}
           </div>
         </div>
       </div>

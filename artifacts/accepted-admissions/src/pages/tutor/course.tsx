@@ -91,6 +91,13 @@ export default function TutorCourse() {
                   </div>
                   
                   <div className="flex items-center gap-3 w-full md:w-auto">
+                     {session.meetingUrl && (
+                       <Button asChild variant="outline" size="sm" className="flex-1 md:flex-none">
+                         <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
+                           <Video className="w-4 h-4 mr-2" /> Join Meet
+                         </a>
+                       </Button>
+                     )}
                     <Link href={`/tutor/sessions/${session.id}`} className="flex-1 md:flex-none">
                       <Button variant="secondary" size="sm" className="w-full">
                         <Settings className="w-4 h-4 mr-2" /> Manage Curriculum

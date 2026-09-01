@@ -38,6 +38,17 @@ test("removes Google busy windows and adjacent buffered slots", () => {
   );
 });
 
+test("treats adjacent unbuffered meetings as non-overlapping", () => {
+  assert.equal(
+    overlapsBusyWindow(
+      new Date("2026-08-31T15:00:00.000Z"),
+      new Date("2026-08-31T16:00:00.000Z"),
+      [{ start: "2026-08-31T14:00:00.000Z", end: "2026-08-31T15:00:00.000Z" }],
+    ),
+    false,
+  );
+});
+
 test("honors booking notice and blackout dates", () => {
   const slots = generateAvailableSlots(
     { ...rule, blackoutDates: ["2026-08-31"] },

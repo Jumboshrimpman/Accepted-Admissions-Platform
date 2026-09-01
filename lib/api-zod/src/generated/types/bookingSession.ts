@@ -21,9 +21,7 @@ export interface BookingSession {
   durationMinutes: number;
   bookingStatus: BookingSessionBookingStatus;
   /** @nullable */
-  providerEventId?: string | null;
-  /** @nullable */
-  providerEventUrl?: string | null;
+  meetingUrl: string | null;
   /** @nullable */
   cancellationReason?: string | null;
 }

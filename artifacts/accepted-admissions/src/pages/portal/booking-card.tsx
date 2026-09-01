@@ -8,6 +8,7 @@ import {
   Link2,
   Loader2,
   RotateCcw,
+  Video,
   XCircle,
 } from "lucide-react";
 import {
@@ -381,6 +382,13 @@ export function BookingCard() {
                       </p>
                     </div>
                     <div className="flex gap-2">
+                       {session.meetingUrl && (
+                         <Button asChild size="sm" variant="outline" className="rounded-full">
+                           <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
+                             <Video className="mr-1.5 h-3.5 w-3.5" /> Meet
+                           </a>
+                         </Button>
+                       )}
                       <Button
                         size="sm"
                         variant="outline"

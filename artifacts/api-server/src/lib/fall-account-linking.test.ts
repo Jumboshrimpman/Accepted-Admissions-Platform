@@ -15,7 +15,7 @@ const { publicSessionShape, reconcileTaitoSessions, visibleSessionsForUser } =
   privacyModule;
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 const scheduleModule = await import("./session-schedule.ts");
-const { TAITO_FALL_2026_SESSIONS, taitoSessionDateTime } = scheduleModule;
+const { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, taitoSessionDateTime } = scheduleModule;
 
 test("reconciles existing Fall sessions in place and keeps access subject-scoped", async () => {
   const suffix = randomUUID();
@@ -129,6 +129,11 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
         subject: scheduled.subject,
       })),
     );
+    const [reconciledCourse] = await db
+      .select({ meetUrl: coursesTable.meetUrl })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, courseId));
+    assert.equal(reconciledCourse?.meetUrl, SHARED_FALL_MEETING_URL);
 
     const [taitoSessions, euniceSessions, nikaSessions] = await Promise.all([
       visibleSessionsForUser(student!, courseId),

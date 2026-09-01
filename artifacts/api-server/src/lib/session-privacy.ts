@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   courseMembershipsTable,
+  coursesTable,
   db,
   sessionsTable,
   tutorProfilesTable,
@@ -9,7 +10,7 @@ import {
   type AppUser,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -21,7 +22,13 @@ function subjectFamily(subject: string): string {
 }
 
 export async function reconcileTaitoSessions(courseId: string): Promise<void> {
-  const [courseSessions, tutorProfiles, users] = await Promise.all([
+  const [course, courseSessions, tutorProfiles, users] = await Promise.all([
+    db
+      .select({ id: coursesTable.id, term: coursesTable.term, meetUrl: coursesTable.meetUrl })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, courseId))
+      .limit(1)
+      .then((rows) => rows[0]),
     db
       .select()
       .from(sessionsTable)
@@ -54,6 +61,13 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
         ]),
       ),
   ]);
+  if (!course) return;
+  if (isFall2026Term(course.term) && course.meetUrl !== SHARED_FALL_MEETING_URL) {
+    await db
+      .update(coursesTable)
+      .set({ meetUrl: SHARED_FALL_MEETING_URL })
+      .where(eq(coursesTable.id, courseId));
+  }
   const student = users.find((user) => user.email === "taito0525@gmail.com");
   const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
   for (const session of courseSessions) {
