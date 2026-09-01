@@ -71,7 +71,7 @@ export default function PortalSession() {
         <span className="text-foreground">{formatSessionDate(session)}</span>
       </nav>
 
-      <section className="rounded-3xl bg-gradient-brand p-6 text-white shadow-xl sm:p-8">
+      <section className="rounded-3xl bg-brand-ink p-6 text-white shadow-xl sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Badge className="border-0 bg-white/20 text-white">{sessionSubjectLabel(session.subject)}</Badge>

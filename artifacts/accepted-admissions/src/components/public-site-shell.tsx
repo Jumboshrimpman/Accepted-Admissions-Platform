@@ -83,7 +83,7 @@ export function PublicSiteShell({
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-border bg-background">
         <div className="container mx-auto flex min-h-20 items-center justify-between gap-4 px-6 py-3">
           <Link href="/" className="flex shrink-0 items-center gap-3" aria-label="Accepted Admissions home">
             <img
@@ -91,7 +91,7 @@ export function PublicSiteShell({
               alt="Accepted Admissions"
               width="40"
               height="40"
-              className="h-10 w-10 rounded-xl shadow-sm"
+              className="h-10 w-10 dark:invert"
             />
             <span className="hidden font-bold tracking-tight sm:inline">Accepted Admissions</span>
           </Link>
@@ -104,16 +104,16 @@ export function PublicSiteShell({
           <div className="flex min-w-0 items-center justify-end gap-2">
             <span className="hidden text-xs text-muted-foreground md:inline">{eyebrow}</span>
             <Show when="signed-out">
-              <Button asChild variant="ghost" className="hidden rounded-full sm:inline-flex">
+              <Button asChild variant="ghost" className="hidden rounded-md sm:inline-flex">
                 <Link href="/login" data-testid="button-header-sign-in">Client sign in</Link>
               </Button>
             </Show>
             <Show when="signed-in">
-              <Button asChild variant="ghost" className="hidden rounded-full sm:inline-flex">
+              <Button asChild variant="ghost" className="hidden rounded-md sm:inline-flex">
                 <Link href="/portal" data-testid="button-header-portal">Open client portal</Link>
               </Button>
             </Show>
-            <Button asChild className="rounded-full bg-primary px-4 text-sm text-primary-foreground sm:px-5">
+            <Button asChild className="rounded-md bg-primary px-4 text-sm text-primary-foreground sm:px-5">
               <Link href="/client-request" data-testid="link-header-guidance">
                 Get guidance <ArrowUpRight className="ml-2 h-4 w-4" />
               </Link>
@@ -122,7 +122,7 @@ export function PublicSiteShell({
               type="button"
               variant="ghost"
               size="icon"
-              className="ml-1 rounded-full lg:hidden"
+              className="ml-1 rounded-md lg:hidden"
               aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={menuOpen}
               aria-controls="public-mobile-navigation"
@@ -140,10 +140,10 @@ export function PublicSiteShell({
               <PublicNavLink href="/past-success">Student stories</PublicNavLink>
               <PublicNavLink href="/client-request">Get guidance</PublicNavLink>
               <Show when="signed-out">
-                <Link href="/login" data-testid="link-mobile-sign-in" className="rounded-full px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Client sign in</Link>
+                <Link href="/login" data-testid="link-mobile-sign-in" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Client sign in</Link>
               </Show>
               <Show when="signed-in">
-                <Link href="/portal" data-testid="link-mobile-portal" className="rounded-full px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Open client portal</Link>
+                <Link href="/portal" data-testid="link-mobile-portal" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Open client portal</Link>
               </Show>
             </div>
           </nav>
@@ -153,7 +153,7 @@ export function PublicSiteShell({
       <footer className="border-t bg-card">
         <div className="container mx-auto flex flex-col gap-6 px-6 py-10 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
-            <img src={publicAssetPath("/logo.svg")} alt="" width="24" height="24" className="h-6 w-6 rounded-md opacity-50 grayscale" />
+             <img src={publicAssetPath("/logo.svg")} alt="" width="24" height="24" className="h-6 w-6 opacity-80 dark:invert" />
             <div>
               <p className="font-medium text-foreground">Accepted Admissions</p>
               <p className="mt-1 text-xs">Focused tutoring. Thoughtful guidance.</p>
@@ -181,8 +181,11 @@ function PublicNavLink({
   children: React.ReactNode;
   reference?: React.RefObject<HTMLAnchorElement | null>;
 }) {
+  const [location] = useLocation();
+  const isActive = location === href || location.startsWith(`${href}/`);
+
   return (
-    <Link ref={reference} data-testid={`link-nav-${href.slice(1) || "home"}`} className="rounded-full px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground" href={href}>
+    <Link ref={reference} data-testid={`link-nav-${href.slice(1) || "home"}`} className={`rounded-md px-4 py-2 text-sm transition-colors ${isActive ? "font-semibold text-accent underline decoration-2 underline-offset-8" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`} href={href} aria-current={isActive ? "page" : undefined}>
       {children}
     </Link>
   );

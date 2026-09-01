@@ -61,7 +61,7 @@ function ResultView({
         ← Back to Dashboard
       </Link>
       <Card className="overflow-hidden border-primary/20 shadow-lg">
-        <div className="bg-gradient-brand p-8 text-white">
+        <div className="bg-brand-ink p-8 text-white">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <Badge className="mb-3 border-0 bg-white/20 text-white">

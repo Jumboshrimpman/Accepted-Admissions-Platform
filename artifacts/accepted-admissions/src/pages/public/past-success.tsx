@@ -64,32 +64,32 @@ export default function PastSuccess() {
     >
       <main className="container mx-auto px-6 py-20 md:py-28">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">Student stories</p>
-          <h1 className="mt-4 text-5xl font-bold tracking-tight md:text-6xl">{content?.title || "Approved perspectives, shared carefully."}</h1>
+          <p className="font-metadata text-accent">Student stories</p>
+          <h1 className="font-display mt-4 text-5xl tracking-tight md:text-6xl">{content?.title || "Approved perspectives, shared carefully."}</h1>
           {content?.body.intro && <p className="mt-6 text-lg leading-relaxed text-muted-foreground">{content.body.intro}</p>}
           {!content?.body.intro && !loading && !error && <p className="mt-6 text-lg leading-relaxed text-muted-foreground">This page shares approved student perspectives and destination details when they are available. Published examples are not promises of a particular outcome.</p>}
           {loading && <p className="mt-6 text-sm text-muted-foreground" role="status" data-testid="status-stories-loading">Loading approved stories…</p>}
           {error && (
             <div className="mt-6 rounded-2xl border border-destructive/20 bg-card p-5 text-sm text-muted-foreground" role="alert" data-testid="status-stories-error">
               <p>Approved student stories are temporarily unavailable.</p>
-              <Button data-testid="button-stories-retry" type="button" variant="outline" className="mt-4 rounded-full" onClick={loadContent}>Try again</Button>
+              <Button data-testid="button-stories-retry" type="button" variant="outline" className="mt-4 rounded-md" onClick={loadContent}>Try again</Button>
             </div>
           )}
         </div>
         {!loading && !error && (
           <section className="mt-14 grid gap-6 lg:grid-cols-[.75fr_1.25fr]">
-           {testimonial?.quote ? <figure className="rounded-3xl bg-gradient-brand p-8 text-white shadow-xl shadow-primary/15" data-testid="story-testimonial">
-            <Quote className="h-9 w-9 text-white/70" aria-hidden="true" />
-             <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Approved student perspective</p>
-             <blockquote className="mt-4 text-xl font-semibold leading-relaxed">“{testimonial.quote}”</blockquote>
-            {attribution && <figcaption className="mt-6 text-sm font-medium text-white/80">— {attribution}</figcaption>}
-           </figure> : <div className="rounded-3xl border border-dashed bg-card p-8 text-sm text-muted-foreground" data-testid="status-stories-no-testimonial">No approved student perspective is available at this time.</div>}
-          <div className="rounded-3xl border bg-card p-8">
-             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-accent">Published destination details</p>
+           {testimonial?.quote ? <figure className="rounded-xl bg-primary p-8 text-primary-foreground shadow-sm" data-testid="story-testimonial">
+             <Quote className="h-9 w-9 text-accent" aria-hidden="true" />
+              <p className="font-metadata mt-8 text-primary-foreground/70">Approved student perspective</p>
+              <blockquote className="font-display mt-4 text-3xl leading-tight">“{testimonial.quote}”</blockquote>
+             {attribution && <figcaption className="mt-6 text-sm font-medium text-primary-foreground/80">— {attribution}</figcaption>}
+            </figure> : <div className="rounded-lg border border-dashed bg-card p-8 text-sm text-muted-foreground" data-testid="status-stories-no-testimonial">No approved student perspective is available at this time.</div>}
+           <div className="rounded-xl border bg-card p-8">
+              <p className="font-metadata text-accent">Published destination details</p>
              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">These names and images come from the approved page content and are shared as examples, not guarantees.</p>
             {logos.length > 0 ? <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {logos.map((logo) => (
-                <div key={logo.name} className="flex min-h-28 items-center justify-center rounded-2xl bg-muted/50 p-4">
+                 <div key={logo.name} className="flex min-h-28 items-center justify-center rounded-lg bg-muted/50 p-4">
                   <img src={logo.src} alt={logo.alt || `${logo.name} logo`} width="120" height="96" className="max-h-20 max-w-full object-contain mix-blend-multiply" loading="lazy" onError={(event) => {
                     event.currentTarget.style.display = "none";
                     event.currentTarget.nextElementSibling?.removeAttribute("hidden");
@@ -98,7 +98,7 @@ export default function PastSuccess() {
                 </div>
               ))}
             </div> : <p className="mt-6 text-sm text-muted-foreground">Approved destination details will appear here when available.</p>}
-             <Button asChild className="mt-7 rounded-full"><Link href="/client-request" data-testid="link-stories-guidance">Request guidance <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+              <Button asChild className="mt-7 rounded-md"><Link href="/client-request" data-testid="link-stories-guidance">Request guidance <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
           </div>
         </section>
         )}

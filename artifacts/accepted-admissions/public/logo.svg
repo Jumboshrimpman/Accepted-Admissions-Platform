@@ -1,11 +1,6 @@
-<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="256" height="256" rx="64" fill="url(#paint0_linear_1_2)"/>
-<path d="M128 64L192 100.571V155.429L128 192L64 155.429V100.571L128 64Z" fill="white"/>
-<path d="M128 96L160 114.286V140.571L128 158.857L96 140.571V114.286L128 96Z" fill="url(#paint0_linear_1_2)"/>
-<defs>
-<linearGradient id="paint0_linear_1_2" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-<stop stop-color="#0B1121"/>
-<stop offset="1" stop-color="#4F46E5"/>
-</linearGradient>
-</defs>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="logo-title">
+  <title id="logo-title">Accepted Admissions A mark</title>
+  <path d="M47 204L104.5 52H151.5L209 204H178.5L164.25 165H91.75L77.5 204H47Z" fill="#183247"/>
+  <path d="M101 140H155L128 66L101 140Z" fill="#F5F0E7"/>
+  <path d="M87 146H169" stroke="#8D4937" stroke-width="14" stroke-linecap="square"/>
 </svg>

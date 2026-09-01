@@ -89,25 +89,24 @@ export default function SatOfferings() {
     >
       <main>
         <section className="relative overflow-hidden border-b">
-          <div className="absolute -right-24 -top-40 h-[520px] w-[520px] rounded-full bg-accent/10 blur-3xl" />
           <div className="container relative mx-auto grid gap-12 px-6 py-20 md:grid-cols-[1.05fr_.95fr] md:items-center md:py-28">
             <div>
-              <Badge className="mb-6 rounded-full bg-accent/10 px-3 py-1 text-accent hover:bg-accent/10">
+              <Badge className="font-metadata mb-6 rounded-sm bg-accent/10 px-3 py-1 text-accent hover:bg-accent/10">
                 Current online offer
               </Badge>
-              <h1 className="max-w-3xl text-5xl font-bold tracking-tight md:text-7xl">
-                 One focused hour of <span className="text-gradient-brand">SAT tutoring.</span>
+               <h1 className="font-display max-w-3xl text-5xl tracking-tight md:text-7xl">
+                 One focused hour of <span className="text-accent">SAT tutoring.</span>
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
                 Review the single session currently available to purchase online. The current approved price is shown in the offer below.
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="h-13 w-full rounded-full bg-gradient-brand px-7 text-white sm:w-auto">
+                <Button asChild size="lg" className="h-13 w-full rounded-md bg-primary px-7 text-primary-foreground sm:w-auto">
                   <a href="#session-offer" data-testid="link-sat-offer">
                     View the session offer <ArrowRight className="ml-2 h-4 w-4" />
                   </a>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-13 rounded-full px-7">
+                <Button asChild size="lg" variant="outline" className="h-13 rounded-md px-7">
                   <Link href="/client-request" data-testid="link-sat-guidance">
                     Request broader guidance
                   </Link>
@@ -115,10 +114,10 @@ export default function SatOfferings() {
               </div>
               <p className="mt-4 text-sm text-muted-foreground">Looking for a different service? Use the request form instead of assuming this offer is the right fit.</p>
             </div>
-            <Card className="border-primary/10 bg-card/80 shadow-2xl shadow-primary/10">
+            <Card className="rounded-xl border bg-card shadow-sm">
               <CardHeader>
-                <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="h-5 w-5" /></div>
-                <CardTitle className="text-2xl">From offer to scheduled session</CardTitle>
+                 <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-md bg-primary/10 text-primary"><Sparkles className="h-5 w-5" /></div>
+                 <CardTitle className="font-display text-3xl">From offer to scheduled session</CardTitle>
                 <CardDescription>What to expect before and after secure checkout.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -127,12 +126,12 @@ export default function SatOfferings() {
                    ["2. Sign in and pay", "Signed-out visitors are sent to sign in and returned here to continue secure checkout."],
                    ["3. Schedule after payment", "Once payment is verified, choose an available time in the client portal."],
                 ].map(([title, description], index) => (
-                   <div key={title} className="flex gap-4 rounded-2xl border bg-background/70 p-4" data-testid={`step-sat-${index + 1}`}>
+                    <div key={title} className="flex gap-4 rounded-lg border bg-background p-4" data-testid={`step-sat-${index + 1}`}>
                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{index + 1}</span>
                     <div><p className="font-semibold">{title}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p></div>
                   </div>
                 ))}
-                <div className="flex items-start gap-3 rounded-2xl bg-muted/60 p-4 text-sm text-muted-foreground">
+                 <div className="flex items-start gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
                   <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                     <span>Scheduling is a post-purchase portal step. Availability is checked again when a time is booked.</span>
                 </div>
@@ -143,19 +142,19 @@ export default function SatOfferings() {
 
          <section id="session-offer" className="container mx-auto scroll-mt-28 px-6 py-20">
           <div className="mb-10 max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-accent">The current offer</p>
-               <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">The current SAT tutoring offer.</h2>
+               <p className="font-metadata text-accent">The current offer</p>
+                <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">The current SAT tutoring offer.</h2>
                <p className="mt-3 text-muted-foreground">There is one online SAT offer here: a single 60-minute session. The price below comes from the active offer record. Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
           </div>
           {loading ? (
-             <div className="max-w-2xl" data-testid="status-sat-loading"><Skeleton className="h-72 rounded-3xl" /></div>
+             <div className="max-w-2xl" data-testid="status-sat-loading"><Skeleton className="h-72 rounded-lg" /></div>
           ) : error ? (
-             <div className="rounded-3xl border border-dashed p-10 text-center text-muted-foreground" role="alert" data-testid="status-sat-error">The current SAT offer is temporarily unavailable. Please use the guidance request form and we’ll help you directly.</div>
+             <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground" role="alert" data-testid="status-sat-error">The current SAT offer is temporarily unavailable. Please use the guidance request form and we’ll help you directly.</div>
           ) : products.length === 0 ? (
-             <div className="rounded-3xl border border-dashed p-10 text-center" data-testid="status-sat-empty">
+             <div className="rounded-lg border border-dashed p-10 text-center" data-testid="status-sat-empty">
                <h3 className="text-lg font-semibold">The online session is not available right now</h3>
                <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">This page does not list a different package or promise availability. Tell us what you are working toward and we’ll help you find the right next step.</p>
-               <Button asChild variant="outline" className="mt-5 rounded-full"><Link href="/client-request" data-testid="link-sat-empty-guidance">Request guidance</Link></Button>
+               <Button asChild variant="outline" className="mt-5 rounded-md"><Link href="/client-request" data-testid="link-sat-empty-guidance">Request guidance</Link></Button>
             </div>
           ) : (
              <div className="max-w-2xl">
@@ -163,8 +162,8 @@ export default function SatOfferings() {
                  const durationMinutes = Math.round(product.durationHours * 60);
                  const price = (product.totalPriceCents / 100).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
                  return (
-                  <Card key={product.id} className="relative overflow-hidden rounded-3xl border-accent/40 shadow-lg shadow-accent/10" data-testid={`card-sat-offer-${product.id}`}>
-                    <Badge className="absolute right-5 top-5 rounded-full bg-accent text-white">{durationMinutes} minutes</Badge>
+                   <Card key={product.id} className="relative overflow-hidden rounded-xl border-accent/40 shadow-sm" data-testid={`card-sat-offer-${product.id}`}>
+                     <Badge className="font-metadata absolute right-5 top-5 rounded-sm bg-accent text-accent-foreground">{durationMinutes} minutes</Badge>
                   <CardHeader className="pb-4">
                        <p className="text-sm font-medium text-muted-foreground">Accepted Admissions · SAT tutoring</p>
                     <CardTitle className="mt-2 text-2xl">{product.name}</CardTitle>
@@ -172,14 +171,14 @@ export default function SatOfferings() {
                   </CardHeader>
                   <CardContent>
                      <div className="mb-5" data-testid={`price-sat-offer-${product.id}`}>
-                       <span className="text-4xl font-bold">{price}</span>
+                        <span className="font-display text-5xl">{price}</span>
                         <span className="ml-2 text-sm text-muted-foreground">for one session</span>
                          <p className="mt-1 text-sm font-medium text-accent">One prepaid {durationMinutes}-minute SAT tutoring session</p>
                     </div>
                      <Button
                         data-testid={`button-sat-checkout-${product.id}`}
                         variant="default"
-                       className="w-full rounded-full"
+                         className="w-full rounded-md"
                        onClick={() => startCheckout(product.id)}
                        disabled={checkout.isPending}
                      >

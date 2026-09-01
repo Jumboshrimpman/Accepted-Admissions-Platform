@@ -100,10 +100,10 @@ export default function OurTeam() {
     >
       <main className="container mx-auto px-6 py-20 md:py-24">
         <header className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
+           <p className="font-metadata text-accent">
             Our team
           </p>
-          <h1 className="mt-5 text-5xl font-bold tracking-tight md:text-7xl">
+           <h1 className="font-display mt-5 text-5xl tracking-tight md:text-7xl">
             {content?.title || "Meet Our Team"}
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
@@ -117,7 +117,7 @@ export default function OurTeam() {
 
         {loading && (
           <div
-            className="mx-auto mt-16 max-w-2xl rounded-2xl border bg-card p-6 text-sm text-muted-foreground"
+             className="mx-auto mt-16 max-w-2xl rounded-lg border bg-card p-6 text-sm text-muted-foreground"
             role="status"
             data-testid="status-team-loading"
           >
@@ -127,7 +127,7 @@ export default function OurTeam() {
 
         {error && (
           <div
-            className="mx-auto mt-16 max-w-2xl rounded-2xl border border-destructive/20 bg-card p-6 text-sm text-muted-foreground"
+             className="mx-auto mt-16 max-w-2xl rounded-lg border border-destructive/20 bg-card p-6 text-sm text-muted-foreground"
             role="alert"
             data-testid="status-team-error"
           >
@@ -136,7 +136,7 @@ export default function OurTeam() {
               data-testid="button-team-retry"
               type="button"
               variant="outline"
-              className="mt-4 rounded-full"
+               className="mt-4 rounded-md"
               onClick={loadTutors}
             >
               Try again
@@ -146,7 +146,7 @@ export default function OurTeam() {
 
         {!loading && !error && tutors.length === 0 && (
           <div
-            className="mx-auto mt-16 max-w-2xl rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground"
+             className="mx-auto mt-16 max-w-2xl rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground"
             data-testid="status-team-empty"
           >
             <p>No approved team profiles are published right now.</p>
@@ -154,7 +154,7 @@ export default function OurTeam() {
               If you would like to discuss SAT tutoring or broader guidance, you
               can still share your goals privately.
             </p>
-            <Button asChild variant="outline" className="mt-5 rounded-full">
+             <Button asChild variant="outline" className="mt-5 rounded-md">
               <Link
                 href="/client-request"
                 data-testid="link-team-empty-guidance"
@@ -167,13 +167,13 @@ export default function OurTeam() {
 
         {!loading && !error && tutors.length > 0 && (
           <section
-            className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-border sm:grid-cols-2 xl:grid-cols-4"
+             className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-xl bg-border sm:grid-cols-2 xl:grid-cols-4"
             aria-label="Approved team profiles"
           >
             {tutors.map((tutor) => (
               <article
                 key={tutor.id}
-                className="group relative isolate min-h-[31rem] overflow-hidden bg-muted"
+                 className="group relative isolate min-h-[31rem] overflow-hidden bg-muted"
                 data-testid={`card-team-${tutor.id}`}
               >
                 <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
@@ -201,8 +201,8 @@ export default function OurTeam() {
                   </span>
                 </div>
 
-                <div
-                  className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent"
+                 <div
+                   className="absolute inset-x-0 bottom-0 h-48 bg-foreground/90"
                   aria-hidden="true"
                 />
 
@@ -220,11 +220,11 @@ export default function OurTeam() {
 
                 <div className="absolute inset-x-0 bottom-0 z-10 p-5 text-white sm:p-6">
                   {tutor.title && (
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/85">
+                     <p className="font-metadata text-white/85">
                       {tutor.title}
                     </p>
                   )}
-                  <h2 className="mt-3 text-2xl font-bold leading-tight">
+                   <h2 className="font-display mt-3 text-3xl leading-tight">
                     {tutor.name || "Accepted Admissions tutor"}
                   </h2>
                   {tutor.biography && (
@@ -244,7 +244,7 @@ export default function OurTeam() {
             Tell us what you are working toward. We will review your request
             before discussing a possible next step.
           </p>
-          <Button asChild className="mt-5 rounded-full">
+             <Button asChild className="mt-5 rounded-md">
             <Link href="/client-request" data-testid="link-team-guidance">
               Get guidance <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

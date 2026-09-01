@@ -82,7 +82,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <img
                 src={`${import.meta.env.BASE_URL}logo.svg`}
                 alt="Accepted Admissions"
-                className="w-8 h-8 rounded-lg"
+                className="w-8 h-8 dark:invert"
               />
               <span className="font-bold text-lg tracking-tight text-foreground hidden sm:inline-block">
                 Accepted Admissions

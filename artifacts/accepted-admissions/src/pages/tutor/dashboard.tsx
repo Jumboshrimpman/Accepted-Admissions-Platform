@@ -148,7 +148,7 @@ export default function TutorDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <section className="rounded-3xl bg-gradient-brand px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-10">
+      <section className="rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-10">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/65">
           Tutor workspace
         </p>

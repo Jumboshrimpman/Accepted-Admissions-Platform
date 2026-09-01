@@ -60,4 +60,12 @@ describe("PublicSiteShell", () => {
     expect(resolvePublicPath("/logo.svg", "/accepted-admissions/")).toBe("/accepted-admissions/logo.svg");
     expect(resolvePublicPath("api/public/products", "/accepted-admissions")).toBe("/accepted-admissions/api/public/products");
   });
+
+  it("uses the coordinated A mark in the shared public shell", () => {
+    render(<PublicSiteShell><main>Page content</main></PublicSiteShell>);
+
+    const logo = screen.getByRole("img", { name: "Accepted Admissions" });
+    expect(logo.getAttribute("src")).toContain("/logo.svg");
+    expect(logo.className).toContain("dark:invert");
+  });
 });

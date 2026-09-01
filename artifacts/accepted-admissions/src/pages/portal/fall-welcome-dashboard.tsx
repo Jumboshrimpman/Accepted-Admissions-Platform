@@ -106,7 +106,7 @@ export function ClientDashboardView({
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14">
-      <section className="overflow-hidden rounded-3xl bg-gradient-brand px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
+      <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">Fall 2026 curriculum</p>
@@ -135,7 +135,7 @@ export function ClientDashboardView({
           <Eye className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
             <p className="font-semibold">{adminPreview ? "Read-only client preview" : "Curriculum in view-only mode"}</p>
-            <p className="mt-1 text-amber-800">{adminPreview ? "You can review the student&apos;s curriculum without opening student actions." : "You can review the complete plan, preparation, and published results. Only the student can complete work."}</p>
+            <p className="mt-1 text-amber-800">{adminPreview ? "You can review the student's curriculum without opening student actions." : "You can review the complete plan, preparation, and published results. Only the student can complete work."}</p>
           </div>
         </div>
       )}
