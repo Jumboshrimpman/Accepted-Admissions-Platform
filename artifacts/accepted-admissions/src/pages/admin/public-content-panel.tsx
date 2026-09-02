@@ -1,29 +1,24 @@
 import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
+import { Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { OurTeamContent, type TeamContent, type Tutor } from "@/pages/public/our-team";
+import { PastSuccessContent, type SchoolLogo, type SuccessContent } from "@/pages/public/past-success";
 
-type TutorProfile = {
+type TutorProfile = Tutor & {
   id: string;
   email: string;
-  name: string;
-  title: string;
-  photoUrl: string | null;
-  photoAltText: string | null;
-  biography: string | null;
-  subjects: string[];
-  linkedinUrl: string | null;
   publicApproved: boolean;
   active: boolean;
   bookingEligible: boolean;
 };
-
-type SchoolLogo = { name: string; src: string; alt: string };
 
 type PublicContent = {
   id: string;
@@ -49,6 +44,7 @@ export function PublicContentPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [preview, setPreview] = useState<"team" | "success" | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -131,6 +127,39 @@ export function PublicContentPanel() {
   const success = content.find((item) => item.slug === "past-success");
   const team = content.find((item) => item.slug === "our-team");
 
+  const previewTutors: Tutor[] = tutors
+    .filter((tutor) => tutor.active && tutor.publicApproved)
+    .map(({ id, name, title, photoUrl, photoAltText, biography, subjects, linkedinUrl }) => ({
+      id,
+      name,
+      title,
+      photoUrl,
+      photoAltText,
+      biography,
+      subjects,
+      linkedinUrl,
+    }));
+  const teamPreview: TeamContent | null = team
+    ? {
+        title: team.title,
+        seoTitle: team.seoTitle,
+        seoDescription: team.seoDescription,
+        body: { intro: team.body.intro },
+      }
+    : null;
+  const successPreview: SuccessContent | null = success
+    ? {
+        title: success.title,
+        seoTitle: success.seoTitle,
+        seoDescription: success.seoDescription,
+        body: {
+          intro: success.body.intro,
+          testimonial: success.body.testimonial,
+          schoolLogos: success.body.schoolLogos,
+        },
+      }
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -183,7 +212,12 @@ export function PublicContentPanel() {
                 <CardTitle>Our Team page</CardTitle>
                 <CardDescription>These fields control the public page heading, introduction, and search preview.</CardDescription>
               </div>
-              <Badge variant={team.status === "published" ? "default" : "outline"} className="capitalize">{team.status}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={team.status === "published" ? "default" : "outline"} className="capitalize">{team.status}</Badge>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPreview("team")} data-testid="button-preview-our-team">
+                  <Eye className="mr-2 h-4 w-4" /> Preview
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="grid gap-5 lg:grid-cols-2">
@@ -212,7 +246,12 @@ export function PublicContentPanel() {
                 <CardTitle>Student Stories page</CardTitle>
                 <CardDescription>Preserve the approved testimonial attribution and destination image descriptions when editing. Published examples should not be framed as guarantees.</CardDescription>
               </div>
-              <Badge variant={success.status === "published" ? "default" : "outline"} className="capitalize">{success.status}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={success.status === "published" ? "default" : "outline"} className="capitalize">{success.status}</Badge>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPreview("success")} data-testid="button-preview-student-stories">
+                  <Eye className="mr-2 h-4 w-4" /> Preview
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="grid gap-5 lg:grid-cols-2">
@@ -281,6 +320,28 @@ export function PublicContentPanel() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
+        <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b bg-card px-6 py-5 pr-12">
+            <DialogTitle>{preview === "team" ? "Our Team preview" : "Student Stories preview"}</DialogTitle>
+            <DialogDescription>
+              Preview only — this uses the current editor values and does not publish or change the live page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[calc(85vh-7rem)] overflow-y-auto bg-background">
+            <div className="border-b border-dashed bg-amber-50 px-6 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+              Review this administrator-only view before publishing. Images and optional content are shown exactly as the public layout will render them.
+            </div>
+            {preview === "team" && teamPreview && (
+              <OurTeamContent tutors={previewTutors} content={teamPreview} />
+            )}
+            {preview === "success" && successPreview && (
+              <PastSuccessContent content={successPreview} />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -304,6 +304,19 @@ function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/admin/content">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/admin*">
           <SignedIn>
             <RoleBoundary roles={["administrator"]}>
