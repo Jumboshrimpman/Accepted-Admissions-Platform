@@ -1,11 +1,23 @@
 import { Link } from "wouter";
-import { useGetAdminCurriculum, useGetAdminOverview, type AdminGuidanceRequest } from "@workspace/api-client-react";
-import { ArrowRight, AlertTriangle, BookOpen, CalendarDays, ChevronDown, ClipboardList, FileText, LogIn, MessageSquareText, Users, WalletCards } from "lucide-react";
+import {
+  getGetAdminOverviewQueryKey,
+  useGetAdminCurriculum,
+  useGetAdminOverview,
+  useUpdateAdminGuidanceRequest,
+  type AdminGuidanceRequest,
+  type AdminGuidanceRequestUpdate,
+  type AdminOverview,
+  type AdminOverviewUsersItem,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, AlertTriangle, BookOpen, CalendarDays, ChevronDown, ClipboardList, FileText, LogIn, MessageSquareText, Save, Users, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { useEffect, useState } from "react";
 import {
   disclosedSessions,
   displaySessionTitle,
@@ -28,6 +40,28 @@ const accessRoleCategoryLabels: Record<string, string> = {
   viewer: "Viewer",
 };
 
+const requestStatusOptions: Array<{ value: AdminGuidanceRequest["status"]; label: string }> = [
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
+  { value: "in_progress", label: "In progress" },
+  { value: "closed", label: "Closed" },
+];
+
+const conversionStatusOptions: Array<{ value: AdminGuidanceRequest["conversionStatus"]; label: string }> = [
+  { value: "unqualified", label: "Unqualified" },
+  { value: "qualified", label: "Qualified" },
+  { value: "converted", label: "Converted" },
+  { value: "lost", label: "Lost" },
+];
+
+type AdminOverviewWithPlatform = AdminOverview & {
+  platform?: {
+    outstandingInvoices: number;
+    upcomingSessions: number;
+    newRequests: number;
+  };
+};
+
 export default function AdminDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const { data: overview, isLoading: overviewLoading } = useGetAdminOverview();
@@ -38,6 +72,7 @@ export default function AdminDashboard() {
   const platform = (overview as typeof overview & { platform?: { outstandingInvoices: number; upcomingSessions: number; newRequests: number } } | undefined)?.platform;
   const loginActivity = overview?.loginActivity ?? [];
   const guidanceRequests = overview?.guidanceRequests ?? [];
+  const administrators = (overview?.users ?? []).filter((user) => user.role === "administrator");
   const accessConflicts = overview?.accessConflicts ?? [];
   const latestLogin = loginActivity[0];
   const statCards = [
@@ -74,7 +109,7 @@ export default function AdminDashboard() {
          {guidanceRequests.length === 0 ? (
            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-guidance-requests">No guidance requests have been submitted yet.</p>
          ) : (
-           guidanceRequests.map((request) => <GuidanceRequestItem key={request.id} request={request} />)
+            guidanceRequests.map((request) => <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />)
          )}
        </CardContent>
      </Card>
@@ -120,9 +155,78 @@ export default function AdminDashboard() {
   </div>;
 }
 
-function GuidanceRequestItem({ request }: { request: AdminGuidanceRequest }) {
+function GuidanceRequestItem({ request, administrators }: { request: AdminGuidanceRequest; administrators: AdminOverviewUsersItem[] }) {
   const receivedAt = new Date(request.createdAt);
   const receivedLabel = receivedAt.toLocaleString();
+  const queryClient = useQueryClient();
+  const updateRequest = useUpdateAdminGuidanceRequest();
+  const [draft, setDraft] = useState<AdminGuidanceRequestUpdate>({
+    status: request.status,
+    assignedStaffUserId: request.assignedStaffUserId,
+    followUpNotes: request.followUpNotes,
+    conversionStatus: request.conversionStatus,
+  });
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setDraft({
+      status: request.status,
+      assignedStaffUserId: request.assignedStaffUserId,
+      followUpNotes: request.followUpNotes,
+      conversionStatus: request.conversionStatus,
+    });
+  }, [request.assignedStaffUserId, request.conversionStatus, request.followUpNotes, request.status]);
+
+  const hasChanges =
+    draft.status !== request.status ||
+    draft.assignedStaffUserId !== request.assignedStaffUserId ||
+    (draft.followUpNotes ?? "") !== (request.followUpNotes ?? "") ||
+    draft.conversionStatus !== request.conversionStatus;
+
+  const save = () => {
+    setMessage("");
+    updateRequest.mutate(
+      { requestId: request.id, data: draft },
+      {
+        onSuccess: (updated) => {
+          queryClient.setQueryData<AdminOverviewWithPlatform>(
+            getGetAdminOverviewQueryKey(),
+            (current) => {
+              if (!current) return current;
+              return {
+                ...current,
+                guidanceRequests: current.guidanceRequests.map((item) =>
+                  item.id === updated.id ? updated : item
+                ),
+                platform: current.platform
+                  ? {
+                      ...current.platform,
+                      newRequests: current.guidanceRequests.reduce(
+                        (count, item) =>
+                          count + ((item.id === updated.id ? updated.status : item.status) === "new" ? 1 : 0),
+                        0,
+                      ),
+                    }
+                  : undefined,
+              };
+            },
+          );
+          setDraft({
+            status: updated.status,
+            assignedStaffUserId: updated.assignedStaffUserId,
+            followUpNotes: updated.followUpNotes,
+            conversionStatus: updated.conversionStatus,
+          });
+          setMessage("Triage details saved.");
+        },
+        onError: (error) => {
+          const detail = (error as { data?: { error?: string } } | null)?.data?.error;
+          setMessage(detail || "Could not save triage details. Please try again.");
+        },
+      },
+    );
+  };
+
   return (
     <details className="group rounded-xl border" data-testid={`details-guidance-request-${request.id}`}>
       <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-row sm:items-center sm:justify-between">
@@ -151,18 +255,81 @@ function GuidanceRequestItem({ request }: { request: AdminGuidanceRequest }) {
           <RequestField label="Target SAT score" value={request.targetSatScore} />
           <RequestField label="Planned test date" value={request.plannedTestDate} />
           <RequestField label="Referral source" value={request.referralSource} />
-          <RequestField label="Request status" value={request.status} />
-          <RequestField label="Conversion status" value={request.conversionStatus} />
           <RequestField label="Received" value={receivedLabel} />
-          <RequestField label="Assigned staff" value={request.assignedStaffUserId ?? "Unassigned"} />
           <RequestField label="Source page" value={request.sourcePage} />
           <RequestField label="Contact consent" value={request.consentToContact ? "Granted" : "Not granted"} />
           <RequestField label="Privacy acknowledged" value={request.privacyAcknowledged ? "Yes" : "No"} />
-          <RequestField label="Follow-up notes" value={request.followUpNotes} />
         </dl>
         <div className="mt-4 grid gap-4">
           <RequestField label="Goals and explanation of requested help" value={request.goals} multiline />
           <RequestField label="General scheduling availability" value={request.schedulingAvailability} multiline />
+        </div>
+        <div className="mt-6 rounded-xl border bg-muted/20 p-4" data-testid={`triage-guidance-request-${request.id}`}>
+          <div>
+            <h3 className="font-semibold">Private triage</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Ownership, progress, and notes are visible only to administrators.</p>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor={`request-status-${request.id}`}>Request status</Label>
+              <select
+                id={`request-status-${request.id}`}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={draft.status}
+                onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminGuidanceRequest["status"] })}
+                disabled={updateRequest.isPending}
+              >
+                {requestStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`conversion-status-${request.id}`}>Conversion status</Label>
+              <select
+                id={`conversion-status-${request.id}`}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={draft.conversionStatus}
+                onChange={(event) => setDraft({ ...draft, conversionStatus: event.target.value as AdminGuidanceRequest["conversionStatus"] })}
+                disabled={updateRequest.isPending}
+              >
+                {conversionStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`assigned-staff-${request.id}`}>Assigned administrator</Label>
+              <select
+                id={`assigned-staff-${request.id}`}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={draft.assignedStaffUserId ?? ""}
+                onChange={(event) => setDraft({ ...draft, assignedStaffUserId: event.target.value || null })}
+                disabled={updateRequest.isPending}
+              >
+                <option value="">Unassigned</option>
+                {administrators.map((administrator) => <option key={administrator.id} value={administrator.id}>{administrator.displayName}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={`follow-up-notes-${request.id}`}>Private follow-up notes</Label>
+              <span className="text-xs text-muted-foreground">{(draft.followUpNotes ?? "").length}/5000</span>
+            </div>
+            <Textarea
+              id={`follow-up-notes-${request.id}`}
+              rows={4}
+              maxLength={5000}
+              value={draft.followUpNotes ?? ""}
+              onChange={(event) => setDraft({ ...draft, followUpNotes: event.target.value || null })}
+              placeholder="Add contact attempts, next steps, or context for the team."
+              disabled={updateRequest.isPending}
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button onClick={save} disabled={!hasChanges || updateRequest.isPending} data-testid={`save-guidance-request-${request.id}`}>
+              <Save className="mr-2 h-4 w-4" />
+              {updateRequest.isPending ? "Saving…" : "Save triage"}
+            </Button>
+            {message && <p className="text-sm text-muted-foreground" role={message.startsWith("Could not") ? "alert" : "status"}>{message}</p>}
+          </div>
         </div>
       </div>
     </details>

@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import { clientRequestsTable, db, type AppUser } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { auditLogsTable, clientRequestsTable, db, type AppUser } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import express, {
   type NextFunction,
   type Request,
@@ -35,6 +35,7 @@ function testAuthMiddleware(user: AppUser) {
 
 async function startDashboardHttpServer(user: AppUser) {
   const app = express();
+  app.use(express.json());
   app.use(testAuthMiddleware(user));
   app.use("/api", platformRouter);
   const server = app.listen(0);
@@ -52,6 +53,18 @@ async function startDashboardHttpServer(user: AppUser) {
 
 async function getJson(baseUrl: string, path: string) {
   const response = await fetch(`${baseUrl}${path}`);
+  return {
+    response,
+    body: (await response.json()) as Record<string, any>,
+  };
+}
+
+async function patchJson(baseUrl: string, path: string, body: unknown) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   return {
     response,
     body: (await response.json()) as Record<string, any>,
@@ -343,10 +356,72 @@ test("HTTP admin overview returns private guidance requests only to administrato
       conversionStatus: "unqualified",
       createdAt: "2099-09-01T12:00:00.000Z",
     });
+
+    const updatePath = `/api/admin/guidance-requests/${createdRequestIds[1]}`;
+    const forbiddenUpdate = await patchJson(studentServer.baseUrl, updatePath, {
+      status: "contacted",
+    });
+    assert.equal(forbiddenUpdate.response.status, 403);
+    assert.deepEqual(forbiddenUpdate.body, { error: "Insufficient permission" });
+
+    const invalidStatus = await patchJson(administratorServer.baseUrl, updatePath, {
+      status: "invalid-status",
+    });
+    assert.equal(invalidStatus.response.status, 400);
+    assert.deepEqual(invalidStatus.body, { error: "Invalid guidance request update." });
+
+    const emptyUpdate = await patchJson(administratorServer.baseUrl, updatePath, {});
+    assert.equal(emptyUpdate.response.status, 400);
+    assert.deepEqual(emptyUpdate.body, { error: "Invalid guidance request update." });
+
+    const invalidAssignee = await patchJson(administratorServer.baseUrl, updatePath, {
+      assignedStaffUserId: fixture.student.id,
+    });
+    assert.equal(invalidAssignee.response.status, 400);
+    assert.deepEqual(invalidAssignee.body, {
+      error: "Assigned staff member must be an administrator.",
+    });
+
+    const updated = await patchJson(administratorServer.baseUrl, updatePath, {
+      status: "contacted",
+      assignedStaffUserId: fixture.administrator.id,
+      followUpNotes: "Called guardian; follow up Friday.",
+      conversionStatus: "qualified",
+    });
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.body.status, "contacted");
+    assert.equal(updated.body.assignedStaffUserId, fixture.administrator.id);
+    assert.equal(updated.body.followUpNotes, "Called guardian; follow up Friday.");
+    assert.equal(updated.body.conversionStatus, "qualified");
+
+    const [persisted] = await db
+      .select({
+        status: clientRequestsTable.status,
+        assignedStaffUserId: clientRequestsTable.assignedStaffUserId,
+        followUpNotes: clientRequestsTable.followUpNotes,
+        conversionStatus: clientRequestsTable.conversionStatus,
+      })
+      .from(clientRequestsTable)
+      .where(eq(clientRequestsTable.id, createdRequestIds[1]))
+      .limit(1);
+    assert.deepEqual(persisted, {
+      status: "contacted",
+      assignedStaffUserId: fixture.administrator.id,
+      followUpNotes: "Called guardian; follow up Friday.",
+      conversionStatus: "qualified",
+    });
   } finally {
     await studentServer?.close();
     await administratorServer?.close();
     for (const requestId of createdRequestIds) {
+      await db
+        .delete(auditLogsTable)
+        .where(
+          and(
+            eq(auditLogsTable.entityType, "client_request"),
+            eq(auditLogsTable.entityId, requestId),
+          ),
+        );
       await db
         .delete(clientRequestsTable)
         .where(eq(clientRequestsTable.id, requestId));

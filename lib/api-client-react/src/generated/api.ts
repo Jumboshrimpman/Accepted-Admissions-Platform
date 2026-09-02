@@ -29,6 +29,8 @@ import type {
   AdminClientDashboard,
   AdminCurriculum,
   AdminFinancials,
+  AdminGuidanceRequest,
+  AdminGuidanceRequestUpdate,
   AdminOverview,
   AdminProgram,
   AdminProgramUpdate,
@@ -362,6 +364,78 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
 
 
 
+
+export const getUpdateAdminGuidanceRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/admin/guidance-requests/${requestId}`
+}
+
+/**
+ * @summary Triage an administrator-only guidance request
+ */
+export const updateAdminGuidanceRequest = async (requestId: string,
+    adminGuidanceRequestUpdate: AdminGuidanceRequestUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminGuidanceRequest> => {
+
+  return customFetch<AdminGuidanceRequest>(getUpdateAdminGuidanceRequestUrl(requestId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminGuidanceRequestUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminGuidanceRequestMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGuidanceRequest>>, TError,{requestId: string;data: BodyType<AdminGuidanceRequestUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminGuidanceRequest>>, TError,{requestId: string;data: BodyType<AdminGuidanceRequestUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminGuidanceRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminGuidanceRequest>>, {requestId: string;data: BodyType<AdminGuidanceRequestUpdate>}> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  updateAdminGuidanceRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminGuidanceRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminGuidanceRequest>>>
+    export type UpdateAdminGuidanceRequestMutationBody = BodyType<AdminGuidanceRequestUpdate>
+    export type UpdateAdminGuidanceRequestMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Triage an administrator-only guidance request
+ */
+export const useUpdateAdminGuidanceRequest = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGuidanceRequest>>, TError,{requestId: string;data: BodyType<AdminGuidanceRequestUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminGuidanceRequest>>,
+        TError,
+        {requestId: string;data: BodyType<AdminGuidanceRequestUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminGuidanceRequestMutationOptions(options));
+    }
 
 export const getGetAdminCurriculumUrl = (params?: GetAdminCurriculumParams,) => {
   const normalizedParams = new URLSearchParams();

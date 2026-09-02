@@ -561,6 +561,26 @@ export interface AdminLoginActivity {
   signedInAt: string;
 }
 
+export type AdminGuidanceRequestStatus = typeof AdminGuidanceRequestStatus[keyof typeof AdminGuidanceRequestStatus];
+
+
+export const AdminGuidanceRequestStatus = {
+  new: 'new',
+  contacted: 'contacted',
+  in_progress: 'in_progress',
+  closed: 'closed',
+} as const;
+
+export type AdminGuidanceConversionStatus = typeof AdminGuidanceConversionStatus[keyof typeof AdminGuidanceConversionStatus];
+
+
+export const AdminGuidanceConversionStatus = {
+  unqualified: 'unqualified',
+  qualified: 'qualified',
+  converted: 'converted',
+  lost: 'lost',
+} as const;
+
 export interface AdminGuidanceRequest {
   id: string;
   guardianName: string;
@@ -586,12 +606,12 @@ export interface AdminGuidanceRequest {
   consentToContact: boolean;
   privacyAcknowledged: boolean;
   sourcePage: string;
-  status: string;
+  status: AdminGuidanceRequestStatus;
   /** @nullable */
   assignedStaffUserId: string | null;
   /** @nullable */
   followUpNotes: string | null;
-  conversionStatus: string;
+  conversionStatus: AdminGuidanceConversionStatus;
   createdAt: string;
 }
 
@@ -605,6 +625,18 @@ export interface AdminOverview {
   guidanceRequests: AdminGuidanceRequest[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
+}
+
+export interface AdminGuidanceRequestUpdate {
+  status?: AdminGuidanceRequestStatus;
+  /** @nullable */
+  assignedStaffUserId?: string | null;
+  /**
+     * @maxLength 5000
+     * @nullable
+     */
+  followUpNotes?: string | null;
+  conversionStatus?: AdminGuidanceConversionStatus;
 }
 
 export type AdminProgramStatus = typeof AdminProgramStatus[keyof typeof AdminProgramStatus];

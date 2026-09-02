@@ -1,4 +1,4 @@
-- [OpenAPI and Zod generator compatibility](openapi-zod-compatibility.md) — use number/plain-string fields while Orval 8 outputs target workspace Zod 3.
+- [OpenAPI and Zod generator compatibility](openapi-zod-compatibility.md) — avoid Zod 4-only formats and enforce ignored object constraints in handlers.
 - [Stripe financial integrity](stripe-financial-integrity.md) — settle before crediting, enforce DB uniqueness, lock cumulative refunds, and isolate invoice items.
 - [Migration ledger drift](merged-migration-reconciliation.md) — schema objects can exist before their migration ledger entries; keep reconciliation DDL idempotent.
 - [Clerk identity claims](clerk-identity-claims.md) — development sessions may omit email claims; resolve the verified email server-side before account linking.

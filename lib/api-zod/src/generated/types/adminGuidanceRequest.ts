@@ -5,6 +5,8 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminGuidanceConversionStatus } from './adminGuidanceConversionStatus';
+import type { AdminGuidanceRequestStatus } from './adminGuidanceRequestStatus';
 
 export interface AdminGuidanceRequest {
   id: string;
@@ -31,11 +33,11 @@ export interface AdminGuidanceRequest {
   consentToContact: boolean;
   privacyAcknowledged: boolean;
   sourcePage: string;
-  status: string;
+  status: AdminGuidanceRequestStatus;
   /** @nullable */
   assignedStaffUserId: string | null;
   /** @nullable */
   followUpNotes: string | null;
-  conversionStatus: string;
+  conversionStatus: AdminGuidanceConversionStatus;
   createdAt: Date;
 }

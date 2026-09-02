@@ -64,6 +64,28 @@ paths:
                 $ref: "#/components/schemas/AdminOverview"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/guidance-requests/{requestId}:
+    patch:
+      operationId: updateAdminGuidanceRequest
+      tags: [administration]
+      summary: Triage an administrator-only guidance request
+      parameters:
+        - $ref: "#/components/parameters/GuidanceRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminGuidanceRequestUpdate" }
+      responses:
+        "200":
+          description: Updated guidance request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGuidanceRequest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/curriculum:
     get:
       operationId: getAdminCurriculum
@@ -1311,6 +1333,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    GuidanceRequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     Unauthorized:
       description: Authentication required
@@ -1825,11 +1852,26 @@ components:
         consentToContact: { type: boolean }
         privacyAcknowledged: { type: boolean }
         sourcePage: { type: string }
-        status: { type: string }
+        status: { $ref: "#/components/schemas/AdminGuidanceRequestStatus" }
         assignedStaffUserId: { type: ["string", "null"] }
         followUpNotes: { type: ["string", "null"] }
-        conversionStatus: { type: string }
+        conversionStatus: { $ref: "#/components/schemas/AdminGuidanceConversionStatus" }
         createdAt: { type: string, format: date-time }
+    AdminGuidanceRequestStatus:
+      type: string
+      enum: [new, contacted, in_progress, closed]
+    AdminGuidanceConversionStatus:
+      type: string
+      enum: [unqualified, qualified, converted, lost]
+    AdminGuidanceRequestUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        status: { $ref: "#/components/schemas/AdminGuidanceRequestStatus" }
+        assignedStaffUserId: { type: ["string", "null"] }
+        followUpNotes: { type: ["string", "null"], maxLength: 5000 }
+        conversionStatus: { $ref: "#/components/schemas/AdminGuidanceConversionStatus" }
     AdminProgram:
       type: object
       required: [id, title, subject, term, status, goalSummary, meetUrl, driveUrl, sessionCount, completedSessionCount]

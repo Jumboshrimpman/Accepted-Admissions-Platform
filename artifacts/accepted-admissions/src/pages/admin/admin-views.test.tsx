@@ -3,7 +3,17 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  updateGuidanceRequest: vi.fn(),
+  setQueryData: vi.fn(),
   overview: {
+    users: [] as Array<{
+      id: string;
+      clerkUserId: string;
+      email: string;
+      displayName: string;
+      role: "administrator" | "tutor" | "student" | "viewer";
+      createdAt: string;
+    }>,
     audit: [],
     accessConflicts: [] as Array<{ roleCategories: string[] }>,
     loginActivity: [
@@ -72,6 +82,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
   useGetAdminOverview: () => ({
     data: mocks.overview,
     isLoading: false,
@@ -79,6 +90,10 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetAdminCurriculum: () => ({
     data: mocks.curriculum,
     isLoading: false,
+  }),
+  useUpdateAdminGuidanceRequest: () => ({
+    mutate: mocks.updateGuidanceRequest,
+    isPending: false,
   }),
 }));
 
@@ -89,7 +104,7 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries: vi.fn(), setQueryData: mocks.setQueryData }),
 }));
 
 import AdminDashboard from "./dashboard";
@@ -97,6 +112,9 @@ import AdminCurriculum from "./curriculum";
 
 afterEach(() => {
   cleanup();
+  mocks.updateGuidanceRequest.mockReset();
+  mocks.setQueryData.mockReset();
+  mocks.overview.users = [];
   mocks.overview.accessConflicts = [];
   mocks.overview.guidanceRequests = [];
 });
@@ -202,5 +220,91 @@ describe("administrator overview", () => {
     expect(screen.getByText("Build a consistent study plan before the fall test.")).toBeTruthy();
     expect(screen.getAllByText("Not provided").length).toBeGreaterThan(0);
     expect(screen.getByText("Unassigned")).toBeTruthy();
+  });
+
+  test("edits and saves guidance request triage details", () => {
+    mocks.overview.users = [
+      {
+        id: "administrator-1",
+        clerkUserId: "clerk-administrator-1",
+        email: "administrator@example.invalid",
+        displayName: "Admissions Lead",
+        role: "administrator",
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+      {
+        id: "student-1",
+        clerkUserId: "clerk-student-1",
+        email: "student@example.invalid",
+        displayName: "Student Account",
+        role: "student",
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+    ];
+    mocks.overview.guidanceRequests = [{
+      id: "request-1",
+      guardianName: "Mika Goto",
+      studentName: "Taito Goto",
+      email: "mika@example.invalid",
+      phone: "+1 555 0100",
+      gradeOrGraduationYear: "11th grade",
+      currentSchool: "Accepted Academy",
+      serviceRequested: "SAT tutoring",
+      currentSatTotal: null,
+      currentReadingWriting: "680",
+      currentMath: "700",
+      targetSatScore: "1450",
+      plannedTestDate: null,
+      goals: "Build a consistent study plan before the fall test.",
+      schedulingAvailability: "Weekday evenings and Saturday mornings.",
+      referralSource: "School counselor",
+      consentToContact: true,
+      privacyAcknowledged: true,
+      sourcePage: "/client-request",
+      status: "new",
+      assignedStaffUserId: null,
+      followUpNotes: null,
+      conversionStatus: "unqualified",
+      createdAt: "2026-09-02T12:00:00.000Z",
+    }];
+    mocks.updateGuidanceRequest.mockImplementation((variables, options) => {
+      options.onSuccess({
+        ...mocks.overview.guidanceRequests[0],
+        ...variables.data,
+      });
+    });
+
+    render(<AdminDashboard />);
+    fireEvent.click(screen.getByTestId("details-guidance-request-request-1").querySelector("summary")!);
+
+    const saveButton = screen.getByTestId("save-guidance-request-request-1") as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(true);
+    expect(screen.queryByRole("option", { name: "Student Account" })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Request status"), { target: { value: "contacted" } });
+    fireEvent.change(screen.getByLabelText("Conversion status"), { target: { value: "qualified" } });
+    fireEvent.change(screen.getByLabelText("Assigned administrator"), { target: { value: "administrator-1" } });
+    fireEvent.change(screen.getByLabelText("Private follow-up notes"), { target: { value: "Called guardian; follow up Friday." } });
+
+    expect(saveButton.disabled).toBe(false);
+    fireEvent.click(saveButton);
+
+    expect(mocks.updateGuidanceRequest).toHaveBeenCalledWith(
+      {
+        requestId: "request-1",
+        data: {
+          status: "contacted",
+          conversionStatus: "qualified",
+          assignedStaffUserId: "administrator-1",
+          followUpNotes: "Called guardian; follow up Friday.",
+        },
+      },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+    expect(mocks.setQueryData).toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toBe("Triage details saved.");
   });
 });

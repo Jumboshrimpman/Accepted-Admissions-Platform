@@ -96,6 +96,9 @@ import {
   CreateAdminSessionResponse,
   GetAdminClientDashboardParams,
   GetAdminClientDashboardResponse,
+  UpdateAdminGuidanceRequestBody,
+  UpdateAdminGuidanceRequestParams,
+  UpdateAdminGuidanceRequestResponse,
   GetAdaptiveCurriculumParams,
   GetAdaptiveCurriculumResponse,
   GetAdminCurriculumQueryParams,
@@ -6003,6 +6006,110 @@ router.get(
         },
       },
     });
+  },
+);
+
+router.patch(
+  "/admin/guidance-requests/:requestId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminGuidanceRequestParams.safeParse(req.params);
+    const body = UpdateAdminGuidanceRequestBody.safeParse(req.body);
+    if (!params.success || !body.success || Object.keys(body.data).length === 0) {
+      adminMutationError(res, "Invalid guidance request update.");
+      return;
+    }
+    if (
+      !UUID_PATTERN.test(params.data.requestId) ||
+      (body.data.assignedStaffUserId !== undefined &&
+        body.data.assignedStaffUserId !== null &&
+        !UUID_PATTERN.test(body.data.assignedStaffUserId))
+    ) {
+      adminMutationError(res, "Invalid guidance request update.");
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(clientRequestsTable)
+      .where(eq(clientRequestsTable.id, params.data.requestId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Guidance request not found" });
+      return;
+    }
+
+    const assignedStaffUserId =
+      body.data.assignedStaffUserId === undefined
+        ? existing.assignedStaffUserId
+        : body.data.assignedStaffUserId;
+    if (assignedStaffUserId) {
+      const [assignedStaff] = await db
+        .select({ id: usersTable.id, role: usersTable.role })
+        .from(usersTable)
+        .where(eq(usersTable.id, assignedStaffUserId))
+        .limit(1);
+      if (!assignedStaff || assignedStaff.role !== "administrator") {
+        res.status(400).json({ error: "Assigned staff member must be an administrator." });
+        return;
+      }
+    }
+
+    const [updated] = await db
+      .update(clientRequestsTable)
+      .set({
+        ...(body.data.status === undefined ? {} : { status: body.data.status }),
+        ...(body.data.assignedStaffUserId === undefined
+          ? {}
+          : { assignedStaffUserId }),
+        ...(body.data.followUpNotes === undefined
+          ? {}
+          : { followUpNotes: body.data.followUpNotes?.trim() || null }),
+        ...(body.data.conversionStatus === undefined
+          ? {}
+          : { conversionStatus: body.data.conversionStatus }),
+      })
+      .where(eq(clientRequestsTable.id, existing.id))
+      .returning();
+
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "guidance_request.updated",
+      entityType: "client_request",
+      entityId: updated!.id,
+      metadata: {
+        fields: Object.keys(body.data),
+        status: updated!.status,
+        assignedStaffUserId: updated!.assignedStaffUserId,
+        conversionStatus: updated!.conversionStatus,
+      },
+    });
+    res.json(UpdateAdminGuidanceRequestResponse.parse({
+      id: updated!.id,
+      guardianName: updated!.guardianName,
+      studentName: updated!.studentName,
+      email: updated!.email,
+      phone: updated!.phone,
+      gradeOrGraduationYear: updated!.gradeOrGraduationYear,
+      currentSchool: updated!.currentSchool,
+      serviceRequested: updated!.serviceRequested,
+      currentSatTotal: updated!.currentSatTotal,
+      currentReadingWriting: updated!.currentReadingWriting,
+      currentMath: updated!.currentMath,
+      targetSatScore: updated!.targetSatScore,
+      plannedTestDate: updated!.plannedTestDate,
+      goals: updated!.goals,
+      schedulingAvailability: updated!.schedulingAvailability,
+      referralSource: updated!.referralSource,
+      consentToContact: updated!.consentToContact,
+      privacyAcknowledged: updated!.privacyAcknowledged,
+      sourcePage: updated!.sourcePage,
+      status: updated!.status,
+      assignedStaffUserId: updated!.assignedStaffUserId,
+      followUpNotes: updated!.followUpNotes,
+      conversionStatus: updated!.conversionStatus,
+      createdAt: updated!.createdAt,
+    }));
   },
 );
 
