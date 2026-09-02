@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminGuidanceConversionStatus } from './adminGuidanceConversionStatus';
+import type { AdminGuidanceRequestNotificationDelivery } from './adminGuidanceRequestNotificationDelivery';
 import type { AdminGuidanceRequestStatus } from './adminGuidanceRequestStatus';
 
 export interface AdminGuidanceRequest {
@@ -40,4 +41,5 @@ export interface AdminGuidanceRequest {
   followUpNotes: string | null;
   conversionStatus: AdminGuidanceConversionStatus;
   createdAt: Date;
+  notificationDelivery?: AdminGuidanceRequestNotificationDelivery;
 }

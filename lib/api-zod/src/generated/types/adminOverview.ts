@@ -7,6 +7,7 @@
  */
 import type { AdminGuidanceRequest } from './adminGuidanceRequest';
 import type { AdminLoginActivity } from './adminLoginActivity';
+import type { AdminNotification } from './adminNotification';
 import type { AdminOverviewAccessConflictsItem } from './adminOverviewAccessConflictsItem';
 import type { AdminOverviewAssignmentsItem } from './adminOverviewAssignmentsItem';
 import type { AdminOverviewAuditItem } from './adminOverviewAuditItem';
@@ -21,6 +22,8 @@ export interface AdminOverview {
   loginActivity: AdminLoginActivity[];
   /** Private guidance form submissions, visible only to administrators. */
   guidanceRequests: AdminGuidanceRequest[];
+  /** Notifications addressed to the signed-in administrator. */
+  notifications: AdminNotification[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
 }

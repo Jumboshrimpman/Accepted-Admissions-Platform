@@ -1746,7 +1746,7 @@ components:
         avatarUrl: { type: ["string", "null"] }
     AdminOverview:
       type: object
-      required: [users, memberships, assignments, audit, loginActivity, accessConflicts, guidanceRequests]
+      required: [users, memberships, assignments, audit, loginActivity, accessConflicts, guidanceRequests, notifications]
       properties:
         users:
           type: array
@@ -1806,6 +1806,10 @@ components:
           type: array
           description: Private guidance form submissions, visible only to administrators.
           items: { $ref: "#/components/schemas/AdminGuidanceRequest" }
+        notifications:
+          type: array
+          description: Notifications addressed to the signed-in administrator.
+          items: { $ref: "#/components/schemas/AdminNotification" }
         accessConflicts:
           type: array
           description: Conflicting role categories only; identity values are intentionally omitted.
@@ -1829,6 +1833,16 @@ components:
         userEmail: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         signedInAt: { type: string, format: date-time }
+    AdminNotification:
+      type: object
+      required: [id, kind, guidanceRequestId, title, message, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [guidance_request_assigned] }
+        guidanceRequestId: { type: string }
+        title: { type: string }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
     AdminGuidanceRequest:
       type: object
       required: [id, guardianName, studentName, email, phone, gradeOrGraduationYear, currentSchool, serviceRequested, currentSatTotal, currentReadingWriting, currentMath, targetSatScore, plannedTestDate, goals, schedulingAvailability, referralSource, consentToContact, privacyAcknowledged, sourcePage, status, assignedStaffUserId, followUpNotes, conversionStatus, createdAt]
@@ -1857,6 +1871,12 @@ components:
         followUpNotes: { type: ["string", "null"] }
         conversionStatus: { $ref: "#/components/schemas/AdminGuidanceConversionStatus" }
         createdAt: { type: string, format: date-time }
+        notificationDelivery:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [sent, failed] }
+            error: { type: string }
     AdminGuidanceRequestStatus:
       type: string
       enum: [new, contacted, in_progress, closed]

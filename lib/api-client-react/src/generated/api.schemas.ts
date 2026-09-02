@@ -581,6 +581,19 @@ export const AdminGuidanceConversionStatus = {
   lost: 'lost',
 } as const;
 
+export type AdminGuidanceRequestNotificationDeliveryStatus = typeof AdminGuidanceRequestNotificationDeliveryStatus[keyof typeof AdminGuidanceRequestNotificationDeliveryStatus];
+
+
+export const AdminGuidanceRequestNotificationDeliveryStatus = {
+  sent: 'sent',
+  failed: 'failed',
+} as const;
+
+export type AdminGuidanceRequestNotificationDelivery = {
+  status: AdminGuidanceRequestNotificationDeliveryStatus;
+  error?: string;
+};
+
 export interface AdminGuidanceRequest {
   id: string;
   guardianName: string;
@@ -613,6 +626,23 @@ export interface AdminGuidanceRequest {
   followUpNotes: string | null;
   conversionStatus: AdminGuidanceConversionStatus;
   createdAt: string;
+  notificationDelivery?: AdminGuidanceRequestNotificationDelivery;
+}
+
+export type AdminNotificationKind = typeof AdminNotificationKind[keyof typeof AdminNotificationKind];
+
+
+export const AdminNotificationKind = {
+  guidance_request_assigned: 'guidance_request_assigned',
+} as const;
+
+export interface AdminNotification {
+  id: string;
+  kind: AdminNotificationKind;
+  guidanceRequestId: string;
+  title: string;
+  message: string;
+  createdAt: string;
 }
 
 export interface AdminOverview {
@@ -623,6 +653,8 @@ export interface AdminOverview {
   loginActivity: AdminLoginActivity[];
   /** Private guidance form submissions, visible only to administrators. */
   guidanceRequests: AdminGuidanceRequest[];
+  /** Notifications addressed to the signed-in administrator. */
+  notifications: AdminNotification[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
 }

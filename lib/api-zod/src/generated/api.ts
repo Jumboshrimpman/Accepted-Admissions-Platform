@@ -104,8 +104,20 @@ export const GetAdminOverviewResponse = zod.object({
   "assignedStaffUserId": zod.string().nullable(),
   "followUpNotes": zod.string().nullable(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "notificationDelivery": zod.object({
+  "status": zod.enum(['sent', 'failed']),
+  "error": zod.string().optional()
+}).optional()
 })).describe('Private guidance form submissions, visible only to administrators.'),
+  "notifications": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['guidance_request_assigned']),
+  "guidanceRequestId": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+})).describe('Notifications addressed to the signed-in administrator.'),
   "accessConflicts": zod.array(zod.object({
   "roleCategories": zod.array(zod.enum(['administrator', 'sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer'])).min(getAdminOverviewResponseAccessConflictsItemRoleCategoriesMin)
 })).describe('Conflicting role categories only; identity values are intentionally omitted.')
@@ -154,7 +166,11 @@ export const UpdateAdminGuidanceRequestResponse = zod.object({
   "assignedStaffUserId": zod.string().nullable(),
   "followUpNotes": zod.string().nullable(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "notificationDelivery": zod.object({
+  "status": zod.enum(['sent', 'failed']),
+  "error": zod.string().optional()
+}).optional()
 })
 
 

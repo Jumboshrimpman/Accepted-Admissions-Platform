@@ -193,6 +193,7 @@ import {
   assignmentQuestionsTable,
   assignmentsTable,
   adaptiveRecommendationsTable,
+  adminNotificationsTable,
   attemptsTable,
   auditLogsTable,
   availabilityRulesTable,
@@ -5833,10 +5834,10 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
 router.get(
   "/admin/overview",
   ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
+  async (req: AuthedRequest, res): Promise<void> => {
     await ensureSeedData();
     await ensureUpgradeSeedData();
-    const [users, memberships, assignments, audit, loginActivity, guidanceRequests, platform, connectedCalendars] =
+    const [users, memberships, assignments, audit, loginActivity, guidanceRequests, notifications, platform, connectedCalendars] =
       await Promise.all([
       db
         .select({
@@ -5927,6 +5928,19 @@ router.get(
          })
          .from(clientRequestsTable)
          .orderBy(desc(clientRequestsTable.createdAt)),
+      db
+        .select({
+          id: adminNotificationsTable.id,
+          kind: adminNotificationsTable.kind,
+          guidanceRequestId: adminNotificationsTable.guidanceRequestId,
+          title: adminNotificationsTable.title,
+          message: adminNotificationsTable.message,
+          createdAt: adminNotificationsTable.createdAt,
+        })
+        .from(adminNotificationsTable)
+        .where(eq(adminNotificationsTable.recipientUserId, req.appUser!.id))
+        .orderBy(desc(adminNotificationsTable.createdAt))
+        .limit(20),
       Promise.all([
         db.select({ count: sql<number>`count(*)` }).from(usersTable),
         db
@@ -5981,6 +5995,7 @@ router.get(
       audit,
       loginActivity,
        guidanceRequests,
+      notifications,
       accessConflicts: configuredAccessConflicts(),
       platform: {
         totalUsers: Number(platform[0][0]?.count ?? 0),
@@ -6043,6 +6058,9 @@ router.patch(
       body.data.assignedStaffUserId === undefined
         ? existing.assignedStaffUserId
         : body.data.assignedStaffUserId;
+    const assignmentChanged =
+      body.data.assignedStaffUserId !== undefined &&
+      body.data.assignedStaffUserId !== existing.assignedStaffUserId;
     if (assignedStaffUserId) {
       const [assignedStaff] = await db
         .select({ id: usersTable.id, role: usersTable.role })
@@ -6084,6 +6102,34 @@ router.patch(
         conversionStatus: updated!.conversionStatus,
       },
     });
+    let notificationDelivery:
+      | { status: "sent" | "failed"; error?: string }
+      | undefined;
+    if (assignmentChanged && updated!.assignedStaffUserId) {
+      try {
+        await db.insert(adminNotificationsTable).values({
+          recipientUserId: updated!.assignedStaffUserId,
+          kind: "guidance_request_assigned",
+          guidanceRequestId: updated!.id,
+          title: "Guidance request assigned to you",
+          message: `${updated!.studentName} · ${updated!.serviceRequested} was assigned to you by ${req.appUser!.displayName}.`,
+        });
+        notificationDelivery = { status: "sent" };
+      } catch (error) {
+        req.log?.error(
+          {
+            err: error,
+            guidanceRequestId: updated!.id,
+            recipientUserId: updated!.assignedStaffUserId,
+          },
+          "Guidance request assignment notification could not be delivered",
+        );
+        notificationDelivery = {
+          status: "failed",
+          error: "Assignment notification could not be delivered.",
+        };
+      }
+    }
     res.json(UpdateAdminGuidanceRequestResponse.parse({
       id: updated!.id,
       guardianName: updated!.guardianName,
@@ -6109,6 +6155,7 @@ router.patch(
       followUpNotes: updated!.followUpNotes,
       conversionStatus: updated!.conversionStatus,
       createdAt: updated!.createdAt,
+      ...(notificationDelivery ? { notificationDelivery } : {}),
     }));
   },
 );

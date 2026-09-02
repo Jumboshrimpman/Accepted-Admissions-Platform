@@ -4,6 +4,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  index,
   text,
   timestamp,
   uniqueIndex,
@@ -562,6 +563,25 @@ export const clientRequestsTable = pgTable("client_requests", {
   conversionStatus: text("conversion_status").notNull().default("unqualified"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const adminNotificationsTable = pgTable(
+  "admin_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipientUserId: uuid("recipient_user_id").notNull().references(() => usersTable.id),
+    kind: text("kind").notNull(),
+    guidanceRequestId: uuid("guidance_request_id").notNull().references(() => clientRequestsTable.id),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_notifications_recipient_created_idx").on(
+      table.recipientUserId,
+      table.createdAt,
+    ),
+  ],
+);
 
 export const publicContentTable = pgTable(
   "public_content",

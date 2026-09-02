@@ -16,6 +16,14 @@ const mocks = vi.hoisted(() => ({
     }>,
     audit: [],
     accessConflicts: [] as Array<{ roleCategories: string[] }>,
+    notifications: [] as Array<{
+      id: string;
+      kind: string;
+      guidanceRequestId: string;
+      title: string;
+      message: string;
+      createdAt: string;
+    }>,
     loginActivity: [
       {
         id: "login-1",
@@ -116,6 +124,7 @@ afterEach(() => {
   mocks.setQueryData.mockReset();
   mocks.overview.users = [];
   mocks.overview.accessConflicts = [];
+  mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
 });
 
@@ -271,6 +280,7 @@ describe("administrator overview", () => {
       options.onSuccess({
         ...mocks.overview.guidanceRequests[0],
         ...variables.data,
+        notificationDelivery: { status: "sent" },
       });
     });
 
@@ -305,6 +315,61 @@ describe("administrator overview", () => {
       }),
     );
     expect(mocks.setQueryData).toHaveBeenCalled();
-    expect(screen.getByRole("status").textContent).toBe("Triage details saved.");
+    expect(screen.getByRole("status").textContent).toBe("Triage details saved and assignment notification sent.");
+  });
+
+  test("shows a non-blocking assignment notification delivery failure", () => {
+    mocks.overview.users = [{
+      id: "administrator-1",
+      clerkUserId: "clerk-administrator-1",
+      email: "administrator@example.invalid",
+      displayName: "Admissions Lead",
+      role: "administrator",
+      createdAt: "2026-09-01T12:00:00.000Z",
+    }];
+    mocks.overview.guidanceRequests = [{
+      id: "request-1",
+      guardianName: "Mika Goto",
+      studentName: "Taito Goto",
+      email: "mika@example.invalid",
+      phone: "+1 555 0100",
+      gradeOrGraduationYear: "11th grade",
+      currentSchool: "Accepted Academy",
+      serviceRequested: "SAT tutoring",
+      currentSatTotal: null,
+      currentReadingWriting: null,
+      currentMath: null,
+      targetSatScore: null,
+      plannedTestDate: null,
+      goals: "Private goal",
+      schedulingAvailability: "Weekday evenings.",
+      referralSource: "School counselor",
+      consentToContact: true,
+      privacyAcknowledged: true,
+      sourcePage: "/client-request",
+      status: "new",
+      assignedStaffUserId: null,
+      followUpNotes: null,
+      conversionStatus: "unqualified",
+      createdAt: "2026-09-02T12:00:00.000Z",
+    }];
+    mocks.updateGuidanceRequest.mockImplementation((_variables, options) => {
+      options.onSuccess({
+        ...mocks.overview.guidanceRequests[0],
+        assignedStaffUserId: "administrator-1",
+        notificationDelivery: {
+          status: "failed",
+          error: "Assignment notification could not be delivered.",
+        },
+      });
+    });
+
+    render(<AdminDashboard />);
+    fireEvent.click(screen.getByTestId("details-guidance-request-request-1").querySelector("summary")!);
+    fireEvent.change(screen.getByLabelText("Assigned administrator"), { target: { value: "administrator-1" } });
+    fireEvent.click(screen.getByTestId("save-guidance-request-request-1"));
+
+    expect(screen.getByRole("alert").textContent).toContain("Triage details saved");
+    expect(screen.getByRole("alert").textContent).toContain("could not be delivered");
   });
 });

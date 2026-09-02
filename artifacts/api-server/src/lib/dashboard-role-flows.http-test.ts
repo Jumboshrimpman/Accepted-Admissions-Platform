@@ -3,7 +3,14 @@ import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import { auditLogsTable, clientRequestsTable, db, type AppUser } from "@workspace/db";
+import {
+  adminNotificationsTable,
+  auditLogsTable,
+  clientRequestsTable,
+  db,
+  usersTable,
+  type AppUser,
+} from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import express, {
   type NextFunction,
@@ -236,6 +243,15 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
 
 test("HTTP admin overview returns private guidance requests only to administrators", async () => {
   const fixture = await createDashboardRoleFixture();
+  const [secondaryAdministrator] = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId: `secondary-guidance-administrator:${randomUUID()}`,
+      email: `secondary-guidance-administrator-${randomUUID()}@example.invalid`,
+      displayName: "Secondary Administrator",
+      role: "administrator",
+    })
+    .returning();
   const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
   const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
   let administratorServer:
@@ -393,6 +409,52 @@ test("HTTP admin overview returns private guidance requests only to administrato
     assert.equal(updated.body.assignedStaffUserId, fixture.administrator.id);
     assert.equal(updated.body.followUpNotes, "Called guardian; follow up Friday.");
     assert.equal(updated.body.conversionStatus, "qualified");
+    assert.deepEqual(updated.body.notificationDelivery, { status: "sent" });
+
+    const firstNotifications = await db
+      .select()
+      .from(adminNotificationsTable)
+      .where(eq(adminNotificationsTable.guidanceRequestId, createdRequestIds[1]));
+    assert.equal(firstNotifications.length, 1);
+    assert.equal(firstNotifications[0].recipientUserId, fixture.administrator.id);
+    assert.equal(firstNotifications[0].title, "Guidance request assigned to you");
+    assert.equal(
+      firstNotifications[0].message,
+      "Latest Student · Admissions guidance was assigned to you by Dashboard Administrator.",
+    );
+    assert.equal(firstNotifications[0].message.includes("Called guardian"), false);
+    assert.equal(firstNotifications[0].message.includes("Review the application timeline"), false);
+
+    const reassigned = await patchJson(administratorServer.baseUrl, updatePath, {
+      assignedStaffUserId: secondaryAdministrator!.id,
+      followUpNotes: "This private note must not be included.",
+    });
+    assert.equal(reassigned.response.status, 200);
+    assert.equal(reassigned.body.assignedStaffUserId, secondaryAdministrator!.id);
+    assert.deepEqual(reassigned.body.notificationDelivery, { status: "sent" });
+
+    const reassignmentNotifications = await db
+      .select()
+      .from(adminNotificationsTable)
+      .where(eq(adminNotificationsTable.guidanceRequestId, createdRequestIds[1]));
+    assert.equal(reassignmentNotifications.length, 2);
+    const latestNotification = reassignmentNotifications.find(
+      (notification) => notification.recipientUserId === secondaryAdministrator!.id,
+    );
+    assert.ok(latestNotification);
+    assert.equal(latestNotification.message.includes("This private note"), false);
+
+    const unassigned = await patchJson(administratorServer.baseUrl, updatePath, {
+      assignedStaffUserId: null,
+    });
+    assert.equal(unassigned.response.status, 200);
+    assert.equal(unassigned.body.assignedStaffUserId, null);
+    assert.equal(unassigned.body.notificationDelivery, undefined);
+    const notificationsAfterUnassignment = await db
+      .select()
+      .from(adminNotificationsTable)
+      .where(eq(adminNotificationsTable.guidanceRequestId, createdRequestIds[1]));
+    assert.equal(notificationsAfterUnassignment.length, 2);
 
     const [persisted] = await db
       .select({
@@ -406,8 +468,8 @@ test("HTTP admin overview returns private guidance requests only to administrato
       .limit(1);
     assert.deepEqual(persisted, {
       status: "contacted",
-      assignedStaffUserId: fixture.administrator.id,
-      followUpNotes: "Called guardian; follow up Friday.",
+      assignedStaffUserId: null,
+      followUpNotes: "This private note must not be included.",
       conversionStatus: "qualified",
     });
   } finally {
@@ -423,9 +485,15 @@ test("HTTP admin overview returns private guidance requests only to administrato
           ),
         );
       await db
+        .delete(adminNotificationsTable)
+        .where(eq(adminNotificationsTable.guidanceRequestId, requestId));
+      await db
         .delete(clientRequestsTable)
         .where(eq(clientRequestsTable.id, requestId));
     }
+    await db
+      .delete(usersTable)
+      .where(eq(usersTable.id, secondaryAdministrator!.id));
     if (previousAdminIds === undefined) {
       delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
     } else {
