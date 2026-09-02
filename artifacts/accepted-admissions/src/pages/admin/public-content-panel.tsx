@@ -172,19 +172,19 @@ export function PublicContentPanel() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         {tutors.map((tutor) => (
-          <Card key={tutor.id}>
+          <Card key={tutor.id} className="min-w-0">
             <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle>{tutor.name}</CardTitle>
+              <div className="flex min-w-0 items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <CardTitle className="break-words">{tutor.name}</CardTitle>
                   <CardDescription>{tutor.email}</CardDescription>
                 </div>
-                <Badge variant={tutor.publicApproved ? "default" : "outline"}>
+                <Badge className="shrink-0" variant={tutor.publicApproved ? "default" : "outline"}>
                   {tutor.publicApproved ? "Public" : "Draft"}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="min-w-0 space-y-4">
               <Field label="Public name"><Input value={tutor.name} onChange={(event) => updateTutor(tutor.id, { name: event.target.value })} /></Field>
               <Field label="Title"><Input value={tutor.title} onChange={(event) => updateTutor(tutor.id, { title: event.target.value })} /></Field>
               <Field label="Biography"><Textarea rows={6} value={tutor.biography ?? ""} onChange={(event) => updateTutor(tutor.id, { biography: event.target.value })} /></Field>
@@ -205,14 +205,14 @@ export function PublicContentPanel() {
       </div>
 
       {team && (
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle>Our Team page</CardTitle>
-                <CardDescription>These fields control the public page heading, introduction, and search preview.</CardDescription>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="break-words">Our Team page</CardTitle>
+                <CardDescription className="break-words">These fields control the public page heading, introduction, and search preview.</CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Badge variant={team.status === "published" ? "default" : "outline"} className="capitalize">{team.status}</Badge>
                 <Button type="button" variant="outline" size="sm" onClick={() => setPreview("team")} data-testid="button-preview-our-team">
                   <Eye className="mr-2 h-4 w-4" /> Preview
@@ -220,7 +220,7 @@ export function PublicContentPanel() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-2">
+          <CardContent className="min-w-0 grid gap-5 lg:grid-cols-2">
             <Field label="Page title"><Input maxLength={120} value={team.title} onChange={(event) => updateContent(team.slug, { title: event.target.value })} /></Field>
             <Field label="SEO title"><Input maxLength={70} value={team.seoTitle ?? ""} onChange={(event) => updateContent(team.slug, { seoTitle: event.target.value })} /></Field>
             <Field label="SEO description"><Textarea maxLength={180} rows={3} value={team.seoDescription ?? ""} onChange={(event) => updateContent(team.slug, { seoDescription: event.target.value })} /></Field>
@@ -239,14 +239,14 @@ export function PublicContentPanel() {
       )}
 
       {success && (
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle>Student Stories page</CardTitle>
-                <CardDescription>Preserve the approved testimonial attribution and destination image descriptions when editing. Published examples should not be framed as guarantees.</CardDescription>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="break-words">Student Stories page</CardTitle>
+                <CardDescription className="break-words">Preserve the approved testimonial attribution and destination image descriptions when editing. Published examples should not be framed as guarantees.</CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Badge variant={success.status === "published" ? "default" : "outline"} className="capitalize">{success.status}</Badge>
                 <Button type="button" variant="outline" size="sm" onClick={() => setPreview("success")} data-testid="button-preview-student-stories">
                   <Eye className="mr-2 h-4 w-4" /> Preview
@@ -254,7 +254,7 @@ export function PublicContentPanel() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-2">
+          <CardContent className="min-w-0 grid gap-5 lg:grid-cols-2">
             <div className="space-y-4">
               <Field label="Page title"><Input maxLength={120} value={success.title} onChange={(event) => updateContent(success.slug, { title: event.target.value })} /></Field>
               <Field label="SEO title"><Input maxLength={70} value={success.seoTitle ?? ""} onChange={(event) => updateContent(success.slug, { seoTitle: event.target.value })} /></Field>
@@ -322,14 +322,18 @@ export function PublicContentPanel() {
       )}
 
       <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
-        <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-card px-6 py-5 pr-12">
-            <DialogTitle>{preview === "team" ? "Our Team preview" : "Student Stories preview"}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-6xl gap-0 overflow-hidden p-0">
+          <DialogHeader className="min-w-0 border-b bg-card px-6 py-5 pr-12">
+            <DialogTitle className="break-words">{preview === "team" ? "Our Team preview" : "Student Stories preview"}</DialogTitle>
+            <DialogDescription className="break-words">
               Preview only — this uses the current editor values and does not publish or change the live page.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[calc(85vh-7rem)] overflow-y-auto bg-background">
+          <div
+            className="min-h-0 max-h-[calc(85vh-7rem)] min-w-0 overflow-x-hidden overflow-y-auto bg-background"
+            data-testid="preview-scroll-area"
+            aria-label="Preview content"
+          >
             <div className="border-b border-dashed bg-amber-50 px-6 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
               Review this administrator-only view before publishing. Images and optional content are shown exactly as the public layout will render them.
             </div>
