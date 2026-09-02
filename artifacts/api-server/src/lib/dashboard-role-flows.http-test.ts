@@ -508,6 +508,28 @@ test("HTTP admin overview returns private guidance requests only to administrato
     );
     assert.equal(returnedNotification.status, "dismissed");
 
+    const restoredNotification = await patchJson(
+      administratorServer.baseUrl,
+      `/api/admin/notifications/${firstNotification.id}`,
+      { status: "unread" },
+    );
+    assert.equal(restoredNotification.response.status, 200);
+    assert.equal(restoredNotification.body.status, "unread");
+    assert.equal(restoredNotification.body.readAt, null);
+    assert.equal(restoredNotification.body.dismissedAt, null);
+
+    const overviewAfterRestore = await getJson(
+      administratorServer.baseUrl,
+      "/api/admin/overview",
+    );
+    assert.equal(overviewAfterRestore.response.status, 200);
+    const restoredOverviewNotification = overviewAfterRestore.body.notifications.find(
+      (notification: { id: string }) => notification.id === firstNotification.id,
+    );
+    assert.equal(restoredOverviewNotification.status, "unread");
+    assert.equal(restoredOverviewNotification.readAt, null);
+    assert.equal(restoredOverviewNotification.dismissedAt, null);
+
     const unassigned = await patchJson(administratorServer.baseUrl, updatePath, {
       assignedStaffUserId: null,
     });

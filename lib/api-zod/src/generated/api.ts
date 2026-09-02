@@ -128,14 +128,14 @@ export const GetAdminOverviewResponse = zod.object({
 
 
 /**
- * @summary Mark an administrator notification as read or dismissed
+ * @summary Mark an administrator notification as unread, read, or dismissed
  */
 export const UpdateAdminNotificationParams = zod.object({
   "notificationId": zod.coerce.string()
 })
 
 export const UpdateAdminNotificationBody = zod.object({
-  "status": zod.enum(['read', 'dismissed'])
+  "status": zod.enum(['unread', 'read', 'dismissed'])
 })
 
 export const UpdateAdminNotificationResponse = zod.object({

@@ -68,7 +68,7 @@ paths:
     patch:
       operationId: updateAdminNotification
       tags: [administration]
-      summary: Mark an administrator notification as read or dismissed
+      summary: Mark an administrator notification as unread, read, or dismissed
       parameters:
         - name: notificationId
           in: path
@@ -1876,7 +1876,7 @@ components:
       required: [status]
       additionalProperties: false
       properties:
-        status: { type: string, enum: [read, dismissed] }
+        status: { type: string, enum: [unread, read, dismissed] }
     AdminGuidanceRequest:
       type: object
       required: [id, guardianName, studentName, email, phone, gradeOrGraduationYear, currentSchool, serviceRequested, currentSatTotal, currentReadingWriting, currentMath, targetSatScore, plannedTestDate, goals, schedulingAvailability, referralSource, consentToContact, privacyAcknowledged, sourcePage, status, assignedStaffUserId, followUpNotes, conversionStatus, createdAt]

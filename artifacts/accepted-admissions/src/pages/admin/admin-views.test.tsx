@@ -138,7 +138,7 @@ afterEach(() => {
 });
 
 describe("administrator overview", () => {
-  test("separates active assignment alerts from prior notifications and supports clearing alerts", () => {
+  test("separates active assignment alerts and supports clearing or restoring alerts", () => {
     mocks.overview.notifications = [
       {
         id: "notification-unread",
@@ -172,10 +172,17 @@ describe("administrator overview", () => {
     expect(screen.getByTestId("notification-dismiss-notification-unread")).toBeTruthy();
     expect(screen.queryByTestId("notification-read-notification-read")).toBeNull();
     expect(screen.queryByTestId("notification-dismiss-notification-read")).toBeNull();
+    expect(screen.getByTestId("notification-restore-notification-read")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("notification-read-notification-unread"));
     expect(mocks.updateNotification).toHaveBeenCalledWith(
       { notificationId: "notification-unread", data: { status: "read" } },
+      expect.any(Object),
+    );
+
+    fireEvent.click(screen.getByTestId("notification-restore-notification-read"));
+    expect(mocks.updateNotification).toHaveBeenLastCalledWith(
+      { notificationId: "notification-read", data: { status: "unread" } },
       expect.any(Object),
     );
   });

@@ -10,6 +10,7 @@ export type AdminNotificationUpdateStatus = typeof AdminNotificationUpdateStatus
 
 
 export const AdminNotificationUpdateStatus = {
+  unread: 'unread',
   read: 'read',
   dismissed: 'dismissed',
 } as const;

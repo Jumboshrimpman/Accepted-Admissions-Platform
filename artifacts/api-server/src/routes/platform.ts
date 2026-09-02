@@ -6049,9 +6049,11 @@ router.patch(
     const [notification] = await db
       .update(adminNotificationsTable)
       .set(
-        body.data.status === "read"
-          ? { status: "read", readAt: now, dismissedAt: null }
-          : { status: "dismissed", readAt: now, dismissedAt: now },
+        body.data.status === "unread"
+          ? { status: "unread", readAt: null, dismissedAt: null }
+          : body.data.status === "read"
+            ? { status: "read", readAt: now, dismissedAt: null }
+            : { status: "dismissed", readAt: now, dismissedAt: now },
       )
       .where(
         and(

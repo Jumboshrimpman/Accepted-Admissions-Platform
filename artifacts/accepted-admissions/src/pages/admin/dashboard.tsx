@@ -103,7 +103,7 @@ export default function AdminDashboard() {
        </section>}
        {priorNotifications.length > 0 && <section aria-labelledby="prior-notifications-heading" className="space-y-3 border-t pt-5">
          <div className="flex items-center justify-between gap-3"><h2 id="prior-notifications-heading" className="text-sm font-semibold">Prior notifications</h2><Badge variant="secondary">{priorNotifications.length}</Badge></div>
-         {priorNotifications.map((notification) => <AdminNotificationItem key={notification.id} notification={notification} isPending={false} />)}
+          {priorNotifications.map((notification) => <AdminNotificationItem key={notification.id} notification={notification} isPending={updateNotification.isPending} onUpdate={(status) => updateNotification.mutate({ notificationId: notification.id, data: { status } }, { onSuccess: (updated) => queryClient.setQueryData<AdminOverviewWithPlatform>(getGetAdminOverviewQueryKey(), (current) => current ? { ...current, notifications: current.notifications.map((item) => item.id === updated.id ? updated : item) } : current) })} />)}
        </section>}
      </CardContent></Card>}
      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{statCards.map(({ label, value, icon: Icon }) => <Card key={label}><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>)}</div>
@@ -179,7 +179,7 @@ function AdminNotificationItem({
 }: {
   notification: AdminNotification;
   isPending: boolean;
-  onUpdate?: (status: "read" | "dismissed") => void;
+  onUpdate?: (status: "unread" | "read" | "dismissed") => void;
 }) {
   const createdAt = new Date(notification.createdAt);
   return (
@@ -191,8 +191,14 @@ function AdminNotificationItem({
           <time className="mt-2 block text-xs text-muted-foreground" dateTime={createdAt.toISOString()}>{createdAt.toLocaleString()}</time>
         </div>
         {onUpdate && <div className="flex shrink-0 gap-2">
-          <Button variant="outline" size="sm" disabled={isPending} onClick={() => onUpdate("read")} data-testid={`notification-read-${notification.id}`}>Mark read</Button>
-          <Button variant="ghost" size="sm" disabled={isPending} onClick={() => onUpdate("dismissed")} data-testid={`notification-dismiss-${notification.id}`}>Dismiss</Button>
+          {notification.status === "unread" ? (
+            <>
+              <Button variant="outline" size="sm" disabled={isPending} onClick={() => onUpdate("read")} data-testid={`notification-read-${notification.id}`}>Mark read</Button>
+              <Button variant="ghost" size="sm" disabled={isPending} onClick={() => onUpdate("dismissed")} data-testid={`notification-dismiss-${notification.id}`}>Dismiss</Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" disabled={isPending} onClick={() => onUpdate("unread")} data-testid={`notification-restore-${notification.id}`}>Restore</Button>
+          )}
         </div>}
       </div>
     </div>

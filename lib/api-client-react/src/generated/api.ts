@@ -376,7 +376,7 @@ export const getUpdateAdminNotificationUrl = (notificationId: string,) => {
 }
 
 /**
- * @summary Mark an administrator notification as read or dismissed
+ * @summary Mark an administrator notification as unread, read, or dismissed
  */
 export const updateAdminNotification = async (notificationId: string,
     adminNotificationUpdate: AdminNotificationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotification> => {
@@ -426,7 +426,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateAdminNotificationMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
 
     /**
- * @summary Mark an administrator notification as read or dismissed
+ * @summary Mark an administrator notification as unread, read, or dismissed
  */
 export const useUpdateAdminNotification = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotification>>, TError,{notificationId: string;data: BodyType<AdminNotificationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
