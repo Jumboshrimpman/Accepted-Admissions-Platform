@@ -18,6 +18,7 @@ import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import {
   getGetCurrentUserQueryKey,
+  setBaseUrl,
   useGetCurrentUser,
 } from '@workspace/api-client-react';
 
@@ -52,6 +53,8 @@ const clerkPubKey = publishableKeyFromHost(
 );
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+setBaseUrl(basePath || null);
 
 const queryClient = new QueryClient();
 

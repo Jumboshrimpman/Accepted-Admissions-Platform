@@ -6,6 +6,10 @@ vi.mock("@/components/public-site-shell", () => ({
     <div>{children}</div>
   ),
   publicApiPath: (path: string) => path,
+  fetchPublicJson: async (path: string) => {
+    const response = await fetch(path);
+    return response.json();
+  },
 }));
 
 vi.mock("wouter", () => ({
@@ -51,6 +55,16 @@ describe("OurTeam publication gate", () => {
                 linkedinUrl:
                   "https://www.linkedin.com/in/xavier-morales-8830821a5/",
               },
+              {
+                id: "nika",
+                name: "Nika Raiffe",
+                title: "Admissions Tutor",
+                photoUrl: "https://example.com/nika.png",
+                photoAltText: "Nika Raiffe, Admissions Tutor",
+                biography: "Approved admissions biography",
+                subjects: ["College admissions"],
+                linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
+              },
             ]),
             { status: 200, headers: { "Content-Type": "application/json" } },
           );
@@ -84,10 +98,12 @@ describe("OurTeam publication gate", () => {
       within(roster)
         .getAllByRole("heading", { level: 2 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Rosanna Kataja", "Xavier Morales"]);
+    ).toEqual(["Rosanna Kataja", "Xavier Morales", "Nika Raiffe"]);
     expect(
       screen.getByAltText("Rosanna Kataja, Admissions Tutor"),
     ).toBeTruthy();
+    expect(screen.getByAltText("Nika Raiffe, Admissions Tutor")).toBeTruthy();
+    expect(screen.getByAltText("Nika Raiffe, Admissions Tutor").getAttribute("src")).toBe("https://example.com/nika.png");
     expect(
       screen
         .getByRole("link", { name: "View Xavier Morales on LinkedIn" })

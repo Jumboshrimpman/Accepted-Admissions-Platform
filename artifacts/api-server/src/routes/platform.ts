@@ -217,6 +217,25 @@ const XAVIER_NAME = "Xavier Morales";
 const XAVIER_OFFER_SLUG = "single-sat-session";
 const XAVIER_OFFER_PRICE_CENTS = 15_000;
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
+const NIKA_NAME = "Nika Raiffe";
+const NIKA_EMAIL = "nika.raiffe@gmail.com";
+const NIKA_APPROVED_PHOTO_URL =
+  "https://static.wixstatic.com/media/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png/v1/fill/w_457,h_685,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png";
+const NIKA_LEGACY_SEED_PHOTO_URL =
+  "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg";
+const PUBLIC_TUTOR_ORDER = [
+  "Rosanna Kataja",
+  "Xavier Morales",
+  "Eunice Chon",
+  "Sophia Lamas",
+  "Aurelia Finch",
+  NIKA_NAME,
+  "Kya Brooks",
+  "Michael Pecorara",
+  "Kyle Englander",
+  "Daniel Salgado-Alvarez",
+  "Sama Noori",
+] as const;
 const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
 const RYO_VIEWER_EMAIL = "ryo@jaac.co.jp";
 const TAITO_VIEWER_RELATIONSHIP =
@@ -1315,15 +1334,13 @@ async function ensureUpgradeSeedData(): Promise<void> {
     ])
     .onConflictDoNothing();
 
-  // Nika was part of the original private seed. Promote that untouched seed
-  // record once so the local roster matches the published team page without
-  // re-publishing a profile an administrator intentionally changed later.
+  // Nika was part of the original private seed. Promote only the untouched
+  // private record so administrator edits remain the source of truth.
   await db
     .update(tutorProfilesTable)
     .set({
       title: "Admissions Tutor",
-      photoUrl:
-        "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg",
+      photoUrl: NIKA_APPROVED_PHOTO_URL,
       photoAltText: "Nika Raiffe, Admissions Tutor",
       biography:
         "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
@@ -1335,9 +1352,36 @@ async function ensureUpgradeSeedData(): Promise<void> {
     })
     .where(
       and(
-        eq(tutorProfilesTable.email, "nika.raiffe@gmail.com"),
+        eq(tutorProfilesTable.email, NIKA_EMAIL),
+        eq(tutorProfilesTable.title, "English & IELTS Tutor"),
+        sql`${tutorProfilesTable.subjects} = '["English", "IELTS"]'::jsonb`,
         eq(tutorProfilesTable.publicApproved, false),
         isNull(tutorProfilesTable.photoUrl),
+      ),
+    );
+
+  await db
+    .update(tutorProfilesTable)
+    .set({ photoUrl: NIKA_APPROVED_PHOTO_URL, updatedAt: new Date() })
+    .where(
+      and(
+        eq(tutorProfilesTable.email, NIKA_EMAIL),
+        isNull(tutorProfilesTable.userId),
+        or(
+          isNull(tutorProfilesTable.photoUrl),
+          eq(tutorProfilesTable.photoUrl, ""),
+          eq(tutorProfilesTable.photoUrl, NIKA_LEGACY_SEED_PHOTO_URL),
+        ),
+      ),
+    );
+  await db
+    .update(tutorProfilesTable)
+    .set({ photoAltText: "Nika Raiffe, Admissions Tutor", updatedAt: new Date() })
+    .where(
+      and(
+        eq(tutorProfilesTable.email, NIKA_EMAIL),
+        isNull(tutorProfilesTable.userId),
+        or(isNull(tutorProfilesTable.photoAltText), eq(tutorProfilesTable.photoAltText, "")),
       ),
     );
 
@@ -3796,7 +3840,16 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
-  res.json(tutors);
+  res.json(
+    [...tutors].sort((a, b) => {
+      const aIndex = PUBLIC_TUTOR_ORDER.indexOf(a.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
+      const bIndex = PUBLIC_TUTOR_ORDER.indexOf(b.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
+      if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    }),
+  );
 });
 
 router.get("/public/content/:slug", async (req, res): Promise<void> => {

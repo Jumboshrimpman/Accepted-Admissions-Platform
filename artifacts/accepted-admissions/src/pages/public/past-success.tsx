@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Quote } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { PublicSiteShell, publicApiPath } from "@/components/public-site-shell";
+import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
 
 type SchoolLogo = {
   name: string;
@@ -25,6 +25,53 @@ type SuccessContent = {
   };
 };
 
+function normalizeSuccessContent(value: unknown): SuccessContent {
+  if (!value || typeof value !== "object") throw new Error("Success content response is malformed");
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.title !== "string" || !candidate.title.trim()) {
+    throw new Error("Success content response is missing a title");
+  }
+  const rawBody = candidate.body;
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
+    throw new Error("Success content response is missing a body");
+  }
+  const body = rawBody as Record<string, unknown>;
+  const rawTestimonial = body.testimonial;
+  let testimonial: SuccessContent["body"]["testimonial"];
+  if (rawTestimonial && typeof rawTestimonial === "object" && !Array.isArray(rawTestimonial)) {
+    const item = rawTestimonial as Record<string, unknown>;
+    const normalizedTestimonial: NonNullable<SuccessContent["body"]["testimonial"]> = {};
+    if (typeof item.quote === "string") normalizedTestimonial.quote = item.quote;
+    if (typeof item.attribution === "string") normalizedTestimonial.attribution = item.attribution;
+    if (item.attributionMode === "named" || item.attributionMode === "anonymous") {
+      normalizedTestimonial.attributionMode = item.attributionMode;
+    }
+    testimonial = normalizedTestimonial;
+  }
+  const schoolLogos = Array.isArray(body.schoolLogos)
+    ? body.schoolLogos.flatMap((logo): SchoolLogo[] => {
+        if (!logo || typeof logo !== "object" || Array.isArray(logo)) return [];
+        const item = logo as Record<string, unknown>;
+        if (typeof item.name !== "string" || !item.name.trim() || typeof item.src !== "string" || !item.src.trim()) return [];
+        return [{
+          name: item.name,
+          src: item.src,
+          alt: typeof item.alt === "string" && item.alt.trim() ? item.alt : `${item.name} logo`,
+        }];
+      })
+    : [];
+  return {
+    title: candidate.title,
+    seoTitle: typeof candidate.seoTitle === "string" ? candidate.seoTitle : null,
+    seoDescription: typeof candidate.seoDescription === "string" ? candidate.seoDescription : null,
+    body: {
+      intro: typeof body.intro === "string" ? body.intro : undefined,
+      testimonial,
+      schoolLogos,
+    },
+  };
+}
+
 export default function PastSuccess() {
   const [content, setContent] = useState<SuccessContent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,12 +80,8 @@ export default function PastSuccess() {
   const loadContent = () => {
     setLoading(true);
     setError(false);
-    fetch(publicApiPath("/api/public/content/past-success"))
-      .then((response) => {
-        if (!response.ok) throw new Error("Unable to load approved success content");
-        return response.json() as Promise<SuccessContent>;
-      })
-      .then((result) => setContent(result))
+    fetchPublicJson<unknown>("/api/public/content/past-success")
+      .then((result) => setContent(normalizeSuccessContent(result)))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   };

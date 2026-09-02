@@ -10,6 +10,24 @@ export function publicApiPath(path: string): string {
   return resolvePublicPath(path);
 }
 
+export async function fetchPublicJson<T>(path: string): Promise<T> {
+  const response = await fetch(publicApiPath(path), {
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Public API request failed with status ${response.status}`);
+  }
+  const mediaType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json" && !mediaType?.endsWith("+json")) {
+    throw new Error("Public API returned a non-JSON response");
+  }
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error("Public API returned malformed JSON");
+  }
+}
+
 export function publicAssetPath(path: string): string {
   return resolvePublicPath(path);
 }

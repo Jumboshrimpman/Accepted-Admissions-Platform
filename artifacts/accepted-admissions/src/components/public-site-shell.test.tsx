@@ -12,7 +12,7 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/", vi.fn()],
 }));
 
-import { PublicSiteShell, resolvePublicPath } from "./public-site-shell";
+import { PublicSiteShell, fetchPublicJson, resolvePublicPath } from "./public-site-shell";
 
 afterEach(() => {
   cleanup();
@@ -59,6 +59,20 @@ describe("PublicSiteShell", () => {
   it("keeps assets and API calls inside a configured base path", () => {
     expect(resolvePublicPath("/logo.svg", "/accepted-admissions/")).toBe("/accepted-admissions/logo.svg");
     expect(resolvePublicPath("api/public/products", "/accepted-admissions")).toBe("/accepted-admissions/api/public/products");
+  });
+
+  it("rejects HTML fallbacks and malformed public JSON", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<!doctype html>", {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    })));
+    await expect(fetchPublicJson("/api/public/content/past-success")).rejects.toThrow("non-JSON");
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{not-json", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+    await expect(fetchPublicJson("/api/public/content/past-success")).rejects.toThrow("malformed JSON");
   });
 
   it("uses the coordinated A mark in the shared public shell", () => {

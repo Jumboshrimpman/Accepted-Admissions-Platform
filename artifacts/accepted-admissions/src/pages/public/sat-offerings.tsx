@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
-import { useCreatePaymentCheckout } from "@workspace/api-client-react";
+import {
+  getGetCurrentUserQueryKey,
+  useCreatePaymentCheckout,
+  useGetCurrentUser,
+} from "@workspace/api-client-react";
 import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PublicSiteShell, publicApiPath } from "@/components/public-site-shell";
+import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
 
 type Product = {
   id: string;
@@ -28,25 +32,86 @@ export default function SatOfferings() {
   const [checkoutMessage, setCheckoutMessage] = useState("");
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
   const checkout = useCreatePaymentCheckout();
+  const {
+    data: currentUser,
+    isLoading: currentUserLoading,
+    error: currentUserError,
+  } = useGetCurrentUser({
+    query: {
+      queryKey: getGetCurrentUserQueryKey(),
+      enabled: Boolean(isSignedIn),
+      retry: false,
+    },
+  });
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const accountReady = Boolean(isSignedIn) && !currentUserLoading;
+  const canCheckout = accountReady && currentUser?.role === "student";
+
+  const accessMessage = (() => {
+    if (!isSignedIn || canCheckout || currentUserLoading) return null;
+    if (currentUser?.role === "administrator") {
+      return {
+        text: "Administrators cannot purchase the student offer. Open the administrator workspace or request guidance.",
+        href: "/admin",
+        label: "Open administrator workspace",
+      };
+    }
+    if (currentUser?.role === "tutor") {
+      return {
+        text: "Tutors cannot purchase the student offer. Open the tutor workspace or request guidance.",
+        href: "/tutor",
+        label: "Open tutor workspace",
+      };
+    }
+    if (currentUser?.role === "viewer") {
+      return {
+        text: "This offer is reserved for provisioned student accounts. Review your client workspace or request guidance.",
+        href: "/portal",
+        label: "Open client workspace",
+      };
+    }
+    return {
+      text: currentUserError
+        ? "This account could not be verified for student checkout right now. Request guidance and we’ll help with the next step."
+        : "This offer is available only to provisioned student accounts. Request guidance and we’ll help with the next step.",
+      href: "/client-request",
+      label: "Request guidance",
+    };
+  })();
 
   useEffect(() => {
     const storedProductId = window.sessionStorage.getItem("accepted:pending-product");
     if (storedProductId) setPendingProductId(storedProductId);
-    fetch(publicApiPath("/api/public/products"))
-      .then((response) => {
-        if (!response.ok) throw new Error("Products unavailable");
-        return response.json() as Promise<Product[]>;
-      })
+    fetchPublicJson<unknown>("/api/public/products")
       .then((nextProducts) => {
-        setProducts(Array.isArray(nextProducts) ? nextProducts : []);
+        if (!Array.isArray(nextProducts)) throw new Error("Products response is malformed");
+        setProducts(
+          nextProducts.filter((product): product is Product => {
+            if (!product || typeof product !== "object") return false;
+            const candidate = product as Record<string, unknown>;
+            return (
+              typeof candidate.id === "string" &&
+              typeof candidate.slug === "string" &&
+              typeof candidate.name === "string" &&
+              typeof candidate.description === "string" &&
+              typeof candidate.durationHours === "number" &&
+              typeof candidate.totalPriceCents === "number" &&
+              typeof candidate.effectiveHourlyRateCents === "number"
+            );
+          }),
+        );
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (!isSignedIn || !pendingProductId || loading || !products.length) return;
+    if (!isSignedIn || !pendingProductId || loading || !products.length || currentUserLoading) return;
+    if (!currentUser || currentUser.role !== "student") {
+      setPendingProductId(null);
+      window.sessionStorage.removeItem("accepted:pending-product");
+      return;
+    }
     if (!products.some((product) => product.id === pendingProductId)) {
       setPendingProductId(null);
       window.sessionStorage.removeItem("accepted:pending-product");
@@ -55,7 +120,7 @@ export default function SatOfferings() {
     setPendingProductId(null);
     window.sessionStorage.removeItem("accepted:pending-product");
     startCheckout(pendingProductId);
-  }, [isSignedIn, pendingProductId, loading, products]);
+  }, [isSignedIn, pendingProductId, loading, products, currentUserLoading, currentUser]);
 
   const startCheckout = (productId: string) => {
     setCheckoutMessage("");
@@ -65,15 +130,22 @@ export default function SatOfferings() {
       window.location.assign(`${basePath}/login?returnTo=${encodeURIComponent(returnTo)}`);
       return;
     }
+    if (!canCheckout) {
+      setCheckoutMessage(accessMessage?.text ?? "Student checkout is unavailable for this account.");
+      return;
+    }
     setCheckoutProductId(productId);
     checkout.mutate(
       { data: { productId } },
       {
         onSuccess: (session) => window.location.assign(session.url),
         onError: (checkoutError) => {
+          const status = (checkoutError as { status?: number } | null)?.status;
           const message =
-            (checkoutError as { data?: { error?: string } } | null)?.data?.error ??
-            "Secure Checkout is temporarily unavailable.";
+            status === 403
+              ? "Student checkout is available only to provisioned student accounts. Please request guidance if you need help."
+              : (checkoutError as { data?: { error?: string } } | null)?.data?.error ??
+                "Secure Checkout is temporarily unavailable.";
           setCheckoutMessage(message);
           setCheckoutProductId("");
         },
@@ -180,15 +252,27 @@ export default function SatOfferings() {
                         variant="default"
                          className="w-full rounded-md"
                        onClick={() => startCheckout(product.id)}
-                       disabled={checkout.isPending}
+                        disabled={checkout.isPending || (Boolean(isSignedIn) && (currentUserLoading || !canCheckout))}
                      >
                        {checkout.isPending && checkoutProductId === product.id
                          ? "Opening secure Checkout…"
-                         : isSignedIn
+                          : !isSignedIn
+                            ? "Sign in to purchase this session"
+                            : currentUserLoading
+                              ? "Checking account access…"
+                              : canCheckout
                             ? "Continue to secure checkout"
-                            : "Sign in to purchase this session"}
+                             : "Student checkout unavailable"}
                      </Button>
                       {!isSignedIn && <p className="mt-3 text-center text-xs text-muted-foreground">You’ll return to this offer after signing in.</p>}
+                      {accessMessage && (
+                        <p className="mt-3 text-center text-xs text-muted-foreground">
+                          {accessMessage.text}{" "}
+                          <Link href={accessMessage.href} className="font-semibold text-primary hover:underline">
+                            {accessMessage.label}
+                          </Link>
+                        </p>
+                      )}
                   </CardContent>
                 </Card>
                 );

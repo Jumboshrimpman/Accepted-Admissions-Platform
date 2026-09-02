@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Linkedin, UserRound } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { PublicSiteShell, publicApiPath } from "@/components/public-site-shell";
+import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
 
 type Tutor = {
   id: string;
@@ -21,6 +21,47 @@ type TeamContent = {
   seoDescription: string | null;
   body: { intro?: string };
 };
+
+function normalizeTutor(value: unknown): Tutor | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string" || typeof candidate.name !== "string" || !candidate.name.trim()) {
+    return null;
+  }
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    title: typeof candidate.title === "string" ? candidate.title : "",
+    photoUrl: typeof candidate.photoUrl === "string" && candidate.photoUrl ? candidate.photoUrl : null,
+    photoAltText: typeof candidate.photoAltText === "string" && candidate.photoAltText ? candidate.photoAltText : null,
+    biography: typeof candidate.biography === "string" && candidate.biography ? candidate.biography : null,
+    subjects: Array.isArray(candidate.subjects)
+      ? candidate.subjects.filter((subject): subject is string => typeof subject === "string")
+      : [],
+    linkedinUrl: typeof candidate.linkedinUrl === "string" && candidate.linkedinUrl ? candidate.linkedinUrl : null,
+  };
+}
+
+function normalizeTeamContent(value: unknown): TeamContent {
+  if (!value || typeof value !== "object") throw new Error("Team content response is malformed");
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.title !== "string" || !candidate.title.trim()) {
+    throw new Error("Team content response is missing a title");
+  }
+  const body = candidate.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("Team content response is missing a body");
+  }
+  const bodyRecord = body as Record<string, unknown>;
+  return {
+    title: candidate.title,
+    seoTitle: typeof candidate.seoTitle === "string" ? candidate.seoTitle : null,
+    seoDescription: typeof candidate.seoDescription === "string" ? candidate.seoDescription : null,
+    body: {
+      intro: typeof bodyRecord.intro === "string" ? bodyRecord.intro : undefined,
+    },
+  };
+}
 
 const liveTeamOrder = [
   "Rosanna Kataja",
@@ -64,18 +105,13 @@ export default function OurTeam() {
     setLoading(true);
     setError(false);
     Promise.all([
-      fetch(publicApiPath("/api/public/tutors")).then((response) => {
-        if (!response.ok) throw new Error("Unable to load approved tutors");
-        return response.json() as Promise<Tutor[]>;
-      }),
-      fetch(publicApiPath("/api/public/content/our-team")).then((response) => {
-        if (!response.ok) throw new Error("Unable to load team page content");
-        return response.json() as Promise<TeamContent>;
-      }),
+      fetchPublicJson<unknown>("/api/public/tutors"),
+      fetchPublicJson<unknown>("/api/public/content/our-team"),
     ])
       .then(([tutorResult, contentResult]) => {
-        setTutors(Array.isArray(tutorResult) ? orderTeam(tutorResult) : []);
-        setContent(contentResult);
+        if (!Array.isArray(tutorResult)) throw new Error("Tutor response is malformed");
+        setTutors(orderTeam(tutorResult.map(normalizeTutor).filter((tutor): tutor is Tutor => tutor !== null)));
+        setContent(normalizeTeamContent(contentResult));
       })
       .catch(() => {
         setTutors([]);
