@@ -95,6 +95,47 @@ function profileImageAlt(tutor: Tutor) {
   );
 }
 
+function TeamPortrait({ tutor }: { tutor: Tutor }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(tutor.photoUrl) && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [tutor.photoUrl]);
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground"
+      data-testid={`team-portrait-${tutor.id}`}
+    >
+      {showImage && (
+        <img
+          src={tutor.photoUrl ?? undefined}
+          alt={profileImageAlt(tutor)}
+          width="640"
+          height="960"
+          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+        />
+      )}
+      {!showImage && (
+        <span
+          className="flex flex-col items-center gap-3 px-6 text-center"
+          role="img"
+          aria-label={`${profileImageAlt(tutor)} — portrait unavailable`}
+          data-testid={`team-placeholder-${tutor.id}`}
+        >
+          <UserRound className="h-16 w-16" aria-hidden="true" />
+          <span className="text-xs font-medium uppercase tracking-[0.18em]">
+            Portrait unavailable
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function OurTeamContent({
   tutors,
   content,
@@ -186,36 +227,13 @@ export function OurTeamContent({
           {tutors.map((tutor) => (
             <article
               key={tutor.id}
-               className="group relative isolate min-h-[31rem] overflow-hidden bg-muted"
+               className="group relative isolate min-h-[34rem] overflow-hidden bg-muted sm:min-h-[36rem]"
               data-testid={`card-team-${tutor.id}`}
             >
-              <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
-                {tutor.photoUrl ? (
-                  <img
-                    src={tutor.photoUrl}
-                    alt={profileImageAlt(tutor)}
-                    width="640"
-                    height="860"
-                    className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
-                    loading="lazy"
-                    onError={(event) => {
-                      event.currentTarget.classList.add("hidden");
-                      event.currentTarget.nextElementSibling?.classList.remove(
-                        "hidden",
-                      );
-                    }}
-                  />
-                ) : null}
-                <span
-                  className={tutor.photoUrl ? "hidden" : "flex"}
-                  data-testid={`team-placeholder-${tutor.id}`}
-                >
-                  <UserRound className="h-16 w-16" aria-hidden="true" />
-                </span>
-              </div>
+              <TeamPortrait tutor={tutor} />
 
                <div
-                 className="absolute inset-x-0 bottom-0 h-48 bg-foreground/90"
+                 className="absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/55 to-transparent"
                 aria-hidden="true"
               />
 
@@ -237,11 +255,11 @@ export function OurTeamContent({
                     {tutor.title}
                   </p>
                 )}
-                 <h2 className="font-display mt-3 text-3xl leading-tight">
+                 <h2 className="mt-2 text-2xl font-bold leading-tight tracking-tight">
                   {tutor.name || "Accepted Admissions tutor"}
                 </h2>
                 {tutor.biography && (
-                  <p className="mt-3 text-sm leading-relaxed text-white/85">
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-white/90">
                     {tutor.biography}
                   </p>
                 )}

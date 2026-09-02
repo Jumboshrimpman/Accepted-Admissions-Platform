@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 vi.mock("@/components/public-site-shell", () => ({
   PublicSiteShell: ({ children }: { children: React.ReactNode }) => (
@@ -109,6 +109,99 @@ describe("OurTeam publication gate", () => {
         .getByRole("link", { name: "View Xavier Morales on LinkedIn" })
         .getAttribute("href"),
     ).toBe("https://www.linkedin.com/in/xavier-morales-8830821a5/");
+  });
+
+  it("keeps the complete approved roster and portrait mapping in sequence", async () => {
+    const approvedRoster = [
+      ["Rosanna Kataja", "rosanna"],
+      ["Xavier Morales", "xavier"],
+      ["Eunice Chon", "eunice"],
+      ["Sophia Lamas", "sophia"],
+      ["Aurelia Finch", "aurelia"],
+      ["Nika Raiffe", "nika"],
+      ["Kya Brooks", "kya"],
+      ["Michael Pecorara", "michael"],
+      ["Kyle Englander", "kyle"],
+      ["Daniel Salgado-Alvarez", "daniel"],
+      ["Sama Noori", "sama"],
+    ] as const;
+    const approvedPortraits: Record<string, string> = {
+      kya: "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg",
+      michael: "https://static.wixstatic.com/media/2c8654_ab3655c726c846819c5eec1195af49bd~mv2.jpg",
+      kyle: "https://static.wixstatic.com/media/2c8654_1ab78bc7f16a48559bc3b46364c94bcc~mv2.jpg",
+      daniel: "https://static.wixstatic.com/media/2c8654_72de1811814144689846123daff8471f~mv2.png",
+      sama: "https://static.wixstatic.com/media/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg",
+    };
+    const tutors = [...approvedRoster].reverse().map(([name, id]) => ({
+      id,
+      name,
+      title: name === "Kya Brooks" ? "Admissions Tutor" : "Tutor",
+      photoUrl: approvedPortraits[id] ?? `https://example.com/${id}.jpg`,
+      photoAltText: `${name}, ${name === "Kya Brooks" ? "Admissions Tutor" : "Tutor"}`,
+      biography:
+        name === "Kya Brooks"
+          ? "Kya is a senior at Harvard studying economics and the History of Art and Literature."
+          : `Approved biography for ${name}.`,
+      subjects: [],
+      linkedinUrl: name === "Michael Pecorara"
+        ? "https://www.linkedin.com/in/michaelpecorara/"
+        : null,
+    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        return new Response(
+          JSON.stringify(
+            url.endsWith("/api/public/tutors")
+              ? tutors
+              : {
+                  title: "Meet Our Team",
+                  seoTitle: "Meet Our Team | Accepted Admissions",
+                  seoDescription: "Approved team content.",
+                  body: { intro: "Choose the expert best fit for you." },
+                },
+          ),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    render(<OurTeam />);
+
+    const roster = await screen.findByRole("region", {
+      name: "Approved team profiles",
+    });
+    expect(
+      within(roster)
+        .getAllByRole("heading", { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(approvedRoster.map(([name]) => name));
+
+    const kyaCard = screen.getByTestId("card-team-kya");
+    const michaelCard = screen.getByTestId("card-team-michael");
+    const kyaImage = within(kyaCard).getByAltText("Kya Brooks, Admissions Tutor");
+    const michaelImage = within(michaelCard).getByAltText("Michael Pecorara, Tutor");
+    expect(kyaImage.getAttribute("src")).toContain("99fefc7159a4424fa7e6fb36ed6cbb86");
+    expect(michaelImage.getAttribute("src")).toContain("ab3655c726c846819c5eec1195af49bd");
+    expect(within(kyaCard).getByText(/Kya is a senior at Harvard/)).toBeTruthy();
+    expect(
+      within(michaelCard)
+        .getByRole("link", { name: "View Michael Pecorara on LinkedIn" })
+        .getAttribute("href"),
+    ).toBe("https://www.linkedin.com/in/michaelpecorara/");
+
+    fireEvent.error(kyaImage);
+
+    expect(within(kyaCard).getByTestId("team-placeholder-kya")).toBeTruthy();
+    expect(
+      within(kyaCard).getByRole("img", {
+        name: "Kya Brooks, Admissions Tutor — portrait unavailable",
+      }),
+    ).toBeTruthy();
+    expect(within(michaelCard).getByAltText("Michael Pecorara, Tutor")).toBeTruthy();
+    expect(within(michaelCard).queryByTestId("team-placeholder-michael")).toBeNull();
   });
 
   it("does not expose tutor profiles when team page content is unpublished", async () => {
