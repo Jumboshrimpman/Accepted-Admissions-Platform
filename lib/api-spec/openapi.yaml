@@ -64,6 +64,31 @@ paths:
                 $ref: "#/components/schemas/AdminOverview"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/notifications/{notificationId}:
+    patch:
+      operationId: updateAdminNotification
+      tags: [administration]
+      summary: Mark an administrator notification as read or dismissed
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminNotificationUpdate" }
+      responses:
+        "200":
+          description: Updated administrator notification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminNotification" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/guidance-requests/{requestId}:
     patch:
       operationId: updateAdminGuidanceRequest
@@ -1835,14 +1860,23 @@ components:
         signedInAt: { type: string, format: date-time }
     AdminNotification:
       type: object
-      required: [id, kind, guidanceRequestId, title, message, createdAt]
+      required: [id, kind, guidanceRequestId, title, message, status, readAt, dismissedAt, createdAt]
       properties:
         id: { type: string }
         kind: { type: string, enum: [guidance_request_assigned] }
         guidanceRequestId: { type: string }
         title: { type: string }
         message: { type: string }
+        status: { type: string, enum: [unread, read, dismissed] }
+        readAt: { type: ["string", "null"], format: date-time }
+        dismissedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    AdminNotificationUpdate:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [read, dismissed] }
     AdminGuidanceRequest:
       type: object
       required: [id, guardianName, studentName, email, phone, gradeOrGraduationYear, currentSchool, serviceRequested, currentSatTotal, currentReadingWriting, currentMath, targetSatScore, plannedTestDate, goals, schedulingAvailability, referralSource, consentToContact, privacyAcknowledged, sourcePage, status, assignedStaffUserId, followUpNotes, conversionStatus, createdAt]

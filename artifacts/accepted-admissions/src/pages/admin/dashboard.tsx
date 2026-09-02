@@ -3,9 +3,11 @@ import {
   getGetAdminOverviewQueryKey,
   useGetAdminCurriculum,
   useGetAdminOverview,
+  useUpdateAdminNotification,
   useUpdateAdminGuidanceRequest,
   type AdminGuidanceRequest,
   type AdminGuidanceRequestUpdate,
+  type AdminNotification,
   type AdminOverview,
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
@@ -66,6 +68,8 @@ export default function AdminDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const { data: overview, isLoading: overviewLoading } = useGetAdminOverview();
   const { data: curriculum, isLoading: curriculumLoading } = useGetAdminCurriculum();
+  const queryClient = useQueryClient();
+  const updateNotification = useUpdateAdminNotification();
   if (overviewLoading || curriculumLoading) {
     return <div className="space-y-6"><Skeleton className="h-10 w-72 rounded-xl" /><div className="grid gap-4 md:grid-cols-4">{[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-28 rounded-2xl" />)}</div><Skeleton className="h-72 rounded-2xl" /></div>;
   }
@@ -73,6 +77,8 @@ export default function AdminDashboard() {
   const loginActivity = overview?.loginActivity ?? [];
   const guidanceRequests = overview?.guidanceRequests ?? [];
   const notifications = overview?.notifications ?? [];
+  const activeNotifications = notifications.filter((notification) => notification.status === "unread");
+  const priorNotifications = notifications.filter((notification) => notification.status !== "unread");
   const administrators = (overview?.users ?? []).filter((user) => user.role === "administrator");
   const accessConflicts = overview?.accessConflicts ?? [];
   const latestLogin = loginActivity[0];
@@ -90,7 +96,16 @@ export default function AdminDashboard() {
   return <div className="mx-auto max-w-7xl space-y-7 pb-16 animate-in fade-in">
      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-sm font-medium text-primary">Accepted Admissions · administrator</p><h1 className="text-3xl font-bold tracking-tight">Admin overview</h1><p className="mt-1 text-muted-foreground">A compact view of the learning product and the work that needs an operator.</p></div><div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/financials"><WalletCards className="mr-2 h-4 w-4" /> Finance</Link></Button><Button asChild variant="outline"><Link href="/admin/content"><FileText className="mr-2 h-4 w-4" /> Public content</Link></Button></div></div>
      {accessConflicts.length > 0 && <Card className="border-amber-300 bg-amber-50 text-amber-950" role="alert"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-5 w-5" /> Portal access configuration warning</CardTitle><CardDescription className="text-amber-900">Some identities appear in more than one role allowlist. Sign-in will be denied for each overlap until the configuration is corrected.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="space-y-2">{accessConflicts.map((conflict, index) => <div key={`${conflict.roleCategories.join("-")}-${index}`} className="rounded-lg border border-amber-300/80 bg-white/60 px-3 py-2 text-sm"><span className="font-medium">Conflicting role categories:</span>{" "}{conflict.roleCategories.map((category) => accessRoleCategoryLabels[category] ?? category).join(", ")}</div>)}</div><p className="text-sm font-medium">Remove each overlapping identity from all but one role allowlist, then retry access.</p></CardContent></Card>}
-     {notifications.length > 0 && <Card data-testid="card-admin-notifications"><CardHeader><CardTitle>Notifications</CardTitle><CardDescription>Recent ownership changes addressed to you.</CardDescription></CardHeader><CardContent className="space-y-3">{notifications.map((notification) => <div key={notification.id} className="rounded-xl border bg-muted/20 p-4" data-testid={`notification-${notification.id}`}><p className="font-medium">{notification.title}</p><p className="mt-1 text-sm text-muted-foreground">{notification.message}</p><time className="mt-2 block text-xs text-muted-foreground" dateTime={new Date(notification.createdAt).toISOString()}>{new Date(notification.createdAt).toLocaleString()}</time></div>)}</CardContent></Card>}
+     {notifications.length > 0 && <Card data-testid="card-admin-notifications"><CardHeader><CardTitle>Assignment notifications</CardTitle><CardDescription>Ownership changes addressed to you, with unresolved alerts kept at the top.</CardDescription></CardHeader><CardContent className="space-y-5">
+       {activeNotifications.length > 0 && <section aria-labelledby="active-notifications-heading" className="space-y-3">
+         <div className="flex items-center justify-between gap-3"><h2 id="active-notifications-heading" className="text-sm font-semibold">Needs attention</h2><Badge variant="default">{activeNotifications.length}</Badge></div>
+         {activeNotifications.map((notification) => <AdminNotificationItem key={notification.id} notification={notification} isPending={updateNotification.isPending} onUpdate={(status) => updateNotification.mutate({ notificationId: notification.id, data: { status } }, { onSuccess: (updated) => queryClient.setQueryData<AdminOverviewWithPlatform>(getGetAdminOverviewQueryKey(), (current) => current ? { ...current, notifications: current.notifications.map((item) => item.id === updated.id ? updated : item) } : current) })} />)}
+       </section>}
+       {priorNotifications.length > 0 && <section aria-labelledby="prior-notifications-heading" className="space-y-3 border-t pt-5">
+         <div className="flex items-center justify-between gap-3"><h2 id="prior-notifications-heading" className="text-sm font-semibold">Prior notifications</h2><Badge variant="secondary">{priorNotifications.length}</Badge></div>
+         {priorNotifications.map((notification) => <AdminNotificationItem key={notification.id} notification={notification} isPending={false} />)}
+       </section>}
+     </CardContent></Card>}
      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{statCards.map(({ label, value, icon: Icon }) => <Card key={label}><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>)}</div>
     <Card><CardHeader><CardTitle>Operations</CardTitle><CardDescription>Jump directly to a focused area instead of scanning one long workspace.</CardDescription></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{operationLinks.map(({ href, title, detail, icon: Icon }) => <Link key={href} href={href} className="group rounded-xl border p-4 transition-colors hover:border-primary/50 hover:bg-primary/5"><div className="flex items-start justify-between"><Icon className="h-5 w-5 text-primary" /><ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" /></div><h2 className="mt-4 font-semibold">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{detail}</p></Link>)}</CardContent></Card>
     <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" /> Upcoming sessions</CardTitle><CardDescription>The next scheduled appointments across authorized programs.</CardDescription></div><Badge variant="secondary">{upcomingSessions.length} scheduled</Badge></div></CardHeader><CardContent className="space-y-3">{visibleUpcomingSessions.map((session) => <div key={session.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-sm text-muted-foreground">{formatSessionDateTime(session)}</p></div><Button asChild variant="outline" size="sm"><Link href="/admin/curriculum?section=sessions">Manage session</Link></Button></div>)}{upcomingSessions.length === 0 && <p className="py-5 text-center text-sm text-muted-foreground">No upcoming sessions are scheduled.</p>}{upcomingSessions.length > 3 && <Button variant="outline" onClick={() => setShowAllSessions((value) => !value)} aria-expanded={showAllSessions}>{showAllSessions ? "View less" : `View more (${upcomingSessions.length - 3})`}</Button>}</CardContent></Card>
@@ -155,6 +170,33 @@ export default function AdminDashboard() {
       </details>
     </Card>
   </div>;
+}
+
+function AdminNotificationItem({
+  notification,
+  isPending,
+  onUpdate,
+}: {
+  notification: AdminNotification;
+  isPending: boolean;
+  onUpdate?: (status: "read" | "dismissed") => void;
+}) {
+  const createdAt = new Date(notification.createdAt);
+  return (
+    <div className="rounded-xl border bg-muted/20 p-4" data-testid={`notification-${notification.id}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-medium">{notification.title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{notification.message}</p>
+          <time className="mt-2 block text-xs text-muted-foreground" dateTime={createdAt.toISOString()}>{createdAt.toLocaleString()}</time>
+        </div>
+        {onUpdate && <div className="flex shrink-0 gap-2">
+          <Button variant="outline" size="sm" disabled={isPending} onClick={() => onUpdate("read")} data-testid={`notification-read-${notification.id}`}>Mark read</Button>
+          <Button variant="ghost" size="sm" disabled={isPending} onClick={() => onUpdate("dismissed")} data-testid={`notification-dismiss-${notification.id}`}>Dismiss</Button>
+        </div>}
+      </div>
+    </div>
+  );
 }
 
 function GuidanceRequestItem({ request, administrators }: { request: AdminGuidanceRequest; administrators: AdminOverviewUsersItem[] }) {

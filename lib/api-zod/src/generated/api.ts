@@ -116,11 +116,38 @@ export const GetAdminOverviewResponse = zod.object({
   "guidanceRequestId": zod.string(),
   "title": zod.string(),
   "message": zod.string(),
+  "status": zod.enum(['unread', 'read', 'dismissed']),
+  "readAt": zod.coerce.date().nullable(),
+  "dismissedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date()
 })).describe('Notifications addressed to the signed-in administrator.'),
   "accessConflicts": zod.array(zod.object({
   "roleCategories": zod.array(zod.enum(['administrator', 'sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer'])).min(getAdminOverviewResponseAccessConflictsItemRoleCategoriesMin)
 })).describe('Conflicting role categories only; identity values are intentionally omitted.')
+})
+
+
+/**
+ * @summary Mark an administrator notification as read or dismissed
+ */
+export const UpdateAdminNotificationParams = zod.object({
+  "notificationId": zod.coerce.string()
+})
+
+export const UpdateAdminNotificationBody = zod.object({
+  "status": zod.enum(['read', 'dismissed'])
+})
+
+export const UpdateAdminNotificationResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['guidance_request_assigned']),
+  "guidanceRequestId": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "status": zod.enum(['unread', 'read', 'dismissed']),
+  "readAt": zod.coerce.date().nullable(),
+  "dismissedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
 })
 
 

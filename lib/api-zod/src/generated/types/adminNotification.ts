@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminNotificationKind } from './adminNotificationKind';
+import type { AdminNotificationStatus } from './adminNotificationStatus';
 
 export interface AdminNotification {
   id: string;
@@ -13,5 +14,10 @@ export interface AdminNotification {
   guidanceRequestId: string;
   title: string;
   message: string;
+  status: AdminNotificationStatus;
+  /** @nullable */
+  readAt: Date | null;
+  /** @nullable */
+  dismissedAt: Date | null;
   createdAt: Date;
 }

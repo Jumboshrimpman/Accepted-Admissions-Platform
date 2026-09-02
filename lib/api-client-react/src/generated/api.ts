@@ -31,6 +31,8 @@ import type {
   AdminFinancials,
   AdminGuidanceRequest,
   AdminGuidanceRequestUpdate,
+  AdminNotification,
+  AdminNotificationUpdate,
   AdminOverview,
   AdminProgram,
   AdminProgramUpdate,
@@ -364,6 +366,78 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
 
 
 
+
+export const getUpdateAdminNotificationUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/admin/notifications/${notificationId}`
+}
+
+/**
+ * @summary Mark an administrator notification as read or dismissed
+ */
+export const updateAdminNotification = async (notificationId: string,
+    adminNotificationUpdate: AdminNotificationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotification> => {
+
+  return customFetch<AdminNotification>(getUpdateAdminNotificationUrl(notificationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminNotificationUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminNotificationMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotification>>, TError,{notificationId: string;data: BodyType<AdminNotificationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotification>>, TError,{notificationId: string;data: BodyType<AdminNotificationUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminNotification>>, {notificationId: string;data: BodyType<AdminNotificationUpdate>}> = (props) => {
+          const {notificationId,data} = props ?? {};
+
+          return  updateAdminNotification(notificationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminNotification>>>
+    export type UpdateAdminNotificationMutationBody = BodyType<AdminNotificationUpdate>
+    export type UpdateAdminNotificationMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Mark an administrator notification as read or dismissed
+ */
+export const useUpdateAdminNotification = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotification>>, TError,{notificationId: string;data: BodyType<AdminNotificationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminNotification>>,
+        TError,
+        {notificationId: string;data: BodyType<AdminNotificationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminNotificationMutationOptions(options));
+    }
 
 export const getUpdateAdminGuidanceRequestUrl = (requestId: string,) => {
 

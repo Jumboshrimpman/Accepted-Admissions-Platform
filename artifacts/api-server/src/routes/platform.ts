@@ -96,6 +96,9 @@ import {
   CreateAdminSessionResponse,
   GetAdminClientDashboardParams,
   GetAdminClientDashboardResponse,
+  UpdateAdminNotificationBody,
+  UpdateAdminNotificationParams,
+  UpdateAdminNotificationResponse,
   UpdateAdminGuidanceRequestBody,
   UpdateAdminGuidanceRequestParams,
   UpdateAdminGuidanceRequestResponse,
@@ -5935,6 +5938,9 @@ router.get(
           guidanceRequestId: adminNotificationsTable.guidanceRequestId,
           title: adminNotificationsTable.title,
           message: adminNotificationsTable.message,
+          status: adminNotificationsTable.status,
+          readAt: adminNotificationsTable.readAt,
+          dismissedAt: adminNotificationsTable.dismissedAt,
           createdAt: adminNotificationsTable.createdAt,
         })
         .from(adminNotificationsTable)
@@ -6021,6 +6027,46 @@ router.get(
         },
       },
     });
+  },
+);
+
+router.patch(
+  "/admin/notifications/:notificationId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminNotificationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = UpdateAdminNotificationBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+
+    const now = new Date();
+    const [notification] = await db
+      .update(adminNotificationsTable)
+      .set(
+        body.data.status === "read"
+          ? { status: "read", readAt: now, dismissedAt: null }
+          : { status: "dismissed", readAt: now, dismissedAt: now },
+      )
+      .where(
+        and(
+          eq(adminNotificationsTable.id, params.data.notificationId),
+          eq(adminNotificationsTable.recipientUserId, req.appUser!.id),
+        ),
+      )
+      .returning();
+
+    if (!notification) {
+      res.status(404).json({ error: "Notification not found" });
+      return;
+    }
+
+    res.json(UpdateAdminNotificationResponse.parse(notification));
   },
 );
 

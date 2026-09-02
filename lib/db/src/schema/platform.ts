@@ -573,11 +573,19 @@ export const adminNotificationsTable = pgTable(
     guidanceRequestId: uuid("guidance_request_id").notNull().references(() => clientRequestsTable.id),
     title: text("title").notNull(),
     message: text("message").notNull(),
+    status: text("status").notNull().default("unread"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("admin_notifications_recipient_created_idx").on(
       table.recipientUserId,
+      table.createdAt,
+    ),
+    index("admin_notifications_recipient_status_created_idx").on(
+      table.recipientUserId,
+      table.status,
       table.createdAt,
     ),
   ],

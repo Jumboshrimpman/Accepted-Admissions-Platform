@@ -636,12 +636,26 @@ export const AdminNotificationKind = {
   guidance_request_assigned: 'guidance_request_assigned',
 } as const;
 
+export type AdminNotificationStatus = typeof AdminNotificationStatus[keyof typeof AdminNotificationStatus];
+
+
+export const AdminNotificationStatus = {
+  unread: 'unread',
+  read: 'read',
+  dismissed: 'dismissed',
+} as const;
+
 export interface AdminNotification {
   id: string;
   kind: AdminNotificationKind;
   guidanceRequestId: string;
   title: string;
   message: string;
+  status: AdminNotificationStatus;
+  /** @nullable */
+  readAt: string | null;
+  /** @nullable */
+  dismissedAt: string | null;
   createdAt: string;
 }
 
@@ -657,6 +671,18 @@ export interface AdminOverview {
   notifications: AdminNotification[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
+}
+
+export type AdminNotificationUpdateStatus = typeof AdminNotificationUpdateStatus[keyof typeof AdminNotificationUpdateStatus];
+
+
+export const AdminNotificationUpdateStatus = {
+  read: 'read',
+  dismissed: 'dismissed',
+} as const;
+
+export interface AdminNotificationUpdate {
+  status: AdminNotificationUpdateStatus;
 }
 
 export interface AdminGuidanceRequestUpdate {

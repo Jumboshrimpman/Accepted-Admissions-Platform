@@ -8,6 +8,7 @@ import {
   auditLogsTable,
   clientRequestsTable,
   db,
+  loginActivityTable,
   usersTable,
   type AppUser,
 } from "@workspace/db";
@@ -260,9 +261,14 @@ test("HTTP admin overview returns private guidance requests only to administrato
   let studentServer:
     | Awaited<ReturnType<typeof startDashboardHttpServer>>
     | undefined;
+  let secondaryAdministratorServer:
+    | Awaited<ReturnType<typeof startDashboardHttpServer>>
+    | undefined;
   const createdRequestIds: string[] = [];
-  process.env.ACCEPTED_ADMIN_CLERK_USER_IDS =
-    fixture.administrator.clerkUserId;
+  process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = [
+    fixture.administrator.clerkUserId,
+    secondaryAdministrator!.clerkUserId,
+  ].join(",");
   process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = fixture.student.clerkUserId;
   try {
     const requests = await db
@@ -324,6 +330,9 @@ test("HTTP admin overview returns private guidance requests only to administrato
 
     administratorServer = await startDashboardHttpServer(
       fixture.administrator,
+    );
+    secondaryAdministratorServer = await startDashboardHttpServer(
+      secondaryAdministrator!,
     );
     studentServer = await startDashboardHttpServer(fixture.student);
 
@@ -417,6 +426,9 @@ test("HTTP admin overview returns private guidance requests only to administrato
       .where(eq(adminNotificationsTable.guidanceRequestId, createdRequestIds[1]));
     assert.equal(firstNotifications.length, 1);
     assert.equal(firstNotifications[0].recipientUserId, fixture.administrator.id);
+    assert.equal(firstNotifications[0].status, "unread");
+    assert.equal(firstNotifications[0].readAt, null);
+    assert.equal(firstNotifications[0].dismissedAt, null);
     assert.equal(firstNotifications[0].title, "Guidance request assigned to you");
     assert.equal(
       firstNotifications[0].message,
@@ -443,6 +455,58 @@ test("HTTP admin overview returns private guidance requests only to administrato
     );
     assert.ok(latestNotification);
     assert.equal(latestNotification.message.includes("This private note"), false);
+
+    const firstNotification = reassignmentNotifications.find(
+      (notification) => notification.recipientUserId === fixture.administrator.id,
+    );
+    assert.ok(firstNotification);
+    const crossRecipientUpdate = await patchJson(
+      administratorServer.baseUrl,
+      `/api/admin/notifications/${latestNotification.id}`,
+      { status: "read" },
+    );
+    assert.equal(crossRecipientUpdate.response.status, 404);
+    assert.deepEqual(crossRecipientUpdate.body, { error: "Notification not found" });
+
+    const readNotification = await patchJson(
+      secondaryAdministratorServer.baseUrl,
+      `/api/admin/notifications/${latestNotification.id}`,
+      { status: "read" },
+    );
+    assert.equal(readNotification.response.status, 200);
+    assert.equal(readNotification.body.status, "read");
+    assert.equal(typeof readNotification.body.readAt, "string");
+    assert.equal(readNotification.body.dismissedAt, null);
+
+    const otherCrossRecipientUpdate = await patchJson(
+      secondaryAdministratorServer.baseUrl,
+      `/api/admin/notifications/${firstNotification.id}`,
+      { status: "dismissed" },
+    );
+    assert.equal(otherCrossRecipientUpdate.response.status, 404);
+    assert.deepEqual(otherCrossRecipientUpdate.body, {
+      error: "Notification not found",
+    });
+
+    const dismissedNotification = await patchJson(
+      administratorServer.baseUrl,
+      `/api/admin/notifications/${firstNotification.id}`,
+      { status: "dismissed" },
+    );
+    assert.equal(dismissedNotification.response.status, 200);
+    assert.equal(dismissedNotification.body.status, "dismissed");
+    assert.equal(typeof dismissedNotification.body.readAt, "string");
+    assert.equal(typeof dismissedNotification.body.dismissedAt, "string");
+
+    const overviewAfterUpdates = await getJson(
+      administratorServer.baseUrl,
+      "/api/admin/overview",
+    );
+    assert.equal(overviewAfterUpdates.response.status, 200);
+    const returnedNotification = overviewAfterUpdates.body.notifications.find(
+      (notification: { id: string }) => notification.id === firstNotification.id,
+    );
+    assert.equal(returnedNotification.status, "dismissed");
 
     const unassigned = await patchJson(administratorServer.baseUrl, updatePath, {
       assignedStaffUserId: null,
@@ -474,6 +538,7 @@ test("HTTP admin overview returns private guidance requests only to administrato
     });
   } finally {
     await studentServer?.close();
+    await secondaryAdministratorServer?.close();
     await administratorServer?.close();
     for (const requestId of createdRequestIds) {
       await db
@@ -491,6 +556,9 @@ test("HTTP admin overview returns private guidance requests only to administrato
         .delete(clientRequestsTable)
         .where(eq(clientRequestsTable.id, requestId));
     }
+    await db
+      .delete(loginActivityTable)
+      .where(eq(loginActivityTable.userId, secondaryAdministrator!.id));
     await db
       .delete(usersTable)
       .where(eq(usersTable.id, secondaryAdministrator!.id));

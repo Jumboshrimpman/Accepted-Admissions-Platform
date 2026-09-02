@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   updateGuidanceRequest: vi.fn(),
+  updateNotification: vi.fn(),
   setQueryData: vi.fn(),
   overview: {
     users: [] as Array<{
@@ -22,6 +23,9 @@ const mocks = vi.hoisted(() => ({
       guidanceRequestId: string;
       title: string;
       message: string;
+      status: "unread" | "read" | "dismissed";
+      readAt: string | null;
+      dismissedAt: string | null;
       createdAt: string;
     }>,
     loginActivity: [
@@ -103,6 +107,10 @@ vi.mock("@workspace/api-client-react", () => ({
     mutate: mocks.updateGuidanceRequest,
     isPending: false,
   }),
+  useUpdateAdminNotification: () => ({
+    mutate: mocks.updateNotification,
+    isPending: false,
+  }),
 }));
 
 vi.mock("wouter", () => ({
@@ -121,6 +129,7 @@ import AdminCurriculum from "./curriculum";
 afterEach(() => {
   cleanup();
   mocks.updateGuidanceRequest.mockReset();
+  mocks.updateNotification.mockReset();
   mocks.setQueryData.mockReset();
   mocks.overview.users = [];
   mocks.overview.accessConflicts = [];
@@ -129,6 +138,48 @@ afterEach(() => {
 });
 
 describe("administrator overview", () => {
+  test("separates active assignment alerts from prior notifications and supports clearing alerts", () => {
+    mocks.overview.notifications = [
+      {
+        id: "notification-unread",
+        kind: "guidance_request_assigned",
+        guidanceRequestId: "request-1",
+        title: "New assignment",
+        message: "A new guidance request needs your attention.",
+        status: "unread",
+        readAt: null,
+        dismissedAt: null,
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+      {
+        id: "notification-read",
+        kind: "guidance_request_assigned",
+        guidanceRequestId: "request-2",
+        title: "Completed assignment",
+        message: "This assignment was already reviewed.",
+        status: "read",
+        readAt: "2026-09-01T11:00:00.000Z",
+        dismissedAt: null,
+        createdAt: "2026-09-01T11:00:00.000Z",
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByRole("heading", { name: "Needs attention" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Prior notifications" })).toBeTruthy();
+    expect(screen.getByTestId("notification-read-notification-unread")).toBeTruthy();
+    expect(screen.getByTestId("notification-dismiss-notification-unread")).toBeTruthy();
+    expect(screen.queryByTestId("notification-read-notification-read")).toBeNull();
+    expect(screen.queryByTestId("notification-dismiss-notification-read")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("notification-read-notification-unread"));
+    expect(mocks.updateNotification).toHaveBeenCalledWith(
+      { notificationId: "notification-unread", data: { status: "read" } },
+      expect.any(Object),
+    );
+  });
+
   test("removes attention surfaces and keeps login activity collapsed by default", () => {
     render(<AdminDashboard />);
 
