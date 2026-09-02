@@ -30,7 +30,18 @@ const mocks = vi.hoisted(() => ({
     questionStatus: [],
     submissions: [],
     tutors: [],
-    clients: [] as Array<{ id: string; name: string; email: string }>,
+    clients: [] as Array<{
+      id: string;
+      name: string;
+      email: string;
+      assignedTutors: Array<{
+        id: string;
+        name: string;
+        courseId: string;
+        courseTitle: string;
+        subject: string;
+      }>;
+    }>,
   },
 }));
 
@@ -82,12 +93,26 @@ describe("administrator overview", () => {
 
   test("exposes a client preview action for each student", () => {
     mocks.curriculum.clients = [
-      { id: "student-1", name: "Taito Goto", email: "taito@example.invalid" },
+      {
+        id: "student-1",
+        name: "Taito Goto",
+        email: "taito@example.invalid",
+        assignedTutors: [
+          {
+            id: "tutor-1",
+            name: "Nika Raiffe",
+            courseId: "course-1",
+            courseTitle: "Fall 2026 SAT & IELTS",
+            subject: "IELTS",
+          },
+        ],
+      },
     ];
     render(<AdminCurriculum />);
 
     const previewLink = screen.getByRole("link", { name: /View client/i });
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    expect(screen.getByText("Nika Raiffe · English")).toBeTruthy();
   });
 
   test("shows role categories and remediation when portal allowlists conflict", () => {

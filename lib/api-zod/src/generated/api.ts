@@ -7,6 +7,7 @@
  */
 import * as zod from 'zod';
 
+
 /**
  * Returns server health status
  * @summary Health check
@@ -14,6 +15,8 @@ import * as zod from 'zod';
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
+
+
 /**
  * @summary Get the signed-in application user
  */
@@ -181,12 +184,26 @@ export const GetAdminCurriculumResponse = zod.object({
   "active": zod.boolean(),
   "calendarStatus": zod.enum(['connected', 'disconnected', 'unavailable']),
   "sessionCount": zod.number(),
-  "upcomingSessionCount": zod.number()
+  "upcomingSessionCount": zod.number(),
+  "assignedStudents": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "subject": zod.string()
+}))
 })),
   "clients": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
-  "email": zod.string()
+  "email": zod.string(),
+  "assignedTutors": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "subject": zod.string()
+}))
 }))
 })
 

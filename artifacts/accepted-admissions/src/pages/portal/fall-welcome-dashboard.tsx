@@ -1,5 +1,5 @@
 import { useGetDashboard, type CurriculumSession, type Dashboard } from "@workspace/api-client-react";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Video } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users, Video } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -139,6 +139,40 @@ export function ClientDashboardView({
           </div>
         </div>
       )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Users className="h-5 w-5 text-primary" />
+            Your tutors
+          </CardTitle>
+          <CardDescription>
+            Your approved tutor relationships, organized by subject.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const tutors = dashboard.courses
+              .flatMap((course) => course.tutors ?? [])
+              .filter((tutor): tutor is NonNullable<typeof tutor> => tutor != null)
+              .filter((tutor, index, all) => all.findIndex((candidate) => candidate.id === tutor.id) === index);
+            return tutors.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {tutors.map((tutor) => (
+                  <div key={tutor.id} className="rounded-xl border p-4">
+                    <p className="font-semibold">{tutor.name}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{tutor.specialty}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-3 text-sm text-muted-foreground">
+                Your tutor relationships will appear here once the matching tutor account is provisioned.
+              </p>
+            );
+          })()}
+        </CardContent>
+      </Card>
 
       {nextSession ? (
         <Card className="border-primary/25 shadow-sm">

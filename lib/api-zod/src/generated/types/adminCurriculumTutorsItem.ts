@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminCurriculumTutorsItemCalendarStatus } from './adminCurriculumTutorsItemCalendarStatus';
+import type { AdminRelationship } from './adminRelationship';
 
 export type AdminCurriculumTutorsItem = {
   id: string;
@@ -16,4 +17,5 @@ export type AdminCurriculumTutorsItem = {
   calendarStatus: AdminCurriculumTutorsItemCalendarStatus;
   sessionCount: number;
   upcomingSessionCount: number;
+  assignedStudents: AdminRelationship[];
 };

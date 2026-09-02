@@ -156,6 +156,53 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.equal(serializedPreview.includes("tutorShareCents"), false);
     assert.equal(serializedPreview.includes("platformShareCents"), false);
     assert.equal(serializedPreview.includes("transfer"), false);
+
+    const curriculum = await getJson(
+      administratorServer.baseUrl,
+      `/api/admin/curriculum?courseId=${fixture.courseId}`,
+    );
+    assert.equal(curriculum.response.status, 200);
+    const student = curriculum.body.clients.find(
+      (client: { id: string }) => client.id === fixture.student.id,
+    );
+    assert.deepEqual(
+      student.assignedTutors
+        .map((tutor: { id: string; name: string; subject: string }) => ({
+          id: tutor.id,
+          name: tutor.name,
+          subject: tutor.subject,
+        }))
+        .sort((left: { subject: string }, right: { subject: string }) =>
+          left.subject.localeCompare(right.subject),
+        ),
+      [
+        {
+          id: fixture.englishTutor.id,
+          name: fixture.englishTutor.displayName,
+          subject: "IELTS",
+        },
+        {
+          id: fixture.satTutor.id,
+          name: fixture.satTutor.displayName,
+          subject: "SAT",
+        },
+      ],
+    );
+    const satTutor = curriculum.body.tutors.find(
+      (tutor: { id: string }) => tutor.id === fixture.satTutor.id,
+    );
+    const courseTitle = curriculum.body.programs.find(
+      (course: { id: string }) => course.id === fixture.courseId,
+    ).title;
+    assert.deepEqual(satTutor.assignedStudents, [
+      {
+        id: fixture.student.id,
+        name: fixture.student.displayName,
+        courseId: fixture.courseId,
+        courseTitle,
+        subject: "SAT",
+      },
+    ]);
   } finally {
     await studentServer?.close();
     await administratorServer?.close();

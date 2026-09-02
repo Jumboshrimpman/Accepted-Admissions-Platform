@@ -8,6 +8,7 @@ import {
   loginActivityTable,
   sessionsTable,
   tutorAssignmentsTable,
+  tutorProfilesTable,
   usersTable,
   viewerLinksTable,
   type AppUser,
@@ -83,6 +84,22 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
   const viewer = users[3]!;
   const satTutor = users[4]!;
   const englishTutor = users[5]!;
+  await db.insert(tutorProfilesTable).values([
+    {
+      userId: satTutor.id,
+      email: satTutor.email,
+      name: satTutor.displayName,
+      title: "SAT Tutor",
+      subjects: ["SAT"],
+    },
+    {
+      userId: englishTutor.id,
+      email: englishTutor.email,
+      name: englishTutor.displayName,
+      title: "English Tutor",
+      subjects: ["IELTS"],
+    },
+  ]);
 
   const [course] = await db
     .insert(coursesTable)
@@ -258,6 +275,9 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
           ),
         );
       await db.delete(coursesTable).where(eq(coursesTable.id, courseId));
+      await db
+        .delete(tutorProfilesTable)
+        .where(inArray(tutorProfilesTable.userId, userIds));
       await db
         .delete(usersTable)
         .where(inArray(usersTable.id, userIds));

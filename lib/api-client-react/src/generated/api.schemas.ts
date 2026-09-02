@@ -8,6 +8,7 @@
 export interface HealthStatus {
   status: string;
 }
+
 export interface Error {
   error: string;
   code?: string;
@@ -28,6 +29,7 @@ export const FinancialStatus = {
   refunded: 'refunded',
   partially_refunded: 'partially_refunded',
 } as const;
+
 export interface SatProduct {
   id: string;
   slug: string;
@@ -146,6 +148,7 @@ export type CheckoutSessionStatus = typeof CheckoutSessionStatus[keyof typeof Ch
 export const CheckoutSessionStatus = {
   pending: 'pending',
 } as const;
+
 export interface CheckoutSession {
   paymentId: string;
   invoiceId: string;
@@ -969,6 +972,14 @@ export const AdminCurriculumTutorsItemCalendarStatus = {
   unavailable: 'unavailable',
 } as const;
 
+export interface AdminRelationship {
+  id: string;
+  name: string;
+  courseId: string;
+  courseTitle: string;
+  subject: string;
+}
+
 export type AdminCurriculumTutorsItem = {
   id: string;
   name: string;
@@ -978,12 +989,14 @@ export type AdminCurriculumTutorsItem = {
   calendarStatus: AdminCurriculumTutorsItemCalendarStatus;
   sessionCount: number;
   upcomingSessionCount: number;
+  assignedStudents: AdminRelationship[];
 };
 
 export type AdminCurriculumClientsItem = {
   id: string;
   name: string;
   email: string;
+  assignedTutors: AdminRelationship[];
 };
 
 export type CurriculumBlockKind = typeof CurriculumBlockKind[keyof typeof CurriculumBlockKind];

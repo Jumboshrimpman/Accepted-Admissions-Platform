@@ -46,6 +46,7 @@ export * from './adminProgramStatus';
 export * from './adminProgramUpdate';
 export * from './adminProgramUpdateStatus';
 export * from './adminQuestionStatus';
+export * from './adminRelationship';
 export * from './adminSession';
 export * from './adminSessionInput';
 export * from './adminSessionInputBookingStatus';

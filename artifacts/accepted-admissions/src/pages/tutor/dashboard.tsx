@@ -36,6 +36,7 @@ import {
   disclosedSessions,
   formatSessionDate,
   formatSessionTimeRange,
+  sessionSubjectLabel,
 } from "@/lib/session-display";
 
 export default function TutorDashboard() {
@@ -390,7 +391,7 @@ export default function TutorDashboard() {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{student.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {student.courseTitle} · {student.subject}
+                       {student.courseTitle} · {sessionSubjectLabel(student.subject)}
                     </p>
                   </div>
                 </div>

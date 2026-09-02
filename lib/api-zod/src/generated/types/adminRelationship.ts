@@ -5,11 +5,11 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
-import type { AdminRelationship } from './adminRelationship';
 
-export type AdminCurriculumClientsItem = {
+export interface AdminRelationship {
   id: string;
   name: string;
-  email: string;
-  assignedTutors: AdminRelationship[];
-};
+  courseId: string;
+  courseTitle: string;
+  subject: string;
+}

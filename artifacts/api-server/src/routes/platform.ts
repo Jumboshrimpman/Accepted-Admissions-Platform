@@ -63,6 +63,10 @@ import {
   dashboardSessionShape,
   dashboardSessionsForUser,
 } from "../lib/dashboard-data";
+import {
+  courseForTutorAssignments,
+  reconcileTutorAssignments,
+} from "../lib/tutor-assignment-reconciliation";
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
   createCheckoutSession,
@@ -1852,42 +1856,7 @@ async function syncConfiguredAccess(
     }
   }
 
-  const students = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .innerJoin(
-      courseMembershipsTable,
-      and(
-        eq(courseMembershipsTable.userId, usersTable.id),
-        eq(courseMembershipsTable.courseId, courseId),
-        eq(courseMembershipsTable.membershipRole, "student"),
-      ),
-    );
-  const tutors = await db
-    .select({
-      userId: courseMembershipsTable.userId,
-      subject: courseMembershipsTable.subject,
-    })
-    .from(courseMembershipsTable)
-    .where(
-      and(
-        eq(courseMembershipsTable.courseId, courseId),
-        eq(courseMembershipsTable.membershipRole, "tutor"),
-      ),
-    );
-  for (const tutor of tutors) {
-    for (const student of students) {
-      await db
-        .insert(tutorAssignmentsTable)
-        .values({
-          courseId,
-          tutorUserId: tutor.userId,
-          studentUserId: student.id,
-          subject: tutor.subject,
-        })
-        .onConflictDoNothing();
-    }
-  }
+  await reconcileTutorAssignments(courseId);
 }
 
 async function clerkIdentity(
@@ -2458,42 +2427,26 @@ async function courseShape(courseId: string, user?: AppUser) {
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.courseId, course.id));
-  const membership = user && user.role !== "administrator"
-    ? (
-        await db
-          .select({ subject: courseMembershipsTable.subject })
-          .from(courseMembershipsTable)
-          .where(
-            and(
-              eq(courseMembershipsTable.courseId, course.id),
-              eq(courseMembershipsTable.userId, user.id),
-              eq(courseMembershipsTable.membershipRole, user.role),
-            ),
-          )
-          .limit(1)
-      )[0]
-    : null;
   const sessionsForUser = user
     ? await visibleSessionsForUser(user, course.id)
     : courseSessions;
-  const tutorMemberships = await db
-    .select({ user: usersTable, subject: courseMembershipsTable.subject })
-    .from(courseMembershipsTable)
-    .innerJoin(usersTable, eq(usersTable.id, courseMembershipsTable.userId))
-    .where(
-      and(
-        eq(courseMembershipsTable.courseId, course.id),
-        eq(courseMembershipsTable.membershipRole, "tutor"),
-      ),
-    );
-  const visibleTutorMemberships =
-    user?.role === "tutor" && membership && membership.subject !== "all"
-      ? tutorMemberships.filter(
-          ({ user: tutor, subject: tutorSubject }) =>
-            tutor.id === user.id ||
-            subjectFamily(membership.subject) === subjectFamily(tutorSubject),
+  const tutorMemberships =
+    user?.role === "student" || user?.role === "viewer" || user?.role === "tutor"
+      ? await courseForTutorAssignments(
+          course.id,
+          user,
+          user.role === "viewer" ? await dataSubjectUserId(user) : undefined,
         )
-      : tutorMemberships;
+      : await db
+          .select({ user: usersTable, subject: courseMembershipsTable.subject })
+          .from(courseMembershipsTable)
+          .innerJoin(usersTable, eq(usersTable.id, courseMembershipsTable.userId))
+          .where(
+            and(
+              eq(courseMembershipsTable.courseId, course.id),
+              eq(courseMembershipsTable.membershipRole, "tutor"),
+            ),
+          );
   return {
     id: course.id,
     title: course.title,
@@ -2503,7 +2456,9 @@ async function courseShape(courseId: string, user?: AppUser) {
     sessionCount: sessionsForUser.length,
     completedSessionCount: sessionsForUser.filter((s) => s.status === "completed")
       .length,
-    tutors: visibleTutorMemberships.map(({ user }) => tutorShape(user)!),
+    tutors: tutorMemberships
+      .filter(({ user: tutor }) => tutor.role === "tutor")
+      .map(({ user: tutor }) => tutorShape(tutor)!),
   };
 }
 
@@ -6267,7 +6222,7 @@ router.get(
     const courseFilter = query.data.courseId
       ? eq(coursesTable.id, query.data.courseId)
       : undefined;
-    const [courses, allSessions, allAssignments, blocks, questions, submissions, tutorProfiles, clients] =
+    const [courses, allSessions, allAssignments, blocks, questions, submissions, tutorProfiles, clients, relationshipRows] =
       await Promise.all([
         db.select().from(coursesTable).where(courseFilter ?? sql`true`).orderBy(asc(coursesTable.title)),
         db
@@ -6320,6 +6275,18 @@ router.get(
           .from(usersTable)
           .where(eq(usersTable.role, "student"))
           .orderBy(asc(usersTable.displayName)),
+        db
+          .select({
+            courseId: tutorAssignmentsTable.courseId,
+            courseTitle: coursesTable.title,
+            tutorUserId: tutorAssignmentsTable.tutorUserId,
+            studentUserId: tutorAssignmentsTable.studentUserId,
+            subject: tutorAssignmentsTable.subject,
+          })
+          .from(tutorAssignmentsTable)
+          .innerJoin(coursesTable, eq(coursesTable.id, tutorAssignmentsTable.courseId))
+          .where(courseFilter ?? sql`true`)
+          .orderBy(asc(coursesTable.title), asc(tutorAssignmentsTable.subject)),
       ]);
     const sessions = await Promise.all(
       allSessions.map(async ({ session }) => {
@@ -6333,6 +6300,45 @@ router.get(
       }),
     );
     const assignments = await Promise.all(allAssignments.map(({ assignment }) => adminAssignmentShape(assignment)));
+    const assignedStudentsByTutor = new Map<
+      string,
+      Array<{ id: string; name: string; courseId: string; courseTitle: string; subject: string }>
+    >();
+    const assignedTutorsByClient = new Map<
+      string,
+      Array<{ id: string; name: string; courseId: string; courseTitle: string; subject: string }>
+    >();
+    for (const relationship of relationshipRows) {
+      const tutor = tutorProfiles.find(
+        (candidate) => candidate.id === relationship.tutorUserId,
+      );
+      const student = clients.find(
+        (candidate) => candidate.id === relationship.studentUserId,
+      );
+      if (!tutor || !student) continue;
+      const studentSummary = {
+        id: student.id,
+        name: student.name,
+        courseId: relationship.courseId,
+        courseTitle: relationship.courseTitle,
+        subject: relationship.subject,
+      };
+      const tutorSummary = {
+        id: tutor.id,
+        name: tutor.name,
+        courseId: relationship.courseId,
+        courseTitle: relationship.courseTitle,
+        subject: relationship.subject,
+      };
+      assignedStudentsByTutor.set(
+        tutor.id,
+        [...(assignedStudentsByTutor.get(tutor.id) ?? []), studentSummary],
+      );
+      assignedTutorsByClient.set(
+        student.id,
+        [...(assignedTutorsByClient.get(student.id) ?? []), tutorSummary],
+      );
+    }
     const tutors = await Promise.all(
       tutorProfiles.map(async (tutor) => {
         const [counts] = await db
@@ -6347,6 +6353,7 @@ router.get(
           calendarStatus: normalizeGoogleCalendarStatus(tutor.calendarStatus),
           sessionCount: Number(counts?.total ?? 0),
           upcomingSessionCount: Number(counts?.upcoming ?? 0),
+          assignedStudents: assignedStudentsByTutor.get(tutor.id) ?? [],
         };
       }),
     );
@@ -6379,7 +6386,10 @@ router.get(
             : 0,
         })),
         tutors,
-        clients,
+         clients: clients.map((client) => ({
+           ...client,
+           assignedTutors: assignedTutorsByClient.get(client.id) ?? [],
+         })),
       }),
     );
   },

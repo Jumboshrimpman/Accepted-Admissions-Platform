@@ -81,7 +81,22 @@ function dashboardForRole(
         status: "active",
         sessionCount: 2,
         completedSessionCount: 0,
-        tutors: [],
+        tutors: isTutor
+          ? []
+          : [
+              {
+                id: "eunice",
+                name: "Eunice Chon",
+                specialty: "SAT Tutor",
+                avatarUrl: null,
+              },
+              {
+                id: "nika",
+                name: "Nika Raiffe",
+                specialty: "English Tutor",
+                avatarUrl: null,
+              },
+            ],
       },
     ],
     upcomingSessions: isTutor
@@ -248,6 +263,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("85%")).toBeTruthy();
     expect(screen.getByText("Complete")).toBeTruthy();
     expect(screen.getByText("Past due")).toBeTruthy();
+    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.getAllByText("Eunice Chon").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Nika Raiffe").length).toBeGreaterThan(0);
   });
 
   test("viewer gets the same scoped review surface in explicit view-only mode", () => {
@@ -255,6 +273,7 @@ describe("authenticated role dashboard flows", () => {
     render(<FallWelcomeDashboard />);
 
     expect(screen.getByRole("status").textContent).toContain("view-only mode");
+    expect(screen.getByText("Your tutors")).toBeTruthy();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
@@ -267,6 +286,7 @@ describe("authenticated role dashboard flows", () => {
     render(<ClientDashboardView dashboard={mocks.dashboard} adminPreview />);
 
     expect(screen.getByRole("status").textContent).toContain("Read-only client preview");
+    expect(screen.getByText("Your tutors")).toBeTruthy();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Read only" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /Open session/i })).toBeNull();
