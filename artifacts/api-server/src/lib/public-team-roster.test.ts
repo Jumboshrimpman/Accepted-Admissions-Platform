@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { APPROVED_PUBLIC_TEAM_PORTRAITS, MIRRORED_PORTRAIT_RECONCILIATIONS, PUBLIC_TUTOR_ORDER } from "./public-team-roster.ts";
+import { APPROVED_PUBLIC_TEAM_PORTRAITS, MIRRORED_PORTRAIT_RECONCILIATIONS, PUBLIC_TUTOR_ORDER, publicTeamPortrait } from "./public-team-roster.ts";
 
 test("defines the complete approved public roster in display order", () => {
   assert.deepEqual(PUBLIC_TUTOR_ORDER, [
@@ -26,6 +26,16 @@ test("keeps Kya and every following portrait attached to the correct profile", (
   assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Kyle Englander"], /1ab78bc7f16a48559bc3b46364c94bcc/);
   assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Daniel Salgado-Alvarez"], /72de1811814144689846123daff8471f/);
   assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Sama Noori"], /fb647c84910a4d97bd9a13d22f9dc124/);
+});
+
+test("locks Kya's public portrait even when the stored value is blank or drifted", () => {
+  const approved = APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
+  assert.equal(publicTeamPortrait("Kya Brooks", null), approved);
+  assert.equal(publicTeamPortrait("Kya Brooks", "https://example.com/wrong.jpg"), approved);
+  assert.equal(
+    publicTeamPortrait("Michael Pecorara", "https://example.com/michael.jpg"),
+    "https://example.com/michael.jpg",
+  );
 });
 
 test("reconciles only the known mirrored offset without positional image lookup", () => {

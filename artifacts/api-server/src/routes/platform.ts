@@ -72,6 +72,7 @@ import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
   PUBLIC_TUTOR_ORDER,
+  publicTeamPortrait,
 } from "../lib/public-team-roster";
 import {
   createCheckoutSession,
@@ -3744,14 +3745,19 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
     )
     .orderBy(asc(tutorProfilesTable.name));
   res.json(
-    [...tutors].sort((a, b) => {
-      const aIndex = PUBLIC_TUTOR_ORDER.indexOf(a.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
-      const bIndex = PUBLIC_TUTOR_ORDER.indexOf(b.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
-      if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    }),
+    [...tutors]
+      .sort((a, b) => {
+        const aIndex = PUBLIC_TUTOR_ORDER.indexOf(a.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
+        const bIndex = PUBLIC_TUTOR_ORDER.indexOf(b.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
+        if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      })
+      .map((tutor) => ({
+        ...tutor,
+        photoUrl: publicTeamPortrait(tutor.name, tutor.photoUrl),
+      })),
   );
 });
 

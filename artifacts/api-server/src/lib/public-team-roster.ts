@@ -39,6 +39,13 @@ export const APPROVED_PUBLIC_TEAM_PORTRAITS: Record<PublicTutorName, string> = {
     "https://static.wixstatic.com/media/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg/v1/fill/w_457,h_763,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg",
 };
 
+export function publicTeamPortrait(name: string, storedPhotoUrl: string | null) {
+  if (name === "Kya Brooks") {
+    return APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
+  }
+  return storedPhotoUrl;
+}
+
 export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
   {
     email: "xsfam6@gmail.com",
