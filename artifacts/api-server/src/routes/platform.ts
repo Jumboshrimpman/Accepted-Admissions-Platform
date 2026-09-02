@@ -5827,7 +5827,7 @@ router.get(
   async (_req: AuthedRequest, res): Promise<void> => {
     await ensureSeedData();
     await ensureUpgradeSeedData();
-    const [users, memberships, assignments, audit, loginActivity, platform, connectedCalendars] =
+    const [users, memberships, assignments, audit, loginActivity, guidanceRequests, platform, connectedCalendars] =
       await Promise.all([
       db
         .select({
@@ -5889,6 +5889,35 @@ router.get(
         .from(loginActivityTable)
         .innerJoin(usersTable, eq(usersTable.id, loginActivityTable.userId))
         .orderBy(desc(loginActivityTable.signedInAt)),
+       db
+         .select({
+           id: clientRequestsTable.id,
+           guardianName: clientRequestsTable.guardianName,
+           studentName: clientRequestsTable.studentName,
+           email: clientRequestsTable.email,
+           phone: clientRequestsTable.phone,
+           gradeOrGraduationYear: clientRequestsTable.gradeOrGraduationYear,
+           currentSchool: clientRequestsTable.currentSchool,
+           serviceRequested: clientRequestsTable.serviceRequested,
+           currentSatTotal: clientRequestsTable.currentSatTotal,
+           currentReadingWriting: clientRequestsTable.currentReadingWriting,
+           currentMath: clientRequestsTable.currentMath,
+           targetSatScore: clientRequestsTable.targetSatScore,
+           plannedTestDate: clientRequestsTable.plannedTestDate,
+           goals: clientRequestsTable.goals,
+           schedulingAvailability: clientRequestsTable.schedulingAvailability,
+           referralSource: clientRequestsTable.referralSource,
+           consentToContact: clientRequestsTable.consentToContact,
+           privacyAcknowledged: clientRequestsTable.privacyAcknowledged,
+           sourcePage: clientRequestsTable.sourcePage,
+           status: clientRequestsTable.status,
+           assignedStaffUserId: clientRequestsTable.assignedStaffUserId,
+           followUpNotes: clientRequestsTable.followUpNotes,
+           conversionStatus: clientRequestsTable.conversionStatus,
+           createdAt: clientRequestsTable.createdAt,
+         })
+         .from(clientRequestsTable)
+         .orderBy(desc(clientRequestsTable.createdAt)),
       Promise.all([
         db.select({ count: sql<number>`count(*)` }).from(usersTable),
         db
@@ -5942,6 +5971,7 @@ router.get(
       })),
       audit,
       loginActivity,
+       guidanceRequests,
       accessConflicts: configuredAccessConflicts(),
       platform: {
         totalUsers: Number(platform[0][0]?.count ?? 0),

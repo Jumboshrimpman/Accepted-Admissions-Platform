@@ -561,12 +561,48 @@ export interface AdminLoginActivity {
   signedInAt: string;
 }
 
+export interface AdminGuidanceRequest {
+  id: string;
+  guardianName: string;
+  studentName: string;
+  email: string;
+  phone: string;
+  gradeOrGraduationYear: string;
+  currentSchool: string;
+  serviceRequested: string;
+  /** @nullable */
+  currentSatTotal: string | null;
+  /** @nullable */
+  currentReadingWriting: string | null;
+  /** @nullable */
+  currentMath: string | null;
+  /** @nullable */
+  targetSatScore: string | null;
+  /** @nullable */
+  plannedTestDate: string | null;
+  goals: string;
+  schedulingAvailability: string;
+  referralSource: string;
+  consentToContact: boolean;
+  privacyAcknowledged: boolean;
+  sourcePage: string;
+  status: string;
+  /** @nullable */
+  assignedStaffUserId: string | null;
+  /** @nullable */
+  followUpNotes: string | null;
+  conversionStatus: string;
+  createdAt: string;
+}
+
 export interface AdminOverview {
   users: AdminOverviewUsersItem[];
   memberships: AdminOverviewMembershipsItem[];
   assignments: AdminOverviewAssignmentsItem[];
   audit: AdminOverviewAuditItem[];
   loginActivity: AdminLoginActivity[];
+  /** Private guidance form submissions, visible only to administrators. */
+  guidanceRequests: AdminGuidanceRequest[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
 }

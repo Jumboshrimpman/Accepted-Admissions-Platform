@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminGuidanceRequest } from './adminGuidanceRequest';
 import type { AdminLoginActivity } from './adminLoginActivity';
 import type { AdminOverviewAccessConflictsItem } from './adminOverviewAccessConflictsItem';
 import type { AdminOverviewAssignmentsItem } from './adminOverviewAssignmentsItem';
@@ -18,6 +19,8 @@ export interface AdminOverview {
   assignments: AdminOverviewAssignmentsItem[];
   audit: AdminOverviewAuditItem[];
   loginActivity: AdminLoginActivity[];
+  /** Private guidance form submissions, visible only to administrators. */
+  guidanceRequests: AdminGuidanceRequest[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
 }

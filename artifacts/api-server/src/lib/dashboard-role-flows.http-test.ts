@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import type { AppUser } from "@workspace/db";
+import { clientRequestsTable, db, type AppUser } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import express, {
   type NextFunction,
   type Request,
@@ -206,6 +207,150 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
   } finally {
     await studentServer?.close();
     await administratorServer?.close();
+    if (previousAdminIds === undefined) {
+      delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+    } else {
+      process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdminIds;
+    }
+    if (previousStudentIds === undefined) {
+      delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+    } else {
+      process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudentIds;
+    }
+    await fixture.cleanup();
+  }
+});
+
+test("HTTP admin overview returns private guidance requests only to administrators", async () => {
+  const fixture = await createDashboardRoleFixture();
+  const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+  const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+  let administratorServer:
+    | Awaited<ReturnType<typeof startDashboardHttpServer>>
+    | undefined;
+  let studentServer:
+    | Awaited<ReturnType<typeof startDashboardHttpServer>>
+    | undefined;
+  const createdRequestIds: string[] = [];
+  process.env.ACCEPTED_ADMIN_CLERK_USER_IDS =
+    fixture.administrator.clerkUserId;
+  process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = fixture.student.clerkUserId;
+  try {
+    const requests = await db
+      .insert(clientRequestsTable)
+      .values([
+        {
+          guardianName: "Earlier Guardian",
+          studentName: "Earlier Student",
+          email: "earlier-guidance@example.invalid",
+          phone: "+1555010101",
+          gradeOrGraduationYear: "11th grade",
+          currentSchool: "Earlier Academy",
+          serviceRequested: "SAT tutoring",
+          currentSatTotal: null,
+          currentReadingWriting: "650",
+          currentMath: "680",
+          targetSatScore: "1450",
+          plannedTestDate: null,
+          goals: "Build a complete study plan.",
+          schedulingAvailability: "Weekday evenings.",
+          referralSource: "School counselor",
+          consentToContact: true,
+          privacyAcknowledged: true,
+          sourcePage: "/client-request",
+          status: "new",
+          assignedStaffUserId: null,
+          followUpNotes: null,
+          conversionStatus: "unqualified",
+          createdAt: new Date("2098-09-01T12:00:00.000Z"),
+        },
+        {
+          guardianName: "Latest Guardian",
+          studentName: "Latest Student",
+          email: "latest-guidance@example.invalid",
+          phone: "+1555010102",
+          gradeOrGraduationYear: "12th grade",
+          currentSchool: "Latest Academy",
+          serviceRequested: "Admissions guidance",
+          currentSatTotal: "1380",
+          currentReadingWriting: null,
+          currentMath: null,
+          targetSatScore: null,
+          plannedTestDate: "2099-10-01",
+          goals: "Review the application timeline.",
+          schedulingAvailability: "Saturday mornings.",
+          referralSource: "Friend",
+          consentToContact: true,
+          privacyAcknowledged: true,
+          sourcePage: "/client-request",
+          status: "new",
+          assignedStaffUserId: null,
+          followUpNotes: null,
+          conversionStatus: "unqualified",
+          createdAt: new Date("2099-09-01T12:00:00.000Z"),
+        },
+      ])
+      .returning({ id: clientRequestsTable.id });
+    createdRequestIds.push(...requests.map((request) => request.id));
+
+    administratorServer = await startDashboardHttpServer(
+      fixture.administrator,
+    );
+    studentServer = await startDashboardHttpServer(fixture.student);
+
+    const forbidden = await getJson(
+      studentServer.baseUrl,
+      "/api/admin/overview",
+    );
+    assert.equal(forbidden.response.status, 403);
+    assert.deepEqual(forbidden.body, { error: "Insufficient permission" });
+
+    const overview = await getJson(
+      administratorServer.baseUrl,
+      "/api/admin/overview",
+    );
+    assert.equal(overview.response.status, 200);
+    const returnedRequests = overview.body.guidanceRequests.filter(
+      (request: { id: string }) => createdRequestIds.includes(request.id),
+    );
+    assert.deepEqual(
+      returnedRequests.map((request: { id: string }) => request.id),
+      [createdRequestIds[1], createdRequestIds[0]],
+    );
+    assert.deepEqual(returnedRequests[0], {
+      id: createdRequestIds[1],
+      guardianName: "Latest Guardian",
+      studentName: "Latest Student",
+      email: "latest-guidance@example.invalid",
+      phone: "+1555010102",
+      gradeOrGraduationYear: "12th grade",
+      currentSchool: "Latest Academy",
+      serviceRequested: "Admissions guidance",
+      currentSatTotal: "1380",
+      currentReadingWriting: null,
+      currentMath: null,
+      targetSatScore: null,
+      plannedTestDate: "2099-10-01",
+      goals: "Review the application timeline.",
+      schedulingAvailability: "Saturday mornings.",
+      referralSource: "Friend",
+      consentToContact: true,
+      privacyAcknowledged: true,
+      sourcePage: "/client-request",
+      status: "new",
+      assignedStaffUserId: null,
+      followUpNotes: null,
+      conversionStatus: "unqualified",
+      createdAt: "2099-09-01T12:00:00.000Z",
+    });
+  } finally {
+    await studentServer?.close();
+    await administratorServer?.close();
+    for (const requestId of createdRequestIds) {
+      await db
+        .delete(clientRequestsTable)
+        .where(eq(clientRequestsTable.id, requestId));
+    }
     if (previousAdminIds === undefined) {
       delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
     } else {

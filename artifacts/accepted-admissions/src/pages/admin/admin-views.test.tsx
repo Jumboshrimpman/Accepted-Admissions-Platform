@@ -21,6 +21,32 @@ const mocks = vi.hoisted(() => ({
       outstandingInvoices: 0,
       newRequests: 0,
     },
+    guidanceRequests: [] as Array<{
+      id: string;
+      guardianName: string;
+      studentName: string;
+      email: string;
+      phone: string;
+      gradeOrGraduationYear: string;
+      currentSchool: string;
+      serviceRequested: string;
+      currentSatTotal: string | null;
+      currentReadingWriting: string | null;
+      currentMath: string | null;
+      targetSatScore: string | null;
+      plannedTestDate: string | null;
+      goals: string;
+      schedulingAvailability: string;
+      referralSource: string;
+      consentToContact: boolean;
+      privacyAcknowledged: boolean;
+      sourcePage: string;
+      status: string;
+      assignedStaffUserId: string | null;
+      followUpNotes: string | null;
+      conversionStatus: string;
+      createdAt: string;
+    }>,
   },
   curriculum: {
     programs: [],
@@ -72,6 +98,7 @@ import AdminCurriculum from "./curriculum";
 afterEach(() => {
   cleanup();
   mocks.overview.accessConflicts = [];
+  mocks.overview.guidanceRequests = [];
 });
 
 describe("administrator overview", () => {
@@ -127,5 +154,53 @@ describe("administrator overview", () => {
     expect(warning.textContent).toContain(
       "Remove each overlapping identity from all but one role allowlist",
     );
+  });
+
+  test("shows an empty guidance request state and new total", () => {
+    render(<AdminDashboard />);
+
+    expect(screen.getByTestId("empty-guidance-requests")).toBeTruthy();
+    expect(screen.getByTestId("count-guidance-requests").textContent).toBe("0 total");
+    expect(screen.getByTestId("count-new-guidance-requests").textContent).toBe("0 new");
+  });
+
+  test("renders expandable guidance request answers and optional fields", () => {
+    mocks.overview.platform.newRequests = 1;
+    mocks.overview.guidanceRequests = [{
+      id: "request-1",
+      guardianName: "Mika Goto",
+      studentName: "Taito Goto",
+      email: "mika@example.invalid",
+      phone: "+1 555 0100",
+      gradeOrGraduationYear: "11th grade",
+      currentSchool: "Accepted Academy",
+      serviceRequested: "SAT tutoring",
+      currentSatTotal: null,
+      currentReadingWriting: "680",
+      currentMath: "700",
+      targetSatScore: "1450",
+      plannedTestDate: null,
+      goals: "Build a consistent study plan before the fall test.",
+      schedulingAvailability: "Weekday evenings and Saturday mornings.",
+      referralSource: "School counselor",
+      consentToContact: true,
+      privacyAcknowledged: true,
+      sourcePage: "/client-request",
+      status: "new",
+      assignedStaffUserId: null,
+      followUpNotes: null,
+      conversionStatus: "unqualified",
+      createdAt: "2026-09-02T12:00:00.000Z",
+    }];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByTestId("text-guidance-request-student-request-1").textContent).toBe("Taito Goto");
+    expect(screen.getByTestId("count-new-guidance-requests").textContent).toBe("1 new");
+    fireEvent.click(screen.getByTestId("details-guidance-request-request-1").querySelector("summary")!);
+    expect(screen.getByTestId("text-guidance-request-email-request-1").textContent).toBe("mika@example.invalid");
+    expect(screen.getByText("Build a consistent study plan before the fall test.")).toBeTruthy();
+    expect(screen.getAllByText("Not provided").length).toBeGreaterThan(0);
+    expect(screen.getByText("Unassigned")).toBeTruthy();
   });
 });

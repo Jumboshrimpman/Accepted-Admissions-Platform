@@ -32,6 +32,7 @@ export * from './adminCurriculumClientsItem';
 export * from './adminCurriculumTutorsItem';
 export * from './adminCurriculumTutorsItemCalendarStatus';
 export * from './adminFinancials';
+export * from './adminGuidanceRequest';
 export * from './adminLoginActivity';
 export * from './adminOverview';
 export * from './adminOverviewAccessConflictsItem';

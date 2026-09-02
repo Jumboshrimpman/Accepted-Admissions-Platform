@@ -1719,7 +1719,7 @@ components:
         avatarUrl: { type: ["string", "null"] }
     AdminOverview:
       type: object
-      required: [users, memberships, assignments, audit, loginActivity, accessConflicts]
+      required: [users, memberships, assignments, audit, loginActivity, accessConflicts, guidanceRequests]
       properties:
         users:
           type: array
@@ -1775,6 +1775,10 @@ components:
         loginActivity:
           type: array
           items: { $ref: "#/components/schemas/AdminLoginActivity" }
+        guidanceRequests:
+          type: array
+          description: Private guidance form submissions, visible only to administrators.
+          items: { $ref: "#/components/schemas/AdminGuidanceRequest" }
         accessConflicts:
           type: array
           description: Conflicting role categories only; identity values are intentionally omitted.
@@ -1798,6 +1802,34 @@ components:
         userEmail: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         signedInAt: { type: string, format: date-time }
+    AdminGuidanceRequest:
+      type: object
+      required: [id, guardianName, studentName, email, phone, gradeOrGraduationYear, currentSchool, serviceRequested, currentSatTotal, currentReadingWriting, currentMath, targetSatScore, plannedTestDate, goals, schedulingAvailability, referralSource, consentToContact, privacyAcknowledged, sourcePage, status, assignedStaffUserId, followUpNotes, conversionStatus, createdAt]
+      properties:
+        id: { type: string }
+        guardianName: { type: string }
+        studentName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        gradeOrGraduationYear: { type: string }
+        currentSchool: { type: string }
+        serviceRequested: { type: string }
+        currentSatTotal: { type: ["string", "null"] }
+        currentReadingWriting: { type: ["string", "null"] }
+        currentMath: { type: ["string", "null"] }
+        targetSatScore: { type: ["string", "null"] }
+        plannedTestDate: { type: ["string", "null"] }
+        goals: { type: string }
+        schedulingAvailability: { type: string }
+        referralSource: { type: string }
+        consentToContact: { type: boolean }
+        privacyAcknowledged: { type: boolean }
+        sourcePage: { type: string }
+        status: { type: string }
+        assignedStaffUserId: { type: ["string", "null"] }
+        followUpNotes: { type: ["string", "null"] }
+        conversionStatus: { type: string }
+        createdAt: { type: string, format: date-time }
     AdminProgram:
       type: object
       required: [id, title, subject, term, status, goalSummary, meetUrl, driveUrl, sessionCount, completedSessionCount]

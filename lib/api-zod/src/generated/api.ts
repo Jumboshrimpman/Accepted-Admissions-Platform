@@ -80,6 +80,32 @@ export const GetAdminOverviewResponse = zod.object({
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "signedInAt": zod.coerce.date()
 })),
+  "guidanceRequests": zod.array(zod.object({
+  "id": zod.string(),
+  "guardianName": zod.string(),
+  "studentName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "gradeOrGraduationYear": zod.string(),
+  "currentSchool": zod.string(),
+  "serviceRequested": zod.string(),
+  "currentSatTotal": zod.string().nullable(),
+  "currentReadingWriting": zod.string().nullable(),
+  "currentMath": zod.string().nullable(),
+  "targetSatScore": zod.string().nullable(),
+  "plannedTestDate": zod.string().nullable(),
+  "goals": zod.string(),
+  "schedulingAvailability": zod.string(),
+  "referralSource": zod.string(),
+  "consentToContact": zod.boolean(),
+  "privacyAcknowledged": zod.boolean(),
+  "sourcePage": zod.string(),
+  "status": zod.string(),
+  "assignedStaffUserId": zod.string().nullable(),
+  "followUpNotes": zod.string().nullable(),
+  "conversionStatus": zod.string(),
+  "createdAt": zod.coerce.date()
+})).describe('Private guidance form submissions, visible only to administrators.'),
   "accessConflicts": zod.array(zod.object({
   "roleCategories": zod.array(zod.enum(['administrator', 'sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer'])).min(getAdminOverviewResponseAccessConflictsItemRoleCategoriesMin)
 })).describe('Conflicting role categories only; identity values are intentionally omitted.')
