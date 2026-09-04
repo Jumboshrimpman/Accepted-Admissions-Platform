@@ -142,7 +142,7 @@ export function publicTeamPortrait(name: string, storedPhotoUrl: string | null) 
 
 export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
   {
-    email: "xsfam6@gmail.com",
+    email: "xaver.rmz6@gmail.com",
     name: "Xavier Morales" as const,
     previousPhotoUrl:
       "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",

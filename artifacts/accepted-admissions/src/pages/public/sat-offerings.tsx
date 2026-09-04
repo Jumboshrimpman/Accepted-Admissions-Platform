@@ -184,7 +184,13 @@ export default function SatOfferings() {
                   </Link>
                 </Button>
               </div>
-              <p className="mt-4 text-sm text-muted-foreground">Looking for a different service? Use the request form instead of assuming these offers are the right fit.</p>
+              <p className="mt-4 text-sm text-muted-foreground">
+                Looking for a different service? Campus tours, college advising, and other requests use the{" "}
+                <Link href="/client-request" className="font-semibold text-primary hover:underline">
+                  guidance form
+                </Link>{" "}
+                instead of SAT checkout. Financial aid for SAT tutoring is considered case by case — mention it in that request.
+              </p>
             </div>
             <Card className="rounded-xl border bg-card shadow-sm">
               <CardHeader>

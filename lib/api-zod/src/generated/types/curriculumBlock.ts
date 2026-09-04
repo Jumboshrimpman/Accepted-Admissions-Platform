@@ -13,6 +13,8 @@ import type { CurriculumBlockVisibility } from './curriculumBlockVisibility';
 export interface CurriculumBlock {
   id: string;
   sessionId: string;
+  /** @nullable */
+  libraryAssetId?: string | null;
   kind: CurriculumBlockKind;
   position: number;
   visibility: CurriculumBlockVisibility;

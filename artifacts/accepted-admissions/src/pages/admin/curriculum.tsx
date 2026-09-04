@@ -6,14 +6,17 @@ import {
   getListAdminAccessGrantsQueryKey,
   useCreateAdminAccessGrant,
   useCreateAdminAssignment,
+  useCreateAdminLibraryAsset,
   useCreateAdminSession,
   useGetAdminCurriculum,
   useListAdminAccessGrants,
   useUpdateAdminAccessGrant,
   useUpdateAdminAssignment,
+  useUpdateAdminLibraryAsset,
   useUpdateAdminProgram,
   useUpdateAdminSession,
   useUpdateCurriculumBlock,
+  useAttachSessionLibraryAsset,
 } from "@workspace/api-client-react";
 import type {
   AdminAccessGrant,
@@ -27,6 +30,8 @@ import type {
   AdminSession,
   AdminSessionInput,
   AdminSessionUpdate,
+  CurriculumLibraryAsset,
+  CurriculumLibraryAssetInput,
   ProvisionableRoleCategory,
 } from "@workspace/api-client-react";
 import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, FileText, GraduationCap, Library, Mail, Plus, Save, UserPlus, Users } from "lucide-react";
@@ -43,6 +48,7 @@ import {
   formatSessionDateTime,
   sessionSubjectLabel,
 } from "@/lib/session-display";
+import { SessionJoinActions } from "@/components/session-join-actions";
 
 type Section = "roadmap" | "people" | "programs" | "curriculum" | "sessions";
 
@@ -533,8 +539,9 @@ function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum;
   const assignments = data.assignments.filter((item) => !term || `${item.title} ${item.programTitle} ${item.subject}`.toLowerCase().includes(term));
   const submissions = data.submissions.filter((item) => !term || `${item.assignmentTitle} ${item.studentName}`.toLowerCase().includes(term));
   return <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-    <TabsList className="h-auto flex-wrap justify-start"><TabsTrigger value="assignments"><ClipboardList className="mr-2 h-4 w-4" /> Assignments</TabsTrigger><TabsTrigger value="materials"><FileText className="mr-2 h-4 w-4" /> Materials</TabsTrigger><TabsTrigger value="questions"><Library className="mr-2 h-4 w-4" /> Question bank</TabsTrigger><TabsTrigger value="submissions"><CheckCircle2 className="mr-2 h-4 w-4" /> Submissions</TabsTrigger></TabsList>
+    <TabsList className="h-auto flex-wrap justify-start"><TabsTrigger value="assignments"><ClipboardList className="mr-2 h-4 w-4" /> Assignments</TabsTrigger><TabsTrigger value="library"><Library className="mr-2 h-4 w-4" /> Library</TabsTrigger><TabsTrigger value="materials"><FileText className="mr-2 h-4 w-4" /> Materials</TabsTrigger><TabsTrigger value="questions"><Library className="mr-2 h-4 w-4" /> Question bank</TabsTrigger><TabsTrigger value="submissions"><CheckCircle2 className="mr-2 h-4 w-4" /> Submissions</TabsTrigger></TabsList>
     <TabsContent value="assignments"><AssignmentManager data={data} assignments={assignments} onChanged={onChanged} /></TabsContent>
+    <TabsContent value="library"><LibraryManager assets={data.libraryAssets} sessions={data.sessions} search={search} onChanged={onChanged} /></TabsContent>
     <TabsContent value="materials"><MaterialsManager data={data} onChanged={onChanged} /></TabsContent>
     <TabsContent value="questions"><div className="grid gap-4 md:grid-cols-2">{data.questionStatus.map((item) => <Card key={item.subject}><CardHeader className="pb-3"><CardTitle className="text-base">{item.subject}</CardTitle><CardDescription>{item.total} total question-bank items</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2"><Badge variant="secondary">{item.approved} approved</Badge><Badge variant="outline">{item.draft} draft</Badge><Badge variant="outline">{item.rejected} rejected</Badge></CardContent></Card>)}{data.questionStatus.length === 0 && <Empty text="No question-bank items yet." />}</div></TabsContent>
     <TabsContent value="submissions"><Card><CardHeader><CardTitle>Student submissions</CardTitle><CardDescription>Review status, scores, and mistake counts without exposing financial data.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-3">Student</th><th className="p-3">Assignment</th><th className="p-3">Score</th><th className="p-3">Review</th><th className="p-3">Submitted</th></tr></thead><tbody>{submissions.map((item) => <tr key={item.attemptId} className="border-b"><td className="p-3 font-medium">{item.studentName}</td><td className="p-3">{item.assignmentTitle}</td><td className="p-3">{item.score}% <span className="text-muted-foreground">· {item.mistakeCount} missed</span></td><td className="p-3"><Badge variant={statusVariant(item.reviewStatus)}>{item.reviewStatus}</Badge></td><td className="p-3 text-muted-foreground">{new Date(item.submittedAt).toLocaleDateString()}</td></tr>)}</tbody></table>{submissions.length === 0 && <Empty text="No matching submissions." />}</div></CardContent></Card></TabsContent>
@@ -584,11 +591,348 @@ function SessionsSection({ data, search, onChanged }: { data: AdminCurriculum; s
     else create.mutate({ data: payload }, { onSuccess: () => { setShowCreate(false); reset(); setMessage("Session created."); onChanged(); }, onError: (error) => setMessage(errorText(error) + " Check the conflict card before trying again.") });
   };
   const form = <Card className="border-primary/30"><CardContent className="grid gap-4 p-5"><div className="grid gap-3 md:grid-cols-3"><Field label="Program"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.courseId} onChange={(event) => setDraft({ ...draft, courseId: event.target.value })}>{data.programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}</select></Field><Field label="Student"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.clientUserId ?? ""} onChange={(event) => setDraft({ ...draft, clientUserId: event.target.value || null })}><option value="">Unassigned</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></Field><Field label="Tutor"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.tutorUserId ?? ""} onChange={(event) => setDraft({ ...draft, tutorUserId: event.target.value || null })}><option value="">Unassigned</option>{data.tutors.map((tutor) => <option key={tutor.id} value={tutor.id}>{tutor.name} — Calendar {tutor.calendarStatus}</option>)}</select></Field></div>{selectedTutor && <div className={`rounded-xl border p-3 text-sm ${calendarBlocked ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-300 bg-emerald-50 text-emerald-950"}`} role={calendarBlocked ? "alert" : "status"}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Google Calendar: {selectedTutor.calendarStatus}</p><p className="mt-1">{calendarBlocked ? selectedTutor.calendarStatus === "unavailable" ? "Google Calendar is currently unavailable. The tutor must reconnect Google Calendar from their tutor dashboard before this session can be assigned." : "This tutor must reconnect Google Calendar from their tutor dashboard before this session can be assigned." : "The tutor calendar is connected and will be checked again before assignment."}</p></div>{calendarBlocked && <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-400 bg-white"><a href={reconnectMailto}><Mail className="mr-2 h-4 w-4" />Email tutor to reconnect</a></Button>}</div></div>}<div className="grid gap-3 md:grid-cols-3"><Field label="Subject"><Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></Field><Field label="Start time"><Input type="datetime-local" value={dateInput(draft.dateTime)} onChange={(event) => setDraft({ ...draft, dateTime: new Date(event.target.value).toISOString() })} /></Field><Field label="Duration (minutes)"><Input type="number" min="15" max="480" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: Number(event.target.value) })} /></Field></div><div className="grid gap-3 md:grid-cols-3"><Field label="Timezone"><Input value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /></Field><Field label="Session state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.status ?? "draft"} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminSessionInput["status"] })}><option value="draft">Draft</option><option value="published">Published</option><option value="completed">Completed</option><option value="archived">Archived</option></select></Field><Field label="Booking state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.bookingStatus ?? "confirmed"} onChange={(event) => setDraft({ ...draft, bookingStatus: event.target.value as AdminSessionInput["bookingStatus"] })}><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="rescheduled">Rescheduled</option><option value="cancelled">Cancelled</option></select></Field></div><p className="text-sm text-muted-foreground">The appointment name is generated from the assigned student, subject, and tutor.</p><div className="flex gap-2"><Button onClick={save} disabled={create.isPending || update.isPending || calendarBlocked}>{editing ? "Save session" : "Create session"}</Button><Button variant="ghost" onClick={() => { setEditing(null); setShowCreate(false); }}>Cancel</Button></div></CardContent></Card>;
-  return <div className="space-y-4">{message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}<div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold">Session operations</h2><p className="text-sm text-muted-foreground">Upcoming and completed sessions with privacy-safe scheduling details.</p></div><Button onClick={() => { reset(); setEditing(null); setShowCreate(true); }}><Plus className="mr-2 h-4 w-4" /> New session</Button></div>{(showCreate || editing) && form}<div className="grid gap-3">{sessions.map((session) => <SessionCard key={session.id} session={session} onEdit={() => { setEditing(session.id); setShowCreate(false); setDraft({ courseId: session.courseId, dateTime: session.dateTime, timezone: session.timezone, subject: session.subject, durationMinutes: session.durationMinutes, status: session.status, bookingStatus: session.bookingStatus as AdminSessionInput["bookingStatus"], clientUserId: session.student?.id ?? null, tutorUserId: session.tutor?.id ?? null }); }} />)}</div>{sessions.length === 0 && <Empty text="No matching sessions." />}</div>;
+  return <div className="space-y-4">{message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}<div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold">Session operations</h2><p className="text-sm text-muted-foreground">Upcoming and completed sessions with privacy-safe scheduling details.</p></div><Button onClick={() => { reset(); setEditing(null); setShowCreate(true); }}><Plus className="mr-2 h-4 w-4" /> New session</Button></div>{(showCreate || editing) && form}<div className="grid gap-3">{sessions.map((session) => <SessionCard key={session.id} session={session} libraryAssets={data.libraryAssets} onChanged={onChanged} onEdit={() => { setEditing(session.id); setShowCreate(false); setDraft({ courseId: session.courseId, dateTime: session.dateTime, timezone: session.timezone, subject: session.subject, durationMinutes: session.durationMinutes, status: session.status, bookingStatus: session.bookingStatus as AdminSessionInput["bookingStatus"], clientUserId: session.student?.id ?? null, tutorUserId: session.tutor?.id ?? null }); }} />)}</div>{sessions.length === 0 && <Empty text="No matching sessions." />}</div>;
 }
 
-function SessionCard({ session, onEdit }: { session: AdminSession; onEdit: () => void }) {
-  return <Card className={session.conflict ? "border-destructive/50 bg-destructive/5" : ""}><CardContent className="p-4"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{displaySessionTitle(session.title, session.subject)}</h3><Badge variant={statusVariant(session.status)}>{session.status}</Badge>{session.conflict && <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" /> Conflict</Badge>}</div><p className="mt-2 text-sm text-muted-foreground">{formatSessionDateTime(session)} · {session.durationMinutes} min</p><p className="mt-1 text-sm">{session.programTitle} · {sessionSubjectLabel(session.subject)}</p><div className="mt-3 flex flex-wrap gap-2 text-sm">{session.meetingUrl && <Button asChild size="sm" variant="link" className="h-auto p-0"><a href={session.meetingUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-3 w-3" /> Open Meet link</a></Button>}</div>{session.conflict && <div className="mt-3 rounded-lg border border-destructive/30 bg-background p-3 text-sm"><p className="font-medium text-destructive">Resolve before assigning this time</p>{session.conflictWith.map((item) => <p key={item} className="mt-1 text-muted-foreground">{item}</p>)}</div>}</div><Button variant="outline" size="sm" onClick={onEdit}><Edit3 className="mr-2 h-4 w-4" /> Edit / archive</Button></div></CardContent></Card>;
+function SessionCard({
+  session,
+  libraryAssets,
+  onChanged,
+  onEdit,
+}: {
+  session: AdminSession;
+  libraryAssets: CurriculumLibraryAsset[];
+  onChanged: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <Card className={session.conflict ? "border-destructive/50 bg-destructive/5" : ""}>
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">{displaySessionTitle(session.title, session.subject)}</h3>
+              <Badge variant={statusVariant(session.status)}>{session.status}</Badge>
+              {session.conflict && (
+                <Badge variant="destructive">
+                  <AlertTriangle className="mr-1 h-3 w-3" /> Conflict
+                </Badge>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {formatSessionDateTime(session)} · {session.durationMinutes} min
+            </p>
+            <p className="mt-1 text-sm">
+              {session.programTitle} · {sessionSubjectLabel(session.subject)}
+            </p>
+            <div className="mt-3">
+              <SessionJoinActions meetingUrl={session.meetingUrl} calendarEventUrl={session.calendarEventUrl} />
+            </div>
+            {session.conflict && (
+              <div className="mt-3 rounded-lg border border-destructive/30 bg-background p-3 text-sm">
+                <p className="font-medium text-destructive">Resolve before assigning this time</p>
+                {session.conflictWith.map((item) => (
+                  <p key={item} className="mt-1 text-muted-foreground">
+                    {item}
+                  </p>
+                ))}
+              </div>
+            )}
+            <AttachLibraryControl sessionId={session.id} assets={libraryAssets} onChanged={onChanged} />
+          </div>
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Edit3 className="mr-2 h-4 w-4" /> Edit / archive
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AttachLibraryControl({
+  sessionId,
+  assets,
+  onChanged,
+}: {
+  sessionId: string;
+  assets: CurriculumLibraryAsset[];
+  onChanged: () => void;
+}) {
+  const attach = useAttachSessionLibraryAsset();
+  const [assetId, setAssetId] = useState(assets[0]?.id ?? "");
+  const [message, setMessage] = useState("");
+  if (assets.length === 0) {
+    return (
+      <p className="mt-3 text-xs text-muted-foreground">
+        Add a practice test or mini-section in the Library tab, then attach it here.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+      <select
+        aria-label="Library asset to attach"
+        className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
+        value={assetId}
+        onChange={(event) => setAssetId(event.target.value)}
+      >
+        {assets.map((asset) => (
+          <option key={asset.id} value={asset.id}>
+            {asset.title} · {asset.kind.replaceAll("_", " ")}
+          </option>
+        ))}
+      </select>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={attach.isPending || !assetId}
+        onClick={() =>
+          attach.mutate(
+            { sessionId, data: { libraryAssetId: assetId } },
+            {
+              onSuccess: () => {
+                setMessage("Attached to this session dashboard.");
+                onChanged();
+              },
+              onError: (error) => setMessage(errorText(error)),
+            },
+          )
+        }
+      >
+        Attach to this session
+      </Button>
+      {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
+
+function LibraryManager({
+  assets,
+  sessions,
+  search,
+  onChanged,
+}: {
+  assets: CurriculumLibraryAsset[];
+  sessions: AdminSession[];
+  search: string;
+  onChanged: () => void;
+}) {
+  const create = useCreateAdminLibraryAsset();
+  const update = useUpdateAdminLibraryAsset();
+  const attach = useAttachSessionLibraryAsset();
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CurriculumLibraryAssetInput>({
+    title: "",
+    kind: "practice_test",
+    description: "",
+    resourceUrl: "",
+    body: "",
+  });
+  const [attachSessionId, setAttachSessionId] = useState(sessions[0]?.id ?? "");
+  const [message, setMessage] = useState("");
+  const term = search.trim().toLowerCase();
+  const visible = assets.filter(
+    (item) => !term || `${item.title} ${item.kind} ${item.description ?? ""}`.toLowerCase().includes(term),
+  );
+  const reset = () =>
+    setDraft({ title: "", kind: "practice_test", description: "", resourceUrl: "", body: "" });
+  const save = () => {
+    const payload = {
+      ...draft,
+      description: draft.description?.trim() || null,
+      resourceUrl: draft.resourceUrl?.trim() || null,
+      body: draft.body?.trim() || null,
+    };
+    if (editing) {
+      update.mutate(
+        { assetId: editing, data: payload },
+        {
+          onSuccess: () => {
+            setEditing(null);
+            setMessage("Library asset saved.");
+            onChanged();
+          },
+          onError: (error) => setMessage(errorText(error)),
+        },
+      );
+      return;
+    }
+    create.mutate(
+      { data: payload },
+      {
+        onSuccess: () => {
+          setShowCreate(false);
+          reset();
+          setMessage("Library asset created.");
+          onChanged();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+  const form = (
+    <Card className="border-primary/30">
+      <CardContent className="grid gap-4 p-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Title">
+            <Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+          </Field>
+          <Field label="Kind">
+            <select
+              className="h-10 rounded-md border bg-background px-3 text-sm"
+              value={draft.kind}
+              onChange={(event) =>
+                setDraft({ ...draft, kind: event.target.value as CurriculumLibraryAssetInput["kind"] })
+              }
+            >
+              <option value="practice_test">Full SAT practice test</option>
+              <option value="mini_section">Mini-section</option>
+              <option value="resource">Resource</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="Description">
+          <Textarea
+            value={draft.description ?? ""}
+            onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+            placeholder="What students and tutors should do with this block."
+          />
+        </Field>
+        <Field label="Shared resource URL (Drive, PDF, or licensed test)">
+          <Input
+            value={draft.resourceUrl ?? ""}
+            onChange={(event) => setDraft({ ...draft, resourceUrl: event.target.value })}
+            placeholder="https://"
+          />
+        </Field>
+        <Field label="Notes shown on the session dashboard">
+          <Textarea value={draft.body ?? ""} onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
+        </Field>
+        <div className="flex gap-2">
+          <Button onClick={save} disabled={create.isPending || update.isPending || draft.title.trim().length < 2}>
+            {editing ? "Save asset" : "Create asset"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setEditing(null);
+              setShowCreate(false);
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+  return (
+    <div className="space-y-4">
+      {message && (
+        <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">
+          {message}
+        </p>
+      )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Curriculum library</h2>
+          <p className="text-sm text-muted-foreground">
+            Reusable SAT tests and mini-sections. Attach a block to a session date so Taito, Michelle, and their tutors see it on that dashboard.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            reset();
+            setEditing(null);
+            setShowCreate(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" /> New library asset
+        </Button>
+      </div>
+      {(showCreate || editing) && form}
+      <div className="grid gap-3">
+        {visible.map((asset) => (
+          <Card key={asset.id}>
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-medium">{asset.title}</h3>
+                  <Badge variant="outline">{asset.kind.replaceAll("_", " ")}</Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{asset.description || "No description yet."}</p>
+                {asset.resourceUrl ? (
+                  <a
+                    href={asset.resourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Open resource
+                  </a>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-2 sm:items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditing(asset.id);
+                    setShowCreate(false);
+                    setDraft({
+                      title: asset.title,
+                      kind: asset.kind,
+                      description: asset.description ?? "",
+                      resourceUrl: asset.resourceUrl ?? "",
+                      body: asset.body ?? "",
+                    });
+                  }}
+                >
+                  <Edit3 className="mr-2 h-4 w-4" /> Edit
+                </Button>
+                {sessions.length > 0 && (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <select
+                      aria-label={`Attach ${asset.title} to session`}
+                      className="h-9 max-w-xs rounded-md border bg-background px-2 text-xs"
+                      value={attachSessionId}
+                      onChange={(event) => setAttachSessionId(event.target.value)}
+                    >
+                      {sessions.map((session) => (
+                        <option key={session.id} value={session.id}>
+                          {formatSessionDateTime(session)} · {displaySessionTitle(session.title, session.subject)}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={attach.isPending || !attachSessionId}
+                      onClick={() =>
+                        attach.mutate(
+                          { sessionId: attachSessionId, data: { libraryAssetId: asset.id } },
+                          {
+                            onSuccess: () => {
+                              setMessage(`Attached ${asset.title} to the selected session.`);
+                              onChanged();
+                            },
+                            onError: (error) => setMessage(errorText(error)),
+                          },
+                        )
+                      }
+                    >
+                      Attach to session
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {visible.length === 0 && <Empty text="No library assets yet. Create a practice test or mini-section to attach to a session date." />}
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

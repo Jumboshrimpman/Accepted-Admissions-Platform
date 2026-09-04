@@ -22,7 +22,7 @@ export default function Landing() {
                 A clear next step for your <span className="text-accent">college goals.</span>
               </h1>
               <p className="mt-7 max-w-2xl text-xl leading-relaxed text-muted-foreground">
-                Accepted Admissions combines focused one-on-one SAT tutoring with thoughtful guidance for families whose needs go beyond a single session.
+                Harvard students and recent graduates provide focused one-on-one SAT tutoring, with thoughtful guidance for families whose needs go beyond a single session.
               </p>
               <div className="mt-10 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-14 w-full rounded-md bg-primary px-7 text-base text-primary-foreground shadow-sm sm:w-auto">

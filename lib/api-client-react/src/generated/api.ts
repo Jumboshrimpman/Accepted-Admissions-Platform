@@ -47,6 +47,7 @@ import type {
   AssignmentQuestion,
   AssignmentQuestionUpdate,
   AssignmentSummary,
+  AttachLibraryAssetInput,
   AttachQuestionInput,
   Attempt,
   AttemptResponse,
@@ -75,6 +76,9 @@ import type {
   CurriculumBlock,
   CurriculumBlockInput,
   CurriculumBlockUpdate,
+  CurriculumLibraryAsset,
+  CurriculumLibraryAssetInput,
+  CurriculumLibraryAssetUpdate,
   Dashboard,
   Error,
   FinancialSummary,
@@ -1107,6 +1111,150 @@ export const useUpdateAdminAssignment = <TError = ErrorType<BadRequestResponse |
         TContext
       > => {
       return useMutation(getUpdateAdminAssignmentMutationOptions(options));
+    }
+
+export const getCreateAdminLibraryAssetUrl = () => {
+
+
+
+
+  return `/api/admin/curriculum/library-assets`
+}
+
+/**
+ * Admin-authored building block (full SAT practice test, mini-section, or resource) that can later be attached to a specific session dashboard.
+ * @summary Create a reusable curriculum library asset
+ */
+export const createAdminLibraryAsset = async (curriculumLibraryAssetInput: CurriculumLibraryAssetInput, options?: Parameters<typeof customFetch>[1]): Promise<CurriculumLibraryAsset> => {
+
+  return customFetch<CurriculumLibraryAsset>(getCreateAdminLibraryAssetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(curriculumLibraryAssetInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminLibraryAssetMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminLibraryAsset>>, TError,{data: BodyType<CurriculumLibraryAssetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminLibraryAsset>>, TError,{data: BodyType<CurriculumLibraryAssetInput>}, TContext> => {
+
+const mutationKey = ['createAdminLibraryAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminLibraryAsset>>, {data: BodyType<CurriculumLibraryAssetInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminLibraryAsset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminLibraryAssetMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminLibraryAsset>>>
+    export type CreateAdminLibraryAssetMutationBody = BodyType<CurriculumLibraryAssetInput>
+    export type CreateAdminLibraryAssetMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>
+
+    /**
+ * @summary Create a reusable curriculum library asset
+ */
+export const useCreateAdminLibraryAsset = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminLibraryAsset>>, TError,{data: BodyType<CurriculumLibraryAssetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminLibraryAsset>>,
+        TError,
+        {data: BodyType<CurriculumLibraryAssetInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminLibraryAssetMutationOptions(options));
+    }
+
+export const getUpdateAdminLibraryAssetUrl = (assetId: string,) => {
+
+
+
+
+  return `/api/admin/curriculum/library-assets/${assetId}`
+}
+
+/**
+ * @summary Update a reusable curriculum library asset
+ */
+export const updateAdminLibraryAsset = async (assetId: string,
+    curriculumLibraryAssetUpdate: CurriculumLibraryAssetUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CurriculumLibraryAsset> => {
+
+  return customFetch<CurriculumLibraryAsset>(getUpdateAdminLibraryAssetUrl(assetId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(curriculumLibraryAssetUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminLibraryAssetMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminLibraryAsset>>, TError,{assetId: string;data: BodyType<CurriculumLibraryAssetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminLibraryAsset>>, TError,{assetId: string;data: BodyType<CurriculumLibraryAssetUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminLibraryAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminLibraryAsset>>, {assetId: string;data: BodyType<CurriculumLibraryAssetUpdate>}> = (props) => {
+          const {assetId,data} = props ?? {};
+
+          return  updateAdminLibraryAsset(assetId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminLibraryAssetMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminLibraryAsset>>>
+    export type UpdateAdminLibraryAssetMutationBody = BodyType<CurriculumLibraryAssetUpdate>
+    export type UpdateAdminLibraryAssetMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Update a reusable curriculum library asset
+ */
+export const useUpdateAdminLibraryAsset = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminLibraryAsset>>, TError,{assetId: string;data: BodyType<CurriculumLibraryAssetUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminLibraryAsset>>,
+        TError,
+        {assetId: string;data: BodyType<CurriculumLibraryAssetUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminLibraryAssetMutationOptions(options));
     }
 
 export const getCreateAdminSessionUrl = () => {
@@ -3045,6 +3193,79 @@ export const useCreateCurriculumBlock = <TError = ErrorType<UnauthorizedResponse
         TContext
       > => {
       return useMutation(getCreateCurriculumBlockMutationOptions(options));
+    }
+
+export const getAttachSessionLibraryAssetUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/library-assets`
+}
+
+/**
+ * Clones a reusable library asset onto the session as a published curriculum block so the student and tutor see it on that date's dashboard.
+ * @summary Attach a library asset to a session dashboard
+ */
+export const attachSessionLibraryAsset = async (sessionId: string,
+    attachLibraryAssetInput: AttachLibraryAssetInput, options?: Parameters<typeof customFetch>[1]): Promise<CurriculumBlock> => {
+
+  return customFetch<CurriculumBlock>(getAttachSessionLibraryAssetUrl(sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(attachLibraryAssetInput)
+  }
+);}
+
+
+
+
+
+export const getAttachSessionLibraryAssetMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachSessionLibraryAsset>>, TError,{sessionId: string;data: BodyType<AttachLibraryAssetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof attachSessionLibraryAsset>>, TError,{sessionId: string;data: BodyType<AttachLibraryAssetInput>}, TContext> => {
+
+const mutationKey = ['attachSessionLibraryAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof attachSessionLibraryAsset>>, {sessionId: string;data: BodyType<AttachLibraryAssetInput>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  attachSessionLibraryAsset(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AttachSessionLibraryAssetMutationResult = NonNullable<Awaited<ReturnType<typeof attachSessionLibraryAsset>>>
+    export type AttachSessionLibraryAssetMutationBody = BodyType<AttachLibraryAssetInput>
+    export type AttachSessionLibraryAssetMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Attach a library asset to a session dashboard
+ */
+export const useAttachSessionLibraryAsset = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof attachSessionLibraryAsset>>, TError,{sessionId: string;data: BodyType<AttachLibraryAssetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof attachSessionLibraryAsset>>,
+        TError,
+        {sessionId: string;data: BodyType<AttachLibraryAssetInput>},
+        TContext
+      > => {
+      return useMutation(getAttachSessionLibraryAssetMutationOptions(options));
     }
 
 export const getGetAdaptiveCurriculumUrl = (sessionId: string,) => {

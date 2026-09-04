@@ -40,6 +40,9 @@ describe("PublicSiteShell", () => {
     expect(mainNavigation.textContent).toContain("Student stories");
     expect(mainNavigation.textContent).toContain("Get guidance");
     expect(screen.getByTestId("link-header-guidance").getAttribute("href")).toBe("/client-request");
+    expect(screen.getByRole("link", { name: "info@acceptedadmissions.org" }).getAttribute("href")).toBe(
+      "mailto:info@acceptedadmissions.org",
+    );
   });
 
   it("sets route metadata and canonical URLs", () => {

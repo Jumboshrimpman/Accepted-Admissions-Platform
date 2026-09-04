@@ -21,6 +21,8 @@ export interface Session {
   tutor?: Tutor | null;
   /** @nullable */
   meetingUrl?: string | null;
+  /** @nullable */
+  calendarEventUrl?: string | null;
   student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;

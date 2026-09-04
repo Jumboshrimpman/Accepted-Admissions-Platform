@@ -212,4 +212,46 @@ describe("client availability calendar", () => {
       expect(screen.getByText("Available times with Eunice Chon")).toBeTruthy();
     });
   });
+
+  test("prompts a zero-credit client to buy a single hour or 10-hour package before booking", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.tutorsQuery.data = [
+      {
+        id: "tutor-xavier",
+        name: "Xavier Morales",
+        title: "SAT Tutor",
+        photoUrl: null,
+        biography: "Xavier helps students strengthen SAT reasoning.",
+        subjects: ["SAT", "Math"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+      },
+      {
+        id: "tutor-eunice",
+        name: "Eunice Chon",
+        title: "SAT Tutor",
+        photoUrl: null,
+        biography: "Eunice coaches SAT sessions.",
+        subjects: ["SAT"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+      },
+    ];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Buy a single hour \(\$130\) or the 10-hour package \(\$1,300\)/),
+      ).toBeTruthy();
+    });
+    expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/sat");
+    expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
 });

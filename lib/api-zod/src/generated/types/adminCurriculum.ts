@@ -13,12 +13,14 @@ import type { AdminQuestionStatus } from './adminQuestionStatus';
 import type { AdminSession } from './adminSession';
 import type { AdminSubmission } from './adminSubmission';
 import type { CurriculumBlock } from './curriculumBlock';
+import type { CurriculumLibraryAsset } from './curriculumLibraryAsset';
 
 export interface AdminCurriculum {
   programs: AdminProgram[];
   sessions: AdminSession[];
   assignments: AdminAssignment[];
   blocks: CurriculumBlock[];
+  libraryAssets: CurriculumLibraryAsset[];
   questionStatus: AdminQuestionStatus[];
   submissions: AdminSubmission[];
   tutors: AdminCurriculumTutorsItem[];

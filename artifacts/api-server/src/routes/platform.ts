@@ -40,12 +40,14 @@ import {
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
+  listSharedMeetBusyWindows,
   lockClientCreditsAndRequireHours,
   notifyAdministratorsOfBooking,
   recordBookingConfirmedAudit,
   requireStudentBooker,
   rollbackBookingAfterCalendarFailure,
 } from "../lib/booking-service";
+import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
 import {
   calendarEventPayload,
   generateAvailableSlots,
@@ -58,9 +60,12 @@ import {
   TAITO_FALL_2026_SESSIONS,
   TAITO_SESSION_TIMEZONE,
   TAITO_STUDENT_DISPLAY_NAME,
+  TAITO_STUDENT_EMAIL,
+  calendarEventUrlForSession,
   isTaitoFallSession,
   isFall2026Term,
   meetingUrlForTerm,
+  selfServeSatBookingForEmail,
   sessionTitle,
   taitoSessionDateTime,
 } from "../lib/session-schedule";
@@ -90,6 +95,11 @@ import {
 } from "../lib/tutor-assignment-reconciliation";
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
+  isLibraryAssetKind,
+  libraryAssetBlockKind,
+  libraryAssetToBlockConfig,
+} from "../lib/curriculum-library";
+import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   APPROVED_SCHOOL_LOGOS,
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
@@ -109,10 +119,15 @@ import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
   AttachQuestionToAssignmentResponse,
+  AttachSessionLibraryAssetBody,
+  AttachSessionLibraryAssetParams,
+  AttachSessionLibraryAssetResponse,
   CreateAdminAssignmentBody,
   CreateAdminAssignmentResponse,
   CreateAdminAccessGrantBody,
   CreateAdminAccessGrantResponse,
+  CreateAdminLibraryAssetBody,
+  CreateAdminLibraryAssetResponse,
   CreateAdminSessionBody,
   CreateAdminSessionResponse,
   GetAdminClientDashboardParams,
@@ -170,6 +185,9 @@ import {
   UpdateAdminAssignmentBody,
   UpdateAdminAssignmentParams,
   UpdateAdminAssignmentResponse,
+  UpdateAdminLibraryAssetBody,
+  UpdateAdminLibraryAssetParams,
+  UpdateAdminLibraryAssetResponse,
   UpdateAdminProgramBody,
   UpdateAdminProgramParams,
   UpdateAdminProgramResponse,
@@ -242,6 +260,7 @@ import {
   courseMembershipsTable,
   coursesTable,
   curriculumBlocksTable,
+  curriculumLibraryAssetsTable,
   creditLedgerTable,
   db,
   invoicesTable,
@@ -307,7 +326,6 @@ const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
 const NIKA_LEGACY_SEED_PHOTO_URL = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
 const NIKA_LEGACY_APPROVED_WIX_PHOTO_URL =
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
-const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
 const RYO_VIEWER_EMAIL = "ryo@jaac.co.jp";
 const TAITO_VIEWER_RELATIONSHIP =
   "view only mirror of Taito’s client account";
@@ -1154,11 +1172,20 @@ async function ensureSeedData(): Promise<string> {
 }
 
 async function ensureUpgradeSeedData(): Promise<void> {
+  await db.execute(sql`
+    UPDATE tutor_profiles
+    SET email = 'xaver.rmz6@gmail.com', updated_at = now()
+    WHERE lower(email) = lower('xsfam6@gmail.com')
+      AND NOT EXISTS (
+        SELECT 1 FROM tutor_profiles AS other
+        WHERE lower(other.email) = lower('xaver.rmz6@gmail.com')
+      )
+  `);
   await db
     .insert(tutorProfilesTable)
     .values([
       {
-        email: "xsfam6@gmail.com",
+        email: "xaver.rmz6@gmail.com",
         name: "Xavier Morales",
         title: "SAT & Math Tutor",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
@@ -1506,11 +1533,11 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT tutoring",
         seoTitle: "SAT tutoring | Accepted Admissions",
         seoDescription:
-          "Explore the current 60-minute SAT tutoring offer, see the approved price, and continue to secure checkout.",
+          "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
         body: {
           sections: [
-            "Review the single SAT tutoring session currently available online.",
-            "Sign in to purchase, then use the verified prepaid hour to schedule in the client portal.",
+            "Review the current single-hour and ten-hour SAT tutoring credits available online.",
+            "Sign in to purchase, then use verified prepaid credits to schedule with Xavier or Eunice in the client portal.",
           ],
         },
         status: "published",
@@ -1570,6 +1597,45 @@ async function ensureUpgradeSeedData(): Promise<void> {
         isNull(publicContentTable.updatedBy),
       ),
     );
+
+  const [satSeed] = await db
+    .select()
+    .from(publicContentTable)
+    .where(
+      and(
+        eq(publicContentTable.slug, "sat"),
+        isNull(publicContentTable.updatedBy),
+      ),
+    )
+    .limit(1);
+  const satBody =
+    satSeed?.body && typeof satSeed.body === "object" && !Array.isArray(satSeed.body)
+      ? (satSeed.body as Record<string, unknown>)
+      : null;
+  const satSections = Array.isArray(satBody?.sections)
+    ? satBody.sections.filter((section): section is string => typeof section === "string")
+    : [];
+  if (
+    satSeed &&
+    (satSections.some((section) => section.includes("single SAT tutoring session currently available")) ||
+      (typeof satSeed.seoDescription === "string" &&
+        satSeed.seoDescription.includes("current 60-minute SAT tutoring offer")))
+  ) {
+    await db
+      .update(publicContentTable)
+      .set({
+        seoDescription:
+          "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
+        body: {
+          sections: [
+            "Review the current single-hour and ten-hour SAT tutoring credits available online.",
+            "Sign in to purchase, then use verified prepaid credits to schedule with Xavier or Eunice in the client portal.",
+          ],
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(publicContentTable.id, satSeed.id));
+  }
 
   const [successSeed] = await db
     .select()
@@ -2398,6 +2464,20 @@ async function canAccessSession(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<boolean> {
   return canViewSession(user, session);
+}
+
+function libraryAssetResponse(
+  asset: typeof curriculumLibraryAssetsTable.$inferSelect,
+) {
+  return {
+    id: asset.id,
+    title: asset.title,
+    kind: isLibraryAssetKind(asset.kind) ? asset.kind : ("resource" as const),
+    description: asset.description,
+    resourceUrl: asset.resourceUrl,
+    body: asset.body,
+    createdAt: asset.createdAt,
+  };
 }
 
 async function studentShape(studentUserId: string) {
@@ -3563,7 +3643,7 @@ async function slotsForTutor(
     );
     return { tutor, rule, access: null, slots: [] as string[] };
   }
-  const [bookedSessions] = await Promise.all([
+  const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({
         id: sessionsTable.id,
@@ -3581,11 +3661,19 @@ async function slotsForTutor(
           excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
         ),
       ),
+    listSharedMeetBusyWindows({
+      start: from,
+      end: to,
+      excludeSessionId,
+    }),
   ]);
-  const bookedWindows: BusyWindow[] = bookedSessions.map((session) => ({
-    start: session.dateTime.toISOString(),
-    end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
-  }));
+  const bookedWindows: BusyWindow[] = [
+    ...bookedSessions.map((session) => ({
+      start: session.dateTime.toISOString(),
+      end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
+    })),
+    ...sharedMeetWindows,
+  ];
   const availabilityRule: AvailabilityRule = {
     timezone: rule.timezone,
     weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
@@ -3646,6 +3734,7 @@ async function bookingSessionShape(
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
     meetingUrl: SHARED_FALL_MEETING_URL,
+    calendarEventUrl: calendarEventUrlForSession(session),
     cancellationReason: session.cancellationReason,
     ...(extras.creditRestored !== undefined
       ? { creditRestored: extras.creditRestored }
@@ -4546,6 +4635,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       title: sessionsTable.title,
       durationMinutes: sessionsTable.durationMinutes,
       bookingStatus: sessionsTable.bookingStatus,
+      providerEventUrl: sessionsTable.providerEventUrl,
       cancellationReason: sessionsTable.cancellationReason,
     })
     .from(sessionsTable)
@@ -4565,6 +4655,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       durationMinutes: session.durationMinutes,
       bookingStatus: session.bookingStatus,
       meetingUrl: SHARED_FALL_MEETING_URL,
+      calendarEventUrl: calendarEventUrlForSession(session),
       cancellationReason: session.cancellationReason,
     })),
   );
@@ -4755,32 +4846,15 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     const participantIds = [session.clientUserId, session.tutorUserId].filter(
       (id): id is string => Boolean(id),
     );
-    const [internalConflict] = await db
-      .select({ id: sessionsTable.id })
-      .from(sessionsTable)
-      .where(
-        and(
-          sql`${sessionsTable.id} <> ${session.id}`,
-          sql`${sessionsTable.status} <> 'archived'`,
-          sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
-          sql`${sessionsTable.dateTime} < ${end}`,
-          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${start}`,
-          or(
-            ...participantIds.flatMap((id) => [
-              eq(sessionsTable.tutorUserId, id),
-              eq(sessionsTable.clientUserId, id),
-            ]),
-          ),
-        ),
-      )
-      .limit(1);
-    if (internalConflict) {
-      throw new BookingError(
-        409,
-        "SCHEDULE_CONFLICT",
-        "That time overlaps another active meeting for you or the tutor. Choose a different slot.",
-      );
-    }
+    await db.transaction(async (tx) => {
+      await acquireBookingLocks(tx, participantIds, start.toISOString());
+      await assertNoScheduleConflict(tx, {
+        participantIds,
+        start,
+        end,
+        excludeSessionId: session.id,
+      });
+    });
     const previousStart = session.dateTime;
     const event = session.providerEventId
       ? await updateGoogleEvent(
@@ -6323,6 +6397,8 @@ async function adminSessionConflicts(
     clientUserId?: string | null;
     dateTime: Date;
     durationMinutes: number;
+    courseId?: string | null;
+    subject?: string | null;
   },
   excludeSessionId?: string,
   options: { checkProvider?: boolean; strictProvider?: boolean } = {},
@@ -6336,8 +6412,12 @@ async function adminSessionConflicts(
       durationMinutes: sessionsTable.durationMinutes,
       tutorUserId: sessionsTable.tutorUserId,
       clientUserId: sessionsTable.clientUserId,
+      subject: sessionsTable.subject,
+      term: coursesTable.term,
+      courseMeetUrl: coursesTable.meetUrl,
     })
     .from(sessionsTable)
+    .innerJoin(coursesTable, eq(sessionsTable.courseId, coursesTable.id))
     .where(
       and(
         sql`${sessionsTable.status} <> 'archived'`,
@@ -6357,6 +6437,27 @@ async function adminSessionConflicts(
       (row) =>
         `${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`,
     );
+  const [proposedCourse] = payload.courseId
+    ? await db
+        .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
+        .from(coursesTable)
+        .where(eq(coursesTable.id, payload.courseId))
+        .limit(1)
+    : [];
+  const proposedClaimsShared = sessionClaimsSharedFallMeet({
+    term: proposedCourse?.term,
+    courseMeetUrl: proposedCourse?.meetUrl,
+    subject: payload.subject,
+  });
+  if (proposedClaimsShared) {
+    for (const row of rows) {
+      if (!sessionClaimsSharedFallMeet(row)) continue;
+      const label = `Shared Google Meet · ${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`;
+      if (!conflicts.includes(label) && !conflicts.some((item) => item.startsWith(`${row.title} ·`))) {
+        conflicts.push(label);
+      }
+    }
+  }
   if (options.checkProvider === true && payload.tutorUserId) {
     const access = await calendarAccessForUser(payload.tutorUserId);
     if (!access) {
@@ -6434,6 +6535,7 @@ async function adminSessionShape(
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
     meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
+    calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
       ? { id: session.clientUserId!, name: personById.get(session.clientUserId!)! }
       : isTaitoFallSession(session)
@@ -6772,7 +6874,7 @@ router.get(
     const courseFilter = query.data.courseId
       ? eq(coursesTable.id, query.data.courseId)
       : undefined;
-    const [courses, allSessions, allAssignments, blocks, questions, submissions, tutorProfiles, clients, relationshipRows] =
+    const [courses, allSessions, allAssignments, blocks, libraryAssets, questions, submissions, tutorProfiles, clients, relationshipRows] =
       await Promise.all([
         db.select().from(coursesTable).where(courseFilter ?? sql`true`).orderBy(asc(coursesTable.title)),
         db
@@ -6793,6 +6895,10 @@ router.get(
           .innerJoin(sessionsTable, eq(sessionsTable.id, curriculumBlocksTable.sessionId))
           .where(courseFilter ? eq(sessionsTable.courseId, query.data.courseId!) : sql`true`)
           .orderBy(asc(curriculumBlocksTable.position)),
+        db
+          .select()
+          .from(curriculumLibraryAssetsTable)
+          .orderBy(desc(curriculumLibraryAssetsTable.updatedAt)),
         db.select().from(questionsTable).orderBy(desc(questionsTable.createdAt)),
         db
           .select({ attempt: attemptsTable, assignment: assignmentsTable, student: usersTable })
@@ -6845,6 +6951,8 @@ router.get(
           clientUserId: session.clientUserId,
           dateTime: session.dateTime,
           durationMinutes: session.durationMinutes,
+          courseId: session.courseId,
+          subject: session.subject,
         }, session.id);
         return adminSessionShape(session, conflictWith);
       }),
@@ -6920,6 +7028,15 @@ router.get(
         sessions,
         assignments,
         blocks: blocks.map(({ block }) => block),
+        libraryAssets: libraryAssets.map((asset) => ({
+          id: asset.id,
+          title: asset.title,
+          kind: isLibraryAssetKind(asset.kind) ? asset.kind : "resource",
+          description: asset.description,
+          resourceUrl: asset.resourceUrl,
+          body: asset.body,
+          createdAt: asset.createdAt,
+        })),
         questionStatus: [...questionBySubject.entries()].map(([subject, value]) => ({ subject, ...value })),
         submissions: submissions.map(({ attempt, assignment, student }) => ({
           attemptId: attempt.id,
@@ -6942,6 +7059,83 @@ router.get(
          })),
       }),
     );
+  },
+);
+
+router.post(
+  "/admin/curriculum/library-assets",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateAdminLibraryAssetBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, body.error.message);
+      return;
+    }
+    const [created] = await db
+      .insert(curriculumLibraryAssetsTable)
+      .values({
+        title: body.data.title.trim(),
+        kind: body.data.kind,
+        description: body.data.description?.trim() || null,
+        resourceUrl: body.data.resourceUrl?.trim() || null,
+        body: body.data.body?.trim() || null,
+        createdByUserId: req.appUser!.id,
+      })
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "curriculum_library_asset.created",
+      entityType: "curriculum_library_asset",
+      entityId: created!.id,
+      metadata: { title: created!.title, kind: created!.kind },
+    });
+    res.status(201).json(CreateAdminLibraryAssetResponse.parse(libraryAssetResponse(created!)));
+  },
+);
+
+router.patch(
+  "/admin/curriculum/library-assets/:assetId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminLibraryAssetParams.safeParse(req.params);
+    const body = UpdateAdminLibraryAssetBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "Invalid library asset update.");
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(curriculumLibraryAssetsTable)
+      .where(eq(curriculumLibraryAssetsTable.id, params.data.assetId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Library asset not found" });
+      return;
+    }
+    const [updated] = await db
+      .update(curriculumLibraryAssetsTable)
+      .set({
+        ...(body.data.title === undefined ? {} : { title: body.data.title.trim() }),
+        ...(body.data.kind === undefined ? {} : { kind: body.data.kind }),
+        ...(body.data.description === undefined
+          ? {}
+          : { description: body.data.description?.trim() || null }),
+        ...(body.data.resourceUrl === undefined
+          ? {}
+          : { resourceUrl: body.data.resourceUrl?.trim() || null }),
+        ...(body.data.body === undefined ? {} : { body: body.data.body?.trim() || null }),
+        updatedAt: new Date(),
+      })
+      .where(eq(curriculumLibraryAssetsTable.id, params.data.assetId))
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "curriculum_library_asset.updated",
+      entityType: "curriculum_library_asset",
+      entityId: updated!.id,
+      metadata: { title: updated!.title, kind: updated!.kind },
+    });
+    res.json(UpdateAdminLibraryAssetResponse.parse(libraryAssetResponse(updated!)));
   },
 );
 
@@ -7122,6 +7316,8 @@ router.post(
         clientUserId: body.data.clientUserId,
         dateTime: body.data.dateTime,
         durationMinutes: body.data.durationMinutes,
+        courseId: body.data.courseId,
+        subject: body.data.subject,
       }, undefined, { checkProvider: true, strictProvider: true });
     } catch (error) {
       if (error instanceof BookingError) {
@@ -7323,6 +7519,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
             ),
             tutor,
             meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
+            calendarEventUrl: calendarEventUrlForSession(session),
           };
         }),
       ),
@@ -7594,6 +7791,14 @@ async function dashboardDataForUser(user: AppUser) {
           )
           .then((items) => items.filter(Boolean))
       : [];
+  const [billingUser] =
+    user.id === subjectUserId
+      ? [{ email: user.email }]
+      : await db
+          .select({ email: usersTable.email })
+          .from(usersTable)
+          .where(eq(usersTable.id, subjectUserId))
+          .limit(1);
   const creditEntries = await db
     .select({
       entryType: creditLedgerTable.entryType,
@@ -7651,6 +7856,9 @@ async function dashboardDataForUser(user: AppUser) {
         usedHours: creditSummary.usedHours,
         remainingHours: creditSummary.remainingHours,
         readOnly: user.role === "viewer",
+        selfServeSatBooking: selfServeSatBookingForEmail(
+          billingUser?.email ?? user.email,
+        ),
       },
       progress: {
         totalSessions: scopedSessions.length,
@@ -7890,6 +8098,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       ...publicSessionShape(session),
       tutor: await sessionTutorShape(session),
       meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
+      calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
           ? await sessionStudentShape(session)
@@ -8862,6 +9071,80 @@ router.post(
       })
       .returning();
     res.status(201).json(CreateCurriculumBlockResponse.parse(created));
+  },
+);
+
+router.post(
+  "/sessions/:sessionId/library-assets",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = AttachSessionLibraryAssetParams.safeParse(req.params);
+    const body = AttachSessionLibraryAssetBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid library attachment." });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, params.data.sessionId));
+    if (!session || !(await canAccessSession(req.appUser!, session))) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const [asset] = await db
+      .select()
+      .from(curriculumLibraryAssetsTable)
+      .where(eq(curriculumLibraryAssetsTable.id, body.data.libraryAssetId))
+      .limit(1);
+    if (!asset) {
+      res.status(404).json({ error: "Library asset not found" });
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(curriculumBlocksTable)
+      .where(
+        and(
+          eq(curriculumBlocksTable.sessionId, session.id),
+          eq(curriculumBlocksTable.libraryAssetId, asset.id),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      res.status(201).json(AttachSessionLibraryAssetResponse.parse(existing));
+      return;
+    }
+    const [positionRow] = await db
+      .select({
+        position: sql<number>`coalesce(max(${curriculumBlocksTable.position}), -1)`,
+      })
+      .from(curriculumBlocksTable)
+      .where(eq(curriculumBlocksTable.sessionId, session.id));
+    const [created] = await db
+      .insert(curriculumBlocksTable)
+      .values({
+        sessionId: session.id,
+        libraryAssetId: asset.id,
+        kind: libraryAssetBlockKind(asset),
+        position: Number(positionRow?.position ?? -1) + 1,
+        visibility: "both",
+        status: "published",
+        config: libraryAssetToBlockConfig(asset),
+      })
+      .returning();
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "curriculum_library_asset.attached",
+      entityType: "curriculum_block",
+      entityId: created!.id,
+      metadata: {
+        sessionId: session.id,
+        libraryAssetId: asset.id,
+        title: asset.title,
+      },
+    });
+    res.status(201).json(AttachSessionLibraryAssetResponse.parse(created!));
   },
 );
 

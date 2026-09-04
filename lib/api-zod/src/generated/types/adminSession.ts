@@ -23,6 +23,8 @@ export interface AdminSession {
   /** @nullable */
   meetingUrl: string | null;
   /** @nullable */
+  calendarEventUrl?: string | null;
+  /** @nullable */
   student: AdminSessionStudent;
   /** @nullable */
   tutor: AdminSessionTutor;

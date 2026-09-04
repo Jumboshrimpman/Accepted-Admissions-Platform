@@ -119,17 +119,52 @@ export const sessionsTable = pgTable("sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const curriculumBlocksTable = pgTable("curriculum_blocks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  sessionId: uuid("session_id").notNull().references(() => sessionsTable.id),
-  kind: text("kind").notNull(),
-  position: numeric("position", { mode: "number" }).notNull(),
-  visibility: text("visibility").notNull().default("both"),
-  status: contentStatusEnum("status").notNull().default("draft"),
-  config: jsonb("config").$type<Record<string, unknown>>().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const curriculumLibraryAssetsTable = pgTable(
+  "curriculum_library_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    kind: text("kind").notNull(),
+    description: text("description"),
+    resourceUrl: text("resource_url"),
+    body: text("body"),
+    createdByUserId: uuid("created_by_user_id").references(() => usersTable.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+);
+
+export const curriculumBlocksTable = pgTable(
+  "curriculum_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => sessionsTable.id),
+    libraryAssetId: uuid("library_asset_id").references(
+      () => curriculumLibraryAssetsTable.id,
+    ),
+    kind: text("kind").notNull(),
+    position: numeric("position", { mode: "number" }).notNull(),
+    visibility: text("visibility").notNull().default("both"),
+    status: contentStatusEnum("status").notNull().default("draft"),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("curriculum_blocks_session_library_asset_idx").on(
+      table.sessionId,
+      table.libraryAssetId,
+    ),
+  ],
+);
 
 export const assignmentsTable = pgTable("assignments", {
   id: uuid("id").primaryKey().defaultRandom(),

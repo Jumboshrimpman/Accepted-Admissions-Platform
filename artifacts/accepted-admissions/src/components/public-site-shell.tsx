@@ -192,6 +192,9 @@ export function PublicSiteShell({
             <Link href="/past-success" className="hover:text-foreground">Student stories</Link>
             <Link href="/client-request" className="hover:text-foreground">Get guidance</Link>
             <Link href="/login" className="hover:text-foreground">Client sign in</Link>
+            <a href="mailto:info@acceptedadmissions.org" className="hover:text-foreground">
+              info@acceptedadmissions.org
+            </a>
           </div>
         </div>
       </footer>

@@ -87,7 +87,7 @@ test("maps the complete approved roster without overlapping roles", () => {
   const rosterEnv = {
     ACCEPTED_ADMIN_EMAILS: "admin@acceptedadmissions.org",
     ACCEPTED_SAT_TUTOR_EMAILS:
-      "xsfam6@gmail.com, eunice_chon@berkeley.edu",
+      "xaver.rmz6@gmail.com, eunice_chon@berkeley.edu",
     ACCEPTED_ENGLISH_TUTOR_EMAILS: "nika.raiffe@gmail.com",
     ACCEPTED_TUTOR_EMAILS: "",
     ACCEPTED_STUDENT_EMAILS: "taito0525@gmail.com",
@@ -95,7 +95,7 @@ test("maps the complete approved roster without overlapping roles", () => {
   } satisfies NodeJS.ProcessEnv;
   const expected = [
     ["admin@acceptedadmissions.org", "administrator", "all"],
-    ["xsfam6@gmail.com", "tutor", "SAT"],
+    ["xaver.rmz6@gmail.com", "tutor", "SAT"],
     ["eunice_chon@berkeley.edu", "tutor", "SAT"],
     ["taito0525@gmail.com", "student", "all"],
     ["nika.raiffe@gmail.com", "tutor", "IELTS"],

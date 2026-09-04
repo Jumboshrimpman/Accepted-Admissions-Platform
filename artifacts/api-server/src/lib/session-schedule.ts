@@ -4,6 +4,7 @@ import { zonedDateTimeToUtc } from "./booking.ts";
 export const TAITO_SESSION_TIMEZONE = "Asia/Tokyo";
 export const TAITO_SESSION_TIME = "21:00";
 export const TAITO_STUDENT_DISPLAY_NAME = "Taito";
+export const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
 export const SHARED_FALL_MEETING_URL = "https://meet.google.com/rih-iayt-okb";
 
 export function isFall2026Term(term: string | null | undefined): boolean {
@@ -70,4 +71,56 @@ export function sessionTitle(
   const client = participantFirstName(clientName, "Client");
   const tutor = participantFirstName(tutorName, "Tutor");
   return `${client}’s ${normalizedSessionSubject(subject)} Session with ${tutor}`;
+}
+
+/** Taito pays outside the platform; Michelle and other SAT clients use Stripe + credits. */
+export function selfServeSatBookingForEmail(
+  email: string | null | undefined,
+): boolean {
+  return email?.trim().toLowerCase() !== TAITO_STUDENT_EMAIL;
+}
+
+export function isGoogleCalendarEventUrl(
+  url: string | null | undefined,
+): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    return (
+      (host === "calendar.google.com" ||
+        host === "www.google.com" ||
+        host.endsWith(".google.com")) &&
+      (host.includes("calendar") ||
+        path.includes("/calendar") ||
+        parsed.searchParams.has("eid"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function googleCalendarDayUrl(dateTime: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(dateTime);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `https://calendar.google.com/calendar/r/day?date=${value("year")}${value("month")}${value("day")}`;
+}
+
+/** Public calendar deep-link only — never provider event IDs. */
+export function calendarEventUrlForSession(session: {
+  dateTime: Date;
+  timezone: string;
+  providerEventUrl?: string | null;
+}): string {
+  if (isGoogleCalendarEventUrl(session.providerEventUrl)) {
+    return session.providerEventUrl!;
+  }
+  return googleCalendarDayUrl(session.dateTime, session.timezone);
 }

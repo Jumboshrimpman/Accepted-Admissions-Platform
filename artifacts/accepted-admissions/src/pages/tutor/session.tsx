@@ -43,7 +43,6 @@ import {
   Sparkles,
   ListChecks,
   UserRound,
-  Video,
   XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +61,8 @@ import {
   sessionStudentLabel,
   sessionSubjectLabel,
 } from "@/lib/session-display";
+import { SessionJoinActions } from "@/components/session-join-actions";
+import { CurriculumBlockView } from "@/components/curriculum-block-view";
 
 function QuestionReviewCard({
   question,
@@ -478,13 +479,7 @@ export default function TutorSession() {
                 <Sparkles className="mr-2 h-4 w-4" />
                 {refreshAdaptive.isPending ? "Preparing…" : "Auto-prepare session"}
               </Button>
-              {session.meetingUrl && (
-                <Button asChild>
-                  <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
-                    <Video className="mr-2 h-4 w-4" /> Join meeting
-                  </a>
-                </Button>
-              )}
+              <SessionJoinActions meetingUrl={session.meetingUrl} calendarEventUrl={session.calendarEventUrl} size="default" />
             </div>
           </div>
         </CardHeader>
@@ -1156,9 +1151,13 @@ export default function TutorSession() {
                     </Button>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {block.kind === "heading"
-                      ? String(block.config.text ?? "")
-                      : JSON.stringify(block.config)}
+                    {typeof block.config.libraryKind === "string" ? (
+                      <CurriculumBlockView block={block} />
+                    ) : block.kind === "heading" ? (
+                      String(block.config.text ?? "")
+                    ) : (
+                      JSON.stringify(block.config)
+                    )}
                   </p>
                 </div>
               </CardContent>

@@ -16,7 +16,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
+import { SessionJoinActions } from "@/components/session-join-actions";
 import {
   displaySessionTitle,
   disclosedSessions,
@@ -210,18 +210,11 @@ export default function TutorDashboard() {
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
-                    {session.meetingUrl && (
-                      <Button asChild variant="outline" className="flex-1 sm:flex-none">
-                        <a
-                          href={session.meetingUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Video className="mr-2 h-4 w-4" />
-                          Join meeting
-                        </a>
-                      </Button>
-                    )}
+                    <SessionJoinActions
+                      meetingUrl={session.meetingUrl}
+                      calendarEventUrl={session.calendarEventUrl}
+                      className="flex flex-wrap gap-2 sm:w-auto"
+                    />
                   </div>
                 </div>
               ))}

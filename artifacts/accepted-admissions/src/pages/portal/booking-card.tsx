@@ -8,7 +8,6 @@ import {
   Link2,
   Loader2,
   RotateCcw,
-  Video,
   XCircle,
 } from "lucide-react";
 import {
@@ -22,10 +21,12 @@ import {
   useRescheduleBookingSession,
   type AdminClientPreviewBooking,
 } from "@workspace/api-client-react";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
+import { SessionJoinActions } from "@/components/session-join-actions";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -258,7 +259,8 @@ export function BookingCard() {
               Book a prepaid SAT session
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-              Choose a tutor and a 60-minute time verified against their live Google Calendar.
+              Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar.
+              Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking.
               Cancel at least 24 hours ahead to restore the credit.
             </CardDescription>
           </div>
@@ -444,8 +446,18 @@ export function BookingCard() {
                     </div>
                   </div>
                 )}
+                {remainingHours !== null && remainingHours <= 0 && !reschedulingSessionId && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    <p>
+                      You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here.
+                    </p>
+                    <Button asChild className="mt-3 rounded-full" size="sm">
+                      <Link href="/sat">Purchase SAT hours</Link>
+                    </Button>
+                  </div>
+                )}
                 {selectedSlot && (
-                  <Button className="mt-4 rounded-full" onClick={submitBooking} disabled={busy}>
+                  <Button className="mt-4 rounded-full" onClick={submitBooking} disabled={busy || (!reschedulingSessionId && remainingHours !== null && remainingHours <= 0)}>
                     {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {reschedulingSessionId ? "Confirm new time" : "Reserve this hour"}
                   </Button>
@@ -480,13 +492,12 @@ export function BookingCard() {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                       {session.meetingUrl && (
-                         <Button asChild size="sm" variant="outline" className="rounded-full">
-                           <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
-                             <Video className="mr-1.5 h-3.5 w-3.5" /> Meet
-                           </a>
-                         </Button>
-                       )}
+                       <SessionJoinActions
+                         meetingUrl={session.meetingUrl}
+                         calendarEventUrl={session.calendarEventUrl}
+                         meetingLabel="Meet"
+                         calendarLabel="Calendar"
+                       />
                       <Button
                         size="sm"
                         variant="outline"
