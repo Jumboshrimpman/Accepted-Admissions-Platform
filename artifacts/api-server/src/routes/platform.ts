@@ -7061,13 +7061,18 @@ router.patch(
 
 router.get("/me", async (req: AuthedRequest, res): Promise<void> => {
   const user = req.appUser!;
+  let avatarUrl: string | null = null;
+  if (user.role === "tutor" || user.role === "administrator") {
+    const profile = await resolveCalendarProfileForUser(user);
+    avatarUrl = profile?.photoUrl ?? null;
+  }
   res.json(
     GetCurrentUserResponse.parse({
       id: user.id,
       displayName: user.displayName,
       email: user.email,
       role: user.role,
-      avatarUrl: null,
+      avatarUrl,
     }),
   );
 });

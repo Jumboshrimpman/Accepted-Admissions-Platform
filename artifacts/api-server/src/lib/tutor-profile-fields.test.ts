@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { parseTutorProfileEditableFields } from "./tutor-profile-fields.ts";
 
 test("requires a name when creating a profile", () => {
