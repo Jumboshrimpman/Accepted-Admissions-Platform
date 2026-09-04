@@ -1734,6 +1734,7 @@ components:
         bookingStatus: { type: string, enum: [confirmed, rescheduled, cancelled] }
         meetingUrl: { type: ["string", "null"] }
         cancellationReason: { type: ["string", "null"] }
+        creditRestored: { type: ["boolean", "null"] }
     BookingInput:
       type: object
       required: [tutorProfileId, startTime]
@@ -1862,11 +1863,14 @@ components:
         signedInAt: { type: string, format: date-time }
     AdminNotification:
       type: object
-      required: [id, kind, guidanceRequestId, title, message, status, readAt, dismissedAt, createdAt]
+      required: [id, kind, title, message, status, readAt, dismissedAt, createdAt]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [guidance_request_assigned] }
-        guidanceRequestId: { type: string }
+        kind:
+          type: string
+          enum: [guidance_request_assigned, booking_confirmed, booking_cancelled]
+        guidanceRequestId: { type: ["string", "null"] }
+        sessionId: { type: ["string", "null"] }
         title: { type: string }
         message: { type: string }
         status: { type: string, enum: [unread, read, dismissed] }

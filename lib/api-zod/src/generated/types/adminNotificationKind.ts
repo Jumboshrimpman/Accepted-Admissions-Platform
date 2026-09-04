@@ -11,4 +11,6 @@ export type AdminNotificationKind = typeof AdminNotificationKind[keyof typeof Ad
 
 export const AdminNotificationKind = {
   guidance_request_assigned: 'guidance_request_assigned',
+  booking_confirmed: 'booking_confirmed',
+  booking_cancelled: 'booking_cancelled',
 } as const;

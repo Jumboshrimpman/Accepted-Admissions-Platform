@@ -112,8 +112,9 @@ export const GetAdminOverviewResponse = zod.object({
 })).describe('Private guidance form submissions, visible only to administrators.'),
   "notifications": zod.array(zod.object({
   "id": zod.string(),
-  "kind": zod.enum(['guidance_request_assigned']),
-  "guidanceRequestId": zod.string(),
+  "kind": zod.enum(['guidance_request_assigned', 'booking_confirmed', 'booking_cancelled']),
+  "guidanceRequestId": zod.string().nullish(),
+  "sessionId": zod.string().nullish(),
   "title": zod.string(),
   "message": zod.string(),
   "status": zod.enum(['unread', 'read', 'dismissed']),
@@ -140,8 +141,9 @@ export const UpdateAdminNotificationBody = zod.object({
 
 export const UpdateAdminNotificationResponse = zod.object({
   "id": zod.string(),
-  "kind": zod.enum(['guidance_request_assigned']),
-  "guidanceRequestId": zod.string(),
+  "kind": zod.enum(['guidance_request_assigned', 'booking_confirmed', 'booking_cancelled']),
+  "guidanceRequestId": zod.string().nullish(),
+  "sessionId": zod.string().nullish(),
   "title": zod.string(),
   "message": zod.string(),
   "status": zod.enum(['unread', 'read', 'dismissed']),
@@ -592,7 +594,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
-  "cancellationReason": zod.string().nullish()
+  "cancellationReason": zod.string().nullish(),
+  "creditRestored": zod.boolean().nullish()
 }))
 })
 }))
@@ -1635,7 +1638,8 @@ export const ListBookingSessionsResponseItem = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
-  "cancellationReason": zod.string().nullish()
+  "cancellationReason": zod.string().nullish(),
+  "creditRestored": zod.boolean().nullish()
 })
 export const ListBookingSessionsResponse = zod.array(ListBookingSessionsResponseItem)
 
@@ -1663,7 +1667,8 @@ export const CreateBookingSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
-  "cancellationReason": zod.string().nullish()
+  "cancellationReason": zod.string().nullish(),
+  "creditRestored": zod.boolean().nullish()
 })
 
 
@@ -1690,7 +1695,8 @@ export const CancelBookingSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
-  "cancellationReason": zod.string().nullish()
+  "cancellationReason": zod.string().nullish(),
+  "creditRestored": zod.boolean().nullish()
 })
 
 
@@ -1717,7 +1723,8 @@ export const RescheduleBookingSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
-  "cancellationReason": zod.string().nullish()
+  "cancellationReason": zod.string().nullish(),
+  "creditRestored": zod.boolean().nullish()
 })
 
 

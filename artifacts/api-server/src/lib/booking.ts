@@ -112,10 +112,12 @@ export function calendarEventPayload(
   durationMinutes: number,
   timeZone: string,
   attendeeEmail: string,
+  location?: string,
 ) {
   return {
     summary: title,
     description: "Accepted Admissions tutoring session",
+    ...(location ? { location } : {}),
     start: { dateTime: start.toISOString(), timeZone },
     end: { dateTime: new Date(start.getTime() + durationMinutes * 60_000).toISOString(), timeZone },
     attendees: [{ email: attendeeEmail }],

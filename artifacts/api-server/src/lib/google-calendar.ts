@@ -53,9 +53,42 @@ function fromBase64Url(value: string): Buffer {
 export function getGoogleCalendarConfig(): GoogleCalendarConfig | null {
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) return null;
+  if (!clientId || !clientSecret) return null;
+  const redirectUri = resolveGoogleCalendarRedirectUri();
+  if (!redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
+}
+
+/** Resolve the OAuth callback URL from env; production requires HTTPS. */
+export function resolveGoogleCalendarRedirectUri(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const explicit = env.GOOGLE_CALENDAR_REDIRECT_URI?.trim();
+  if (explicit) {
+    if (!isAcceptableCalendarRedirectUri(explicit, env)) return null;
+    return explicit.replace(/\/$/, "");
+  }
+  const origin = env.APP_ORIGIN?.trim().replace(/\/$/, "");
+  if (!origin) return null;
+  const derived = `${origin}/api/calendar/oauth/callback`;
+  if (!isAcceptableCalendarRedirectUri(derived, env)) return null;
+  return derived;
+}
+
+function isAcceptableCalendarRedirectUri(
+  value: string,
+  env: NodeJS.ProcessEnv,
+): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  if (env.NODE_ENV === "production" && parsed.protocol !== "https:") return false;
+  if (!parsed.pathname.includes("/api/calendar/oauth/callback")) return false;
+  return true;
 }
 
 export function createCalendarOAuthState(tutorProfileId: string, appUserId: string): string {

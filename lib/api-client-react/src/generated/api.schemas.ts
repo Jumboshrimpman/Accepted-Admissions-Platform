@@ -445,6 +445,8 @@ export interface BookingSession {
   meetingUrl: string | null;
   /** @nullable */
   cancellationReason?: string | null;
+  /** @nullable */
+  creditRestored?: boolean | null;
 }
 
 export type BookingInputDurationMinutes = typeof BookingInputDurationMinutes[keyof typeof BookingInputDurationMinutes];
@@ -636,6 +638,8 @@ export type AdminNotificationKind = typeof AdminNotificationKind[keyof typeof Ad
 
 export const AdminNotificationKind = {
   guidance_request_assigned: 'guidance_request_assigned',
+  booking_confirmed: 'booking_confirmed',
+  booking_cancelled: 'booking_cancelled',
 } as const;
 
 export type AdminNotificationStatus = typeof AdminNotificationStatus[keyof typeof AdminNotificationStatus];
@@ -650,7 +654,10 @@ export const AdminNotificationStatus = {
 export interface AdminNotification {
   id: string;
   kind: AdminNotificationKind;
-  guidanceRequestId: string;
+  /** @nullable */
+  guidanceRequestId?: string | null;
+  /** @nullable */
+  sessionId?: string | null;
   title: string;
   message: string;
   status: AdminNotificationStatus;

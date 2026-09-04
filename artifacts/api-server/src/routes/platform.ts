@@ -35,6 +35,18 @@ import {
   saveRefreshedGoogleAccessToken,
 } from "../lib/calendar-persistence";
 import {
+  acquireBookingLocks,
+  assertNoScheduleConflict,
+  BookingServiceError,
+  cancelBookingWithCreditPolicy,
+  insertConfirmedBookingWithDebit,
+  lockClientCreditsAndRequireHours,
+  notifyAdministratorsOfBooking,
+  recordBookingConfirmedAudit,
+  requireStudentBooker,
+  rollbackBookingAfterCalendarFailure,
+} from "../lib/booking-service";
+import {
   calendarEventPayload,
   generateAvailableSlots,
   overlapsBusyWindow,
@@ -3487,7 +3499,10 @@ async function studentCourseForBooking(userId: string): Promise<{ id: string; su
   return { id: membership.id, subject: membership.subject === "all" ? "SAT" : membership.subject };
 }
 
-async function bookingSessionShape(session: typeof sessionsTable.$inferSelect) {
+async function bookingSessionShape(
+  session: typeof sessionsTable.$inferSelect,
+  extras: { creditRestored?: boolean | null } = {},
+) {
   const [tutorProfile] = session.tutorUserId
     ? await db
         .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
@@ -3508,6 +3523,9 @@ async function bookingSessionShape(session: typeof sessionsTable.$inferSelect) {
     bookingStatus: session.bookingStatus,
     meetingUrl: SHARED_FALL_MEETING_URL,
     cancellationReason: session.cancellationReason,
+    ...(extras.creditRestored !== undefined
+      ? { creditRestored: extras.creditRestored }
+      : {}),
   };
 }
 
@@ -3528,7 +3546,7 @@ async function sessionForActor(sessionId: string, user: AppUser) {
 }
 
 function sendBookingError(error: unknown, res: Response): void {
-  if (error instanceof BookingError) {
+  if (error instanceof BookingError || error instanceof BookingServiceError) {
     res.status(error.status).json({ code: error.code, error: error.message });
     return;
   }
@@ -4277,9 +4295,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
 
 router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> => {
   try {
-    if (req.appUser!.role !== "student") {
-      throw new BookingError(403, "STUDENT_ONLY", "Only a student can reserve a prepaid session.");
-    }
+    requireStudentBooker(req.appUser!);
     const body = (req.body ?? {}) as Record<string, unknown>;
     const tutorProfileId = stringField(body, "tutorProfileId");
     const start = asDate(body.startTime);
@@ -4300,53 +4316,19 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     }
     const course = await studentCourseForBooking(req.appUser!.id);
     const created = await db.transaction(async (tx) => {
-      const lockKeys = [
-        tutor.userId ? `participant:${tutor.userId}` : null,
-        `participant:${req.appUser!.id}`,
-      ]
-        .filter((key): key is string => Boolean(key))
-        .sort();
-      for (const lockKey of lockKeys) {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`${lockKey}:${start.toISOString()}`}))`,
-        );
-      }
-      const end = new Date(start.getTime() + durationMinutes * 60_000);
       const participantIds = [tutor.userId, req.appUser!.id].filter(
         (id): id is string => Boolean(id),
       );
-      const [conflict] = await tx
-        .select({ id: sessionsTable.id })
-        .from(sessionsTable)
-        .where(
-          and(
-            sql`${sessionsTable.status} <> 'archived'`,
-            sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
-            sql`${sessionsTable.dateTime} < ${end}`,
-            sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${start}`,
-            or(
-              ...participantIds.flatMap((id) => [
-                eq(sessionsTable.tutorUserId, id),
-                eq(sessionsTable.clientUserId, id),
-              ]),
-          ),
-          ),
-        )
-        .limit(1);
-      if (conflict) {
-        throw new BookingError(
-          409,
-          "SCHEDULE_CONFLICT",
-          "That time overlaps another active meeting for you or the tutor. Choose a different slot.",
-        );
-      }
+      await acquireBookingLocks(tx, participantIds, start.toISOString());
+      const end = new Date(start.getTime() + durationMinutes * 60_000);
+      await assertNoScheduleConflict(tx, { participantIds, start, end });
       let liveBusyWindows: BusyWindow[];
       try {
         liveBusyWindows = await listGoogleBusyWindows(
           access.accessToken,
           access.connection.calendarId!,
           start,
-          new Date(start.getTime() + durationMinutes * 60_000),
+          end,
         );
       } catch {
         throw new BookingError(
@@ -4355,60 +4337,21 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
           "The tutor calendar could not be checked. Your credit was not used.",
         );
       }
-      if (
-        overlapsBusyWindow(
-          start,
-          new Date(start.getTime() + durationMinutes * 60_000),
-          liveBusyWindows,
-          0,
-        )
-      ) {
+      if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
         throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
       }
-      await tx.execute(
-        sql`select id from credit_ledger where client_user_id = ${req.appUser!.id} for update`,
-      );
-      const entries = await tx
-        .select({ entryType: creditLedgerTable.entryType, hours: creditLedgerTable.hours })
-        .from(creditLedgerTable)
-        .where(eq(creditLedgerTable.clientUserId, req.appUser!.id));
-      const remainingHours = entries.reduce(
-        (total, entry) =>
-          total +
-          (["original", "restored", "adjustment_credit"].includes(entry.entryType)
-            ? entry.hours
-            : -entry.hours),
-        0,
-      );
-      if (remainingHours < durationMinutes / 60) {
-        throw new BookingError(409, "INSUFFICIENT_CREDIT", "You do not have enough prepaid hours for this session.");
-      }
-      const [session] = await tx
-        .insert(sessionsTable)
-        .values({
-          courseId: course.id,
-          clientUserId: req.appUser!.id,
-          tutorUserId: tutor.userId,
-          dateTime: start,
-          timezone: rule.timezone,
-          subject: "SAT",
-          title: sessionTitle(req.appUser!.displayName, "SAT", tutor.name),
-          status: "published",
-          durationMinutes,
-          bookingStatus: "confirmed",
-        })
-        .returning();
-      await tx.insert(creditLedgerTable).values({
+      await lockClientCreditsAndRequireHours(tx, req.appUser!.id, durationMinutes / 60);
+      return insertConfirmedBookingWithDebit(tx, {
+        courseId: course.id,
         clientUserId: req.appUser!.id,
-        productId: null,
-        sessionId: session!.id,
-        entryType: "debit",
-        hours: durationMinutes / 60,
-        referenceType: "session",
-        referenceId: session!.id,
-        note: `Reserved SAT session with ${tutor.name}`,
+        tutorUserId: tutor.userId,
+        start,
+        timezone: rule.timezone,
+        subject: "SAT",
+        title: sessionTitle(req.appUser!.displayName, "SAT", tutor.name),
+        durationMinutes,
+        tutorName: tutor.name,
       });
-      return session!;
     });
     try {
       const event = await createGoogleEvent(
@@ -4420,6 +4363,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
           durationMinutes,
           rule.timezone,
           req.appUser!.email,
+          SHARED_FALL_MEETING_URL,
         ),
       );
       const [updated] = await db
@@ -4431,29 +4375,29 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         })
         .where(eq(sessionsTable.id, created.id))
         .returning();
-      res.status(201).json(await bookingSessionShape(updated ?? created));
+      const confirmed = updated ?? created;
+      await recordBookingConfirmedAudit(req.appUser!.id, confirmed);
+      await notifyAdministratorsOfBooking({
+        kind: "booking_confirmed",
+        sessionId: confirmed.id,
+        title: "SAT booking confirmed",
+        message: `${req.appUser!.displayName} booked ${confirmed.title} at ${confirmed.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
+      });
+      res.status(201).json(await bookingSessionShape(confirmed));
     } catch {
       await db.transaction(async (tx) => {
-        await tx
-          .update(sessionsTable)
-          .set({
-            bookingStatus: "cancelled",
-            cancelledAt: new Date(),
-            cancellationReason: "Calendar event could not be created",
-            updatedAt: new Date(),
-          })
-          .where(eq(sessionsTable.id, created.id));
-        await tx.insert(creditLedgerTable).values({
-          clientUserId: req.appUser!.id,
+        await rollbackBookingAfterCalendarFailure(tx, {
           sessionId: created.id,
-          entryType: "restored",
-          hours: durationMinutes / 60,
-          referenceType: "session",
-          referenceId: created.id,
-          note: "Restored after calendar event creation failed",
+          clientUserId: req.appUser!.id,
+          durationMinutes,
+          actorUserId: req.appUser!.id,
         });
       });
-      throw new BookingError(503, "CALENDAR_UNAVAILABLE", "The tutor calendar could not be updated. Your credit was not used.");
+      throw new BookingError(
+        503,
+        "CALENDAR_UNAVAILABLE",
+        "The tutor calendar could not be updated. Your credit was not used.",
+      );
     }
   } catch (error) {
     sendBookingError(error, res);
@@ -4465,7 +4409,7 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
     const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId : "";
     const session = await sessionForActor(sessionId, req.appUser!);
     if (session.bookingStatus === "cancelled") {
-      res.json(await bookingSessionShape(session));
+      res.json(await bookingSessionShape(session, { creditRestored: false }));
       return;
     }
     if (session.dateTime <= new Date()) {
@@ -4482,35 +4426,20 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
       await deleteGoogleEvent(access.accessToken, access.connection.calendarId!, session.providerEventId);
     }
     const reason = stringField((req.body ?? {}) as Record<string, unknown>, "reason") || "Cancelled by client";
-    const [updated] = await db.transaction(async (tx) => {
-      await tx.execute(sql`select id from sessions where id = ${session.id} for update`);
-      const [current] = await tx
-        .select()
-        .from(sessionsTable)
-        .where(eq(sessionsTable.id, session.id));
-      if (!current || current.bookingStatus === "cancelled") return [current];
-      const [saved] = await tx
-        .update(sessionsTable)
-        .set({
-          bookingStatus: "cancelled",
-          cancelledAt: new Date(),
-          cancellationReason: reason,
-          updatedAt: new Date(),
-        })
-        .where(eq(sessionsTable.id, session.id))
-        .returning();
-      await tx.insert(creditLedgerTable).values({
-        clientUserId: current.clientUserId!,
-        sessionId: current.id,
-        entryType: "restored",
-        hours: current.durationMinutes / 60,
-        referenceType: "session",
-        referenceId: current.id,
-        note: "Credit restored after session cancellation",
-      });
-      return [saved];
+    const result = await db.transaction(async (tx) =>
+      cancelBookingWithCreditPolicy(tx, {
+        session,
+        reason,
+        actorUserId: req.appUser!.id,
+      }),
+    );
+    await notifyAdministratorsOfBooking({
+      kind: "booking_cancelled",
+      sessionId: result.session.id,
+      title: result.creditRestored ? "SAT booking cancelled — credit restored" : "SAT booking cancelled — credit retained",
+      message: `${req.appUser!.displayName} cancelled ${result.session.title}. Credit restored: ${result.creditRestored ? "yes" : "no"}.`,
     });
-    res.json(await bookingSessionShape(updated ?? session));
+    res.json(await bookingSessionShape(result.session, { creditRestored: result.creditRestored }));
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -4587,6 +4516,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             session.durationMinutes,
             rule.timezone,
             (await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, session.clientUserId!)).limit(1))[0]?.email ?? "",
+            SHARED_FALL_MEETING_URL,
           ),
         )
       : null;
@@ -4608,7 +4538,14 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
           access.accessToken,
           access.connection.calendarId!,
           session.providerEventId,
-          calendarEventPayload(session.title, previousStart, session.durationMinutes, session.timezone, ""),
+          calendarEventPayload(
+            session.title,
+            previousStart,
+            session.durationMinutes,
+            session.timezone,
+            "",
+            SHARED_FALL_MEETING_URL,
+          ),
         );
       }
       throw new BookingError(500, "RESCHEDULE_FAILED", "The session could not be rescheduled.");
@@ -5874,6 +5811,7 @@ router.get(
           id: adminNotificationsTable.id,
           kind: adminNotificationsTable.kind,
           guidanceRequestId: adminNotificationsTable.guidanceRequestId,
+          sessionId: adminNotificationsTable.sessionId,
           title: adminNotificationsTable.title,
           message: adminNotificationsTable.message,
           status: adminNotificationsTable.status,

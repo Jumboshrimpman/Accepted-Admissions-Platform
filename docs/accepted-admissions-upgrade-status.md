@@ -58,3 +58,11 @@ The following are intentionally not labeled live:
 - Unauthenticated credit access returned HTTP 401.
 - Public home, SAT offerings, and mobile client-request pages rendered without browser errors.
 - Our Team and Past Success passed desktop and mobile browser checks for approved copy, attribution, image loading and alt text, SEO metadata, responsive navigation, and absence of placeholder content.
+
+## rescue/03-xavier-booking
+
+- Student portal mounts Xavier booking beside prepaid credit balances; viewers stay read-only.
+- Cancellation restores one credit only when made at least 24 hours before the session; late cancellation does not auto-restore.
+- Booking, cancellation, and credit restore write audit logs; administrators receive in-app booking notifications.
+- Google Calendar OAuth uses environment-provided HTTPS `GOOGLE_CALENDAR_REDIRECT_URI` (or HTTPS `${APP_ORIGIN}/api/calendar/oauth/callback`); no committed replit.dev callback.
+- Confirmed appointments use Meet location `https://meet.google.com/rih-iayt-okb`; calendar create failure rolls back the booking and restores the credit.

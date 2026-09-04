@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { createCalendarOAuthState, decryptCalendarToken, encryptCalendarToken, GOOGLE_CALENDAR_SCOPES, googleCalendarCompletionHtml, readCalendarOAuthState } from "./google-calendar.ts";
+import {
+  createCalendarOAuthState,
+  decryptCalendarToken,
+  encryptCalendarToken,
+  getGoogleCalendarConfig,
+  GOOGLE_CALENDAR_SCOPES,
+  googleCalendarCompletionHtml,
+  readCalendarOAuthState,
+  resolveGoogleCalendarRedirectUri,
+} from "./google-calendar.ts";
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
 
@@ -54,4 +63,60 @@ test("calendar completion page renders a safe rejected-authorization message", (
   assert.match(html, /outcome: "cancelled"/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+});
+
+test("production calendar redirect requires HTTPS callback URL", () => {
+  assert.equal(
+    resolveGoogleCalendarRedirectUri({
+      NODE_ENV: "production",
+      GOOGLE_CALENDAR_REDIRECT_URI: "https://app.example.com/api/calendar/oauth/callback",
+    }),
+    "https://app.example.com/api/calendar/oauth/callback",
+  );
+  assert.equal(
+    resolveGoogleCalendarRedirectUri({
+      NODE_ENV: "production",
+      GOOGLE_CALENDAR_REDIRECT_URI: "http://app.example.com/api/calendar/oauth/callback",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveGoogleCalendarRedirectUri({
+      NODE_ENV: "production",
+      APP_ORIGIN: "https://app.example.com",
+    }),
+    "https://app.example.com/api/calendar/oauth/callback",
+  );
+  assert.equal(
+    resolveGoogleCalendarRedirectUri({
+      NODE_ENV: "production",
+      APP_ORIGIN: "http://localhost:3000",
+    }),
+    null,
+  );
+});
+
+test("getGoogleCalendarConfig uses environment-provided HTTPS redirect", () => {
+  const previous = {
+    id: process.env.GOOGLE_CALENDAR_CLIENT_ID,
+    secret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
+    redirect: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+    origin: process.env.APP_ORIGIN,
+    nodeEnv: process.env.NODE_ENV,
+  };
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = "client-id";
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = "client-secret";
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI =
+    "https://app.example.com/api/calendar/oauth/callback";
+  process.env.NODE_ENV = "production";
+  assert.deepEqual(getGoogleCalendarConfig(), {
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    redirectUri: "https://app.example.com/api/calendar/oauth/callback",
+  });
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = previous.id;
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = previous.secret;
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI = previous.redirect;
+  process.env.APP_ORIGIN = previous.origin;
+  process.env.NODE_ENV = previous.nodeEnv;
 });

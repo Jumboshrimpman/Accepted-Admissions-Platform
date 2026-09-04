@@ -185,10 +185,12 @@ export function BookingCard() {
     createBooking.mutate(
       { data: { tutorProfileId: selectedTutorId, startTime: selectedSlot, durationMinutes: 60 } },
       {
-        onSuccess: () => {
+        onSuccess: (session) => {
           invalidateBookingData();
           setSelectedSlot("");
-          setMessage("Your prepaid hour is reserved. The calendar invitation is on its way.");
+          setMessage(
+            `Confirmed: ${session.title}. Join at ${session.meetingUrl ?? "https://meet.google.com/rih-iayt-okb"}. Xavier and an administrator have been notified.`,
+          );
         },
         onError: (error) => setMessage(errorMessage(error)),
       },
@@ -199,9 +201,13 @@ export function BookingCard() {
     cancelBooking.mutate(
       { sessionId, data: { reason: "Cancelled by student" } },
       {
-        onSuccess: () => {
+        onSuccess: (session) => {
           invalidateBookingData();
-          setMessage("Your credit was restored and the session was cancelled.");
+          setMessage(
+            session.creditRestored
+              ? "Session cancelled. Your prepaid credit was restored because you cancelled at least 24 hours in advance."
+              : "Session cancelled. Because this was within 24 hours of the meeting, the prepaid credit was not restored.",
+          );
         },
         onError: (error) => setMessage(errorMessage(error)),
       },
@@ -242,6 +248,7 @@ export function BookingCard() {
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
                Use your prepaid hour to choose a 60-minute time verified against Xavier’s live Google Calendar.
+               Cancel at least 24 hours ahead to restore the credit.
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">

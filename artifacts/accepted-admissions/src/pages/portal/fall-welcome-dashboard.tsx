@@ -12,6 +12,7 @@ import {
   sessionDateKey,
   sessionSubjectLabel,
 } from "@/lib/session-display";
+import { BookingCard } from "@/pages/portal/booking-card";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -172,6 +173,8 @@ export function ClientDashboardView({
           )}
         </CardContent>
       </Card>
+
+      {!viewer && <BookingCard />}
 
       <Card>
         <CardHeader className="pb-3">

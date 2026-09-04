@@ -4,7 +4,7 @@ import { zonedDateTimeToUtc } from "./booking.ts";
 export const TAITO_SESSION_TIMEZONE = "Asia/Tokyo";
 export const TAITO_SESSION_TIME = "21:00";
 export const TAITO_STUDENT_DISPLAY_NAME = "Taito";
-export const SHARED_FALL_MEETING_URL = "http://meet.google.com/rih-iayt-okb";
+export const SHARED_FALL_MEETING_URL = "https://meet.google.com/rih-iayt-okb";
 
 export function isFall2026Term(term: string | null | undefined): boolean {
   return term?.trim().toLowerCase() === "fall 2026";

@@ -57,7 +57,7 @@ test("builds participant-driven appointment names with normalized subjects and f
 });
 
 test("uses one exact shared Meet room for Fall sessions", () => {
-  assert.equal(SHARED_FALL_MEETING_URL, "http://meet.google.com/rih-iayt-okb");
+  assert.equal(SHARED_FALL_MEETING_URL, "https://meet.google.com/rih-iayt-okb");
   assert.equal(isFall2026Term("Fall 2026"), true);
   assert.equal(meetingUrlForTerm("Fall 2026", "https://meet.google.com/provider-event"), SHARED_FALL_MEETING_URL);
   assert.equal(meetingUrlForTerm("Spring 2027", "https://meet.google.com/provider-event"), "https://meet.google.com/provider-event");

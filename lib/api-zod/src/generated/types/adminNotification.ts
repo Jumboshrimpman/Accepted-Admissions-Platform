@@ -11,7 +11,10 @@ import type { AdminNotificationStatus } from './adminNotificationStatus';
 export interface AdminNotification {
   id: string;
   kind: AdminNotificationKind;
-  guidanceRequestId: string;
+  /** @nullable */
+  guidanceRequestId?: string | null;
+  /** @nullable */
+  sessionId?: string | null;
   title: string;
   message: string;
   status: AdminNotificationStatus;
