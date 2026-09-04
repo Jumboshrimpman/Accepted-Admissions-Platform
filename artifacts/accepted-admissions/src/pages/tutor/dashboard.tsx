@@ -16,8 +16,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  GraduationCap,
-  Users,
   Video,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +34,6 @@ import {
   disclosedSessions,
   formatSessionDate,
   formatSessionTimeRange,
-  sessionSubjectLabel,
 } from "@/lib/session-display";
 
 export default function TutorDashboard() {
@@ -48,10 +45,10 @@ export default function TutorDashboard() {
 
   if (loadingDashboard || loadingQueue) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6">
-        <Skeleton className="h-32 rounded-3xl" />
-        <Skeleton className="h-80 rounded-2xl" />
+      <div className="mx-auto max-w-5xl space-y-6">
+        <Skeleton className="h-28 rounded-3xl" />
         <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-48 rounded-2xl" />
       </div>
     );
   }
@@ -148,24 +145,17 @@ export default function TutorDashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <section className="rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-10">
+    <div className="mx-auto max-w-5xl space-y-6 pb-12">
+      <section className="rounded-3xl bg-brand-ink px-6 py-7 text-white sm:px-9">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/65">
           Tutor workspace
         </p>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Good to see you, {dashboard.user.displayName.split(/\s+/)[0]}
-            </h1>
-            <p className="mt-2 max-w-2xl text-base text-white/75">
-              Your sessions and student work, organized around what needs your attention today.
-            </p>
-          </div>
-          <Badge className="border-white/20 bg-white/10 px-3 py-1.5 text-white">
-            Tutor dashboard
-          </Badge>
-        </div>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+          {dashboard.user.displayName.split(/\s+/)[0]}
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-white/75">
+          Sessions and student work that need you today.
+        </p>
       </section>
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">
@@ -177,7 +167,7 @@ export default function TutorDashboard() {
                 Upcoming sessions
               </CardTitle>
               <CardDescription className="mt-1">
-                Open a session workspace with the student, homework, analysis, and curriculum in one place.
+                Open a session workspace to teach and review.
               </CardDescription>
             </div>
             <Badge variant="secondary">{dashboard.upcomingSessions.length} scheduled</Badge>
@@ -191,23 +181,18 @@ export default function TutorDashboard() {
                   key={session.id}
                   className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-                      <CalendarDays className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">
-                        {displaySessionTitle(session.title, session.subject)}
-                      </p>
-                      <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <span>{formatSessionDate(session)}</span>
-                        <span aria-hidden="true">·</span>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock3 className="h-3.5 w-3.5" />
-                          {formatSessionTimeRange(session)}
-                        </span>
-                      </p>
-                    </div>
+                  <div>
+                    <p className="font-semibold">
+                      {displaySessionTitle(session.title, session.subject)}
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <span>{formatSessionDate(session)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {formatSessionTimeRange(session)}
+                      </span>
+                    </p>
                   </div>
                   <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                     <Button asChild className="flex-1 sm:flex-none">
@@ -262,7 +247,7 @@ export default function TutorDashboard() {
                 Needs your attention
               </CardTitle>
               <CardDescription className="mt-1">
-                New submissions and flagged answers, grouped into one review list.
+                New submissions and flagged answers.
               </CardDescription>
             </div>
             {attentionItems.length > 0 && (
@@ -278,7 +263,7 @@ export default function TutorDashboard() {
               {attentionItems.map((item) => (
                 <div
                   key={item.attemptId}
-                  className="flex flex-col gap-4 rounded-xl border p-4 transition-colors hover:border-primary/40 hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -336,141 +321,27 @@ export default function TutorDashboard() {
         </CardContent>
       </Card>
 
-      <Card className="border-primary/20 bg-primary/[0.03] shadow-sm">
-        <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-              <BookOpen className="h-5 w-5" />
+      {fallCourse ? (
+        <Card className="border-primary/20 bg-primary/[0.03]">
+          <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <BookOpen className="mt-0.5 h-5 w-5 text-primary" />
+              <div>
+                <h2 className="font-semibold">Fall curriculum</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Session plans, homework, and practice materials.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
-                Teaching plan
-              </p>
-              <h2 className="mt-1 text-xl font-semibold">Fall 2026 curriculum</h2>
-              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-                Open session plans, homework, adaptive practice, and the hard-question bank.
-              </p>
-            </div>
-          </div>
-          {fallCourse ? (
-            <Button asChild size="lg" className="w-full shrink-0 sm:w-auto">
+            <Button asChild className="w-full shrink-0 sm:w-auto">
               <Link href={`/tutor/courses/${fallCourse.id}`}>
                 Open Fall 2026 curriculum
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-          ) : (
-            <Button size="lg" className="w-full shrink-0 sm:w-auto" disabled>
-              No curriculum assigned
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="px-6 py-5">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Users className="h-5 w-5 text-accent" />
-            Assigned students &amp; programs
-          </CardTitle>
-          <CardDescription className="mt-1">
-            Your current student relationships and curriculum access.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 px-6 pb-6">
-          {dashboard.assignedStudents.length > 0 ? (
-            dashboard.assignedStudents.slice(0, 6).map((student) => (
-              <div
-                key={`${student.id}-${student.courseId}`}
-                className="flex items-center justify-between gap-3 rounded-xl border p-3"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="rounded-xl bg-accent/10 p-2 text-accent">
-                    <GraduationCap className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{student.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                       {student.courseTitle} · {sessionSubjectLabel(student.subject)}
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href={`/tutor/courses/${student.courseId}`}
-                  className="shrink-0 text-sm font-medium text-primary hover:underline"
-                >
-                  Open program
-                </Link>
-              </div>
-            ))
-          ) : (
-            <p className="py-5 text-center text-sm text-muted-foreground">
-              No student assignments are available yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                Upcoming sessions
-              </p>
-              <p className="mt-1 text-2xl font-semibold">
-                {dashboard.upcomingSessions.length}
-              </p>
-            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-2xl bg-accent/10 p-3 text-accent">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                Assigned students
-              </p>
-              <p className="mt-1 text-2xl font-semibold">
-                {dashboard.assignedStudents.length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                Submissions
-              </p>
-              <p className="mt-1 text-2xl font-semibold">
-                {dashboard.newSubmissions.length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-2xl bg-secondary p-3 text-secondary-foreground">
-              <AlertCircle className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                Open flags
-              </p>
-              <p className="mt-1 text-2xl font-semibold">{dashboard.openReviewCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      ) : null}
 
       <CalendarConnectionCard location="tutor_dashboard" />
     </div>

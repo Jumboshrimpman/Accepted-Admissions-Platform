@@ -60,10 +60,10 @@ export default function FallWelcomeDashboard() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-5">
-        <Skeleton className="h-56 rounded-3xl" />
+      <div className="mx-auto max-w-5xl space-y-5">
+        <Skeleton className="h-40 rounded-3xl" />
         <Skeleton className="h-24 rounded-2xl" />
-        <Skeleton className="h-[34rem] rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
@@ -103,31 +103,22 @@ export function ClientDashboardView({
     sessions.find((session) => session.readiness !== "complete") ?? sessions.at(-1);
   const analysis = nextSession?.latestResult?.analysis;
   const completed = sessions.filter((session) => session.readiness === "complete").length;
+  const tutors = dashboard.courses
+    .flatMap((course) => course.tutors ?? [])
+    .filter((tutor): tutor is NonNullable<typeof tutor> => tutor != null)
+    .filter((tutor, index, all) => all.findIndex((candidate) => candidate.id === tutor.id) === index);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-14">
-      <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
-        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">Fall 2026 curriculum</p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              One plan. Twelve focused meetings.
-            </h1>
-            <p className="mt-3 text-white/75">
-              SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-white/65">Progress</p>
-              <p className="mt-1 text-lg font-semibold">{completed} of {sessions.length || 12}</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-white/65">English dates</p>
-              <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
-            </div>
-          </div>
-        </div>
+    <div className="mx-auto max-w-5xl space-y-5 pb-14">
+      <section className="rounded-3xl bg-brand-ink px-6 py-7 text-white sm:px-9">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">Fall 2026 curriculum</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+          Your twelve-session plan
+        </h1>
+        <p className="mt-2 text-white/75">
+          {completed} of {sessions.length || 12} complete
+          {nextSession ? ` · Next: ${formatSessionDate(nextSession)}` : ""}
+        </p>
       </section>
 
       {viewer && (
@@ -140,43 +131,49 @@ export function ClientDashboardView({
         </div>
       )}
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-primary" />
-            Your tutors
-          </CardTitle>
-          <CardDescription>
-            Your approved tutor relationships, organized by subject.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {(() => {
-            const tutors = dashboard.courses
-              .flatMap((course) => course.tutors ?? [])
-              .filter((tutor): tutor is NonNullable<typeof tutor> => tutor != null)
-              .filter((tutor, index, all) => all.findIndex((candidate) => candidate.id === tutor.id) === index);
-            return tutors.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {tutors.map((tutor) => (
-                  <div key={tutor.id} className="rounded-xl border p-4">
-                    <p className="font-semibold">{tutor.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{tutor.specialty}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-3 text-sm text-muted-foreground">
-                Your tutor relationships will appear here once the matching tutor account is provisioned.
-              </p>
-            );
-          })()}
-        </CardContent>
-      </Card>
+      {tutors.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5 text-primary" />
+              Your tutors
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {tutors.map((tutor) => (
+                <div key={tutor.id} className="rounded-xl border p-4">
+                  <p className="font-semibold">{tutor.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{tutor.specialty}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {tutors.length === 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5 text-primary" />
+              Your tutors
+            </CardTitle>
+            <CardDescription>
+              Your approved tutor relationships, organized by subject.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="py-3 text-sm text-muted-foreground">
+              Your tutor relationships will appear here once the matching tutor account is provisioned.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {nextSession ? (
         <Card className="border-primary/25 shadow-sm">
-          <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_1fr_auto] lg:items-center">
+          <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.2fr_auto] lg:items-center">
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>{sessionSubjectLabel(nextSession.subject)}</Badge>
@@ -184,10 +181,7 @@ export function ClientDashboardView({
               </div>
               <h2 className="mt-3 text-2xl font-semibold">{displaySessionTitle(nextSession.title, nextSession.subject)}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{formatSessionTimeRange(nextSession)}</p>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
-              <p className="mt-2 text-sm font-medium">{nextSession.currentFocus ?? "Open the session to review the focus."}</p>
+              <p className="mt-3 text-sm">{nextSession.currentFocus ?? "Open the session to review the focus."}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 {nextSession.preparation ? `${nextSession.preparation.title} · ${readinessLabel(nextSession)}` : "No required preparation."}
               </p>
@@ -214,9 +208,9 @@ export function ClientDashboardView({
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-accent" />Adaptive guidance</CardTitle>
-              <Badge variant="outline">{analysis.label} · {analysis.source === "provider" ? analysis.provider ?? "AI provider" : "Deterministic fallback"}</Badge>
+              <Badge variant="outline">{analysis.label}</Badge>
             </div>
-            <CardDescription>Based only on the latest finalized {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
+            <CardDescription>Based on the latest {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{analysis.strengths[0] ?? "Keep building your baseline."}</p></div>
@@ -228,7 +222,7 @@ export function ClientDashboardView({
 
       {!dashboard.curriculumSessions?.length && dashboard.assignments.length > 0 && (
         <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-lg">Required preparation</CardTitle><CardDescription>A compact status list while the detailed roadmap is loading.</CardDescription></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="text-lg">Required preparation</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {dashboard.assignments.map((assignment) => <Badge key={assignment.id} variant="outline"><span>{assignment.title}</span><span aria-hidden="true"> · </span><span>{preparationStatus(assignment)}</span></Badge>)}
           </CardContent>
@@ -237,32 +231,28 @@ export function ClientDashboardView({
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b px-5 py-5 sm:px-6">
-          <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Twelve-session roadmap</CardTitle>
-          <CardDescription>Open any date to see its before, during, and after learning loop.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Session roadmap</CardTitle>
+          <CardDescription>Open any date for its before, during, and after plan.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {sessions.length > 0 ? (
             <ol className="divide-y">
               {sessions.map((session, index) => (
                 <li key={session.id} className={session.id === nextSession?.id ? "bg-primary/[0.035]" : ""}>
-                  <div className="grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
-                    <div>
-                      <p className="font-semibold">{formatSessionDate(session)}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatSessionTimeRange(session)}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={sessionSubjectLabel(session.subject) === "English" ? "secondary" : "outline"}>{sessionSubjectLabel(session.subject)}</Badge>
-                        <span className="truncate text-sm font-medium">{session.currentFocus}</span>
+                  <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">{formatSessionDate(session)}</p>
+                          <Badge variant={sessionSubjectLabel(session.subject) === "English" ? "secondary" : "outline"}>{sessionSubjectLabel(session.subject)}</Badge>
+                        </div>
+                        <p className="mt-1 truncate text-sm text-muted-foreground">{session.currentFocus}</p>
+                        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {session.readiness === "complete" ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : session.readiness === "not_started" ? <Target className="h-3.5 w-3.5 text-amber-600" /> : <BookOpenCheck className="h-3.5 w-3.5 text-primary" />}
+                          {readinessLabel(session)}
+                        </p>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {session.preparation ? `Before: ${session.preparation.title}` : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      {session.readiness === "complete" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : session.readiness === "not_started" ? <Target className="h-4 w-4 text-amber-600" /> : <BookOpenCheck className="h-4 w-4 text-primary" />}
-                      <span>{readinessLabel(session)}</span>
                     </div>
                     {adminPreview ? <Button disabled variant="ghost" size="sm">Read only</Button> : <Button asChild variant={session.id === nextSession?.id ? "default" : "ghost"} size="sm">
                       <Link href={`/portal/courses/${session.courseId}/sessions/${session.id}`}>

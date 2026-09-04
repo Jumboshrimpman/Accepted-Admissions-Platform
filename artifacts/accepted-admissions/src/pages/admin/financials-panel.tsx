@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useCreateAdminProduct,
   useCreateAdminXavierPayoutOnboarding,
   getGetAdminFinancialsQueryKey,
   getGetAdminXavierPayoutQueryKey,
@@ -12,7 +11,6 @@ import {
   useGetAdminFinancials,
   useGetAdminXavierPayout,
   useReconcileAdminTutorTransfer,
-  useUpdateAdminProduct,
   useUpdateInvoice,
 } from "@workspace/api-client-react";
 import { Check, Edit3, ExternalLink, Loader2, RefreshCw, ReceiptText, WalletCards } from "lucide-react";
@@ -44,8 +42,6 @@ export function AdminFinancialsPanel() {
   const offlinePayment = useCreateOfflinePayment();
   const adjustment = useCreateCreditAdjustment();
   const updateInvoice = useUpdateInvoice();
-  const createProduct = useCreateAdminProduct();
-  const updateProduct = useUpdateAdminProduct();
   const [clientUserId, setClientUserId] = useState("");
   const [productId, setProductId] = useState("");
   const [hours, setHours] = useState("");
@@ -66,14 +62,6 @@ export function AdminFinancialsPanel() {
   const [invoiceClientName, setInvoiceClientName] = useState("");
   const [invoiceClientEmail, setInvoiceClientEmail] = useState("");
   const [editingInvoiceId, setEditingInvoiceId] = useState("");
-  const [productDraft, setProductDraft] = useState({
-    slug: "",
-    name: "",
-    description: "",
-    durationHours: "",
-    totalPrice: "",
-  });
-  const [editingProductId, setEditingProductId] = useState("");
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getGetAdminFinancialsQueryKey() });
@@ -90,8 +78,6 @@ export function AdminFinancialsPanel() {
     offlinePayment.isPending ||
     adjustment.isPending ||
     updateInvoice.isPending ||
-    createProduct.isPending ||
-    updateProduct.isPending ||
     payoutOnboarding.isPending ||
     reconcileTransfer.isPending;
 
@@ -104,13 +90,6 @@ export function AdminFinancialsPanel() {
   const invoicePriceCents = Math.round(
     Number(invoiceUnitPrice || (selectedProductRecord?.totalPriceCents ?? 0) / 100) * 100,
   );
-  const productPayload = {
-    slug: productDraft.slug.trim(),
-    name: productDraft.name.trim(),
-    description: productDraft.description.trim(),
-    durationHours: Number(productDraft.durationHours),
-    totalPriceCents: Math.round(Number(productDraft.totalPrice) * 100),
-  };
   const invoiceDetails = {
     description: invoiceDescription || selectedProductRecord?.name || "SAT tutoring",
     lineItems: [{
@@ -180,44 +159,15 @@ export function AdminFinancialsPanel() {
             <h3 className="font-semibold">Authoritative SAT offer</h3>
             <p className="text-sm text-muted-foreground">The public offer is fixed at one 60-minute Xavier session for $150. Legacy packages remain inactive for audit history.</p>
           </div>
-          <div className="hidden grid gap-3 md:grid-cols-5">
-            <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
-            <Input placeholder="Product name" value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} />
-            <Input placeholder="Description" value={productDraft.description} onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })} />
-            <Input type="number" min="0.25" step="0.25" placeholder="Hours" value={productDraft.durationHours} onChange={(event) => setProductDraft({ ...productDraft, durationHours: event.target.value })} />
-            <Input type="number" min="0.01" step="0.01" placeholder="Price ($)" value={productDraft.totalPrice} onChange={(event) => setProductDraft({ ...productDraft, totalPrice: event.target.value })} />
-          </div>
-          <div className="hidden flex-wrap gap-2">
-            <Button
-              disabled={busy || !productPayload.slug || !productPayload.name || !productPayload.description || !productPayload.durationHours || !productPayload.totalPriceCents}
-              onClick={() => {
-                if (editingProductId) {
-                  updateProduct.mutate({ productId: editingProductId, data: productPayload }, {
-                    onSuccess: () => { setEditingProductId(""); setProductDraft({ slug: "", name: "", description: "", durationHours: "", totalPrice: "" }); complete("Product updated."); },
-                    onError: fail,
-                  });
-                } else {
-                  createProduct.mutate({ data: productPayload }, {
-                    onSuccess: () => { setProductDraft({ slug: "", name: "", description: "", durationHours: "", totalPrice: "" }); complete("Product added to the catalog."); },
-                    onError: fail,
-                  });
-                }
-              }}
-            >
-              {editingProductId ? "Save product" : "Add product"}
-            </Button>
-            {editingProductId && <Button variant="ghost" onClick={() => { setEditingProductId(""); setProductDraft({ slug: "", name: "", description: "", durationHours: "", totalPrice: "" }); }}>Cancel edit</Button>}
-          </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-2">Product</th><th className="p-2">Hours</th><th className="p-2">Price</th><th className="p-2">Status</th><th className="hidden p-2">Action</th></tr></thead>
+              <thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-2">Product</th><th className="p-2">Hours</th><th className="p-2">Price</th><th className="p-2">Status</th></tr></thead>
               <tbody>{data.products.map((product) => (
                 <tr key={product.id} className="border-b">
                   <td className="p-2"><p className="font-medium">{product.name}</p><p className="text-xs text-muted-foreground">{product.slug}</p></td>
                   <td className="p-2">{product.durationHours}</td>
                   <td className="p-2">{money(product.totalPriceCents)} <span className="text-xs text-muted-foreground">({money(product.effectiveHourlyRateCents)}/hr)</span></td>
                   <td className="p-2"><Badge variant={product.active ? "secondary" : "outline"}>{product.active ? "Active" : "Inactive"}</Badge></td>
-                  <td className="hidden p-2"><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => { setEditingProductId(product.id); setProductDraft({ slug: product.slug, name: product.name, description: product.description, durationHours: String(product.durationHours), totalPrice: (product.totalPriceCents / 100).toFixed(2) }); }}><Edit3 className="mr-1 h-3 w-3" /> Edit</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => updateProduct.mutate({ productId: product.id, data: { active: !product.active } }, { onSuccess: () => complete(product.active ? "Product deactivated." : "Product reactivated."), onError: fail })}>{product.active ? "Deactivate" : "Activate"}</Button></div></td>
                 </tr>
               ))}</tbody>
             </table>
