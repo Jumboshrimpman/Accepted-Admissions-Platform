@@ -6,6 +6,7 @@ vi.mock("@/components/public-site-shell", () => ({
     <div>{children}</div>
   ),
   publicApiPath: (path: string) => path,
+  resolvePublicMediaUrl: (url: string | null | undefined) => url ?? undefined,
   fetchPublicJson: async (path: string) => {
     const response = await fetch(path);
     return response.json();
