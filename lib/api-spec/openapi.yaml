@@ -2444,6 +2444,23 @@ components:
         finalAnswer: { type: ["string", "null"] }
         correctAnswer: { type: string }
         reason: { type: string }
+    SessionPrepSummary:
+      type: object
+      required: [mode, summary, duringAssignmentId, attachedQuestionCount]
+      properties:
+        mode:
+          type: string
+          enum:
+            [
+              awaiting_homework,
+              complete_homework_in_session,
+              mistake_focus,
+              hard_bank,
+              ready,
+            ]
+        summary: { type: string }
+        duringAssignmentId: { type: ["string", "null"] }
+        attachedQuestionCount: { type: number }
     AdaptiveCurriculum:
       type: object
       required: [sessionId, homework, mistakes, recommendations, hardQuestions, tutorNotes, publishedBlocks]
@@ -2466,6 +2483,10 @@ components:
         publishedBlocks:
           type: array
           items: { $ref: "#/components/schemas/CurriculumBlock" }
+        sessionPrep:
+          allOf:
+            - $ref: "#/components/schemas/SessionPrepSummary"
+          nullable: true
     AdaptiveRecommendationUpdate:
       type: object
       required: [status]
@@ -2680,6 +2701,10 @@ components:
         reviewStatus: { type: string, enum: [new, in_review, reviewed] }
         mistakeCount: { type: number }
         tutorNotes: { type: ["string", "null"] }
+        analysisPreview: { type: ["string", "null"] }
+        nextFocus:
+          type: array
+          items: { type: string }
     AttemptReviewUpdate:
       type: object
       properties:

@@ -1502,6 +1502,9 @@ export interface ReviewSubmission {
   mistakeCount?: number;
   /** @nullable */
   tutorNotes?: string | null;
+  /** @nullable */
+  analysisPreview?: string | null;
+  nextFocus?: string[];
 }
 
 export type DashboardRecentScoresItem = {
@@ -1788,6 +1791,25 @@ export interface AdaptiveMistake {
   reason: string;
 }
 
+export type SessionPrepSummaryMode = typeof SessionPrepSummaryMode[keyof typeof SessionPrepSummaryMode];
+
+
+export const SessionPrepSummaryMode = {
+  awaiting_homework: 'awaiting_homework',
+  complete_homework_in_session: 'complete_homework_in_session',
+  mistake_focus: 'mistake_focus',
+  hard_bank: 'hard_bank',
+  ready: 'ready',
+} as const;
+
+export interface SessionPrepSummary {
+  mode: SessionPrepSummaryMode;
+  summary: string;
+  /** @nullable */
+  duringAssignmentId: string | null;
+  attachedQuestionCount: number;
+}
+
 export interface AdaptiveCurriculum {
   sessionId: string;
   homework: AssignmentSummary | null;
@@ -1797,6 +1819,7 @@ export interface AdaptiveCurriculum {
   /** @nullable */
   tutorNotes: string | null;
   publishedBlocks: CurriculumBlock[];
+  sessionPrep?: SessionPrepSummary | null;
 }
 
 export type AdaptiveRecommendationUpdateStatus = typeof AdaptiveRecommendationUpdateStatus[keyof typeof AdaptiveRecommendationUpdateStatus];

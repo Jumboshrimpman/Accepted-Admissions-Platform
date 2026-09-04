@@ -47,7 +47,7 @@ import {
 type Section = "roadmap" | "people" | "programs" | "curriculum" | "sessions";
 
 const sectionLinks: Array<{ id: Section; label: string; icon: typeof Users }> = [
-  { id: "roadmap", label: "Fall roadmap", icon: CalendarDays },
+  { id: "roadmap", label: "Curriculum builder", icon: CalendarDays },
   { id: "people", label: "Clients & tutors", icon: Users },
   { id: "programs", label: "Programs", icon: GraduationCap },
   { id: "curriculum", label: "Content tools", icon: Library },
@@ -108,8 +108,10 @@ export default function AdminCurriculum() {
             <ChevronRight className="h-4 w-4" />
             <span>Operations</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Learning operations</h1>
-          <p className="mt-1 text-muted-foreground">Manage programs, assignments, learning materials, people, and sessions from one focused workspace.</p>
+          <h1 className="text-3xl font-bold tracking-tight">AI-native curriculum</h1>
+          <p className="mt-1 text-muted-foreground">
+            Build the Fall plan on the platform: diagnostic, weekly mini-sections, live session focus, and submission alerts in one workspace.
+          </p>
         </div>
         <Input className="w-full sm:w-72" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this section…" aria-label="Search operations" />
       </div>
@@ -601,6 +603,9 @@ function RoadmapSection({ data }: { data: AdminCurriculum }) {
   const sessions = data.sessions
     .filter((session) => fallDateOrder.includes(session.dateTime.slice(0, 10)))
     .sort((left, right) => fallDateOrder.indexOf(left.dateTime.slice(0, 10)) - fallDateOrder.indexOf(right.dateTime.slice(0, 10)));
+  const diagnostic = data.assignments.find((assignment) =>
+    /full sat practice diagnostic|sat diagnostic/i.test(assignment.title),
+  );
   const allExceptions = [
     ...sessions.filter((session) => session.conflict).map((session) => ({
       kind: "schedule",
@@ -622,19 +627,67 @@ function RoadmapSection({ data }: { data: AdminCurriculum }) {
     })),
   ];
   const exceptions = allExceptions.slice(0, 6);
+  const newSubmissions = data.submissions.filter((item) => item.reviewStatus !== "reviewed").slice(0, 5);
 
   return <div className="space-y-5">
+    <Card className="border-primary/20 bg-primary/[0.03]">
+      <CardContent className="grid gap-4 p-5 lg:grid-cols-[1.4fr_1fr]">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Build on the platform</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">One loop for every meeting</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Full timed diagnostic before October 2 → weekly mini-section homework → adaptive analysis for student and tutor → live session focuses on misses (or unfinished homework, or a hard-question bank).
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="secondary">Shared Meet: meet.google.com/rih-iayt-okb</Badge>
+            <Badge variant="outline">Auto similar questions</Badge>
+            <Badge variant="outline">Submission alerts</Badge>
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-background p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pre–Oct 2 diagnostic</p>
+          <p className="mt-2 font-semibold">{diagnostic?.title ?? "Full SAT Practice Diagnostic"}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {diagnostic
+              ? `${diagnostic.questionCount} questions · ${diagnostic.timeLimitMinutes} min · ${diagnostic.submissionCount} submissions`
+              : "Seeded when Fall sessions are reconciled."}
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Tutors get a projected SAT score plus strengths/weaknesses before the first meeting.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
     <div className="grid gap-4 sm:grid-cols-3">
       <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Fall meetings</p><p className="mt-2 text-3xl font-bold">{sessions.length} / 12</p></CardContent></Card>
       <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">English / IELTS</p><p className="mt-2 text-3xl font-bold">{sessions.filter((session) => session.subject.toUpperCase() === "IELTS").length} / 3</p></CardContent></Card>
       <Card className={exceptions.length ? "border-amber-400/40" : ""}><CardContent className="p-5"><p className="text-sm text-muted-foreground">Exceptions</p><p className="mt-2 text-3xl font-bold">{allExceptions.length}</p></CardContent></Card>
     </div>
+    {newSubmissions.length > 0 && (
+      <Card className="border-accent/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Latest submission alerts</CardTitle>
+          <CardDescription>New homework results waiting for tutor review and live-plan prep.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {newSubmissions.map((item) => (
+            <div key={item.attemptId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-sm">
+              <div>
+                <p className="font-medium">{item.studentName} · {item.assignmentTitle}</p>
+                <p className="text-muted-foreground">{Math.round(item.score)}% · {item.mistakeCount} misses · {item.reviewStatus}</p>
+              </div>
+              <Badge variant="outline">{new Date(item.submittedAt).toLocaleDateString()}</Badge>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    )}
     {exceptions.length > 0 && <details className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-4">
       <summary className="cursor-pointer font-semibold"><AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />Review {allExceptions.length} exception{allExceptions.length === 1 ? "" : "s"}</summary>
       <div className="mt-4 grid gap-2 md:grid-cols-2">{exceptions.map((item, index) => <div key={`${item.kind}-${index}`} className="rounded-xl border bg-background p-3 text-sm"><Badge variant={item.severity === "urgent" ? "destructive" : "outline"}>{item.label}</Badge><p className="mt-2 text-muted-foreground">{item.detail}</p></div>)}</div>
     </details>}
     <Card className="overflow-hidden">
-      <CardHeader className="border-b"><CardTitle>Twelve-date readiness</CardTitle><CardDescription>Scan the live Fall plan first. Open detailed content or session controls only when needed.</CardDescription></CardHeader>
+      <CardHeader className="border-b"><CardTitle>Twelve-date curriculum builder</CardTitle><CardDescription>Each date already carries before-session homework and during-session practice. Open a brief to auto-prepare the live plan from the latest submission.</CardDescription></CardHeader>
       <CardContent className="p-0">
         {sessions.length ? <div className="divide-y">{sessions.map((session, index) => {
           const assignments = data.assignments.filter((assignment) => assignment.sessionId === session.id);
@@ -644,9 +697,9 @@ function RoadmapSection({ data }: { data: AdminCurriculum }) {
           return <div key={session.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
             <div><p className="font-semibold">{new Date(session.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: session.timezone })}</p><Badge variant="outline" className="mt-1">{sessionSubjectLabel(session.subject)}</Badge></div>
-            <div><p className="text-sm font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-xs text-muted-foreground">Before: {preparation ? preparation.status : "not required"} · During: {during ? during.status : "no assignment"} · Report: {session.hasReport ? "ready" : "pending"}</p></div>
+            <div><p className="text-sm font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-xs text-muted-foreground">Before: {preparation ? `${preparation.title} (${preparation.status})` : "not required"} · During: {during ? during.status : "auto-prepared in session"} · Report: {session.hasReport ? "ready" : "pending"}</p></div>
             <Badge variant={ready ? "default" : "secondary"} className="w-fit">{ready ? "Ready" : "Needs setup"}</Badge>
-            <Button asChild size="sm" variant="outline"><Link href={`/tutor/sessions/${session.id}`}>Open brief <ChevronRight className="ml-2 h-4 w-4" /></Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/tutor/sessions/${session.id}`}>Open builder <ChevronRight className="ml-2 h-4 w-4" /></Link></Button>
           </div>;
         })}</div> : <Empty text="No Fall curriculum dates are available." />}
       </CardContent>

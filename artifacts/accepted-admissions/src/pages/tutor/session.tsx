@@ -455,15 +455,58 @@ export default function TutorSession() {
                 Review the student&apos;s readiness, results, focus areas, and session plan together.
               </p>
             </div>
-            {session.meetingUrl && (
-              <Button asChild>
-                <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
-                  <Video className="mr-2 h-4 w-4" /> Join meeting
-                </a>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={refreshAdaptive.isPending}
+                onClick={() =>
+                  refreshAdaptive.mutate(
+                    { sessionId },
+                    {
+                      onSuccess: () => {
+                        queryClient.invalidateQueries({
+                          queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: getGetSessionQueryKey(sessionId),
+                        });
+                      },
+                    },
+                  )
+                }
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {refreshAdaptive.isPending ? "Preparing…" : "Auto-prepare session"}
               </Button>
-            )}
+              {session.meetingUrl && (
+                <Button asChild>
+                  <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
+                    <Video className="mr-2 h-4 w-4" /> Join meeting
+                  </a>
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
+        {adaptive?.sessionPrep && (
+          <div className="border-b bg-accent/5 px-6 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+                  AI-native live plan
+                </p>
+                <p className="mt-1 text-sm font-medium">{adaptive.sessionPrep.summary}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Mode: {adaptive.sessionPrep.mode.replaceAll("_", " ")}
+                  {adaptive.sessionPrep.attachedQuestionCount > 0
+                    ? ` · ${adaptive.sessionPrep.attachedQuestionCount} in-session questions ready`
+                    : ""}
+                </p>
+              </div>
+              <Badge variant="outline">{adaptive.sessionPrep.mode.replaceAll("_", " ")}</Badge>
+            </div>
+          </div>
+        )}
         <CardContent className="grid gap-4 p-6 md:grid-cols-[0.8fr_1.2fr]">
           <div className="space-y-4">
             <div className="rounded-xl border bg-background p-4">
@@ -519,7 +562,7 @@ export default function TutorSession() {
                           <p><span className="font-medium text-emerald-700">Strength:</span> {homework.analysis.strengths[0] ?? "No strength summary yet."}</p>
                           <p><span className="font-medium text-amber-700">Recommended focus:</span> {homework.analysis.nextFocus[0] ?? homework.analysis.weaknesses[0] ?? "Keep practicing."}</p>
                           <Badge variant="outline" className="w-fit sm:col-span-2">
-                            {homework.analysis.label} · {homework.analysis.source === "provider" ? homework.analysis.provider ?? "AI provider" : "Deterministic fallback"}
+                            {homework.analysis.label} · shared with student
                           </Badge>
                         </div>
                       )}

@@ -215,6 +215,8 @@ export * from './sessionDetail';
 export * from './sessionHomework';
 export * from './sessionHomeworkAttemptStatus';
 export * from './sessionHomeworkStatus';
+export * from './sessionPrepSummary';
+export * from './sessionPrepSummaryMode';
 export * from './sessionStatus';
 export * from './sessionStudent';
 export * from './timerEvent';

@@ -595,7 +595,9 @@ export const GetAdminClientDashboardResponse = zod.object({
   "submittedAt": zod.coerce.date(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
   "mistakeCount": zod.number().optional(),
-  "tutorNotes": zod.string().nullish()
+  "tutorNotes": zod.string().nullish(),
+  "analysisPreview": zod.string().nullish(),
+  "nextFocus": zod.array(zod.string()).optional()
 })),
   "openReviewCount": zod.number()
 }).and(zod.object({
@@ -1647,7 +1649,9 @@ export const GetDashboardResponse = zod.object({
   "submittedAt": zod.coerce.date(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
   "mistakeCount": zod.number().optional(),
-  "tutorNotes": zod.string().nullish()
+  "tutorNotes": zod.string().nullish(),
+  "analysisPreview": zod.string().nullish(),
+  "nextFocus": zod.array(zod.string()).optional()
 })),
   "openReviewCount": zod.number()
 })
@@ -2110,7 +2114,13 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
   "config": zod.record(zod.string(), zod.unknown())
-}))
+})),
+  "sessionPrep": zod.object({
+  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
+  "summary": zod.string(),
+  "duringAssignmentId": zod.string().nullable(),
+  "attachedQuestionCount": zod.number()
+}).nullish()
 })
 
 
@@ -2208,7 +2218,13 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
   "config": zod.record(zod.string(), zod.unknown())
-}))
+})),
+  "sessionPrep": zod.object({
+  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
+  "summary": zod.string(),
+  "duringAssignmentId": zod.string().nullable(),
+  "attachedQuestionCount": zod.number()
+}).nullish()
 })
 
 
@@ -2979,7 +2995,9 @@ export const ListReviewSubmissionsResponseItem = zod.object({
   "submittedAt": zod.coerce.date(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
   "mistakeCount": zod.number().optional(),
-  "tutorNotes": zod.string().nullish()
+  "tutorNotes": zod.string().nullish(),
+  "analysisPreview": zod.string().nullish(),
+  "nextFocus": zod.array(zod.string()).optional()
 })
 export const ListReviewSubmissionsResponse = zod.array(ListReviewSubmissionsResponseItem)
 
