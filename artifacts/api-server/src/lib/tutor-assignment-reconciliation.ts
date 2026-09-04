@@ -24,7 +24,7 @@ export const APPROVED_TUTOR_ASSIGNMENTS = [
     studentSubject: "all",
   },
   {
-    tutorEmail: "xsfam6@gmail.com",
+    tutorEmail: "xaver.rmz6@gmail.com",
     studentEmail: "michaelmakarem@gmail.com",
     tutorSubject: "SAT",
     studentSubject: "SAT",

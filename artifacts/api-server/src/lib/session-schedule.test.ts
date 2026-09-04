@@ -97,7 +97,7 @@ test("Taito billing stays off-platform while Michelle can self-serve SAT booking
   assert.equal(selfServeSatBookingForEmail("taito0525@gmail.com"), false);
   assert.equal(selfServeSatBookingForEmail("TAITO0525@gmail.com"), false);
   assert.equal(selfServeSatBookingForEmail("michaelmakarem@gmail.com"), true);
-  assert.equal(selfServeSatBookingForEmail("xsfam6@gmail.com"), true);
+  assert.equal(selfServeSatBookingForEmail("xaver.rmz6@gmail.com"), true);
 });
 
 test("calendar deep-links prefer Google event htmlLinks and never Meet URLs", () => {

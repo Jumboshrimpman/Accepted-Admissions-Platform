@@ -40,12 +40,14 @@ import {
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
+  listSharedMeetBusyWindows,
   lockClientCreditsAndRequireHours,
   notifyAdministratorsOfBooking,
   recordBookingConfirmedAudit,
   requireStudentBooker,
   rollbackBookingAfterCalendarFailure,
 } from "../lib/booking-service";
+import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
 import {
   calendarEventPayload,
   generateAvailableSlots,
@@ -1170,11 +1172,20 @@ async function ensureSeedData(): Promise<string> {
 }
 
 async function ensureUpgradeSeedData(): Promise<void> {
+  await db.execute(sql`
+    UPDATE tutor_profiles
+    SET email = 'xaver.rmz6@gmail.com', updated_at = now()
+    WHERE lower(email) = lower('xsfam6@gmail.com')
+      AND NOT EXISTS (
+        SELECT 1 FROM tutor_profiles AS other
+        WHERE lower(other.email) = lower('xaver.rmz6@gmail.com')
+      )
+  `);
   await db
     .insert(tutorProfilesTable)
     .values([
       {
-        email: "xsfam6@gmail.com",
+        email: "xaver.rmz6@gmail.com",
         name: "Xavier Morales",
         title: "SAT & Math Tutor",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
@@ -3632,7 +3643,7 @@ async function slotsForTutor(
     );
     return { tutor, rule, access: null, slots: [] as string[] };
   }
-  const [bookedSessions] = await Promise.all([
+  const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({
         id: sessionsTable.id,
@@ -3650,11 +3661,19 @@ async function slotsForTutor(
           excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
         ),
       ),
+    listSharedMeetBusyWindows({
+      start: from,
+      end: to,
+      excludeSessionId,
+    }),
   ]);
-  const bookedWindows: BusyWindow[] = bookedSessions.map((session) => ({
-    start: session.dateTime.toISOString(),
-    end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
-  }));
+  const bookedWindows: BusyWindow[] = [
+    ...bookedSessions.map((session) => ({
+      start: session.dateTime.toISOString(),
+      end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
+    })),
+    ...sharedMeetWindows,
+  ];
   const availabilityRule: AvailabilityRule = {
     timezone: rule.timezone,
     weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
@@ -4827,32 +4846,15 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     const participantIds = [session.clientUserId, session.tutorUserId].filter(
       (id): id is string => Boolean(id),
     );
-    const [internalConflict] = await db
-      .select({ id: sessionsTable.id })
-      .from(sessionsTable)
-      .where(
-        and(
-          sql`${sessionsTable.id} <> ${session.id}`,
-          sql`${sessionsTable.status} <> 'archived'`,
-          sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
-          sql`${sessionsTable.dateTime} < ${end}`,
-          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${start}`,
-          or(
-            ...participantIds.flatMap((id) => [
-              eq(sessionsTable.tutorUserId, id),
-              eq(sessionsTable.clientUserId, id),
-            ]),
-          ),
-        ),
-      )
-      .limit(1);
-    if (internalConflict) {
-      throw new BookingError(
-        409,
-        "SCHEDULE_CONFLICT",
-        "That time overlaps another active meeting for you or the tutor. Choose a different slot.",
-      );
-    }
+    await db.transaction(async (tx) => {
+      await acquireBookingLocks(tx, participantIds, start.toISOString());
+      await assertNoScheduleConflict(tx, {
+        participantIds,
+        start,
+        end,
+        excludeSessionId: session.id,
+      });
+    });
     const previousStart = session.dateTime;
     const event = session.providerEventId
       ? await updateGoogleEvent(
@@ -6395,6 +6397,8 @@ async function adminSessionConflicts(
     clientUserId?: string | null;
     dateTime: Date;
     durationMinutes: number;
+    courseId?: string | null;
+    subject?: string | null;
   },
   excludeSessionId?: string,
   options: { checkProvider?: boolean; strictProvider?: boolean } = {},
@@ -6408,8 +6412,12 @@ async function adminSessionConflicts(
       durationMinutes: sessionsTable.durationMinutes,
       tutorUserId: sessionsTable.tutorUserId,
       clientUserId: sessionsTable.clientUserId,
+      subject: sessionsTable.subject,
+      term: coursesTable.term,
+      courseMeetUrl: coursesTable.meetUrl,
     })
     .from(sessionsTable)
+    .innerJoin(coursesTable, eq(sessionsTable.courseId, coursesTable.id))
     .where(
       and(
         sql`${sessionsTable.status} <> 'archived'`,
@@ -6429,6 +6437,27 @@ async function adminSessionConflicts(
       (row) =>
         `${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`,
     );
+  const [proposedCourse] = payload.courseId
+    ? await db
+        .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
+        .from(coursesTable)
+        .where(eq(coursesTable.id, payload.courseId))
+        .limit(1)
+    : [];
+  const proposedClaimsShared = sessionClaimsSharedFallMeet({
+    term: proposedCourse?.term,
+    courseMeetUrl: proposedCourse?.meetUrl,
+    subject: payload.subject,
+  });
+  if (proposedClaimsShared) {
+    for (const row of rows) {
+      if (!sessionClaimsSharedFallMeet(row)) continue;
+      const label = `Shared Google Meet · ${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`;
+      if (!conflicts.includes(label) && !conflicts.some((item) => item.startsWith(`${row.title} ·`))) {
+        conflicts.push(label);
+      }
+    }
+  }
   if (options.checkProvider === true && payload.tutorUserId) {
     const access = await calendarAccessForUser(payload.tutorUserId);
     if (!access) {
@@ -6922,6 +6951,8 @@ router.get(
           clientUserId: session.clientUserId,
           dateTime: session.dateTime,
           durationMinutes: session.durationMinutes,
+          courseId: session.courseId,
+          subject: session.subject,
         }, session.id);
         return adminSessionShape(session, conflictWith);
       }),
@@ -7285,6 +7316,8 @@ router.post(
         clientUserId: body.data.clientUserId,
         dateTime: body.data.dateTime,
         durationMinutes: body.data.durationMinutes,
+        courseId: body.data.courseId,
+        subject: body.data.subject,
       }, undefined, { checkProvider: true, strictProvider: true });
     } catch (error) {
       if (error instanceof BookingError) {

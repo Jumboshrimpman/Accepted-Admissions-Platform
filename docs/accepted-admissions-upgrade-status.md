@@ -28,6 +28,12 @@ The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live W
 
 Xavier payout tracking stays **out** (schema leftovers only; no tutor payout UI).
 
+Migration `0026_xavier_email_xaver_rmz6` corrects Xavier’s live email from the 0008 alias `xsfam6@gmail.com` to `xaver.rmz6@gmail.com` on `tutor_profiles`, `users`, and `portal_access_grants`. Historical migration 0008 is left unchanged.
+
+## Shared Google Meet collision
+
+The Fall room `https://meet.google.com/rih-iayt-okb` is assigned to Fall 2026 curriculum sessions and to SAT self-serve bookings. Availability omits occupied slots; booking (and admin session create/update) returns `SCHEDULE_CONFLICT` when another active session already claims that room. This covers Michelle booking Xavier/Eunice at the same time as Taito’s Eunice/Nika Fall sessions.
+
 ## Curriculum building-block model
 
 Admin library at `/admin/curriculum` → Content tools → **Library**:
@@ -64,7 +70,7 @@ Migration `0025_curriculum_library_assets` adds `curriculum_library_assets` and 
 | Keep Xavier payout tracking out | **Done** |
 | Clerk invites + `ACCEPTED_*_CLERK_USER_IDS` | **Owner-only** |
 | `STRIPE_WEBHOOK_SECRET` on the deployment host (not Replit) | **Owner-only** |
-| Google Calendar consent: Xavier `xsfam6@gmail.com`, Eunice `eunice_chon@berkeley.edu` from `/tutor` | **Owner-only** |
+| Google Calendar consent: Xavier `xaver.rmz6@gmail.com`, Eunice `eunice_chon@berkeley.edu` from `/tutor` | **Owner-only** |
 | Policy copy (cancel / refund / privacy / financial aid) | **Owner-only** |
 | Optional publish of live-site phone / Virginia Beach address | **Owner-only** |
 
@@ -81,13 +87,13 @@ Do not invent or commit secrets.
 
 1. **Clerk invites** — confirm production/development addresses, invite in the matching Clerk instance, then put Clerk user IDs in `ACCEPTED_*_CLERK_USER_IDS` (see `docs/accepted-admissions-provisioning.md`). Do not enable public sign-up. Needed for Taito, Eunice, Nika, Xavier, Michelle, and Taito’s viewer if used.
 2. **Stripe webhook signing secret** — set `STRIPE_WEBHOOK_SECRET` on the deployment host and complete a test-mode Checkout / invoice / refund pass before live charges. Michelle cannot receive credits until the webhook marks payment verified.
-3. **Google Calendar consent** — Xavier (`xsfam6@gmail.com`) and Eunice (`eunice_chon@berkeley.edu`) both need `/tutor` Google consent before Michelle can see live availability. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done. Taito’s Meet room is the shared Fall URL; calendar **event** links fill in when Google `htmlLink` is stored on the session.
+3. **Google Calendar consent** — Xavier must sign in at `/tutor` with **`xaver.rmz6@gmail.com`** (not `xsfam6@gmail.com`) and complete Google Calendar OAuth. Eunice (`eunice_chon@berkeley.edu`) also needs `/tutor` Google consent before Michelle can see live availability. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done. Taito’s Meet room is the shared Fall URL; calendar **event** links fill in when Google `htmlLink` is stored on the session. Booking and availability reject any slot that would put two sessions on that shared Meet at the same time.
 4. **Policy copy** — final cancellation, credit-restoration, invoice, refund, privacy-policy, and financial-aid rules. The public form has a short storage notice only; do not treat that as a legal privacy policy.
 5. **Optional publish decisions** — whether to show the live-site phone (`757-332-4244`) and Virginia Beach address on the new footer; whether remaining Wix pages (blog posts, campus-tour product SKUs) should keep inquiry-only redirects.
 6. **Curriculum content** — add licensed SAT practice tests / mini-sections in Admin → Library, then attach them to Taito’s October 2 (and later) session dashboards. Do not upload College Board materials the team is not licensed to host.
 
 ## Verification
 
-- Workspace typecheck, Accepted Admissions tests, API unit tests that do not need Postgres, journal↔SQL 1:1, and both production builds should be run after this pass.
-- Database-backed API tests (`booking-credits`, `calendar-persistence`, `dashboard-role-flows`, `fall-account-linking`, `login-activity`, `payment-credits`, `tutor-assignment-reconciliation`) require `DATABASE_URL` and were not run in this environment unless a database is provisioned.
+- Workspace typecheck, Accepted Admissions tests, API unit tests that do not need Postgres (`shared-meet-conflict`, session-schedule, access-config, public-team-roster, curriculum-library), journal↔SQL 1:1 (includes `0026`), and both production builds should be run after this pass.
+- Database-backed API tests (`booking-credits` including Michelle vs Taito shared-Meet occupancy, `calendar-persistence`, `dashboard-role-flows`, `fall-account-linking`, `login-activity`, `payment-credits`, `tutor-assignment-reconciliation`) require `DATABASE_URL` and were not run in this environment unless a database is provisioned.
 - Public media files for the approved roster and seven school logos are present in-repo.

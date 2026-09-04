@@ -367,6 +367,131 @@ test("concurrent attempts cannot double-book a slot", async () => {
   }
 });
 
+test("Michelle booking is rejected when Taito already holds the shared Meet", async () => {
+  const fixture = await createBookingFixture({ creditHours: 1 });
+  const taitoId = randomUUID();
+  const euniceId = randomUUID();
+  try {
+    await fixture.db.db.insert(fixture.db.usersTable).values([
+      {
+        id: taitoId,
+        clerkUserId: `booking-taito-${fixture.suffix}`,
+        email: `booking-taito-${fixture.suffix}@example.invalid`,
+        displayName: "Taito Goto",
+        role: "student",
+      },
+      {
+        id: euniceId,
+        clerkUserId: `booking-eunice-${fixture.suffix}`,
+        email: `booking-eunice-${fixture.suffix}@example.invalid`,
+        displayName: "Eunice Chon",
+        role: "tutor",
+      },
+    ]);
+    await fixture.db.db.insert(fixture.db.sessionsTable).values({
+      courseId: fixture.courseId,
+      clientUserId: taitoId,
+      tutorUserId: euniceId,
+      dateTime: fixture.start,
+      timezone: "Asia/Tokyo",
+      subject: "SAT",
+      title: "Taito’s SAT Session with Eunice",
+      status: "published",
+      durationMinutes: 60,
+      bookingStatus: "confirmed",
+    });
+    await assert.rejects(
+      () =>
+        fixture.db.db.transaction(async (tx) => {
+          await acquireBookingLocks(
+            tx,
+            [fixture.studentId, fixture.tutorId],
+            fixture.start.toISOString(),
+          );
+          await assertNoScheduleConflict(tx, {
+            participantIds: [fixture.studentId, fixture.tutorId],
+            start: fixture.start,
+            end: new Date(fixture.start.getTime() + 60_000 * 60),
+          });
+        }),
+      (error: unknown) =>
+        error instanceof BookingServiceError &&
+        error.code === "SCHEDULE_CONFLICT" &&
+        /shared Google Meet/i.test(error.message),
+    );
+  } finally {
+    await fixture.db.db
+      .delete(fixture.db.sessionsTable)
+      .where(eq(fixture.db.sessionsTable.clientUserId, taitoId));
+    await fixture.db.db
+      .delete(fixture.db.usersTable)
+      .where(eq(fixture.db.usersTable.id, taitoId));
+    await fixture.db.db
+      .delete(fixture.db.usersTable)
+      .where(eq(fixture.db.usersTable.id, euniceId));
+    await cleanupBookingFixture(fixture);
+  }
+});
+
+test("Michelle booking is allowed when Taito's shared Meet session does not overlap", async () => {
+  const fixture = await createBookingFixture({ creditHours: 1 });
+  const taitoId = randomUUID();
+  const euniceId = randomUUID();
+  try {
+    await fixture.db.db.insert(fixture.db.usersTable).values([
+      {
+        id: taitoId,
+        clerkUserId: `booking-taito-open-${fixture.suffix}`,
+        email: `booking-taito-open-${fixture.suffix}@example.invalid`,
+        displayName: "Taito Goto",
+        role: "student",
+      },
+      {
+        id: euniceId,
+        clerkUserId: `booking-eunice-open-${fixture.suffix}`,
+        email: `booking-eunice-open-${fixture.suffix}@example.invalid`,
+        displayName: "Eunice Chon",
+        role: "tutor",
+      },
+    ]);
+    await fixture.db.db.insert(fixture.db.sessionsTable).values({
+      courseId: fixture.courseId,
+      clientUserId: taitoId,
+      tutorUserId: euniceId,
+      dateTime: new Date(fixture.start.getTime() + 2 * 60 * 60_000),
+      timezone: "Asia/Tokyo",
+      subject: "IELTS",
+      title: "Taito’s English Session with Nika",
+      status: "published",
+      durationMinutes: 60,
+      bookingStatus: "confirmed",
+    });
+    await fixture.db.db.transaction(async (tx) => {
+      await acquireBookingLocks(
+        tx,
+        [fixture.studentId, fixture.tutorId],
+        fixture.start.toISOString(),
+      );
+      await assertNoScheduleConflict(tx, {
+        participantIds: [fixture.studentId, fixture.tutorId],
+        start: fixture.start,
+        end: new Date(fixture.start.getTime() + 60_000 * 60),
+      });
+    });
+  } finally {
+    await fixture.db.db
+      .delete(fixture.db.sessionsTable)
+      .where(eq(fixture.db.sessionsTable.clientUserId, taitoId));
+    await fixture.db.db
+      .delete(fixture.db.usersTable)
+      .where(eq(fixture.db.usersTable.id, taitoId));
+    await fixture.db.db
+      .delete(fixture.db.usersTable)
+      .where(eq(fixture.db.usersTable.id, euniceId));
+    await cleanupBookingFixture(fixture);
+  }
+});
+
 test("one credit cannot be deducted twice for the same session", async () => {
   const fixture = await createBookingFixture({ creditHours: 1 });
   try {

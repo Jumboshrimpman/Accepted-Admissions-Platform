@@ -20,7 +20,7 @@ The approved shared/development email roster is:
 | Email | Role | Scope |
 | --- | --- | --- |
 | `admin@acceptedadmissions.org` | administrator | all courses |
-| `xsfam6@gmail.com` | SAT tutor | SAT |
+| `xaver.rmz6@gmail.com` | SAT tutor | SAT |
 | `eunice_chon@berkeley.edu` | SAT tutor | SAT |
 | `taito0525@gmail.com` | student/client | Fall 2026 student course and sessions |
 | `nika.raiffe@gmail.com` | English/IELTS tutor | IELTS/English |

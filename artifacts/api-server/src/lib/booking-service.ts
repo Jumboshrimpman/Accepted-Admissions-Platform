@@ -2,12 +2,16 @@ import { and, eq, or, sql } from "drizzle-orm";
 import {
   adminNotificationsTable,
   auditLogsTable,
+  coursesTable,
   creditLedgerTable,
   db,
   sessionsTable,
   usersTable,
   type AppUser,
 } from "@workspace/db";
+import type { BusyWindow } from "./booking";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { SHARED_FALL_MEET_LOCK_KEY, SHARED_MEET_CONFLICT_MESSAGE, sessionClaimsSharedFallMeet, sharedMeetOccupancyWindows } from "./shared-meet-conflict.ts";
 
 export const BOOKING_CANCEL_RESTORE_NOTICE_MS = 24 * 60 * 60 * 1000;
 
@@ -67,6 +71,69 @@ export async function acquireBookingLocks(
   }
 }
 
+export async function acquireSharedMeetLock(tx: Tx): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${SHARED_FALL_MEET_LOCK_KEY}))`);
+}
+
+function overlappingSessionWhere(args: {
+  start: Date;
+  end: Date;
+  excludeSessionId?: string;
+}) {
+  return and(
+    sql`${sessionsTable.status} <> 'archived'`,
+    sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
+    sql`${sessionsTable.dateTime} < ${args.end}`,
+    sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${args.start}`,
+    args.excludeSessionId ? sql`${sessionsTable.id} <> ${args.excludeSessionId}` : sql`true`,
+  );
+}
+
+async function overlappingSharedMeetCandidates(
+  query: Tx | typeof db,
+  args: {
+    start: Date;
+    end: Date;
+    excludeSessionId?: string;
+  },
+) {
+  return query
+    .select({
+      id: sessionsTable.id,
+      dateTime: sessionsTable.dateTime,
+      durationMinutes: sessionsTable.durationMinutes,
+      subject: sessionsTable.subject,
+      term: coursesTable.term,
+      courseMeetUrl: coursesTable.meetUrl,
+    })
+    .from(sessionsTable)
+    .innerJoin(coursesTable, eq(sessionsTable.courseId, coursesTable.id))
+    .where(overlappingSessionWhere(args));
+}
+
+export async function listSharedMeetBusyWindows(args: {
+  start: Date;
+  end: Date;
+  excludeSessionId?: string;
+}): Promise<BusyWindow[]> {
+  const rows = await overlappingSharedMeetCandidates(db, args);
+  return sharedMeetOccupancyWindows(rows);
+}
+
+export async function assertNoSharedMeetConflict(
+  tx: Tx,
+  args: {
+    start: Date;
+    end: Date;
+    excludeSessionId?: string;
+  },
+): Promise<void> {
+  const rows = await overlappingSharedMeetCandidates(tx, args);
+  if (rows.some((row) => sessionClaimsSharedFallMeet(row))) {
+    throw new BookingServiceError(409, "SCHEDULE_CONFLICT", SHARED_MEET_CONFLICT_MESSAGE);
+  }
+}
+
 export async function assertNoScheduleConflict(
   tx: Tx,
   args: {
@@ -76,6 +143,7 @@ export async function assertNoScheduleConflict(
     excludeSessionId?: string;
   },
 ): Promise<void> {
+  await acquireSharedMeetLock(tx);
   const [conflict] = await tx
     .select({ id: sessionsTable.id })
     .from(sessionsTable)
@@ -102,6 +170,11 @@ export async function assertNoScheduleConflict(
       "That time overlaps another active meeting for you or the tutor. Choose a different slot.",
     );
   }
+  await assertNoSharedMeetConflict(tx, {
+    start: args.start,
+    end: args.end,
+    excludeSessionId: args.excludeSessionId,
+  });
 }
 
 export async function lockClientCreditsAndRequireHours(
