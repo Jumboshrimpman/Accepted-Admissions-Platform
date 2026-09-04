@@ -653,6 +653,44 @@ export const meetingRecordsTable = pgTable("meeting_records", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Admin-provisionable portal roles only — never administrator or viewer. */
+export const provisionableRoleCategoryEnum = pgEnum(
+  "provisionable_role_category",
+  ["sat_tutor", "english_tutor", "tutor", "student"],
+);
+
+export const portalAccessGrantsTable = pgTable(
+  "portal_access_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    clerkUserId: text("clerk_user_id"),
+    displayName: text("display_name").notNull(),
+    roleCategory: provisionableRoleCategoryEnum("role_category").notNull(),
+    active: boolean("active").notNull().default(true),
+    notes: text("notes"),
+    provisionedByUserId: uuid("provisioned_by_user_id").references(
+      () => usersTable.id,
+    ),
+    userId: uuid("user_id").references(() => usersTable.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("portal_access_grants_email_idx").on(table.email),
+    index("portal_access_grants_clerk_user_id_idx").on(table.clerkUserId),
+    index("portal_access_grants_active_created_idx").on(
+      table.active,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const insertCurriculumBlockSchema =
   createInsertSchema(curriculumBlocksTable).omit({
     id: true,
@@ -661,3 +699,4 @@ export const insertCurriculumBlockSchema =
   });
 export type AppUser = typeof usersTable.$inferSelect;
 export type Attempt = typeof attemptsTable.$inferSelect;
+export type PortalAccessGrant = typeof portalAccessGrantsTable.$inferSelect;

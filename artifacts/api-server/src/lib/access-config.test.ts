@@ -172,6 +172,47 @@ test("denies emails that are not provisioned", () => {
   );
 });
 
+test("resolves database grants for tutors and students", async () => {
+  const { resolvePortalAccess, databaseConfiguredAccess, mergeAccessDecisions } =
+    // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+    await import("./access-config.ts");
+
+  assert.deepEqual(
+    databaseConfiguredAccess("clerk-1", "new.student@example.com", [
+      {
+        email: "new.student@example.com",
+        clerkUserId: null,
+        roleCategory: "student",
+        active: true,
+      },
+    ]),
+    { access: { role: "student", subject: "all" }, conflict: false },
+  );
+
+  assert.deepEqual(
+    resolvePortalAccess("clerk-sat", "sat.tutor@example.com", {
+      env: {},
+      databaseGrants: [
+        {
+          email: "sat.tutor@example.com",
+          clerkUserId: "clerk-sat",
+          roleCategory: "sat_tutor",
+          active: true,
+        },
+      ],
+    }),
+    { access: { role: "tutor", subject: "SAT" }, conflict: false },
+  );
+
+  assert.deepEqual(
+    mergeAccessDecisions(
+      { access: { role: "student", subject: "all" }, conflict: false },
+      { access: { role: "tutor", subject: "SAT" }, conflict: false },
+    ),
+    { access: null, conflict: true },
+  );
+});
+
 test("returns only a Clerk-verified primary email", () => {
   assert.equal(
     verifiedPrimaryEmail({

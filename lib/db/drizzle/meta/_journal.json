@@ -127,6 +127,13 @@
       "when": 1788400000000,
       "tag": "0018_orphan_ledger_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788500000000,
+      "tag": "0019_portal_access_grants",
+      "breakpoints": true
     }
   ]
 }

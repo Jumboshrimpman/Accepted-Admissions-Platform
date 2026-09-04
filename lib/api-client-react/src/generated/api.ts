@@ -23,6 +23,10 @@ import type {
   AdaptiveCurriculum,
   AdaptiveRecommendation,
   AdaptiveRecommendationUpdate,
+  AdminAccessGrant,
+  AdminAccessGrantInput,
+  AdminAccessGrantList,
+  AdminAccessGrantUpdate,
   AdminAssignment,
   AdminAssignmentInput,
   AdminAssignmentUpdate,
@@ -594,6 +598,227 @@ export function useGetAdminCurriculum<TData = Awaited<ReturnType<typeof getAdmin
 
 
 
+
+export const getListAdminAccessGrantsUrl = () => {
+
+
+
+
+  return `/api/admin/access-grants`
+}
+
+/**
+ * @summary List portal access grants for tutors and students
+ */
+export const listAdminAccessGrants = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrantList> => {
+
+  return customFetch<AdminAccessGrantList>(getListAdminAccessGrantsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminAccessGrantsQueryKey = () => {
+    return [
+    `/api/admin/access-grants`
+    ] as const;
+    }
+
+
+export const getListAdminAccessGrantsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAccessGrants>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccessGrants>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminAccessGrantsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAccessGrants>>> = ({ signal }) => listAdminAccessGrants({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAccessGrants>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminAccessGrantsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAccessGrants>>>
+export type ListAdminAccessGrantsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List portal access grants for tutors and students
+ */
+
+export function useListAdminAccessGrants<TData = Awaited<ReturnType<typeof listAdminAccessGrants>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccessGrants>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminAccessGrantsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAdminAccessGrantUrl = () => {
+
+
+
+
+  return `/api/admin/access-grants`
+}
+
+/**
+ * Creates or reactivates a database access grant for a tutor or student. Administrator and viewer roles cannot be provisioned from this endpoint. Does not send Clerk invitations.
+ * @summary Provision a tutor or student for portal access
+ */
+export const createAdminAccessGrant = async (adminAccessGrantInput: AdminAccessGrantInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrant> => {
+
+  return customFetch<AdminAccessGrant>(getCreateAdminAccessGrantUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminAccessGrantInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminAccessGrantMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminAccessGrant>>, TError,{data: BodyType<AdminAccessGrantInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminAccessGrant>>, TError,{data: BodyType<AdminAccessGrantInput>}, TContext> => {
+
+const mutationKey = ['createAdminAccessGrant'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminAccessGrant>>, {data: BodyType<AdminAccessGrantInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminAccessGrant(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminAccessGrantMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminAccessGrant>>>
+    export type CreateAdminAccessGrantMutationBody = BodyType<AdminAccessGrantInput>
+    export type CreateAdminAccessGrantMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>
+
+    /**
+ * @summary Provision a tutor or student for portal access
+ */
+export const useCreateAdminAccessGrant = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminAccessGrant>>, TError,{data: BodyType<AdminAccessGrantInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminAccessGrant>>,
+        TError,
+        {data: BodyType<AdminAccessGrantInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminAccessGrantMutationOptions(options));
+    }
+
+export const getUpdateAdminAccessGrantUrl = (grantId: string,) => {
+
+
+
+
+  return `/api/admin/access-grants/${grantId}`
+}
+
+/**
+ * @summary Update or revoke a tutor or student access grant
+ */
+export const updateAdminAccessGrant = async (grantId: string,
+    adminAccessGrantUpdate: AdminAccessGrantUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrant> => {
+
+  return customFetch<AdminAccessGrant>(getUpdateAdminAccessGrantUrl(grantId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminAccessGrantUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminAccessGrantMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAccessGrant>>, TError,{grantId: string;data: BodyType<AdminAccessGrantUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminAccessGrant>>, TError,{grantId: string;data: BodyType<AdminAccessGrantUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminAccessGrant'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminAccessGrant>>, {grantId: string;data: BodyType<AdminAccessGrantUpdate>}> = (props) => {
+          const {grantId,data} = props ?? {};
+
+          return  updateAdminAccessGrant(grantId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminAccessGrantMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminAccessGrant>>>
+    export type UpdateAdminAccessGrantMutationBody = BodyType<AdminAccessGrantUpdate>
+    export type UpdateAdminAccessGrantMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Update or revoke a tutor or student access grant
+ */
+export const useUpdateAdminAccessGrant = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAccessGrant>>, TError,{grantId: string;data: BodyType<AdminAccessGrantUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminAccessGrant>>,
+        TError,
+        {grantId: string;data: BodyType<AdminAccessGrantUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminAccessGrantMutationOptions(options));
+    }
 
 export const getGetAdminClientDashboardUrl = (clientId: string,) => {
 

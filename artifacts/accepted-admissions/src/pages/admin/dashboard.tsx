@@ -27,7 +27,7 @@ import {
 } from "@/lib/session-display";
 
 const operationLinks = [
-  { href: "/admin/curriculum?section=people", title: "Clients & tutors", detail: "People, subject access, and active status.", icon: Users },
+  { href: "/admin/curriculum?section=people", title: "Clients & tutors", detail: "Provision tutors and students, review people, and subject access.", icon: Users },
   { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish, archive, and update program details.", icon: BookOpen },
   { href: "/admin/curriculum?section=curriculum", title: "Curriculum", detail: "Assignments, materials, question bank, and submissions.", icon: ClipboardList },
   { href: "/admin/curriculum?section=sessions", title: "Sessions", detail: "Participants, Meet links, status, and conflicts.", icon: CalendarDays },

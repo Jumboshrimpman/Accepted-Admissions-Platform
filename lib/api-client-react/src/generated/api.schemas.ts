@@ -485,6 +485,95 @@ export const Role = {
   viewer: 'viewer',
 } as const;
 
+/**
+ * Roles that administrators may provision from the portal (never administrator or viewer).
+ */
+export type ProvisionableRoleCategory = typeof ProvisionableRoleCategory[keyof typeof ProvisionableRoleCategory];
+
+
+export const ProvisionableRoleCategory = {
+  sat_tutor: 'sat_tutor',
+  english_tutor: 'english_tutor',
+  tutor: 'tutor',
+  student: 'student',
+} as const;
+
+export type AdminAccessGrantRole = typeof AdminAccessGrantRole[keyof typeof AdminAccessGrantRole];
+
+
+export const AdminAccessGrantRole = {
+  tutor: 'tutor',
+  student: 'student',
+} as const;
+
+export interface AdminAccessGrant {
+  id: string;
+  email: string;
+  /** @nullable */
+  clerkUserId: string | null;
+  displayName: string;
+  roleCategory: ProvisionableRoleCategory;
+  role: AdminAccessGrantRole;
+  subject: string;
+  active: boolean;
+  /** @nullable */
+  notes: string | null;
+  /** @nullable */
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  revokedAt: string | null;
+}
+
+export interface AdminAccessGrantList {
+  grants: AdminAccessGrant[];
+}
+
+export interface AdminAccessGrantInput {
+  /** @minLength 3 */
+  email: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  displayName: string;
+  roleCategory: ProvisionableRoleCategory;
+  /**
+     * Optional Clerk user ID when already known; otherwise access matches the verified primary email.
+     * @minLength 3
+     * @maxLength 128
+     * @nullable
+     */
+  clerkUserId?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+}
+
+export interface AdminAccessGrantUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  displayName?: string;
+  roleCategory?: ProvisionableRoleCategory;
+  /**
+     * @minLength 3
+     * @maxLength 128
+     * @nullable
+     */
+  clerkUserId?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+  active?: boolean;
+}
+
 export interface CurrentUser {
   id: string;
   displayName: string;
