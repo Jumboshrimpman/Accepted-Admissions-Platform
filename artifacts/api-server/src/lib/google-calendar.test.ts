@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
+import * as googleCalendar from "./google-calendar.ts";
+
+const {
   createCalendarOAuthState,
   decryptCalendarToken,
   encryptCalendarToken,
@@ -10,7 +12,7 @@ import {
   googleCalendarCompletionHtml,
   readCalendarOAuthState,
   resolveGoogleCalendarRedirectUri,
-} from "./google-calendar.ts";
+} = googleCalendar;
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
 

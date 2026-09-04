@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { and, eq } from "drizzle-orm";
 // @ts-expect-error Native Node test execution requires the source extension.
-import {
+import * as bookingService from "./booking-service.ts";
+
+const {
   acquireBookingLocks,
   assertNoScheduleConflict,
   BookingServiceError,
@@ -17,7 +19,7 @@ import {
   sessionCalendarFailRestoreFulfillmentKey,
   sessionDebitFulfillmentKey,
   sessionRestoreFulfillmentKey,
-} from "./booking-service.ts";
+} = bookingService;
 
 type DatabaseModule = typeof import("@workspace/db");
 

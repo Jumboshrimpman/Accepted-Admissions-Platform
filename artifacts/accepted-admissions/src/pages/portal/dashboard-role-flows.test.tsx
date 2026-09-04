@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@workspace/api-client-react", () => ({
   getGetDashboardQueryKey: () => ["dashboard"],
   getListReviewQueueQueryKey: () => ["review-queue"],
+  getGetBookingAvailabilityQueryKey: () => ["availability"],
+  getListBookingSessionsQueryKey: () => ["sessions"],
   useGetDashboard: () => ({
     data: mocks.dashboard,
     isLoading: false,
@@ -47,6 +49,30 @@ vi.mock("@workspace/api-client-react", () => ({
     refetch: vi.fn(async () => undefined),
   }),
   useDisconnectCalendar: () => ({
+    isPending: false,
+    mutate: vi.fn(),
+  }),
+  useListBookingTutors: () => ({
+    data: [],
+    isLoading: false,
+  }),
+  useListBookingSessions: () => ({
+    data: [],
+    isLoading: false,
+  }),
+  useGetBookingAvailability: () => ({
+    data: null,
+    isLoading: false,
+  }),
+  useCreateBookingSession: () => ({
+    isPending: false,
+    mutate: vi.fn(),
+  }),
+  useCancelBookingSession: () => ({
+    isPending: false,
+    mutate: vi.fn(),
+  }),
+  useRescheduleBookingSession: () => ({
     isPending: false,
     mutate: vi.fn(),
   }),

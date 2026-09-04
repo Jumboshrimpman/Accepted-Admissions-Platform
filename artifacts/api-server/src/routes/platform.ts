@@ -7215,7 +7215,7 @@ router.get(
       previewBooking = {
         calendarStatus: "unavailable",
         availability: null,
-        sessions: await Promise.all(bookingSessions.map(bookingSessionShape)),
+        sessions: await Promise.all(bookingSessions.map((session) => bookingSessionShape(session))),
       };
     } else {
       const from = new Date();
@@ -7239,13 +7239,13 @@ router.get(
             providerStatus: availability.access ? "connected" : "disconnected",
             slots: availability.slots,
           },
-          sessions: await Promise.all(bookingSessions.map(bookingSessionShape)),
+          sessions: await Promise.all(bookingSessions.map((session) => bookingSessionShape(session))),
         };
       } catch {
         previewBooking = {
           calendarStatus: "unavailable",
           availability: null,
-          sessions: await Promise.all(bookingSessions.map(bookingSessionShape)),
+          sessions: await Promise.all(bookingSessions.map((session) => bookingSessionShape(session))),
         };
       }
     }
