@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/react";
+import { usePortalAuth } from "@/components/portal-auth";
 import {
   getGetCurrentUserQueryKey,
   useCreatePaymentCheckout,
@@ -24,7 +24,7 @@ type Product = {
 };
 
 export default function SatOfferings() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn } = usePortalAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

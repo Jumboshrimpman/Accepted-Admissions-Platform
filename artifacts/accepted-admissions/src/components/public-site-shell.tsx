@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Show } from "@clerk/react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
+import { WhenSignedIn, WhenSignedOut } from "@/components/portal-auth";
 import { Button } from "@/components/ui/button";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -130,16 +130,16 @@ export function PublicSiteShell({
           </nav>
           <div className="flex min-w-0 items-center justify-end gap-2">
             <span className="hidden text-xs text-muted-foreground md:inline">{eyebrow}</span>
-            <Show when="signed-out">
+            <WhenSignedOut>
               <Button asChild variant="ghost" className="hidden rounded-md sm:inline-flex">
-                <Link href="/login" data-testid="button-header-sign-in">Client sign in</Link>
+                <Link href="/login" data-testid="button-header-sign-in">Sign in</Link>
               </Button>
-            </Show>
-            <Show when="signed-in">
+            </WhenSignedOut>
+            <WhenSignedIn>
               <Button asChild variant="ghost" className="hidden rounded-md sm:inline-flex">
-                <Link href="/portal" data-testid="button-header-portal">Open client portal</Link>
+                <Link href="/portal" data-testid="button-header-portal">Open portal</Link>
               </Button>
-            </Show>
+            </WhenSignedIn>
             <Button asChild className="rounded-md bg-primary px-4 text-sm text-primary-foreground sm:px-5">
               <Link href="/client-request" data-testid="link-header-guidance">
                 Get guidance <ArrowUpRight className="ml-2 h-4 w-4" />
@@ -166,12 +166,12 @@ export function PublicSiteShell({
               <PublicNavLink href="/our-team">Meet the team</PublicNavLink>
               <PublicNavLink href="/past-success">Student stories</PublicNavLink>
               <PublicNavLink href="/client-request">Get guidance</PublicNavLink>
-              <Show when="signed-out">
-                <Link href="/login" data-testid="link-mobile-sign-in" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Client sign in</Link>
-              </Show>
-              <Show when="signed-in">
-                <Link href="/portal" data-testid="link-mobile-portal" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Open client portal</Link>
-              </Show>
+              <WhenSignedOut>
+                <Link href="/login" data-testid="link-mobile-sign-in" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Sign in</Link>
+              </WhenSignedOut>
+              <WhenSignedIn>
+                <Link href="/portal" data-testid="link-mobile-portal" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Open portal</Link>
+              </WhenSignedIn>
             </div>
           </nav>
         )}
@@ -191,7 +191,7 @@ export function PublicSiteShell({
             <Link href="/our-team" className="hover:text-foreground">Meet the team</Link>
             <Link href="/past-success" className="hover:text-foreground">Student stories</Link>
             <Link href="/client-request" className="hover:text-foreground">Get guidance</Link>
-            <Link href="/login" className="hover:text-foreground">Client sign in</Link>
+            <Link href="/login" data-testid="link-footer-sign-in" className="hover:text-foreground">Sign in</Link>
             <a href="mailto:info@acceptedadmissions.org" className="hover:text-foreground">
               info@acceptedadmissions.org
             </a>

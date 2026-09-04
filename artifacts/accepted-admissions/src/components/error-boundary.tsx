@@ -52,13 +52,22 @@ function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
             {error.message || String(error)}
           </pre>
         ) : null}
-        <button
-          type="button"
-          onClick={resetError}
-          className="mt-4 rounded bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
-        >
-          Try again
-        </button>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={resetError}
+            className="rounded bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            Try again
+          </button>
+          <a
+            href={import.meta.env.BASE_URL || "/"}
+            className="text-sm font-medium text-gray-700 underline-offset-4 hover:underline"
+            data-testid="link-error-home"
+          >
+            Back to home
+          </a>
+        </div>
       </div>
     </div>
   );

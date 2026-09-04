@@ -14,8 +14,18 @@ import {
   Router as WouterRouter,
   Redirect,
 } from 'wouter';
-import { ClerkProvider, Show, SignIn, useClerk } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
+import { ClerkProvider, useClerk } from '@clerk/react';
+import {
+  AuthSessionLoading,
+  ClerkPortalAuthBridge,
+  PortalAuthProvider,
+  usePortalAuth,
+} from '@/components/portal-auth';
+import SignInPage, { LoginErrorState } from '@/pages/login';
+import {
+  clerkLoadFailureCopy,
+  resolveClerkPublishableKey,
+} from '@/lib/clerk-publishable-key';
 import {
   getGetCurrentUserQueryKey,
   setBaseUrl,
@@ -47,12 +57,11 @@ import { LEGACY_PUBLIC_REDIRECTS } from '@/lib/legacy-public-routes';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 import { ProvisioningReference } from '@/components/provisioning-reference';
-import { safeReturnPath } from '@/lib/safe-return-path';
 
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
+const clerkKeyResult = resolveClerkPublishableKey(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
+const clerkPubKey = clerkKeyResult.ok ? clerkKeyResult.publishableKey : '';
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -64,10 +73,6 @@ function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || '/'
     : path;
-}
-
-if (!clerkPubKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY');
 }
 
 function ClerkQueryClientCacheInvalidator() {
@@ -93,51 +98,19 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function SignedIn({ children }: { children: ReactNode }) {
-  return <Show when="signed-in">{children}</Show>;
+  const auth = usePortalAuth();
+  if (auth.clerkAvailable && !auth.isLoaded) {
+    return <AuthSessionLoading message="Checking your session…" />;
+  }
+  if (!auth.isSignedIn) return null;
+  return <>{children}</>;
 }
 
 function SignedOut({ children }: { children: ReactNode }) {
-  return <Show when="signed-out">{children}</Show>;
-}
-
-function SignInPage() {
-  const requestedReturnTo = new URLSearchParams(window.location.search).get("returnTo");
-  const safeReturnTo = safeReturnPath({
-    requested: requestedReturnTo,
-    basePath,
-    origin: window.location.origin,
-    fallback: `${basePath}/portal`,
-  });
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4">
-      <div className="w-full max-w-[400px] mb-4">
-        <a
-          href={`${basePath || '/'}`}
-          className="text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          ← Back to Home
-        </a>
-      </div>
-      <SignIn
-        routing="path"
-        path={`${basePath}/login`}
-        forceRedirectUrl={safeReturnTo}
-        fallbackRedirectUrl={safeReturnTo}
-        withSignUp={false}
-        appearance={{
-          elements: {
-            footerAction: { display: 'none' },
-            footer: { display: 'none' },
-            socialButtonsBlockButton: { display: 'none' },
-            socialButtonsBlockButtonText: { display: 'none' },
-            socialButtonsProviderIcon: { display: 'none' },
-            dividerRow: { display: 'none' },
-          },
-        }}
-      />
-    </div>
-  );
+  const auth = usePortalAuth();
+  if (auth.clerkAvailable && !auth.isLoaded) return null;
+  if (auth.isSignedIn) return null;
+  return <>{children}</>;
 }
 
 function Router() {
@@ -425,25 +398,70 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function ClerkBootFallback(_props: { error: Error; resetError: () => void }) {
+  const copy = clerkLoadFailureCopy(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+  return (
+    <div className="min-h-screen bg-background px-6 py-16">
+      <div className="mx-auto max-w-lg">
+        <LoginErrorState
+          title={copy.title}
+          body={copy.body}
+          failedHost={copy.failedHost}
+          scriptUrl={copy.scriptUrl}
+        />
+      </div>
+    </div>
+  );
+}
+
+function AppProviders({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        {children}
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
 function App() {
   const [, setLocation] = useLocation();
 
-  return (
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
-      signInUrl={`${basePath}/login`}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
-    >
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <TooltipProvider>
+  if (!clerkKeyResult.ok) {
+    return (
+      <PortalAuthProvider
+        value={{
+          clerkAvailable: false,
+          isLoaded: true,
+          isSignedIn: false,
+          reason: clerkKeyResult.reason,
+        }}
+      >
+        <AppProviders>
           <Router />
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ClerkProvider>
+        </AppProviders>
+      </PortalAuthProvider>
+    );
+  }
+
+  return (
+    <ErrorBoundary FallbackComponent={ClerkBootFallback}>
+      <ClerkProvider
+        publishableKey={clerkPubKey}
+        proxyUrl={clerkProxyUrl}
+        signInUrl={`${basePath}/login`}
+        routerPush={(to) => setLocation(stripBase(to))}
+        routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      >
+        <AppProviders>
+          <ClerkQueryClientCacheInvalidator />
+          <ClerkPortalAuthBridge>
+            <Router />
+          </ClerkPortalAuthBridge>
+        </AppProviders>
+      </ClerkProvider>
+    </ErrorBoundary>
   );
 }
 
