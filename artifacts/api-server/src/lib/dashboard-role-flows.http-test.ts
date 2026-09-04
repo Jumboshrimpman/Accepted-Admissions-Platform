@@ -131,7 +131,7 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.deepEqual(preview.body.previewOffer, {
       name: "Single SAT Session",
       description: "One prepaid 60-minute SAT tutoring session credit.",
-      priceCents: 17500,
+      priceCents: 13000,
       durationMinutes: 60,
     });
     assert.equal(preview.body.previewFinancials.readOnly, true);

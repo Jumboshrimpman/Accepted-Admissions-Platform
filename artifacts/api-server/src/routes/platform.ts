@@ -263,7 +263,7 @@ const XAVIER_NAME = "Xavier Morales";
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const SINGLE_SAT_SESSION_SLUG = "single-sat-session";
 const TEN_SAT_SESSION_PACKAGE_SLUG = "ten-sat-session-package";
-const SINGLE_SAT_SESSION_PRICE_CENTS = 17_500;
+const SINGLE_SAT_SESSION_PRICE_CENTS = 13_000;
 const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = 130_000;
 const ACCEPTED_SAT_CATALOG = [
   {
@@ -3410,7 +3410,6 @@ async function bookingTutor(tutorProfileId: string, allowExistingSessionTutor = 
             eq(tutorProfilesTable.id, tutorProfileId),
             eq(tutorProfilesTable.active, true),
             eq(tutorProfilesTable.bookingEligible, true),
-            eq(tutorProfilesTable.name, XAVIER_NAME),
           ),
     )
     .limit(1);
@@ -4210,7 +4209,6 @@ router.get("/booking/tutors", async (_req: AuthedRequest, res): Promise<void> =>
       and(
         eq(tutorProfilesTable.active, true),
         eq(tutorProfilesTable.bookingEligible, true),
-        eq(tutorProfilesTable.name, XAVIER_NAME),
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
@@ -4246,7 +4244,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
         throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
       }
     } else if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "Xavier sessions must be exactly 60 minutes.");
+      throw new BookingError(400, "INVALID_DURATION", "Prepaid sessions must be exactly 60 minutes.");
     }
     const result = await slotsForTutor(
       tutorProfileId,
@@ -4318,7 +4316,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "Xavier sessions must be exactly 60 minutes.");
+      throw new BookingError(400, "INVALID_DURATION", "Prepaid sessions must be exactly 60 minutes.");
     }
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
@@ -7317,23 +7315,27 @@ router.get(
       return;
     }
     const dashboard = await dashboardDataForUser(client);
-    const [xavierProfile] = await db
+    const eligibleTutors = await db
       .select({
         id: tutorProfilesTable.id,
         name: tutorProfilesTable.name,
         title: tutorProfilesTable.title,
+        photoUrl: tutorProfilesTable.photoUrl,
+        biography: tutorProfilesTable.biography,
+        subjects: tutorProfilesTable.subjects,
         active: tutorProfilesTable.active,
         bookingEligible: tutorProfilesTable.bookingEligible,
+        calendarStatus: tutorProfilesTable.calendarStatus,
       })
       .from(tutorProfilesTable)
       .where(
         and(
-          eq(tutorProfilesTable.name, XAVIER_NAME),
           eq(tutorProfilesTable.active, true),
           eq(tutorProfilesTable.bookingEligible, true),
         ),
       )
-      .limit(1);
+      .orderBy(asc(tutorProfilesTable.name));
+    const previewTutor = eligibleTutors[0];
     const [bookingSessions, financials] = await Promise.all([
       db
         .select()
@@ -7356,9 +7358,7 @@ router.get(
       } | null;
       sessions: Awaited<ReturnType<typeof bookingSessionShape>>[];
     };
-    if (
-      !xavierProfile
-    ) {
+    if (!previewTutor) {
       previewBooking = {
         calendarStatus: "unavailable",
         availability: null,
@@ -7369,7 +7369,7 @@ router.get(
       const to = new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
       try {
         const availability = await slotsForTutor(
-          xavierProfile.id,
+          previewTutor.id,
           from,
           to,
           60,

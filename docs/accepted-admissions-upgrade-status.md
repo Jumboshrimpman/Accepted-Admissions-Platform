@@ -5,7 +5,7 @@
 - Added a durable `viewer` application role and `viewer_links` relationship. Viewer access is deny-by-default, scoped to a linked student, and blocked for every non-read API request with `VIEW_ONLY`.
 - Added the public SAT offerings, Our Team, Past Success, and Client Request routes using the existing visual system.
 - Added public SAT product records with the requested prices and effective hourly rates:
-  - Single SAT session — $175 for 1 hour
+  - Single SAT session — $130 for 1 hour
   - SAT 5-hour package — $800 for 5 hours
   - SAT 10-hour package — $1,500 for 10 hours
   - SAT 20-hour package — $2,400 for 20 hours

@@ -54,8 +54,8 @@ describe("SAT offer clarity", () => {
         name: "Single SAT Session",
         description: "One prepaid 60-minute SAT tutoring session credit.",
         durationHours: 1,
-        totalPriceCents: 17500,
-        effectiveHourlyRateCents: 17500,
+        totalPriceCents: 13000,
+        effectiveHourlyRateCents: 13000,
       },
       {
         id: "offer-10",
@@ -72,7 +72,7 @@ describe("SAT offer clarity", () => {
 
     expect(await screen.findByTestId("card-sat-offer-offer-1")).toBeTruthy();
     expect(screen.getByTestId("card-sat-offer-offer-10")).toBeTruthy();
-    expect(screen.getByTestId("price-sat-offer-offer-1").textContent).toContain("$175");
+    expect(screen.getByTestId("price-sat-offer-offer-1").textContent).toContain("$130");
     expect(screen.getByTestId("price-sat-offer-offer-10").textContent).toContain("$1,300");
     expect(screen.getByTestId("button-sat-checkout-offer-1").textContent).toContain("Sign in to purchase this session");
     expect(screen.getAllByText("You’ll return to this offer after signing in.").length).toBeGreaterThan(0);
@@ -100,8 +100,8 @@ describe("SAT offer clarity", () => {
       name: "SAT session",
       description: "Approved session",
       durationHours: 1,
-      totalPriceCents: 17500,
-      effectiveHourlyRateCents: 17500,
+      totalPriceCents: 13000,
+      effectiveHourlyRateCents: 13000,
     }]), { status: 200, headers: { "Content-Type": "application/json" } })));
 
     render(<SatOfferings />);
@@ -123,8 +123,8 @@ describe("SAT offer clarity", () => {
       name: "SAT session",
       description: "Approved session",
       durationHours: 1,
-      totalPriceCents: 17500,
-      effectiveHourlyRateCents: 17500,
+      totalPriceCents: 13000,
+      effectiveHourlyRateCents: 13000,
     }]), { status: 200, headers: { "Content-Type": "application/json" } })));
 
     render(<SatOfferings />);

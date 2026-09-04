@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
         id: "tutor-xavier",
         name: "Xavier Morales",
         title: "SAT Tutor",
+        photoUrl: null,
+        biography: "Xavier helps students strengthen SAT reasoning.",
+        subjects: ["SAT", "Math"],
+        calendarStatus: "connected",
         providerStatus: "connected",
       },
     ],
@@ -108,6 +112,18 @@ function dayButton(date: Date): HTMLButtonElement | null {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.tutorsQuery.data = [
+    {
+      id: "tutor-xavier",
+      name: "Xavier Morales",
+      title: "SAT Tutor",
+      photoUrl: null,
+      biography: "Xavier helps students strengthen SAT reasoning.",
+      subjects: ["SAT", "Math"],
+      calendarStatus: "connected",
+      providerStatus: "connected",
+    },
+  ];
   mocks.availabilityQuery.data = {
     tutor: { timezone: tutorTimezone },
     providerStatus: "connected",
@@ -161,5 +177,39 @@ describe("client availability calendar", () => {
 
     expect(screen.getByText("This tutor needs to reconnect Google Calendar before times can be displayed.")).toBeTruthy();
     expect(screen.queryByText("Dates with open times are available to select.")).toBeNull();
+  });
+  test("shows tutor biography and switches calendars between tutors", async () => {
+    mocks.tutorsQuery.data = [
+      {
+        id: "tutor-xavier",
+        name: "Xavier Morales",
+        title: "SAT Tutor",
+        photoUrl: null,
+        biography: "Xavier helps students strengthen SAT reasoning.",
+        subjects: ["SAT", "Math"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+      },
+      {
+        id: "tutor-eunice",
+        name: "Eunice Chon",
+        title: "Scholarship Tutor",
+        photoUrl: null,
+        biography: "Eunice coaches scholarship and admissions work.",
+        subjects: ["Scholarships"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+      },
+    ];
+
+    render(<BookingCard />);
+    expect(screen.getByText("Xavier helps students strengthen SAT reasoning.")).toBeTruthy();
+    expect(screen.getByText("Eunice coaches scholarship and admissions work.")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Eunice Chon" }));
+    await waitFor(() => {
+      expect(screen.getByText("Available times with Eunice Chon")).toBeTruthy();
+    });
   });
 });

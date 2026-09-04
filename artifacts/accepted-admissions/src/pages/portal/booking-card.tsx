@@ -64,6 +64,13 @@ function timeInTimeZone(value: string, timeZone: string): string {
   }).format(parseISO(value));
 }
 
+function truncateBio(value: string | null | undefined, max = 180): string {
+  const text = value?.trim() ?? "";
+  if (!text) return "Biography coming soon.";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trimEnd()}…`;
+}
+
 export function BookingCard() {
   const queryClient = useQueryClient();
   const [selectedTutorId, setSelectedTutorId] = useState("");
@@ -86,6 +93,10 @@ export function BookingCard() {
           id: selectedTutorId,
           name: activeSession.tutorName ?? "Your tutor",
           title: "Existing session tutor",
+          photoUrl: null,
+          biography: null,
+          subjects: [] as string[],
+          calendarStatus: "connected",
           providerStatus: "connected" as const,
         }
       : undefined);
@@ -189,7 +200,7 @@ export function BookingCard() {
           invalidateBookingData();
           setSelectedSlot("");
           setMessage(
-            `Confirmed: ${session.title}. Join at ${session.meetingUrl ?? "https://meet.google.com/rih-iayt-okb"}. Xavier and an administrator have been notified.`,
+            `Confirmed: ${session.title}. Join at ${session.meetingUrl ?? "https://meet.google.com/rih-iayt-okb"}. Your tutor and an administrator have been notified.`,
           );
         },
         onError: (error) => setMessage(errorMessage(error)),
@@ -238,17 +249,17 @@ export function BookingCard() {
   }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
 
   return (
-    <Card className="border-primary/15 shadow-lg shadow-primary/5">
+    <Card id="booking-schedule" className="border-primary/15 shadow-lg shadow-primary/5 scroll-mt-24">
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarClock className="h-5 w-5 text-primary" />
-               Book your session with Xavier
+              Book a prepaid SAT session
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-               Use your prepaid hour to choose a 60-minute time verified against Xavier’s live Google Calendar.
-               Cancel at least 24 hours ahead to restore the credit.
+              Choose a tutor and a 60-minute time verified against their live Google Calendar.
+              Cancel at least 24 hours ahead to restore the credit.
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -262,10 +273,31 @@ export function BookingCard() {
           <p className="text-sm text-muted-foreground">Loading eligible tutors…</p>
         ) : tutors.length === 0 ? (
           <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-             Xavier’s booking calendar is not available right now.
+            No booking calendars are available right now. Please check again soon.
           </div>
         ) : (
           <>
+            {tutors.length > 1 && (
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Choose a tutor">
+                {tutors.map((tutor) => (
+                  <button
+                    key={`tab-${tutor.id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedTutorId === tutor.id}
+                    onClick={() => chooseTutor(tutor.id)}
+                    className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                      selectedTutorId === tutor.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hover:border-primary/40 hover:bg-muted/40"
+                    }`}
+                  >
+                    {tutor.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="grid gap-3">
               {tutors.map((tutor) => (
                 <button
@@ -278,18 +310,58 @@ export function BookingCard() {
                       : "hover:border-primary/40 hover:bg-muted/40"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{tutor.name}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{tutor.title}</p>
+                  <div className="flex items-start gap-4">
+                    {tutor.photoUrl ? (
+                      <img
+                        src={tutor.photoUrl}
+                        alt=""
+                        className="h-16 w-16 shrink-0 rounded-2xl object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-semibold text-muted-foreground">
+                        {tutor.name
+                          .split(/\s+/)
+                          .slice(0, 2)
+                          .map((part) => part[0] ?? "")
+                          .join("")}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{tutor.name}</p>
+                          <p className="mt-0.5 text-sm text-muted-foreground">{tutor.title}</p>
+                        </div>
+                        <span
+                          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                            tutor.providerStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"
+                          }`}
+                          title={
+                            tutor.providerStatus === "connected"
+                              ? "Calendar connected"
+                              : "Calendar connection needed"
+                          }
+                        />
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                        {truncateBio(tutor.biography)}
+                      </p>
+                      {tutor.subjects.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {tutor.subjects.map((subject) => (
+                            <Badge key={subject} variant="outline" className="rounded-full text-xs">
+                              {subject}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {tutor.providerStatus === "connected"
+                          ? "Calendar connected — times below"
+                          : "Calendar connection needed before times appear"}
+                      </p>
                     </div>
-                    <span className={`mt-1 h-2.5 w-2.5 rounded-full ${tutor.providerStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"}`} />
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {tutor.providerStatus === "connected"
-                      ? "Calendar connected"
-                      : "Calendar connection needed"}
-                  </p>
                 </button>
               ))}
             </div>
@@ -317,7 +389,7 @@ export function BookingCard() {
                     <span>This tutor needs to reconnect Google Calendar before times can be displayed.</span>
                   </div>
                 ) : availableSlots.length === 0 ? (
-                   <p className="mt-4 text-sm text-muted-foreground">Xavier has no open times in this window. Please check again soon.</p>
+                   <p className="mt-4 text-sm text-muted-foreground">{selectedTutor.name} has no open times in this window. Please check again soon.</p>
                 ) : (
                   <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
                     <div className="rounded-xl border bg-background p-2 sm:p-3">
@@ -404,6 +476,7 @@ export function BookingCard() {
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {session.bookingStatus === "rescheduled" ? "Rescheduled" : "Confirmed"}
+                        {session.tutorName ? ` · ${session.tutorName}` : ""}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -439,7 +512,7 @@ export function BookingCard() {
           )}
           {sessions.some((session) => session.bookingStatus === "cancelled") && (
             <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Cancelled sessions restore their prepaid credit.
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Cancellations at least 24 hours ahead restore the prepaid credit.
             </p>
           )}
         </div>
@@ -499,10 +572,10 @@ export function ClientPreviewBookingCard({
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarClock className="h-5 w-5 text-primary" />
-              Xavier booking experience
+              Prepaid booking experience
             </CardTitle>
             <CardDescription className="mt-2">
-              A client-safe view of the one-time, 60-minute booking journey. No changes can be made from this preview.
+              A client-safe view of the 60-minute booking journey. No changes can be made from this preview.
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -516,14 +589,14 @@ export function ClientPreviewBookingCard({
             {bookingState === "unpaid"
               ? "Booking unavailable until payment is verified"
               : bookingState === "booked"
-                ? "A Xavier session is booked"
+                ? "A prepaid session is booked"
                 : bookingState === "no_credit"
                   ? "No prepaid hour is currently available"
                   : "Payment verified — ready to book"}
           </p>
           <p className="mt-1 text-amber-800">
             {bookingState === "unpaid"
-              ? "The student must complete the one-time SAT purchase before a prepaid hour can be reserved."
+              ? "The student must complete an SAT purchase before a prepaid hour can be reserved."
               : bookingState === "booked"
                 ? "Booked, rescheduled, and cancelled sessions are listed below with their current status."
                 : bookingState === "no_credit"
@@ -534,7 +607,7 @@ export function ClientPreviewBookingCard({
 
         {previewBooking.calendarStatus === "unavailable" ? (
           <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-            <p>Xavier&apos;s booking calendar is not available right now.</p>
+            <p>No booking calendar is available right now.</p>
             <Button disabled variant="outline" className="mt-4 rounded-full">
               Booking disabled in preview
             </Button>
@@ -543,7 +616,7 @@ export function ClientPreviewBookingCard({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <div className="flex items-start gap-2">
               <Link2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Xavier&apos;s Google Calendar is disconnected, so no times can be displayed.</span>
+              <span>This tutor&apos;s Google Calendar is disconnected, so no times can be displayed.</span>
             </div>
             <Button disabled variant="outline" className="mt-4 rounded-full">
               Booking disabled in preview
@@ -551,7 +624,7 @@ export function ClientPreviewBookingCard({
           </div>
         ) : availableSlots.length === 0 ? (
           <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-            Xavier has no open 60-minute times in the next 14 days.
+            {availability?.tutor.name ?? "This tutor"} has no open 60-minute times in the next 14 days.
           </p>
         ) : (
           <div>
