@@ -103,6 +103,53 @@ function mockInitialRequests() {
 }
 
 describe("administrator public content previews", () => {
+  test("creates a tutor profile with name and photo", async () => {
+    mockInitialRequests();
+    mocks.customFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/admin/tutors" && (!init || !init.method || init.method === "GET")) {
+        return tutors;
+      }
+      if (path === "/api/admin/public-content") return content;
+      if (path === "/api/admin/tutors" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        return {
+          id: "created-tutor",
+          email: body.email,
+          name: body.name,
+          title: body.title,
+          photoUrl: body.photoUrl,
+          photoAltText: body.photoAltText,
+          biography: null,
+          subjects: [],
+          linkedinUrl: null,
+          publicApproved: false,
+          active: true,
+          bookingEligible: false,
+        };
+      }
+      throw new Error(`Unexpected request: ${path} ${init?.method ?? "GET"}`);
+    });
+
+    render(<PublicContentPanel />);
+
+    expect(await screen.findByTestId("create-tutor-profile")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("create-tutor-name"), {
+      target: { value: "New Tutor" },
+    });
+    fireEvent.change(screen.getByTestId("create-tutor-email"), {
+      target: { value: "new.tutor@example.invalid" },
+    });
+    fireEvent.change(screen.getByTestId("create-tutor-photo"), {
+      target: { value: "https://example.com/new-tutor.jpg" },
+    });
+    fireEvent.click(screen.getByTestId("create-tutor-submit"));
+
+    await waitFor(() => {
+      expect(screen.getByText("New Tutor was created on file.")).toBeTruthy();
+    });
+    expect(screen.getByDisplayValue("New Tutor")).toBeTruthy();
+  });
+
   test("renders current unsaved values in both previews without saving or publishing", async () => {
     mockInitialRequests();
     render(<PublicContentPanel />);

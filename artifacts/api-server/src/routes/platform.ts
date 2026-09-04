@@ -224,6 +224,11 @@ import {
   verifiedPrimaryEmail,
 } from "../lib/access-config";
 import {
+  parseTutorProfileEditableFields,
+  safePublicUrl,
+  tutorProfileApprovalError,
+} from "../lib/tutor-profile-fields";
+import {
   contentSourcesTable,
   assignmentQuestionsTable,
   assignmentsTable,
@@ -1221,7 +1226,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         name: "Aurelia Finch",
         title: "Admissions Tutor - UK",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Aurelia Finch"],
-        photoAltText: "Aurelia Finch, Admissions Tutor",
+        photoAltText: "Aurelia Finch, Admissions Tutor - UK",
         biography:
           "Aurelia graduated with an MPhil in Modern Middle Eastern Studies from the University of Oxford in 2024, after completing her undergraduate studies in Arabic and Spanish at the University of Durham with first class honours. She is now Director of the UK-MENA Network.",
         subjects: ["College admissions"],
@@ -3284,14 +3289,30 @@ async function ensurePublicPlatformData(): Promise<void> {
 }
 
 
-function safePublicUrl(value: unknown): boolean {
-  if (typeof value !== "string" || value.length > 2048) return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
+const tutorProfileSelect = {
+  id: tutorProfilesTable.id,
+  email: tutorProfilesTable.email,
+  name: tutorProfilesTable.name,
+  title: tutorProfilesTable.title,
+  photoUrl: tutorProfilesTable.photoUrl,
+  photoAltText: tutorProfilesTable.photoAltText,
+  biography: tutorProfilesTable.biography,
+  subjects: tutorProfilesTable.subjects,
+  linkedinUrl: tutorProfilesTable.linkedinUrl,
+  publicApproved: tutorProfilesTable.publicApproved,
+  active: tutorProfilesTable.active,
+  bookingEligible: tutorProfilesTable.bookingEligible,
+} as const;
+
+async function syncLinkedUserDisplayName(
+  userId: string | null | undefined,
+  name: string | undefined,
+): Promise<void> {
+  if (!userId || !name) return;
+  await db
+    .update(usersTable)
+    .set({ displayName: name, updatedAt: new Date() })
+    .where(eq(usersTable.id, userId));
 }
 
 /** Absolute http(s) URLs or same-origin relative media paths (no protocol-relative or traversal). */
@@ -3878,23 +3899,105 @@ router.get(
   async (_req: AuthedRequest, res): Promise<void> => {
     await ensureUpgradeSeedData();
     const tutors = await db
-      .select({
-        id: tutorProfilesTable.id,
-        email: tutorProfilesTable.email,
-        name: tutorProfilesTable.name,
-        title: tutorProfilesTable.title,
-        photoUrl: tutorProfilesTable.photoUrl,
-        photoAltText: tutorProfilesTable.photoAltText,
-        biography: tutorProfilesTable.biography,
-        subjects: tutorProfilesTable.subjects,
-        linkedinUrl: tutorProfilesTable.linkedinUrl,
-        publicApproved: tutorProfilesTable.publicApproved,
-        active: tutorProfilesTable.active,
-        bookingEligible: tutorProfilesTable.bookingEligible,
-      })
+      .select(tutorProfileSelect)
       .from(tutorProfilesTable)
       .orderBy(asc(tutorProfilesTable.name));
-    res.json(tutors);
+    const ordered = [...tutors].sort((left, right) => {
+      const leftIndex = PUBLIC_TUTOR_ORDER.indexOf(
+        left.name as (typeof PUBLIC_TUTOR_ORDER)[number],
+      );
+      const rightIndex = PUBLIC_TUTOR_ORDER.indexOf(
+        right.name as (typeof PUBLIC_TUTOR_ORDER)[number],
+      );
+      if (leftIndex === -1 && rightIndex === -1) return left.name.localeCompare(right.name);
+      if (leftIndex === -1) return 1;
+      if (rightIndex === -1) return -1;
+      return leftIndex - rightIndex;
+    });
+    res.json(ordered);
+  },
+);
+
+router.post(
+  "/admin/tutors",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const email = stringField(body, "email").toLowerCase();
+    if (!email || !email.includes("@") || email.length > 320) {
+      res.status(400).json({ error: "A valid email is required to create a profile." });
+      return;
+    }
+    const parsed = parseTutorProfileEditableFields(body, { requireName: true });
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const publicApproved =
+      typeof body.publicApproved === "boolean" ? body.publicApproved : false;
+    const active = typeof body.active === "boolean" ? body.active : true;
+    const bookingEligible =
+      typeof body.bookingEligible === "boolean" ? body.bookingEligible : false;
+    const title = parsed.updates.title ?? "Tutor";
+    const proposed = {
+      name: parsed.updates.name!,
+      title,
+      biography: parsed.updates.biography ?? null,
+      photoUrl: parsed.updates.photoUrl ?? null,
+      photoAltText: parsed.updates.photoAltText ?? null,
+      linkedinUrl: parsed.updates.linkedinUrl ?? null,
+      publicApproved,
+    };
+    const approvalError = tutorProfileApprovalError(proposed);
+    if (approvalError) {
+      res.status(400).json({ error: approvalError });
+      return;
+    }
+    const [linkedUser] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+    try {
+      const [created] = await db
+        .insert(tutorProfilesTable)
+        .values({
+          userId: linkedUser?.id ?? null,
+          email,
+          name: parsed.updates.name!,
+          title,
+          photoUrl: parsed.updates.photoUrl ?? null,
+          photoAltText: parsed.updates.photoAltText ?? null,
+          biography: parsed.updates.biography ?? null,
+          subjects: parsed.updates.subjects ?? [],
+          linkedinUrl: parsed.updates.linkedinUrl ?? null,
+          publicApproved,
+          active,
+          bookingEligible,
+        })
+        .returning(tutorProfileSelect);
+      if (!created) {
+        res.status(500).json({ error: "Could not create tutor profile" });
+        return;
+      }
+      await syncLinkedUserDisplayName(linkedUser?.id, created.name);
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "public.tutor_created",
+        entityType: "tutor_profile",
+        entityId: created.id,
+        metadata: { email: created.email, publicApproved: created.publicApproved },
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/unique|duplicate/i.test(message)) {
+        res.status(409).json({ error: "A tutor profile already exists for that email." });
+        return;
+      }
+      throw error;
+    }
   },
 );
 
@@ -3909,28 +4012,21 @@ router.patch(
       return;
     }
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const stringFields = [
-      "name",
-      "title",
-      "photoUrl",
-      "photoAltText",
-      "biography",
-      "linkedinUrl",
-    ] as const;
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-    for (const field of stringFields) {
-      if (field in body && (typeof body[field] === "string" || body[field] === null)) {
-        updates[field] = body[field];
-      }
+    const parsed = parseTutorProfileEditableFields(body);
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
     }
-    if ("subjects" in body && Array.isArray(body.subjects) && body.subjects.every((item) => typeof item === "string")) {
-      updates.subjects = body.subjects;
-    }
+    const updates: Record<string, unknown> = {
+      ...parsed.updates,
+      updatedAt: new Date(),
+    };
     for (const field of ["publicApproved", "active", "bookingEligible"] as const) {
       if (field in body && typeof body[field] === "boolean") updates[field] = body[field];
     }
     const [existing] = await db
       .select({
+        userId: tutorProfilesTable.userId,
         name: tutorProfilesTable.name,
         title: tutorProfilesTable.title,
         photoUrl: tutorProfilesTable.photoUrl,
@@ -3947,56 +4043,134 @@ router.patch(
       return;
     }
     const proposed = { ...existing, ...updates };
-    if (proposed.publicApproved === true) {
-      if (!existing || typeof proposed.name !== "string" || !proposed.name.trim() || typeof proposed.title !== "string" || !proposed.title.trim()) {
-        res.status(400).json({ error: "An approved tutor needs a name and title." });
-        return;
-      }
-      if (typeof proposed.biography !== "string" || !proposed.biography.trim()) {
-        res.status(400).json({ error: "An approved tutor needs a biography." });
-        return;
-      }
-      if (proposed.photoUrl !== null && proposed.photoUrl !== undefined && !safePublicMediaUrl(proposed.photoUrl)) {
-        res.status(400).json({ error: "A headshot URL must use http(s) or a site-relative path." });
-        return;
-      }
-      if (proposed.photoUrl && (typeof proposed.photoAltText !== "string" || !proposed.photoAltText.trim())) {
-        res.status(400).json({ error: "A public headshot needs alt text." });
-        return;
-      }
-      if (proposed.linkedinUrl !== null && proposed.linkedinUrl !== undefined && !safePublicUrl(proposed.linkedinUrl)) {
-        res.status(400).json({ error: "A LinkedIn URL must use http or https." });
-        return;
-      }
+    const approvalError = tutorProfileApprovalError(proposed);
+    if (approvalError) {
+      res.status(400).json({ error: approvalError });
+      return;
     }
     const [saved] = await db
       .update(tutorProfilesTable)
       .set(updates)
       .where(eq(tutorProfilesTable.id, tutorId))
-      .returning({
-        id: tutorProfilesTable.id,
-        email: tutorProfilesTable.email,
-        name: tutorProfilesTable.name,
-        title: tutorProfilesTable.title,
-        photoUrl: tutorProfilesTable.photoUrl,
-        photoAltText: tutorProfilesTable.photoAltText,
-        biography: tutorProfilesTable.biography,
-        subjects: tutorProfilesTable.subjects,
-        linkedinUrl: tutorProfilesTable.linkedinUrl,
-        publicApproved: tutorProfilesTable.publicApproved,
-        active: tutorProfilesTable.active,
-        bookingEligible: tutorProfilesTable.bookingEligible,
-      });
+      .returning(tutorProfileSelect);
     if (!saved) {
       res.status(404).json({ error: "Tutor profile not found" });
       return;
     }
+    await syncLinkedUserDisplayName(existing.userId, saved.name);
     await db.insert(auditLogsTable).values({
       actorUserId: req.appUser!.id,
       action: "public.tutor_updated",
       entityType: "tutor_profile",
       entityId: saved.id,
       metadata: { publicApproved: saved.publicApproved },
+    });
+    res.json(saved);
+  },
+);
+
+router.get(
+  "/tutor/profile",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, true);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    res.json({
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      title: profile.title,
+      photoUrl: profile.photoUrl,
+      photoAltText: profile.photoAltText,
+      biography: profile.biography,
+      subjects: profile.subjects,
+      linkedinUrl: profile.linkedinUrl,
+      publicApproved: profile.publicApproved,
+      active: profile.active,
+      bookingEligible: profile.bookingEligible,
+    });
+  },
+);
+
+router.patch(
+  "/tutor/profile",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, true);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    if (profile.userId && profile.userId !== req.appUser!.id && req.appUser!.role !== "administrator") {
+      res.status(403).json({ error: "Insufficient permission" });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const parsed = parseTutorProfileEditableFields(body);
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    if (Object.keys(parsed.updates).length === 0) {
+      res.status(400).json({ error: "Provide at least one profile field to update." });
+      return;
+    }
+    if (
+      parsed.updates.photoUrl &&
+      !(parsed.updates.photoAltText ?? profile.photoAltText)?.trim()
+    ) {
+      res.status(400).json({
+        error: "Add short alt text that describes the photo before saving it.",
+      });
+      return;
+    }
+    const proposed = {
+      name: parsed.updates.name ?? profile.name,
+      title: parsed.updates.title ?? profile.title,
+      biography: parsed.updates.biography === undefined ? profile.biography : parsed.updates.biography,
+      photoUrl: parsed.updates.photoUrl === undefined ? profile.photoUrl : parsed.updates.photoUrl,
+      photoAltText:
+        parsed.updates.photoAltText === undefined
+          ? profile.photoAltText
+          : parsed.updates.photoAltText,
+      linkedinUrl:
+        parsed.updates.linkedinUrl === undefined
+          ? profile.linkedinUrl
+          : parsed.updates.linkedinUrl,
+      publicApproved: profile.publicApproved,
+    };
+    const approvalError = tutorProfileApprovalError(proposed);
+    if (approvalError) {
+      res.status(400).json({ error: approvalError });
+      return;
+    }
+    const [saved] = await db
+      .update(tutorProfilesTable)
+      .set({
+        ...parsed.updates,
+        userId: profile.userId ?? req.appUser!.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(tutorProfilesTable.id, profile.id))
+      .returning(tutorProfileSelect);
+    if (!saved) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    await syncLinkedUserDisplayName(profile.userId ?? req.appUser!.id, saved.name);
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "tutor.profile_updated",
+      entityType: "tutor_profile",
+      entityId: saved.id,
+      metadata: {
+        fields: Object.keys(parsed.updates),
+      },
     });
     res.json(saved);
   },
@@ -7050,13 +7224,18 @@ router.patch(
 
 router.get("/me", async (req: AuthedRequest, res): Promise<void> => {
   const user = req.appUser!;
+  let avatarUrl: string | null = null;
+  if (user.role === "tutor" || user.role === "administrator") {
+    const profile = await resolveCalendarProfileForUser(user);
+    avatarUrl = profile?.photoUrl ?? null;
+  }
   res.json(
     GetCurrentUserResponse.parse({
       id: user.id,
       displayName: user.displayName,
       email: user.email,
       role: user.role,
-      avatarUrl: null,
+      avatarUrl,
     }),
   );
 });

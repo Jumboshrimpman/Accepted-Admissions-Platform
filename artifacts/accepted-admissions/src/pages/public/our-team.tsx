@@ -105,7 +105,7 @@ function TeamPortrait({ tutor }: { tutor: Tutor }) {
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground"
+      className="absolute inset-0 flex items-center justify-center bg-[#d8d4cc] text-foreground/50"
       data-testid={`team-portrait-${tutor.id}`}
     >
       {showImage && (
@@ -114,7 +114,7 @@ function TeamPortrait({ tutor }: { tutor: Tutor }) {
           alt={profileImageAlt(tutor)}
           width="640"
           height="960"
-          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
+          className="h-full w-full object-cover object-top transition duration-700 ease-out group-hover:scale-[1.03]"
           loading="lazy"
           onError={() => setImageFailed(true)}
         />
@@ -150,90 +150,93 @@ export function OurTeamContent({
   onRetry?: () => void;
 }) {
   return (
-    <main className="container mx-auto px-6 py-20 md:py-24">
-      <header className="mx-auto max-w-3xl text-center">
-         <p className="font-metadata text-accent">
-          Our team
-        </p>
-         <h1 className="font-display mt-5 text-5xl tracking-tight md:text-7xl">
+    <main className="bg-[#f7f5f0]">
+      <header className="mx-auto max-w-4xl px-6 pb-10 pt-16 text-center md:pb-14 md:pt-24">
+        <h1 className="font-display text-[2.75rem] leading-[1.05] tracking-tight text-foreground md:text-6xl lg:text-7xl">
           {content?.title || "Meet Our Team"}
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+        <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-foreground/80 md:text-lg">
           {content?.body.intro || "Choose the expert best fit for you."}
         </p>
         <div
-          className="mx-auto mt-7 h-px w-8 bg-foreground/70"
+          className="mx-auto mt-8 h-px w-14 bg-foreground/55"
           aria-hidden="true"
         />
       </header>
 
       {loading && (
         <div
-           className="mx-auto mt-16 max-w-2xl rounded-lg border bg-card p-6 text-sm text-muted-foreground"
+          className="mx-auto max-w-2xl px-6 pb-20"
           role="status"
           data-testid="status-team-loading"
         >
-          Loading approved team profiles…
+          <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+            Loading approved team profiles…
+          </div>
         </div>
       )}
 
       {error && (
         <div
-           className="mx-auto mt-16 max-w-2xl rounded-lg border border-destructive/20 bg-card p-6 text-sm text-muted-foreground"
+          className="mx-auto max-w-2xl px-6 pb-20"
           role="alert"
           data-testid="status-team-error"
         >
-          <p>Approved team profiles are temporarily unavailable.</p>
-          {onRetry && (
-            <Button
-              data-testid="button-team-retry"
-              type="button"
-              variant="outline"
-               className="mt-4 rounded-md"
-              onClick={onRetry}
-            >
-              Try again
-            </Button>
-          )}
+          <div className="rounded-lg border border-destructive/20 bg-card p-6 text-sm text-muted-foreground">
+            <p>Approved team profiles are temporarily unavailable.</p>
+            {onRetry && (
+              <Button
+                data-testid="button-team-retry"
+                type="button"
+                variant="outline"
+                className="mt-4 rounded-md"
+                onClick={onRetry}
+              >
+                Try again
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
       {!loading && !error && tutors.length === 0 && (
         <div
-           className="mx-auto mt-16 max-w-2xl rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground"
+          className="mx-auto max-w-2xl px-6 pb-20"
           data-testid="status-team-empty"
         >
-          <p>No approved team profiles are published right now.</p>
-          <p className="mx-auto mt-2 max-w-lg">
-            If you would like to discuss SAT tutoring or broader guidance, you
-            can still share your goals privately.
-          </p>
-           <Button asChild variant="outline" className="mt-5 rounded-md">
-            <Link
-              href="/client-request"
-              data-testid="link-team-empty-guidance"
-            >
-              Request guidance
-            </Link>
-          </Button>
+          <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+            <p>No approved team profiles are published right now.</p>
+            <p className="mx-auto mt-2 max-w-lg">
+              If you would like to discuss SAT tutoring or broader guidance, you
+              can still share your goals privately.
+            </p>
+            <Button asChild variant="outline" className="mt-5 rounded-md">
+              <Link
+                href="/client-request"
+                data-testid="link-team-empty-guidance"
+              >
+                Request guidance
+              </Link>
+            </Button>
+          </div>
         </div>
       )}
 
       {!loading && !error && tutors.length > 0 && (
         <section
-           className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-xl bg-border sm:grid-cols-2 xl:grid-cols-4"
+          className="grid grid-cols-1 gap-0 sm:grid-cols-2 lg:grid-cols-3"
           aria-label="Approved team profiles"
         >
           {tutors.map((tutor) => (
             <article
               key={tutor.id}
-               className="group relative isolate min-h-[34rem] overflow-hidden bg-muted sm:min-h-[36rem]"
+              className="group relative isolate aspect-[3/4] min-h-[28rem] overflow-hidden bg-[#d8d4cc] sm:min-h-0"
               data-testid={`card-team-${tutor.id}`}
             >
               <TeamPortrait tutor={tutor} />
 
-               <div
-                 className="absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/55 to-transparent"
+              <div
+                className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent transition duration-500 group-hover:from-black/90"
                 aria-hidden="true"
               />
 
@@ -243,7 +246,7 @@ export function OurTeamContent({
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`View ${tutor.name} on LinkedIn`}
-                  className="absolute right-4 top-4 z-10 inline-flex h-8 w-8 items-center justify-center bg-[#0a66c2] text-white transition hover:bg-[#004182] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a66c2]"
+                  className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-sm bg-[#0a66c2] text-white shadow-sm transition hover:bg-[#004182] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a66c2]"
                 >
                   <Linkedin className="h-4 w-4" aria-hidden="true" />
                 </a>
@@ -251,15 +254,15 @@ export function OurTeamContent({
 
               <div className="absolute inset-x-0 bottom-0 z-10 p-5 text-white sm:p-6">
                 {tutor.title && (
-                   <p className="font-metadata text-white/85">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/90">
                     {tutor.title}
                   </p>
                 )}
-                 <h2 className="mt-2 text-2xl font-bold leading-tight tracking-tight">
+                <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-tight sm:text-[1.65rem]">
                   {tutor.name || "Accepted Admissions tutor"}
                 </h2>
                 {tutor.biography && (
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-white/90">
+                  <p className="mt-3 max-h-[9.5rem] overflow-hidden text-sm leading-relaxed text-white/92 sm:text-[0.95rem]">
                     {tutor.biography}
                   </p>
                 )}
@@ -269,13 +272,13 @@ export function OurTeamContent({
         </section>
       )}
 
-      <div className="mx-auto mt-14 max-w-2xl text-center">
-        <p className="text-sm font-semibold">Not sure which path fits?</p>
+      <div className="mx-auto max-w-2xl px-6 py-16 text-center md:py-20">
+        <p className="text-sm font-semibold text-foreground">Not sure which path fits?</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Tell us what you are working toward. We will review your request
           before discussing a possible next step.
         </p>
-           <Button asChild className="mt-5 rounded-md">
+        <Button asChild className="mt-5 rounded-md">
           <Link href="/client-request" data-testid="link-team-guidance">
             Get guidance <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
