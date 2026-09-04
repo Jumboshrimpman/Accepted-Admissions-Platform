@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   clerkConfigErrorCopy,
+  clerkJsScriptUrl,
+  clerkLoadFailureCopy,
   type ClerkPublishableKeyResult,
 } from "@/lib/clerk-publishable-key";
 import { safeReturnPath } from "@/lib/safe-return-path";
@@ -95,14 +97,28 @@ export function LoginLoadingState({
 export function LoginErrorState({
   title,
   body,
+  failedHost,
+  scriptUrl,
 }: {
   title: string;
   body: string;
+  failedHost?: string;
+  scriptUrl?: string;
 }) {
   return (
     <div className="text-center" data-testid="status-login-error" role="alert">
       <h2 className="text-xl font-semibold">{title}</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
+      {failedHost ? (
+        <p className="mt-4 font-mono text-sm break-all text-foreground" data-testid="text-login-failed-host">
+          {failedHost}
+        </p>
+      ) : null}
+      {scriptUrl ? (
+        <p className="mt-2 font-mono text-xs break-all text-muted-foreground" data-testid="text-login-failed-script">
+          {scriptUrl}
+        </p>
+      ) : null}
       <Button asChild className="mt-6 rounded-md">
         <a href={homeHref()} data-testid="link-login-error-home">
           Back to home
@@ -118,35 +134,52 @@ function toRouterPath(path: string): string {
     : path;
 }
 
-function LoginErrorFallback(_props: ErrorFallbackProps) {
+function clerkFailureState(hostname = window.location.hostname) {
+  const copy = clerkLoadFailureCopy(hostname);
   return (
     <LoginErrorState
-      title="Sign-in could not start"
-      body="Clerk hit an error on this host. This often means the publishable key or Frontend API domain does not match app.acceptedadmissions.org. Return home and try again, or contact the team if it continues."
+      title={copy.title}
+      body={copy.body}
+      failedHost={copy.failedHost}
+      scriptUrl={copy.scriptUrl}
     />
   );
 }
 
+function LoginErrorFallback(_props: ErrorFallbackProps) {
+  return clerkFailureState();
+}
+
 function ClerkLoadTimeoutError() {
-  return (
-    <LoginErrorState
-      title="Sign-in is taking too long"
-      body="The Clerk session never became ready. That usually means this host cannot reach the Frontend API (clerk.acceptedadmissions.org) or the publishable key does not match this domain. Return home and try again."
-    />
-  );
+  return clerkFailureState();
 }
 
 function ClerkSignInExperience({ returnTo }: { returnTo: string }) {
   const auth = usePortalAuth();
   const [timedOut, setTimedOut] = useState(false);
+  const [scriptFailed, setScriptFailed] = useState(false);
 
   useEffect(() => {
     if (auth.isLoaded) {
       setTimedOut(false);
+      setScriptFailed(false);
       return;
     }
     const timer = window.setTimeout(() => setTimedOut(true), CLERK_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
+  }, [auth.isLoaded]);
+
+  useEffect(() => {
+    if (auth.isLoaded) return;
+    const scriptUrl = clerkJsScriptUrl(window.location.hostname);
+    if (!scriptUrl || typeof fetch !== "function") return;
+    let cancelled = false;
+    fetch(scriptUrl, { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => {
+      if (!cancelled) setScriptFailed(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [auth.isLoaded]);
 
   if (auth.isLoaded && auth.isSignedIn) {
@@ -158,7 +191,7 @@ function ClerkSignInExperience({ returnTo }: { returnTo: string }) {
     );
   }
 
-  if (!auth.isLoaded && timedOut) {
+  if (!auth.isLoaded && (timedOut || scriptFailed)) {
     return <ClerkLoadTimeoutError />;
   }
 

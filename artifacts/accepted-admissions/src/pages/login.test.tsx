@@ -21,7 +21,12 @@ import {
 afterEach(() => {
   cleanup();
   window.history.pushState({}, "", "/login");
+  vi.unstubAllGlobals();
 });
+
+function stubClerkScriptReachable() {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 200 })));
+}
 
 describe("login page", () => {
   it("keeps heading, helper copy, and a home recovery link on the sign-in screen", () => {
@@ -49,6 +54,7 @@ describe("login page", () => {
   });
 
   it("shows a loading state instead of a blank SignIn while Clerk is not ready", () => {
+    stubClerkScriptReachable();
     render(
       <PortalAuthProvider
         value={{
@@ -93,6 +99,7 @@ describe("login page", () => {
   });
 
   it("shows a readable error if Clerk never becomes ready", () => {
+    stubClerkScriptReachable();
     vi.useFakeTimers();
     render(
       <PortalAuthProvider
@@ -112,12 +119,44 @@ describe("login page", () => {
       vi.advanceTimersByTime(CLERK_LOAD_TIMEOUT_MS);
     });
     expect(screen.getByTestId("status-login-error").textContent).toMatch(
-      /taking too long/i,
+      /could not load clerk/i,
+    );
+    expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
+      "clerk.localhost",
+    );
+    expect(screen.getByTestId("text-login-failed-script").textContent).toContain(
+      "clerk.localhost/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
     );
     expect(screen.getByTestId("link-login-error-home").getAttribute("href")).toBe(
       "/",
     );
     vi.useRealTimers();
+  });
+
+  it("shows the failed Clerk host when the browser script cannot be reached", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    }));
+    render(
+      <PortalAuthProvider
+        value={{
+          clerkAvailable: true,
+          isLoaded: false,
+          isSignedIn: false,
+          reason: null,
+        }}
+      >
+        <SignInPage />
+      </PortalAuthProvider>,
+    );
+
+    expect(await screen.findByTestId("text-login-failed-host")).toBeTruthy();
+    expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
+      "clerk.localhost",
+    );
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /clerk\.localhost/i,
+    );
   });
 
   it("continues to the safe return path after an existing session is ready", () => {
@@ -154,10 +193,18 @@ describe("login helpers", () => {
     expect(screen.getByTestId("status-login-loading")).toBeTruthy();
     cleanup();
     render(
-      <LoginErrorState title="Sign-in could not start" body="Try home." />,
+      <LoginErrorState
+        title="Sign-in could not start"
+        body="Try home."
+        failedHost="clerk.app.acceptedadmissions.org"
+        scriptUrl="https://clerk.app.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+      />,
     );
     expect(screen.getByTestId("status-login-error").textContent).toContain(
       "Sign-in could not start",
+    );
+    expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
+      "clerk.app.acceptedadmissions.org",
     );
   });
 });

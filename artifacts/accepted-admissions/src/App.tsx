@@ -21,8 +21,12 @@ import {
   PortalAuthProvider,
   usePortalAuth,
 } from '@/components/portal-auth';
+import { publishableKeyFromHost } from '@clerk/react/internal';
 import SignInPage, { LoginErrorState } from '@/pages/login';
-import { resolveClerkPublishableKey } from '@/lib/clerk-publishable-key';
+import {
+  clerkLoadFailureCopy,
+  resolveClerkPublishableKey,
+} from '@/lib/clerk-publishable-key';
 import {
   getGetCurrentUserQueryKey,
   setBaseUrl,
@@ -58,6 +62,7 @@ import { ProvisioningReference } from '@/components/provisioning-reference';
 const clerkKeyResult = resolveClerkPublishableKey(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+  publishableKeyFromHost,
 );
 const clerkPubKey = clerkKeyResult.ok ? clerkKeyResult.publishableKey : '';
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -397,12 +402,15 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function ClerkBootFallback(_props: { error: Error; resetError: () => void }) {
+  const copy = clerkLoadFailureCopy(window.location.hostname);
   return (
     <div className="min-h-screen bg-background px-6 py-16">
       <div className="mx-auto max-w-lg">
         <LoginErrorState
-          title="Sign-in could not start"
-          body="Clerk failed to initialize for this host. That usually means the publishable key or Frontend API domain does not match. Return home and try again, or contact the team if it continues."
+          title={copy.title}
+          body={copy.body}
+          failedHost={copy.failedHost}
+          scriptUrl={copy.scriptUrl}
         />
       </div>
     </div>
