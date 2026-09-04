@@ -52,6 +52,15 @@ import {
   sessionTitle,
   taitoSessionDateTime,
 } from "../lib/session-schedule";
+import { buildAttemptAnalysis } from "../lib/assessment-analysis";
+import {
+  FULL_SAT_DIAGNOSTIC_QUESTIONS,
+  HARD_BANK_SEED_QUESTIONS,
+} from "../lib/sat-assessment-content";
+import {
+  enqueueMissedReviewItems,
+  prepareSessionCurriculum,
+} from "../lib/session-curriculum-prep";
 import {
   canViewSession,
   publicSessionShape,
@@ -271,175 +280,7 @@ function publicAppOrigin(): string {
   throw new Error("APP_ORIGIN must be configured for hosted payment redirects");
 }
 
-const SAT_DIAGNOSTIC_QUESTIONS = [
-  {
-    prompt: "Which choice most effectively combines the sentences while maintaining standard English conventions?",
-    stimulus:
-      "The community archive contains letters, maps, and photographs from the town's earliest residents. Together, these materials reveal how the waterfront changed over time.",
-    domain: "Standard English Conventions",
-    skill: "Boundaries",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "residents, together these" },
-      { id: "b", label: "B", text: "residents; together, these" },
-      { id: "c", label: "C", text: "residents together these" },
-      { id: "d", label: "D", text: "residents: together these" },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "A semicolon correctly joins two independent clauses, and the introductory adverb is followed by a comma.",
-  },
-  {
-    prompt: "Which conclusion is best supported by the study?",
-    stimulus:
-      "In a greenhouse study, seedlings receiving six hours of filtered light grew taller than seedlings receiving six hours of direct light, while both groups received equal water and nutrients.",
-    domain: "Information and Ideas",
-    skill: "Command of Evidence",
-    difficulty: "hard",
-    choices: [
-      { id: "a", label: "A", text: "Filtered light always improves plant health." },
-      { id: "b", label: "B", text: "Water affected the groups differently." },
-      { id: "c", label: "C", text: "Light conditions may influence seedling height." },
-      { id: "d", label: "D", text: "Direct light prevents all seedling growth." },
-    ],
-    correctAnswer: "c",
-    explanation:
-      "The controlled comparison supports a limited conclusion about a possible relationship between light conditions and height.",
-  },
-  {
-    prompt: "Which choice completes the text with the most logical transition?",
-    stimulus:
-      "The first prototype was inexpensive to produce. _____, it was too fragile for repeated classroom use.",
-    domain: "Expression of Ideas",
-    skill: "Transitions",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "Similarly" },
-      { id: "b", label: "B", text: "However" },
-      { id: "c", label: "C", text: "For example" },
-      { id: "d", label: "D", text: "Therefore" },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "The second sentence contrasts the prototype's low cost with its lack of durability, so “However” is logical.",
-  },
-  {
-    prompt: "Which choice completes the text so that it conforms to the conventions of Standard English?",
-    stimulus:
-      "The museum's new exhibit features three artists _____ work explores migration and memory.",
-    domain: "Standard English Conventions",
-    skill: "Form, Structure, and Sense",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "who's" },
-      { id: "b", label: "B", text: "whose" },
-      { id: "c", label: "C", text: "whom's" },
-      { id: "d", label: "D", text: "who" },
-    ],
-    correctAnswer: "b",
-    explanation: "The possessive relative pronoun “whose” correctly describes the artists' work.",
-  },
-  {
-    prompt: "Which choice most effectively states the main idea of the text?",
-    stimulus:
-      "Rather than replacing the old footbridge, residents repaired its supports and added a ramp. The project preserved a familiar landmark while making the crossing safer for more people.",
-    domain: "Information and Ideas",
-    skill: "Central Ideas and Details",
-    difficulty: "foundational",
-    choices: [
-      { id: "a", label: "A", text: "A landmark was removed after years of neglect." },
-      { id: "b", label: "B", text: "Residents balanced preservation with improved access." },
-      { id: "c", label: "C", text: "The footbridge was moved to a new location." },
-      { id: "d", label: "D", text: "Only visitors use the repaired footbridge." },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "The text emphasizes both preserving the bridge and improving its safety and accessibility.",
-  },
-  {
-    prompt: "Which choice completes the text with the most logical transition?",
-    stimulus:
-      "The first trial used recycled paper. _____, the research team tested a version made from agricultural waste.",
-    domain: "Expression of Ideas",
-    skill: "Transitions",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "In contrast" },
-      { id: "b", label: "B", text: "Next" },
-      { id: "c", label: "C", text: "For instance" },
-      { id: "d", label: "D", text: "Nevertheless" },
-    ],
-    correctAnswer: "b",
-    explanation: "“Next” clearly signals the subsequent step in the team's testing process.",
-  },
-  {
-    prompt: "Which choice best describes the function of the sentence in the text as a whole?",
-    stimulus:
-      "Many coastal plants tolerate salt in the soil. This adaptation allows them to survive where freshwater species cannot.",
-    domain: "Information and Ideas",
-    skill: "Text Structure and Purpose",
-    difficulty: "hard",
-    choices: [
-      { id: "a", label: "A", text: "It introduces a problem that the next sentence disproves." },
-      { id: "b", label: "B", text: "It gives an example that clarifies a broader claim." },
-      { id: "c", label: "C", text: "It presents a counterargument to the study." },
-      { id: "d", label: "D", text: "It lists two unrelated observations." },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "The second sentence explains why salt tolerance matters, clarifying the observation in the first sentence.",
-  },
-  {
-    prompt: "Which choice completes the text so that it conforms to the conventions of Standard English?",
-    stimulus:
-      "The solar panels, installed on the library's roof last spring, _____ enough electricity to power the reading room.",
-    domain: "Standard English Conventions",
-    skill: "Subject-Verb Agreement",
-    difficulty: "foundational",
-    choices: [
-      { id: "a", label: "A", text: "generates" },
-      { id: "b", label: "B", text: "generate" },
-      { id: "c", label: "C", text: "is generating" },
-      { id: "d", label: "D", text: "has generated" },
-    ],
-    correctAnswer: "b",
-    explanation: "The plural subject “panels” takes the plural verb “generate.”",
-  },
-  {
-    prompt: "Which choice most logically completes the text?",
-    stimulus:
-      "The city tested two designs for a protected bike lane. The design with a planted divider received more favorable safety ratings from riders.",
-    domain: "Information and Ideas",
-    skill: "Inferences",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "Riders preferred the design with a planted divider." },
-      { id: "b", label: "B", text: "The city ended all bicycle programs." },
-      { id: "c", label: "C", text: "Planting trees always reduces traffic." },
-      { id: "d", label: "D", text: "Both designs received identical ratings." },
-    ],
-    correctAnswer: "a",
-    explanation:
-      "More favorable ratings indicate that riders preferred the protected-lane design with a planted divider.",
-  },
-  {
-    prompt: "Which choice completes the text with the most logical transition?",
-    stimulus:
-      "The recipe requires only four ingredients. _____, the finished dish has a complex flavor.",
-    domain: "Expression of Ideas",
-    skill: "Transitions",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "As a result" },
-      { id: "b", label: "B", text: "In addition" },
-      { id: "c", label: "C", text: "Even so" },
-      { id: "d", label: "D", text: "For example" },
-    ],
-    correctAnswer: "c",
-    explanation:
-      "“Even so” signals the contrast between the recipe's simplicity and the dish's complex flavor.",
-  },
-] as const;
+const SAT_DIAGNOSTIC_QUESTIONS = FULL_SAT_DIAGNOSTIC_QUESTIONS;
 
 const SAT_HOMEWORK_SETS = [
   {
@@ -849,6 +690,7 @@ type SeedSatQuestion = {
   choices: readonly { id: string; label: string; text: string }[];
   correctAnswer: string;
   explanation: string;
+  subject?: string;
 };
 
 async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
@@ -881,14 +723,20 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
         ),
       )
       .limit(1);
-    if (!assignment && title.startsWith("SAT Diagnostic")) {
+    if (
+      !assignment &&
+      (title.startsWith("SAT Diagnostic") || title.startsWith("Full SAT Practice Diagnostic"))
+    ) {
       [assignment] = await db
         .select()
         .from(assignmentsTable)
         .where(
           and(
             eq(assignmentsTable.courseId, courseId),
-            eq(assignmentsTable.title, "Baseline Reading & Writing Mini-Section"),
+            inArray(assignmentsTable.title, [
+              "Baseline Reading & Writing Mini-Section",
+              "SAT Diagnostic — Reading & Writing",
+            ]),
           ),
         )
         .limit(1);
@@ -934,7 +782,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
         [storedQuestion] = await db
           .insert(questionsTable)
           .values({
-            subject: "SAT Reading & Writing",
+            subject: question.subject ?? "SAT Reading & Writing",
             domain: question.domain,
             skill: question.skill,
             questionType: "multiple_choice",
@@ -946,7 +794,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
             explanation: question.explanation,
             sourceType: "original",
             generationMethod: "tutor-authored",
-            reviewStatus: "reviewed",
+            reviewStatus: "approved",
             tags: ["sat-original"],
           })
           .returning();
@@ -978,9 +826,9 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   if (diagnosticSession) {
     await ensureAssignment(
       diagnosticSession,
-      "SAT Diagnostic — Reading & Writing",
-      "Complete this original, full timed SAT Reading & Writing diagnostic independently before the October 2 session. Use the result to identify your strongest skills and the next skills to practice.",
-      35,
+      "Full SAT Practice Diagnostic",
+      "Complete this original timed SAT practice test (Reading & Writing + Math) independently before the October 2 session. Your score and adaptive analysis help your tutors understand strengths, weaknesses, and the first session focus.",
+      65,
       new Date("2026-10-01T12:00:00.000Z"),
       1,
       SAT_DIAGNOSTIC_QUESTIONS,
@@ -1003,6 +851,43 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   for (const session of satSessions.values()) {
     await ensureDuringSessionAssignment(session);
   }
+
+  for (const question of HARD_BANK_SEED_QUESTIONS) {
+    const [existingHard] = await db
+      .select({ id: questionsTable.id })
+      .from(questionsTable)
+      .where(eq(questionsTable.prompt, question.prompt))
+      .limit(1);
+    if (!existingHard) {
+      await db.insert(questionsTable).values({
+        subject: question.subject ?? "SAT Reading & Writing",
+        domain: question.domain,
+        skill: question.skill,
+        questionType: "multiple_choice",
+        difficulty: question.difficulty,
+        stimulus: "stimulus" in question ? question.stimulus ?? null : null,
+        prompt: question.prompt,
+        choices: [...question.choices],
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+        sourceType: "original",
+        generationMethod: "tutor-authored",
+        reviewStatus: "approved",
+        tags: ["sat-hard-bank"],
+        reviewedAt: new Date(),
+      });
+    }
+  }
+
+  await db
+    .update(questionsTable)
+    .set({ reviewStatus: "approved", reviewedAt: new Date() })
+    .where(
+      and(
+        eq(questionsTable.sourceType, "original"),
+        eq(questionsTable.reviewStatus, "reviewed"),
+      ),
+    );
 }
 
 async function ensureSeedData(): Promise<string> {
@@ -2668,51 +2553,32 @@ async function storedAttemptResult(
 
 function deterministicAnalysis(
   breakdown: AttemptResultPayload["breakdown"],
-  items: AttemptResultPayload["items"],
-  score: number,
-): AttemptAnalysisPayload {
-  const strengths = breakdown
-    .filter((skill) => skill.accuracy >= 80)
-    .sort((a, b) => b.accuracy - a.accuracy)
-    .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% accuracy)`);
-  const weaknesses = breakdown
-    .filter((skill) => skill.accuracy < 80)
-    .sort((a, b) => a.accuracy - b.accuracy)
-    .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% accuracy)`);
-  const mistakesBySkill = new Map<string, number>();
-  for (const item of items) {
-    if (!item.correct) {
-      mistakesBySkill.set(item.skill, (mistakesBySkill.get(item.skill) ?? 0) + 1);
+  items: Array<
+    AttemptResultPayload["items"][number] & {
+      domain?: string | null;
+      subject?: string | null;
     }
-  }
-  const mistakePatterns = [...mistakesBySkill.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([skill, count]) =>
-      `${skill}: ${count} ${count === 1 ? "miss" : "misses"}${items.some((item) => !item.correct && item.skill === skill && !item.finalAnswer) ? " or unanswered item" : ""}`,
-    );
-  const nextFocus = (weaknesses.length > 0
-    ? weaknesses
-    : strengths.slice().reverse()
-  )
-    .slice(0, 3)
-    .map((skill) => skill.replace(/ \(\d+% accuracy\)$/, ""));
-  if (nextFocus.length === 0) nextFocus.push("Keep practicing mixed SAT Reading & Writing sets.");
-  const feedback =
-    score >= 80
-      ? "You are building a strong foundation. Keep your accuracy steady while practicing under the time limit."
-      : score >= 60
-        ? "You have a useful foundation. Review the focus areas below, then retry a short mixed set under time."
-        : "Start with the focus areas below and explain each missed answer before moving to another timed set.";
-  return {
-    source: "deterministic",
-    label: "Deterministic skill analysis",
-    provider: null,
-    strengths: strengths.length > 0 ? strengths : ["No skill reached 80% yet; every item gives us a useful starting point."],
-    weaknesses: weaknesses.length > 0 ? weaknesses : ["No major weakness identified in this set."],
-    mistakePatterns: mistakePatterns.length > 0 ? mistakePatterns : ["No incorrect responses in this attempt."],
-    nextFocus,
-    feedback,
-  };
+  >,
+  score: number,
+  assignmentTitle?: string | null,
+): AttemptAnalysisPayload {
+  return buildAttemptAnalysis(
+    breakdown,
+    items.map((item) => ({
+      correct: item.correct,
+      skill: item.skill,
+      finalAnswer: item.finalAnswer,
+      domain: item.domain ?? null,
+      subject: item.subject ?? attemptSubjectFromAssignment(assignmentTitle),
+    })),
+    score,
+    { assignmentTitle },
+  );
+}
+
+function attemptSubjectFromAssignment(title?: string | null): string {
+  if (/math/i.test(title ?? "")) return "SAT Math";
+  return "SAT Reading & Writing";
 }
 
 async function finalizeAttemptResult(
@@ -2805,8 +2671,10 @@ async function finalizeAttemptResult(
     prompt: question.prompt,
     stimulus: question.stimulus,
     choices: question.choices,
+    domain: question.domain,
+    subject: question.subject,
   }));
-  const analysis = deterministicAnalysis(breakdown, items, score);
+  const analysis = deterministicAnalysis(breakdown, items, score, attempt.assignment.title);
   const result: AttemptResultPayload = {
     attemptId: attempt.attempt.id,
     assignmentId: attempt.assignment.id,
@@ -2845,6 +2713,19 @@ async function finalizeAttemptResult(
       .values({ attemptId: attempt.attempt.id, type: "submitted" });
   }
   await deriveAdaptiveRecommendations(attempt.attempt.id);
+  await enqueueMissedReviewItems({
+    attemptId: attempt.attempt.id,
+    studentUserId: attempt.student.id,
+    items: items.map((item) => ({
+      questionId: item.questionId,
+      skill: item.skill,
+      correct: item.correct,
+      prompt: item.prompt,
+    })),
+  });
+  if (attempt.session) {
+    await prepareSessionCurriculum(attempt.session);
+  }
   return result;
 }
 
@@ -3004,7 +2885,7 @@ async function ensureHardQuestionFallback(
     .from(questionsTable)
     .where(
       and(
-        eq(questionsTable.reviewStatus, "approved"),
+        inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
         eq(questionsTable.sourceType, "original"),
         eq(questionsTable.difficulty, "hard"),
       ),
@@ -7014,6 +6895,26 @@ async function reviewSubmissionsForUser(user: AppUser) {
           ).items.filter((item) => !item.correct).length
         : 0,
       tutorNotes: attempt.tutorNotes,
+      analysisPreview:
+        typeof (attempt.analysis as { feedback?: unknown } | null)?.feedback ===
+        "string"
+          ? (attempt.analysis as { feedback: string }).feedback
+          : typeof (attempt.result as { analysis?: { feedback?: unknown } } | null)
+                ?.analysis?.feedback === "string"
+            ? (attempt.result as { analysis: { feedback: string } }).analysis
+                .feedback
+            : null,
+      nextFocus: Array.isArray(
+        (attempt.analysis as { nextFocus?: unknown } | null)?.nextFocus,
+      )
+        ? ((attempt.analysis as { nextFocus: string[] }).nextFocus ?? [])
+        : Array.isArray(
+              (attempt.result as { analysis?: { nextFocus?: unknown } } | null)
+                ?.analysis?.nextFocus,
+            )
+          ? ((attempt.result as { analysis: { nextFocus: string[] } }).analysis
+              .nextFocus ?? [])
+          : [],
     }));
 }
 
@@ -7648,6 +7549,24 @@ async function adaptiveCurriculumForSession(
     | undefined;
   const isStaff = user.role === "administrator" || user.role === "tutor";
   const completed = latestAttempt?.status === "submitted" || latestAttempt?.status === "expired";
+  let sessionPrep: {
+    mode: string;
+    summary: string;
+    duringAssignmentId: string | null;
+    attachedQuestionCount: number;
+  } | null = null;
+  if (isStaff) {
+    if (completed && latestAttempt) {
+      await deriveAdaptiveRecommendations(latestAttempt.id);
+    }
+    const prep = await prepareSessionCurriculum(session);
+    sessionPrep = {
+      mode: prep.mode,
+      summary: prep.summary,
+      duringAssignmentId: prep.duringAssignmentId,
+      attachedQuestionCount: prep.attachedQuestionCount,
+    };
+  }
   const mistakes =
     isStaff && completed
       ? (result?.items ?? [])
@@ -7693,7 +7612,7 @@ async function adaptiveCurriculumForSession(
       .from(questionsTable)
       .where(
         and(
-          eq(questionsTable.reviewStatus, "approved"),
+          inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
           eq(questionsTable.sourceType, "original"),
           eq(questionsTable.difficulty, "hard"),
         ),
@@ -7755,6 +7674,7 @@ async function adaptiveCurriculumForSession(
     publishedBlocks: isStaff
       ? blocks
       : blocks.filter((block) => block.visibility !== "tutor"),
+    sessionPrep,
   };
 }
 
@@ -7826,7 +7746,7 @@ router.post(
         .limit(1);
       if (attempt) await deriveAdaptiveRecommendations(attempt.id);
     }
-    await ensureDuringSessionAssignment(session);
+    await prepareSessionCurriculum(session);
     res
       .status(201)
       .json(
@@ -9233,7 +9153,7 @@ router.patch(
         .select()
         .from(questionsTable)
         .where(eq(questionsTable.id, record.recommendation.recommendedQuestionId ?? ""));
-      if (!question || question.reviewStatus !== "approved") {
+      if (!question || (question.reviewStatus !== "approved" && question.reviewStatus !== "reviewed")) {
         res.status(400).json({ error: "Only approved practice can be accepted" });
         return;
       }

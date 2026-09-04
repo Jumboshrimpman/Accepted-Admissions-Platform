@@ -214,7 +214,7 @@ export function ClientDashboardView({
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-accent" />Adaptive guidance</CardTitle>
-              <Badge variant="outline">{analysis.label} · {analysis.source === "provider" ? analysis.provider ?? "AI provider" : "Deterministic fallback"}</Badge>
+              <Badge variant="outline">{analysis.label} · shared with your tutor</Badge>
             </div>
             <CardDescription>Based only on the latest finalized {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
           </CardHeader>

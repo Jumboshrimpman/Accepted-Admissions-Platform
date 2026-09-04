@@ -83,7 +83,10 @@ export default function TutorDashboard() {
     mistakeCount: number;
     submittedAt: string | null;
     sessionDateTime: string | null;
+    sessionId: string | null;
     reviewStatus: string;
+    analysisPreview: string | null;
+    nextFocus: string[];
     queueItems: typeof openQueue;
   };
 
@@ -99,7 +102,10 @@ export default function TutorDashboard() {
       mistakeCount: submission.mistakeCount ?? 0,
       submittedAt: submission.submittedAt,
       sessionDateTime: submission.sessionDateTime,
+      sessionId: submission.sessionId,
       reviewStatus: submission.reviewStatus,
+      analysisPreview: submission.analysisPreview ?? null,
+      nextFocus: submission.nextFocus ?? [],
       queueItems: [],
     });
   });
@@ -120,7 +126,10 @@ export default function TutorDashboard() {
       mistakeCount: 1,
       submittedAt: null,
       sessionDateTime: null,
+      sessionId: null,
       reviewStatus: "in_review",
+      analysisPreview: item.reason,
+      nextFocus: [item.skill],
       queueItems: [item],
     });
   });
@@ -259,10 +268,10 @@ export default function TutorDashboard() {
             <div>
               <CardTitle className="flex items-center gap-2 text-xl">
                 <AlertCircle className="h-5 w-5 text-accent" />
-                Needs your attention
+                New submission alerts
               </CardTitle>
               <CardDescription className="mt-1">
-                New submissions and flagged answers, grouped into one review list.
+                When a student submits homework for an upcoming meeting, review the adaptive analysis and open the session plan.
               </CardDescription>
             </div>
             {attentionItems.length > 0 && (
@@ -299,6 +308,16 @@ export default function TutorDashboard() {
                       {item.score === null ? "" : ` · ${Math.round(item.score)}%`}
                       {` · ${item.mistakeCount} mistake${item.mistakeCount === 1 ? "" : "s"}`}
                     </p>
+                    {item.analysisPreview && (
+                      <p className="mt-2 line-clamp-2 text-sm text-foreground/80">
+                        {item.analysisPreview}
+                      </p>
+                    )}
+                    {item.nextFocus.length > 0 && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Focus: {item.nextFocus.slice(0, 3).join(" · ")}
+                      </p>
+                    )}
                     {item.queueItems.length > 0 && (
                       <p className="mt-2 text-xs text-muted-foreground">
                         Flagged skills:{" "}
@@ -313,6 +332,13 @@ export default function TutorDashboard() {
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Link>
                     </Button>
+                    {item.sessionId && (
+                      <Button asChild size="sm" variant="outline" className="flex-1 sm:flex-none">
+                        <Link href={`/tutor/sessions/${item.sessionId}`}>
+                          Open meeting plan
+                        </Link>
+                      </Button>
+                    )}
                     {item.queueItems.length > 0 && (
                       <Button
                         size="sm"
