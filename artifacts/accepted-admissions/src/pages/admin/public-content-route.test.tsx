@@ -18,10 +18,6 @@ vi.mock("@clerk/react", () => ({
   useClerk: () => ({ addListener: () => () => undefined }),
 }));
 
-vi.mock("@clerk/react/internal", () => ({
-  publishableKeyFromHost: () => "pk_test_public-content-route",
-}));
-
 vi.mock("@/lib/clerk-publishable-key", () => ({
   resolveClerkPublishableKey: () => ({
     ok: true,
@@ -30,9 +26,8 @@ vi.mock("@/lib/clerk-publishable-key", () => ({
   clerkLoadFailureCopy: () => ({
     title: "Sign-in could not load Clerk",
     body: "Clerk script failed.",
-    failedHost: "clerk.localhost",
-    accountsHost: "accounts.localhost",
-    scriptUrl: "https://clerk.localhost/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+    failedHost: "clerk.acceptedadmissions.org",
+    scriptUrl: "https://clerk.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
   }),
 }));
 

@@ -27,26 +27,11 @@ Set these on the Vercel project (Production; Preview too if you deploy preview U
 
 | Name | Required | When it is read |
 | --- | --- | --- |
-| `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Vite build (`import.meta.env`). The app shows a readable sign-in error if it is missing or invalid; it does not throw a blank page. Production still uses Clerk’s host-derived Frontend API (`clerk.<app-host>`). |
+| `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Vite build (`import.meta.env`). Used **unchanged** as the Clerk publishable key. The Frontend API host is the one encoded in that key (Production: `clerk.acceptedadmissions.org`), not `clerk.` + the browser hostname. The app shows a readable sign-in error if the key is missing or invalid; it does not throw a blank page. |
 | `PUBLIC_SITE_ORIGIN` | No | Vite build (`vite.config.ts`). Canonical / Open Graph / sitemap / robots. Defaults to `https://www.acceptedadmissions.org`. For a private Vercel test host you may set this to the Vercel HTTPS origin. |
 | `BASE_PATH` | No | Vite build. Leave unset (defaults to `/`). |
 
 Optional: `VITE_CLERK_PROXY_URL` (for example `/api/__clerk`) if Clerk Frontend API should go through the same `/api` rewrite. Leave unset unless that proxy is already configured in Clerk and on Railway.
-
-## Clerk Production custom-domain DNS
-
-The Production app host is `app.acceptedadmissions.org`. Clerk loads its browser script from **`clerk.<app-host>`**, not from `clerk.acceptedadmissions.org`:
-
-| Record | Example | Purpose |
-| --- | --- | --- |
-| `clerk.<app-host>` | `clerk.app.acceptedadmissions.org` | Clerk Frontend API + `clerk.browser.js` |
-| `accounts.<app-host>` | `accounts.app.acceptedadmissions.org` | Typical Clerk accounts/satellite host |
-
-A missing `clerk.app.acceptedadmissions.org` CNAME shows up as `ERR_NAME_NOT_RESOLVED` on:
-
-`https://clerk.app.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js`
-
-and a blank `/login` before this UX change. Add those CNAMEs in Wix DNS (values from the Clerk Dashboard custom-domain setup). `clerk.acceptedadmissions.org` alone is not enough when the app is served on the `app.` host.
 
 Do not set `VITE_API_URL`. The client uses `setBaseUrl` from Vite `BASE_URL` and relative `/api/...` paths.
 

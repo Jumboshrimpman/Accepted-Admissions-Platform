@@ -21,7 +21,6 @@ import {
   PortalAuthProvider,
   usePortalAuth,
 } from '@/components/portal-auth';
-import { publishableKeyFromHost } from '@clerk/react/internal';
 import SignInPage, { LoginErrorState } from '@/pages/login';
 import {
   clerkLoadFailureCopy,
@@ -60,9 +59,7 @@ import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 import { ProvisioningReference } from '@/components/provisioning-reference';
 
 const clerkKeyResult = resolveClerkPublishableKey(
-  window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-  publishableKeyFromHost,
 );
 const clerkPubKey = clerkKeyResult.ok ? clerkKeyResult.publishableKey : '';
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -402,7 +399,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function ClerkBootFallback(_props: { error: Error; resetError: () => void }) {
-  const copy = clerkLoadFailureCopy(window.location.hostname);
+  const copy = clerkLoadFailureCopy(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
   return (
     <div className="min-h-screen bg-background px-6 py-16">
       <div className="mx-auto max-w-lg">

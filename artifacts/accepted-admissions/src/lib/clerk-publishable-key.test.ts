@@ -1,71 +1,68 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  clerkAccountsHost,
   clerkConfigErrorCopy,
-  clerkFrontendApiHost,
-  clerkJsScriptUrl,
+  clerkJsScriptUrlFromKey,
   clerkLoadFailureCopy,
+  frontendApiFromPublishableKey,
   isConfiguredPublishableKey,
   resolveClerkPublishableKey,
 } from "./clerk-publishable-key.ts";
 
-const liveKey = "pk_live_configured_example_key";
-const testKey = "pk_test_configured_example_key";
+function encodePublishableKey(
+  frontendApi: string,
+  prefix: "pk_live_" | "pk_test_",
+): string {
+  const encoded = Buffer.from(`${frontendApi}$`, "utf8")
+    .toString("base64")
+    .replace(/=+$/, "");
+  return `${prefix}${encoded}`;
+}
 
-test("keeps a test key as-is on localhost", () => {
-  const result = resolveClerkPublishableKey("localhost", testKey);
+const productionLiveKey = encodePublishableKey(
+  "clerk.acceptedadmissions.org",
+  "pk_live_",
+);
+const testKey = encodePublishableKey("clerk.example.com", "pk_test_");
+
+test("uses a production live key unchanged on app.acceptedadmissions.org", () => {
+  const result = resolveClerkPublishableKey(productionLiveKey);
+  assert.deepEqual(result, { ok: true, publishableKey: productionLiveKey });
+  assert.equal(
+    frontendApiFromPublishableKey(productionLiveKey),
+    "clerk.acceptedadmissions.org",
+  );
+  assert.notEqual(
+    frontendApiFromPublishableKey(productionLiveKey),
+    "clerk.app.acceptedadmissions.org",
+  );
+});
+
+test("uses a configured test key unchanged", () => {
+  const result = resolveClerkPublishableKey(testKey);
   assert.deepEqual(result, { ok: true, publishableKey: testKey });
 });
 
-test("does not throw when deriving a live key for the production app host", () => {
-  const result = resolveClerkPublishableKey(
-    "app.acceptedadmissions.org",
-    liveKey,
-    (host, fallback) => `derived:${host}:${fallback}`,
-  );
-  assert.deepEqual(result, {
-    ok: true,
-    publishableKey: "derived:app.acceptedadmissions.org:pk_live_configured_example_key",
-  });
-});
-
-test("falls back to the configured key when host derivation throws", () => {
-  const result = resolveClerkPublishableKey("app.acceptedadmissions.org", liveKey, () => {
-    throw new Error("Host must not be empty.");
-  });
-  assert.deepEqual(result, { ok: true, publishableKey: liveKey });
-});
-
 test("does not throw when the configured key is missing", () => {
-  const result = resolveClerkPublishableKey("app.acceptedadmissions.org", "");
+  const result = resolveClerkPublishableKey("");
   assert.deepEqual(result, { ok: false, reason: "missing" });
   assert.match(clerkConfigErrorCopy("missing").body, /missing its Clerk publishable key/i);
 });
 
 test("does not throw when the configured key is not a publishable key", () => {
-  const result = resolveClerkPublishableKey(
-    "app.acceptedadmissions.org",
-    "not-a-clerk-key",
-  );
+  const result = resolveClerkPublishableKey("not-a-clerk-key");
   assert.deepEqual(result, { ok: false, reason: "invalid" });
   assert.equal(isConfiguredPublishableKey("not-a-clerk-key"), false);
 });
 
-test("names the clerk.<app-host> script host Clerk tries to load", () => {
+test("failure copy reports the Frontend API encoded in the configured key", () => {
   assert.equal(
-    clerkFrontendApiHost("app.acceptedadmissions.org"),
-    "clerk.app.acceptedadmissions.org",
+    clerkJsScriptUrlFromKey(productionLiveKey),
+    "https://clerk.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
   );
-  assert.equal(
-    clerkAccountsHost("app.acceptedadmissions.org"),
-    "accounts.app.acceptedadmissions.org",
-  );
-  assert.equal(
-    clerkJsScriptUrl("app.acceptedadmissions.org"),
-    "https://clerk.app.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
-  );
-  const copy = clerkLoadFailureCopy("app.acceptedadmissions.org");
-  assert.match(copy.body, /clerk\.app\.acceptedadmissions\.org/);
-  assert.match(copy.body, /accounts\.app\.acceptedadmissions\.org/);
+  const copy = clerkLoadFailureCopy(productionLiveKey);
+  assert.equal(copy.failedHost, "clerk.acceptedadmissions.org");
+  assert.match(copy.body, /clerk\.acceptedadmissions\.org/);
+  assert.doesNotMatch(copy.body, /clerk\.app\.acceptedadmissions\.org/);
+  assert.doesNotMatch(copy.body, /accounts\.app\.acceptedadmissions\.org/);
 });

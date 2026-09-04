@@ -15,42 +15,49 @@ export function isConfiguredPublishableKey(
   return trimmed.startsWith(LIVE_PREFIX) || trimmed.startsWith(TEST_PREFIX);
 }
 
-export function normalizeAppHostname(hostname: string): string {
-  return hostname.toLowerCase().replace(/:\d+$/, "").trim();
+function decodeBase64(value: string): string {
+  const padded = value + "=".repeat((4 - (value.length % 4)) % 4);
+  if (typeof atob === "function") {
+    return atob(padded);
+  }
+  return Buffer.from(padded, "base64").toString("utf8");
 }
 
-/** Clerk Frontend API host for an app hostname (`app.example.com` → `clerk.app.example.com`). */
-export function clerkFrontendApiHost(hostname: string): string {
-  const host = normalizeAppHostname(hostname);
-  return host ? `clerk.${host}` : "";
+/** Frontend API host encoded in a Clerk publishable key (`…$` payload). */
+export function frontendApiFromPublishableKey(
+  key: string | undefined,
+): string | null {
+  if (!isConfiguredPublishableKey(key)) return null;
+  const encoded = key.startsWith(LIVE_PREFIX)
+    ? key.slice(LIVE_PREFIX.length)
+    : key.slice(TEST_PREFIX.length);
+  if (!encoded) return null;
+  try {
+    const decoded = decodeBase64(encoded);
+    if (!decoded.endsWith("$")) return null;
+    const frontendApi = decoded.slice(0, -1);
+    return frontendApi.includes(".") ? frontendApi : null;
+  } catch {
+    return null;
+  }
 }
 
-/** Typical Clerk accounts host for an app hostname. */
-export function clerkAccountsHost(hostname: string): string {
-  const host = normalizeAppHostname(hostname);
-  return host ? `accounts.${host}` : "";
-}
-
-export function clerkJsScriptUrl(hostname: string): string {
-  const apiHost = clerkFrontendApiHost(hostname);
-  return apiHost
-    ? `https://${apiHost}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`
+export function clerkJsScriptUrlFromKey(key: string | undefined): string {
+  const frontendApi = frontendApiFromPublishableKey(key);
+  return frontendApi
+    ? `https://${frontendApi}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`
     : "";
 }
 
 /**
- * Resolve the Clerk publishable key without throwing at module load.
+ * Use the configured Vite publishable key unchanged.
  *
- * Production instances still use Clerk's host-derived Frontend API
- * (`clerk.<app-host>`). That is expected: `app.acceptedadmissions.org` loads
- * Clerk JS from `clerk.app.acceptedadmissions.org`. DNS must include that
- * CNAME (and typically `accounts.<app-host>`). A missing record shows up as
- * ERR_NAME_NOT_RESOLVED, not as a React crash.
+ * Do not pass a valid `pk_live_` / `pk_test_` key through
+ * `publishableKeyFromHost()`. That helper ignores live keys and builds
+ * `clerk.${browserHost}`, which is not the Frontend API encoded in the key.
  */
 export function resolveClerkPublishableKey(
-  hostname: string,
   configuredKey: string | undefined,
-  deriveFromHost: (host: string, fallbackKey?: string) => string = defaultDeriveFromHost,
 ): ClerkPublishableKeyResult {
   const configured = configuredKey?.trim() ?? "";
   if (!configured) {
@@ -59,40 +66,22 @@ export function resolveClerkPublishableKey(
   if (!isConfiguredPublishableKey(configured)) {
     return { ok: false, reason: "invalid" };
   }
-  try {
-    const derived = deriveFromHost(hostname, configured);
-    return { ok: true, publishableKey: derived || configured };
-  } catch {
-    return { ok: true, publishableKey: configured };
-  }
+  return { ok: true, publishableKey: configured };
 }
 
-function defaultDeriveFromHost(host: string, fallbackKey?: string): string {
-  if (fallbackKey && fallbackKey.startsWith(TEST_PREFIX)) {
-    return fallbackKey;
-  }
-  const hostname = normalizeAppHostname(host);
-  if (!hostname) {
-    throw new Error("Host must not be empty.");
-  }
-  return fallbackKey ?? "";
-}
-
-export function clerkLoadFailureCopy(hostname: string): {
+export function clerkLoadFailureCopy(configuredKey: string | undefined): {
   title: string;
   body: string;
   failedHost: string;
-  accountsHost: string;
   scriptUrl: string;
 } {
-  const failedHost = clerkFrontendApiHost(hostname);
-  const accountsHost = clerkAccountsHost(hostname);
-  const scriptUrl = clerkJsScriptUrl(hostname);
+  const failedHost = frontendApiFromPublishableKey(configuredKey) ?? "";
+  const scriptUrl = clerkJsScriptUrlFromKey(configuredKey);
+  const hostLabel = failedHost || "the Frontend API encoded in the configured publishable key";
   return {
     title: "Sign-in could not load Clerk",
-    body: `The Clerk browser script did not load from ${failedHost}. Production custom domains need a DNS CNAME for that host (and typically ${accountsHost}). Return home and try again after those records resolve.`,
+    body: `The Clerk browser script did not load from ${hostLabel}. That host comes from this site’s configured publishable key, not from the browser hostname. Return home and try again, or contact the team if it continues.`,
     failedHost,
-    accountsHost,
     scriptUrl,
   };
 }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   clerkConfigErrorCopy,
-  clerkJsScriptUrl,
+  clerkJsScriptUrlFromKey,
   clerkLoadFailureCopy,
 } from "@/lib/clerk-publishable-key";
 import { safeReturnPath } from "@/lib/safe-return-path";
@@ -133,8 +133,10 @@ function toRouterPath(path: string): string {
     : path;
 }
 
-function clerkFailureState(hostname = window.location.hostname) {
-  const copy = clerkLoadFailureCopy(hostname);
+function clerkFailureState(
+  configuredKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+) {
+  const copy = clerkLoadFailureCopy(configuredKey);
   return (
     <LoginErrorState
       title={copy.title}
@@ -170,7 +172,9 @@ function ClerkSignInExperience({ returnTo }: { returnTo: string }) {
 
   useEffect(() => {
     if (auth.isLoaded) return;
-    const scriptUrl = clerkJsScriptUrl(window.location.hostname);
+    const scriptUrl = clerkJsScriptUrlFromKey(
+      import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+    );
     if (!scriptUrl || typeof fetch !== "function") return;
     let cancelled = false;
     fetch(scriptUrl, { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => {

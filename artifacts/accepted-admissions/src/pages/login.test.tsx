@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 vi.mock("@clerk/react", () => ({
   SignIn: () => <div data-testid="clerk-sign-in">Clerk sign-in form</div>,
@@ -18,10 +18,19 @@ import {
   loginReturnPath,
 } from "./login";
 
+const productionLiveKey = `pk_live_${Buffer.from("clerk.acceptedadmissions.org$", "utf8")
+  .toString("base64")
+  .replace(/=+$/, "")}`;
+
+beforeEach(() => {
+  vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", productionLiveKey);
+});
+
 afterEach(() => {
   cleanup();
   window.history.pushState({}, "", "/login");
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function stubClerkScriptReachable() {
@@ -122,10 +131,10 @@ describe("login page", () => {
       /could not load clerk/i,
     );
     expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
-      "clerk.localhost",
+      "clerk.acceptedadmissions.org",
     );
     expect(screen.getByTestId("text-login-failed-script").textContent).toContain(
-      "clerk.localhost/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
+      "clerk.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js",
     );
     expect(screen.getByTestId("link-login-error-home").getAttribute("href")).toBe(
       "/",
@@ -152,10 +161,13 @@ describe("login page", () => {
 
     expect(await screen.findByTestId("text-login-failed-host")).toBeTruthy();
     expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
-      "clerk.localhost",
+      "clerk.acceptedadmissions.org",
     );
     expect(screen.getByTestId("status-login-error").textContent).toMatch(
-      /clerk\.localhost/i,
+      /clerk\.acceptedadmissions\.org/i,
+    );
+    expect(screen.getByTestId("status-login-error").textContent).not.toMatch(
+      /clerk\.app\.acceptedadmissions\.org/i,
     );
   });
 
@@ -196,15 +208,15 @@ describe("login helpers", () => {
       <LoginErrorState
         title="Sign-in could not start"
         body="Try home."
-        failedHost="clerk.app.acceptedadmissions.org"
-        scriptUrl="https://clerk.app.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+        failedHost="clerk.acceptedadmissions.org"
+        scriptUrl="https://clerk.acceptedadmissions.org/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
       />,
     );
     expect(screen.getByTestId("status-login-error").textContent).toContain(
       "Sign-in could not start",
     );
     expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
-      "clerk.app.acceptedadmissions.org",
+      "clerk.acceptedadmissions.org",
     );
   });
 });
