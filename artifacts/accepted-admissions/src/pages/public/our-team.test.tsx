@@ -93,7 +93,7 @@ describe("OurTeam publication gate", () => {
     });
     expect(roster.className).toContain("grid-cols-1");
     expect(roster.className).toContain("sm:grid-cols-2");
-    expect(roster.className).toContain("xl:grid-cols-4");
+    expect(roster.className).toContain("lg:grid-cols-3");
     expect(
       within(roster)
         .getAllByRole("heading", { level: 2 })
