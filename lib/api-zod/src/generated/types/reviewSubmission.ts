@@ -25,4 +25,7 @@ export interface ReviewSubmission {
   mistakeCount?: number;
   /** @nullable */
   tutorNotes?: string | null;
+  /** @nullable */
+  analysisPreview?: string | null;
+  nextFocus?: string[];
 }

@@ -85,7 +85,7 @@ function ResultView({
             </div>
             <p className="text-sm text-muted-foreground">{result.studentFeedback}</p>
             <Badge variant="outline" className="mt-3">
-              {result.analysis.label} · {result.analysis.source === "deterministic" ? "No AI provider used" : result.analysis.provider}
+              {result.analysis.label} · shared with your tutor
             </Badge>
           </div>
           <div className="grid gap-4 md:grid-cols-2">

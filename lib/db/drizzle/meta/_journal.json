@@ -148,6 +148,27 @@
       "when": 1788700000000,
       "tag": "0021_tutor_payout_obligations",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788800000000,
+      "tag": "0022_portal_access_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788900000000,
+      "tag": "0023_sat_catalog_130_1300",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0024_sat_hourly_rate_130",
+      "breakpoints": true
     }
   ]
 }

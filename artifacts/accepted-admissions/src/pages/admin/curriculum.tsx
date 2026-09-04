@@ -3,15 +3,21 @@ import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminCurriculumQueryKey,
+  getListAdminAccessGrantsQueryKey,
+  useCreateAdminAccessGrant,
   useCreateAdminAssignment,
   useCreateAdminSession,
   useGetAdminCurriculum,
+  useListAdminAccessGrants,
+  useUpdateAdminAccessGrant,
   useUpdateAdminAssignment,
   useUpdateAdminProgram,
   useUpdateAdminSession,
   useUpdateCurriculumBlock,
 } from "@workspace/api-client-react";
 import type {
+  AdminAccessGrant,
+  AdminAccessGrantInput,
   AdminAssignment,
   AdminAssignmentInput,
   AdminAssignmentUpdate,
@@ -21,8 +27,9 @@ import type {
   AdminSession,
   AdminSessionInput,
   AdminSessionUpdate,
+  ProvisionableRoleCategory,
 } from "@workspace/api-client-react";
-import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, FileText, GraduationCap, Library, Mail, Plus, Save, Users } from "lucide-react";
+import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, FileText, GraduationCap, Library, Mail, Plus, Save, UserPlus, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,7 +47,7 @@ import {
 type Section = "roadmap" | "people" | "programs" | "curriculum" | "sessions";
 
 const sectionLinks: Array<{ id: Section; label: string; icon: typeof Users }> = [
-  { id: "roadmap", label: "Fall roadmap", icon: CalendarDays },
+  { id: "roadmap", label: "Curriculum builder", icon: CalendarDays },
   { id: "people", label: "Clients & tutors", icon: Users },
   { id: "programs", label: "Programs", icon: GraduationCap },
   { id: "curriculum", label: "Content tools", icon: Library },
@@ -101,8 +108,10 @@ export default function AdminCurriculum() {
             <ChevronRight className="h-4 w-4" />
             <span>Operations</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Learning operations</h1>
-          <p className="mt-1 text-muted-foreground">Manage programs, assignments, learning materials, people, and sessions from one focused workspace.</p>
+          <h1 className="text-3xl font-bold tracking-tight">AI-native curriculum</h1>
+          <p className="mt-1 text-muted-foreground">
+            Build the Fall plan on the platform: diagnostic, weekly mini-sections, live session focus, and submission alerts in one workspace.
+          </p>
         </div>
         <Input className="w-full sm:w-72" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this section…" aria-label="Search operations" />
       </div>
@@ -130,13 +139,379 @@ const fallDateOrder = [
   "2026-11-27", "2026-12-04", "2026-12-11", "2026-12-18",
 ];
 function PeopleSection({ data, search }: { data: AdminCurriculum; search: string }) {
+  const queryClient = useQueryClient();
+  const grantsQuery = useListAdminAccessGrants();
+  const createGrant = useCreateAdminAccessGrant();
+  const updateGrant = useUpdateAdminAccessGrant();
+  const [draft, setDraft] = useState<AdminAccessGrantInput>({
+    email: "",
+    displayName: "",
+    roleCategory: "student",
+    clerkUserId: null,
+    notes: null,
+  });
+  const [message, setMessage] = useState("");
   const term = search.trim().toLowerCase();
   const tutors = data?.tutors.filter((item) => !term || `${item.name} ${item.email} ${item.subjects.join(" ")}`.toLowerCase().includes(term)) ?? [];
   const clients = data?.clients.filter((item) => !term || `${item.name} ${item.email}`.toLowerCase().includes(term)) ?? [];
-  return <div className="grid gap-6 lg:grid-cols-2">
-    <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Clients / students</CardTitle><CardDescription>Identity and approved tutor relationships. Financial details stay in administrator-only finance.</CardDescription></CardHeader><CardContent className="space-y-2">{clients.map((client) => <div key={client.id} className="rounded-xl border p-3"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{client.name}</p><p className="text-sm text-muted-foreground">{client.email}</p></div><div className="flex items-center gap-2"><Badge variant="outline">Student</Badge><Button asChild size="sm" variant="outline"><Link href={`/admin/clients/${client.id}/preview`}><ExternalLink className="mr-2 h-3.5 w-3.5" /> View client</Link></Button></div></div><div className="mt-3 border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Assigned tutors</p>{client.assignedTutors.length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{client.assignedTutors.map((tutor) => <Badge key={`${tutor.id}-${tutor.courseId}-${tutor.subject}`} variant="secondary">{tutor.name} · {sessionSubjectLabel(tutor.subject)}</Badge>)}</div> : <p className="mt-2 text-sm text-muted-foreground">No tutor relationship is provisioned yet.</p>}</div></div>)}{clients.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>}</CardContent></Card>
-    <Card><CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary" /> Tutors</CardTitle><CardDescription>Subject access, approved clients, and activity. Compensation is never returned by this operational view.</CardDescription></CardHeader><CardContent className="space-y-2">{tutors.map((tutor) => <div key={tutor.id} className="rounded-xl border p-3"><div className="flex items-center justify-between"><div><p className="font-medium">{tutor.name}</p><p className="text-sm text-muted-foreground">{tutor.email}</p><div className="mt-2 flex flex-wrap gap-1">{tutor.subjects.map((subject) => <Badge key={subject} variant="secondary">{sessionSubjectLabel(subject)}</Badge>)}</div><p className="mt-2 text-xs text-muted-foreground">{tutor.sessionCount} total sessions · {tutor.upcomingSessionCount} upcoming</p></div><Badge variant={tutor.active ? "default" : "outline"}>{tutor.active ? "Active" : "Inactive"}</Badge></div><div className="mt-3 border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Assigned clients</p>{tutor.assignedStudents.length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{tutor.assignedStudents.map((student) => <Badge key={`${student.id}-${student.courseId}-${student.subject}`} variant="secondary">{student.name} · {sessionSubjectLabel(student.subject)}</Badge>)}</div> : <p className="mt-2 text-sm text-muted-foreground">No client relationship is provisioned yet.</p>}</div></div>)}{tutors.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matching tutors.</p>}</CardContent></Card>
-  </div>;
+  const grants = (grantsQuery.data?.grants ?? []).filter(
+    (grant) =>
+      !term ||
+      `${grant.displayName} ${grant.email} ${grant.roleCategory}`.toLowerCase().includes(term),
+  );
+
+  const refreshPeople = () => {
+    queryClient.invalidateQueries({ queryKey: getGetAdminCurriculumQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListAdminAccessGrantsQueryKey() });
+  };
+
+  const roleLabel = (category: ProvisionableRoleCategory) => {
+    switch (category) {
+      case "student":
+        return "Student";
+      case "sat_tutor":
+        return "SAT tutor";
+      case "english_tutor":
+        return "IELTS tutor";
+      case "tutor":
+        return "Tutor (all subjects)";
+    }
+  };
+
+  const provision = () => {
+    const payload: AdminAccessGrantInput = {
+      email: draft.email.trim(),
+      displayName: draft.displayName.trim(),
+      roleCategory: draft.roleCategory,
+      clerkUserId: draft.clerkUserId?.trim() ? draft.clerkUserId.trim() : null,
+      notes: draft.notes?.trim() ? draft.notes.trim() : null,
+    };
+    createGrant.mutate(
+      { data: payload },
+      {
+        onSuccess: (grant) => {
+          setMessage(`${grant.displayName} provisioned as ${roleLabel(grant.roleCategory)}. They can sign in once invited in Clerk.`);
+          setDraft({
+            email: "",
+            displayName: "",
+            roleCategory: "student",
+            clerkUserId: null,
+            notes: null,
+          });
+          refreshPeople();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+
+  const revoke = (grant: AdminAccessGrant) => {
+    updateGrant.mutate(
+      { grantId: grant.id, data: { active: false } },
+      {
+        onSuccess: () => {
+          setMessage(`${grant.displayName} access revoked.`);
+          refreshPeople();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+
+  const reactivate = (grant: AdminAccessGrant) => {
+    updateGrant.mutate(
+      {
+        grantId: grant.id,
+        data: {
+          active: true,
+          roleCategory: grant.roleCategory,
+          displayName: grant.displayName,
+        },
+      },
+      {
+        onSuccess: () => {
+          setMessage(`${grant.displayName} access restored.`);
+          refreshPeople();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-primary" /> Provision people
+          </CardTitle>
+          <CardDescription>
+            Quickly grant portal access as a student or tutor. Administrator access stays environment-only. This does not send Clerk invitations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Field label="Display name">
+              <Input
+                value={draft.displayName}
+                onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
+                placeholder="Full name"
+                autoComplete="name"
+              />
+            </Field>
+            <Field label="Email">
+              <Input
+                type="email"
+                value={draft.email}
+                onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+                placeholder="person@example.com"
+                autoComplete="email"
+              />
+            </Field>
+            <Field label="Role">
+              <select
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={draft.roleCategory}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    roleCategory: event.target.value as ProvisionableRoleCategory,
+                  })
+                }
+                aria-label="Provision role"
+              >
+                <option value="student">Student</option>
+                <option value="sat_tutor">SAT tutor</option>
+                <option value="english_tutor">IELTS tutor</option>
+                <option value="tutor">Tutor (all subjects)</option>
+              </select>
+            </Field>
+            <Field label="Clerk user ID (optional)">
+              <Input
+                value={draft.clerkUserId ?? ""}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    clerkUserId: event.target.value || null,
+                  })
+                }
+                placeholder="user_…"
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+          <Field label="Notes (optional)">
+            <Input
+              value={draft.notes ?? ""}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  notes: event.target.value || null,
+                })
+              }
+              placeholder="Cohort, referral, or onboarding note"
+            />
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={provision}
+              disabled={
+                createGrant.isPending ||
+                draft.displayName.trim().length < 1 ||
+                draft.email.trim().length < 3 ||
+                !draft.email.includes("@")
+              }
+            >
+              <Plus className="mr-2 h-4 w-4" /> Provision access
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              After provisioning, invite them in Clerk with the same email, then they sign in at /login.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" /> Access grants
+          </CardTitle>
+          <CardDescription>
+            Database-backed portal grants for tutors and students. Revoking removes portal access unless the identity remains on an environment allowlist.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {grantsQuery.isLoading && <Skeleton className="h-24 w-full rounded-xl" />}
+          {grantsQuery.error && (
+            <p className="text-sm text-destructive">{errorText(grantsQuery.error)}</p>
+          )}
+          {grants.map((grant) => (
+            <div key={grant.id} className="rounded-xl border p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{grant.displayName}</p>
+                    <Badge variant={grant.active ? "default" : "outline"}>
+                      {grant.active ? "Active" : "Revoked"}
+                    </Badge>
+                    <Badge variant="secondary">{roleLabel(grant.roleCategory)}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{grant.email}</p>
+                  {grant.clerkUserId && (
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{grant.clerkUserId}</p>
+                  )}
+                  {grant.notes && <p className="mt-2 text-sm text-muted-foreground">{grant.notes}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {grant.active ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateGrant.isPending}
+                      onClick={() => revoke(grant)}
+                    >
+                      Revoke
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateGrant.isPending}
+                      onClick={() => reactivate(grant)}
+                    >
+                      Restore
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          {!grantsQuery.isLoading && grants.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No matching access grants yet. Provision someone above to get started.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> Clients / students
+            </CardTitle>
+            <CardDescription>
+              Identity and approved tutor relationships. Financial details stay in administrator-only finance.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {clients.map((client) => (
+              <div key={client.id} className="rounded-xl border p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium">{client.name}</p>
+                    <p className="text-sm text-muted-foreground">{client.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">Student</Badge>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/admin/clients/${client.id}/preview`}>
+                        <ExternalLink className="mr-2 h-3.5 w-3.5" /> View client
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 border-t pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Assigned tutors
+                  </p>
+                  {client.assignedTutors.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {client.assignedTutors.map((tutor) => (
+                        <Badge
+                          key={`${tutor.id}-${tutor.courseId}-${tutor.subject}`}
+                          variant="secondary"
+                        >
+                          {tutor.name} · {sessionSubjectLabel(tutor.subject)}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No tutor relationship is provisioned yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {clients.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-primary" /> Tutors
+            </CardTitle>
+            <CardDescription>
+              Subject access, approved clients, and activity. Compensation is never returned by this operational view.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {tutors.map((tutor) => (
+              <div key={tutor.id} className="rounded-xl border p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{tutor.name}</p>
+                    <p className="text-sm text-muted-foreground">{tutor.email}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {tutor.subjects.map((subject) => (
+                        <Badge key={subject} variant="secondary">
+                          {sessionSubjectLabel(subject)}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {tutor.sessionCount} total sessions · {tutor.upcomingSessionCount} upcoming
+                    </p>
+                  </div>
+                  <Badge variant={tutor.active ? "default" : "outline"}>
+                    {tutor.active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <div className="mt-3 border-t pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Assigned clients
+                  </p>
+                  {tutor.assignedStudents.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {tutor.assignedStudents.map((student) => (
+                        <Badge
+                          key={`${student.id}-${student.courseId}-${student.subject}`}
+                          variant="secondary"
+                        >
+                          {student.name} · {sessionSubjectLabel(student.subject)}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No client relationship is provisioned yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {tutors.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">No matching tutors.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
 function ProgramsSection({ programs, onSaved }: { programs: AdminProgram[]; onSaved: () => void }) {
@@ -228,6 +603,9 @@ function RoadmapSection({ data }: { data: AdminCurriculum }) {
   const sessions = data.sessions
     .filter((session) => fallDateOrder.includes(session.dateTime.slice(0, 10)))
     .sort((left, right) => fallDateOrder.indexOf(left.dateTime.slice(0, 10)) - fallDateOrder.indexOf(right.dateTime.slice(0, 10)));
+  const diagnostic = data.assignments.find((assignment) =>
+    /full sat practice diagnostic|sat diagnostic/i.test(assignment.title),
+  );
   const allExceptions = [
     ...sessions.filter((session) => session.conflict).map((session) => ({
       kind: "schedule",
@@ -249,19 +627,67 @@ function RoadmapSection({ data }: { data: AdminCurriculum }) {
     })),
   ];
   const exceptions = allExceptions.slice(0, 6);
+  const newSubmissions = data.submissions.filter((item) => item.reviewStatus !== "reviewed").slice(0, 5);
 
   return <div className="space-y-5">
+    <Card className="border-primary/20 bg-primary/[0.03]">
+      <CardContent className="grid gap-4 p-5 lg:grid-cols-[1.4fr_1fr]">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Build on the platform</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">One loop for every meeting</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Full timed diagnostic before October 2 → weekly mini-section homework → adaptive analysis for student and tutor → live session focuses on misses (or unfinished homework, or a hard-question bank).
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="secondary">Shared Meet: meet.google.com/rih-iayt-okb</Badge>
+            <Badge variant="outline">Auto similar questions</Badge>
+            <Badge variant="outline">Submission alerts</Badge>
+          </div>
+        </div>
+        <div className="rounded-2xl border bg-background p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pre–Oct 2 diagnostic</p>
+          <p className="mt-2 font-semibold">{diagnostic?.title ?? "Full SAT Practice Diagnostic"}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {diagnostic
+              ? `${diagnostic.questionCount} questions · ${diagnostic.timeLimitMinutes} min · ${diagnostic.submissionCount} submissions`
+              : "Seeded when Fall sessions are reconciled."}
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Tutors get a projected SAT score plus strengths/weaknesses before the first meeting.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
     <div className="grid gap-4 sm:grid-cols-3">
       <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Fall meetings</p><p className="mt-2 text-3xl font-bold">{sessions.length} / 12</p></CardContent></Card>
       <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">English / IELTS</p><p className="mt-2 text-3xl font-bold">{sessions.filter((session) => session.subject.toUpperCase() === "IELTS").length} / 3</p></CardContent></Card>
       <Card className={exceptions.length ? "border-amber-400/40" : ""}><CardContent className="p-5"><p className="text-sm text-muted-foreground">Exceptions</p><p className="mt-2 text-3xl font-bold">{allExceptions.length}</p></CardContent></Card>
     </div>
+    {newSubmissions.length > 0 && (
+      <Card className="border-accent/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Latest submission alerts</CardTitle>
+          <CardDescription>New homework results waiting for tutor review and live-plan prep.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {newSubmissions.map((item) => (
+            <div key={item.attemptId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-sm">
+              <div>
+                <p className="font-medium">{item.studentName} · {item.assignmentTitle}</p>
+                <p className="text-muted-foreground">{Math.round(item.score)}% · {item.mistakeCount} misses · {item.reviewStatus}</p>
+              </div>
+              <Badge variant="outline">{new Date(item.submittedAt).toLocaleDateString()}</Badge>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    )}
     {exceptions.length > 0 && <details className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-4">
       <summary className="cursor-pointer font-semibold"><AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />Review {allExceptions.length} exception{allExceptions.length === 1 ? "" : "s"}</summary>
       <div className="mt-4 grid gap-2 md:grid-cols-2">{exceptions.map((item, index) => <div key={`${item.kind}-${index}`} className="rounded-xl border bg-background p-3 text-sm"><Badge variant={item.severity === "urgent" ? "destructive" : "outline"}>{item.label}</Badge><p className="mt-2 text-muted-foreground">{item.detail}</p></div>)}</div>
     </details>}
     <Card className="overflow-hidden">
-      <CardHeader className="border-b"><CardTitle>Twelve-date readiness</CardTitle><CardDescription>Scan the live Fall plan first. Open detailed content or session controls only when needed.</CardDescription></CardHeader>
+      <CardHeader className="border-b"><CardTitle>Twelve-date curriculum builder</CardTitle><CardDescription>Each date already carries before-session homework and during-session practice. Open a brief to auto-prepare the live plan from the latest submission.</CardDescription></CardHeader>
       <CardContent className="p-0">
         {sessions.length ? <div className="divide-y">{sessions.map((session, index) => {
           const assignments = data.assignments.filter((assignment) => assignment.sessionId === session.id);
@@ -271,9 +697,9 @@ function RoadmapSection({ data }: { data: AdminCurriculum }) {
           return <div key={session.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
             <div><p className="font-semibold">{new Date(session.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: session.timezone })}</p><Badge variant="outline" className="mt-1">{sessionSubjectLabel(session.subject)}</Badge></div>
-            <div><p className="text-sm font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-xs text-muted-foreground">Before: {preparation ? preparation.status : "not required"} · During: {during ? during.status : "no assignment"} · Report: {session.hasReport ? "ready" : "pending"}</p></div>
+            <div><p className="text-sm font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-xs text-muted-foreground">Before: {preparation ? `${preparation.title} (${preparation.status})` : "not required"} · During: {during ? during.status : "auto-prepared in session"} · Report: {session.hasReport ? "ready" : "pending"}</p></div>
             <Badge variant={ready ? "default" : "secondary"} className="w-fit">{ready ? "Ready" : "Needs setup"}</Badge>
-            <Button asChild size="sm" variant="outline"><Link href={`/tutor/sessions/${session.id}`}>Open brief <ChevronRight className="ml-2 h-4 w-4" /></Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/tutor/sessions/${session.id}`}>Open builder <ChevronRight className="ml-2 h-4 w-4" /></Link></Button>
           </div>;
         })}</div> : <Empty text="No Fall curriculum dates are available." />}
       </CardContent>

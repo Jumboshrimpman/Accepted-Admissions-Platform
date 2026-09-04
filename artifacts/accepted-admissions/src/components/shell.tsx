@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
 import { ProvisioningReference } from "@/components/provisioning-reference";
@@ -9,7 +10,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, BookOpen, LayoutDashboard, Settings } from "lucide-react";
+import {
+  BookOpen,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Settings,
+  UserRound,
+  WalletCards,
+  X,
+} from "lucide-react";
 import {
   getGetCurrentUserQueryKey,
   useGetCurrentUser,
@@ -19,7 +30,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
-  
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const { data: apiUser, isLoading, error } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
   });
@@ -49,20 +61,27 @@ export function Shell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location]);
+
   const role = apiUser.role;
 
   const getLinks = () => {
-    switch(role) {
+    switch (role) {
       case "tutor":
         return [
           { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/tutor/profile", label: "Profile", icon: UserRound },
           { href: "/portal/curriculum", label: "Client curriculum", icon: BookOpen },
         ];
       case "administrator":
         return [
-          { href: "/admin", label: "Admin", icon: Settings },
+          { href: "/admin", label: "Overview", icon: Settings },
           { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
-          { href: "/tutor", label: "Tutor View", icon: BookOpen },
+          { href: "/admin/financials", label: "Finance", icon: WalletCards },
+          { href: "/admin/content", label: "Content", icon: FileText },
+          { href: "/tutor", label: "Tutor view", icon: BookOpen },
         ];
       default:
         return [
@@ -72,6 +91,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
 
   const links = getLinks();
+  const linkActive = (href: string) =>
+    location === href ||
+    (href !== "/portal" &&
+      href !== "/admin" &&
+      href !== "/tutor" &&
+      location.startsWith(href)) ||
+    (href === "/admin" && location === "/admin") ||
+    (href === "/tutor" && (location === "/tutor" || location.startsWith("/tutor/"))) ||
+    (href === "/portal/curriculum" && location.startsWith("/portal"));
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -88,13 +116,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 Accepted Admissions
               </span>
             </Link>
-            <nav className="hidden md:flex gap-1">
+            <nav className="hidden md:flex gap-1" aria-label="Portal navigation">
               {links.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    location === link.href || (link.href !== "/portal" && location.startsWith(link.href))
+                    linkActive(link.href)
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
@@ -105,21 +133,39 @@ export function Shell({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={menuOpen}
+              aria-controls="portal-mobile-navigation"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2 px-2">
                   <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent overflow-hidden">
-                    {user?.imageUrl ? (
-                      <img src={user.imageUrl} alt={user.fullName || ""} className="w-full h-full object-cover" />
+                    {apiUser.avatarUrl || user?.imageUrl ? (
+                      <img
+                        src={apiUser.avatarUrl || user?.imageUrl}
+                        alt={apiUser.displayName || user?.fullName || ""}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <span className="font-medium text-xs">
-                        {user?.firstName?.charAt(0) || "U"}
+                        {apiUser.displayName?.charAt(0) || user?.firstName?.charAt(0) || "U"}
                       </span>
                     )}
                   </div>
                   <div className="hidden sm:flex flex-col items-start text-left">
-                    <span className="text-sm font-medium leading-none">{user?.fullName}</span>
+                    <span className="text-sm font-medium leading-none">
+                      {apiUser.displayName || user?.fullName}
+                    </span>
                     <span className="text-xs text-muted-foreground capitalize leading-none">{role}</span>
                   </div>
                 </Button>
@@ -133,6 +179,31 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </DropdownMenu>
           </div>
         </div>
+        {menuOpen && (
+          <nav
+            id="portal-mobile-navigation"
+            className="border-t bg-card px-4 py-3 md:hidden"
+            aria-label="Mobile portal navigation"
+          >
+            <div className="container mx-auto grid gap-1">
+              {links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-2 rounded-md px-3 py-3 text-sm font-medium ${
+                    linkActive(link.href)
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <link.icon className="h-4 w-4" />
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
+        )}
       </header>
       <main className="flex-1 container mx-auto px-4 py-8">
         {children}

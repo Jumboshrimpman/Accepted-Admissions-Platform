@@ -8,7 +8,7 @@ import { processStripeWebhook } from "./payment-service.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { verifyStripeSignature } from "./stripe-client.ts";
 
-const SINGLE_PRICE_CENTS = 17_500;
+const SINGLE_PRICE_CENTS = 13_000;
 const PACKAGE_PRICE_CENTS = 130_000;
 
 type DatabaseModule = typeof import("@workspace/db");
@@ -157,7 +157,7 @@ test("rejects a tampered Stripe webhook payload with the official SDK", () => {
   }
 });
 
-test("$175 purchase grants exactly 1 credit", async () => {
+test("$130 purchase grants exactly 1 credit", async () => {
   const fixture = await createPurchaseFixture({
     amountCents: SINGLE_PRICE_CENTS,
     durationHours: 1,

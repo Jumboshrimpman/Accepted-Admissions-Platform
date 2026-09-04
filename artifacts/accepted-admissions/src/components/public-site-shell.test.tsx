@@ -12,7 +12,7 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/", vi.fn()],
 }));
 
-import { PublicSiteShell, fetchPublicJson, resolvePublicPath } from "./public-site-shell";
+import { PublicSiteShell, fetchPublicJson, resolvePublicMediaUrl, resolvePublicPath } from "./public-site-shell";
 
 afterEach(() => {
   cleanup();
@@ -59,6 +59,9 @@ describe("PublicSiteShell", () => {
   it("keeps assets and API calls inside a configured base path", () => {
     expect(resolvePublicPath("/logo.svg", "/accepted-admissions/")).toBe("/accepted-admissions/logo.svg");
     expect(resolvePublicPath("api/public/products", "/accepted-admissions")).toBe("/accepted-admissions/api/public/products");
+    expect(resolvePublicMediaUrl("/media/team/kya-brooks.jpg")).toMatch(/\/media\/team\/kya-brooks\.jpg$/);
+    expect(resolvePublicMediaUrl("https://cdn.example.com/photo.jpg")).toBe("https://cdn.example.com/photo.jpg");
+    expect(resolvePublicMediaUrl(null)).toBeUndefined();
   });
 
   it("rejects HTML fallbacks and malformed public JSON", async () => {

@@ -188,77 +188,6 @@ export interface AdminFinancials {
   transfers: TutorTransferRecord[];
 }
 
-export interface TutorPayoutStatus {
-  tutorProfileId: string;
-  tutorName: string;
-  /** @nullable */
-  accountId?: string | null;
-  status: string;
-  detailsSubmitted: boolean;
-  chargesEnabled: boolean;
-  payoutsEnabled: boolean;
-  ready: boolean;
-}
-
-export type TutorPayoutOnboarding = TutorPayoutStatus & {
-  url: string;
-};
-
-export type TutorPayoutObligationStatus = typeof TutorPayoutObligationStatus[keyof typeof TutorPayoutObligationStatus];
-
-
-export const TutorPayoutObligationStatus = {
-  pending: 'pending',
-  due: 'due',
-  paid: 'paid',
-  reversed: 'reversed',
-} as const;
-
-export interface TutorPayoutObligation {
-  id: string;
-  sessionId: string;
-  studentUserId: string;
-  /** @nullable */
-  studentName: string | null;
-  tutorUserId: string;
-  /** @nullable */
-  tutorName: string | null;
-  tutorProfileId: string;
-  sessionDateTime: string;
-  durationMinutes: number;
-  /** @nullable */
-  paymentId: string | null;
-  /** @nullable */
-  purchaseReference: string | null;
-  tutorRateCents: number;
-  amountOwedCents: number;
-  status: TutorPayoutObligationStatus;
-  completedAt: string;
-  /** @nullable */
-  paidAt: string | null;
-  /** @nullable */
-  paidByUserId: string | null;
-  /** @nullable */
-  paidByName: string | null;
-  /** @nullable */
-  paymentReference: string | null;
-  /** @nullable */
-  notes: string | null;
-  createdAt: string;
-}
-
-export interface MarkTutorPayoutPaidInput {
-  /** @maxLength 500 */
-  paymentReference?: string;
-  /** @maxLength 2000 */
-  notes?: string;
-}
-
-export interface ReverseTutorPayoutInput {
-  /** @maxLength 2000 */
-  notes?: string;
-}
-
 export type HostedInvoiceInputProvider = typeof HostedInvoiceInputProvider[keyof typeof HostedInvoiceInputProvider];
 
 
@@ -543,6 +472,95 @@ export const Role = {
   student: 'student',
   viewer: 'viewer',
 } as const;
+
+/**
+ * Roles that administrators may provision from the portal (never administrator or viewer).
+ */
+export type ProvisionableRoleCategory = typeof ProvisionableRoleCategory[keyof typeof ProvisionableRoleCategory];
+
+
+export const ProvisionableRoleCategory = {
+  sat_tutor: 'sat_tutor',
+  english_tutor: 'english_tutor',
+  tutor: 'tutor',
+  student: 'student',
+} as const;
+
+export type AdminAccessGrantRole = typeof AdminAccessGrantRole[keyof typeof AdminAccessGrantRole];
+
+
+export const AdminAccessGrantRole = {
+  tutor: 'tutor',
+  student: 'student',
+} as const;
+
+export interface AdminAccessGrant {
+  id: string;
+  email: string;
+  /** @nullable */
+  clerkUserId: string | null;
+  displayName: string;
+  roleCategory: ProvisionableRoleCategory;
+  role: AdminAccessGrantRole;
+  subject: string;
+  active: boolean;
+  /** @nullable */
+  notes: string | null;
+  /** @nullable */
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  revokedAt: string | null;
+}
+
+export interface AdminAccessGrantList {
+  grants: AdminAccessGrant[];
+}
+
+export interface AdminAccessGrantInput {
+  /** @minLength 3 */
+  email: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  displayName: string;
+  roleCategory: ProvisionableRoleCategory;
+  /**
+     * Optional Clerk user ID when already known; otherwise access matches the verified primary email.
+     * @minLength 3
+     * @maxLength 128
+     * @nullable
+     */
+  clerkUserId?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+}
+
+export interface AdminAccessGrantUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  displayName?: string;
+  roleCategory?: ProvisionableRoleCategory;
+  /**
+     * @minLength 3
+     * @maxLength 128
+     * @nullable
+     */
+  clerkUserId?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+  active?: boolean;
+}
 
 export interface CurrentUser {
   id: string;
@@ -1484,6 +1502,9 @@ export interface ReviewSubmission {
   mistakeCount?: number;
   /** @nullable */
   tutorNotes?: string | null;
+  /** @nullable */
+  analysisPreview?: string | null;
+  nextFocus?: string[];
 }
 
 export type DashboardRecentScoresItem = {
@@ -1770,6 +1791,25 @@ export interface AdaptiveMistake {
   reason: string;
 }
 
+export type SessionPrepSummaryMode = typeof SessionPrepSummaryMode[keyof typeof SessionPrepSummaryMode];
+
+
+export const SessionPrepSummaryMode = {
+  awaiting_homework: 'awaiting_homework',
+  complete_homework_in_session: 'complete_homework_in_session',
+  mistake_focus: 'mistake_focus',
+  hard_bank: 'hard_bank',
+  ready: 'ready',
+} as const;
+
+export interface SessionPrepSummary {
+  mode: SessionPrepSummaryMode;
+  summary: string;
+  /** @nullable */
+  duringAssignmentId: string | null;
+  attachedQuestionCount: number;
+}
+
 export interface AdaptiveCurriculum {
   sessionId: string;
   homework: AssignmentSummary | null;
@@ -1779,6 +1819,7 @@ export interface AdaptiveCurriculum {
   /** @nullable */
   tutorNotes: string | null;
   publishedBlocks: CurriculumBlock[];
+  sessionPrep?: SessionPrepSummary | null;
 }
 
 export type AdaptiveRecommendationUpdateStatus = typeof AdaptiveRecommendationUpdateStatus[keyof typeof AdaptiveRecommendationUpdateStatus];

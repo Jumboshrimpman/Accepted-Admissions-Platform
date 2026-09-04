@@ -129,6 +129,65 @@ paths:
               schema: { $ref: "#/components/schemas/AdminCurriculum" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/access-grants:
+    get:
+      operationId: listAdminAccessGrants
+      tags: [administration]
+      summary: List portal access grants for tutors and students
+      responses:
+        "200":
+          description: Access grants
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccessGrantList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createAdminAccessGrant
+      tags: [administration]
+      summary: Provision a tutor or student for portal access
+      description: >
+        Creates or reactivates a database access grant for a tutor or student.
+        Administrator and viewer roles cannot be provisioned from this endpoint.
+        Does not send Clerk invitations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAccessGrantInput" }
+      responses:
+        "201":
+          description: Provisioned access grant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccessGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /admin/access-grants/{grantId}:
+    patch:
+      operationId: updateAdminAccessGrant
+      tags: [administration]
+      summary: Update or revoke a tutor or student access grant
+      parameters:
+        - $ref: "#/components/parameters/GrantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAccessGrantUpdate" }
+      responses:
+        "200":
+          description: Updated access grant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccessGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/clients/{clientId}/dashboard:
     get:
       operationId: getAdminClientDashboard
@@ -305,114 +364,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminFinancials" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /admin/xavier-payout:
-    get:
-      operationId: getAdminXavierPayout
-      tags: [administration]
-      summary: Refresh and return Xavier Morales' Stripe Connect payout readiness
-      responses:
-        "200":
-          description: Current Stripe Connect payout readiness
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TutorPayoutStatus" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-  /admin/xavier-payout/onboarding:
-    post:
-      operationId: createAdminXavierPayoutOnboarding
-      tags: [administration]
-      summary: Create or continue Xavier Morales' Stripe Connect onboarding
-      responses:
-        "201":
-          description: Stripe-hosted onboarding link
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TutorPayoutOnboarding" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-  /admin/tutor-payouts:
-    get:
-      operationId: listAdminTutorPayouts
-      tags: [administration]
-      summary: List tutor payout obligations for manual settlement
-      responses:
-        "200":
-          description: Company-wide tutor payout ledger
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TutorPayoutObligation" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /admin/tutor-payouts/{obligationId}/mark-paid:
-    post:
-      operationId: markAdminTutorPayoutPaid
-      tags: [administration]
-      summary: Mark a tutor payout obligation as paid offline
-      parameters:
-        - name: obligationId
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MarkTutorPayoutPaidInput" }
-      responses:
-        "200":
-          description: Updated payout obligation
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TutorPayoutObligation" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
-  /admin/tutor-payouts/{obligationId}/reverse:
-    post:
-      operationId: reverseAdminTutorPayout
-      tags: [administration]
-      summary: Reverse a tutor payout obligation
-      parameters:
-        - name: obligationId
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ReverseTutorPayoutInput" }
-      responses:
-        "200":
-          description: Updated payout obligation
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TutorPayoutObligation" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /tutor/payouts:
-    get:
-      operationId: listTutorPayouts
-      tags: [portal]
-      summary: List the current tutor's payout obligations
-      responses:
-        "200":
-          description: Tutor-scoped payout history
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TutorPayoutObligation" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /admin/products:
@@ -836,23 +787,6 @@ paths:
               schema: { $ref: "#/components/schemas/AdaptiveCurriculum" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-  /admin/transfers/{paymentId}/reconcile:
-    post:
-      operationId: reconcileAdminTutorTransfer
-      tags: [administration]
-      summary: Retry and reconcile a tutor transfer or refund reversal
-      parameters:
-        - name: paymentId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        "204": { description: Transfer state reconciled }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-        "404": { $ref: "#/components/responses/NotFound" }
   /adaptive-recommendations/{recommendationId}:
     patch:
       operationId: updateAdaptiveRecommendation
@@ -1443,6 +1377,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    GrantId:
+      name: grantId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     Unauthorized:
       description: Authentication required
@@ -1648,26 +1587,6 @@ components:
         transfers:
           type: array
           items: { $ref: "#/components/schemas/TutorTransferRecord" }
-    TutorPayoutStatus:
-      type: object
-      required:
-        [tutorProfileId, tutorName, status, detailsSubmitted, chargesEnabled, payoutsEnabled, ready]
-      properties:
-        tutorProfileId: { type: string }
-        tutorName: { type: string }
-        accountId: { type: ["string", "null"] }
-        status: { type: string }
-        detailsSubmitted: { type: boolean }
-        chargesEnabled: { type: boolean }
-        payoutsEnabled: { type: boolean }
-        ready: { type: boolean }
-    TutorPayoutOnboarding:
-      allOf:
-        - { $ref: "#/components/schemas/TutorPayoutStatus" }
-        - type: object
-          required: [url]
-          properties:
-            url: { type: string }
     TutorTransferRecord:
       type: object
       required: [id, paymentId, amountCents, reversedAmountCents, status, createdAt]
@@ -1681,66 +1600,6 @@ components:
         status: { type: string }
         failureReason: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
-    TutorPayoutObligationStatus:
-      type: string
-      enum: [pending, due, paid, reversed]
-    TutorPayoutObligation:
-      type: object
-      required:
-        [
-          id,
-          sessionId,
-          studentUserId,
-          studentName,
-          tutorUserId,
-          tutorName,
-          tutorProfileId,
-          sessionDateTime,
-          durationMinutes,
-          paymentId,
-          purchaseReference,
-          tutorRateCents,
-          amountOwedCents,
-          status,
-          completedAt,
-          paidAt,
-          paidByUserId,
-          paidByName,
-          paymentReference,
-          notes,
-          createdAt,
-        ]
-      properties:
-        id: { type: string }
-        sessionId: { type: string }
-        studentUserId: { type: string }
-        studentName: { type: ["string", "null"] }
-        tutorUserId: { type: string }
-        tutorName: { type: ["string", "null"] }
-        tutorProfileId: { type: string }
-        sessionDateTime: { type: string, format: date-time }
-        durationMinutes: { type: number }
-        paymentId: { type: ["string", "null"] }
-        purchaseReference: { type: ["string", "null"] }
-        tutorRateCents: { type: number }
-        amountOwedCents: { type: number }
-        status: { $ref: "#/components/schemas/TutorPayoutObligationStatus" }
-        completedAt: { type: string, format: date-time }
-        paidAt: { type: ["string", "null"], format: date-time }
-        paidByUserId: { type: ["string", "null"] }
-        paidByName: { type: ["string", "null"] }
-        paymentReference: { type: ["string", "null"] }
-        notes: { type: ["string", "null"] }
-        createdAt: { type: string, format: date-time }
-    MarkTutorPayoutPaidInput:
-      type: object
-      properties:
-        paymentReference: { type: string, maxLength: 500 }
-        notes: { type: string, maxLength: 2000 }
-    ReverseTutorPayoutInput:
-      type: object
-      properties:
-        notes: { type: string, maxLength: 2000 }
     HostedInvoiceInput:
       type: object
       required: [clientUserId]
@@ -1903,6 +1762,75 @@ components:
     Role:
       type: string
       enum: [administrator, tutor, student, viewer]
+    ProvisionableRoleCategory:
+      type: string
+      description: Roles that administrators may provision from the portal (never administrator or viewer).
+      enum: [sat_tutor, english_tutor, tutor, student]
+    AdminAccessGrant:
+      type: object
+      required:
+        [
+          id,
+          email,
+          clerkUserId,
+          displayName,
+          roleCategory,
+          role,
+          subject,
+          active,
+          notes,
+          userId,
+          createdAt,
+          updatedAt,
+          revokedAt,
+        ]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        email: { type: string }
+        clerkUserId: { type: ["string", "null"] }
+        displayName: { type: string }
+        roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
+        role: { type: string, enum: [tutor, student] }
+        subject: { type: string }
+        active: { type: boolean }
+        notes: { type: ["string", "null"] }
+        userId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+    AdminAccessGrantList:
+      type: object
+      required: [grants]
+      additionalProperties: false
+      properties:
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAccessGrant" }
+    AdminAccessGrantInput:
+      type: object
+      required: [email, displayName, roleCategory]
+      additionalProperties: false
+      properties:
+        email: { type: string, minLength: 3 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
+        clerkUserId:
+          type: ["string", "null"]
+          description: Optional Clerk user ID when already known; otherwise access matches the verified primary email.
+          minLength: 3
+          maxLength: 128
+        notes: { type: ["string", "null"], maxLength: 500 }
+    AdminAccessGrantUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
+        clerkUserId: { type: ["string", "null"], minLength: 3, maxLength: 128 }
+        notes: { type: ["string", "null"], maxLength: 500 }
+        active: { type: boolean }
     CurrentUser:
       type: object
       required: [id, displayName, email, role]
@@ -2516,6 +2444,23 @@ components:
         finalAnswer: { type: ["string", "null"] }
         correctAnswer: { type: string }
         reason: { type: string }
+    SessionPrepSummary:
+      type: object
+      required: [mode, summary, duringAssignmentId, attachedQuestionCount]
+      properties:
+        mode:
+          type: string
+          enum:
+            [
+              awaiting_homework,
+              complete_homework_in_session,
+              mistake_focus,
+              hard_bank,
+              ready,
+            ]
+        summary: { type: string }
+        duringAssignmentId: { type: ["string", "null"] }
+        attachedQuestionCount: { type: number }
     AdaptiveCurriculum:
       type: object
       required: [sessionId, homework, mistakes, recommendations, hardQuestions, tutorNotes, publishedBlocks]
@@ -2538,6 +2483,10 @@ components:
         publishedBlocks:
           type: array
           items: { $ref: "#/components/schemas/CurriculumBlock" }
+        sessionPrep:
+          allOf:
+            - $ref: "#/components/schemas/SessionPrepSummary"
+          nullable: true
     AdaptiveRecommendationUpdate:
       type: object
       required: [status]
@@ -2752,6 +2701,10 @@ components:
         reviewStatus: { type: string, enum: [new, in_review, reviewed] }
         mistakeCount: { type: number }
         tutorNotes: { type: ["string", "null"] }
+        analysisPreview: { type: ["string", "null"] }
+        nextFocus:
+          type: array
+          items: { type: string }
     AttemptReviewUpdate:
       type: object
       properties:

@@ -326,6 +326,109 @@ export const GetAdminCurriculumResponse = zod.object({
 
 
 /**
+ * @summary List portal access grants for tutors and students
+ */
+export const ListAdminAccessGrantsResponse = zod.object({
+  "grants": zod.array(zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "clerkUserId": zod.string().nullable(),
+  "displayName": zod.string(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "role": zod.enum(['tutor', 'student']),
+  "subject": zod.string(),
+  "active": zod.boolean(),
+  "notes": zod.string().nullable(),
+  "userId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * Creates or reactivates a database access grant for a tutor or student. Administrator and viewer roles cannot be provisioned from this endpoint. Does not send Clerk invitations.
+ * @summary Provision a tutor or student for portal access
+ */
+export const createAdminAccessGrantBodyEmailMin = 3;
+
+export const createAdminAccessGrantBodyDisplayNameMax = 120;
+
+export const createAdminAccessGrantBodyClerkUserIdMin = 3;
+export const createAdminAccessGrantBodyClerkUserIdMax = 128;
+
+export const createAdminAccessGrantBodyNotesMax = 500;
+
+
+
+export const CreateAdminAccessGrantBody = zod.object({
+  "email": zod.string().min(createAdminAccessGrantBodyEmailMin),
+  "displayName": zod.string().min(1).max(createAdminAccessGrantBodyDisplayNameMax),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Clerk user ID when already known; otherwise access matches the verified primary email.'),
+  "notes": zod.string().max(createAdminAccessGrantBodyNotesMax).nullish()
+})
+
+export const CreateAdminAccessGrantResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "clerkUserId": zod.string().nullable(),
+  "displayName": zod.string(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "role": zod.enum(['tutor', 'student']),
+  "subject": zod.string(),
+  "active": zod.boolean(),
+  "notes": zod.string().nullable(),
+  "userId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Update or revoke a tutor or student access grant
+ */
+export const UpdateAdminAccessGrantParams = zod.object({
+  "grantId": zod.coerce.string()
+})
+
+export const updateAdminAccessGrantBodyDisplayNameMax = 120;
+
+export const updateAdminAccessGrantBodyClerkUserIdMin = 3;
+export const updateAdminAccessGrantBodyClerkUserIdMax = 128;
+
+export const updateAdminAccessGrantBodyNotesMax = 500;
+
+
+
+export const UpdateAdminAccessGrantBody = zod.object({
+  "displayName": zod.string().min(1).max(updateAdminAccessGrantBodyDisplayNameMax).optional(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).optional().describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "clerkUserId": zod.string().min(updateAdminAccessGrantBodyClerkUserIdMin).max(updateAdminAccessGrantBodyClerkUserIdMax).nullish(),
+  "notes": zod.string().max(updateAdminAccessGrantBodyNotesMax).nullish(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateAdminAccessGrantResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "clerkUserId": zod.string().nullable(),
+  "displayName": zod.string(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "role": zod.enum(['tutor', 'student']),
+  "subject": zod.string(),
+  "active": zod.boolean(),
+  "notes": zod.string().nullable(),
+  "userId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Get an administrator-authorized read-only client dashboard preview
  */
 export const GetAdminClientDashboardParams = zod.object({
@@ -492,7 +595,9 @@ export const GetAdminClientDashboardResponse = zod.object({
   "submittedAt": zod.coerce.date(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
   "mistakeCount": zod.number().optional(),
-  "tutorNotes": zod.string().nullish()
+  "tutorNotes": zod.string().nullish(),
+  "analysisPreview": zod.string().nullish(),
+  "nextFocus": zod.array(zod.string()).optional()
 })),
   "openReviewCount": zod.number()
 }).and(zod.object({
@@ -1038,179 +1143,6 @@ export const GetAdminFinancialsResponse = zod.object({
 
 
 /**
- * @summary Refresh and return Xavier Morales' Stripe Connect payout readiness
- */
-export const GetAdminXavierPayoutResponse = zod.object({
-  "tutorProfileId": zod.string(),
-  "tutorName": zod.string(),
-  "accountId": zod.string().nullish(),
-  "status": zod.string(),
-  "detailsSubmitted": zod.boolean(),
-  "chargesEnabled": zod.boolean(),
-  "payoutsEnabled": zod.boolean(),
-  "ready": zod.boolean()
-})
-
-
-/**
- * @summary Create or continue Xavier Morales' Stripe Connect onboarding
- */
-export const CreateAdminXavierPayoutOnboardingResponse = zod.object({
-  "tutorProfileId": zod.string(),
-  "tutorName": zod.string(),
-  "accountId": zod.string().nullish(),
-  "status": zod.string(),
-  "detailsSubmitted": zod.boolean(),
-  "chargesEnabled": zod.boolean(),
-  "payoutsEnabled": zod.boolean(),
-  "ready": zod.boolean()
-}).and(zod.object({
-  "url": zod.string()
-}))
-
-
-/**
- * @summary List tutor payout obligations for manual settlement
- */
-export const ListAdminTutorPayoutsResponseItem = zod.object({
-  "id": zod.string(),
-  "sessionId": zod.string(),
-  "studentUserId": zod.string(),
-  "studentName": zod.string().nullable(),
-  "tutorUserId": zod.string(),
-  "tutorName": zod.string().nullable(),
-  "tutorProfileId": zod.string(),
-  "sessionDateTime": zod.coerce.date(),
-  "durationMinutes": zod.number(),
-  "paymentId": zod.string().nullable(),
-  "purchaseReference": zod.string().nullable(),
-  "tutorRateCents": zod.number(),
-  "amountOwedCents": zod.number(),
-  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
-  "completedAt": zod.coerce.date(),
-  "paidAt": zod.coerce.date().nullable(),
-  "paidByUserId": zod.string().nullable(),
-  "paidByName": zod.string().nullable(),
-  "paymentReference": zod.string().nullable(),
-  "notes": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
-})
-export const ListAdminTutorPayoutsResponse = zod.array(ListAdminTutorPayoutsResponseItem)
-
-
-/**
- * @summary Mark a tutor payout obligation as paid offline
- */
-export const MarkAdminTutorPayoutPaidParams = zod.object({
-  "obligationId": zod.coerce.string()
-})
-
-export const markAdminTutorPayoutPaidBodyPaymentReferenceMax = 500;
-
-export const markAdminTutorPayoutPaidBodyNotesMax = 2000;
-
-
-
-export const MarkAdminTutorPayoutPaidBody = zod.object({
-  "paymentReference": zod.string().max(markAdminTutorPayoutPaidBodyPaymentReferenceMax).optional(),
-  "notes": zod.string().max(markAdminTutorPayoutPaidBodyNotesMax).optional()
-})
-
-export const MarkAdminTutorPayoutPaidResponse = zod.object({
-  "id": zod.string(),
-  "sessionId": zod.string(),
-  "studentUserId": zod.string(),
-  "studentName": zod.string().nullable(),
-  "tutorUserId": zod.string(),
-  "tutorName": zod.string().nullable(),
-  "tutorProfileId": zod.string(),
-  "sessionDateTime": zod.coerce.date(),
-  "durationMinutes": zod.number(),
-  "paymentId": zod.string().nullable(),
-  "purchaseReference": zod.string().nullable(),
-  "tutorRateCents": zod.number(),
-  "amountOwedCents": zod.number(),
-  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
-  "completedAt": zod.coerce.date(),
-  "paidAt": zod.coerce.date().nullable(),
-  "paidByUserId": zod.string().nullable(),
-  "paidByName": zod.string().nullable(),
-  "paymentReference": zod.string().nullable(),
-  "notes": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Reverse a tutor payout obligation
- */
-export const ReverseAdminTutorPayoutParams = zod.object({
-  "obligationId": zod.coerce.string()
-})
-
-export const reverseAdminTutorPayoutBodyNotesMax = 2000;
-
-
-
-export const ReverseAdminTutorPayoutBody = zod.object({
-  "notes": zod.string().max(reverseAdminTutorPayoutBodyNotesMax).optional()
-})
-
-export const ReverseAdminTutorPayoutResponse = zod.object({
-  "id": zod.string(),
-  "sessionId": zod.string(),
-  "studentUserId": zod.string(),
-  "studentName": zod.string().nullable(),
-  "tutorUserId": zod.string(),
-  "tutorName": zod.string().nullable(),
-  "tutorProfileId": zod.string(),
-  "sessionDateTime": zod.coerce.date(),
-  "durationMinutes": zod.number(),
-  "paymentId": zod.string().nullable(),
-  "purchaseReference": zod.string().nullable(),
-  "tutorRateCents": zod.number(),
-  "amountOwedCents": zod.number(),
-  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
-  "completedAt": zod.coerce.date(),
-  "paidAt": zod.coerce.date().nullable(),
-  "paidByUserId": zod.string().nullable(),
-  "paidByName": zod.string().nullable(),
-  "paymentReference": zod.string().nullable(),
-  "notes": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary List the current tutor's payout obligations
- */
-export const ListTutorPayoutsResponseItem = zod.object({
-  "id": zod.string(),
-  "sessionId": zod.string(),
-  "studentUserId": zod.string(),
-  "studentName": zod.string().nullable(),
-  "tutorUserId": zod.string(),
-  "tutorName": zod.string().nullable(),
-  "tutorProfileId": zod.string(),
-  "sessionDateTime": zod.coerce.date(),
-  "durationMinutes": zod.number(),
-  "paymentId": zod.string().nullable(),
-  "purchaseReference": zod.string().nullable(),
-  "tutorRateCents": zod.number(),
-  "amountOwedCents": zod.number(),
-  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
-  "completedAt": zod.coerce.date(),
-  "paidAt": zod.coerce.date().nullable(),
-  "paidByUserId": zod.string().nullable(),
-  "paidByName": zod.string().nullable(),
-  "paymentReference": zod.string().nullable(),
-  "notes": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
-})
-export const ListTutorPayoutsResponse = zod.array(ListTutorPayoutsResponseItem)
-
-
-/**
  * @summary List all SAT products for catalog administration
  */
 export const ListAdminProductsResponseItem = zod.object({
@@ -1717,7 +1649,9 @@ export const GetDashboardResponse = zod.object({
   "submittedAt": zod.coerce.date(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
   "mistakeCount": zod.number().optional(),
-  "tutorNotes": zod.string().nullish()
+  "tutorNotes": zod.string().nullish(),
+  "analysisPreview": zod.string().nullish(),
+  "nextFocus": zod.array(zod.string()).optional()
 })),
   "openReviewCount": zod.number()
 })
@@ -2180,7 +2114,13 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
   "config": zod.record(zod.string(), zod.unknown())
-}))
+})),
+  "sessionPrep": zod.object({
+  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
+  "summary": zod.string(),
+  "duringAssignmentId": zod.string().nullable(),
+  "attachedQuestionCount": zod.number()
+}).nullish()
 })
 
 
@@ -2278,18 +2218,14 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
   "config": zod.record(zod.string(), zod.unknown())
-}))
+})),
+  "sessionPrep": zod.object({
+  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
+  "summary": zod.string(),
+  "duringAssignmentId": zod.string().nullable(),
+  "attachedQuestionCount": zod.number()
+}).nullish()
 })
-
-
-/**
- * @summary Retry and reconcile a tutor transfer or refund reversal
- */
-export const ReconcileAdminTutorTransferParams = zod.object({
-  "paymentId": zod.coerce.string()
-})
-
-export const ReconcileAdminTutorTransferResponse = zod.void()
 
 
 /**
@@ -3059,7 +2995,9 @@ export const ListReviewSubmissionsResponseItem = zod.object({
   "submittedAt": zod.coerce.date(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']),
   "mistakeCount": zod.number().optional(),
-  "tutorNotes": zod.string().nullish()
+  "tutorNotes": zod.string().nullish(),
+  "analysisPreview": zod.string().nullish(),
+  "nextFocus": zod.array(zod.string()).optional()
 })
 export const ListReviewSubmissionsResponse = zod.array(ListReviewSubmissionsResponseItem)
 

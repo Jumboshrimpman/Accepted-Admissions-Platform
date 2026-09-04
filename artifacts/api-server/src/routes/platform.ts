@@ -64,6 +64,15 @@ import {
   sessionTitle,
   taitoSessionDateTime,
 } from "../lib/session-schedule";
+import { buildAttemptAnalysis } from "../lib/assessment-analysis";
+import {
+  FULL_SAT_DIAGNOSTIC_QUESTIONS,
+  HARD_BANK_SEED_QUESTIONS,
+} from "../lib/sat-assessment-content";
+import {
+  enqueueMissedReviewItems,
+  prepareSessionCurriculum,
+} from "../lib/session-curriculum-prep";
 import {
   canViewSession,
   publicSessionShape,
@@ -82,40 +91,36 @@ import {
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
+  APPROVED_SCHOOL_LOGOS,
+  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
+  rewriteLegacyWixMediaUrl,
+  rewriteLegacyWixSchoolLogos,
 } from "../lib/public-team-roster";
 import {
   createCheckoutSession,
   createHostedInvoice,
-  reconcileTutorTransfer,
   stripeErrorMessage,
   voidHostedInvoice,
 } from "../lib/payment-service";
-import {
-  accrueObligationForCompletedSession,
-  listTutorPayoutObligations,
-  markObligationPaid,
-  reverseObligation,
-  TutorPayoutLedgerError,
-  type TutorPayoutObligationView,
-} from "../lib/tutor-payout-ledger";
-import {
-  createStripeConnectAccount,
-  createStripeConnectAccountLink,
-  retrieveStripeConnectAccount,
-} from "../lib/stripe-client";
 import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
   AttachQuestionToAssignmentResponse,
   CreateAdminAssignmentBody,
   CreateAdminAssignmentResponse,
+  CreateAdminAccessGrantBody,
+  CreateAdminAccessGrantResponse,
   CreateAdminSessionBody,
   CreateAdminSessionResponse,
   GetAdminClientDashboardParams,
   GetAdminClientDashboardResponse,
+  ListAdminAccessGrantsResponse,
+  UpdateAdminAccessGrantBody,
+  UpdateAdminAccessGrantParams,
+  UpdateAdminAccessGrantResponse,
   UpdateAdminNotificationBody,
   UpdateAdminNotificationParams,
   UpdateAdminNotificationResponse,
@@ -146,7 +151,6 @@ import {
   GetDashboardResponse,
   GetSessionParams,
   GetSessionResponse,
-  ListAdminTutorPayoutsResponse,
   ListAssignmentsQueryParams,
   ListAssignmentsResponse,
   ListCoursesResponse,
@@ -156,13 +160,6 @@ import {
   ListQuestionBankResponse,
   ListReviewQueueResponse,
   ListReviewSubmissionsResponse,
-  ListTutorPayoutsResponse,
-  MarkAdminTutorPayoutPaidBody,
-  MarkAdminTutorPayoutPaidParams,
-  MarkAdminTutorPayoutPaidResponse,
-  ReverseAdminTutorPayoutBody,
-  ReverseAdminTutorPayoutParams,
-  ReverseAdminTutorPayoutResponse,
   ListSessionArtifactsParams,
   ListSessionArtifactsResponse,
   RefreshAdaptiveCurriculumParams,
@@ -213,12 +210,24 @@ import {
   UpsertSessionArtifactResponse,
 } from "@workspace/api-zod";
 import {
-  configuredAccess,
+  accessFromRoleCategory,
   configuredAccessConflicts,
+  envRoleCategoriesForIdentity,
+  isProvisionableRoleCategory,
   normalizeProvisionedEmail,
+  resolvePortalAccess,
+  subjectsForRoleCategory,
+  tutorTitleForRoleCategory,
   type ConfiguredAccess,
+  type DatabaseAccessGrant,
+  type ProvisionableRoleCategory,
   verifiedPrimaryEmail,
 } from "../lib/access-config";
+import {
+  parseTutorProfileEditableFields,
+  safePublicUrl,
+  tutorProfileApprovalError,
+} from "../lib/tutor-profile-fields";
 import {
   contentSourcesTable,
   assignmentQuestionsTable,
@@ -238,6 +247,7 @@ import {
   invoicesTable,
   loginActivityTable,
   paymentsTable,
+  portalAccessGrantsTable,
   publicContentTable,
   questionsTable,
   responsesTable,
@@ -253,43 +263,50 @@ import {
   usersTable,
   viewerLinksTable,
   type AppUser,
+  type PortalAccessGrant,
 } from "@workspace/db";
 
 type AuthedRequest = Request & { appUser?: AppUser };
 
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
+const EUNICE_NAME = "Eunice Chon";
+/** Prepaid SAT credits may be booked with either SAT tutor's calendar. */
+const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME] as const;
 /** Legacy tutor compensation seed only — not used for student Checkout settlement. */
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const SINGLE_SAT_SESSION_SLUG = "single-sat-session";
 const TEN_SAT_SESSION_PACKAGE_SLUG = "ten-sat-session-package";
-const SINGLE_SAT_SESSION_PRICE_CENTS = 17_500;
-const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = 130_000;
+const SAT_HOURLY_RATE_CENTS = 13_000;
+const SINGLE_SAT_SESSION_PRICE_CENTS = SAT_HOURLY_RATE_CENTS;
+const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = SAT_HOURLY_RATE_CENTS * 10;
 const ACCEPTED_SAT_CATALOG = [
   {
     slug: SINGLE_SAT_SESSION_SLUG,
     name: "Single SAT Session",
-    description: "One prepaid 60-minute SAT tutoring session credit.",
+    description:
+      "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
     durationHours: 1,
     totalPriceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
-    effectiveHourlyRateCents: SINGLE_SAT_SESSION_PRICE_CENTS,
+    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
   },
   {
     slug: TEN_SAT_SESSION_PACKAGE_SLUG,
     name: "Ten SAT Session Package",
-    description: "Ten prepaid 60-minute SAT tutoring session credits.",
+    description:
+      "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on Xavier or Eunice’s available calendar.",
     durationHours: 10,
     totalPriceCents: TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
-    effectiveHourlyRateCents: 13_000,
+    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
   },
 ] as const;
 const ACCEPTED_SAT_CATALOG_SLUGS = new Set(ACCEPTED_SAT_CATALOG.map((product) => product.slug));
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
-const NIKA_APPROVED_PHOTO_URL =
-  "https://static.wixstatic.com/media/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png/v1/fill/w_457,h_685,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png";
-const NIKA_LEGACY_SEED_PHOTO_URL =
-  "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg";
+const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
+const NIKA_LEGACY_SEED_PHOTO_URL = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
+const NIKA_LEGACY_APPROVED_WIX_PHOTO_URL =
+  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
 const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
 const RYO_VIEWER_EMAIL = "ryo@jaac.co.jp";
 const TAITO_VIEWER_RELATIONSHIP =
@@ -359,175 +376,7 @@ function isAcceptedSatCatalogProduct(product: {
   );
 }
 
-const SAT_DIAGNOSTIC_QUESTIONS = [
-  {
-    prompt: "Which choice most effectively combines the sentences while maintaining standard English conventions?",
-    stimulus:
-      "The community archive contains letters, maps, and photographs from the town's earliest residents. Together, these materials reveal how the waterfront changed over time.",
-    domain: "Standard English Conventions",
-    skill: "Boundaries",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "residents, together these" },
-      { id: "b", label: "B", text: "residents; together, these" },
-      { id: "c", label: "C", text: "residents together these" },
-      { id: "d", label: "D", text: "residents: together these" },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "A semicolon correctly joins two independent clauses, and the introductory adverb is followed by a comma.",
-  },
-  {
-    prompt: "Which conclusion is best supported by the study?",
-    stimulus:
-      "In a greenhouse study, seedlings receiving six hours of filtered light grew taller than seedlings receiving six hours of direct light, while both groups received equal water and nutrients.",
-    domain: "Information and Ideas",
-    skill: "Command of Evidence",
-    difficulty: "hard",
-    choices: [
-      { id: "a", label: "A", text: "Filtered light always improves plant health." },
-      { id: "b", label: "B", text: "Water affected the groups differently." },
-      { id: "c", label: "C", text: "Light conditions may influence seedling height." },
-      { id: "d", label: "D", text: "Direct light prevents all seedling growth." },
-    ],
-    correctAnswer: "c",
-    explanation:
-      "The controlled comparison supports a limited conclusion about a possible relationship between light conditions and height.",
-  },
-  {
-    prompt: "Which choice completes the text with the most logical transition?",
-    stimulus:
-      "The first prototype was inexpensive to produce. _____, it was too fragile for repeated classroom use.",
-    domain: "Expression of Ideas",
-    skill: "Transitions",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "Similarly" },
-      { id: "b", label: "B", text: "However" },
-      { id: "c", label: "C", text: "For example" },
-      { id: "d", label: "D", text: "Therefore" },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "The second sentence contrasts the prototype's low cost with its lack of durability, so “However” is logical.",
-  },
-  {
-    prompt: "Which choice completes the text so that it conforms to the conventions of Standard English?",
-    stimulus:
-      "The museum's new exhibit features three artists _____ work explores migration and memory.",
-    domain: "Standard English Conventions",
-    skill: "Form, Structure, and Sense",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "who's" },
-      { id: "b", label: "B", text: "whose" },
-      { id: "c", label: "C", text: "whom's" },
-      { id: "d", label: "D", text: "who" },
-    ],
-    correctAnswer: "b",
-    explanation: "The possessive relative pronoun “whose” correctly describes the artists' work.",
-  },
-  {
-    prompt: "Which choice most effectively states the main idea of the text?",
-    stimulus:
-      "Rather than replacing the old footbridge, residents repaired its supports and added a ramp. The project preserved a familiar landmark while making the crossing safer for more people.",
-    domain: "Information and Ideas",
-    skill: "Central Ideas and Details",
-    difficulty: "foundational",
-    choices: [
-      { id: "a", label: "A", text: "A landmark was removed after years of neglect." },
-      { id: "b", label: "B", text: "Residents balanced preservation with improved access." },
-      { id: "c", label: "C", text: "The footbridge was moved to a new location." },
-      { id: "d", label: "D", text: "Only visitors use the repaired footbridge." },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "The text emphasizes both preserving the bridge and improving its safety and accessibility.",
-  },
-  {
-    prompt: "Which choice completes the text with the most logical transition?",
-    stimulus:
-      "The first trial used recycled paper. _____, the research team tested a version made from agricultural waste.",
-    domain: "Expression of Ideas",
-    skill: "Transitions",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "In contrast" },
-      { id: "b", label: "B", text: "Next" },
-      { id: "c", label: "C", text: "For instance" },
-      { id: "d", label: "D", text: "Nevertheless" },
-    ],
-    correctAnswer: "b",
-    explanation: "“Next” clearly signals the subsequent step in the team's testing process.",
-  },
-  {
-    prompt: "Which choice best describes the function of the sentence in the text as a whole?",
-    stimulus:
-      "Many coastal plants tolerate salt in the soil. This adaptation allows them to survive where freshwater species cannot.",
-    domain: "Information and Ideas",
-    skill: "Text Structure and Purpose",
-    difficulty: "hard",
-    choices: [
-      { id: "a", label: "A", text: "It introduces a problem that the next sentence disproves." },
-      { id: "b", label: "B", text: "It gives an example that clarifies a broader claim." },
-      { id: "c", label: "C", text: "It presents a counterargument to the study." },
-      { id: "d", label: "D", text: "It lists two unrelated observations." },
-    ],
-    correctAnswer: "b",
-    explanation:
-      "The second sentence explains why salt tolerance matters, clarifying the observation in the first sentence.",
-  },
-  {
-    prompt: "Which choice completes the text so that it conforms to the conventions of Standard English?",
-    stimulus:
-      "The solar panels, installed on the library's roof last spring, _____ enough electricity to power the reading room.",
-    domain: "Standard English Conventions",
-    skill: "Subject-Verb Agreement",
-    difficulty: "foundational",
-    choices: [
-      { id: "a", label: "A", text: "generates" },
-      { id: "b", label: "B", text: "generate" },
-      { id: "c", label: "C", text: "is generating" },
-      { id: "d", label: "D", text: "has generated" },
-    ],
-    correctAnswer: "b",
-    explanation: "The plural subject “panels” takes the plural verb “generate.”",
-  },
-  {
-    prompt: "Which choice most logically completes the text?",
-    stimulus:
-      "The city tested two designs for a protected bike lane. The design with a planted divider received more favorable safety ratings from riders.",
-    domain: "Information and Ideas",
-    skill: "Inferences",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "Riders preferred the design with a planted divider." },
-      { id: "b", label: "B", text: "The city ended all bicycle programs." },
-      { id: "c", label: "C", text: "Planting trees always reduces traffic." },
-      { id: "d", label: "D", text: "Both designs received identical ratings." },
-    ],
-    correctAnswer: "a",
-    explanation:
-      "More favorable ratings indicate that riders preferred the protected-lane design with a planted divider.",
-  },
-  {
-    prompt: "Which choice completes the text with the most logical transition?",
-    stimulus:
-      "The recipe requires only four ingredients. _____, the finished dish has a complex flavor.",
-    domain: "Expression of Ideas",
-    skill: "Transitions",
-    difficulty: "medium",
-    choices: [
-      { id: "a", label: "A", text: "As a result" },
-      { id: "b", label: "B", text: "In addition" },
-      { id: "c", label: "C", text: "Even so" },
-      { id: "d", label: "D", text: "For example" },
-    ],
-    correctAnswer: "c",
-    explanation:
-      "“Even so” signals the contrast between the recipe's simplicity and the dish's complex flavor.",
-  },
-] as const;
+const SAT_DIAGNOSTIC_QUESTIONS = FULL_SAT_DIAGNOSTIC_QUESTIONS;
 
 const SAT_HOMEWORK_SETS = [
   {
@@ -937,6 +786,7 @@ type SeedSatQuestion = {
   choices: readonly { id: string; label: string; text: string }[];
   correctAnswer: string;
   explanation: string;
+  subject?: string;
 };
 
 async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
@@ -969,14 +819,20 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
         ),
       )
       .limit(1);
-    if (!assignment && title.startsWith("SAT Diagnostic")) {
+    if (
+      !assignment &&
+      (title.startsWith("SAT Diagnostic") || title.startsWith("Full SAT Practice Diagnostic"))
+    ) {
       [assignment] = await db
         .select()
         .from(assignmentsTable)
         .where(
           and(
             eq(assignmentsTable.courseId, courseId),
-            eq(assignmentsTable.title, "Baseline Reading & Writing Mini-Section"),
+            inArray(assignmentsTable.title, [
+              "Baseline Reading & Writing Mini-Section",
+              "SAT Diagnostic — Reading & Writing",
+            ]),
           ),
         )
         .limit(1);
@@ -1022,7 +878,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
         [storedQuestion] = await db
           .insert(questionsTable)
           .values({
-            subject: "SAT Reading & Writing",
+            subject: question.subject ?? "SAT Reading & Writing",
             domain: question.domain,
             skill: question.skill,
             questionType: "multiple_choice",
@@ -1034,7 +890,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
             explanation: question.explanation,
             sourceType: "original",
             generationMethod: "tutor-authored",
-            reviewStatus: "reviewed",
+            reviewStatus: "approved",
             tags: ["sat-original"],
           })
           .returning();
@@ -1066,9 +922,9 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   if (diagnosticSession) {
     await ensureAssignment(
       diagnosticSession,
-      "SAT Diagnostic — Reading & Writing",
-      "Complete this original, full timed SAT Reading & Writing diagnostic independently before the October 2 session. Use the result to identify your strongest skills and the next skills to practice.",
-      35,
+      "Full SAT Practice Diagnostic",
+      "Complete this original timed SAT practice test (Reading & Writing + Math) independently before the October 2 session. Your score and adaptive analysis help your tutors understand strengths, weaknesses, and the first session focus.",
+      65,
       new Date("2026-10-01T12:00:00.000Z"),
       1,
       SAT_DIAGNOSTIC_QUESTIONS,
@@ -1091,6 +947,43 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   for (const session of satSessions.values()) {
     await ensureDuringSessionAssignment(session);
   }
+
+  for (const question of HARD_BANK_SEED_QUESTIONS) {
+    const [existingHard] = await db
+      .select({ id: questionsTable.id })
+      .from(questionsTable)
+      .where(eq(questionsTable.prompt, question.prompt))
+      .limit(1);
+    if (!existingHard) {
+      await db.insert(questionsTable).values({
+        subject: question.subject ?? "SAT Reading & Writing",
+        domain: question.domain,
+        skill: question.skill,
+        questionType: "multiple_choice",
+        difficulty: question.difficulty,
+        stimulus: "stimulus" in question ? question.stimulus ?? null : null,
+        prompt: question.prompt,
+        choices: [...question.choices],
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+        sourceType: "original",
+        generationMethod: "tutor-authored",
+        reviewStatus: "approved",
+        tags: ["sat-hard-bank"],
+        reviewedAt: new Date(),
+      });
+    }
+  }
+
+  await db
+    .update(questionsTable)
+    .set({ reviewStatus: "approved", reviewedAt: new Date() })
+    .where(
+      and(
+        eq(questionsTable.sourceType, "original"),
+        eq(questionsTable.reviewStatus, "reviewed"),
+      ),
+    );
 }
 
 async function ensureSeedData(): Promise<string> {
@@ -1286,7 +1179,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         photoAltText: "Eunice Chon, Scholarship Tutor",
         biography:
           "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
-        subjects: ["Scholarships", "College admissions"],
+        subjects: ["SAT", "Scholarships", "College admissions"],
         linkedinUrl: "https://linkedin.com/in/eunicechon",
         publicApproved: true,
         calendarStatus: "disconnected",
@@ -1339,7 +1232,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         name: "Aurelia Finch",
         title: "Admissions Tutor - UK",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Aurelia Finch"],
-        photoAltText: "Aurelia Finch, Admissions Tutor",
+        photoAltText: "Aurelia Finch, Admissions Tutor - UK",
         biography:
           "Aurelia graduated with an MPhil in Modern Middle Eastern Studies from the University of Oxford in 2024, after completing her undergraduate studies in Arabic and Spanish at the University of Durham with first class honours. She is now Director of the UK-MENA Network.",
         subjects: ["College admissions"],
@@ -1455,6 +1348,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
           isNull(tutorProfilesTable.photoUrl),
           eq(tutorProfilesTable.photoUrl, ""),
           eq(tutorProfilesTable.photoUrl, NIKA_LEGACY_SEED_PHOTO_URL),
+          eq(tutorProfilesTable.photoUrl, NIKA_LEGACY_APPROVED_WIX_PHOTO_URL),
         ),
       ),
     );
@@ -1491,9 +1385,50 @@ async function ensureUpgradeSeedData(): Promise<void> {
       );
   }
 
+  // Rewrite any remaining known Wix CDN portrait URLs to first-party assets so
+  // the public site does not depend on the retired Wix marketing site.
+  for (const name of PUBLIC_TUTOR_ORDER) {
+    const legacyUrl = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS[name];
+    const localUrl = APPROVED_PUBLIC_TEAM_PORTRAITS[name];
+    if (legacyUrl === localUrl) continue;
+    await db
+      .update(tutorProfilesTable)
+      .set({ photoUrl: localUrl, updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.photoUrl, legacyUrl));
+  }
+  for (const legacyUrl of [
+    "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",
+    "https://static.wixstatic.com/media/2c8654_3d3d703b8ea343ef8805961027f1406a~mv2.jpg/v1/crop/x_32,y_0,w_537,h_400/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Manuel.jpg",
+  ] as const) {
+    await db
+      .update(tutorProfilesTable)
+      .set({ photoUrl: rewriteLegacyWixMediaUrl(legacyUrl), updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.photoUrl, legacyUrl));
+  }
+
   // Catalog prices are owned by migration 0019_accepted_admissions_sat_catalog.
   // Do not upsert or reset sat_products prices/Stripe IDs from GET-driven seed paths.
   // Complimentary credits are granted only through the audited admin credit-adjustment action.
+
+  // Ensure Eunice remains bookable for prepaid SAT credits without overwriting admin edits
+  // to biography or title; only add SAT when the untouched seed subject list is present.
+  await db
+    .update(tutorProfilesTable)
+    .set({
+      subjects: ["SAT", "Scholarships", "College admissions"],
+      bookingEligible: true,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tutorProfilesTable.email, "eunice_chon@berkeley.edu"),
+        eq(tutorProfilesTable.name, EUNICE_NAME),
+        or(
+          sql`${tutorProfilesTable.subjects} = '["Scholarships", "College admissions"]'::jsonb`,
+          sql`${tutorProfilesTable.subjects} = '["SAT", "Scholarships", "College admissions"]'::jsonb`,
+        ),
+      ),
+    );
 
   const seededTutors = await db
     .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
@@ -1610,43 +1545,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
             attribution: "Sarah M.",
             attributionMode: "named",
           },
-          schoolLogos: [
-            {
-              name: "Harvard University",
-              src: "https://static.wixstatic.com/media/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png",
-              alt: "Harvard University logo",
-            },
-            {
-              name: "Princeton University",
-              src: "https://static.wixstatic.com/media/2c8654_d6d5f4729bd048ddb2366f66b32506c4~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/princeton%20logo.png",
-              alt: "Princeton University logo",
-            },
-            {
-              name: "MIT",
-              src: "https://static.wixstatic.com/media/2c8654_e7dedad8e02d43e6965cb5d8054d6c15~mv2.jpg/v1/crop/x_276,y_222,w_528,h_425/fill/w_296,h_238,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/MIT_edited.jpg",
-              alt: "MIT logo",
-            },
-            {
-              name: "University of Chicago",
-              src: "https://static.wixstatic.com/media/2c8654_dfa69976a1274e4f9de87500d1409fc0~mv2.jpg",
-              alt: "University of Chicago logo",
-            },
-            {
-              name: "Georgetown University",
-              src: "https://static.wixstatic.com/media/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png/v1/fill/w_266,h_266,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Georgetown-University-Logo.png",
-              alt: "Georgetown University logo",
-            },
-            {
-              name: "Boston University",
-              src: "https://static.wixstatic.com/media/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png/v1/fill/w_250,h_250,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Boston_University_seal.svg.png",
-              alt: "Boston University seal",
-            },
-            {
-              name: "Claremont McKenna College",
-              src: "https://static.wixstatic.com/media/2c8654_69f9b18f19db4eb68fa898beeaec3768~mv2.png/v1/fill/w_266,h_277,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/CMC%20Seal.png",
-              alt: "Claremont McKenna College seal",
-            },
-          ],
+          schoolLogos: [...APPROVED_SCHOOL_LOGOS],
         },
         status: "published",
         publishedAt: new Date(),
@@ -1709,6 +1608,216 @@ async function ensureUpgradeSeedData(): Promise<void> {
       })
       .where(eq(publicContentTable.id, successSeed.id));
   }
+
+  // Rewrite known Wix CDN school logos on every past-success record so published
+  // pages keep working after the Wix site is shut down. Custom admin URLs that
+  // are not in the legacy map are left unchanged.
+  const pastSuccessPages = await db
+    .select({ id: publicContentTable.id, body: publicContentTable.body })
+    .from(publicContentTable)
+    .where(eq(publicContentTable.slug, "past-success"));
+  for (const page of pastSuccessPages) {
+    if (!page.body || typeof page.body !== "object" || Array.isArray(page.body)) continue;
+    const body = page.body as Record<string, unknown>;
+    const rewrittenLogos = rewriteLegacyWixSchoolLogos(body.schoolLogos);
+    if (!rewrittenLogos) continue;
+    await db
+      .update(publicContentTable)
+      .set({
+        body: { ...body, schoolLogos: rewrittenLogos },
+        updatedAt: new Date(),
+      })
+      .where(eq(publicContentTable.id, page.id));
+  }
+}
+
+async function loadActiveDatabaseAccessGrants(
+  clerkUserId?: string,
+  email?: string,
+): Promise<DatabaseAccessGrant[]> {
+  const normalizedEmail = email ? normalizeProvisionedEmail(email) : undefined;
+  const identityFilters = [
+    ...(clerkUserId
+      ? [eq(portalAccessGrantsTable.clerkUserId, clerkUserId)]
+      : []),
+    ...(normalizedEmail
+      ? [eq(portalAccessGrantsTable.email, normalizedEmail)]
+      : []),
+  ];
+  if (identityFilters.length === 0) return [];
+  const rows = await db
+    .select({
+      email: portalAccessGrantsTable.email,
+      clerkUserId: portalAccessGrantsTable.clerkUserId,
+      roleCategory: portalAccessGrantsTable.roleCategory,
+      active: portalAccessGrantsTable.active,
+    })
+    .from(portalAccessGrantsTable)
+    .where(
+      and(eq(portalAccessGrantsTable.active, true), or(...identityFilters)),
+    );
+  return rows.map((row) => ({
+    email: row.email,
+    clerkUserId: row.clerkUserId,
+    roleCategory: row.roleCategory,
+    active: row.active,
+  }));
+}
+
+async function resolveIdentityAccess(
+  clerkUserId: string,
+  email?: string,
+): Promise<ReturnType<typeof resolvePortalAccess>> {
+  const databaseGrants = await loadActiveDatabaseAccessGrants(
+    clerkUserId,
+    email,
+  );
+  return resolvePortalAccess(clerkUserId, email, { databaseGrants });
+}
+
+function adminAccessGrantShape(grant: PortalAccessGrant) {
+  const access = accessFromRoleCategory(grant.roleCategory);
+  return {
+    id: grant.id,
+    email: grant.email,
+    clerkUserId: grant.clerkUserId,
+    displayName: grant.displayName,
+    roleCategory: grant.roleCategory,
+    role: access.role as "tutor" | "student",
+    subject: access.subject,
+    active: grant.active,
+    notes: grant.notes,
+    userId: grant.userId,
+    createdAt: grant.createdAt.toISOString(),
+    updatedAt: grant.updatedAt.toISOString(),
+    revokedAt: grant.revokedAt ? grant.revokedAt.toISOString() : null,
+  };
+}
+
+function pendingClerkUserId(email: string): string {
+  return `pending:${normalizeProvisionedEmail(email)}`;
+}
+
+function looksLikeClerkUserId(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    trimmed.length >= 3 &&
+    !trimmed.includes("@") &&
+    !trimmed.startsWith("pending:")
+  );
+}
+
+async function ensureProvisionedAppUser(input: {
+  email: string;
+  displayName: string;
+  roleCategory: ProvisionableRoleCategory;
+  clerkUserId?: string | null;
+}): Promise<AppUser> {
+  const email = normalizeProvisionedEmail(input.email);
+  const access = accessFromRoleCategory(input.roleCategory);
+  const desiredClerkUserId =
+    input.clerkUserId && looksLikeClerkUserId(input.clerkUserId)
+      ? input.clerkUserId.trim()
+      : pendingClerkUserId(email);
+
+  const [byEmail] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+  const [byClerk] =
+    desiredClerkUserId && !desiredClerkUserId.startsWith("pending:")
+      ? await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.clerkUserId, desiredClerkUserId))
+          .limit(1)
+      : [];
+
+  if (byClerk && byEmail && byClerk.id !== byEmail.id) {
+    throw new Error("CLERK_USER_EMAIL_CONFLICT");
+  }
+
+  const existing = byEmail ?? byClerk;
+  let user: AppUser;
+  if (existing) {
+    const nextClerkUserId =
+      existing.clerkUserId.startsWith("pending:") ||
+      existing.clerkUserId === desiredClerkUserId
+        ? desiredClerkUserId
+        : existing.clerkUserId;
+    [user] = await db
+      .update(usersTable)
+      .set({
+        displayName: input.displayName.trim(),
+        role: access.role,
+        clerkUserId: nextClerkUserId,
+        email,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, existing.id))
+      .returning();
+  } else {
+    [user] = await db
+      .insert(usersTable)
+      .values({
+        clerkUserId: desiredClerkUserId,
+        email,
+        displayName: input.displayName.trim(),
+        role: access.role,
+      })
+      .returning();
+  }
+
+  await syncConfiguredAccess(user!, access);
+
+  if (access.role === "tutor") {
+    const subjects = subjectsForRoleCategory(input.roleCategory);
+    const title = tutorTitleForRoleCategory(
+      input.roleCategory as Exclude<ProvisionableRoleCategory, "student">,
+    );
+    const [existingProfile] = await db
+      .select()
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.email, email))
+      .limit(1);
+    if (existingProfile) {
+      await db
+        .update(tutorProfilesTable)
+        .set({
+          userId: user!.id,
+          name: input.displayName.trim(),
+          title,
+          subjects,
+          active: true,
+          bookingEligible: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(tutorProfilesTable.id, existingProfile.id));
+    } else {
+      await db.insert(tutorProfilesTable).values({
+        userId: user!.id,
+        email,
+        name: input.displayName.trim(),
+        title,
+        subjects,
+        active: true,
+        bookingEligible: true,
+        publicApproved: false,
+      });
+    }
+  } else {
+    await db
+      .update(tutorProfilesTable)
+      .set({
+        active: false,
+        bookingEligible: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(tutorProfilesTable.email, email));
+  }
+
+  return user!;
 }
 
 async function syncConfiguredAccess(
@@ -1864,14 +1973,14 @@ async function requireAppUser(
     .from(usersTable)
     .where(eq(usersTable.clerkUserId, clerkUserId))
     .limit(1);
-  const initialAccess = configuredAccess(clerkUserId);
+  const initialAccess = await resolveIdentityAccess(clerkUserId);
   let configured = initialAccess.access;
   let configurationConflict = initialAccess.conflict;
   let identity: { email?: string; displayName?: string } | undefined;
-  if (!configured) {
+  if (!configured && !configurationConflict) {
     try {
       identity = await clerkIdentity(auth, clerkUserId, appUser, true);
-      const emailAccess = configuredAccess(
+      const emailAccess = await resolveIdentityAccess(
         clerkUserId,
         identity.email ? normalizeProvisionedEmail(identity.email) : undefined,
       );
@@ -2027,6 +2136,30 @@ async function requireAppUser(
     return;
   }
   await syncConfiguredAccess(appUser, configured);
+  if (configured.role === "tutor" || configured.role === "student") {
+    const grantEmail = normalizeProvisionedEmail(appUser.email);
+    await db
+      .update(portalAccessGrantsTable)
+      .set({
+        clerkUserId,
+        userId: appUser.id,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(portalAccessGrantsTable.active, true),
+          eq(portalAccessGrantsTable.email, grantEmail),
+          or(
+            isNull(portalAccessGrantsTable.clerkUserId),
+            eq(portalAccessGrantsTable.clerkUserId, clerkUserId),
+            eq(
+              portalAccessGrantsTable.clerkUserId,
+              pendingClerkUserId(grantEmail),
+            ),
+          ),
+        ),
+      );
+  }
   const clerkSessionId =
     auth.sessionId ?? claimString(auth.sessionClaims, "sid");
   await recordSuccessfulLogin(appUser.id, clerkSessionId);
@@ -2668,51 +2801,32 @@ async function storedAttemptResult(
 
 function deterministicAnalysis(
   breakdown: AttemptResultPayload["breakdown"],
-  items: AttemptResultPayload["items"],
-  score: number,
-): AttemptAnalysisPayload {
-  const strengths = breakdown
-    .filter((skill) => skill.accuracy >= 80)
-    .sort((a, b) => b.accuracy - a.accuracy)
-    .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% accuracy)`);
-  const weaknesses = breakdown
-    .filter((skill) => skill.accuracy < 80)
-    .sort((a, b) => a.accuracy - b.accuracy)
-    .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% accuracy)`);
-  const mistakesBySkill = new Map<string, number>();
-  for (const item of items) {
-    if (!item.correct) {
-      mistakesBySkill.set(item.skill, (mistakesBySkill.get(item.skill) ?? 0) + 1);
+  items: Array<
+    AttemptResultPayload["items"][number] & {
+      domain?: string | null;
+      subject?: string | null;
     }
-  }
-  const mistakePatterns = [...mistakesBySkill.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([skill, count]) =>
-      `${skill}: ${count} ${count === 1 ? "miss" : "misses"}${items.some((item) => !item.correct && item.skill === skill && !item.finalAnswer) ? " or unanswered item" : ""}`,
-    );
-  const nextFocus = (weaknesses.length > 0
-    ? weaknesses
-    : strengths.slice().reverse()
-  )
-    .slice(0, 3)
-    .map((skill) => skill.replace(/ \(\d+% accuracy\)$/, ""));
-  if (nextFocus.length === 0) nextFocus.push("Keep practicing mixed SAT Reading & Writing sets.");
-  const feedback =
-    score >= 80
-      ? "You are building a strong foundation. Keep your accuracy steady while practicing under the time limit."
-      : score >= 60
-        ? "You have a useful foundation. Review the focus areas below, then retry a short mixed set under time."
-        : "Start with the focus areas below and explain each missed answer before moving to another timed set.";
-  return {
-    source: "deterministic",
-    label: "Deterministic skill analysis",
-    provider: null,
-    strengths: strengths.length > 0 ? strengths : ["No skill reached 80% yet; every item gives us a useful starting point."],
-    weaknesses: weaknesses.length > 0 ? weaknesses : ["No major weakness identified in this set."],
-    mistakePatterns: mistakePatterns.length > 0 ? mistakePatterns : ["No incorrect responses in this attempt."],
-    nextFocus,
-    feedback,
-  };
+  >,
+  score: number,
+  assignmentTitle?: string | null,
+): AttemptAnalysisPayload {
+  return buildAttemptAnalysis(
+    breakdown,
+    items.map((item) => ({
+      correct: item.correct,
+      skill: item.skill,
+      finalAnswer: item.finalAnswer,
+      domain: item.domain ?? null,
+      subject: item.subject ?? attemptSubjectFromAssignment(assignmentTitle),
+    })),
+    score,
+    { assignmentTitle },
+  );
+}
+
+function attemptSubjectFromAssignment(title?: string | null): string {
+  if (/math/i.test(title ?? "")) return "SAT Math";
+  return "SAT Reading & Writing";
 }
 
 async function finalizeAttemptResult(
@@ -2805,8 +2919,10 @@ async function finalizeAttemptResult(
     prompt: question.prompt,
     stimulus: question.stimulus,
     choices: question.choices,
+    domain: question.domain,
+    subject: question.subject,
   }));
-  const analysis = deterministicAnalysis(breakdown, items, score);
+  const analysis = deterministicAnalysis(breakdown, items, score, attempt.assignment.title);
   const result: AttemptResultPayload = {
     attemptId: attempt.attempt.id,
     assignmentId: attempt.assignment.id,
@@ -2845,6 +2961,19 @@ async function finalizeAttemptResult(
       .values({ attemptId: attempt.attempt.id, type: "submitted" });
   }
   await deriveAdaptiveRecommendations(attempt.attempt.id);
+  await enqueueMissedReviewItems({
+    attemptId: attempt.attempt.id,
+    studentUserId: attempt.student.id,
+    items: items.map((item) => ({
+      questionId: item.questionId,
+      skill: item.skill,
+      correct: item.correct,
+      prompt: item.prompt,
+    })),
+  });
+  if (attempt.session) {
+    await prepareSessionCurriculum(attempt.session);
+  }
   return result;
 }
 
@@ -3004,7 +3133,7 @@ async function ensureHardQuestionFallback(
     .from(questionsTable)
     .where(
       and(
-        eq(questionsTable.reviewStatus, "approved"),
+        inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
         eq(questionsTable.sourceType, "original"),
         eq(questionsTable.difficulty, "hard"),
       ),
@@ -3185,66 +3314,45 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
-async function xavierTutorProfile() {
-  await ensureUpgradeSeedData();
-  const [profile] = await db
-    .select()
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.name, XAVIER_NAME))
-    .limit(1);
-  if (!profile) throw new Error("Xavier Morales' tutor profile is not configured");
-  return profile;
+
+const tutorProfileSelect = {
+  id: tutorProfilesTable.id,
+  email: tutorProfilesTable.email,
+  name: tutorProfilesTable.name,
+  title: tutorProfilesTable.title,
+  photoUrl: tutorProfilesTable.photoUrl,
+  photoAltText: tutorProfilesTable.photoAltText,
+  biography: tutorProfilesTable.biography,
+  subjects: tutorProfilesTable.subjects,
+  linkedinUrl: tutorProfilesTable.linkedinUrl,
+  publicApproved: tutorProfilesTable.publicApproved,
+  active: tutorProfilesTable.active,
+  bookingEligible: tutorProfilesTable.bookingEligible,
+} as const;
+
+async function syncLinkedUserDisplayName(
+  userId: string | null | undefined,
+  name: string | undefined,
+): Promise<void> {
+  if (!userId || !name) return;
+  await db
+    .update(usersTable)
+    .set({ displayName: name, updatedAt: new Date() })
+    .where(eq(usersTable.id, userId));
 }
 
-function connectStatusFor(profile: typeof tutorProfilesTable.$inferSelect) {
-  return {
-    tutorProfileId: profile.id,
-    tutorName: profile.name,
-    accountId: profile.stripeConnectAccountId,
-    status: profile.stripeConnectStatus,
-    detailsSubmitted: profile.stripeConnectDetailsSubmitted,
-    chargesEnabled: profile.stripeConnectChargesEnabled,
-    payoutsEnabled: profile.stripeConnectPayoutsEnabled,
-    ready:
-      profile.stripeConnectStatus === "ready" &&
-      profile.stripeConnectPayoutsEnabled,
-  };
-}
-
-async function refreshXavierConnectStatus() {
-  const profile = await xavierTutorProfile();
-  if (!profile.stripeConnectAccountId) return profile;
-  const account = await retrieveStripeConnectAccount(profile.stripeConnectAccountId);
-  const status =
-    account.detailsSubmitted &&
-    account.payoutsEnabled &&
-    account.transfersCapability === "active"
-      ? "ready"
-      : account.requirementsCurrentlyDue.length > 0
-        ? "requirements_due"
-        : "onboarding";
-  const [updated] = await db
-    .update(tutorProfilesTable)
-    .set({
-      stripeConnectStatus: status,
-      stripeConnectDetailsSubmitted: account.detailsSubmitted,
-      stripeConnectChargesEnabled: account.chargesEnabled,
-      stripeConnectPayoutsEnabled: account.payoutsEnabled,
-      updatedAt: new Date(),
-    })
-    .where(eq(tutorProfilesTable.id, profile.id))
-    .returning();
-  return updated ?? profile;
-}
-
-function safePublicUrl(value: unknown): boolean {
+/** Absolute http(s) URLs or same-origin relative media paths (no protocol-relative or traversal). */
+function safePublicMediaUrl(value: unknown): boolean {
   if (typeof value !== "string" || value.length > 2048) return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
+  if (
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.includes("\\") &&
+    !value.includes("..")
+  ) {
+    return true;
   }
+  return safePublicUrl(value);
 }
 
 function publicContentPublicationError(
@@ -3311,11 +3419,11 @@ function publicContentPublicationError(
           Array.isArray(logo) ||
           typeof name !== "string" ||
           !name.trim() ||
-          !safePublicUrl(item.src) ||
+          !safePublicMediaUrl(item.src) ||
           typeof alt !== "string" ||
           !alt.trim()
         ) {
-          return "Each school logo needs a name, safe http(s) image URL, and alt text.";
+          return "Each school logo needs a name, safe http(s) or site-relative image URL, and alt text.";
         }
       }
     }
@@ -3410,7 +3518,7 @@ async function bookingTutor(tutorProfileId: string, allowExistingSessionTutor = 
             eq(tutorProfilesTable.id, tutorProfileId),
             eq(tutorProfilesTable.active, true),
             eq(tutorProfilesTable.bookingEligible, true),
-            eq(tutorProfilesTable.name, XAVIER_NAME),
+            inArray(tutorProfilesTable.name, [...SAT_BOOKING_TUTOR_NAMES]),
           ),
     )
     .limit(1);
@@ -3817,23 +3925,105 @@ router.get(
   async (_req: AuthedRequest, res): Promise<void> => {
     await ensureUpgradeSeedData();
     const tutors = await db
-      .select({
-        id: tutorProfilesTable.id,
-        email: tutorProfilesTable.email,
-        name: tutorProfilesTable.name,
-        title: tutorProfilesTable.title,
-        photoUrl: tutorProfilesTable.photoUrl,
-        photoAltText: tutorProfilesTable.photoAltText,
-        biography: tutorProfilesTable.biography,
-        subjects: tutorProfilesTable.subjects,
-        linkedinUrl: tutorProfilesTable.linkedinUrl,
-        publicApproved: tutorProfilesTable.publicApproved,
-        active: tutorProfilesTable.active,
-        bookingEligible: tutorProfilesTable.bookingEligible,
-      })
+      .select(tutorProfileSelect)
       .from(tutorProfilesTable)
       .orderBy(asc(tutorProfilesTable.name));
-    res.json(tutors);
+    const ordered = [...tutors].sort((left, right) => {
+      const leftIndex = PUBLIC_TUTOR_ORDER.indexOf(
+        left.name as (typeof PUBLIC_TUTOR_ORDER)[number],
+      );
+      const rightIndex = PUBLIC_TUTOR_ORDER.indexOf(
+        right.name as (typeof PUBLIC_TUTOR_ORDER)[number],
+      );
+      if (leftIndex === -1 && rightIndex === -1) return left.name.localeCompare(right.name);
+      if (leftIndex === -1) return 1;
+      if (rightIndex === -1) return -1;
+      return leftIndex - rightIndex;
+    });
+    res.json(ordered);
+  },
+);
+
+router.post(
+  "/admin/tutors",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const email = stringField(body, "email").toLowerCase();
+    if (!email || !email.includes("@") || email.length > 320) {
+      res.status(400).json({ error: "A valid email is required to create a profile." });
+      return;
+    }
+    const parsed = parseTutorProfileEditableFields(body, { requireName: true });
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const publicApproved =
+      typeof body.publicApproved === "boolean" ? body.publicApproved : false;
+    const active = typeof body.active === "boolean" ? body.active : true;
+    const bookingEligible =
+      typeof body.bookingEligible === "boolean" ? body.bookingEligible : false;
+    const title = parsed.updates.title ?? "Tutor";
+    const proposed = {
+      name: parsed.updates.name!,
+      title,
+      biography: parsed.updates.biography ?? null,
+      photoUrl: parsed.updates.photoUrl ?? null,
+      photoAltText: parsed.updates.photoAltText ?? null,
+      linkedinUrl: parsed.updates.linkedinUrl ?? null,
+      publicApproved,
+    };
+    const approvalError = tutorProfileApprovalError(proposed);
+    if (approvalError) {
+      res.status(400).json({ error: approvalError });
+      return;
+    }
+    const [linkedUser] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+    try {
+      const [created] = await db
+        .insert(tutorProfilesTable)
+        .values({
+          userId: linkedUser?.id ?? null,
+          email,
+          name: parsed.updates.name!,
+          title,
+          photoUrl: parsed.updates.photoUrl ?? null,
+          photoAltText: parsed.updates.photoAltText ?? null,
+          biography: parsed.updates.biography ?? null,
+          subjects: parsed.updates.subjects ?? [],
+          linkedinUrl: parsed.updates.linkedinUrl ?? null,
+          publicApproved,
+          active,
+          bookingEligible,
+        })
+        .returning(tutorProfileSelect);
+      if (!created) {
+        res.status(500).json({ error: "Could not create tutor profile" });
+        return;
+      }
+      await syncLinkedUserDisplayName(linkedUser?.id, created.name);
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "public.tutor_created",
+        entityType: "tutor_profile",
+        entityId: created.id,
+        metadata: { email: created.email, publicApproved: created.publicApproved },
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/unique|duplicate/i.test(message)) {
+        res.status(409).json({ error: "A tutor profile already exists for that email." });
+        return;
+      }
+      throw error;
+    }
   },
 );
 
@@ -3848,28 +4038,21 @@ router.patch(
       return;
     }
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const stringFields = [
-      "name",
-      "title",
-      "photoUrl",
-      "photoAltText",
-      "biography",
-      "linkedinUrl",
-    ] as const;
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-    for (const field of stringFields) {
-      if (field in body && (typeof body[field] === "string" || body[field] === null)) {
-        updates[field] = body[field];
-      }
+    const parsed = parseTutorProfileEditableFields(body);
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
     }
-    if ("subjects" in body && Array.isArray(body.subjects) && body.subjects.every((item) => typeof item === "string")) {
-      updates.subjects = body.subjects;
-    }
+    const updates: Record<string, unknown> = {
+      ...parsed.updates,
+      updatedAt: new Date(),
+    };
     for (const field of ["publicApproved", "active", "bookingEligible"] as const) {
       if (field in body && typeof body[field] === "boolean") updates[field] = body[field];
     }
     const [existing] = await db
       .select({
+        userId: tutorProfilesTable.userId,
         name: tutorProfilesTable.name,
         title: tutorProfilesTable.title,
         photoUrl: tutorProfilesTable.photoUrl,
@@ -3886,56 +4069,134 @@ router.patch(
       return;
     }
     const proposed = { ...existing, ...updates };
-    if (proposed.publicApproved === true) {
-      if (!existing || typeof proposed.name !== "string" || !proposed.name.trim() || typeof proposed.title !== "string" || !proposed.title.trim()) {
-        res.status(400).json({ error: "An approved tutor needs a name and title." });
-        return;
-      }
-      if (typeof proposed.biography !== "string" || !proposed.biography.trim()) {
-        res.status(400).json({ error: "An approved tutor needs a biography." });
-        return;
-      }
-      if (proposed.photoUrl !== null && proposed.photoUrl !== undefined && !safePublicUrl(proposed.photoUrl)) {
-        res.status(400).json({ error: "A headshot URL must use http or https." });
-        return;
-      }
-      if (proposed.photoUrl && (typeof proposed.photoAltText !== "string" || !proposed.photoAltText.trim())) {
-        res.status(400).json({ error: "A public headshot needs alt text." });
-        return;
-      }
-      if (proposed.linkedinUrl !== null && proposed.linkedinUrl !== undefined && !safePublicUrl(proposed.linkedinUrl)) {
-        res.status(400).json({ error: "A LinkedIn URL must use http or https." });
-        return;
-      }
+    const approvalError = tutorProfileApprovalError(proposed);
+    if (approvalError) {
+      res.status(400).json({ error: approvalError });
+      return;
     }
     const [saved] = await db
       .update(tutorProfilesTable)
       .set(updates)
       .where(eq(tutorProfilesTable.id, tutorId))
-      .returning({
-        id: tutorProfilesTable.id,
-        email: tutorProfilesTable.email,
-        name: tutorProfilesTable.name,
-        title: tutorProfilesTable.title,
-        photoUrl: tutorProfilesTable.photoUrl,
-        photoAltText: tutorProfilesTable.photoAltText,
-        biography: tutorProfilesTable.biography,
-        subjects: tutorProfilesTable.subjects,
-        linkedinUrl: tutorProfilesTable.linkedinUrl,
-        publicApproved: tutorProfilesTable.publicApproved,
-        active: tutorProfilesTable.active,
-        bookingEligible: tutorProfilesTable.bookingEligible,
-      });
+      .returning(tutorProfileSelect);
     if (!saved) {
       res.status(404).json({ error: "Tutor profile not found" });
       return;
     }
+    await syncLinkedUserDisplayName(existing.userId, saved.name);
     await db.insert(auditLogsTable).values({
       actorUserId: req.appUser!.id,
       action: "public.tutor_updated",
       entityType: "tutor_profile",
       entityId: saved.id,
       metadata: { publicApproved: saved.publicApproved },
+    });
+    res.json(saved);
+  },
+);
+
+router.get(
+  "/tutor/profile",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, true);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    res.json({
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      title: profile.title,
+      photoUrl: profile.photoUrl,
+      photoAltText: profile.photoAltText,
+      biography: profile.biography,
+      subjects: profile.subjects,
+      linkedinUrl: profile.linkedinUrl,
+      publicApproved: profile.publicApproved,
+      active: profile.active,
+      bookingEligible: profile.bookingEligible,
+    });
+  },
+);
+
+router.patch(
+  "/tutor/profile",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, true);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    if (profile.userId && profile.userId !== req.appUser!.id && req.appUser!.role !== "administrator") {
+      res.status(403).json({ error: "Insufficient permission" });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const parsed = parseTutorProfileEditableFields(body);
+    if (parsed.error) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    if (Object.keys(parsed.updates).length === 0) {
+      res.status(400).json({ error: "Provide at least one profile field to update." });
+      return;
+    }
+    if (
+      parsed.updates.photoUrl &&
+      !(parsed.updates.photoAltText ?? profile.photoAltText)?.trim()
+    ) {
+      res.status(400).json({
+        error: "Add short alt text that describes the photo before saving it.",
+      });
+      return;
+    }
+    const proposed = {
+      name: parsed.updates.name ?? profile.name,
+      title: parsed.updates.title ?? profile.title,
+      biography: parsed.updates.biography === undefined ? profile.biography : parsed.updates.biography,
+      photoUrl: parsed.updates.photoUrl === undefined ? profile.photoUrl : parsed.updates.photoUrl,
+      photoAltText:
+        parsed.updates.photoAltText === undefined
+          ? profile.photoAltText
+          : parsed.updates.photoAltText,
+      linkedinUrl:
+        parsed.updates.linkedinUrl === undefined
+          ? profile.linkedinUrl
+          : parsed.updates.linkedinUrl,
+      publicApproved: profile.publicApproved,
+    };
+    const approvalError = tutorProfileApprovalError(proposed);
+    if (approvalError) {
+      res.status(400).json({ error: approvalError });
+      return;
+    }
+    const [saved] = await db
+      .update(tutorProfilesTable)
+      .set({
+        ...parsed.updates,
+        userId: profile.userId ?? req.appUser!.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(tutorProfilesTable.id, profile.id))
+      .returning(tutorProfileSelect);
+    if (!saved) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    await syncLinkedUserDisplayName(profile.userId ?? req.appUser!.id, saved.name);
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "tutor.profile_updated",
+      entityType: "tutor_profile",
+      entityId: saved.id,
+      metadata: {
+        fields: Object.keys(parsed.updates),
+      },
     });
     res.json(saved);
   },
@@ -4210,7 +4471,7 @@ router.get("/booking/tutors", async (_req: AuthedRequest, res): Promise<void> =>
       and(
         eq(tutorProfilesTable.active, true),
         eq(tutorProfilesTable.bookingEligible, true),
-        eq(tutorProfilesTable.name, XAVIER_NAME),
+        inArray(tutorProfilesTable.name, [...SAT_BOOKING_TUTOR_NAMES]),
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
@@ -4246,7 +4507,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
         throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
       }
     } else if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "Xavier sessions must be exactly 60 minutes.");
+      throw new BookingError(400, "INVALID_DURATION", "SAT sessions must be exactly 60 minutes.");
     }
     const result = await slotsForTutor(
       tutorProfileId,
@@ -4318,7 +4579,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "Xavier sessions must be exactly 60 minutes.");
+      throw new BookingError(400, "INVALID_DURATION", "SAT sessions must be exactly 60 minutes.");
     }
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
@@ -4663,181 +4924,6 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
   });
 });
 
-router.get(
-  "/admin/xavier-payout",
-  ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
-    try {
-      const profile = await refreshXavierConnectStatus();
-      res.json(connectStatusFor(profile));
-    } catch (error) {
-      res.status(502).json({ error: stripeErrorMessage(error) });
-    }
-  },
-);
-
-router.post(
-  "/admin/xavier-payout/onboarding",
-  ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
-    try {
-      let profile = await xavierTutorProfile();
-      if (!profile.stripeConnectAccountId) {
-        const account = await createStripeConnectAccount({
-          tutorProfileId: profile.id,
-          name: profile.name,
-          email: profile.email,
-        });
-        const [updated] = await db
-          .update(tutorProfilesTable)
-          .set({
-            stripeConnectAccountId: account.id,
-            stripeConnectStatus: "onboarding",
-            updatedAt: new Date(),
-          })
-          .where(eq(tutorProfilesTable.id, profile.id))
-          .returning();
-        profile = updated ?? profile;
-      }
-      const origin = publicAppOrigin();
-      const url = await createStripeConnectAccountLink({
-        accountId: profile.stripeConnectAccountId!,
-        refreshUrl: `${origin}/admin/financials?connect=refresh`,
-        returnUrl: `${origin}/admin/financials?connect=return`,
-      });
-      res.status(201).json({ url, ...connectStatusFor(profile) });
-    } catch (error) {
-      res.status(502).json({ error: stripeErrorMessage(error) });
-    }
-  },
-);
-
-router.post(
-  "/admin/transfers/:paymentId/reconcile",
-  ensureRole(["administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const paymentId = typeof req.params.paymentId === "string" ? req.params.paymentId : "";
-    if (!paymentId) {
-      res.status(400).json({ error: "A payment is required." });
-      return;
-    }
-    try {
-      await reconcileTutorTransfer(paymentId);
-      res.status(204).send();
-    } catch (error) {
-      res.status(502).json({ error: stripeErrorMessage(error) });
-    }
-  },
-);
-
-function serializeTutorPayoutObligation(row: TutorPayoutObligationView) {
-  return {
-    id: row.id,
-    sessionId: row.sessionId,
-    studentUserId: row.studentUserId,
-    studentName: row.studentName,
-    tutorUserId: row.tutorUserId,
-    tutorName: row.tutorName,
-    tutorProfileId: row.tutorProfileId,
-    sessionDateTime: row.sessionDateTime,
-    durationMinutes: row.durationMinutes,
-    paymentId: row.paymentId,
-    purchaseReference: row.purchaseReference,
-    tutorRateCents: row.tutorRateCents,
-    amountOwedCents: row.amountOwedCents,
-    status: row.status,
-    completedAt: row.completedAt,
-    paidAt: row.paidAt,
-    paidByUserId: row.paidByUserId,
-    paidByName: row.paidByName,
-    paymentReference: row.paymentReference,
-    notes: row.notes,
-    createdAt: row.createdAt,
-  };
-}
-
-function sendTutorPayoutLedgerError(error: unknown, res: Response): boolean {
-  if (!(error instanceof TutorPayoutLedgerError)) return false;
-  res.status(error.status).json({ error: error.message, code: error.code });
-  return true;
-}
-
-router.get(
-  "/admin/tutor-payouts",
-  ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
-    const rows = await listTutorPayoutObligations();
-    res.json(ListAdminTutorPayoutsResponse.parse(rows.map(serializeTutorPayoutObligation)));
-  },
-);
-
-router.post(
-  "/admin/tutor-payouts/:obligationId/mark-paid",
-  ensureRole(["administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const params = MarkAdminTutorPayoutPaidParams.safeParse(req.params);
-    const body = MarkAdminTutorPayoutPaidBody.safeParse(req.body ?? {});
-    if (!params.success || !body.success) {
-      res.status(400).json({ error: "Invalid payout payment details." });
-      return;
-    }
-    try {
-      const updated = await markObligationPaid(params.data.obligationId, req.appUser!, {
-        paymentReference: body.data.paymentReference,
-        notes: body.data.notes,
-      });
-      const matched =
-        (await listTutorPayoutObligations()).find((row) => row.id === updated.id) ?? null;
-      if (!matched) {
-        res.status(404).json({ error: "Payout obligation not found" });
-        return;
-      }
-      res.json(MarkAdminTutorPayoutPaidResponse.parse(serializeTutorPayoutObligation(matched)));
-    } catch (error) {
-      if (sendTutorPayoutLedgerError(error, res)) return;
-      throw error;
-    }
-  },
-);
-
-router.post(
-  "/admin/tutor-payouts/:obligationId/reverse",
-  ensureRole(["administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const params = ReverseAdminTutorPayoutParams.safeParse(req.params);
-    const body = ReverseAdminTutorPayoutBody.safeParse(req.body ?? {});
-    if (!params.success || !body.success) {
-      res.status(400).json({ error: "Invalid payout reversal details." });
-      return;
-    }
-    try {
-      const updated = await reverseObligation(
-        params.data.obligationId,
-        req.appUser!,
-        body.data.notes,
-      );
-      const matched =
-        (await listTutorPayoutObligations()).find((row) => row.id === updated.id) ?? null;
-      if (!matched) {
-        res.status(404).json({ error: "Payout obligation not found" });
-        return;
-      }
-      res.json(ReverseAdminTutorPayoutResponse.parse(serializeTutorPayoutObligation(matched)));
-    } catch (error) {
-      if (sendTutorPayoutLedgerError(error, res)) return;
-      throw error;
-    }
-  },
-);
-
-router.get(
-  "/tutor/payouts",
-  ensureRole(["tutor", "administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const rows = await listTutorPayoutObligations({ tutorUserId: req.appUser!.id });
-    res.json(ListTutorPayoutsResponse.parse(rows.map(serializeTutorPayoutObligation)));
-  },
-);
 
 router.post(
   "/payments/checkout",
@@ -6396,6 +6482,283 @@ function adminMutationError(res: Response, message: string): void {
 }
 
 router.get(
+  "/admin/access-grants",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    const grants = await db
+      .select()
+      .from(portalAccessGrantsTable)
+      .orderBy(
+        desc(portalAccessGrantsTable.active),
+        desc(portalAccessGrantsTable.updatedAt),
+      );
+    res.json(
+      ListAdminAccessGrantsResponse.parse({
+        grants: grants.map(adminAccessGrantShape),
+      }),
+    );
+  },
+);
+
+router.post(
+  "/admin/access-grants",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateAdminAccessGrantBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, "Invalid provisioning details.");
+      return;
+    }
+    if (!isProvisionableRoleCategory(body.data.roleCategory)) {
+      res.status(400).json({
+        error: "Only tutor and student roles can be provisioned here.",
+      });
+      return;
+    }
+    const email = normalizeProvisionedEmail(body.data.email);
+    if (!email.includes("@")) {
+      adminMutationError(res, "A valid email address is required.");
+      return;
+    }
+    const clerkUserId =
+      body.data.clerkUserId === undefined || body.data.clerkUserId === null
+        ? null
+        : body.data.clerkUserId.trim();
+    if (clerkUserId && !looksLikeClerkUserId(clerkUserId)) {
+      adminMutationError(res, "Clerk user ID looks invalid.");
+      return;
+    }
+
+    const envCategories = envRoleCategoriesForIdentity(
+      clerkUserId ?? undefined,
+      email,
+    );
+    if (envCategories.includes("administrator") || envCategories.includes("viewer")) {
+      res.status(409).json({
+        error:
+          "This identity is already configured as an administrator or viewer in environment allowlists.",
+      });
+      return;
+    }
+    const desiredAccess = accessFromRoleCategory(body.data.roleCategory);
+    for (const category of envCategories) {
+      const envAccess = accessFromRoleCategory(category);
+      if (
+        envAccess.role !== desiredAccess.role ||
+        envAccess.subject !== desiredAccess.subject
+      ) {
+        res.status(409).json({
+          error:
+            "This identity already has a conflicting role in environment allowlists.",
+        });
+        return;
+      }
+    }
+
+    let user: AppUser;
+    try {
+      user = await ensureProvisionedAppUser({
+        email,
+        displayName: body.data.displayName,
+        roleCategory: body.data.roleCategory,
+        clerkUserId,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "CLERK_USER_EMAIL_CONFLICT") {
+        res.status(409).json({
+          error:
+            "That Clerk user ID is already linked to a different email address.",
+        });
+        return;
+      }
+      throw error;
+    }
+
+    const [existingGrant] = await db
+      .select()
+      .from(portalAccessGrantsTable)
+      .where(eq(portalAccessGrantsTable.email, email))
+      .limit(1);
+
+    const grantValues = {
+      email,
+      clerkUserId,
+      displayName: body.data.displayName.trim(),
+      roleCategory: body.data.roleCategory,
+      active: true,
+      notes: body.data.notes?.trim() || null,
+      provisionedByUserId: req.appUser!.id,
+      userId: user.id,
+      updatedAt: new Date(),
+      revokedAt: null as Date | null,
+    };
+
+    const [grant] = existingGrant
+      ? await db
+          .update(portalAccessGrantsTable)
+          .set(grantValues)
+          .where(eq(portalAccessGrantsTable.id, existingGrant.id))
+          .returning()
+      : await db
+          .insert(portalAccessGrantsTable)
+          .values(grantValues)
+          .returning();
+
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: existingGrant ? "access.grant.updated" : "access.grant.created",
+      entityType: "portal_access_grant",
+      entityId: grant!.id,
+      metadata: {
+        email,
+        roleCategory: body.data.roleCategory,
+        role: desiredAccess.role,
+        subject: desiredAccess.subject,
+        userId: user.id,
+      },
+    });
+
+    res
+      .status(201)
+      .json(CreateAdminAccessGrantResponse.parse(adminAccessGrantShape(grant!)));
+  },
+);
+
+router.patch(
+  "/admin/access-grants/:grantId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminAccessGrantParams.safeParse(req.params);
+    const body = UpdateAdminAccessGrantBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "Invalid access grant update.");
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(portalAccessGrantsTable)
+      .where(eq(portalAccessGrantsTable.id, params.data.grantId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Access grant not found" });
+      return;
+    }
+
+    const nextRoleCategory = body.data.roleCategory ?? existing.roleCategory;
+    if (!isProvisionableRoleCategory(nextRoleCategory)) {
+      res.status(400).json({
+        error: "Only tutor and student roles can be provisioned here.",
+      });
+      return;
+    }
+    const nextClerkUserId =
+      body.data.clerkUserId === undefined
+        ? existing.clerkUserId
+        : body.data.clerkUserId === null
+          ? null
+          : body.data.clerkUserId.trim();
+    if (nextClerkUserId && !looksLikeClerkUserId(nextClerkUserId)) {
+      adminMutationError(res, "Clerk user ID looks invalid.");
+      return;
+    }
+    const nextActive = body.data.active ?? existing.active;
+    const nextDisplayName =
+      body.data.displayName?.trim() || existing.displayName;
+    const nextNotes =
+      body.data.notes === undefined
+        ? existing.notes
+        : body.data.notes?.trim() || null;
+
+    if (nextActive) {
+      const envCategories = envRoleCategoriesForIdentity(
+        nextClerkUserId ?? undefined,
+        existing.email,
+      );
+      if (
+        envCategories.includes("administrator") ||
+        envCategories.includes("viewer")
+      ) {
+        res.status(409).json({
+          error:
+            "This identity is already configured as an administrator or viewer in environment allowlists.",
+        });
+        return;
+      }
+      const desiredAccess = accessFromRoleCategory(nextRoleCategory);
+      for (const category of envCategories) {
+        const envAccess = accessFromRoleCategory(category);
+        if (
+          envAccess.role !== desiredAccess.role ||
+          envAccess.subject !== desiredAccess.subject
+        ) {
+          res.status(409).json({
+            error:
+              "This identity already has a conflicting role in environment allowlists.",
+          });
+          return;
+        }
+      }
+    }
+
+    let userId = existing.userId;
+    if (nextActive) {
+      try {
+        const user = await ensureProvisionedAppUser({
+          email: existing.email,
+          displayName: nextDisplayName,
+          roleCategory: nextRoleCategory,
+          clerkUserId: nextClerkUserId,
+        });
+        userId = user.id;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "CLERK_USER_EMAIL_CONFLICT"
+        ) {
+          res.status(409).json({
+            error:
+              "That Clerk user ID is already linked to a different email address.",
+          });
+          return;
+        }
+        throw error;
+      }
+    }
+
+    const [grant] = await db
+      .update(portalAccessGrantsTable)
+      .set({
+        displayName: nextDisplayName,
+        roleCategory: nextRoleCategory,
+        clerkUserId: nextClerkUserId,
+        notes: nextNotes,
+        active: nextActive,
+        userId,
+        revokedAt: nextActive ? null : new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(portalAccessGrantsTable.id, existing.id))
+      .returning();
+
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: nextActive ? "access.grant.updated" : "access.grant.revoked",
+      entityType: "portal_access_grant",
+      entityId: grant!.id,
+      metadata: {
+        email: grant!.email,
+        roleCategory: grant!.roleCategory,
+        active: grant!.active,
+      },
+    });
+
+    res.json(
+      UpdateAdminAccessGrantResponse.parse(adminAccessGrantShape(grant!)),
+    );
+  },
+);
+
+router.get(
   "/admin/curriculum",
   ensureRole(["administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
@@ -6863,49 +7226,42 @@ router.patch(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
-    let updated: typeof sessionsTable.$inferSelect;
-    try {
-      updated = await db.transaction(async (tx) => {
-        const [saved] = await tx
-          .update(sessionsTable)
-          .set({ ...next, updatedAt: new Date() })
-          .where(eq(sessionsTable.id, existing.id))
-          .returning();
-        if (!saved) {
-          throw new Error("SESSION_UPDATE_FAILED");
-        }
-        if (saved.status === "completed") {
-          await accrueObligationForCompletedSession(saved, tx);
-        }
-        await tx.insert(auditLogsTable).values({
-          actorUserId: req.appUser!.id,
-          action: saved.status === "archived" ? "session.archived" : "session.updated",
-          entityType: "session",
-          entityId: saved.id,
-          metadata: { courseId: saved.courseId, status: saved.status },
-        });
-        return saved;
-      });
-    } catch (error) {
-      if (error instanceof TutorPayoutLedgerError) {
-        res.status(error.status).json({ error: error.message, code: error.code });
-        return;
+    const updated = await db.transaction(async (tx) => {
+      const [saved] = await tx
+        .update(sessionsTable)
+        .set({ ...next, updatedAt: new Date() })
+        .where(eq(sessionsTable.id, existing.id))
+        .returning();
+      if (!saved) {
+        throw new Error("SESSION_UPDATE_FAILED");
       }
-      throw error;
-    }
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: saved.status === "archived" ? "session.archived" : "session.updated",
+        entityType: "session",
+        entityId: saved.id,
+        metadata: { courseId: saved.courseId, status: saved.status },
+      });
+      return saved;
+    });
     res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated)));
   },
 );
 
 router.get("/me", async (req: AuthedRequest, res): Promise<void> => {
   const user = req.appUser!;
+  let avatarUrl: string | null = null;
+  if (user.role === "tutor" || user.role === "administrator") {
+    const profile = await resolveCalendarProfileForUser(user);
+    avatarUrl = profile?.photoUrl ?? null;
+  }
   res.json(
     GetCurrentUserResponse.parse({
       id: user.id,
       displayName: user.displayName,
       email: user.email,
       role: user.role,
-      avatarUrl: null,
+      avatarUrl,
     }),
   );
 });
@@ -7037,6 +7393,26 @@ async function reviewSubmissionsForUser(user: AppUser) {
           ).items.filter((item) => !item.correct).length
         : 0,
       tutorNotes: attempt.tutorNotes,
+      analysisPreview:
+        typeof (attempt.analysis as { feedback?: unknown } | null)?.feedback ===
+        "string"
+          ? (attempt.analysis as { feedback: string }).feedback
+          : typeof (attempt.result as { analysis?: { feedback?: unknown } } | null)
+                ?.analysis?.feedback === "string"
+            ? (attempt.result as { analysis: { feedback: string } }).analysis
+                .feedback
+            : null,
+      nextFocus: Array.isArray(
+        (attempt.analysis as { nextFocus?: unknown } | null)?.nextFocus,
+      )
+        ? ((attempt.analysis as { nextFocus: string[] }).nextFocus ?? [])
+        : Array.isArray(
+              (attempt.result as { analysis?: { nextFocus?: unknown } } | null)
+                ?.analysis?.nextFocus,
+            )
+          ? ((attempt.result as { analysis: { nextFocus: string[] } }).analysis
+              .nextFocus ?? [])
+          : [],
     }));
 }
 
@@ -7317,23 +7693,27 @@ router.get(
       return;
     }
     const dashboard = await dashboardDataForUser(client);
-    const [xavierProfile] = await db
+    const eligibleTutors = await db
       .select({
         id: tutorProfilesTable.id,
         name: tutorProfilesTable.name,
         title: tutorProfilesTable.title,
+        photoUrl: tutorProfilesTable.photoUrl,
+        biography: tutorProfilesTable.biography,
+        subjects: tutorProfilesTable.subjects,
         active: tutorProfilesTable.active,
         bookingEligible: tutorProfilesTable.bookingEligible,
+        calendarStatus: tutorProfilesTable.calendarStatus,
       })
       .from(tutorProfilesTable)
       .where(
         and(
-          eq(tutorProfilesTable.name, XAVIER_NAME),
           eq(tutorProfilesTable.active, true),
           eq(tutorProfilesTable.bookingEligible, true),
         ),
       )
-      .limit(1);
+      .orderBy(asc(tutorProfilesTable.name));
+    const previewTutor = eligibleTutors[0];
     const [bookingSessions, financials] = await Promise.all([
       db
         .select()
@@ -7356,9 +7736,7 @@ router.get(
       } | null;
       sessions: Awaited<ReturnType<typeof bookingSessionShape>>[];
     };
-    if (
-      !xavierProfile
-    ) {
+    if (!previewTutor) {
       previewBooking = {
         calendarStatus: "unavailable",
         availability: null,
@@ -7369,7 +7747,7 @@ router.get(
       const to = new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
       try {
         const availability = await slotsForTutor(
-          xavierProfile.id,
+          previewTutor.id,
           from,
           to,
           60,
@@ -7402,7 +7780,8 @@ router.get(
         adminPreview: true,
         previewOffer: {
           name: "Single SAT Session",
-          description: "One prepaid 60-minute SAT tutoring session credit.",
+          description:
+            "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
           priceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
           durationMinutes: 60,
         },
@@ -7674,6 +8053,24 @@ async function adaptiveCurriculumForSession(
     | undefined;
   const isStaff = user.role === "administrator" || user.role === "tutor";
   const completed = latestAttempt?.status === "submitted" || latestAttempt?.status === "expired";
+  let sessionPrep: {
+    mode: string;
+    summary: string;
+    duringAssignmentId: string | null;
+    attachedQuestionCount: number;
+  } | null = null;
+  if (isStaff) {
+    if (completed && latestAttempt) {
+      await deriveAdaptiveRecommendations(latestAttempt.id);
+    }
+    const prep = await prepareSessionCurriculum(session);
+    sessionPrep = {
+      mode: prep.mode,
+      summary: prep.summary,
+      duringAssignmentId: prep.duringAssignmentId,
+      attachedQuestionCount: prep.attachedQuestionCount,
+    };
+  }
   const mistakes =
     isStaff && completed
       ? (result?.items ?? [])
@@ -7719,7 +8116,7 @@ async function adaptiveCurriculumForSession(
       .from(questionsTable)
       .where(
         and(
-          eq(questionsTable.reviewStatus, "approved"),
+          inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
           eq(questionsTable.sourceType, "original"),
           eq(questionsTable.difficulty, "hard"),
         ),
@@ -7781,6 +8178,7 @@ async function adaptiveCurriculumForSession(
     publishedBlocks: isStaff
       ? blocks
       : blocks.filter((block) => block.visibility !== "tutor"),
+    sessionPrep,
   };
 }
 
@@ -7852,7 +8250,7 @@ router.post(
         .limit(1);
       if (attempt) await deriveAdaptiveRecommendations(attempt.id);
     }
-    await ensureDuringSessionAssignment(session);
+    await prepareSessionCurriculum(session);
     res
       .status(201)
       .json(
@@ -9259,7 +9657,7 @@ router.patch(
         .select()
         .from(questionsTable)
         .where(eq(questionsTable.id, record.recommendation.recommendedQuestionId ?? ""));
-      if (!question || question.reviewStatus !== "approved") {
+      if (!question || (question.reviewStatus !== "approved" && question.reviewStatus !== "reviewed")) {
         res.status(400).json({ error: "Only approved practice can be accepted" });
         return;
       }

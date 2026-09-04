@@ -1,5 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { ExternalLink, ReceiptText, WalletCards } from "lucide-react";
+import { Link } from "wouter";
 import { getGetFinancialsQueryKey, useGetFinancials, type AdminClientPreviewOffer, type FinancialSummary } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,14 +97,14 @@ export function FinancialCard({
               <p className="text-lg font-semibold">${(previewOffer.priceCents / 100).toFixed(2)}</p>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Checkout is unavailable in the administrator preview. A verified purchase provides one prepaid 60-minute session.
+              Checkout is unavailable in the administrator preview. A verified purchase provides prepaid session credits that students book on Xavier or Eunice’s calendar.
             </p>
             <Button disabled variant="outline" className="mt-4 rounded-full">Checkout disabled in preview</Button>
           </div>
         )}
         {!readOnly && !adminPreview && (
           <Button asChild className="rounded-full">
-             <a href="/sat">Purchase SAT session credits</a>
+            <Link href="/sat">Purchase SAT session credits</Link>
           </Button>
         )}
         {adminPreview && (

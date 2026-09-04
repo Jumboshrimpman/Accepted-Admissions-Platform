@@ -30,6 +30,7 @@ import PortalCourse from '@/pages/portal/course';
 import PortalSession from '@/pages/portal/session';
 import PortalAssignment from '@/pages/portal/assignment';
 import TutorDashboard from '@/pages/tutor/dashboard';
+import TutorProfile from '@/pages/tutor/profile';
 import TutorCourse from '@/pages/tutor/course';
 import TutorSession from '@/pages/tutor/session';
 import TutorAttempt from '@/pages/tutor/attempt';
@@ -265,6 +266,7 @@ function Router() {
               <Shell>
               <Switch>
                 <Route path="/tutor" component={TutorDashboard} />
+                <Route path="/tutor/profile" component={TutorProfile} />
                 <Route path="/tutor/courses/:courseId" component={TutorCourse} />
                 <Route path="/tutor/sessions/:sessionId" component={TutorSession} />
                 <Route path="/tutor/attempts/:attemptId" component={TutorAttempt} />

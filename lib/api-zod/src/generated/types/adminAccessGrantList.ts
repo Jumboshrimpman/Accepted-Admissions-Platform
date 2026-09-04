@@ -5,8 +5,8 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
-import type { TutorPayoutStatus } from './tutorPayoutStatus';
+import type { AdminAccessGrant } from './adminAccessGrant';
 
-export type TutorPayoutOnboarding = TutorPayoutStatus & {
-  url: string;
-};
+export interface AdminAccessGrantList {
+  grants: AdminAccessGrant[];
+}

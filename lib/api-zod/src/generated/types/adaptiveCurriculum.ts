@@ -10,6 +10,7 @@ import type { AdaptiveQuestion } from './adaptiveQuestion';
 import type { AdaptiveRecommendation } from './adaptiveRecommendation';
 import type { AssignmentSummary } from './assignmentSummary';
 import type { CurriculumBlock } from './curriculumBlock';
+import type { SessionPrepSummary } from './sessionPrepSummary';
 
 export interface AdaptiveCurriculum {
   sessionId: string;
@@ -20,4 +21,5 @@ export interface AdaptiveCurriculum {
   /** @nullable */
   tutorNotes: string | null;
   publishedBlocks: CurriculumBlock[];
+  sessionPrep?: SessionPrepSummary | null;
 }

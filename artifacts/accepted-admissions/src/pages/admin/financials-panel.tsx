@@ -2,24 +2,16 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateAdminProduct,
-  useCreateAdminXavierPayoutOnboarding,
   getGetAdminFinancialsQueryKey,
-  getGetAdminXavierPayoutQueryKey,
   getGetAdminOverviewQueryKey,
-  getListAdminTutorPayoutsQueryKey,
   useCreateCreditAdjustment,
   useCreateHostedInvoice,
   useCreateOfflinePayment,
   useGetAdminFinancials,
-  useGetAdminXavierPayout,
-  useListAdminTutorPayouts,
-  useMarkAdminTutorPayoutPaid,
-  useReconcileAdminTutorTransfer,
-  useReverseAdminTutorPayout,
   useUpdateAdminProduct,
   useUpdateInvoice,
 } from "@workspace/api-client-react";
-import { Check, Edit3, ExternalLink, Loader2, RefreshCw, ReceiptText, WalletCards } from "lucide-react";
+import { Check, Edit3, ExternalLink, Loader2, ReceiptText, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,16 +31,6 @@ export function AdminFinancialsPanel() {
   const financials = useGetAdminFinancials({
     query: { queryKey: getGetAdminFinancialsQueryKey(), staleTime: 10_000 },
   });
-  const payout = useGetAdminXavierPayout({
-    query: { queryKey: getGetAdminXavierPayoutQueryKey(), staleTime: 10_000 },
-  });
-  const tutorPayouts = useListAdminTutorPayouts({
-    query: { queryKey: getListAdminTutorPayoutsQueryKey(), staleTime: 10_000 },
-  });
-  const payoutOnboarding = useCreateAdminXavierPayoutOnboarding();
-  const markTutorPayoutPaid = useMarkAdminTutorPayoutPaid();
-  const reverseTutorPayout = useReverseAdminTutorPayout();
-  const reconcileTransfer = useReconcileAdminTutorTransfer();
   const hostedInvoice = useCreateHostedInvoice();
   const offlinePayment = useCreateOfflinePayment();
   const adjustment = useCreateCreditAdjustment();
@@ -83,14 +65,9 @@ export function AdminFinancialsPanel() {
     totalPrice: "",
   });
   const [editingProductId, setEditingProductId] = useState("");
-  const [payoutPaymentReference, setPayoutPaymentReference] = useState("");
-  const [payoutNotes, setPayoutNotes] = useState("");
-  const [payingObligationId, setPayingObligationId] = useState("");
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getGetAdminFinancialsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetAdminXavierPayoutQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListAdminTutorPayoutsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
   };
   const complete = (text: string) => {
@@ -104,11 +81,7 @@ export function AdminFinancialsPanel() {
     adjustment.isPending ||
     updateInvoice.isPending ||
     createProduct.isPending ||
-    updateProduct.isPending ||
-    payoutOnboarding.isPending ||
-    reconcileTransfer.isPending ||
-    markTutorPayoutPaid.isPending ||
-    reverseTutorPayout.isPending;
+    updateProduct.isPending;
 
   if (financials.isLoading) return <Skeleton className="h-96 rounded-2xl" />;
   if (!financials.data) return null;
@@ -152,171 +125,10 @@ export function AdminFinancialsPanel() {
         <CardDescription>Manage SAT pricing, create transparent invoices, reconcile verified payments, and audit credits.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-7">
-        <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h3 className="font-semibold">Xavier Morales · Stripe Connect (legacy)</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Client purchases settle to Accepted Admissions. Tutor payables accrue only after completed sessions and are settled manually below — this Connect panel does not initiate payout transfers.
-              </p>
-            </div>
-            <Badge variant={payout.data?.ready ? "secondary" : "outline"} className="w-fit capitalize">
-              {payout.isLoading ? "Checking…" : payout.data?.ready ? "Connect ready" : payout.data?.status?.replaceAll("_", " ") ?? "Unavailable"}
-            </Badge>
-          </div>
-          {payout.data && (
-            <div className="grid gap-3 text-sm sm:grid-cols-3">
-              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Hourly tutor rate</p><p className="mt-1 font-semibold">{money(6500)} after completion</p></div>
-              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Purchase settlement</p><p className="mt-1 font-semibold">Platform account</p></div>
-              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Connected account</p><p className="mt-1 font-semibold">{payout.data.accountId ? `••••${payout.data.accountId.slice(-6)}` : "Not created"}</p></div>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={busy}
-              onClick={() =>
-                payoutOnboarding.mutate(undefined, {
-                  onSuccess: (result) => window.location.assign(result.url),
-                  onError: fail,
-                })
-              }
-            >
-              {payoutOnboarding.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {payout.data?.accountId ? "Continue Stripe onboarding" : "Start Stripe onboarding"}
-            </Button>
-            <Button variant="outline" disabled={payout.isFetching} onClick={() => payout.refetch()}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${payout.isFetching ? "animate-spin" : ""}`} />
-              Refresh status
-            </Button>
-          </div>
-        </section>
-        <section className="space-y-4 rounded-2xl border p-4">
-          <div>
-            <h3 className="font-semibold">Tutor payout ledger</h3>
-            <p className="text-sm text-muted-foreground">
-              Obligations become due when a session is marked completed ($65/hr for Xavier). Mark paid after settling offline — no bank or Stripe Connect transfer is initiated here.
-            </p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              placeholder="Optional payment reference"
-              value={payoutPaymentReference}
-              onChange={(event) => setPayoutPaymentReference(event.target.value)}
-            />
-            <Input
-              placeholder="Optional notes"
-              value={payoutNotes}
-              onChange={(event) => setPayoutNotes(event.target.value)}
-            />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-sm">
-              <thead className="border-b text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="p-3">Tutor</th>
-                  <th className="p-3">Student</th>
-                  <th className="p-3">Session</th>
-                  <th className="p-3">Rate</th>
-                  <th className="p-3">Owed</th>
-                  <th className="p-3">Purchase</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(tutorPayouts.data ?? []).map((row) => (
-                  <tr key={row.id} className="border-b">
-                    <td className="p-3">{row.tutorName ?? "Tutor"}</td>
-                    <td className="p-3">{row.studentName ?? "Student"}</td>
-                    <td className="p-3">
-                      <p>{new Date(row.sessionDateTime).toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{row.durationMinutes} min</p>
-                    </td>
-                    <td className="p-3">{money(row.tutorRateCents)}/hr</td>
-                    <td className="p-3 font-medium">{money(row.amountOwedCents)}</td>
-                    <td className="p-3 text-xs text-muted-foreground">{row.purchaseReference ?? "—"}</td>
-                    <td className="p-3">
-                      <Badge variant="outline" className="capitalize">{row.status}</Badge>
-                      {row.paidAt && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Paid {new Date(row.paidAt).toLocaleDateString()}
-                          {row.paidByName ? ` · ${row.paidByName}` : ""}
-                        </p>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-2">
-                        {["due", "pending"].includes(row.status) && (
-                          <Button
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => {
-                              setPayingObligationId(row.id);
-                              markTutorPayoutPaid.mutate(
-                                {
-                                  obligationId: row.id,
-                                  data: {
-                                    paymentReference: payoutPaymentReference || undefined,
-                                    notes: payoutNotes || undefined,
-                                  },
-                                },
-                                {
-                                  onSuccess: () => {
-                                    setPayingObligationId("");
-                                    setPayoutPaymentReference("");
-                                    setPayoutNotes("");
-                                    complete("Tutor payout marked paid.");
-                                  },
-                                  onError: (error) => {
-                                    setPayingObligationId("");
-                                    fail(error);
-                                  },
-                                },
-                              );
-                            }}
-                          >
-                            {markTutorPayoutPaid.isPending && payingObligationId === row.id && (
-                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                            )}
-                            Mark paid
-                          </Button>
-                        )}
-                        {row.status !== "reversed" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={busy}
-                            onClick={() =>
-                              reverseTutorPayout.mutate(
-                                {
-                                  obligationId: row.id,
-                                  data: { notes: payoutNotes || undefined },
-                                },
-                                {
-                                  onSuccess: () => complete("Tutor payout reversed."),
-                                  onError: fail,
-                                },
-                              )
-                            }
-                          >
-                            Reverse
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {(tutorPayouts.data?.length ?? 0) === 0 && (
-              <p className="py-5 text-sm text-muted-foreground">No tutor payout obligations yet.</p>
-            )}
-          </div>
-        </section>
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
             <h3 className="font-semibold">Authoritative SAT catalog</h3>
-            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($175 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits). Funds settle to Accepted Admissions; credits grant only after a verified Stripe webhook.</p>
+            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($130 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits at $130/hour). Credits book any open hour on Xavier or Eunice’s calendar after a verified Stripe webhook.</p>
           </div>
           <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
@@ -443,47 +255,6 @@ export function AdminFinancialsPanel() {
             </tbody>
           </table>
           {data.invoices.length === 0 && <p className="py-5 text-sm text-muted-foreground">No invoices recorded.</p>}
-        </div>
-        <div className="overflow-x-auto">
-          <h3 className="mb-3 font-semibold">Xavier transfer and reversal audit</h3>
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b text-xs uppercase text-muted-foreground">
-              <tr><th className="p-3">Client</th><th className="p-3">Tutor</th><th className="p-3">Allocated</th><th className="p-3">Reversed</th><th className="p-3">Status</th><th className="p-3">Recorded</th><th className="p-3">Action</th></tr>
-            </thead>
-            <tbody>
-              {data.transfers.map((transfer) => (
-                <tr key={transfer.id} className="border-b">
-                  <td className="p-3">{transfer.clientName ?? "Unknown client"}</td>
-                  <td className="p-3">{transfer.tutorName ?? "Xavier Morales"}</td>
-                  <td className="p-3 font-medium">{money(transfer.amountCents)}</td>
-                  <td className="p-3">{money(transfer.reversedAmountCents)}</td>
-                  <td className="p-3">
-                    <Badge variant="outline" className="capitalize">{transfer.status.replaceAll("_", " ")}</Badge>
-                    {transfer.failureReason && <p className="mt-1 max-w-xs text-xs text-destructive">{transfer.failureReason}</p>}
-                  </td>
-                  <td className="p-3 text-muted-foreground">{new Date(transfer.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3">
-                    {["transfer_failed", "reversal_failed"].includes(transfer.status) ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          reconcileTransfer.mutate(
-                            { paymentId: transfer.paymentId },
-                            { onSuccess: () => complete("Tutor reversal reconciled."), onError: fail },
-                          )
-                        }
-                      >
-                        Retry payout
-                      </Button>
-                    ) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {data.transfers.length === 0 && <p className="py-5 text-sm text-muted-foreground">No Stripe Connect transfers recorded yet.</p>}
         </div>
         <div className="overflow-x-auto">
           <h3 className="mb-3 font-semibold">Credit ledger history</h3>

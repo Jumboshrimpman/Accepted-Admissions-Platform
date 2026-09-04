@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Quote } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
+import { PublicSiteShell, fetchPublicJson, resolvePublicMediaUrl } from "@/components/public-site-shell";
 
 export type SchoolLogo = {
   name: string;
@@ -121,7 +121,7 @@ export function PastSuccessContent({
           {logos.length > 0 ? <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {logos.map((logo) => (
                <div key={logo.name} className="flex min-h-28 items-center justify-center rounded-lg bg-muted/50 p-4">
-                <img src={logo.src} alt={logo.alt || `${logo.name} logo`} width="120" height="96" className="max-h-20 max-w-full object-contain mix-blend-multiply" loading="lazy" onError={(event) => {
+                <img src={resolvePublicMediaUrl(logo.src)} alt={logo.alt || `${logo.name} logo`} width="120" height="96" className="max-h-20 max-w-full object-contain mix-blend-multiply" loading="lazy" onError={(event) => {
                   event.currentTarget.style.display = "none";
                   event.currentTarget.nextElementSibling?.removeAttribute("hidden");
                 }} />
