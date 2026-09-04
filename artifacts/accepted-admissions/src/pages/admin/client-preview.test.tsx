@@ -10,6 +10,7 @@ vi.mock("wouter", () => ({
   Link: ({ href, children }: { href: string; children: ReactNode }) =>
     createElement("a", { href }, children),
   useParams: () => ({ clientId: "student-1" }),
+  useLocation: () => ["/admin/clients/student-1", vi.fn()],
 }));
 
 vi.mock("@workspace/api-client-react", () => ({

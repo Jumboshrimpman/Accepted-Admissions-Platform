@@ -76,6 +76,12 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
+  getListTutorPayoutsQueryKey: () => ["tutor-payouts"],
+  useListTutorPayouts: () => ({
+    data: [],
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
