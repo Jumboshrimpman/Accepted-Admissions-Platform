@@ -1,5 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { ExternalLink, ReceiptText, WalletCards } from "lucide-react";
+import { Link } from "wouter";
 import { getGetFinancialsQueryKey, useGetFinancials, type AdminClientPreviewOffer, type FinancialSummary } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,7 +104,7 @@ export function FinancialCard({
         )}
         {!readOnly && !adminPreview && (
           <Button asChild className="rounded-full">
-             <a href="/sat">Purchase SAT session credits</a>
+            <Link href="/sat">Purchase SAT session credits</Link>
           </Button>
         )}
         {adminPreview && (

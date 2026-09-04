@@ -770,18 +770,15 @@ export default function TutorSession() {
                       ? `${adaptive.homework.title} · ${adaptive.homework.questionCount} questions`
                       : "No homework assignment is linked to this session yet."}
                   </p>
-                  {adaptive?.homework && (
-                    <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId ?? ""}`}>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="mt-3"
-                        disabled={!adaptive.homework.latestAttemptId}
-                      >
+                  {adaptive?.homework?.latestAttemptId ? (
+                    <Button asChild size="sm" variant="secondary" className="mt-3">
+                      <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>
                         Open homework / result
-                      </Button>
-                    </Link>
-                  )}
+                      </Link>
+                    </Button>
+                  ) : adaptive?.homework ? (
+                    <p className="mt-3 text-sm text-muted-foreground">No submitted attempt yet.</p>
+                  ) : null}
                   <p className="mt-2 text-xs text-muted-foreground">
                     Incomplete homework can still be worked through during the session.
                   </p>
