@@ -13,19 +13,16 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@clerk/react", () => ({
   ClerkProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-  Show: ({
-    when,
-    children,
-  }: {
-    when: "signed-in" | "signed-out";
-    children: ReactNode;
-  }) => (when === "signed-in" ? <>{children}</> : null),
   SignIn: () => null,
+  useAuth: () => ({ isLoaded: true, isSignedIn: true }),
   useClerk: () => ({ addListener: () => () => undefined }),
 }));
 
-vi.mock("@clerk/react/internal", () => ({
-  publishableKeyFromHost: () => "pk_test_public-content-route",
+vi.mock("@/lib/clerk-publishable-key", () => ({
+  resolveClerkPublishableKey: () => ({
+    ok: true,
+    publishableKey: "pk_test_public-content-route",
+  }),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({

@@ -9,8 +9,8 @@ const userState = vi.hoisted(() => ({
   error: null as unknown,
 }));
 
-vi.mock("@clerk/react", () => ({
-  useAuth: () => authState,
+vi.mock("@/components/portal-auth", () => ({
+  usePortalAuth: () => authState,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({

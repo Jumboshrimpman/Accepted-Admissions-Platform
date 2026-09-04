@@ -1,7 +1,7 @@
 import { Link } from "wouter";
-import { Show } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, Check, GraduationCap, MessageCircle, Users } from "lucide-react";
+import { WhenSignedIn, WhenSignedOut } from "@/components/portal-auth";
 import { PublicSiteShell } from "@/components/public-site-shell";
 
 export default function Landing() {
@@ -36,16 +36,30 @@ export default function Landing() {
                   </Link>
                 </Button>
               </div>
-              <Show when="signed-out">
-                <Link href="/login" data-testid="link-home-sign-in" className="mt-5 inline-flex text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-                  Already a client? Sign in to your portal
-                </Link>
-              </Show>
-              <Show when="signed-in">
-                <Link href="/portal" data-testid="link-home-portal" className="mt-5 inline-flex text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-                  Already a client? Open your portal
-                </Link>
-              </Show>
+              <WhenSignedOut>
+                <div className="mt-6">
+                  <Button asChild variant="secondary" className="h-12 rounded-md px-6">
+                    <Link href="/login" data-testid="link-home-sign-in">
+                      Sign in to your portal
+                    </Link>
+                  </Button>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Students, tutors, and administrators use the same sign-in.
+                  </p>
+                </div>
+              </WhenSignedOut>
+              <WhenSignedIn>
+                <div className="mt-6">
+                  <Button asChild variant="secondary" className="h-12 rounded-md px-6">
+                    <Link href="/portal" data-testid="link-home-portal">
+                      Open your portal
+                    </Link>
+                  </Button>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Continue to your student, tutor, or admin dashboard.
+                  </p>
+                </div>
+              </WhenSignedIn>
             </div>
             <div className="rounded-xl border bg-card p-6 shadow-sm md:p-8">
               <p className="font-metadata text-accent">Start with the right path</p>

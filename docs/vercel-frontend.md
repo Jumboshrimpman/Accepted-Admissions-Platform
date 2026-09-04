@@ -27,7 +27,7 @@ Set these on the Vercel project (Production; Preview too if you deploy preview U
 
 | Name | Required | When it is read |
 | --- | --- | --- |
-| `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Vite build (`import.meta.env`). The app throws at runtime if it is missing. |
+| `VITE_CLERK_PUBLISHABLE_KEY` | **Yes** | Vite build (`import.meta.env`). The app shows a readable sign-in error if it is missing or invalid; it does not throw a blank page. Use the Production `pk_live_` key for `clerk.acceptedadmissions.org` on `app.acceptedadmissions.org`. Do not derive a live key from the app hostname (`clerk.app.acceptedadmissions.org` is wrong). |
 | `PUBLIC_SITE_ORIGIN` | No | Vite build (`vite.config.ts`). Canonical / Open Graph / sitemap / robots. Defaults to `https://www.acceptedadmissions.org`. For a private Vercel test host you may set this to the Vercel HTTPS origin. |
 | `BASE_PATH` | No | Vite build. Leave unset (defaults to `/`). |
 

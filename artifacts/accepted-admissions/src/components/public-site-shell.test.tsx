@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-vi.mock("@clerk/react", () => ({
-  Show: ({ children }: { children: React.ReactNode }) => children,
-}));
-
 vi.mock("wouter", () => ({
   Link: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
     <a href={href} {...props}>{children}</a>
@@ -40,6 +36,9 @@ describe("PublicSiteShell", () => {
     expect(mainNavigation.textContent).toContain("Student stories");
     expect(mainNavigation.textContent).toContain("Get guidance");
     expect(screen.getByTestId("link-header-guidance").getAttribute("href")).toBe("/client-request");
+    expect(screen.getByTestId("button-header-sign-in").getAttribute("href")).toBe("/login");
+    expect(screen.getByTestId("button-header-sign-in").textContent).toMatch(/^Sign in$/);
+    expect(screen.getByTestId("link-footer-sign-in").getAttribute("href")).toBe("/login");
     expect(screen.getByRole("link", { name: "info@acceptedadmissions.org" }).getAttribute("href")).toBe(
       "mailto:info@acceptedadmissions.org",
     );

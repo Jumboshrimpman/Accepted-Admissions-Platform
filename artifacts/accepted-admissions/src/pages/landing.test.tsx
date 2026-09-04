@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 
-vi.mock("@clerk/react", () => ({
-  Show: ({ children }: { children: React.ReactNode }) => children,
-}));
-
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => <a href={href} {...props}>{children}</a>,
 }));
@@ -38,5 +34,14 @@ describe("Landing visitor paths", () => {
     expect(main.queryByText(/\$2,400/)).toBeNull();
     expect(main.queryByText(/5-hour/i)).toBeNull();
     expect(main.queryByText(/20-hour/i)).toBeNull();
+  });
+
+  it("keeps a visible portal sign-in path for students, tutors, and administrators", () => {
+    render(<Landing />);
+
+    const signIn = screen.getByTestId("link-home-sign-in");
+    expect(signIn.getAttribute("href")).toBe("/login");
+    expect(signIn.textContent).toMatch(/sign in to your portal/i);
+    expect(screen.getByText(/students, tutors, and administrators/i)).toBeTruthy();
   });
 });
