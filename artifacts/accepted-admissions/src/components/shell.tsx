@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, BookOpen, LayoutDashboard, Settings } from "lucide-react";
+import { LogOut, BookOpen, LayoutDashboard, Settings, UserRound } from "lucide-react";
 import {
   getGetCurrentUserQueryKey,
   useGetCurrentUser,
@@ -56,6 +56,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       case "tutor":
         return [
           { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/tutor/profile", label: "Profile", icon: UserRound },
           { href: "/portal/curriculum", label: "Client curriculum", icon: BookOpen },
         ];
       case "administrator":
@@ -110,16 +111,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2 px-2">
                   <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent overflow-hidden">
-                    {user?.imageUrl ? (
-                      <img src={user.imageUrl} alt={user.fullName || ""} className="w-full h-full object-cover" />
+                    {apiUser.avatarUrl || user?.imageUrl ? (
+                      <img
+                        src={apiUser.avatarUrl || user?.imageUrl}
+                        alt={apiUser.displayName || user?.fullName || ""}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <span className="font-medium text-xs">
-                        {user?.firstName?.charAt(0) || "U"}
+                        {apiUser.displayName?.charAt(0) || user?.firstName?.charAt(0) || "U"}
                       </span>
                     )}
                   </div>
                   <div className="hidden sm:flex flex-col items-start text-left">
-                    <span className="text-sm font-medium leading-none">{user?.fullName}</span>
+                    <span className="text-sm font-medium leading-none">
+                      {apiUser.displayName || user?.fullName}
+                    </span>
                     <span className="text-xs text-muted-foreground capitalize leading-none">{role}</span>
                   </div>
                 </Button>

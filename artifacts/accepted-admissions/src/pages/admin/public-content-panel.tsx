@@ -38,6 +38,14 @@ type PublicContent = {
   };
 };
 
+const emptyCreateDraft = {
+  name: "",
+  email: "",
+  title: "Tutor",
+  photoUrl: "",
+  photoAltText: "",
+};
+
 export function PublicContentPanel() {
   const [tutors, setTutors] = useState<TutorProfile[]>([]);
   const [content, setContent] = useState<PublicContent[]>([]);
@@ -45,6 +53,7 @@ export function PublicContentPanel() {
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [preview, setPreview] = useState<"team" | "success" | null>(null);
+  const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
 
   useEffect(() => {
     Promise.all([
@@ -87,6 +96,36 @@ export function PublicContentPanel() {
     } catch (error) {
       const detail = (error as { data?: { error?: string } } | null)?.data?.error;
       setMessage(detail || `Could not save ${tutor.name}. Check the public profile fields and try again.`);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const createTutor = async () => {
+    setSaving("create");
+    setMessage("");
+    try {
+      const created = await customFetch<TutorProfile>("/api/admin/tutors", {
+        method: "POST",
+        body: JSON.stringify({
+          name: createDraft.name.trim(),
+          email: createDraft.email.trim().toLowerCase(),
+          title: createDraft.title.trim() || "Tutor",
+          photoUrl: createDraft.photoUrl.trim() || null,
+          photoAltText: createDraft.photoAltText.trim() || null,
+          publicApproved: false,
+          active: true,
+          bookingEligible: false,
+        }),
+      });
+      setTutors((items) =>
+        [...items, created].sort((left, right) => left.name.localeCompare(right.name)),
+      );
+      setCreateDraft(emptyCreateDraft);
+      setMessage(`${created.name} was created on file.`);
+    } catch (error) {
+      const detail = (error as { data?: { error?: string } } | null)?.data?.error;
+      setMessage(detail || "Could not create that profile. Check the name, email, and photo fields.");
     } finally {
       setSaving(null);
     }
@@ -170,14 +209,95 @@ export function PublicContentPanel() {
         {message && <p role="status" className="text-sm font-medium text-primary">{message}</p>}
       </div>
 
+      <Card className="min-w-0 border-primary/20" data-testid="create-tutor-profile">
+        <CardHeader>
+          <CardTitle>Create a tutor profile</CardTitle>
+          <CardDescription>
+            Add a name on file and an optional photo URL. Public approval stays off until the profile is ready.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <Field label="Name on file">
+            <Input
+              value={createDraft.name}
+              onChange={(event) => setCreateDraft((draft) => ({ ...draft, name: event.target.value }))}
+              placeholder="Full name"
+              data-testid="create-tutor-name"
+            />
+          </Field>
+          <Field label="Email">
+            <Input
+              type="email"
+              value={createDraft.email}
+              onChange={(event) => setCreateDraft((draft) => ({ ...draft, email: event.target.value }))}
+              placeholder="tutor@example.com"
+              data-testid="create-tutor-email"
+            />
+          </Field>
+          <Field label="Title">
+            <Input
+              value={createDraft.title}
+              onChange={(event) => setCreateDraft((draft) => ({ ...draft, title: event.target.value }))}
+            />
+          </Field>
+          <Field label="Photo URL">
+            <Input
+              type="url"
+              value={createDraft.photoUrl}
+              onChange={(event) => setCreateDraft((draft) => ({ ...draft, photoUrl: event.target.value }))}
+              placeholder="https://"
+              data-testid="create-tutor-photo"
+            />
+          </Field>
+          <Field label="Photo alt text">
+            <Input
+              value={createDraft.photoAltText}
+              onChange={(event) => setCreateDraft((draft) => ({ ...draft, photoAltText: event.target.value }))}
+              placeholder="Describe the photo for accessibility"
+            />
+          </Field>
+          {createDraft.photoUrl ? (
+            <div className="flex items-end">
+              <img
+                src={createDraft.photoUrl}
+                alt={createDraft.photoAltText || createDraft.name || "Profile photo preview"}
+                className="h-24 w-24 rounded-full object-cover border"
+              />
+            </div>
+          ) : null}
+          <div className="md:col-span-2">
+            <Button
+              onClick={() => void createTutor()}
+              disabled={saving === "create" || !createDraft.name.trim() || !createDraft.email.trim()}
+              data-testid="create-tutor-submit"
+            >
+              {saving === "create" ? "Creating…" : "Create profile"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 xl:grid-cols-2">
         {tutors.map((tutor) => (
           <Card key={tutor.id} className="min-w-0">
             <CardHeader>
               <div className="flex min-w-0 items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <CardTitle className="break-words">{tutor.name}</CardTitle>
-                  <CardDescription>{tutor.email}</CardDescription>
+                <div className="flex min-w-0 items-start gap-3">
+                  {tutor.photoUrl ? (
+                    <img
+                      src={tutor.photoUrl}
+                      alt={tutor.photoAltText || tutor.name}
+                      className="h-12 w-12 shrink-0 rounded-full object-cover border"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-medium">
+                      {tutor.name.charAt(0)}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <CardTitle className="break-words">{tutor.name}</CardTitle>
+                    <CardDescription>{tutor.email}</CardDescription>
+                  </div>
                 </div>
                 <Badge className="shrink-0" variant={tutor.publicApproved ? "default" : "outline"}>
                   {tutor.publicApproved ? "Public" : "Draft"}
@@ -185,12 +305,12 @@ export function PublicContentPanel() {
               </div>
             </CardHeader>
             <CardContent className="min-w-0 space-y-4">
-              <Field label="Public name"><Input value={tutor.name} onChange={(event) => updateTutor(tutor.id, { name: event.target.value })} /></Field>
+              <Field label="Name on file"><Input value={tutor.name} onChange={(event) => updateTutor(tutor.id, { name: event.target.value })} /></Field>
               <Field label="Title"><Input value={tutor.title} onChange={(event) => updateTutor(tutor.id, { title: event.target.value })} /></Field>
               <Field label="Biography"><Textarea rows={6} value={tutor.biography ?? ""} onChange={(event) => updateTutor(tutor.id, { biography: event.target.value })} /></Field>
               <Field label="Subjects and services"><Input value={tutor.subjects.join(", ")} onChange={(event) => updateTutor(tutor.id, { subjects: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} /></Field>
-              <Field label="Headshot URL"><Input type="url" value={tutor.photoUrl ?? ""} onChange={(event) => updateTutor(tutor.id, { photoUrl: event.target.value || null })} /></Field>
-              <Field label="Headshot alt text"><Input value={tutor.photoAltText ?? ""} onChange={(event) => updateTutor(tutor.id, { photoAltText: event.target.value || null })} /></Field>
+              <Field label="Photo URL"><Input type="url" value={tutor.photoUrl ?? ""} onChange={(event) => updateTutor(tutor.id, { photoUrl: event.target.value || null })} /></Field>
+              <Field label="Photo alt text"><Input value={tutor.photoAltText ?? ""} onChange={(event) => updateTutor(tutor.id, { photoAltText: event.target.value || null })} /></Field>
               <Field label="LinkedIn URL"><Input type="url" value={tutor.linkedinUrl ?? ""} onChange={(event) => updateTutor(tutor.id, { linkedinUrl: event.target.value || null })} /></Field>
               <div className="flex flex-wrap gap-6 pt-2">
                 <Toggle label="Approved for public display" checked={tutor.publicApproved} onChange={(checked) => updateTutor(tutor.id, { publicApproved: checked })} />
