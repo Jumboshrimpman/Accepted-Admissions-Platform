@@ -1,5 +1,7 @@
--- Forward-only repair for schema objects represented by unjournaled orphans:
--- 0011_last_rocket_raccoon.sql, 0013_mean_thor_girl.sql, 0014_square_krista_starr.sql
+-- Forward-only repair for schema objects previously represented by unjournaled
+-- duplicate-numbered SQL files (invoice snapshots, Connect columns, and
+-- provider_charge_id). Those orphan files are no longer in the migrations
+-- folder; this idempotent repair remains the ledgered source of truth.
 -- Idempotent for empty DBs and for databases that already applied those changes outside the ledger.
 
 ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "issuer_name" text DEFAULT 'Accepted Admissions' NOT NULL;--> statement-breakpoint

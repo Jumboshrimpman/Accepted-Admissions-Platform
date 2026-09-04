@@ -43,6 +43,7 @@ import SatOfferings from '@/pages/public/sat-offerings';
 import OurTeam from '@/pages/public/our-team';
 import PastSuccess from '@/pages/public/past-success';
 import ClientRequest from '@/pages/public/client-request';
+import { LEGACY_PUBLIC_REDIRECTS } from '@/lib/legacy-public-routes';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 import { ProvisioningReference } from '@/components/provisioning-reference';
@@ -148,7 +149,12 @@ function Router() {
         <Route path="/our-team" component={OurTeam} />
         <Route path="/past-success" component={PastSuccess} />
         <Route path="/client-request" component={ClientRequest} />
-        
+        {LEGACY_PUBLIC_REDIRECTS.map(({ from, to }) => (
+          <Route key={from} path={from}>
+            <Redirect to={to} />
+          </Route>
+        ))}
+
         <Route path="/login/*?" component={SignInPage} />
 
         <Route path="/sign-in/*?">
@@ -212,7 +218,7 @@ function Router() {
                 <Route path="/portal/courses/:courseId" component={PortalCourse} />
                 <Route path="/portal/courses/:courseId/sessions/:sessionId" component={PortalSession} />
                 <Route path="/portal/assignments/:assignmentId" component={PortalAssignment} />
-                <Route component={NotFound} />
+                <Route>{() => <NotFound embedded />}</Route>
               </Switch>
             </Shell>
           </SignedIn>
@@ -270,7 +276,7 @@ function Router() {
                 <Route path="/tutor/courses/:courseId" component={TutorCourse} />
                 <Route path="/tutor/sessions/:sessionId" component={TutorSession} />
                 <Route path="/tutor/attempts/:attemptId" component={TutorAttempt} />
-                <Route component={NotFound} />
+                <Route>{() => <NotFound embedded />}</Route>
               </Switch>
               </Shell>
             </RoleBoundary>
@@ -333,7 +339,7 @@ function Router() {
                   <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
                 </Route>
                 <Route path="/admin" component={AdminDashboard} />
-                <Route component={NotFound} />
+                <Route>{() => <NotFound embedded />}</Route>
               </Switch>
               </Shell>
             </RoleBoundary>
@@ -343,7 +349,7 @@ function Router() {
           </SignedOut>
         </Route>
 
-        <Route component={NotFound} />
+        <Route>{() => <NotFound />}</Route>
       </Switch>
     </RoutedErrorBoundary>
   );

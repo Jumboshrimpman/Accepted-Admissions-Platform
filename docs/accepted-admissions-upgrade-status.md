@@ -1,73 +1,52 @@
 # Accepted Admissions platform upgrade status
 
-## Implemented in this phase
+## Current SAT catalog (source of truth: code + migrations 0023/0024)
 
-- Added a durable `viewer` application role and `viewer_links` relationship. Viewer access is deny-by-default, scoped to a linked student, and blocked for every non-read API request with `VIEW_ONLY`.
-- Added the public SAT offerings, Our Team, Past Success, and Client Request routes using the existing visual system.
-- Added public SAT product records with the requested prices and effective hourly rates:
-  - Single SAT session — $130 for 1 hour
-  - SAT 5-hour package — $800 for 5 hours
-  - SAT 10-hour package — $1,500 for 10 hours
-  - SAT 20-hour package — $2,400 for 20 hours
-- Added administrator-editable foundations for tutor profiles, public content, availability rules, calendar connections, credits, invoices, payments, leads, compensation rates, and private meeting records.
-- Published Xavier Morales and Eunice Chon’s approved source-site titles, biographies, headshots, subjects, LinkedIn links, and useful image alt text behind an administrator-controlled public approval flag.
-- Published the approved Past Success testimonial, preserved Sarah M.’s attribution, explanatory copy, and seven source-site school images with administrator-editable alt text.
-- Added administrator editing controls for public tutor profiles and the Past Success page, including publish/draft status, SEO metadata, attribution, and school image metadata.
-- Added Michelle Makarem’s pending client record and one original prepaid SAT hour. The `pending:` Clerk identifier is not an authorization credential; a later allowlisted Clerk identity is reconciled to this record by server-side account provisioning.
-- Added server-side client-request validation, phone normalization, consent checks, private lead storage, and a basic per-IP rate limit.
-- Added administrator operational and financial snapshot fields, including a clearly labeled gross profit calculation and provider readiness states.
-- Added the visible “Back to Home” link on the portal sign-in screen.
-- Removed the old enrollment status message from the application and replaced it with the neutral “SAT and IELTS program · Fall 2026” label.
-- Added prepaid SAT booking for eligible tutors, including server-validated availability, atomic credit reservation, provider event IDs, cancellation with credit restoration, and rescheduling.
-- Added independently scoped Google Calendar OAuth and tutor controls for Xavier Morales and Eunice Chon; booking exposes only free/busy-derived slots and explicit disconnected states.
-- Added Stripe-hosted SAT Checkout and invoice creation, raw-body webhook signature verification, event idempotency, payment/refund status tracking, and exactly-once credit fulfillment.
-- Added editable administrator product catalog controls, invoice line items and issuer/client snapshots, tax/discount totals, payment instructions, manual reconciliation, verified receipt links, invoice states, and audited credit adjustments.
-- Added account-scoped client financial history with verified payment labels, receipt links, source-aware credit history, and remaining balances; unverified links and redirects never fulfill credits.
-- Added role-specific portal email provisioning using Clerk’s server-verified primary email. Existing Clerk ID lists remain supported as explicit compatibility overrides, while conflicting email roles fail closed.
+Public checkout sells two prepaid credit products. Funds settle to Accepted Admissions (`tutorShareCents = 0`).
 
-## External services
+- Single SAT session — **$130** for 1 hour (1 credit)
+- Ten SAT session package — **$1,300** for 10 hours ($130/hour)
 
-The following are intentionally not labeled live:
+The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live Wix `/book-online` still lists $175 SAT and other services; those non-SAT services are inquiry-only in this app.
 
-- Google Calendar: workspace development OAuth credentials and callback are configured. Any provisioned non-viewer account can connect its own calendar; only booking-eligible tutor profiles affect student availability. Live availability or booking still requires a successful Google consent and end-to-end test.
-- Stripe: connector attached. Hosted payment flows are implemented; the deployment webhook signing secret must be configured before signed events can be accepted.
-- Hosted payment redirects use `APP_ORIGIN` in production; configure it to the canonical HTTPS application origin before deployment.
-- Email: not configured. Client requests are stored, but acknowledgements are not sent by an external provider.
-- Otter.ai: disconnected. Manual meeting-record links are supported by the schema; transcripts are not imported or exposed.
+## Implemented on main (post mega-merge)
+
+- Viewer role, public SAT / Our Team / Past Success / Client Request routes, Stripe Checkout, booking with Xavier and Eunice, locally hosted team portraits and school logos, admin people provisioning, AI-native Fall SAT curriculum, dashboard cleanup.
+- Tutor payout / Stripe Connect surfaces remain **deferred** (schema leftovers only; no tutor payout UI).
+- Google Calendar OAuth is implemented; live availability still needs tutor consent.
+
+## Fixed in this harden pass
+
+- Reconciled status-doc pricing with the $130 / $1,300 catalog.
+- Typecheck: `public-team-roster.test.ts` used a multi-line `.ts` import that `tsc` rejected after the Wix-media merge.
+- Landing test no longer forbids the word “package” (it conflicted with the ten-hour offer copy).
+- Removed leftover `useListTutorPayouts` test mocks from payout-surface removal.
+- Deleted unjournaled duplicate-numbered SQL files (`0011_last_rocket_raccoon`, `0013_mean_thor_girl`, `0014_square_krista_starr`). `0018_orphan_ledger_repair` remains the idempotent repair. Added a journal↔SQL 1:1 test.
+- Asserted approved team portraits and school logos exist under `artifacts/accepted-admissions/public/media/`.
+- Public-site polish for replacing Wix:
+  - Redirect `/book-online` → `/sat`; `/campus-tours` and `/service-page/*` → `/client-request`.
+  - Visitor 404 (no developer “forgot to add the page” copy) with links home / SAT / guidance.
+  - Footer contact `info@acceptedadmissions.org` (already public on the live site).
+  - Home credibility line names Harvard students and recent graduates.
+  - SAT page points other live-site services and case-by-case financial aid to the guidance form.
+  - SAT public-content seed copy updated for the two-product catalog (untouched rows only).
+
+## External services (not labeled live)
+
+- Google Calendar: OAuth is wired. Booking-eligible tutors must complete consent from `/tutor`.
+- Stripe: Checkout and signed webhooks are implemented. Configure `STRIPE_WEBHOOK_SECRET` in host secrets (not Replit) before accepting signed events. Set `APP_ORIGIN` to the canonical HTTPS origin.
+- Email: not configured. Client requests are stored; no external acknowledgement is sent.
+- Otter.ai: disconnected.
 
 ## Owner input still required
 
-- Confirm and invite the intended development or production Clerk accounts before adding their addresses to the role-specific `ACCEPTED_*_EMAILS` lists. Existing invitation work remains separately gated. Development and production Clerk user stores remain separate, but a newly issued Clerk ID can reclaim the same provisioned local account through its verified email.
-- Configure the Stripe webhook signing secret through Replit Secrets and complete a test-mode Checkout/invoice/refund pass before accepting live payments.
-- Xavier’s development account is provisioned under `xsfam6@gmail.com`; he must complete Google consent from `/tutor` for the live provider check. Eunice’s invitation, allowlisting, and Google consent are explicitly deferred by owner direction.
-- Define final cancellation, credit-restoration, invoice, refund, and privacy-policy rules.
+1. **Clerk invites** — confirm production/development addresses, invite in the matching Clerk instance, then put Clerk user IDs in `ACCEPTED_*_CLERK_USER_IDS` (see `docs/accepted-admissions-provisioning.md`). Do not enable public sign-up.
+2. **Stripe webhook signing secret** — set `STRIPE_WEBHOOK_SECRET` on the deployment host and complete a test-mode Checkout / invoice / refund pass before live charges.
+3. **Google Calendar consent** — Xavier (`xsfam6@gmail.com`) and Eunice (`eunice_chon@berkeley.edu`) both need `/tutor` Google consent before students can see live availability. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done.
+4. **Policy copy** — final cancellation, credit-restoration, invoice, refund, privacy-policy, and financial-aid rules. The public form has a short storage notice only; do not treat that as a legal privacy policy.
+5. **Optional publish decisions** — whether to show the live-site phone (`757-332-4244`) and Virginia Beach address on the new footer; whether remaining Wix pages (blog posts, campus-tour product SKUs) should keep inquiry-only redirects.
 
-## Verification completed
+## Verification
 
-- Database migration generated and applied successfully in development.
-- Full workspace typecheck passed.
-- Accepted Admissions production build passed.
-- API server build passed.
-- Accepted Admissions and API server regression tests passed, including client portal financial rendering and Stripe signature/refund/idempotency coverage (external Stripe tests remain test-mode gated).
-- Booking availability, time-zone, buffer, OAuth signing/encryption, and event-payload tests passed.
-- Google OAuth configuration resolves to the workspace callback with offline consent and only free/busy plus calendar-event scopes.
-- The callback rejects incomplete authorization, calendar routes reject unauthenticated requests, and the running API health check returned HTTP 200.
-- Public product, tutor, and SAT content endpoints returned HTTP 200.
-- Approved public team and Past Success records returned HTTP 200 and excluded unapproved tutor profiles.
-- Invalid client-request input returned HTTP 400.
-- Unauthenticated credit access returned HTTP 401.
-- Public home, SAT offerings, and mobile client-request pages rendered without browser errors.
-- Our Team and Past Success passed desktop and mobile browser checks for approved copy, attribution, image loading and alt text, SEO metadata, responsive navigation, and absence of placeholder content.
-
-## rescue/03-xavier-booking
-
-- Student portal mounts Xavier booking beside prepaid credit balances; viewers stay read-only.
-- Cancellation restores one credit only when made at least 24 hours before the session; late cancellation does not auto-restore.
-- Booking, cancellation, and credit restore write audit logs; administrators receive in-app booking notifications.
-- Google Calendar OAuth uses environment-provided HTTPS `GOOGLE_CALENDAR_REDIRECT_URI` (or HTTPS `${APP_ORIGIN}/api/calendar/oauth/callback`); no committed replit.dev callback.
-- Confirmed appointments use Meet location `https://meet.google.com/rih-iayt-okb`; calendar create failure rolls back the booking and restores the credit.
-
-## rescue/04-tutor-payout-ledger
-
-- Tutor payout tracking (manual obligations, Stripe Connect Xavier onboarding, and Connect transfer reconciliation) is deferred for now and removed from product surfaces.
-- Client purchases continue to settle to Accepted Admissions with `tutorShareCents = 0`; session completion no longer accrues tutor payables.
+- Workspace typecheck, API and frontend tests, and production builds are the checks for this pass (see the PR). Database-backed API tests need `DATABASE_URL`; they are not assumed green in environments without Postgres.
+- Public media files for the approved roster and seven school logos are present in-repo.

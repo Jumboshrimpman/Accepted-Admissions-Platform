@@ -1506,11 +1506,11 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT tutoring",
         seoTitle: "SAT tutoring | Accepted Admissions",
         seoDescription:
-          "Explore the current 60-minute SAT tutoring offer, see the approved price, and continue to secure checkout.",
+          "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
         body: {
           sections: [
-            "Review the single SAT tutoring session currently available online.",
-            "Sign in to purchase, then use the verified prepaid hour to schedule in the client portal.",
+            "Review the current single-hour and ten-hour SAT tutoring credits available online.",
+            "Sign in to purchase, then use verified prepaid credits to schedule with Xavier or Eunice in the client portal.",
           ],
         },
         status: "published",
@@ -1570,6 +1570,45 @@ async function ensureUpgradeSeedData(): Promise<void> {
         isNull(publicContentTable.updatedBy),
       ),
     );
+
+  const [satSeed] = await db
+    .select()
+    .from(publicContentTable)
+    .where(
+      and(
+        eq(publicContentTable.slug, "sat"),
+        isNull(publicContentTable.updatedBy),
+      ),
+    )
+    .limit(1);
+  const satBody =
+    satSeed?.body && typeof satSeed.body === "object" && !Array.isArray(satSeed.body)
+      ? (satSeed.body as Record<string, unknown>)
+      : null;
+  const satSections = Array.isArray(satBody?.sections)
+    ? satBody.sections.filter((section): section is string => typeof section === "string")
+    : [];
+  if (
+    satSeed &&
+    (satSections.some((section) => section.includes("single SAT tutoring session currently available")) ||
+      (typeof satSeed.seoDescription === "string" &&
+        satSeed.seoDescription.includes("current 60-minute SAT tutoring offer")))
+  ) {
+    await db
+      .update(publicContentTable)
+      .set({
+        seoDescription:
+          "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
+        body: {
+          sections: [
+            "Review the current single-hour and ten-hour SAT tutoring credits available online.",
+            "Sign in to purchase, then use verified prepaid credits to schedule with Xavier or Eunice in the client portal.",
+          ],
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(publicContentTable.id, satSeed.id));
+  }
 
   const [successSeed] = await db
     .select()

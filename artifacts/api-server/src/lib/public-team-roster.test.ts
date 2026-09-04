@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
+import * as roster from "./public-team-roster.ts";
+
+const {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   APPROVED_SCHOOL_LOGOS,
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
@@ -11,7 +16,11 @@ import {
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
   rewriteLegacyWixSchoolLogos,
-} from "./public-team-roster.ts";
+} = roster;
+
+const publicDir = fileURLToPath(
+  new URL("../../../accepted-admissions/public", import.meta.url),
+);
 
 test("defines the complete approved public roster in display order", () => {
   assert.deepEqual(PUBLIC_TUTOR_ORDER, [
@@ -35,6 +44,11 @@ test("serves first-party portraits instead of Wix CDN URLs", () => {
   for (const name of PUBLIC_TUTOR_ORDER) {
     assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS[name], /^\/media\/team\//);
     assert.match(LEGACY_WIX_PUBLIC_TEAM_PORTRAITS[name], /^https:\/\/static\.wixstatic\.com\//);
+    assert.equal(
+      existsSync(path.join(publicDir, APPROVED_PUBLIC_TEAM_PORTRAITS[name])),
+      true,
+      `missing portrait file for ${name}`,
+    );
   }
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"], "/media/team/kya-brooks.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"], "/media/team/michael-pecorara.jpg");
@@ -95,6 +109,11 @@ test("rewrites known Wix school logos to local assets", () => {
   assert.equal(APPROVED_SCHOOL_LOGOS.length, 7);
   for (const logo of APPROVED_SCHOOL_LOGOS) {
     assert.match(logo.src, /^\/media\/schools\//);
+    assert.equal(
+      existsSync(path.join(publicDir, logo.src)),
+      true,
+      `missing school logo file for ${logo.name}`,
+    );
   }
   const rewritten = rewriteLegacyWixSchoolLogos(
     Object.entries(LEGACY_WIX_SCHOOL_LOGO_URLS).map(([src], index) => ({

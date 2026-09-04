@@ -25,12 +25,18 @@ describe("Landing visitor paths", () => {
     expect(screen.getByTestId("link-home-sat").getAttribute("href")).toBe("/sat");
     expect(screen.getByTestId("link-home-guidance").getAttribute("href")).toBe("/client-request");
     expect(screen.getByText(/purchase one hour or a ten-hour package at \$130 per credit/i)).toBeTruthy();
+    expect(screen.getByText(/harvard students and recent graduates/i)).toBeTruthy();
     expect(screen.getAllByText(/meet the team to learn about our tutors/i)).not.toHaveLength(0);
     expect(screen.queryByRole("heading", { name: /xavier/i })).toBeNull();
     expect(screen.getByText(/starts with a private inquiry—not checkout/i)).toBeTruthy();
 
     const main = within(screen.getByRole("main"));
     expect(main.queryByText(/Fall 2026/i)).toBeNull();
-    expect(main.queryByText(/package/i)).toBeNull();
+    expect(main.queryByText(/\$175/)).toBeNull();
+    expect(main.queryByText(/\$800/)).toBeNull();
+    expect(main.queryByText(/\$1,500/)).toBeNull();
+    expect(main.queryByText(/\$2,400/)).toBeNull();
+    expect(main.queryByText(/5-hour/i)).toBeNull();
+    expect(main.queryByText(/20-hour/i)).toBeNull();
   });
 });
