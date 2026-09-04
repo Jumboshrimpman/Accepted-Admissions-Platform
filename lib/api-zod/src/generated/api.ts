@@ -326,6 +326,109 @@ export const GetAdminCurriculumResponse = zod.object({
 
 
 /**
+ * @summary List portal access grants for tutors and students
+ */
+export const ListAdminAccessGrantsResponse = zod.object({
+  "grants": zod.array(zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "clerkUserId": zod.string().nullable(),
+  "displayName": zod.string(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "role": zod.enum(['tutor', 'student']),
+  "subject": zod.string(),
+  "active": zod.boolean(),
+  "notes": zod.string().nullable(),
+  "userId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * Creates or reactivates a database access grant for a tutor or student. Administrator and viewer roles cannot be provisioned from this endpoint. Does not send Clerk invitations.
+ * @summary Provision a tutor or student for portal access
+ */
+export const createAdminAccessGrantBodyEmailMin = 3;
+
+export const createAdminAccessGrantBodyDisplayNameMax = 120;
+
+export const createAdminAccessGrantBodyClerkUserIdMin = 3;
+export const createAdminAccessGrantBodyClerkUserIdMax = 128;
+
+export const createAdminAccessGrantBodyNotesMax = 500;
+
+
+
+export const CreateAdminAccessGrantBody = zod.object({
+  "email": zod.string().min(createAdminAccessGrantBodyEmailMin),
+  "displayName": zod.string().min(1).max(createAdminAccessGrantBodyDisplayNameMax),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Clerk user ID when already known; otherwise access matches the verified primary email.'),
+  "notes": zod.string().max(createAdminAccessGrantBodyNotesMax).nullish()
+})
+
+export const CreateAdminAccessGrantResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "clerkUserId": zod.string().nullable(),
+  "displayName": zod.string(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "role": zod.enum(['tutor', 'student']),
+  "subject": zod.string(),
+  "active": zod.boolean(),
+  "notes": zod.string().nullable(),
+  "userId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Update or revoke a tutor or student access grant
+ */
+export const UpdateAdminAccessGrantParams = zod.object({
+  "grantId": zod.coerce.string()
+})
+
+export const updateAdminAccessGrantBodyDisplayNameMax = 120;
+
+export const updateAdminAccessGrantBodyClerkUserIdMin = 3;
+export const updateAdminAccessGrantBodyClerkUserIdMax = 128;
+
+export const updateAdminAccessGrantBodyNotesMax = 500;
+
+
+
+export const UpdateAdminAccessGrantBody = zod.object({
+  "displayName": zod.string().min(1).max(updateAdminAccessGrantBodyDisplayNameMax).optional(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).optional().describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "clerkUserId": zod.string().min(updateAdminAccessGrantBodyClerkUserIdMin).max(updateAdminAccessGrantBodyClerkUserIdMax).nullish(),
+  "notes": zod.string().max(updateAdminAccessGrantBodyNotesMax).nullish(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateAdminAccessGrantResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "clerkUserId": zod.string().nullable(),
+  "displayName": zod.string(),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "role": zod.enum(['tutor', 'student']),
+  "subject": zod.string(),
+  "active": zod.boolean(),
+  "notes": zod.string().nullable(),
+  "userId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Get an administrator-authorized read-only client dashboard preview
  */
 export const GetAdminClientDashboardParams = zod.object({

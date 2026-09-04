@@ -98,10 +98,16 @@ import {
   AttachQuestionToAssignmentResponse,
   CreateAdminAssignmentBody,
   CreateAdminAssignmentResponse,
+  CreateAdminAccessGrantBody,
+  CreateAdminAccessGrantResponse,
   CreateAdminSessionBody,
   CreateAdminSessionResponse,
   GetAdminClientDashboardParams,
   GetAdminClientDashboardResponse,
+  ListAdminAccessGrantsResponse,
+  UpdateAdminAccessGrantBody,
+  UpdateAdminAccessGrantParams,
+  UpdateAdminAccessGrantResponse,
   UpdateAdminNotificationBody,
   UpdateAdminNotificationParams,
   UpdateAdminNotificationResponse,
@@ -191,10 +197,17 @@ import {
   UpsertSessionArtifactResponse,
 } from "@workspace/api-zod";
 import {
-  configuredAccess,
+  accessFromRoleCategory,
   configuredAccessConflicts,
+  envRoleCategoriesForIdentity,
+  isProvisionableRoleCategory,
   normalizeProvisionedEmail,
+  resolvePortalAccess,
+  subjectsForRoleCategory,
+  tutorTitleForRoleCategory,
   type ConfiguredAccess,
+  type DatabaseAccessGrant,
+  type ProvisionableRoleCategory,
   verifiedPrimaryEmail,
 } from "../lib/access-config";
 import {
@@ -216,6 +229,7 @@ import {
   invoicesTable,
   loginActivityTable,
   paymentsTable,
+  portalAccessGrantsTable,
   publicContentTable,
   questionsTable,
   responsesTable,
@@ -231,6 +245,7 @@ import {
   usersTable,
   viewerLinksTable,
   type AppUser,
+  type PortalAccessGrant,
 } from "@workspace/db";
 
 type AuthedRequest = Request & { appUser?: AppUser };
@@ -1689,6 +1704,195 @@ async function ensureUpgradeSeedData(): Promise<void> {
   }
 }
 
+async function loadActiveDatabaseAccessGrants(
+  clerkUserId?: string,
+  email?: string,
+): Promise<DatabaseAccessGrant[]> {
+  const normalizedEmail = email ? normalizeProvisionedEmail(email) : undefined;
+  const identityFilters = [
+    ...(clerkUserId
+      ? [eq(portalAccessGrantsTable.clerkUserId, clerkUserId)]
+      : []),
+    ...(normalizedEmail
+      ? [eq(portalAccessGrantsTable.email, normalizedEmail)]
+      : []),
+  ];
+  if (identityFilters.length === 0) return [];
+  const rows = await db
+    .select({
+      email: portalAccessGrantsTable.email,
+      clerkUserId: portalAccessGrantsTable.clerkUserId,
+      roleCategory: portalAccessGrantsTable.roleCategory,
+      active: portalAccessGrantsTable.active,
+    })
+    .from(portalAccessGrantsTable)
+    .where(
+      and(eq(portalAccessGrantsTable.active, true), or(...identityFilters)),
+    );
+  return rows.map((row) => ({
+    email: row.email,
+    clerkUserId: row.clerkUserId,
+    roleCategory: row.roleCategory,
+    active: row.active,
+  }));
+}
+
+async function resolveIdentityAccess(
+  clerkUserId: string,
+  email?: string,
+): Promise<ReturnType<typeof resolvePortalAccess>> {
+  const databaseGrants = await loadActiveDatabaseAccessGrants(
+    clerkUserId,
+    email,
+  );
+  return resolvePortalAccess(clerkUserId, email, { databaseGrants });
+}
+
+function adminAccessGrantShape(grant: PortalAccessGrant) {
+  const access = accessFromRoleCategory(grant.roleCategory);
+  return {
+    id: grant.id,
+    email: grant.email,
+    clerkUserId: grant.clerkUserId,
+    displayName: grant.displayName,
+    roleCategory: grant.roleCategory,
+    role: access.role as "tutor" | "student",
+    subject: access.subject,
+    active: grant.active,
+    notes: grant.notes,
+    userId: grant.userId,
+    createdAt: grant.createdAt.toISOString(),
+    updatedAt: grant.updatedAt.toISOString(),
+    revokedAt: grant.revokedAt ? grant.revokedAt.toISOString() : null,
+  };
+}
+
+function pendingClerkUserId(email: string): string {
+  return `pending:${normalizeProvisionedEmail(email)}`;
+}
+
+function looksLikeClerkUserId(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    trimmed.length >= 3 &&
+    !trimmed.includes("@") &&
+    !trimmed.startsWith("pending:")
+  );
+}
+
+async function ensureProvisionedAppUser(input: {
+  email: string;
+  displayName: string;
+  roleCategory: ProvisionableRoleCategory;
+  clerkUserId?: string | null;
+}): Promise<AppUser> {
+  const email = normalizeProvisionedEmail(input.email);
+  const access = accessFromRoleCategory(input.roleCategory);
+  const desiredClerkUserId =
+    input.clerkUserId && looksLikeClerkUserId(input.clerkUserId)
+      ? input.clerkUserId.trim()
+      : pendingClerkUserId(email);
+
+  const [byEmail] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+  const [byClerk] =
+    desiredClerkUserId && !desiredClerkUserId.startsWith("pending:")
+      ? await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.clerkUserId, desiredClerkUserId))
+          .limit(1)
+      : [];
+
+  if (byClerk && byEmail && byClerk.id !== byEmail.id) {
+    throw new Error("CLERK_USER_EMAIL_CONFLICT");
+  }
+
+  const existing = byEmail ?? byClerk;
+  let user: AppUser;
+  if (existing) {
+    const nextClerkUserId =
+      existing.clerkUserId.startsWith("pending:") ||
+      existing.clerkUserId === desiredClerkUserId
+        ? desiredClerkUserId
+        : existing.clerkUserId;
+    [user] = await db
+      .update(usersTable)
+      .set({
+        displayName: input.displayName.trim(),
+        role: access.role,
+        clerkUserId: nextClerkUserId,
+        email,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, existing.id))
+      .returning();
+  } else {
+    [user] = await db
+      .insert(usersTable)
+      .values({
+        clerkUserId: desiredClerkUserId,
+        email,
+        displayName: input.displayName.trim(),
+        role: access.role,
+      })
+      .returning();
+  }
+
+  await syncConfiguredAccess(user!, access);
+
+  if (access.role === "tutor") {
+    const subjects = subjectsForRoleCategory(input.roleCategory);
+    const title = tutorTitleForRoleCategory(
+      input.roleCategory as Exclude<ProvisionableRoleCategory, "student">,
+    );
+    const [existingProfile] = await db
+      .select()
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.email, email))
+      .limit(1);
+    if (existingProfile) {
+      await db
+        .update(tutorProfilesTable)
+        .set({
+          userId: user!.id,
+          name: input.displayName.trim(),
+          title,
+          subjects,
+          active: true,
+          bookingEligible: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(tutorProfilesTable.id, existingProfile.id));
+    } else {
+      await db.insert(tutorProfilesTable).values({
+        userId: user!.id,
+        email,
+        name: input.displayName.trim(),
+        title,
+        subjects,
+        active: true,
+        bookingEligible: true,
+        publicApproved: false,
+      });
+    }
+  } else {
+    await db
+      .update(tutorProfilesTable)
+      .set({
+        active: false,
+        bookingEligible: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(tutorProfilesTable.email, email));
+  }
+
+  return user!;
+}
+
 async function syncConfiguredAccess(
   user: AppUser,
   access: ConfiguredAccess,
@@ -1842,14 +2046,14 @@ async function requireAppUser(
     .from(usersTable)
     .where(eq(usersTable.clerkUserId, clerkUserId))
     .limit(1);
-  const initialAccess = configuredAccess(clerkUserId);
+  const initialAccess = await resolveIdentityAccess(clerkUserId);
   let configured = initialAccess.access;
   let configurationConflict = initialAccess.conflict;
   let identity: { email?: string; displayName?: string } | undefined;
-  if (!configured) {
+  if (!configured && !configurationConflict) {
     try {
       identity = await clerkIdentity(auth, clerkUserId, appUser, true);
-      const emailAccess = configuredAccess(
+      const emailAccess = await resolveIdentityAccess(
         clerkUserId,
         identity.email ? normalizeProvisionedEmail(identity.email) : undefined,
       );
@@ -2005,6 +2209,30 @@ async function requireAppUser(
     return;
   }
   await syncConfiguredAccess(appUser, configured);
+  if (configured.role === "tutor" || configured.role === "student") {
+    const grantEmail = normalizeProvisionedEmail(appUser.email);
+    await db
+      .update(portalAccessGrantsTable)
+      .set({
+        clerkUserId,
+        userId: appUser.id,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(portalAccessGrantsTable.active, true),
+          eq(portalAccessGrantsTable.email, grantEmail),
+          or(
+            isNull(portalAccessGrantsTable.clerkUserId),
+            eq(portalAccessGrantsTable.clerkUserId, clerkUserId),
+            eq(
+              portalAccessGrantsTable.clerkUserId,
+              pendingClerkUserId(grantEmail),
+            ),
+          ),
+        ),
+      );
+  }
   const clerkSessionId =
     auth.sessionId ?? claimString(auth.sessionClaims, "sid");
   await recordSuccessfulLogin(appUser.id, clerkSessionId);
@@ -6146,6 +6374,283 @@ async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSe
 function adminMutationError(res: Response, message: string): void {
   res.status(400).json({ error: message });
 }
+
+router.get(
+  "/admin/access-grants",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    const grants = await db
+      .select()
+      .from(portalAccessGrantsTable)
+      .orderBy(
+        desc(portalAccessGrantsTable.active),
+        desc(portalAccessGrantsTable.updatedAt),
+      );
+    res.json(
+      ListAdminAccessGrantsResponse.parse({
+        grants: grants.map(adminAccessGrantShape),
+      }),
+    );
+  },
+);
+
+router.post(
+  "/admin/access-grants",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateAdminAccessGrantBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, "Invalid provisioning details.");
+      return;
+    }
+    if (!isProvisionableRoleCategory(body.data.roleCategory)) {
+      res.status(400).json({
+        error: "Only tutor and student roles can be provisioned here.",
+      });
+      return;
+    }
+    const email = normalizeProvisionedEmail(body.data.email);
+    if (!email.includes("@")) {
+      adminMutationError(res, "A valid email address is required.");
+      return;
+    }
+    const clerkUserId =
+      body.data.clerkUserId === undefined || body.data.clerkUserId === null
+        ? null
+        : body.data.clerkUserId.trim();
+    if (clerkUserId && !looksLikeClerkUserId(clerkUserId)) {
+      adminMutationError(res, "Clerk user ID looks invalid.");
+      return;
+    }
+
+    const envCategories = envRoleCategoriesForIdentity(
+      clerkUserId ?? undefined,
+      email,
+    );
+    if (envCategories.includes("administrator") || envCategories.includes("viewer")) {
+      res.status(409).json({
+        error:
+          "This identity is already configured as an administrator or viewer in environment allowlists.",
+      });
+      return;
+    }
+    const desiredAccess = accessFromRoleCategory(body.data.roleCategory);
+    for (const category of envCategories) {
+      const envAccess = accessFromRoleCategory(category);
+      if (
+        envAccess.role !== desiredAccess.role ||
+        envAccess.subject !== desiredAccess.subject
+      ) {
+        res.status(409).json({
+          error:
+            "This identity already has a conflicting role in environment allowlists.",
+        });
+        return;
+      }
+    }
+
+    let user: AppUser;
+    try {
+      user = await ensureProvisionedAppUser({
+        email,
+        displayName: body.data.displayName,
+        roleCategory: body.data.roleCategory,
+        clerkUserId,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "CLERK_USER_EMAIL_CONFLICT") {
+        res.status(409).json({
+          error:
+            "That Clerk user ID is already linked to a different email address.",
+        });
+        return;
+      }
+      throw error;
+    }
+
+    const [existingGrant] = await db
+      .select()
+      .from(portalAccessGrantsTable)
+      .where(eq(portalAccessGrantsTable.email, email))
+      .limit(1);
+
+    const grantValues = {
+      email,
+      clerkUserId,
+      displayName: body.data.displayName.trim(),
+      roleCategory: body.data.roleCategory,
+      active: true,
+      notes: body.data.notes?.trim() || null,
+      provisionedByUserId: req.appUser!.id,
+      userId: user.id,
+      updatedAt: new Date(),
+      revokedAt: null as Date | null,
+    };
+
+    const [grant] = existingGrant
+      ? await db
+          .update(portalAccessGrantsTable)
+          .set(grantValues)
+          .where(eq(portalAccessGrantsTable.id, existingGrant.id))
+          .returning()
+      : await db
+          .insert(portalAccessGrantsTable)
+          .values(grantValues)
+          .returning();
+
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: existingGrant ? "access.grant.updated" : "access.grant.created",
+      entityType: "portal_access_grant",
+      entityId: grant!.id,
+      metadata: {
+        email,
+        roleCategory: body.data.roleCategory,
+        role: desiredAccess.role,
+        subject: desiredAccess.subject,
+        userId: user.id,
+      },
+    });
+
+    res
+      .status(201)
+      .json(CreateAdminAccessGrantResponse.parse(adminAccessGrantShape(grant!)));
+  },
+);
+
+router.patch(
+  "/admin/access-grants/:grantId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminAccessGrantParams.safeParse(req.params);
+    const body = UpdateAdminAccessGrantBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "Invalid access grant update.");
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(portalAccessGrantsTable)
+      .where(eq(portalAccessGrantsTable.id, params.data.grantId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Access grant not found" });
+      return;
+    }
+
+    const nextRoleCategory = body.data.roleCategory ?? existing.roleCategory;
+    if (!isProvisionableRoleCategory(nextRoleCategory)) {
+      res.status(400).json({
+        error: "Only tutor and student roles can be provisioned here.",
+      });
+      return;
+    }
+    const nextClerkUserId =
+      body.data.clerkUserId === undefined
+        ? existing.clerkUserId
+        : body.data.clerkUserId === null
+          ? null
+          : body.data.clerkUserId.trim();
+    if (nextClerkUserId && !looksLikeClerkUserId(nextClerkUserId)) {
+      adminMutationError(res, "Clerk user ID looks invalid.");
+      return;
+    }
+    const nextActive = body.data.active ?? existing.active;
+    const nextDisplayName =
+      body.data.displayName?.trim() || existing.displayName;
+    const nextNotes =
+      body.data.notes === undefined
+        ? existing.notes
+        : body.data.notes?.trim() || null;
+
+    if (nextActive) {
+      const envCategories = envRoleCategoriesForIdentity(
+        nextClerkUserId ?? undefined,
+        existing.email,
+      );
+      if (
+        envCategories.includes("administrator") ||
+        envCategories.includes("viewer")
+      ) {
+        res.status(409).json({
+          error:
+            "This identity is already configured as an administrator or viewer in environment allowlists.",
+        });
+        return;
+      }
+      const desiredAccess = accessFromRoleCategory(nextRoleCategory);
+      for (const category of envCategories) {
+        const envAccess = accessFromRoleCategory(category);
+        if (
+          envAccess.role !== desiredAccess.role ||
+          envAccess.subject !== desiredAccess.subject
+        ) {
+          res.status(409).json({
+            error:
+              "This identity already has a conflicting role in environment allowlists.",
+          });
+          return;
+        }
+      }
+    }
+
+    let userId = existing.userId;
+    if (nextActive) {
+      try {
+        const user = await ensureProvisionedAppUser({
+          email: existing.email,
+          displayName: nextDisplayName,
+          roleCategory: nextRoleCategory,
+          clerkUserId: nextClerkUserId,
+        });
+        userId = user.id;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "CLERK_USER_EMAIL_CONFLICT"
+        ) {
+          res.status(409).json({
+            error:
+              "That Clerk user ID is already linked to a different email address.",
+          });
+          return;
+        }
+        throw error;
+      }
+    }
+
+    const [grant] = await db
+      .update(portalAccessGrantsTable)
+      .set({
+        displayName: nextDisplayName,
+        roleCategory: nextRoleCategory,
+        clerkUserId: nextClerkUserId,
+        notes: nextNotes,
+        active: nextActive,
+        userId,
+        revokedAt: nextActive ? null : new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(portalAccessGrantsTable.id, existing.id))
+      .returning();
+
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: nextActive ? "access.grant.updated" : "access.grant.revoked",
+      entityType: "portal_access_grant",
+      entityId: grant!.id,
+      metadata: {
+        email: grant!.email,
+        roleCategory: grant!.roleCategory,
+        active: grant!.active,
+      },
+    });
+
+    res.json(
+      UpdateAdminAccessGrantResponse.parse(adminAccessGrantShape(grant!)),
+    );
+  },
+);
 
 router.get(
   "/admin/curriculum",

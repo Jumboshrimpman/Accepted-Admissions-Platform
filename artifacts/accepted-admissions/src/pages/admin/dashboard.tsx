@@ -27,11 +27,11 @@ import {
 } from "@/lib/session-display";
 
 const operationLinks = [
-  { href: "/admin/curriculum?section=people", title: "Clients & tutors", detail: "People and subject access.", icon: Users },
-  { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish and archive programs.", icon: BookOpen },
-  { href: "/admin/curriculum?section=curriculum", title: "Curriculum", detail: "Assignments and materials.", icon: ClipboardList },
-  { href: "/admin/curriculum?section=sessions", title: "Sessions", detail: "Schedules and Meet links.", icon: CalendarDays },
-  { href: "/admin/financials", title: "Finance", detail: "Invoices, credits, and payouts.", icon: WalletCards },
+  { href: "/admin/curriculum?section=people", title: "Clients & tutors", detail: "Provision tutors and students, review people, and subject access.", icon: Users },
+  { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish, archive, and update program details.", icon: BookOpen },
+  { href: "/admin/curriculum?section=curriculum", title: "Curriculum", detail: "Assignments, materials, question bank, and submissions.", icon: ClipboardList },
+  { href: "/admin/curriculum?section=sessions", title: "Sessions", detail: "Participants, Meet links, status, and conflicts.", icon: CalendarDays },
+  { href: "/admin/financials", title: "Finance", detail: "Invoices and credits.", icon: WalletCards },
   { href: "/admin/content", title: "Public content", detail: "Team and student stories.", icon: FileText },
 ];
 

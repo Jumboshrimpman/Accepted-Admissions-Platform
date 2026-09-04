@@ -129,6 +129,65 @@ paths:
               schema: { $ref: "#/components/schemas/AdminCurriculum" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/access-grants:
+    get:
+      operationId: listAdminAccessGrants
+      tags: [administration]
+      summary: List portal access grants for tutors and students
+      responses:
+        "200":
+          description: Access grants
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccessGrantList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createAdminAccessGrant
+      tags: [administration]
+      summary: Provision a tutor or student for portal access
+      description: >
+        Creates or reactivates a database access grant for a tutor or student.
+        Administrator and viewer roles cannot be provisioned from this endpoint.
+        Does not send Clerk invitations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAccessGrantInput" }
+      responses:
+        "201":
+          description: Provisioned access grant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccessGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /admin/access-grants/{grantId}:
+    patch:
+      operationId: updateAdminAccessGrant
+      tags: [administration]
+      summary: Update or revoke a tutor or student access grant
+      parameters:
+        - $ref: "#/components/parameters/GrantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAccessGrantUpdate" }
+      responses:
+        "200":
+          description: Updated access grant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAccessGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/clients/{clientId}/dashboard:
     get:
       operationId: getAdminClientDashboard
@@ -1318,6 +1377,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    GrantId:
+      name: grantId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     Unauthorized:
       description: Authentication required
@@ -1698,6 +1762,75 @@ components:
     Role:
       type: string
       enum: [administrator, tutor, student, viewer]
+    ProvisionableRoleCategory:
+      type: string
+      description: Roles that administrators may provision from the portal (never administrator or viewer).
+      enum: [sat_tutor, english_tutor, tutor, student]
+    AdminAccessGrant:
+      type: object
+      required:
+        [
+          id,
+          email,
+          clerkUserId,
+          displayName,
+          roleCategory,
+          role,
+          subject,
+          active,
+          notes,
+          userId,
+          createdAt,
+          updatedAt,
+          revokedAt,
+        ]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        email: { type: string }
+        clerkUserId: { type: ["string", "null"] }
+        displayName: { type: string }
+        roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
+        role: { type: string, enum: [tutor, student] }
+        subject: { type: string }
+        active: { type: boolean }
+        notes: { type: ["string", "null"] }
+        userId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+    AdminAccessGrantList:
+      type: object
+      required: [grants]
+      additionalProperties: false
+      properties:
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAccessGrant" }
+    AdminAccessGrantInput:
+      type: object
+      required: [email, displayName, roleCategory]
+      additionalProperties: false
+      properties:
+        email: { type: string, minLength: 3 }
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
+        clerkUserId:
+          type: ["string", "null"]
+          description: Optional Clerk user ID when already known; otherwise access matches the verified primary email.
+          minLength: 3
+          maxLength: 128
+        notes: { type: ["string", "null"], maxLength: 500 }
+    AdminAccessGrantUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+        roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
+        clerkUserId: { type: ["string", "null"], minLength: 3, maxLength: 128 }
+        notes: { type: ["string", "null"], maxLength: 500 }
+        active: { type: boolean }
     CurrentUser:
       type: object
       required: [id, displayName, email, role]

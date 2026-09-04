@@ -21,8 +21,26 @@ export const ACCESS_ROLE_CATEGORIES = [
 
 export type AccessRoleCategory = (typeof ACCESS_ROLE_CATEGORIES)[number];
 
+/** Roles that administrators may provision from the portal UI. */
+export const PROVISIONABLE_ROLE_CATEGORIES = [
+  "sat_tutor",
+  "english_tutor",
+  "tutor",
+  "student",
+] as const;
+
+export type ProvisionableRoleCategory =
+  (typeof PROVISIONABLE_ROLE_CATEGORIES)[number];
+
 export type AccessConfigurationConflict = {
   roleCategories: AccessRoleCategory[];
+};
+
+export type DatabaseAccessGrant = {
+  email: string;
+  clerkUserId: string | null;
+  roleCategory: ProvisionableRoleCategory;
+  active?: boolean;
 };
 
 function configuredSet(
@@ -48,6 +66,62 @@ export function verifiedPrimaryEmail(user: {
   return primaryEmail.emailAddress
     ? normalizeProvisionedEmail(primaryEmail.emailAddress)
     : undefined;
+}
+
+export function accessFromRoleCategory(
+  roleCategory: AccessRoleCategory,
+): ConfiguredAccess {
+  switch (roleCategory) {
+    case "administrator":
+      return { role: "administrator", subject: "all" };
+    case "sat_tutor":
+      return { role: "tutor", subject: "SAT" };
+    case "english_tutor":
+      return { role: "tutor", subject: "IELTS" };
+    case "tutor":
+      return { role: "tutor", subject: "all" };
+    case "student":
+      return { role: "student", subject: "all" };
+    case "viewer":
+      return {
+        role: "viewer",
+        subject: "student:taito0525@gmail.com",
+      };
+  }
+}
+
+export function isProvisionableRoleCategory(
+  value: string,
+): value is ProvisionableRoleCategory {
+  return (PROVISIONABLE_ROLE_CATEGORIES as readonly string[]).includes(value);
+}
+
+export function subjectsForRoleCategory(
+  roleCategory: ProvisionableRoleCategory,
+): string[] {
+  switch (roleCategory) {
+    case "sat_tutor":
+      return ["SAT"];
+    case "english_tutor":
+      return ["IELTS", "English"];
+    case "tutor":
+      return ["SAT", "IELTS", "English"];
+    case "student":
+      return [];
+  }
+}
+
+export function tutorTitleForRoleCategory(
+  roleCategory: Exclude<ProvisionableRoleCategory, "student">,
+): string {
+  switch (roleCategory) {
+    case "sat_tutor":
+      return "SAT Tutor";
+    case "english_tutor":
+      return "English & IELTS Tutor";
+    case "tutor":
+      return "Tutor";
+  }
 }
 
 const accessAllowlistDefinitions: Array<{
@@ -124,6 +198,20 @@ const accessAllowlistDefinitions: Array<{
   },
 ];
 
+function decisionFromMatches(matches: ConfiguredAccess[]): AccessDecision {
+  if (matches.length > 1) {
+    const unique = new Map(
+      matches.map((match) => [`${match.role}:${match.subject}`, match]),
+    );
+    if (unique.size > 1) return { access: null, conflict: true };
+    return { access: [...unique.values()][0]!, conflict: false };
+  }
+  if (matches.length === 1) {
+    return { access: matches[0]!, conflict: false };
+  }
+  return { access: null, conflict: false };
+}
+
 export function configuredAccessConflicts(
   env: NodeJS.ProcessEnv = process.env,
 ): AccessConfigurationConflict[] {
@@ -168,6 +256,50 @@ export function configuredAccess(
   email?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): AccessDecision {
+  return resolvePortalAccess(clerkUserId, email, { env });
+}
+
+export function databaseConfiguredAccess(
+  clerkUserId: string,
+  email: string | undefined,
+  grants: DatabaseAccessGrant[],
+): AccessDecision {
+  const normalizedEmail = email ? normalizeProvisionedEmail(email) : "";
+  const matches: ConfiguredAccess[] = [];
+  for (const grant of grants) {
+    if (grant.active === false) continue;
+    const grantEmail = normalizeProvisionedEmail(grant.email);
+    const clerkMatch =
+      Boolean(grant.clerkUserId) && grant.clerkUserId === clerkUserId;
+    const emailMatch =
+      Boolean(normalizedEmail) && grantEmail === normalizedEmail;
+    if (!clerkMatch && !emailMatch) continue;
+    matches.push(accessFromRoleCategory(grant.roleCategory));
+  }
+  return decisionFromMatches(matches);
+}
+
+export function mergeAccessDecisions(
+  ...decisions: AccessDecision[]
+): AccessDecision {
+  if (decisions.some((decision) => decision.conflict)) {
+    return { access: null, conflict: true };
+  }
+  const matches = decisions
+    .map((decision) => decision.access)
+    .filter((access): access is ConfiguredAccess => Boolean(access));
+  return decisionFromMatches(matches);
+}
+
+export function resolvePortalAccess(
+  clerkUserId: string,
+  email?: string,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    databaseGrants?: DatabaseAccessGrant[];
+  } = {},
+): AccessDecision {
+  const env = options.env ?? process.env;
   const adminIds = configuredSet(env, "ACCEPTED_ADMIN_CLERK_USER_IDS");
   const satTutorIds = configuredSet(env, "ACCEPTED_SAT_TUTOR_CLERK_USER_IDS");
   const englishTutorIds = configuredSet(
@@ -180,59 +312,100 @@ export function configuredAccess(
 
   const idMatches: ConfiguredAccess[] = [];
   if (adminIds.has(clerkUserId)) {
-    idMatches.push({ role: "administrator", subject: "all" });
+    idMatches.push(accessFromRoleCategory("administrator"));
   }
   if (satTutorIds.has(clerkUserId)) {
-    idMatches.push({ role: "tutor", subject: "SAT" });
+    idMatches.push(accessFromRoleCategory("sat_tutor"));
   }
   if (englishTutorIds.has(clerkUserId)) {
-    idMatches.push({ role: "tutor", subject: "IELTS" });
+    idMatches.push(accessFromRoleCategory("english_tutor"));
   }
   if (tutorIds.has(clerkUserId)) {
-    idMatches.push({ role: "tutor", subject: "all" });
+    idMatches.push(accessFromRoleCategory("tutor"));
   }
   if (studentIds.has(clerkUserId)) {
-    idMatches.push({ role: "student", subject: "all" });
+    idMatches.push(accessFromRoleCategory("student"));
   }
   if (viewerIds.has(clerkUserId)) {
-    idMatches.push({
-      role: "viewer",
-      subject: "student:taito0525@gmail.com",
-    });
+    idMatches.push(accessFromRoleCategory("viewer"));
   }
-  if (idMatches.length > 1) return { access: null, conflict: true };
-  if (idMatches.length === 1) {
-    return { access: idMatches[0]!, conflict: false };
+  const idDecision = decisionFromMatches(idMatches);
+  if (idDecision.access || idDecision.conflict) {
+    return mergeAccessDecisions(
+      idDecision,
+      databaseConfiguredAccess(
+        clerkUserId,
+        email,
+        options.databaseGrants ?? [],
+      ),
+    );
   }
 
   const normalizedEmail = email ? normalizeProvisionedEmail(email) : "";
-  if (!normalizedEmail) return { access: null, conflict: false };
+  if (!normalizedEmail) {
+    return databaseConfiguredAccess(
+      clerkUserId,
+      email,
+      options.databaseGrants ?? [],
+    );
+  }
 
   const emailSet = (name: string) =>
     configuredSet(env, name, normalizeProvisionedEmail);
   const emailMatches: ConfiguredAccess[] = [];
   if (emailSet("ACCEPTED_ADMIN_EMAILS").has(normalizedEmail)) {
-    emailMatches.push({ role: "administrator", subject: "all" });
+    emailMatches.push(accessFromRoleCategory("administrator"));
   }
   if (emailSet("ACCEPTED_SAT_TUTOR_EMAILS").has(normalizedEmail)) {
-    emailMatches.push({ role: "tutor", subject: "SAT" });
+    emailMatches.push(accessFromRoleCategory("sat_tutor"));
   }
   if (emailSet("ACCEPTED_ENGLISH_TUTOR_EMAILS").has(normalizedEmail)) {
-    emailMatches.push({ role: "tutor", subject: "IELTS" });
+    emailMatches.push(accessFromRoleCategory("english_tutor"));
   }
   if (emailSet("ACCEPTED_TUTOR_EMAILS").has(normalizedEmail)) {
-    emailMatches.push({ role: "tutor", subject: "all" });
+    emailMatches.push(accessFromRoleCategory("tutor"));
   }
   if (emailSet("ACCEPTED_STUDENT_EMAILS").has(normalizedEmail)) {
-    emailMatches.push({ role: "student", subject: "all" });
+    emailMatches.push(accessFromRoleCategory("student"));
   }
   if (emailSet("ACCEPTED_VIEWER_EMAILS").has(normalizedEmail)) {
-    emailMatches.push({
-      role: "viewer",
-      subject: "student:taito0525@gmail.com",
-    });
+    emailMatches.push(accessFromRoleCategory("viewer"));
   }
 
-  if (emailMatches.length > 1) return { access: null, conflict: true };
-  return { access: emailMatches[0] ?? null, conflict: false };
+  return mergeAccessDecisions(
+    decisionFromMatches(emailMatches),
+    databaseConfiguredAccess(
+      clerkUserId,
+      normalizedEmail,
+      options.databaseGrants ?? [],
+    ),
+  );
+}
+
+/** Returns env role categories that already claim this identity. */
+export function envRoleCategoriesForIdentity(
+  clerkUserId: string | undefined,
+  email: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): AccessRoleCategory[] {
+  const categories = new Set<AccessRoleCategory>();
+  const normalizedEmail = email ? normalizeProvisionedEmail(email) : "";
+  for (const definition of accessAllowlistDefinitions) {
+    const values = configuredSet(
+      env,
+      definition.envName,
+      definition.normalize,
+    );
+    if (definition.kind === "clerkId" && clerkUserId && values.has(clerkUserId)) {
+      categories.add(definition.roleCategory);
+    }
+    if (
+      definition.kind === "email" &&
+      normalizedEmail &&
+      values.has(normalizedEmail)
+    ) {
+      categories.add(definition.roleCategory);
+    }
+  }
+  return [...categories];
 }

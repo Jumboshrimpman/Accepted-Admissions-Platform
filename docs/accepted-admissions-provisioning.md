@@ -1,6 +1,6 @@
 # Accepted Admissions production provisioning
 
-The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is provisioned with Clerk user IDs, never by public self-enrollment. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
+The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is provisioned with Clerk user IDs, never by public self-enrollment. Administrators can also provision **tutors** and **students** from `/admin/curriculum?section=people` without editing environment allowlists; administrator and viewer roles remain environment-only. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
 
 Set the following environment variables as comma-separated Clerk user IDs via
 host Secrets or a local `.env` (see `.env.example`). Do not commit allowlist
@@ -41,8 +41,15 @@ Do not send invitations until the owner confirms these production addresses.
 3. Restart the **API Server** workflow after changing the environment configuration so the new allowlists are loaded.
 4. Reload the browser preview after the API restart, then have each invited user sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
 5. On the first authorized request, the API records the application user and the appropriate PostgreSQL course membership. Tutors also receive a subject-scoped tutor assignment to provisioned students in that course.
-6. Sign in as the administrator and review the **Access provisioning** and **Memberships & audit** panels at `/admin`.
-7. To revoke access, remove the Clerk user ID from the allowlist, restart the API workflow, and revoke the Clerk session/invitation. Remove old PostgreSQL memberships or tutor assignments as part of the offboarding review.
+6. Sign in as the administrator and review **Clients & tutors** at
+   `/admin/curriculum?section=people`. Use **Provision people** to grant
+   student or tutor access without editing environment allowlists.
+   Administrator and viewer roles remain environment-only.
+7. To revoke in-app grants, use **Revoke** on the access grant. To revoke
+   environment allowlist access, remove the Clerk user ID from the allowlist,
+   restart the API workflow, and revoke the Clerk session/invitation. Remove
+   old PostgreSQL memberships or tutor assignments as part of the offboarding
+   review.
 
 An identity not present in an allowlist can authenticate with Clerk but receives no application user, course membership, or private course/session/assignment/attempt/review data. Existing database roles are never selected by the browser. The API records denied requests for previously provisioned users without storing session tokens or passwords.
 

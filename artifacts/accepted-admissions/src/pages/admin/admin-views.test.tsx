@@ -95,6 +95,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
+  getGetAdminCurriculumQueryKey: () => ["/api/admin/curriculum"],
+  getListAdminAccessGrantsQueryKey: () => ["/api/admin/access-grants"],
   useGetAdminOverview: () => ({
     data: mocks.overview,
     isLoading: false,
@@ -103,6 +105,25 @@ vi.mock("@workspace/api-client-react", () => ({
     data: mocks.curriculum,
     isLoading: false,
   }),
+  useListAdminAccessGrants: () => ({
+    data: { grants: [] },
+    isLoading: false,
+    error: null,
+  }),
+  useCreateAdminAccessGrant: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useUpdateAdminAccessGrant: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useCreateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateAdminProgram: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateCurriculumBlock: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminGuidanceRequest: () => ({
     mutate: mocks.updateGuidanceRequest,
     isPending: false,
@@ -222,6 +243,10 @@ describe("administrator overview", () => {
     ];
     render(<AdminCurriculum />);
 
+    expect(screen.getByText("Provision people")).toBeTruthy();
+    expect(screen.getByLabelText("Provision role")).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "Administrator" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Provision access/i })).toBeTruthy();
     const previewLink = screen.getByRole("link", { name: /View client/i });
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
     expect(screen.getByText("Nika Raiffe · English")).toBeTruthy();
