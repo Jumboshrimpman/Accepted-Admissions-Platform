@@ -361,7 +361,8 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
     );
-    expect(screen.getByText("Needs your attention")).toBeTruthy();
+    expect(screen.getByText("New submission alerts")).toBeTruthy();
+    expect(screen.getByText("1 to review")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: /Review submission/i })).toHaveLength(1);
     expect(screen.getByText("Flagged skills: Boundaries")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Clear flags/i }));

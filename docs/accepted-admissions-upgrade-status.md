@@ -48,5 +48,6 @@ The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live W
 
 ## Verification
 
-- Workspace typecheck, API and frontend tests, and production builds are the checks for this pass (see the PR). Database-backed API tests need `DATABASE_URL`; they are not assumed green in environments without Postgres.
+- Workspace typecheck, Accepted Admissions tests (48), API unit tests that do not need Postgres, and both production builds passed in this pass.
+- Database-backed API tests (`booking-credits`, `calendar-persistence`, `dashboard-role-flows`, `fall-account-linking`, `login-activity`, `payment-credits`, `tutor-assignment-reconciliation`) require `DATABASE_URL` and were not run in this environment.
 - Public media files for the approved roster and seven school logos are present in-repo.

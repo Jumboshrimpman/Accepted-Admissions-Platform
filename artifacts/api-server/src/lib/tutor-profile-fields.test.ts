@@ -29,7 +29,7 @@ test("rejects unsafe photo URLs", () => {
   });
   assert.equal(
     result.error,
-    "A photo must be an http(s) image URL or an uploaded jpeg/png/webp/gif under 2 MB.",
+    "A photo must be an http(s) image URL, a site-relative media path, or an uploaded jpeg/png/webp/gif under 2 MB.",
   );
 });
 
