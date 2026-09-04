@@ -69,8 +69,5 @@ The following are intentionally not labeled live:
 
 ## rescue/04-tutor-payout-ledger
 
-- Completed tutoring sessions accrue a manual tutor payout obligation using the active compensation rate (Xavier $65/hr); cancelled bookings never create an obligation.
-- Session unique constraint prevents duplicate obligations when the same session is completed more than once.
-- Client purchases keep `tutorShareCents = 0` so funds remain with Accepted Admissions; no Stripe Connect / bank transfers are initiated for these payables.
-- Administrators list obligations and mark them paid (or reverse) with optional payment reference and notes; tutors may view only their own payout history.
-- Clients and viewers do not see tutor compensation or payout ledger data.
+- Tutor payout tracking (manual obligations, Stripe Connect Xavier onboarding, and Connect transfer reconciliation) is deferred for now and removed from product surfaces.
+- Client purchases continue to settle to Accepted Admissions with `tutorShareCents = 0`; session completion no longer accrues tutor payables.

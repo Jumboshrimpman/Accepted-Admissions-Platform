@@ -89,23 +89,9 @@ import {
 import {
   createCheckoutSession,
   createHostedInvoice,
-  reconcileTutorTransfer,
   stripeErrorMessage,
   voidHostedInvoice,
 } from "../lib/payment-service";
-import {
-  accrueObligationForCompletedSession,
-  listTutorPayoutObligations,
-  markObligationPaid,
-  reverseObligation,
-  TutorPayoutLedgerError,
-  type TutorPayoutObligationView,
-} from "../lib/tutor-payout-ledger";
-import {
-  createStripeConnectAccount,
-  createStripeConnectAccountLink,
-  retrieveStripeConnectAccount,
-} from "../lib/stripe-client";
 import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
@@ -146,7 +132,6 @@ import {
   GetDashboardResponse,
   GetSessionParams,
   GetSessionResponse,
-  ListAdminTutorPayoutsResponse,
   ListAssignmentsQueryParams,
   ListAssignmentsResponse,
   ListCoursesResponse,
@@ -156,13 +141,6 @@ import {
   ListQuestionBankResponse,
   ListReviewQueueResponse,
   ListReviewSubmissionsResponse,
-  ListTutorPayoutsResponse,
-  MarkAdminTutorPayoutPaidBody,
-  MarkAdminTutorPayoutPaidParams,
-  MarkAdminTutorPayoutPaidResponse,
-  ReverseAdminTutorPayoutBody,
-  ReverseAdminTutorPayoutParams,
-  ReverseAdminTutorPayoutResponse,
   ListSessionArtifactsParams,
   ListSessionArtifactsResponse,
   RefreshAdaptiveCurriculumParams,
@@ -3185,57 +3163,6 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
-async function xavierTutorProfile() {
-  await ensureUpgradeSeedData();
-  const [profile] = await db
-    .select()
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.name, XAVIER_NAME))
-    .limit(1);
-  if (!profile) throw new Error("Xavier Morales' tutor profile is not configured");
-  return profile;
-}
-
-function connectStatusFor(profile: typeof tutorProfilesTable.$inferSelect) {
-  return {
-    tutorProfileId: profile.id,
-    tutorName: profile.name,
-    accountId: profile.stripeConnectAccountId,
-    status: profile.stripeConnectStatus,
-    detailsSubmitted: profile.stripeConnectDetailsSubmitted,
-    chargesEnabled: profile.stripeConnectChargesEnabled,
-    payoutsEnabled: profile.stripeConnectPayoutsEnabled,
-    ready:
-      profile.stripeConnectStatus === "ready" &&
-      profile.stripeConnectPayoutsEnabled,
-  };
-}
-
-async function refreshXavierConnectStatus() {
-  const profile = await xavierTutorProfile();
-  if (!profile.stripeConnectAccountId) return profile;
-  const account = await retrieveStripeConnectAccount(profile.stripeConnectAccountId);
-  const status =
-    account.detailsSubmitted &&
-    account.payoutsEnabled &&
-    account.transfersCapability === "active"
-      ? "ready"
-      : account.requirementsCurrentlyDue.length > 0
-        ? "requirements_due"
-        : "onboarding";
-  const [updated] = await db
-    .update(tutorProfilesTable)
-    .set({
-      stripeConnectStatus: status,
-      stripeConnectDetailsSubmitted: account.detailsSubmitted,
-      stripeConnectChargesEnabled: account.chargesEnabled,
-      stripeConnectPayoutsEnabled: account.payoutsEnabled,
-      updatedAt: new Date(),
-    })
-    .where(eq(tutorProfilesTable.id, profile.id))
-    .returning();
-  return updated ?? profile;
-}
 
 function safePublicUrl(value: unknown): boolean {
   if (typeof value !== "string" || value.length > 2048) return false;
@@ -4663,181 +4590,6 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
   });
 });
 
-router.get(
-  "/admin/xavier-payout",
-  ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
-    try {
-      const profile = await refreshXavierConnectStatus();
-      res.json(connectStatusFor(profile));
-    } catch (error) {
-      res.status(502).json({ error: stripeErrorMessage(error) });
-    }
-  },
-);
-
-router.post(
-  "/admin/xavier-payout/onboarding",
-  ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
-    try {
-      let profile = await xavierTutorProfile();
-      if (!profile.stripeConnectAccountId) {
-        const account = await createStripeConnectAccount({
-          tutorProfileId: profile.id,
-          name: profile.name,
-          email: profile.email,
-        });
-        const [updated] = await db
-          .update(tutorProfilesTable)
-          .set({
-            stripeConnectAccountId: account.id,
-            stripeConnectStatus: "onboarding",
-            updatedAt: new Date(),
-          })
-          .where(eq(tutorProfilesTable.id, profile.id))
-          .returning();
-        profile = updated ?? profile;
-      }
-      const origin = publicAppOrigin();
-      const url = await createStripeConnectAccountLink({
-        accountId: profile.stripeConnectAccountId!,
-        refreshUrl: `${origin}/admin/financials?connect=refresh`,
-        returnUrl: `${origin}/admin/financials?connect=return`,
-      });
-      res.status(201).json({ url, ...connectStatusFor(profile) });
-    } catch (error) {
-      res.status(502).json({ error: stripeErrorMessage(error) });
-    }
-  },
-);
-
-router.post(
-  "/admin/transfers/:paymentId/reconcile",
-  ensureRole(["administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const paymentId = typeof req.params.paymentId === "string" ? req.params.paymentId : "";
-    if (!paymentId) {
-      res.status(400).json({ error: "A payment is required." });
-      return;
-    }
-    try {
-      await reconcileTutorTransfer(paymentId);
-      res.status(204).send();
-    } catch (error) {
-      res.status(502).json({ error: stripeErrorMessage(error) });
-    }
-  },
-);
-
-function serializeTutorPayoutObligation(row: TutorPayoutObligationView) {
-  return {
-    id: row.id,
-    sessionId: row.sessionId,
-    studentUserId: row.studentUserId,
-    studentName: row.studentName,
-    tutorUserId: row.tutorUserId,
-    tutorName: row.tutorName,
-    tutorProfileId: row.tutorProfileId,
-    sessionDateTime: row.sessionDateTime,
-    durationMinutes: row.durationMinutes,
-    paymentId: row.paymentId,
-    purchaseReference: row.purchaseReference,
-    tutorRateCents: row.tutorRateCents,
-    amountOwedCents: row.amountOwedCents,
-    status: row.status,
-    completedAt: row.completedAt,
-    paidAt: row.paidAt,
-    paidByUserId: row.paidByUserId,
-    paidByName: row.paidByName,
-    paymentReference: row.paymentReference,
-    notes: row.notes,
-    createdAt: row.createdAt,
-  };
-}
-
-function sendTutorPayoutLedgerError(error: unknown, res: Response): boolean {
-  if (!(error instanceof TutorPayoutLedgerError)) return false;
-  res.status(error.status).json({ error: error.message, code: error.code });
-  return true;
-}
-
-router.get(
-  "/admin/tutor-payouts",
-  ensureRole(["administrator"]),
-  async (_req: AuthedRequest, res): Promise<void> => {
-    const rows = await listTutorPayoutObligations();
-    res.json(ListAdminTutorPayoutsResponse.parse(rows.map(serializeTutorPayoutObligation)));
-  },
-);
-
-router.post(
-  "/admin/tutor-payouts/:obligationId/mark-paid",
-  ensureRole(["administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const params = MarkAdminTutorPayoutPaidParams.safeParse(req.params);
-    const body = MarkAdminTutorPayoutPaidBody.safeParse(req.body ?? {});
-    if (!params.success || !body.success) {
-      res.status(400).json({ error: "Invalid payout payment details." });
-      return;
-    }
-    try {
-      const updated = await markObligationPaid(params.data.obligationId, req.appUser!, {
-        paymentReference: body.data.paymentReference,
-        notes: body.data.notes,
-      });
-      const matched =
-        (await listTutorPayoutObligations()).find((row) => row.id === updated.id) ?? null;
-      if (!matched) {
-        res.status(404).json({ error: "Payout obligation not found" });
-        return;
-      }
-      res.json(MarkAdminTutorPayoutPaidResponse.parse(serializeTutorPayoutObligation(matched)));
-    } catch (error) {
-      if (sendTutorPayoutLedgerError(error, res)) return;
-      throw error;
-    }
-  },
-);
-
-router.post(
-  "/admin/tutor-payouts/:obligationId/reverse",
-  ensureRole(["administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const params = ReverseAdminTutorPayoutParams.safeParse(req.params);
-    const body = ReverseAdminTutorPayoutBody.safeParse(req.body ?? {});
-    if (!params.success || !body.success) {
-      res.status(400).json({ error: "Invalid payout reversal details." });
-      return;
-    }
-    try {
-      const updated = await reverseObligation(
-        params.data.obligationId,
-        req.appUser!,
-        body.data.notes,
-      );
-      const matched =
-        (await listTutorPayoutObligations()).find((row) => row.id === updated.id) ?? null;
-      if (!matched) {
-        res.status(404).json({ error: "Payout obligation not found" });
-        return;
-      }
-      res.json(ReverseAdminTutorPayoutResponse.parse(serializeTutorPayoutObligation(matched)));
-    } catch (error) {
-      if (sendTutorPayoutLedgerError(error, res)) return;
-      throw error;
-    }
-  },
-);
-
-router.get(
-  "/tutor/payouts",
-  ensureRole(["tutor", "administrator"]),
-  async (req: AuthedRequest, res): Promise<void> => {
-    const rows = await listTutorPayoutObligations({ tutorUserId: req.appUser!.id });
-    res.json(ListTutorPayoutsResponse.parse(rows.map(serializeTutorPayoutObligation)));
-  },
-);
 
 router.post(
   "/payments/checkout",
@@ -6863,36 +6615,24 @@ router.patch(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
-    let updated: typeof sessionsTable.$inferSelect;
-    try {
-      updated = await db.transaction(async (tx) => {
-        const [saved] = await tx
-          .update(sessionsTable)
-          .set({ ...next, updatedAt: new Date() })
-          .where(eq(sessionsTable.id, existing.id))
-          .returning();
-        if (!saved) {
-          throw new Error("SESSION_UPDATE_FAILED");
-        }
-        if (saved.status === "completed") {
-          await accrueObligationForCompletedSession(saved, tx);
-        }
-        await tx.insert(auditLogsTable).values({
-          actorUserId: req.appUser!.id,
-          action: saved.status === "archived" ? "session.archived" : "session.updated",
-          entityType: "session",
-          entityId: saved.id,
-          metadata: { courseId: saved.courseId, status: saved.status },
-        });
-        return saved;
-      });
-    } catch (error) {
-      if (error instanceof TutorPayoutLedgerError) {
-        res.status(error.status).json({ error: error.message, code: error.code });
-        return;
+    const updated = await db.transaction(async (tx) => {
+      const [saved] = await tx
+        .update(sessionsTable)
+        .set({ ...next, updatedAt: new Date() })
+        .where(eq(sessionsTable.id, existing.id))
+        .returning();
+      if (!saved) {
+        throw new Error("SESSION_UPDATE_FAILED");
       }
-      throw error;
-    }
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: saved.status === "archived" ? "session.archived" : "session.updated",
+        entityType: "session",
+        entityId: saved.id,
+        metadata: { courseId: saved.courseId, status: saved.status },
+      });
+      return saved;
+    });
     res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated)));
   },
 );

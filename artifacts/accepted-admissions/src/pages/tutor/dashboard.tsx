@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
-import { TutorPayoutsCard } from "@/pages/tutor/payouts-card";
 import {
   displaySessionTitle,
   disclosedSessions,
@@ -168,8 +167,6 @@ export default function TutorDashboard() {
           </Badge>
         </div>
       </section>
-
-      <TutorPayoutsCard />
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7">
