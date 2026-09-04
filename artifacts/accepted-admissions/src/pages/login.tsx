@@ -9,7 +9,6 @@ import {
   clerkConfigErrorCopy,
   clerkJsScriptUrl,
   clerkLoadFailureCopy,
-  type ClerkPublishableKeyResult,
 } from "@/lib/clerk-publishable-key";
 import { safeReturnPath } from "@/lib/safe-return-path";
 
@@ -226,12 +225,7 @@ export function SignInPage() {
   const returnTo = loginReturnPath();
 
   if (!auth.clerkAvailable) {
-    const copy = clerkConfigErrorCopy(
-      (auth.reason ?? "missing") as Extract<
-        ClerkPublishableKeyResult,
-        { ok: false }
-      >["reason"],
-    );
+    const copy = clerkConfigErrorCopy(auth.reason ?? "missing");
     return (
       <LoginFrame>
         <LoginIntro returnTo={returnTo} />

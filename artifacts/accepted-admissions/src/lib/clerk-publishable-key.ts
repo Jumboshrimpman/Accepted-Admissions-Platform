@@ -2,6 +2,9 @@ export type ClerkPublishableKeyResult =
   | { ok: true; publishableKey: string }
   | { ok: false; reason: "missing" | "invalid" };
 
+export type ClerkConfigErrorReason =
+  Extract<ClerkPublishableKeyResult, { ok: false }>["reason"];
+
 const LIVE_PREFIX = "pk_live_";
 const TEST_PREFIX = "pk_test_";
 
@@ -95,7 +98,7 @@ export function clerkLoadFailureCopy(hostname: string): {
 }
 
 export function clerkConfigErrorCopy(
-  reason: Extract<ClerkPublishableKeyResult, { ok: false }>["reason"],
+  reason: ClerkConfigErrorReason,
 ): { title: string; body: string } {
   if (reason === "invalid") {
     return {
