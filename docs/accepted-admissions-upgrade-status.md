@@ -9,27 +9,66 @@ Public checkout sells two prepaid credit products. Funds settle to Accepted Admi
 
 The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live Wix `/book-online` still lists $175 SAT and other services; those non-SAT services are inquiry-only in this app.
 
+## Real clients (owner briefing)
+
+### Taito Goto (student, Japan) — billing out of scope
+
+- Pays **outside** the platform. Portal hides SAT credits and the prepaid booking card (`selfServeSatBooking = false` when the subject email is `taito0525@gmail.com`).
+- SAT tutor: **Eunice Chon**. English tutor: **Nika Raiffe**.
+- Seeded Fall 2026 plan: 12 sessions (~9 SAT + ~3 English), 9pm JST, shared Meet `https://meet.google.com/rih-iayt-okb`.
+- Workflow today: Sama creates Google Calendar invites → Meet with the tutor.
+- **In product now:** student and tutor dashboards (and session pages) offer **Join meeting** plus **Open calendar** for each upcoming date. If Google has stored an event `htmlLink`, that URL is used; otherwise the day view in Google Calendar opens for that session timezone (never provider event IDs).
+- Curriculum: Sama authors in `/admin/curriculum`. Student + assigned tutor open the session dashboard and see published blocks, assignments, and attached library assets.
+
+### Michelle Makarem (client) — prepaid book/pay in scope
+
+- Primary SAT tutor **Xavier Morales**; can also book **Eunice Chon**. Nika is not on the SAT booking roster.
+- Path: buy **$130 / 1 credit** or **$1,300 / 10 credits** on `/sat` (Stripe Checkout) → spend one credit per hour on the portal booking card against the selected tutor’s live Google Calendar.
+- Curriculum is optional. Shared SAT practice tests / mini-sections can be attached to a booked session from the admin library (same building-block model as Taito).
+
+Xavier payout tracking stays **out** (schema leftovers only; no tutor payout UI).
+
+## Curriculum building-block model
+
+Admin library at `/admin/curriculum` → Content tools → **Library**:
+
+- Reusable assets: full SAT practice test, mini-section, or resource (title, notes, shared URL).
+- **Attach to a session** (roadmap date / session card) clones the asset as a published curriculum block on that session dashboard.
+- Students and tutors open the session view and see the assigned block. Existing AI-native assignments, adaptive prep, and per-session materials are unchanged.
+
+Migration `0025_curriculum_library_assets` adds `curriculum_library_assets` and optional `curriculum_blocks.library_asset_id`.
+
 ## Implemented on main (post mega-merge)
 
 - Viewer role, public SAT / Our Team / Past Success / Client Request routes, Stripe Checkout, booking with Xavier and Eunice, locally hosted team portraits and school logos, admin people provisioning, AI-native Fall SAT curriculum, dashboard cleanup.
 - Tutor payout / Stripe Connect surfaces remain **deferred** (schema leftovers only; no tutor payout UI).
 - Google Calendar OAuth is implemented; live availability still needs tutor consent.
 
-## Fixed in this harden pass
+## Fixed / added in this harden pass
 
 - Reconciled status-doc pricing with the $130 / $1,300 catalog.
-- Typecheck: `public-team-roster.test.ts` used a multi-line `.ts` import that `tsc` rejected after the Wix-media merge.
-- Landing test no longer forbids the word “package” (it conflicted with the ten-hour offer copy).
-- Removed leftover `useListTutorPayouts` test mocks from payout-surface removal.
-- Deleted unjournaled duplicate-numbered SQL files (`0011_last_rocket_raccoon`, `0013_mean_thor_girl`, `0014_square_krista_starr`). `0018_orphan_ledger_repair` remains the idempotent repair. Added a journal↔SQL 1:1 test.
-- Asserted approved team portraits and school logos exist under `artifacts/accepted-admissions/public/media/`.
-- Public-site polish for replacing Wix:
-  - Redirect `/book-online` → `/sat`; `/campus-tours` and `/service-page/*` → `/client-request`.
-  - Visitor 404 (no developer “forgot to add the page” copy) with links home / SAT / guidance.
-  - Footer contact `info@acceptedadmissions.org` (already public on the live site).
-  - Home credibility line names Harvard students and recent graduates.
-  - SAT page points other live-site services and case-by-case financial aid to the guidance form.
-  - SAT public-content seed copy updated for the two-product catalog (untouched rows only).
+- Typecheck, landing copy, payout-mock leftovers, unjournaled SQL, public-site Wix cutover polish (see prior commit).
+- **A)** Meet + calendar deep-links on student dashboard (next meeting **and** each roadmap row), tutor dashboard, session pages, course lists, booking card, and admin session cards.
+- **B)** Curriculum library + attach-to-session (extends session `curriculum_blocks`, does not rewrite adaptive curriculum).
+- **C)** Michelle booking: Xavier **or** Eunice; $130 single-hour or $1,300 / 10-credit package; zero-credit state points at `/sat`. Taito’s self-serve SAT checkout/booking is hidden.
+- **D)** Xavier payout tracking still not exposed.
+
+## Done vs owner-only
+
+| Item | Status |
+| --- | --- |
+| Session Meet + calendar one-click (Taito / Eunice / Nika dashboards) | **Done in code** (live Google event links appear after calendar invites exist / `htmlLink` is stored) |
+| Curriculum library + attach to a session date | **Done in code** (Sama authors in admin; no copyrighted SAT PDFs are seeded) |
+| Michelle books Xavier or Eunice; $130 or 10-credit package | **Done in code** (live slots still need Google consent) |
+| Hide Taito billing; keep Michelle prepaid path | **Done in code** |
+| Keep Xavier payout tracking out | **Done** |
+| Clerk invites + `ACCEPTED_*_CLERK_USER_IDS` | **Owner-only** |
+| `STRIPE_WEBHOOK_SECRET` on the deployment host (not Replit) | **Owner-only** |
+| Google Calendar consent: Xavier `xsfam6@gmail.com`, Eunice `eunice_chon@berkeley.edu` from `/tutor` | **Owner-only** |
+| Policy copy (cancel / refund / privacy / financial aid) | **Owner-only** |
+| Optional publish of live-site phone / Virginia Beach address | **Owner-only** |
+
+Do not invent or commit secrets.
 
 ## External services (not labeled live)
 
@@ -40,14 +79,15 @@ The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live W
 
 ## Owner input still required
 
-1. **Clerk invites** — confirm production/development addresses, invite in the matching Clerk instance, then put Clerk user IDs in `ACCEPTED_*_CLERK_USER_IDS` (see `docs/accepted-admissions-provisioning.md`). Do not enable public sign-up.
-2. **Stripe webhook signing secret** — set `STRIPE_WEBHOOK_SECRET` on the deployment host and complete a test-mode Checkout / invoice / refund pass before live charges.
-3. **Google Calendar consent** — Xavier (`xsfam6@gmail.com`) and Eunice (`eunice_chon@berkeley.edu`) both need `/tutor` Google consent before students can see live availability. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done.
+1. **Clerk invites** — confirm production/development addresses, invite in the matching Clerk instance, then put Clerk user IDs in `ACCEPTED_*_CLERK_USER_IDS` (see `docs/accepted-admissions-provisioning.md`). Do not enable public sign-up. Needed for Taito, Eunice, Nika, Xavier, Michelle, and Taito’s viewer if used.
+2. **Stripe webhook signing secret** — set `STRIPE_WEBHOOK_SECRET` on the deployment host and complete a test-mode Checkout / invoice / refund pass before live charges. Michelle cannot receive credits until the webhook marks payment verified.
+3. **Google Calendar consent** — Xavier (`xsfam6@gmail.com`) and Eunice (`eunice_chon@berkeley.edu`) both need `/tutor` Google consent before Michelle can see live availability. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done. Taito’s Meet room is the shared Fall URL; calendar **event** links fill in when Google `htmlLink` is stored on the session.
 4. **Policy copy** — final cancellation, credit-restoration, invoice, refund, privacy-policy, and financial-aid rules. The public form has a short storage notice only; do not treat that as a legal privacy policy.
 5. **Optional publish decisions** — whether to show the live-site phone (`757-332-4244`) and Virginia Beach address on the new footer; whether remaining Wix pages (blog posts, campus-tour product SKUs) should keep inquiry-only redirects.
+6. **Curriculum content** — add licensed SAT practice tests / mini-sections in Admin → Library, then attach them to Taito’s October 2 (and later) session dashboards. Do not upload College Board materials the team is not licensed to host.
 
 ## Verification
 
-- Workspace typecheck, Accepted Admissions tests (48), API unit tests that do not need Postgres, and both production builds passed in this pass.
-- Database-backed API tests (`booking-credits`, `calendar-persistence`, `dashboard-role-flows`, `fall-account-linking`, `login-activity`, `payment-credits`, `tutor-assignment-reconciliation`) require `DATABASE_URL` and were not run in this environment.
+- Workspace typecheck, Accepted Admissions tests, API unit tests that do not need Postgres, journal↔SQL 1:1, and both production builds should be run after this pass.
+- Database-backed API tests (`booking-credits`, `calendar-persistence`, `dashboard-role-flows`, `fall-account-linking`, `login-activity`, `payment-credits`, `tutor-assignment-reconciliation`) require `DATABASE_URL` and were not run in this environment unless a database is provisioned.
 - Public media files for the approved roster and seven school logos are present in-repo.

@@ -235,6 +235,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -268,11 +269,21 @@ export const GetAdminCurriculumResponse = zod.object({
   "blocks": zod.array(zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
   "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
   "config": zod.record(zod.string(), zod.unknown())
+})),
+  "libraryAssets": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "kind": zod.enum(['practice_test', 'mini_section', 'resource']),
+  "description": zod.string().nullable(),
+  "resourceUrl": zod.string().nullable(),
+  "body": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
 })),
   "questionStatus": zod.array(zod.object({
   "subject": zod.string(),
@@ -475,6 +486,7 @@ export const GetAdminClientDashboardResponse = zod.object({
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -498,6 +510,7 @@ export const GetAdminClientDashboardResponse = zod.object({
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -566,7 +579,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "purchasedHours": zod.number(),
   "usedHours": zod.number(),
   "remainingHours": zod.number(),
-  "readOnly": zod.boolean()
+  "readOnly": zod.boolean(),
+  "selfServeSatBooking": zod.boolean()
 }),
   "progress": zod.object({
   "totalSessions": zod.number(),
@@ -699,6 +713,7 @@ export const GetAdminClientDashboardResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "cancellationReason": zod.string().nullish(),
   "creditRestored": zod.boolean().nullish()
 }))
@@ -853,6 +868,77 @@ export const UpdateAdminAssignmentResponse = zod.object({
 
 
 /**
+ * Admin-authored building block (full SAT practice test, mini-section, or resource) that can later be attached to a specific session dashboard.
+ * @summary Create a reusable curriculum library asset
+ */
+export const createAdminLibraryAssetBodyTitleMin = 2;
+export const createAdminLibraryAssetBodyTitleMax = 200;
+
+export const createAdminLibraryAssetBodyDescriptionMax = 2000;
+
+export const createAdminLibraryAssetBodyResourceUrlMax = 1000;
+
+export const createAdminLibraryAssetBodyBodyMax = 8000;
+
+
+
+export const CreateAdminLibraryAssetBody = zod.object({
+  "title": zod.string().min(createAdminLibraryAssetBodyTitleMin).max(createAdminLibraryAssetBodyTitleMax),
+  "kind": zod.enum(['practice_test', 'mini_section', 'resource']),
+  "description": zod.string().max(createAdminLibraryAssetBodyDescriptionMax).nullish(),
+  "resourceUrl": zod.string().max(createAdminLibraryAssetBodyResourceUrlMax).nullish(),
+  "body": zod.string().max(createAdminLibraryAssetBodyBodyMax).nullish()
+})
+
+export const CreateAdminLibraryAssetResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "kind": zod.enum(['practice_test', 'mini_section', 'resource']),
+  "description": zod.string().nullable(),
+  "resourceUrl": zod.string().nullable(),
+  "body": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a reusable curriculum library asset
+ */
+export const UpdateAdminLibraryAssetParams = zod.object({
+  "assetId": zod.coerce.string()
+})
+
+export const updateAdminLibraryAssetBodyTitleMin = 2;
+export const updateAdminLibraryAssetBodyTitleMax = 200;
+
+export const updateAdminLibraryAssetBodyDescriptionMax = 2000;
+
+export const updateAdminLibraryAssetBodyResourceUrlMax = 1000;
+
+export const updateAdminLibraryAssetBodyBodyMax = 8000;
+
+
+
+export const UpdateAdminLibraryAssetBody = zod.object({
+  "title": zod.string().min(updateAdminLibraryAssetBodyTitleMin).max(updateAdminLibraryAssetBodyTitleMax).optional(),
+  "kind": zod.enum(['practice_test', 'mini_section', 'resource']).optional(),
+  "description": zod.string().max(updateAdminLibraryAssetBodyDescriptionMax).nullish(),
+  "resourceUrl": zod.string().max(updateAdminLibraryAssetBodyResourceUrlMax).nullish(),
+  "body": zod.string().max(updateAdminLibraryAssetBodyBodyMax).nullish()
+})
+
+export const UpdateAdminLibraryAssetResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "kind": zod.enum(['practice_test', 'mini_section', 'resource']),
+  "description": zod.string().nullable(),
+  "resourceUrl": zod.string().nullable(),
+  "body": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Create an administrator-managed session with conflict detection
  */
 export const createAdminSessionBodyTimezoneMax = 100;
@@ -888,6 +974,7 @@ export const CreateAdminSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -947,6 +1034,7 @@ export const UpdateAdminSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -1529,6 +1617,7 @@ export const GetDashboardResponse = zod.object({
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -1552,6 +1641,7 @@ export const GetDashboardResponse = zod.object({
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -1620,7 +1710,8 @@ export const GetDashboardResponse = zod.object({
   "purchasedHours": zod.number(),
   "usedHours": zod.number(),
   "remainingHours": zod.number(),
-  "readOnly": zod.boolean()
+  "readOnly": zod.boolean(),
+  "selfServeSatBooking": zod.boolean()
 }),
   "progress": zod.object({
   "totalSessions": zod.number(),
@@ -1713,6 +1804,7 @@ export const ListBookingSessionsResponseItem = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "cancellationReason": zod.string().nullish(),
   "creditRestored": zod.boolean().nullish()
 })
@@ -1742,6 +1834,7 @@ export const CreateBookingSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "cancellationReason": zod.string().nullish(),
   "creditRestored": zod.boolean().nullish()
 })
@@ -1770,6 +1863,7 @@ export const CancelBookingSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "cancellationReason": zod.string().nullish(),
   "creditRestored": zod.boolean().nullish()
 })
@@ -1798,6 +1892,7 @@ export const RescheduleBookingSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.enum(['confirmed', 'rescheduled', 'cancelled']),
   "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
   "cancellationReason": zod.string().nullish(),
   "creditRestored": zod.boolean().nullish()
 })
@@ -1900,6 +1995,7 @@ export const GetCourseResponse = zod.object({
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -1933,6 +2029,7 @@ export const GetSessionResponse = zod.object({
   "avatarUrl": zod.string().nullish()
 }),zod.null()]).optional(),
   "meetingUrl": zod.string().nullish(),
+  "calendarEventUrl": zod.string().nullish(),
   "student": zod.union([zod.object({
   "id": zod.string().optional(),
   "name": zod.string()
@@ -1943,6 +2040,7 @@ export const GetSessionResponse = zod.object({
   "blocks": zod.array(zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
   "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
@@ -2012,6 +2110,31 @@ export const CreateCurriculumBlockBody = zod.object({
 export const CreateCurriculumBlockResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "position": zod.number(),
+  "visibility": zod.enum(['student', 'tutor', 'both']),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "config": zod.record(zod.string(), zod.unknown())
+})
+
+
+/**
+ * Clones a reusable library asset onto the session as a published curriculum block so the student and tutor see it on that date's dashboard.
+ * @summary Attach a library asset to a session dashboard
+ */
+export const AttachSessionLibraryAssetParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const AttachSessionLibraryAssetBody = zod.object({
+  "libraryAssetId": zod.string()
+})
+
+export const AttachSessionLibraryAssetResponse = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
   "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
@@ -2109,6 +2232,7 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "publishedBlocks": zod.array(zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
   "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
@@ -2213,6 +2337,7 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "publishedBlocks": zod.array(zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
   "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
@@ -2300,6 +2425,7 @@ export const UpdateCurriculumBlockBody = zod.object({
 export const UpdateCurriculumBlockResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
+  "libraryAssetId": zod.string().nullish(),
   "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),

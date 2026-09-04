@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useGetDashboard, type CurriculumSession, type Dashboard } from "@workspace/api-client-react";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users, Video } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   sessionSubjectLabel,
 } from "@/lib/session-display";
 import { BookingCard } from "@/pages/portal/booking-card";
+import { SessionJoinActions } from "@/components/session-join-actions";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -186,40 +187,49 @@ export function ClientDashboardView({
         </div>
       )}
 
-      <Card data-testid="client-credit-balance">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Target className="h-5 w-5 text-primary" />
-            SAT session credits
-          </CardTitle>
-          <CardDescription>
-            Purchased credits unlock after a verified Stripe payment. Booking uses one credit per session.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Purchased</p>
-              <p className="mt-1 text-2xl font-semibold">{dashboard.credits.purchasedHours}</p>
+      {dashboard.credits.selfServeSatBooking ? (
+        <Card data-testid="client-credit-balance">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Target className="h-5 w-5 text-primary" />
+              SAT session credits
+            </CardTitle>
+            <CardDescription>
+              Purchased credits unlock after a verified Stripe payment. Booking uses one credit per session.
+              Pay $130 for a single hour or $1,300 for a 10-hour package, then book Xavier or Eunice.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Purchased</p>
+                <p className="mt-1 text-2xl font-semibold">{dashboard.credits.purchasedHours}</p>
+              </div>
+              <div className="rounded-xl border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
+                <p className="mt-1 text-2xl font-semibold">{dashboard.credits.usedHours}</p>
+              </div>
+              <div className="rounded-xl border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
+                <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
+              </div>
             </div>
-            <div className="rounded-xl border p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
-              <p className="mt-1 text-2xl font-semibold">{dashboard.credits.usedHours}</p>
-            </div>
-            <div className="rounded-xl border p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
-              <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
-            </div>
-          </div>
-          {!viewer && dashboard.credits.remainingHours <= 0 && (
-            <Button asChild className="mt-4 rounded-full">
-              <Link href="/sat">Purchase session credits</Link>
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+            {!viewer && dashboard.credits.remainingHours <= 0 && (
+              <Button asChild className="mt-4 rounded-full">
+                <Link href="/sat">Purchase session credits</Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card data-testid="off-platform-billing-note">
+          <CardContent className="p-5 text-sm text-muted-foreground">
+            Session billing is handled off-platform. Join Google Meet or open the calendar event from each upcoming date below.
+          </CardContent>
+        </Card>
+      )}
 
-      {!viewer && <BookingCard />}
+      {!viewer && dashboard.credits.selfServeSatBooking && <BookingCard />}
 
       <Card>
         <CardHeader className="pb-3">
@@ -281,7 +291,10 @@ export function ClientDashboardView({
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
-                {nextSession.meetingUrl && <Button asChild variant="outline" size="sm"><a href={nextSession.meetingUrl} target="_blank" rel="noopener noreferrer"><Video className="mr-2 h-4 w-4" />Join meeting</a></Button>}
+                <SessionJoinActions
+                  meetingUrl={nextSession.meetingUrl}
+                  calendarEventUrl={nextSession.calendarEventUrl}
+                />
               </>}
             </div>
           </CardContent>
@@ -345,11 +358,21 @@ export function ClientDashboardView({
                       {session.readiness === "complete" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : session.readiness === "not_started" ? <Target className="h-4 w-4 text-amber-600" /> : <BookOpenCheck className="h-4 w-4 text-primary" />}
                       <span>{readinessLabel(session)}</span>
                     </div>
-                    {adminPreview ? <Button disabled variant="ghost" size="sm">Read only</Button> : <Button asChild variant={session.id === nextSession?.id ? "default" : "ghost"} size="sm">
-                      <Link href={`/portal/courses/${session.courseId}/sessions/${session.id}`}>
-                        Open <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                      </Link>
-                    </Button>}
+                    {adminPreview ? (
+                      <Button disabled variant="ghost" size="sm">Read only</Button>
+                    ) : (
+                      <div className="flex flex-col items-stretch gap-2 lg:items-end">
+                        <SessionJoinActions
+                          meetingUrl={session.meetingUrl}
+                          calendarEventUrl={session.calendarEventUrl}
+                        />
+                        <Button asChild variant={session.id === nextSession?.id ? "default" : "ghost"} size="sm">
+                          <Link href={`/portal/courses/${session.courseId}/sessions/${session.id}`}>
+                            Open <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}

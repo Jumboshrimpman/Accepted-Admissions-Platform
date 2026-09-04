@@ -276,6 +276,50 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /admin/curriculum/library-assets:
+    post:
+      operationId: createAdminLibraryAsset
+      tags: [administration]
+      summary: Create a reusable curriculum library asset
+      description: >
+        Admin-authored building block (full SAT practice test, mini-section, or resource)
+        that can later be attached to a specific session dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumLibraryAssetInput" }
+      responses:
+        "201":
+          description: Created library asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurriculumLibraryAsset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/curriculum/library-assets/{assetId}:
+    patch:
+      operationId: updateAdminLibraryAsset
+      tags: [administration]
+      summary: Update a reusable curriculum library asset
+      parameters:
+        - $ref: "#/components/parameters/AssetId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumLibraryAssetUpdate" }
+      responses:
+        "200":
+          description: Updated library asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurriculumLibraryAsset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/sessions:
     post:
       operationId: createAdminSession
@@ -758,6 +802,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /sessions/{sessionId}/library-assets:
+    post:
+      operationId: attachSessionLibraryAsset
+      tags: [curriculum]
+      summary: Attach a library asset to a session dashboard
+      description: >
+        Clones a reusable library asset onto the session as a published curriculum block
+        so the student and tutor see it on that date's dashboard.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttachLibraryAssetInput" }
+      responses:
+        "201":
+          description: Attached curriculum block
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurriculumBlock" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /sessions/{sessionId}/adaptive-curriculum:
     get:
       operationId: getAdaptiveCurriculum
@@ -1332,6 +1401,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema: { type: string }
     BlockId:
       name: blockId
       in: path
@@ -1732,6 +1806,7 @@ components:
         durationMinutes: { type: number }
         bookingStatus: { type: string, enum: [confirmed, rescheduled, cancelled] }
         meetingUrl: { type: ["string", "null"] }
+        calendarEventUrl: { type: ["string", "null"] }
         cancellationReason: { type: ["string", "null"] }
         creditRestored: { type: ["boolean", "null"] }
     BookingInput:
@@ -2039,6 +2114,7 @@ components:
         durationMinutes: { type: number }
         bookingStatus: { type: string }
         meetingUrl: { type: ["string", "null"] }
+        calendarEventUrl: { type: ["string", "null"] }
         student:
           type: ["object", "null"]
           required: [name]
@@ -2154,7 +2230,7 @@ components:
         mistakeCount: { type: number }
     AdminCurriculum:
       type: object
-      required: [programs, sessions, assignments, blocks, questionStatus, submissions, tutors, clients]
+      required: [programs, sessions, assignments, blocks, libraryAssets, questionStatus, submissions, tutors, clients]
       properties:
         programs:
           type: array
@@ -2168,6 +2244,9 @@ components:
         blocks:
           type: array
           items: { $ref: "#/components/schemas/CurriculumBlock" }
+        libraryAssets:
+          type: array
+          items: { $ref: "#/components/schemas/CurriculumLibraryAsset" }
         questionStatus:
           type: array
           items: { $ref: "#/components/schemas/AdminQuestionStatus" }
@@ -2283,6 +2362,7 @@ components:
             - $ref: "#/components/schemas/Tutor"
             - type: "null"
         meetingUrl: { type: ["string", "null"] }
+        calendarEventUrl: { type: ["string", "null"] }
         student:
           oneOf:
             - $ref: "#/components/schemas/SessionStudent"
@@ -2341,6 +2421,7 @@ components:
       properties:
         id: { type: string }
         sessionId: { type: string }
+        libraryAssetId: { type: ["string", "null"] }
         kind:
           type: string
           enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
@@ -2350,6 +2431,39 @@ components:
         config:
           type: object
           additionalProperties: true
+    CurriculumLibraryAsset:
+      type: object
+      required: [id, title, kind, description, resourceUrl, body, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        kind: { type: string, enum: [practice_test, mini_section, resource] }
+        description: { type: ["string", "null"] }
+        resourceUrl: { type: ["string", "null"] }
+        body: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CurriculumLibraryAssetInput:
+      type: object
+      required: [title, kind]
+      properties:
+        title: { type: string, minLength: 2, maxLength: 200 }
+        kind: { type: string, enum: [practice_test, mini_section, resource] }
+        description: { type: ["string", "null"], maxLength: 2000 }
+        resourceUrl: { type: ["string", "null"], maxLength: 1000 }
+        body: { type: ["string", "null"], maxLength: 8000 }
+    CurriculumLibraryAssetUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 2, maxLength: 200 }
+        kind: { type: string, enum: [practice_test, mini_section, resource] }
+        description: { type: ["string", "null"], maxLength: 2000 }
+        resourceUrl: { type: ["string", "null"], maxLength: 1000 }
+        body: { type: ["string", "null"], maxLength: 8000 }
+    AttachLibraryAssetInput:
+      type: object
+      required: [libraryAssetId]
+      properties:
+        libraryAssetId: { type: string }
     CurriculumBlockInput:
       type: object
       required: [kind, visibility, config]
@@ -2856,12 +2970,13 @@ components:
         status: { type: string, enum: [draft, published] }
     DashboardCredits:
       type: object
-      required: [purchasedHours, usedHours, remainingHours, readOnly]
+      required: [purchasedHours, usedHours, remainingHours, readOnly, selfServeSatBooking]
       properties:
         purchasedHours: { type: number }
         usedHours: { type: number }
         remainingHours: { type: number }
         readOnly: { type: boolean }
+        selfServeSatBooking: { type: boolean }
     DashboardProgress:
       type: object
       required: [totalSessions, completedSessions, averageScore, strengths, weaknesses]

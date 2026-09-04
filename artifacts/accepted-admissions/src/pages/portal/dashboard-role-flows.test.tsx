@@ -146,6 +146,7 @@ function dashboardForRole(
             title: "Taito’s SAT Session with Eunice",
             status: "published",
             meetingUrl: "https://meet.google.com/sat-room",
+            calendarEventUrl: "https://calendar.google.com/calendar/r/day?date=20261002",
             tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
             student: { id: "student", name: "Taito Goto" },
           },
@@ -161,6 +162,7 @@ function dashboardForRole(
             title: "Taito’s SAT Session with Eunice",
             status: "published",
             meetingUrl: "https://meet.google.com/sat-room",
+            calendarEventUrl: "https://calendar.google.com/calendar/r/day?date=20261002",
             tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
           },
           {
@@ -173,6 +175,7 @@ function dashboardForRole(
             title: "Taito’s English Session with Nika",
             status: "published",
             meetingUrl: "https://meet.google.com/ielts-room",
+            calendarEventUrl: "https://calendar.google.com/calendar/r/day?date=20261023",
             tutor: { id: "tutor-2", name: "Nika Raiffe", specialty: "IELTS Tutor", avatarUrl: null },
           },
         ],
@@ -243,6 +246,7 @@ function dashboardForRole(
       usedHours: 0,
       remainingHours: isTutor ? 0 : 4,
       readOnly: role === "viewer",
+      selfServeSatBooking: false,
     },
     progress: {
       totalSessions: isTutor ? 1 : 2,
@@ -298,7 +302,10 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getByText("English")).toBeTruthy();
     expect(screen.getAllByText("9:00–10:00 PM JST").length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /Join meeting/i })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: /Join meeting/i }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole("link", { name: /Open calendar/i }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
     expect(screen.getByText("In progress")).toBeTruthy();
     expect(screen.getByText("85%")).toBeTruthy();
     expect(screen.getByText("Complete")).toBeTruthy();
@@ -315,9 +322,10 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByRole("status").textContent).toContain("view-only mode");
     expect(screen.getByText("Your tutors")).toBeTruthy();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
+    expect(screen.getAllByRole("link", { name: /Join meeting/i })[0]?.getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
     );
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
     expect(screen.queryByRole("button", { name: /Mark reviewed/i })).toBeNull();
   });
 
@@ -331,6 +339,7 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getAllByRole("button", { name: "Read only" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /Open session/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /Join meeting/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Open calendar/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /Start|Continue|View result/i })).toBeNull();
   });
 
@@ -361,6 +370,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByRole("link", { name: /Join meeting/i }).getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
     );
+    expect(screen.getByRole("link", { name: /Open calendar/i }).getAttribute("href")).toBe(
+      "https://calendar.google.com/calendar/r/day?date=20261002",
+    );
     expect(screen.getByText("New submission alerts")).toBeTruthy();
     expect(screen.getByText("1 to review")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: /Review submission/i })).toHaveLength(1);
@@ -370,5 +382,31 @@ describe("authenticated role dashboard flows", () => {
       { itemId: "queue-1", data: { status: "reviewed", tutorNote: "Reviewed and approved." } },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  test("Michelle can self-serve SAT booking for Xavier or Eunice", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "michelle-user",
+        displayName: "Michelle Makarem",
+        email: "michaelmakarem@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+      },
+    };
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
+    expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Purchase session credits/i })).toBeTruthy();
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import {
   displaySessionTitle,
   formatSessionDateTime,
 } from "@/lib/session-display";
+import { SessionJoinActions } from "@/components/session-join-actions";
 
 export default function PortalCourse() {
   const params = useParams();
@@ -117,19 +118,15 @@ export default function PortalCourse() {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-3 self-end md:self-auto">
-                       {session.meetingUrl && (
-                         <Button
-                           asChild
-                           size="sm"
-                           variant="outline"
-                           onClick={(event) => event.stopPropagation()}
-                         >
-                           <a href={session.meetingUrl} target="_blank" rel="noopener noreferrer">
-                             <Video className="mr-1.5 h-3.5 w-3.5" /> Join Meet
-                           </a>
-                         </Button>
-                       )}
+                    <div
+                      className="flex items-center gap-3 self-end md:self-auto"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                       <SessionJoinActions
+                         meetingUrl={session.meetingUrl}
+                         calendarEventUrl={session.calendarEventUrl}
+                         meetingLabel="Join Meet"
+                       />
                        {session.hasHomework && (
                         <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
                           Homework

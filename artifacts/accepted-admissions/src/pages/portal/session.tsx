@@ -9,7 +9,7 @@ import {
   useGetSession,
   useListSessionArtifacts,
 } from "@workspace/api-client-react";
-import { BookOpen, Calendar, CheckCircle2, ChevronRight, Clock, ExternalLink, FileText, PenTool, Sparkles, Target, Video } from "lucide-react";
+import { BookOpen, Calendar, CheckCircle2, ChevronRight, Clock, FileText, PenTool, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,18 +20,11 @@ import {
   formatSessionTimeRange,
   sessionSubjectLabel,
 } from "@/lib/session-display";
+import { CurriculumBlockView } from "@/components/curriculum-block-view";
+import { SessionJoinActions } from "@/components/session-join-actions";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
-  const { kind, config } = block;
-  if (kind === "heading") return <h3 className="text-lg font-semibold">{String(config.text || "")}</h3>;
-  if (kind === "rich_text") return <div className="prose prose-slate max-w-none whitespace-pre-wrap text-muted-foreground">{String(config.html || "")}</div>;
-  if (kind === "callout") return <div className="rounded-xl border border-accent/20 bg-accent/10 p-4"><BookOpen className="mr-2 inline h-4 w-4 text-accent" />{String(config.text || "")}</div>;
-  if (kind === "objectives") {
-    const items = Array.isArray(config.items) ? config.items : [];
-    return <ul className="space-y-2">{items.map((item, index) => <li key={index} className="flex gap-2 text-sm"><Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{String(item)}</li>)}</ul>;
-  }
-  if (kind === "external_link") return <a href={String(config.url || "#")} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"><ExternalLink className="h-4 w-4" />{String(config.label || "Open resource")}</a>;
-  return null;
+  return <CurriculumBlockView block={block} />;
 }
 
 function assignmentAction(status?: string | null): string {
@@ -81,7 +74,7 @@ export default function PortalSession() {
               <span className="flex items-center gap-2"><Clock className="h-4 w-4" />{formatSessionTimeRange(session)}</span>
             </div>
           </div>
-          {session.meetingUrl && <Button asChild variant="secondary"><a href={session.meetingUrl} target="_blank" rel="noopener noreferrer"><Video className="mr-2 h-4 w-4" />Join meeting</a></Button>}
+            <SessionJoinActions meetingUrl={session.meetingUrl} calendarEventUrl={session.calendarEventUrl} size="lg" />
         </div>
       </section>
 

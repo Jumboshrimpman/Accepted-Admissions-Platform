@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, isFall2026Term, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -89,6 +89,41 @@ test("recognizes only the approved Fall date and subject pairs", () => {
       subject: "SAT",
     }),
     false,
+  );
+});
+
+test("Taito billing stays off-platform while Michelle can self-serve SAT booking", () => {
+  assert.equal(TAITO_STUDENT_EMAIL, "taito0525@gmail.com");
+  assert.equal(selfServeSatBookingForEmail("taito0525@gmail.com"), false);
+  assert.equal(selfServeSatBookingForEmail("TAITO0525@gmail.com"), false);
+  assert.equal(selfServeSatBookingForEmail("michaelmakarem@gmail.com"), true);
+  assert.equal(selfServeSatBookingForEmail("xsfam6@gmail.com"), true);
+});
+
+test("calendar deep-links prefer Google event htmlLinks and never Meet URLs", () => {
+  const fallStart = taitoSessionDateTime("2026-10-02");
+  assert.equal(isGoogleCalendarEventUrl("https://meet.google.com/rih-iayt-okb"), false);
+  assert.equal(
+    isGoogleCalendarEventUrl(
+      "https://www.google.com/calendar/event?eid=abc123",
+    ),
+    true,
+  );
+  assert.equal(
+    calendarEventUrlForSession({
+      dateTime: fallStart,
+      timezone: TAITO_SESSION_TIMEZONE,
+      providerEventUrl: "https://meet.google.com/rih-iayt-okb",
+    }),
+    "https://calendar.google.com/calendar/r/day?date=20261002",
+  );
+  assert.equal(
+    calendarEventUrlForSession({
+      dateTime: fallStart,
+      timezone: TAITO_SESSION_TIMEZONE,
+      providerEventUrl: "https://www.google.com/calendar/event?eid=abc123",
+    }),
+    "https://www.google.com/calendar/event?eid=abc123",
   );
 });
 

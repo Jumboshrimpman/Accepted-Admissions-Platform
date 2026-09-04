@@ -11,4 +11,5 @@ export interface DashboardCredits {
   usedHours: number;
   remainingHours: number;
   readOnly: boolean;
+  selfServeSatBooking: boolean;
 }

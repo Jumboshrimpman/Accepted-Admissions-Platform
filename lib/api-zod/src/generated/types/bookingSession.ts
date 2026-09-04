@@ -23,6 +23,8 @@ export interface BookingSession {
   /** @nullable */
   meetingUrl: string | null;
   /** @nullable */
+  calendarEventUrl?: string | null;
+  /** @nullable */
   cancellationReason?: string | null;
   /** @nullable */
   creditRestored?: boolean | null;

@@ -428,6 +428,8 @@ export interface BookingSession {
   /** @nullable */
   meetingUrl: string | null;
   /** @nullable */
+  calendarEventUrl?: string | null;
+  /** @nullable */
   cancellationReason?: string | null;
   /** @nullable */
   creditRestored?: boolean | null;
@@ -890,6 +892,8 @@ export interface AdminSession {
   /** @nullable */
   meetingUrl: string | null;
   /** @nullable */
+  calendarEventUrl?: string | null;
+  /** @nullable */
   student: AdminSessionStudent;
   /** @nullable */
   tutor: AdminSessionTutor;
@@ -1256,6 +1260,8 @@ export type CurriculumBlockConfig = { [key: string]: unknown };
 export interface CurriculumBlock {
   id: string;
   sessionId: string;
+  /** @nullable */
+  libraryAssetId?: string | null;
   kind: CurriculumBlockKind;
   position: number;
   visibility: CurriculumBlockVisibility;
@@ -1263,11 +1269,34 @@ export interface CurriculumBlock {
   config: CurriculumBlockConfig;
 }
 
+export type CurriculumLibraryAssetKind = typeof CurriculumLibraryAssetKind[keyof typeof CurriculumLibraryAssetKind];
+
+
+export const CurriculumLibraryAssetKind = {
+  practice_test: 'practice_test',
+  mini_section: 'mini_section',
+  resource: 'resource',
+} as const;
+
+export interface CurriculumLibraryAsset {
+  id: string;
+  title: string;
+  kind: CurriculumLibraryAssetKind;
+  /** @nullable */
+  description: string | null;
+  /** @nullable */
+  resourceUrl: string | null;
+  /** @nullable */
+  body: string | null;
+  createdAt: string;
+}
+
 export interface AdminCurriculum {
   programs: AdminProgram[];
   sessions: AdminSession[];
   assignments: AdminAssignment[];
   blocks: CurriculumBlock[];
+  libraryAssets: CurriculumLibraryAsset[];
   questionStatus: AdminQuestionStatus[];
   submissions: AdminSubmission[];
   tutors: AdminCurriculumTutorsItem[];
@@ -1330,6 +1359,8 @@ export interface Session {
   tutor?: Tutor | null;
   /** @nullable */
   meetingUrl?: string | null;
+  /** @nullable */
+  calendarEventUrl?: string | null;
   student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;
@@ -1449,6 +1480,7 @@ export interface DashboardCredits {
   usedHours: number;
   remainingHours: number;
   readOnly: boolean;
+  selfServeSatBooking: boolean;
 }
 
 export interface DashboardProgress {
@@ -1574,6 +1606,76 @@ export type CourseDetail = Course & ({
   goalSummary?: string | null;
   sessions: Session[];
 });
+
+export type CurriculumLibraryAssetInputKind = typeof CurriculumLibraryAssetInputKind[keyof typeof CurriculumLibraryAssetInputKind];
+
+
+export const CurriculumLibraryAssetInputKind = {
+  practice_test: 'practice_test',
+  mini_section: 'mini_section',
+  resource: 'resource',
+} as const;
+
+export interface CurriculumLibraryAssetInput {
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title: string;
+  kind: CurriculumLibraryAssetInputKind;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  description?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  resourceUrl?: string | null;
+  /**
+     * @maxLength 8000
+     * @nullable
+     */
+  body?: string | null;
+}
+
+export type CurriculumLibraryAssetUpdateKind = typeof CurriculumLibraryAssetUpdateKind[keyof typeof CurriculumLibraryAssetUpdateKind];
+
+
+export const CurriculumLibraryAssetUpdateKind = {
+  practice_test: 'practice_test',
+  mini_section: 'mini_section',
+  resource: 'resource',
+} as const;
+
+export interface CurriculumLibraryAssetUpdate {
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  title?: string;
+  kind?: CurriculumLibraryAssetUpdateKind;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  description?: string | null;
+  /**
+     * @maxLength 1000
+     * @nullable
+     */
+  resourceUrl?: string | null;
+  /**
+     * @maxLength 8000
+     * @nullable
+     */
+  body?: string | null;
+}
+
+export interface AttachLibraryAssetInput {
+  libraryAssetId: string;
+}
 
 export type CurriculumBlockInputKind = typeof CurriculumBlockInputKind[keyof typeof CurriculumBlockInputKind];
 

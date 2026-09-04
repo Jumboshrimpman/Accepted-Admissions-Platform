@@ -48,7 +48,7 @@ describe("administrator client preview", () => {
       assignments: [],
       recentScores: [],
       reviewSkills: [],
-      credits: { purchasedHours: 1, usedHours: 0, remainingHours: 1, readOnly: true },
+      credits: { purchasedHours: 1, usedHours: 0, remainingHours: 1, readOnly: true, selfServeSatBooking: false },
       progress: {
         totalSessions: 0,
         completedSessions: 0,
