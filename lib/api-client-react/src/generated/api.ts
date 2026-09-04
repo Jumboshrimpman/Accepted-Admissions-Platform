@@ -88,6 +88,7 @@ import type {
   ListAssignmentsParams,
   ListContentSourcesParams,
   ListQuestionBankParams,
+  MarkTutorPayoutPaidInput,
   NotFoundResponse,
   OfflinePaymentInput,
   PaymentRecord,
@@ -96,6 +97,7 @@ import type {
   QuestionBankItem,
   QuestionBankUpdate,
   RescheduleBookingInput,
+  ReverseTutorPayoutInput,
   ReviewQueueItem,
   ReviewQueueUpdate,
   ReviewSubmission,
@@ -103,6 +105,7 @@ import type {
   SessionArtifact,
   SessionArtifactInput,
   SessionDetail,
+  TutorPayoutObligation,
   TutorPayoutOnboarding,
   TutorPayoutStatus,
   UnauthorizedResponse
@@ -1402,6 +1405,304 @@ export const useCreateAdminXavierPayoutOnboarding = <TError = ErrorType<Unauthor
       > => {
       return useMutation(getCreateAdminXavierPayoutOnboardingMutationOptions(options));
     }
+
+export const getListAdminTutorPayoutsUrl = () => {
+
+
+
+
+  return `/api/admin/tutor-payouts`
+}
+
+/**
+ * @summary List tutor payout obligations for manual settlement
+ */
+export const listAdminTutorPayouts = async ( options?: Parameters<typeof customFetch>[1]): Promise<TutorPayoutObligation[]> => {
+
+  return customFetch<TutorPayoutObligation[]>(getListAdminTutorPayoutsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminTutorPayoutsQueryKey = () => {
+    return [
+    `/api/admin/tutor-payouts`
+    ] as const;
+    }
+
+
+export const getListAdminTutorPayoutsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminTutorPayouts>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminTutorPayouts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminTutorPayoutsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminTutorPayouts>>> = ({ signal }) => listAdminTutorPayouts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminTutorPayouts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminTutorPayoutsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminTutorPayouts>>>
+export type ListAdminTutorPayoutsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List tutor payout obligations for manual settlement
+ */
+
+export function useListAdminTutorPayouts<TData = Awaited<ReturnType<typeof listAdminTutorPayouts>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminTutorPayouts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminTutorPayoutsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkAdminTutorPayoutPaidUrl = (obligationId: string,) => {
+
+
+
+
+  return `/api/admin/tutor-payouts/${obligationId}/mark-paid`
+}
+
+/**
+ * @summary Mark a tutor payout obligation as paid offline
+ */
+export const markAdminTutorPayoutPaid = async (obligationId: string,
+    markTutorPayoutPaidInput?: MarkTutorPayoutPaidInput, options?: Parameters<typeof customFetch>[1]): Promise<TutorPayoutObligation> => {
+
+  return customFetch<TutorPayoutObligation>(getMarkAdminTutorPayoutPaidUrl(obligationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(markTutorPayoutPaidInput)
+  }
+);}
+
+
+
+
+
+export const getMarkAdminTutorPayoutPaidMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAdminTutorPayoutPaid>>, TError,{obligationId: string;data?: BodyType<MarkTutorPayoutPaidInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAdminTutorPayoutPaid>>, TError,{obligationId: string;data?: BodyType<MarkTutorPayoutPaidInput>}, TContext> => {
+
+const mutationKey = ['markAdminTutorPayoutPaid'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAdminTutorPayoutPaid>>, {obligationId: string;data?: BodyType<MarkTutorPayoutPaidInput>}> = (props) => {
+          const {obligationId,data} = props ?? {};
+
+          return  markAdminTutorPayoutPaid(obligationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAdminTutorPayoutPaidMutationResult = NonNullable<Awaited<ReturnType<typeof markAdminTutorPayoutPaid>>>
+    export type MarkAdminTutorPayoutPaidMutationBody = BodyType<MarkTutorPayoutPaidInput> | undefined
+    export type MarkAdminTutorPayoutPaidMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Mark a tutor payout obligation as paid offline
+ */
+export const useMarkAdminTutorPayoutPaid = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAdminTutorPayoutPaid>>, TError,{obligationId: string;data?: BodyType<MarkTutorPayoutPaidInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAdminTutorPayoutPaid>>,
+        TError,
+        {obligationId: string;data?: BodyType<MarkTutorPayoutPaidInput>},
+        TContext
+      > => {
+      return useMutation(getMarkAdminTutorPayoutPaidMutationOptions(options));
+    }
+
+export const getReverseAdminTutorPayoutUrl = (obligationId: string,) => {
+
+
+
+
+  return `/api/admin/tutor-payouts/${obligationId}/reverse`
+}
+
+/**
+ * @summary Reverse a tutor payout obligation
+ */
+export const reverseAdminTutorPayout = async (obligationId: string,
+    reverseTutorPayoutInput?: ReverseTutorPayoutInput, options?: Parameters<typeof customFetch>[1]): Promise<TutorPayoutObligation> => {
+
+  return customFetch<TutorPayoutObligation>(getReverseAdminTutorPayoutUrl(obligationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reverseTutorPayoutInput)
+  }
+);}
+
+
+
+
+
+export const getReverseAdminTutorPayoutMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseAdminTutorPayout>>, TError,{obligationId: string;data?: BodyType<ReverseTutorPayoutInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseAdminTutorPayout>>, TError,{obligationId: string;data?: BodyType<ReverseTutorPayoutInput>}, TContext> => {
+
+const mutationKey = ['reverseAdminTutorPayout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseAdminTutorPayout>>, {obligationId: string;data?: BodyType<ReverseTutorPayoutInput>}> = (props) => {
+          const {obligationId,data} = props ?? {};
+
+          return  reverseAdminTutorPayout(obligationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseAdminTutorPayoutMutationResult = NonNullable<Awaited<ReturnType<typeof reverseAdminTutorPayout>>>
+    export type ReverseAdminTutorPayoutMutationBody = BodyType<ReverseTutorPayoutInput> | undefined
+    export type ReverseAdminTutorPayoutMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Reverse a tutor payout obligation
+ */
+export const useReverseAdminTutorPayout = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseAdminTutorPayout>>, TError,{obligationId: string;data?: BodyType<ReverseTutorPayoutInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reverseAdminTutorPayout>>,
+        TError,
+        {obligationId: string;data?: BodyType<ReverseTutorPayoutInput>},
+        TContext
+      > => {
+      return useMutation(getReverseAdminTutorPayoutMutationOptions(options));
+    }
+
+export const getListTutorPayoutsUrl = () => {
+
+
+
+
+  return `/api/tutor/payouts`
+}
+
+/**
+ * @summary List the current tutor's payout obligations
+ */
+export const listTutorPayouts = async ( options?: Parameters<typeof customFetch>[1]): Promise<TutorPayoutObligation[]> => {
+
+  return customFetch<TutorPayoutObligation[]>(getListTutorPayoutsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTutorPayoutsQueryKey = () => {
+    return [
+    `/api/tutor/payouts`
+    ] as const;
+    }
+
+
+export const getListTutorPayoutsQueryOptions = <TData = Awaited<ReturnType<typeof listTutorPayouts>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTutorPayouts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTutorPayoutsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTutorPayouts>>> = ({ signal }) => listTutorPayouts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTutorPayouts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTutorPayoutsQueryResult = NonNullable<Awaited<ReturnType<typeof listTutorPayouts>>>
+export type ListTutorPayoutsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List the current tutor's payout obligations
+ */
+
+export function useListTutorPayouts<TData = Awaited<ReturnType<typeof listTutorPayouts>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTutorPayouts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTutorPayoutsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAdminProductsUrl = () => {
 

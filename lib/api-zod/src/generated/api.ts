@@ -1070,6 +1070,147 @@ export const CreateAdminXavierPayoutOnboardingResponse = zod.object({
 
 
 /**
+ * @summary List tutor payout obligations for manual settlement
+ */
+export const ListAdminTutorPayoutsResponseItem = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string().nullable(),
+  "tutorUserId": zod.string(),
+  "tutorName": zod.string().nullable(),
+  "tutorProfileId": zod.string(),
+  "sessionDateTime": zod.coerce.date(),
+  "durationMinutes": zod.number(),
+  "paymentId": zod.string().nullable(),
+  "purchaseReference": zod.string().nullable(),
+  "tutorRateCents": zod.number(),
+  "amountOwedCents": zod.number(),
+  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
+  "completedAt": zod.coerce.date(),
+  "paidAt": zod.coerce.date().nullable(),
+  "paidByUserId": zod.string().nullable(),
+  "paidByName": zod.string().nullable(),
+  "paymentReference": zod.string().nullable(),
+  "notes": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminTutorPayoutsResponse = zod.array(ListAdminTutorPayoutsResponseItem)
+
+
+/**
+ * @summary Mark a tutor payout obligation as paid offline
+ */
+export const MarkAdminTutorPayoutPaidParams = zod.object({
+  "obligationId": zod.coerce.string()
+})
+
+export const markAdminTutorPayoutPaidBodyPaymentReferenceMax = 500;
+
+export const markAdminTutorPayoutPaidBodyNotesMax = 2000;
+
+
+
+export const MarkAdminTutorPayoutPaidBody = zod.object({
+  "paymentReference": zod.string().max(markAdminTutorPayoutPaidBodyPaymentReferenceMax).optional(),
+  "notes": zod.string().max(markAdminTutorPayoutPaidBodyNotesMax).optional()
+})
+
+export const MarkAdminTutorPayoutPaidResponse = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string().nullable(),
+  "tutorUserId": zod.string(),
+  "tutorName": zod.string().nullable(),
+  "tutorProfileId": zod.string(),
+  "sessionDateTime": zod.coerce.date(),
+  "durationMinutes": zod.number(),
+  "paymentId": zod.string().nullable(),
+  "purchaseReference": zod.string().nullable(),
+  "tutorRateCents": zod.number(),
+  "amountOwedCents": zod.number(),
+  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
+  "completedAt": zod.coerce.date(),
+  "paidAt": zod.coerce.date().nullable(),
+  "paidByUserId": zod.string().nullable(),
+  "paidByName": zod.string().nullable(),
+  "paymentReference": zod.string().nullable(),
+  "notes": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reverse a tutor payout obligation
+ */
+export const ReverseAdminTutorPayoutParams = zod.object({
+  "obligationId": zod.coerce.string()
+})
+
+export const reverseAdminTutorPayoutBodyNotesMax = 2000;
+
+
+
+export const ReverseAdminTutorPayoutBody = zod.object({
+  "notes": zod.string().max(reverseAdminTutorPayoutBodyNotesMax).optional()
+})
+
+export const ReverseAdminTutorPayoutResponse = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string().nullable(),
+  "tutorUserId": zod.string(),
+  "tutorName": zod.string().nullable(),
+  "tutorProfileId": zod.string(),
+  "sessionDateTime": zod.coerce.date(),
+  "durationMinutes": zod.number(),
+  "paymentId": zod.string().nullable(),
+  "purchaseReference": zod.string().nullable(),
+  "tutorRateCents": zod.number(),
+  "amountOwedCents": zod.number(),
+  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
+  "completedAt": zod.coerce.date(),
+  "paidAt": zod.coerce.date().nullable(),
+  "paidByUserId": zod.string().nullable(),
+  "paidByName": zod.string().nullable(),
+  "paymentReference": zod.string().nullable(),
+  "notes": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List the current tutor's payout obligations
+ */
+export const ListTutorPayoutsResponseItem = zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "studentUserId": zod.string(),
+  "studentName": zod.string().nullable(),
+  "tutorUserId": zod.string(),
+  "tutorName": zod.string().nullable(),
+  "tutorProfileId": zod.string(),
+  "sessionDateTime": zod.coerce.date(),
+  "durationMinutes": zod.number(),
+  "paymentId": zod.string().nullable(),
+  "purchaseReference": zod.string().nullable(),
+  "tutorRateCents": zod.number(),
+  "amountOwedCents": zod.number(),
+  "status": zod.enum(['pending', 'due', 'paid', 'reversed']),
+  "completedAt": zod.coerce.date(),
+  "paidAt": zod.coerce.date().nullable(),
+  "paidByUserId": zod.string().nullable(),
+  "paidByName": zod.string().nullable(),
+  "paymentReference": zod.string().nullable(),
+  "notes": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListTutorPayoutsResponse = zod.array(ListTutorPayoutsResponseItem)
+
+
+/**
  * @summary List all SAT products for catalog administration
  */
 export const ListAdminProductsResponseItem = zod.object({

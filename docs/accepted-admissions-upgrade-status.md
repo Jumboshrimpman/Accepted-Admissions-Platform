@@ -66,3 +66,11 @@ The following are intentionally not labeled live:
 - Booking, cancellation, and credit restore write audit logs; administrators receive in-app booking notifications.
 - Google Calendar OAuth uses environment-provided HTTPS `GOOGLE_CALENDAR_REDIRECT_URI` (or HTTPS `${APP_ORIGIN}/api/calendar/oauth/callback`); no committed replit.dev callback.
 - Confirmed appointments use Meet location `https://meet.google.com/rih-iayt-okb`; calendar create failure rolls back the booking and restores the credit.
+
+## rescue/04-tutor-payout-ledger
+
+- Completed tutoring sessions accrue a manual tutor payout obligation using the active compensation rate (Xavier $65/hr); cancelled bookings never create an obligation.
+- Session unique constraint prevents duplicate obligations when the same session is completed more than once.
+- Client purchases keep `tutorShareCents = 0` so funds remain with Accepted Admissions; no Stripe Connect / bank transfers are initiated for these payables.
+- Administrators list obligations and mark them paid (or reverse) with optional payment reference and notes; tutors may view only their own payout history.
+- Clients and viewers do not see tutor compensation or payout ledger data.

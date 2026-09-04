@@ -94,6 +94,14 @@ import {
   voidHostedInvoice,
 } from "../lib/payment-service";
 import {
+  accrueObligationForCompletedSession,
+  listTutorPayoutObligations,
+  markObligationPaid,
+  reverseObligation,
+  TutorPayoutLedgerError,
+  type TutorPayoutObligationView,
+} from "../lib/tutor-payout-ledger";
+import {
   createStripeConnectAccount,
   createStripeConnectAccountLink,
   retrieveStripeConnectAccount,
@@ -138,6 +146,7 @@ import {
   GetDashboardResponse,
   GetSessionParams,
   GetSessionResponse,
+  ListAdminTutorPayoutsResponse,
   ListAssignmentsQueryParams,
   ListAssignmentsResponse,
   ListCoursesResponse,
@@ -147,6 +156,13 @@ import {
   ListQuestionBankResponse,
   ListReviewQueueResponse,
   ListReviewSubmissionsResponse,
+  ListTutorPayoutsResponse,
+  MarkAdminTutorPayoutPaidBody,
+  MarkAdminTutorPayoutPaidParams,
+  MarkAdminTutorPayoutPaidResponse,
+  ReverseAdminTutorPayoutBody,
+  ReverseAdminTutorPayoutParams,
+  ReverseAdminTutorPayoutResponse,
   ListSessionArtifactsParams,
   ListSessionArtifactsResponse,
   RefreshAdaptiveCurriculumParams,
@@ -4714,6 +4730,115 @@ router.post(
   },
 );
 
+function serializeTutorPayoutObligation(row: TutorPayoutObligationView) {
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    studentUserId: row.studentUserId,
+    studentName: row.studentName,
+    tutorUserId: row.tutorUserId,
+    tutorName: row.tutorName,
+    tutorProfileId: row.tutorProfileId,
+    sessionDateTime: row.sessionDateTime,
+    durationMinutes: row.durationMinutes,
+    paymentId: row.paymentId,
+    purchaseReference: row.purchaseReference,
+    tutorRateCents: row.tutorRateCents,
+    amountOwedCents: row.amountOwedCents,
+    status: row.status,
+    completedAt: row.completedAt,
+    paidAt: row.paidAt,
+    paidByUserId: row.paidByUserId,
+    paidByName: row.paidByName,
+    paymentReference: row.paymentReference,
+    notes: row.notes,
+    createdAt: row.createdAt,
+  };
+}
+
+function sendTutorPayoutLedgerError(error: unknown, res: Response): boolean {
+  if (!(error instanceof TutorPayoutLedgerError)) return false;
+  res.status(error.status).json({ error: error.message, code: error.code });
+  return true;
+}
+
+router.get(
+  "/admin/tutor-payouts",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    const rows = await listTutorPayoutObligations();
+    res.json(ListAdminTutorPayoutsResponse.parse(rows.map(serializeTutorPayoutObligation)));
+  },
+);
+
+router.post(
+  "/admin/tutor-payouts/:obligationId/mark-paid",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = MarkAdminTutorPayoutPaidParams.safeParse(req.params);
+    const body = MarkAdminTutorPayoutPaidBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid payout payment details." });
+      return;
+    }
+    try {
+      const updated = await markObligationPaid(params.data.obligationId, req.appUser!, {
+        paymentReference: body.data.paymentReference,
+        notes: body.data.notes,
+      });
+      const matched =
+        (await listTutorPayoutObligations()).find((row) => row.id === updated.id) ?? null;
+      if (!matched) {
+        res.status(404).json({ error: "Payout obligation not found" });
+        return;
+      }
+      res.json(MarkAdminTutorPayoutPaidResponse.parse(serializeTutorPayoutObligation(matched)));
+    } catch (error) {
+      if (sendTutorPayoutLedgerError(error, res)) return;
+      throw error;
+    }
+  },
+);
+
+router.post(
+  "/admin/tutor-payouts/:obligationId/reverse",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = ReverseAdminTutorPayoutParams.safeParse(req.params);
+    const body = ReverseAdminTutorPayoutBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid payout reversal details." });
+      return;
+    }
+    try {
+      const updated = await reverseObligation(
+        params.data.obligationId,
+        req.appUser!,
+        body.data.notes,
+      );
+      const matched =
+        (await listTutorPayoutObligations()).find((row) => row.id === updated.id) ?? null;
+      if (!matched) {
+        res.status(404).json({ error: "Payout obligation not found" });
+        return;
+      }
+      res.json(ReverseAdminTutorPayoutResponse.parse(serializeTutorPayoutObligation(matched)));
+    } catch (error) {
+      if (sendTutorPayoutLedgerError(error, res)) return;
+      throw error;
+    }
+  },
+);
+
+router.get(
+  "/tutor/payouts",
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const rows = await listTutorPayoutObligations({ tutorUserId: req.appUser!.id });
+    res.json(ListTutorPayoutsResponse.parse(rows.map(serializeTutorPayoutObligation)));
+  },
+);
+
 router.post(
   "/payments/checkout",
   ensureRole(["student"]),
@@ -6738,15 +6863,37 @@ router.patch(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
-    const [updated] = await db.update(sessionsTable).set({ ...next, updatedAt: new Date() }).where(eq(sessionsTable.id, existing.id)).returning();
-    await db.insert(auditLogsTable).values({
-      actorUserId: req.appUser!.id,
-      action: updated!.status === "archived" ? "session.archived" : "session.updated",
-      entityType: "session",
-      entityId: updated!.id,
-      metadata: { courseId: updated!.courseId, status: updated!.status },
-    });
-    res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated!)));
+    let updated: typeof sessionsTable.$inferSelect;
+    try {
+      updated = await db.transaction(async (tx) => {
+        const [saved] = await tx
+          .update(sessionsTable)
+          .set({ ...next, updatedAt: new Date() })
+          .where(eq(sessionsTable.id, existing.id))
+          .returning();
+        if (!saved) {
+          throw new Error("SESSION_UPDATE_FAILED");
+        }
+        if (saved.status === "completed") {
+          await accrueObligationForCompletedSession(saved, tx);
+        }
+        await tx.insert(auditLogsTable).values({
+          actorUserId: req.appUser!.id,
+          action: saved.status === "archived" ? "session.archived" : "session.updated",
+          entityType: "session",
+          entityId: saved.id,
+          metadata: { courseId: saved.courseId, status: saved.status },
+        });
+        return saved;
+      });
+    } catch (error) {
+      if (error instanceof TutorPayoutLedgerError) {
+        res.status(error.status).json({ error: error.message, code: error.code });
+        return;
+      }
+      throw error;
+    }
+    res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated)));
   },
 );
 

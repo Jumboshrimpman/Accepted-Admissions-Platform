@@ -483,6 +483,50 @@ export const paymentsTable = pgTable(
   ],
 );
 
+export const tutorPayoutObligationStatusEnum = pgEnum("tutor_payout_obligation_status", [
+  "pending",
+  "due",
+  "paid",
+  "reversed",
+]);
+
+export const tutorPayoutObligationsTable = pgTable(
+  "tutor_payout_obligations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessionsTable.id),
+    studentUserId: uuid("student_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    tutorUserId: uuid("tutor_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    tutorProfileId: uuid("tutor_profile_id")
+      .notNull()
+      .references(() => tutorProfilesTable.id),
+    sessionDateTime: timestamp("session_date_time", { withTimezone: true }).notNull(),
+    durationMinutes: numeric("duration_minutes", { mode: "number" }).notNull(),
+    paymentId: uuid("payment_id").references(() => paymentsTable.id),
+    purchaseReference: text("purchase_reference"),
+    tutorRateCents: numeric("tutor_rate_cents", { mode: "number" }).notNull(),
+    amountOwedCents: numeric("amount_owed_cents", { mode: "number" }).notNull(),
+    status: tutorPayoutObligationStatusEnum("status").notNull().default("due"),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: uuid("paid_by_user_id").references(() => usersTable.id),
+    paymentReference: text("payment_reference"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("tutor_payout_obligation_session_unique_idx").on(table.sessionId),
+    index("tutor_payout_obligation_tutor_status_idx").on(table.tutorUserId, table.status),
+  ],
+);
+
 export const stripeTransfersTable = pgTable(
   "stripe_transfers",
   {

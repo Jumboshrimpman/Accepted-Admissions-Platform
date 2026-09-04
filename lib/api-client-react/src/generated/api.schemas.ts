@@ -204,6 +204,61 @@ export type TutorPayoutOnboarding = TutorPayoutStatus & {
   url: string;
 };
 
+export type TutorPayoutObligationStatus = typeof TutorPayoutObligationStatus[keyof typeof TutorPayoutObligationStatus];
+
+
+export const TutorPayoutObligationStatus = {
+  pending: 'pending',
+  due: 'due',
+  paid: 'paid',
+  reversed: 'reversed',
+} as const;
+
+export interface TutorPayoutObligation {
+  id: string;
+  sessionId: string;
+  studentUserId: string;
+  /** @nullable */
+  studentName: string | null;
+  tutorUserId: string;
+  /** @nullable */
+  tutorName: string | null;
+  tutorProfileId: string;
+  sessionDateTime: string;
+  durationMinutes: number;
+  /** @nullable */
+  paymentId: string | null;
+  /** @nullable */
+  purchaseReference: string | null;
+  tutorRateCents: number;
+  amountOwedCents: number;
+  status: TutorPayoutObligationStatus;
+  completedAt: string;
+  /** @nullable */
+  paidAt: string | null;
+  /** @nullable */
+  paidByUserId: string | null;
+  /** @nullable */
+  paidByName: string | null;
+  /** @nullable */
+  paymentReference: string | null;
+  /** @nullable */
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface MarkTutorPayoutPaidInput {
+  /** @maxLength 500 */
+  paymentReference?: string;
+  /** @maxLength 2000 */
+  notes?: string;
+}
+
+export interface ReverseTutorPayoutInput {
+  /** @maxLength 2000 */
+  notes?: string;
+}
+
 export type HostedInvoiceInputProvider = typeof HostedInvoiceInputProvider[keyof typeof HostedInvoiceInputProvider];
 
 

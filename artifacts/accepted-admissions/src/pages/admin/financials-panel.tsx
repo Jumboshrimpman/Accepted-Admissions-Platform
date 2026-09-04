@@ -6,12 +6,16 @@ import {
   getGetAdminFinancialsQueryKey,
   getGetAdminXavierPayoutQueryKey,
   getGetAdminOverviewQueryKey,
+  getListAdminTutorPayoutsQueryKey,
   useCreateCreditAdjustment,
   useCreateHostedInvoice,
   useCreateOfflinePayment,
   useGetAdminFinancials,
   useGetAdminXavierPayout,
+  useListAdminTutorPayouts,
+  useMarkAdminTutorPayoutPaid,
   useReconcileAdminTutorTransfer,
+  useReverseAdminTutorPayout,
   useUpdateAdminProduct,
   useUpdateInvoice,
 } from "@workspace/api-client-react";
@@ -38,7 +42,12 @@ export function AdminFinancialsPanel() {
   const payout = useGetAdminXavierPayout({
     query: { queryKey: getGetAdminXavierPayoutQueryKey(), staleTime: 10_000 },
   });
+  const tutorPayouts = useListAdminTutorPayouts({
+    query: { queryKey: getListAdminTutorPayoutsQueryKey(), staleTime: 10_000 },
+  });
   const payoutOnboarding = useCreateAdminXavierPayoutOnboarding();
+  const markTutorPayoutPaid = useMarkAdminTutorPayoutPaid();
+  const reverseTutorPayout = useReverseAdminTutorPayout();
   const reconcileTransfer = useReconcileAdminTutorTransfer();
   const hostedInvoice = useCreateHostedInvoice();
   const offlinePayment = useCreateOfflinePayment();
@@ -74,10 +83,14 @@ export function AdminFinancialsPanel() {
     totalPrice: "",
   });
   const [editingProductId, setEditingProductId] = useState("");
+  const [payoutPaymentReference, setPayoutPaymentReference] = useState("");
+  const [payoutNotes, setPayoutNotes] = useState("");
+  const [payingObligationId, setPayingObligationId] = useState("");
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getGetAdminFinancialsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetAdminXavierPayoutQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListAdminTutorPayoutsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
   };
   const complete = (text: string) => {
@@ -93,7 +106,9 @@ export function AdminFinancialsPanel() {
     createProduct.isPending ||
     updateProduct.isPending ||
     payoutOnboarding.isPending ||
-    reconcileTransfer.isPending;
+    reconcileTransfer.isPending ||
+    markTutorPayoutPaid.isPending ||
+    reverseTutorPayout.isPending;
 
   if (financials.isLoading) return <Skeleton className="h-96 rounded-2xl" />;
   if (!financials.data) return null;
@@ -140,19 +155,19 @@ export function AdminFinancialsPanel() {
         <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 className="font-semibold">Xavier Morales · Stripe Connect payouts</h3>
+              <h3 className="font-semibold">Xavier Morales · Stripe Connect (legacy)</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Checkout stays blocked until Stripe confirms Xavier can receive the fixed $65 tutor allocation.
+                Client purchases settle to Accepted Admissions. Tutor payables accrue only after completed sessions and are settled manually below — this Connect panel does not initiate payout transfers.
               </p>
             </div>
             <Badge variant={payout.data?.ready ? "secondary" : "outline"} className="w-fit capitalize">
-              {payout.isLoading ? "Checking…" : payout.data?.ready ? "Ready for checkout" : payout.data?.status?.replaceAll("_", " ") ?? "Unavailable"}
+              {payout.isLoading ? "Checking…" : payout.data?.ready ? "Connect ready" : payout.data?.status?.replaceAll("_", " ") ?? "Unavailable"}
             </Badge>
           </div>
           {payout.data && (
             <div className="grid gap-3 text-sm sm:grid-cols-3">
-              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Tutor allocation</p><p className="mt-1 font-semibold">{money(6500)} per purchase</p></div>
-              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Platform gross share</p><p className="mt-1 font-semibold">{money(8500)} before Stripe fees</p></div>
+              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Hourly tutor rate</p><p className="mt-1 font-semibold">{money(6500)} after completion</p></div>
+              <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Purchase settlement</p><p className="mt-1 font-semibold">Platform account</p></div>
               <div className="rounded-xl bg-background p-3"><p className="text-muted-foreground">Connected account</p><p className="mt-1 font-semibold">{payout.data.accountId ? `••••${payout.data.accountId.slice(-6)}` : "Not created"}</p></div>
             </div>
           )}
@@ -173,6 +188,129 @@ export function AdminFinancialsPanel() {
               <RefreshCw className={`mr-2 h-4 w-4 ${payout.isFetching ? "animate-spin" : ""}`} />
               Refresh status
             </Button>
+          </div>
+        </section>
+        <section className="space-y-4 rounded-2xl border p-4">
+          <div>
+            <h3 className="font-semibold">Tutor payout ledger</h3>
+            <p className="text-sm text-muted-foreground">
+              Obligations become due when a session is marked completed ($65/hr for Xavier). Mark paid after settling offline — no bank or Stripe Connect transfer is initiated here.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input
+              placeholder="Optional payment reference"
+              value={payoutPaymentReference}
+              onChange={(event) => setPayoutPaymentReference(event.target.value)}
+            />
+            <Input
+              placeholder="Optional notes"
+              value={payoutNotes}
+              onChange={(event) => setPayoutNotes(event.target.value)}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="p-3">Tutor</th>
+                  <th className="p-3">Student</th>
+                  <th className="p-3">Session</th>
+                  <th className="p-3">Rate</th>
+                  <th className="p-3">Owed</th>
+                  <th className="p-3">Purchase</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(tutorPayouts.data ?? []).map((row) => (
+                  <tr key={row.id} className="border-b">
+                    <td className="p-3">{row.tutorName ?? "Tutor"}</td>
+                    <td className="p-3">{row.studentName ?? "Student"}</td>
+                    <td className="p-3">
+                      <p>{new Date(row.sessionDateTime).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">{row.durationMinutes} min</p>
+                    </td>
+                    <td className="p-3">{money(row.tutorRateCents)}/hr</td>
+                    <td className="p-3 font-medium">{money(row.amountOwedCents)}</td>
+                    <td className="p-3 text-xs text-muted-foreground">{row.purchaseReference ?? "—"}</td>
+                    <td className="p-3">
+                      <Badge variant="outline" className="capitalize">{row.status}</Badge>
+                      {row.paidAt && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Paid {new Date(row.paidAt).toLocaleDateString()}
+                          {row.paidByName ? ` · ${row.paidByName}` : ""}
+                        </p>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-2">
+                        {["due", "pending"].includes(row.status) && (
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => {
+                              setPayingObligationId(row.id);
+                              markTutorPayoutPaid.mutate(
+                                {
+                                  obligationId: row.id,
+                                  data: {
+                                    paymentReference: payoutPaymentReference || undefined,
+                                    notes: payoutNotes || undefined,
+                                  },
+                                },
+                                {
+                                  onSuccess: () => {
+                                    setPayingObligationId("");
+                                    setPayoutPaymentReference("");
+                                    setPayoutNotes("");
+                                    complete("Tutor payout marked paid.");
+                                  },
+                                  onError: (error) => {
+                                    setPayingObligationId("");
+                                    fail(error);
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            {markTutorPayoutPaid.isPending && payingObligationId === row.id && (
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                            )}
+                            Mark paid
+                          </Button>
+                        )}
+                        {row.status !== "reversed" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() =>
+                              reverseTutorPayout.mutate(
+                                {
+                                  obligationId: row.id,
+                                  data: { notes: payoutNotes || undefined },
+                                },
+                                {
+                                  onSuccess: () => complete("Tutor payout reversed."),
+                                  onError: fail,
+                                },
+                              )
+                            }
+                          >
+                            Reverse
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(tutorPayouts.data?.length ?? 0) === 0 && (
+              <p className="py-5 text-sm text-muted-foreground">No tutor payout obligations yet.</p>
+            )}
           </div>
         </section>
         <section className="space-y-3 rounded-2xl border p-4">

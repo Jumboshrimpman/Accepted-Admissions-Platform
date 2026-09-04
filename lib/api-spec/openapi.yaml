@@ -335,6 +335,86 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /admin/tutor-payouts:
+    get:
+      operationId: listAdminTutorPayouts
+      tags: [administration]
+      summary: List tutor payout obligations for manual settlement
+      responses:
+        "200":
+          description: Company-wide tutor payout ledger
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TutorPayoutObligation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/tutor-payouts/{obligationId}/mark-paid:
+    post:
+      operationId: markAdminTutorPayoutPaid
+      tags: [administration]
+      summary: Mark a tutor payout obligation as paid offline
+      parameters:
+        - name: obligationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkTutorPayoutPaidInput" }
+      responses:
+        "200":
+          description: Updated payout obligation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TutorPayoutObligation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /admin/tutor-payouts/{obligationId}/reverse:
+    post:
+      operationId: reverseAdminTutorPayout
+      tags: [administration]
+      summary: Reverse a tutor payout obligation
+      parameters:
+        - name: obligationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReverseTutorPayoutInput" }
+      responses:
+        "200":
+          description: Updated payout obligation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TutorPayoutObligation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /tutor/payouts:
+    get:
+      operationId: listTutorPayouts
+      tags: [portal]
+      summary: List the current tutor's payout obligations
+      responses:
+        "200":
+          description: Tutor-scoped payout history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TutorPayoutObligation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /admin/products:
     get:
       operationId: listAdminProducts
@@ -1601,6 +1681,66 @@ components:
         status: { type: string }
         failureReason: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
+    TutorPayoutObligationStatus:
+      type: string
+      enum: [pending, due, paid, reversed]
+    TutorPayoutObligation:
+      type: object
+      required:
+        [
+          id,
+          sessionId,
+          studentUserId,
+          studentName,
+          tutorUserId,
+          tutorName,
+          tutorProfileId,
+          sessionDateTime,
+          durationMinutes,
+          paymentId,
+          purchaseReference,
+          tutorRateCents,
+          amountOwedCents,
+          status,
+          completedAt,
+          paidAt,
+          paidByUserId,
+          paidByName,
+          paymentReference,
+          notes,
+          createdAt,
+        ]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        studentUserId: { type: string }
+        studentName: { type: ["string", "null"] }
+        tutorUserId: { type: string }
+        tutorName: { type: ["string", "null"] }
+        tutorProfileId: { type: string }
+        sessionDateTime: { type: string, format: date-time }
+        durationMinutes: { type: number }
+        paymentId: { type: ["string", "null"] }
+        purchaseReference: { type: ["string", "null"] }
+        tutorRateCents: { type: number }
+        amountOwedCents: { type: number }
+        status: { $ref: "#/components/schemas/TutorPayoutObligationStatus" }
+        completedAt: { type: string, format: date-time }
+        paidAt: { type: ["string", "null"], format: date-time }
+        paidByUserId: { type: ["string", "null"] }
+        paidByName: { type: ["string", "null"] }
+        paymentReference: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    MarkTutorPayoutPaidInput:
+      type: object
+      properties:
+        paymentReference: { type: string, maxLength: 500 }
+        notes: { type: string, maxLength: 2000 }
+    ReverseTutorPayoutInput:
+      type: object
+      properties:
+        notes: { type: string, maxLength: 2000 }
     HostedInvoiceInput:
       type: object
       required: [clientUserId]
