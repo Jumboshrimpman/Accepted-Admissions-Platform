@@ -18,7 +18,7 @@ const basePath = process.env.BASE_PATH ?? '/';
 const outputDir = path.resolve(import.meta.dirname, 'dist/public');
 const publicOrigin =
   process.env.PUBLIC_SITE_ORIGIN ??
-  'https://accepted-admissions-platform.replit.app';
+  'https://www.acceptedadmissions.org';
 const normalizedBasePath = `/${basePath.replace(/^\/|\/$/g, '')}${basePath === '/' ? '' : '/'}`;
 
 function crawlerAssets() {

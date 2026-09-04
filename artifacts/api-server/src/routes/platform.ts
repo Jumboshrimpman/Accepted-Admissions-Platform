@@ -82,9 +82,13 @@ import {
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
+  APPROVED_SCHOOL_LOGOS,
+  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
+  rewriteLegacyWixMediaUrl,
+  rewriteLegacyWixSchoolLogos,
 } from "../lib/public-team-roster";
 import {
   createCheckoutSession,
@@ -286,10 +290,10 @@ const ACCEPTED_SAT_CATALOG = [
 const ACCEPTED_SAT_CATALOG_SLUGS = new Set(ACCEPTED_SAT_CATALOG.map((product) => product.slug));
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
-const NIKA_APPROVED_PHOTO_URL =
-  "https://static.wixstatic.com/media/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png/v1/fill/w_457,h_685,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png";
-const NIKA_LEGACY_SEED_PHOTO_URL =
-  "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg";
+const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
+const NIKA_LEGACY_SEED_PHOTO_URL = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
+const NIKA_LEGACY_APPROVED_WIX_PHOTO_URL =
+  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
 const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
 const RYO_VIEWER_EMAIL = "ryo@jaac.co.jp";
 const TAITO_VIEWER_RELATIONSHIP =
@@ -1455,6 +1459,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
           isNull(tutorProfilesTable.photoUrl),
           eq(tutorProfilesTable.photoUrl, ""),
           eq(tutorProfilesTable.photoUrl, NIKA_LEGACY_SEED_PHOTO_URL),
+          eq(tutorProfilesTable.photoUrl, NIKA_LEGACY_APPROVED_WIX_PHOTO_URL),
         ),
       ),
     );
@@ -1489,6 +1494,27 @@ async function ensureUpgradeSeedData(): Promise<void> {
             : eq(tutorProfilesTable.photoUrl, update.previousPhotoUrl),
         ),
       );
+  }
+
+  // Rewrite any remaining known Wix CDN portrait URLs to first-party assets so
+  // the public site does not depend on the retired Wix marketing site.
+  for (const name of PUBLIC_TUTOR_ORDER) {
+    const legacyUrl = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS[name];
+    const localUrl = APPROVED_PUBLIC_TEAM_PORTRAITS[name];
+    if (legacyUrl === localUrl) continue;
+    await db
+      .update(tutorProfilesTable)
+      .set({ photoUrl: localUrl, updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.photoUrl, legacyUrl));
+  }
+  for (const legacyUrl of [
+    "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",
+    "https://static.wixstatic.com/media/2c8654_3d3d703b8ea343ef8805961027f1406a~mv2.jpg/v1/crop/x_32,y_0,w_537,h_400/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Manuel.jpg",
+  ] as const) {
+    await db
+      .update(tutorProfilesTable)
+      .set({ photoUrl: rewriteLegacyWixMediaUrl(legacyUrl), updatedAt: new Date() })
+      .where(eq(tutorProfilesTable.photoUrl, legacyUrl));
   }
 
   // Catalog prices are owned by migration 0019_accepted_admissions_sat_catalog.
@@ -1610,43 +1636,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
             attribution: "Sarah M.",
             attributionMode: "named",
           },
-          schoolLogos: [
-            {
-              name: "Harvard University",
-              src: "https://static.wixstatic.com/media/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png",
-              alt: "Harvard University logo",
-            },
-            {
-              name: "Princeton University",
-              src: "https://static.wixstatic.com/media/2c8654_d6d5f4729bd048ddb2366f66b32506c4~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/princeton%20logo.png",
-              alt: "Princeton University logo",
-            },
-            {
-              name: "MIT",
-              src: "https://static.wixstatic.com/media/2c8654_e7dedad8e02d43e6965cb5d8054d6c15~mv2.jpg/v1/crop/x_276,y_222,w_528,h_425/fill/w_296,h_238,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/MIT_edited.jpg",
-              alt: "MIT logo",
-            },
-            {
-              name: "University of Chicago",
-              src: "https://static.wixstatic.com/media/2c8654_dfa69976a1274e4f9de87500d1409fc0~mv2.jpg",
-              alt: "University of Chicago logo",
-            },
-            {
-              name: "Georgetown University",
-              src: "https://static.wixstatic.com/media/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png/v1/fill/w_266,h_266,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Georgetown-University-Logo.png",
-              alt: "Georgetown University logo",
-            },
-            {
-              name: "Boston University",
-              src: "https://static.wixstatic.com/media/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png/v1/fill/w_250,h_250,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Boston_University_seal.svg.png",
-              alt: "Boston University seal",
-            },
-            {
-              name: "Claremont McKenna College",
-              src: "https://static.wixstatic.com/media/2c8654_69f9b18f19db4eb68fa898beeaec3768~mv2.png/v1/fill/w_266,h_277,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/CMC%20Seal.png",
-              alt: "Claremont McKenna College seal",
-            },
-          ],
+          schoolLogos: [...APPROVED_SCHOOL_LOGOS],
         },
         status: "published",
         publishedAt: new Date(),
@@ -1708,6 +1698,27 @@ async function ensureUpgradeSeedData(): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(publicContentTable.id, successSeed.id));
+  }
+
+  // Rewrite known Wix CDN school logos on every past-success record so published
+  // pages keep working after the Wix site is shut down. Custom admin URLs that
+  // are not in the legacy map are left unchanged.
+  const pastSuccessPages = await db
+    .select({ id: publicContentTable.id, body: publicContentTable.body })
+    .from(publicContentTable)
+    .where(eq(publicContentTable.slug, "past-success"));
+  for (const page of pastSuccessPages) {
+    if (!page.body || typeof page.body !== "object" || Array.isArray(page.body)) continue;
+    const body = page.body as Record<string, unknown>;
+    const rewrittenLogos = rewriteLegacyWixSchoolLogos(body.schoolLogos);
+    if (!rewrittenLogos) continue;
+    await db
+      .update(publicContentTable)
+      .set({
+        body: { ...body, schoolLogos: rewrittenLogos },
+        updatedAt: new Date(),
+      })
+      .where(eq(publicContentTable.id, page.id));
   }
 }
 
@@ -3247,6 +3258,20 @@ function safePublicUrl(value: unknown): boolean {
   }
 }
 
+/** Absolute http(s) URLs or same-origin relative media paths (no protocol-relative or traversal). */
+function safePublicMediaUrl(value: unknown): boolean {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  if (
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.includes("\\") &&
+    !value.includes("..")
+  ) {
+    return true;
+  }
+  return safePublicUrl(value);
+}
+
 function publicContentPublicationError(
   pageType: string,
   record: {
@@ -3311,11 +3336,11 @@ function publicContentPublicationError(
           Array.isArray(logo) ||
           typeof name !== "string" ||
           !name.trim() ||
-          !safePublicUrl(item.src) ||
+          !safePublicMediaUrl(item.src) ||
           typeof alt !== "string" ||
           !alt.trim()
         ) {
-          return "Each school logo needs a name, safe http(s) image URL, and alt text.";
+          return "Each school logo needs a name, safe http(s) or site-relative image URL, and alt text.";
         }
       }
     }
@@ -3895,8 +3920,8 @@ router.patch(
         res.status(400).json({ error: "An approved tutor needs a biography." });
         return;
       }
-      if (proposed.photoUrl !== null && proposed.photoUrl !== undefined && !safePublicUrl(proposed.photoUrl)) {
-        res.status(400).json({ error: "A headshot URL must use http or https." });
+      if (proposed.photoUrl !== null && proposed.photoUrl !== undefined && !safePublicMediaUrl(proposed.photoUrl)) {
+        res.status(400).json({ error: "A headshot URL must use http(s) or a site-relative path." });
         return;
       }
       if (proposed.photoUrl && (typeof proposed.photoAltText !== "string" || !proposed.photoAltText.trim())) {

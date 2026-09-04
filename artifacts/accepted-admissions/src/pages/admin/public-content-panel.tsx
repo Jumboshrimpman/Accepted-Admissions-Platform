@@ -189,7 +189,7 @@ export function PublicContentPanel() {
               <Field label="Title"><Input value={tutor.title} onChange={(event) => updateTutor(tutor.id, { title: event.target.value })} /></Field>
               <Field label="Biography"><Textarea rows={6} value={tutor.biography ?? ""} onChange={(event) => updateTutor(tutor.id, { biography: event.target.value })} /></Field>
               <Field label="Subjects and services"><Input value={tutor.subjects.join(", ")} onChange={(event) => updateTutor(tutor.id, { subjects: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} /></Field>
-              <Field label="Headshot URL"><Input type="url" value={tutor.photoUrl ?? ""} onChange={(event) => updateTutor(tutor.id, { photoUrl: event.target.value || null })} /></Field>
+              <Field label="Headshot URL"><Input type="text" inputMode="url" value={tutor.photoUrl ?? ""} onChange={(event) => updateTutor(tutor.id, { photoUrl: event.target.value || null })} /></Field>
               <Field label="Headshot alt text"><Input value={tutor.photoAltText ?? ""} onChange={(event) => updateTutor(tutor.id, { photoAltText: event.target.value || null })} /></Field>
               <Field label="LinkedIn URL"><Input type="url" value={tutor.linkedinUrl ?? ""} onChange={(event) => updateTutor(tutor.id, { linkedinUrl: event.target.value || null })} /></Field>
               <div className="flex flex-wrap gap-6 pt-2">
@@ -289,7 +289,8 @@ export function PublicContentPanel() {
                     />
                     <Input
                       aria-label={`${logo.name} image URL`}
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       value={logo.src}
                       onChange={(event) => {
                         const schoolLogos = [...(success.body.schoolLogos ?? [])];

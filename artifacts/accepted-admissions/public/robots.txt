@@ -8,4 +8,4 @@ Disallow: /sign-in
 Disallow: /t-g
 Disallow: /tutor
 
-Sitemap: https://accepted-admissions-platform.replit.app/sitemap.xml
+Sitemap: https://www.acceptedadmissions.org/sitemap.xml
