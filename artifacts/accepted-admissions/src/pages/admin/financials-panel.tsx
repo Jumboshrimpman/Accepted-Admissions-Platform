@@ -316,7 +316,7 @@ export function AdminFinancialsPanel() {
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
             <h3 className="font-semibold">Authoritative SAT catalog</h3>
-            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($175 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits). Funds settle to Accepted Admissions; credits grant only after a verified Stripe webhook.</p>
+            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($130 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits at $130/hour). Credits book any open hour on Xavier or Eunice’s calendar after a verified Stripe webhook.</p>
           </div>
           <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />

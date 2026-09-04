@@ -170,7 +170,7 @@ export default function SatOfferings() {
                  Prepaid <span className="text-accent">SAT session credits.</span>
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                Purchase a single session or a ten-session package. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment.
+                 Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked on Xavier or Eunice’s calendar.
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-13 w-full rounded-md bg-primary px-7 text-primary-foreground sm:w-auto">
@@ -216,7 +216,7 @@ export default function SatOfferings() {
           <div className="mb-10 max-w-2xl">
                <p className="font-metadata text-accent">The current offers</p>
                 <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">SAT session credit packages.</h2>
-               <p className="mt-3 text-muted-foreground">Choose a single prepaid credit or a ten-session package. Prices come from the active catalog. Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
+               <p className="mt-3 text-muted-foreground">Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on Xavier or Eunice’s available calendar. Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
           </div>
           {loading ? (
              <div className="max-w-2xl" data-testid="status-sat-loading"><Skeleton className="h-72 rounded-lg" /></div>

@@ -148,6 +148,13 @@
       "when": 1788700000000,
       "tag": "0021_tutor_payout_obligations",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788800000000,
+      "tag": "0022_sat_hourly_rate_130",
+      "breakpoints": true
     }
   ]
 }

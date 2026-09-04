@@ -61,8 +61,9 @@ describe("administrator client preview", () => {
       adminPreview: true,
       previewOffer: {
         name: "Single SAT Session",
-        description: "One prepaid 60-minute SAT tutoring session credit.",
-        priceCents: 17500,
+        description:
+          "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
+        priceCents: 13000,
         durationMinutes: 60,
       },
       previewFinancials: {
@@ -75,7 +76,7 @@ describe("administrator client preview", () => {
         payments: [
           {
             id: "payment-1",
-            amountCents: 17500,
+            amountCents: 13000,
             refundedAmountCents: 0,
             status: "paid",
             method: "stripe",
