@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { APPROVED_PUBLIC_TEAM_PORTRAITS, MIRRORED_PORTRAIT_RECONCILIATIONS, PUBLIC_TUTOR_ORDER, publicTeamPortrait } from "./public-team-roster.ts";
+import {
+  APPROVED_PUBLIC_TEAM_PORTRAITS,
+  APPROVED_SCHOOL_LOGOS,
+  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
+  LEGACY_WIX_SCHOOL_LOGO_URLS,
+  MIRRORED_PORTRAIT_RECONCILIATIONS,
+  PUBLIC_TUTOR_ORDER,
+  publicTeamPortrait,
+  rewriteLegacyWixMediaUrl,
+  rewriteLegacyWixSchoolLogos,
+} from "./public-team-roster.ts";
 
 test("defines the complete approved public roster in display order", () => {
   assert.deepEqual(PUBLIC_TUTOR_ORDER, [
@@ -18,14 +28,19 @@ test("defines the complete approved public roster in display order", () => {
     "Sama Noori",
   ]);
   assert.deepEqual(Object.keys(APPROVED_PUBLIC_TEAM_PORTRAITS), PUBLIC_TUTOR_ORDER);
+  assert.deepEqual(Object.keys(LEGACY_WIX_PUBLIC_TEAM_PORTRAITS), PUBLIC_TUTOR_ORDER);
 });
 
-test("keeps Kya and every following portrait attached to the correct profile", () => {
-  assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"], /99fefc7159a4424fa7e6fb36ed6cbb86/);
-  assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"], /ab3655c726c846819c5eec1195af49bd/);
-  assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Kyle Englander"], /1ab78bc7f16a48559bc3b46364c94bcc/);
-  assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Daniel Salgado-Alvarez"], /72de1811814144689846123daff8471f/);
-  assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS["Sama Noori"], /fb647c84910a4d97bd9a13d22f9dc124/);
+test("serves first-party portraits instead of Wix CDN URLs", () => {
+  for (const name of PUBLIC_TUTOR_ORDER) {
+    assert.match(APPROVED_PUBLIC_TEAM_PORTRAITS[name], /^\/media\/team\//);
+    assert.match(LEGACY_WIX_PUBLIC_TEAM_PORTRAITS[name], /^https:\/\/static\.wixstatic\.com\//);
+  }
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"], "/media/team/kya-brooks.jpg");
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"], "/media/team/michael-pecorara.jpg");
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kyle Englander"], "/media/team/kyle-englander.jpg");
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Daniel Salgado-Alvarez"], "/media/team/daniel-salgado-alvarez.png");
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Sama Noori"], "/media/team/sama-noori.jpg");
 });
 
 test("locks Kya's public portrait even when the stored value is blank or drifted", () => {
@@ -35,6 +50,10 @@ test("locks Kya's public portrait even when the stored value is blank or drifted
   assert.equal(
     publicTeamPortrait("Michael Pecorara", "https://example.com/michael.jpg"),
     "https://example.com/michael.jpg",
+  );
+  assert.equal(
+    publicTeamPortrait("Michael Pecorara", LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"]),
+    APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"],
   );
 });
 
@@ -51,23 +70,47 @@ test("reconciles only the known mirrored offset without positional image lookup"
 
   assert.equal(
     corrections.get("Kya Brooks")?.previous,
-    APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"],
+    LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"],
   );
   assert.equal(
     corrections.get("Michael Pecorara")?.previous,
-    APPROVED_PUBLIC_TEAM_PORTRAITS["Kyle Englander"],
+    LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kyle Englander"],
   );
   assert.equal(
     corrections.get("Kyle Englander")?.previous,
-    APPROVED_PUBLIC_TEAM_PORTRAITS["Daniel Salgado-Alvarez"],
+    LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Daniel Salgado-Alvarez"],
   );
   assert.equal(
     corrections.get("Daniel Salgado-Alvarez")?.previous,
-    APPROVED_PUBLIC_TEAM_PORTRAITS["Sama Noori"],
+    LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Sama Noori"],
   );
   assert.equal(corrections.get("Sama Noori")?.previous, null);
   assert.notEqual(
     corrections.get("Kya Brooks")?.approved,
     corrections.get("Michael Pecorara")?.approved,
   );
+});
+
+test("rewrites known Wix school logos to local assets", () => {
+  assert.equal(APPROVED_SCHOOL_LOGOS.length, 7);
+  for (const logo of APPROVED_SCHOOL_LOGOS) {
+    assert.match(logo.src, /^\/media\/schools\//);
+  }
+  const rewritten = rewriteLegacyWixSchoolLogos(
+    Object.entries(LEGACY_WIX_SCHOOL_LOGO_URLS).map(([src], index) => ({
+      name: `School ${index}`,
+      src,
+      alt: `Alt ${index}`,
+    })),
+  );
+  assert.ok(rewritten);
+  assert.deepEqual(
+    rewritten?.map((logo) => logo.src),
+    Object.values(LEGACY_WIX_SCHOOL_LOGO_URLS),
+  );
+  assert.equal(
+    rewriteLegacyWixMediaUrl(LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Rosanna Kataja"]),
+    APPROVED_PUBLIC_TEAM_PORTRAITS["Rosanna Kataja"],
+  );
+  assert.equal(rewriteLegacyWixSchoolLogos([{ name: "Custom", src: "/media/schools/custom.png", alt: "Custom" }]), null);
 });

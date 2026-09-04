@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Linkedin, UserRound } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
+import { PublicSiteShell, fetchPublicJson, resolvePublicMediaUrl } from "@/components/public-site-shell";
 
 export type Tutor = {
   id: string;
@@ -110,7 +110,7 @@ function TeamPortrait({ tutor }: { tutor: Tutor }) {
     >
       {showImage && (
         <img
-          src={tutor.photoUrl ?? undefined}
+          src={resolvePublicMediaUrl(tutor.photoUrl)}
           alt={profileImageAlt(tutor)}
           width="640"
           height="960"

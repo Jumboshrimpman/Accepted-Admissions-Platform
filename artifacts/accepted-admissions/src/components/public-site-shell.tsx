@@ -32,6 +32,15 @@ export function publicAssetPath(path: string): string {
   return resolvePublicPath(path);
 }
 
+/** Resolve API-provided media URLs, including site-relative first-party assets. */
+export function resolvePublicMediaUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return publicAssetPath(url);
+  }
+  return url;
+}
+
 export function resolvePublicPath(path: string, root = basePath): string {
   return `${root.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }

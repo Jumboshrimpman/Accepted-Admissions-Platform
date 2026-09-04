@@ -6,6 +6,7 @@ vi.mock("@/components/public-site-shell", () => ({
     <div>{children}</div>
   ),
   publicApiPath: (path: string) => path,
+  resolvePublicMediaUrl: (url: string | null | undefined) => url ?? undefined,
   fetchPublicJson: async (path: string) => {
     const response = await fetch(path);
     return response.json();
@@ -126,11 +127,11 @@ describe("OurTeam publication gate", () => {
       ["Sama Noori", "sama"],
     ] as const;
     const approvedPortraits: Record<string, string> = {
-      kya: "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg",
-      michael: "https://static.wixstatic.com/media/2c8654_ab3655c726c846819c5eec1195af49bd~mv2.jpg",
-      kyle: "https://static.wixstatic.com/media/2c8654_1ab78bc7f16a48559bc3b46364c94bcc~mv2.jpg",
-      daniel: "https://static.wixstatic.com/media/2c8654_72de1811814144689846123daff8471f~mv2.png",
-      sama: "https://static.wixstatic.com/media/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg",
+      kya: "/media/team/kya-brooks.jpg",
+      michael: "/media/team/michael-pecorara.jpg",
+      kyle: "/media/team/kyle-englander.jpg",
+      daniel: "/media/team/daniel-salgado-alvarez.png",
+      sama: "/media/team/sama-noori.jpg",
     };
     const tutors = [...approvedRoster].reverse().map(([name, id]) => ({
       id,
@@ -183,8 +184,8 @@ describe("OurTeam publication gate", () => {
     const michaelCard = screen.getByTestId("card-team-michael");
     const kyaImage = within(kyaCard).getByAltText("Kya Brooks, Admissions Tutor");
     const michaelImage = within(michaelCard).getByAltText("Michael Pecorara, Tutor");
-    expect(kyaImage.getAttribute("src")).toContain("99fefc7159a4424fa7e6fb36ed6cbb86");
-    expect(michaelImage.getAttribute("src")).toContain("ab3655c726c846819c5eec1195af49bd");
+    expect(kyaImage.getAttribute("src")).toContain("/media/team/kya-brooks.jpg");
+    expect(michaelImage.getAttribute("src")).toContain("/media/team/michael-pecorara.jpg");
     expect(within(kyaCard).getByText(/Kya is a senior at Harvard/)).toBeTruthy();
     expect(
       within(michaelCard)
