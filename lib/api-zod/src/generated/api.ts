@@ -458,6 +458,8 @@ export const GetAdminClientDashboardResponse = zod.object({
 })),
   "reviewSkills": zod.array(zod.string()),
   "credits": zod.object({
+  "purchasedHours": zod.number(),
+  "usedHours": zod.number(),
   "remainingHours": zod.number(),
   "readOnly": zod.boolean()
 }),
@@ -502,6 +504,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "previewFinancials": zod.object({
   "readOnly": zod.boolean(),
   "providerStatus": zod.string(),
+  "purchasedHours": zod.number(),
+  "usedHours": zod.number(),
   "remainingHours": zod.number(),
   "invoices": zod.array(zod.object({
   "id": zod.string(),
@@ -856,6 +860,8 @@ export const UpdateAdminSessionResponse = zod.object({
 export const GetFinancialsResponse = zod.object({
   "readOnly": zod.boolean(),
   "providerStatus": zod.string(),
+  "purchasedHours": zod.number(),
+  "usedHours": zod.number(),
   "remainingHours": zod.number(),
   "invoices": zod.array(zod.object({
   "id": zod.string(),
@@ -1535,6 +1541,8 @@ export const GetDashboardResponse = zod.object({
 })),
   "reviewSkills": zod.array(zod.string()),
   "credits": zod.object({
+  "purchasedHours": zod.number(),
+  "usedHours": zod.number(),
   "remainingHours": zod.number(),
   "readOnly": zod.boolean()
 }),

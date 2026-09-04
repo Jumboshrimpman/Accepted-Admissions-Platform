@@ -140,6 +140,39 @@ export function ClientDashboardView({
         </div>
       )}
 
+      <Card data-testid="client-credit-balance">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Target className="h-5 w-5 text-primary" />
+            SAT session credits
+          </CardTitle>
+          <CardDescription>
+            Purchased credits unlock after a verified Stripe payment. Booking uses one credit per session.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Purchased</p>
+              <p className="mt-1 text-2xl font-semibold">{dashboard.credits.purchasedHours}</p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
+              <p className="mt-1 text-2xl font-semibold">{dashboard.credits.usedHours}</p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
+              <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
+            </div>
+          </div>
+          {!viewer && dashboard.credits.remainingHours <= 0 && (
+            <Button asChild className="mt-4 rounded-full">
+              <Link href="/sat">Purchase session credits</Link>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">

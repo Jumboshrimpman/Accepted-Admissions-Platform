@@ -231,9 +231,31 @@ type AuthedRequest = Request & { appUser?: AppUser };
 
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
-const XAVIER_OFFER_SLUG = "single-sat-session";
-const XAVIER_OFFER_PRICE_CENTS = 15_000;
+/** Legacy tutor compensation seed only — not used for student Checkout settlement. */
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
+const SINGLE_SAT_SESSION_SLUG = "single-sat-session";
+const TEN_SAT_SESSION_PACKAGE_SLUG = "ten-sat-session-package";
+const SINGLE_SAT_SESSION_PRICE_CENTS = 17_500;
+const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = 130_000;
+const ACCEPTED_SAT_CATALOG = [
+  {
+    slug: SINGLE_SAT_SESSION_SLUG,
+    name: "Single SAT Session",
+    description: "One prepaid 60-minute SAT tutoring session credit.",
+    durationHours: 1,
+    totalPriceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
+    effectiveHourlyRateCents: SINGLE_SAT_SESSION_PRICE_CENTS,
+  },
+  {
+    slug: TEN_SAT_SESSION_PACKAGE_SLUG,
+    name: "Ten SAT Session Package",
+    description: "Ten prepaid 60-minute SAT tutoring session credits.",
+    durationHours: 10,
+    totalPriceCents: TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
+    effectiveHourlyRateCents: 13_000,
+  },
+] as const;
+const ACCEPTED_SAT_CATALOG_SLUGS = new Set(ACCEPTED_SAT_CATALOG.map((product) => product.slug));
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
 const NIKA_APPROVED_PHOTO_URL =
@@ -269,6 +291,44 @@ function publicAppOrigin(): string {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }
   throw new Error("APP_ORIGIN must be configured for hosted payment redirects");
+}
+
+function creditHoursSummary(
+  entries: Array<{ entryType: string; hours: number }>,
+): { purchasedHours: number; usedHours: number; remainingHours: number } {
+  let purchasedHours = 0;
+  let usedHours = 0;
+  let restoredHours = 0;
+  for (const entry of entries) {
+    if (entry.entryType === "original" || entry.entryType === "adjustment_credit") {
+      purchasedHours += entry.hours;
+    } else if (
+      entry.entryType === "debit" ||
+      entry.entryType === "adjustment_debit" ||
+      entry.entryType === "refund"
+    ) {
+      usedHours += entry.hours;
+    } else if (entry.entryType === "restored") {
+      restoredHours += entry.hours;
+    }
+  }
+  const remainingHours = purchasedHours - usedHours + restoredHours;
+  return { purchasedHours, usedHours, remainingHours };
+}
+
+function isAcceptedSatCatalogProduct(product: {
+  slug: string;
+  active: boolean;
+  durationHours: number;
+  totalPriceCents: number;
+}): boolean {
+  const expected = ACCEPTED_SAT_CATALOG.find((item) => item.slug === product.slug);
+  return Boolean(
+    expected &&
+      product.active &&
+      product.durationHours === expected.durationHours &&
+      product.totalPriceCents === expected.totalPriceCents,
+  );
 }
 
 const SAT_DIAGNOSTIC_QUESTIONS = [
@@ -1403,97 +1463,9 @@ async function ensureUpgradeSeedData(): Promise<void> {
       );
   }
 
-  await db
-    .insert(satProductsTable)
-    .values([
-      {
-        slug: "single-sat-session",
-        name: "Xavier Morales SAT tutoring session",
-        description: "One focused 60-minute SAT tutoring session with Xavier Morales.",
-        durationHours: 1,
-        totalPriceCents: 15000,
-        effectiveHourlyRateCents: 15000,
-      },
-    ])
-    .onConflictDoNothing();
-
-  const [singleSession] = await db
-    .select()
-    .from(satProductsTable)
-    .where(eq(satProductsTable.slug, "single-sat-session"))
-    .limit(1);
-  if (singleSession) {
-    const priceChanged =
-      singleSession.totalPriceCents !== XAVIER_OFFER_PRICE_CENTS ||
-      singleSession.effectiveHourlyRateCents !== XAVIER_OFFER_PRICE_CENTS;
-    await db
-      .update(satProductsTable)
-      .set({
-        name: "Xavier Morales SAT tutoring session",
-        description: "One focused 60-minute SAT tutoring session with Xavier Morales.",
-        durationHours: 1,
-        totalPriceCents: 15000,
-        effectiveHourlyRateCents: 15000,
-        stripePriceId: priceChanged ? null : singleSession.stripePriceId,
-        active: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(satProductsTable.id, singleSession.id));
-  }
-  await db
-    .update(satProductsTable)
-    .set({ active: false, updatedAt: new Date() })
-    .where(sql`${satProductsTable.slug} <> 'single-sat-session'`);
-  const [pendingMichelle] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, "michaelmakarem@gmail.com"))
-    .limit(1);
-  const michelle =
-    pendingMichelle ??
-    (
-      await db
-        .insert(usersTable)
-        .values({
-          clerkUserId: "pending:michaelmakarem@gmail.com",
-          email: "michaelmakarem@gmail.com",
-          displayName: "Michelle Makarem",
-          role: "student",
-        })
-        .returning()
-    )[0];
-  const courseId = await ensureSeedData();
-  if (michelle) {
-    await db
-      .insert(courseMembershipsTable)
-      .values({
-        courseId,
-        userId: michelle.id,
-        membershipRole: "student",
-        subject: "SAT",
-      })
-      .onConflictDoNothing();
-    const [existingCredit] = await db
-      .select({ id: creditLedgerTable.id })
-      .from(creditLedgerTable)
-      .where(
-        and(
-          eq(creditLedgerTable.clientUserId, michelle.id),
-          eq(creditLedgerTable.entryType, "original"),
-          eq(creditLedgerTable.note, "Prepaid 60-minute SAT session"),
-        ),
-      )
-      .limit(1);
-    if (!existingCredit && singleSession) {
-      await db.insert(creditLedgerTable).values({
-        clientUserId: michelle.id,
-        productId: singleSession.id,
-        entryType: "original",
-        hours: 1,
-        note: "Prepaid 60-minute SAT session",
-      });
-    }
-  }
+  // Catalog prices are owned by migration 0019_accepted_admissions_sat_catalog.
+  // Do not upsert or reset sat_products prices/Stripe IDs from GET-driven seed paths.
+  // Complimentary credits are granted only through the audited admin credit-adjustment action.
 
   const seededTutors = await db
     .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
@@ -3699,12 +3671,17 @@ router.get("/public/products", async (_req, res): Promise<void> => {
     .where(
       and(
         eq(satProductsTable.active, true),
-        eq(satProductsTable.slug, XAVIER_OFFER_SLUG),
+        inArray(
+          satProductsTable.slug,
+          [...ACCEPTED_SAT_CATALOG_SLUGS],
+        ),
       ),
     )
     .orderBy(asc(satProductsTable.durationHours));
   res.json(
-    products.map((product) => ({
+    products
+      .filter((product) => isAcceptedSatCatalogProduct(product))
+      .map((product) => ({
       id: product.id,
       slug: product.slug,
       name: product.name,
@@ -4689,8 +4666,10 @@ async function financialSummary(clientUserId: string) {
     const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
     return total + (positive ? entry.hours : -entry.hours);
   }, 0);
+  const creditSummary = creditHoursSummary(entries);
   return {
-    remainingHours,
+    ...creditSummary,
+    remainingHours: creditSummary.remainingHours,
     invoices: invoiceRows.map((invoice) => ({
       id: invoice.id,
       status: invoice.status,
@@ -4802,7 +4781,6 @@ router.post(
   "/payments/checkout",
   ensureRole(["student"]),
   async (req: AuthedRequest, res): Promise<void> => {
-    await ensureUpgradeSeedData();
     const productId = stringField((req.body ?? {}) as Record<string, unknown>, "productId");
     const [product] = await db
       .select()
@@ -4811,48 +4789,11 @@ router.post(
         and(
           eq(satProductsTable.id, productId),
           eq(satProductsTable.active, true),
-          eq(satProductsTable.slug, XAVIER_OFFER_SLUG),
-          eq(satProductsTable.durationHours, 1),
-          eq(satProductsTable.totalPriceCents, XAVIER_OFFER_PRICE_CENTS),
         ),
       )
       .limit(1);
-    if (!product) {
+    if (!product || !isAcceptedSatCatalogProduct(product)) {
       res.status(404).json({ error: "SAT product not found" });
-      return;
-    }
-    let xavier;
-    try {
-      xavier = await refreshXavierConnectStatus();
-    } catch (error) {
-      res.status(502).json({
-        error: `Xavier's payout status could not be verified. An administrator must check Stripe Connect before checkout. ${stripeErrorMessage(error)}`,
-      });
-      return;
-    }
-    if (!connectStatusFor(xavier).ready) {
-      res.status(409).json({
-        error:
-          "Checkout is not open yet because Xavier's Stripe Connect account cannot receive transfers. An administrator must complete or refresh payout onboarding.",
-      });
-      return;
-    }
-    const [compensationRate] = await db
-      .select()
-      .from(tutorCompensationRatesTable)
-      .where(
-        and(
-          eq(tutorCompensationRatesTable.tutorProfileId, xavier.id),
-          isNull(tutorCompensationRatesTable.endedAt),
-        ),
-      )
-      .orderBy(desc(tutorCompensationRatesTable.effectiveFrom))
-      .limit(1);
-    if (compensationRate?.hourlyRateCents !== XAVIER_TUTOR_SHARE_CENTS) {
-      res.status(409).json({
-        error:
-          "Checkout is not open because Xavier's $65 compensation rate is not configured. An administrator must reconcile the payout setup.",
-      });
       return;
     }
     const [invoice, payment] = await db.transaction(async (tx) => {
@@ -4883,16 +4824,15 @@ router.post(
           invoiceId: createdInvoice!.id,
           productId: product.id,
           amountCents: product.totalPriceCents,
-          tutorProfileId: xavier.id,
-          tutorShareCents: compensationRate.hourlyRateCents,
-          platformShareCents: product.totalPriceCents - compensationRate.hourlyRateCents,
+          tutorShareCents: 0,
+          platformShareCents: product.totalPriceCents,
           status: "pending",
           method: "stripe_checkout",
           auditMetadata: {
-            offer: XAVIER_OFFER_SLUG,
-            tutor: XAVIER_NAME,
-            tutorShareCents: compensationRate.hourlyRateCents,
-            platformShareCents: product.totalPriceCents - compensationRate.hourlyRateCents,
+            offer: product.slug,
+            owner: "accepted_admissions",
+            customerEmail: req.appUser!.email,
+            creditsGrantedOnPaidWebhook: product.durationHours,
           },
         })
         .returning();
@@ -5311,41 +5251,19 @@ router.post(
           )[0]
       : undefined;
     let stripeInvoiceAllocation:
-      | { tutorProfileId: string; tutorShareCents: number; platformShareCents: number }
+      | { tutorShareCents: number; platformShareCents: number }
       | undefined;
     if (provider === "stripe_invoice") {
-      if (
-        product?.slug !== XAVIER_OFFER_SLUG ||
-        product.durationHours !== 1 ||
-        product.totalPriceCents !== XAVIER_OFFER_PRICE_CENTS
-      ) {
-        res.status(400).json({ error: "Stripe invoices are available only for Xavier's $150 session." });
-        return;
-      }
-      const xavier = await refreshXavierConnectStatus();
-      if (!connectStatusFor(xavier).ready) {
-        res.status(409).json({ error: "Xavier's Stripe Connect account must be payout-ready before sending this invoice." });
-        return;
-      }
-      const [rate] = await db
-        .select()
-        .from(tutorCompensationRatesTable)
-        .where(
-          and(
-            eq(tutorCompensationRatesTable.tutorProfileId, xavier.id),
-            isNull(tutorCompensationRatesTable.endedAt),
-          ),
-        )
-        .orderBy(desc(tutorCompensationRatesTable.effectiveFrom))
-        .limit(1);
-      if (rate?.hourlyRateCents !== XAVIER_TUTOR_SHARE_CENTS) {
-        res.status(409).json({ error: "Xavier's $65 compensation rate must be configured before sending this invoice." });
+      if (!product || !isAcceptedSatCatalogProduct(product)) {
+        res.status(400).json({
+          error:
+            "Stripe invoices are available only for Accepted Admissions SAT catalog products at their current prices.",
+        });
         return;
       }
       stripeInvoiceAllocation = {
-        tutorProfileId: xavier.id,
-        tutorShareCents: XAVIER_TUTOR_SHARE_CENTS,
-        platformShareCents: XAVIER_OFFER_PRICE_CENTS - XAVIER_TUTOR_SHARE_CENTS,
+        tutorShareCents: 0,
+        platformShareCents: product.totalPriceCents,
       };
     }
     const [invoice, payment] = await db.transaction(async (tx) => {
@@ -5383,7 +5301,12 @@ router.post(
           status: "pending",
           method: provider,
           auditMetadata: stripeInvoiceAllocation
-            ? { offer: XAVIER_OFFER_SLUG, tutor: XAVIER_NAME, ...stripeInvoiceAllocation }
+            ? {
+                offer: product!.slug,
+                owner: "accepted_admissions",
+                customerEmail: client.email,
+                ...stripeInvoiceAllocation,
+              }
             : undefined,
         })
         .returning();
@@ -5490,12 +5413,6 @@ router.post(
     }
     if (!product) {
       res.status(404).json({ error: "SAT product or invoice line with a product is required" });
-      return;
-    }
-    if (product.slug === XAVIER_OFFER_SLUG) {
-      res.status(400).json({
-        error: "Offline payment reconciliation cannot fulfill Xavier's Connect-settled SAT session.",
-      });
       return;
     }
     const amountCents = Number(body.amountCents ?? requestedInvoice?.totalCents ?? product.totalPriceCents);
@@ -5625,9 +5542,11 @@ router.post(
     const body = (req.body ?? {}) as Record<string, unknown>;
     const clientUserId = stringField(body, "clientUserId");
     const hours = typeof body.hours === "number" ? body.hours : Number.NaN;
-    const note = stringField(body, "note");
+    const note = stringField(body, "note").trim();
     if (!Number.isFinite(hours) || hours === 0 || Math.abs(hours) > 100 || note.length < 3) {
-      res.status(400).json({ error: "Enter a non-zero adjustment up to 100 hours and a note" });
+      res.status(400).json({
+        error: "Enter a non-zero adjustment up to 100 hours and an auditable reason (at least 3 characters)",
+      });
       return;
     }
     const [client] = await db
@@ -5639,6 +5558,7 @@ router.post(
       res.status(404).json({ error: "Client not found" });
       return;
     }
+    const grantedAt = new Date();
     const [entry] = await db
       .insert(creditLedgerTable)
       .values({
@@ -5649,16 +5569,32 @@ router.post(
         referenceId: randomUUID(),
         note,
         createdBy: req.appUser!.id,
+        createdAt: grantedAt,
       })
       .returning();
     await db.insert(auditLogsTable).values({
       actorUserId: req.appUser!.id,
-      action: "credit.adjusted",
+      action: hours > 0 ? "credit.manual_grant" : "credit.adjusted",
       entityType: "credit_ledger",
       entityId: entry!.id,
-      metadata: { clientUserId: client.id, hours },
+      metadata: {
+        clientUserId: client.id,
+        hours,
+        reason: note,
+        administratorId: req.appUser!.id,
+        administratorEmail: req.appUser!.email,
+        grantedAt: grantedAt.toISOString(),
+      },
     });
-    res.status(201).json(entry);
+    res.status(201).json({
+      ...entry,
+      audit: {
+        reason: note,
+        administratorId: req.appUser!.id,
+        administratorEmail: req.appUser!.email,
+        grantedAt: grantedAt.toISOString(),
+      },
+    });
   },
 );
 
@@ -5820,9 +5756,11 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
     const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
     return total + (positive ? entry.hours : -entry.hours);
   }, 0);
+  const creditSummary = creditHoursSummary(entries);
   res.json({
     readOnly: req.appUser!.role === "viewer",
-    remainingHours,
+    ...creditSummary,
+    remainingHours: creditSummary.remainingHours,
     entries,
     providerStatus: {
       payments: process.env.STRIPE_WEBHOOK_SECRET
@@ -7206,6 +7144,7 @@ async function dashboardDataForUser(user: AppUser) {
     const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
     return total + (positive ? entry.hours : -entry.hours);
   }, 0);
+  const creditSummary = creditHoursSummary(creditEntries);
   return GetDashboardResponse.parse({
       user: {
         id: user.id,
@@ -7247,7 +7186,9 @@ async function dashboardDataForUser(user: AppUser) {
         })),
       reviewSkills: weaknesses.length > 0 ? weaknesses : ["Keep building consistency"],
       credits: {
-        remainingHours,
+        purchasedHours: creditSummary.purchasedHours,
+        usedHours: creditSummary.usedHours,
+        remainingHours: creditSummary.remainingHours,
         readOnly: user.role === "viewer",
       },
       progress: {
@@ -7375,9 +7316,9 @@ router.get(
         ...dashboard,
         adminPreview: true,
         previewOffer: {
-          name: "One SAT session with Xavier",
-          description: "A one-time, 60-minute SAT tutoring session with Xavier Morales.",
-          priceCents: XAVIER_OFFER_PRICE_CENTS,
+          name: "Single SAT Session",
+          description: "One prepaid 60-minute SAT tutoring session credit.",
+          priceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
           durationMinutes: 60,
         },
         previewFinancials: {

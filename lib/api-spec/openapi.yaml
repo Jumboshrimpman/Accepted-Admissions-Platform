@@ -1510,10 +1510,12 @@ components:
         createdAt: { type: string, format: date-time }
     FinancialSummary:
       type: object
-      required: [readOnly, providerStatus, remainingHours, invoices, payments, credits]
+      required: [readOnly, providerStatus, purchasedHours, usedHours, remainingHours, invoices, payments, credits]
       properties:
         readOnly: { type: boolean }
         providerStatus: { type: string }
+        purchasedHours: { type: number }
+        usedHours: { type: number }
         remainingHours: { type: number }
         invoices:
           type: array
@@ -2757,8 +2759,10 @@ components:
         status: { type: string, enum: [draft, published] }
     DashboardCredits:
       type: object
-      required: [remainingHours, readOnly]
+      required: [purchasedHours, usedHours, remainingHours, readOnly]
       properties:
+        purchasedHours: { type: number }
+        usedHours: { type: number }
         remainingHours: { type: number }
         readOnly: { type: boolean }
     DashboardProgress:

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import { eq, inArray } from "drizzle-orm";
+import Stripe from "stripe";
 // @ts-expect-error Node's strip-types test runner requires the source extension.
 import { formData, stripeRequest, verifyStripeSignature, webhookEventFromPayload } from "./stripe-client.ts";
 
@@ -300,21 +301,17 @@ after(async () => {
 
 test("accepts a current Stripe HMAC signature and parses its event", () => {
   const previous = process.env.STRIPE_WEBHOOK_SECRET;
-  process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+  const secret = "whsec_test_secret_for_sdk_verification";
+  process.env.STRIPE_WEBHOOK_SECRET = secret;
   try {
-    const payload = Buffer.from(JSON.stringify({
+    const payload = JSON.stringify({
       id: "evt_verified",
       type: "checkout.session.completed",
       data: { object: { id: "cs_test" } },
-    }));
-    const timestamp = Math.floor(Date.now() / 1000);
-    const digest = createHmac("sha256", "whsec_test")
-      .update(`${timestamp}.${payload.toString("utf8")}`)
-      .digest("hex");
-    assert.doesNotThrow(() =>
-      verifyStripeSignature(payload, `t=${timestamp},v1=${digest}`),
-    );
-    assert.equal(webhookEventFromPayload(payload).id, "evt_verified");
+    });
+    const header = Stripe.webhooks.generateTestHeaderString({ payload, secret });
+    assert.doesNotThrow(() => verifyStripeSignature(Buffer.from(payload), header));
+    assert.equal(webhookEventFromPayload(Buffer.from(payload)).id, "evt_verified");
   } finally {
     if (previous === undefined) delete process.env.STRIPE_WEBHOOK_SECRET;
     else process.env.STRIPE_WEBHOOK_SECRET = previous;
@@ -323,18 +320,13 @@ test("accepts a current Stripe HMAC signature and parses its event", () => {
 
 test("rejects a modified Stripe webhook payload", () => {
   const previous = process.env.STRIPE_WEBHOOK_SECRET;
-  process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+  const secret = "whsec_test_secret_for_sdk_verification";
+  process.env.STRIPE_WEBHOOK_SECRET = secret;
   try {
-    const original = Buffer.from('{"id":"evt_original"}');
-    const timestamp = Math.floor(Date.now() / 1000);
-    const digest = createHmac("sha256", "whsec_test")
-      .update(`${timestamp}.${original.toString("utf8")}`)
-      .digest("hex");
-    const modified = Buffer.from('{"id":"evt_modified"}');
-    assert.throws(
-      () => verifyStripeSignature(modified, `t=${timestamp},v1=${digest}`),
-      /Invalid Stripe signature/,
-    );
+    const original = JSON.stringify({ id: "evt_original", type: "checkout.session.completed", data: { object: {} } });
+    const header = Stripe.webhooks.generateTestHeaderString({ payload: original, secret });
+    const modified = Buffer.from(JSON.stringify({ id: "evt_modified", type: "checkout.session.completed", data: { object: {} } }));
+    assert.throws(() => verifyStripeSignature(modified, header));
   } finally {
     if (previous === undefined) delete process.env.STRIPE_WEBHOOK_SECRET;
     else process.env.STRIPE_WEBHOOK_SECRET = previous;

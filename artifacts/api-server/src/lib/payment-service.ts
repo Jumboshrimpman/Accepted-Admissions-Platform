@@ -651,9 +651,15 @@ export async function processStripeWebhook(event: {
         : recordString(object, "payment_intent") ??
           findObjectId(object, "payment_intent");
     const receiptUrl = recordString(object, "receipt_url");
+    const needsChargeLookup =
+      event.type === "checkout.session.completed" ||
+      event.type === "payment_intent.succeeded" ||
+      event.type === "invoice.paid" ||
+      event.type === "charge.succeeded" ||
+      event.type === "charge.refunded";
     let chargeId =
       event.type.startsWith("charge.") ? objectId : findObjectId(object, "latest_charge");
-    if (!chargeId && paymentIntentId) {
+    if (needsChargeLookup && !chargeId && paymentIntentId) {
       const intent = await stripeRequest<StripeRecord>(`/v1/payment_intents/${paymentIntentId}`);
       chargeId = findObjectId(intent, "latest_charge");
     }

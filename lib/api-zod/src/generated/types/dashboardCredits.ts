@@ -7,6 +7,8 @@
  */
 
 export interface DashboardCredits {
+  purchasedHours: number;
+  usedHours: number;
   remainingHours: number;
   readOnly: boolean;
 }

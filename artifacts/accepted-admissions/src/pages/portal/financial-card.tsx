@@ -47,7 +47,7 @@ export function FinancialCard({
     );
   }
 
-  const { invoices, payments, credits, remainingHours } = data;
+  const { invoices, payments, credits, remainingHours, purchasedHours, usedHours } = data;
   const readOnly = adminPreview || data.readOnly;
   const hasVerifiedPayment = payments.some(
     (payment) => payment.verifiedAt || payment.status === "paid" || payment.status === "partially_paid",
@@ -66,8 +66,22 @@ export function FinancialCard({
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            {remainingHours} hour{remainingHours === 1 ? "" : "s"} available
+            {remainingHours} hour{remainingHours === 1 ? "" : "s"} remaining
           </Badge>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3" data-testid="credit-balance-summary">
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Purchased</p>
+            <p className="mt-1 text-lg font-semibold">{purchasedHours ?? 0}</p>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
+            <p className="mt-1 text-lg font-semibold">{usedHours ?? 0}</p>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
+            <p className="mt-1 text-lg font-semibold">{remainingHours}</p>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -89,7 +103,7 @@ export function FinancialCard({
         )}
         {!readOnly && !adminPreview && (
           <Button asChild className="rounded-full">
-             <a href="/sat">Purchase a session with Xavier</a>
+             <a href="/sat">Purchase SAT session credits</a>
           </Button>
         )}
         {adminPreview && (

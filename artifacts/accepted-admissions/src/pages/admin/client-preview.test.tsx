@@ -47,7 +47,7 @@ describe("administrator client preview", () => {
       assignments: [],
       recentScores: [],
       reviewSkills: [],
-      credits: { remainingHours: 1, readOnly: true },
+      credits: { purchasedHours: 1, usedHours: 0, remainingHours: 1, readOnly: true },
       progress: {
         totalSessions: 0,
         completedSessions: 0,
@@ -60,20 +60,22 @@ describe("administrator client preview", () => {
       openReviewCount: 0,
       adminPreview: true,
       previewOffer: {
-        name: "One SAT session with Xavier",
-        description: "A one-time, 60-minute SAT tutoring session with Xavier Morales.",
-        priceCents: 15000,
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring session credit.",
+        priceCents: 17500,
         durationMinutes: 60,
       },
       previewFinancials: {
         readOnly: true,
         providerStatus: "connected",
+        purchasedHours: 1,
+        usedHours: 0,
         remainingHours: 1,
         invoices: [],
         payments: [
           {
             id: "payment-1",
-            amountCents: 15000,
+            amountCents: 17500,
             refundedAmountCents: 0,
             status: "paid",
             method: "stripe",
@@ -110,7 +112,7 @@ describe("administrator client preview", () => {
 
     expect(screen.getByText("Administrator client preview")).toBeTruthy();
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
-    expect(screen.getByText("One SAT session with Xavier")).toBeTruthy();
+    expect(screen.getByText("Single SAT Session")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Checkout disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/Google Calendar is disconnected/)).toBeTruthy();

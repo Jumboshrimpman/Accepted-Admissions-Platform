@@ -1,17 +1,10 @@
-import { ReplitConnectors } from "@replit/connectors-sdk";
-import { createHmac, timingSafeEqual } from "node:crypto";
-
-const connectors = new ReplitConnectors();
+import Stripe from "stripe";
 
 export class StripeRequestError extends Error {
   readonly status: number;
   readonly details: unknown;
 
-  constructor(
-    message: string,
-    status: number,
-    details: unknown,
-  ) {
+  constructor(message: string, status: number, details: unknown) {
     super(message);
     this.name = "StripeRequestError";
     this.status = status;
@@ -21,6 +14,39 @@ export class StripeRequestError extends Error {
 
 type StripeRecord = Record<string, unknown>;
 
+let stripeClient: Stripe | null = null;
+
+export function getStripeClient(): Stripe {
+  if (stripeClient) return stripeClient;
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error(
+      "Stripe is not configured. Set STRIPE_SECRET_KEY for the Accepted Admissions Stripe account.",
+    );
+  }
+  stripeClient = new Stripe(secretKey);
+  return stripeClient;
+}
+
+/** Test helper: clear the singleton so env changes take effect. */
+export function resetStripeClientForTests(): void {
+  stripeClient = null;
+}
+
+function paramsFromBody(body?: URLSearchParams): Record<string, string> | null {
+  if (!body) return null;
+  const params: Record<string, string> = {};
+  for (const [key, value] of body.entries()) {
+    params[key] = value;
+  }
+  return params;
+}
+
+function stripeErrorStatus(error: { statusCode?: number } | undefined): number {
+  if (typeof error?.statusCode === "number") return error.statusCode;
+  return 500;
+}
+
 export async function stripeRequest<T extends StripeRecord>(
   path: string,
   options: {
@@ -29,32 +55,26 @@ export async function stripeRequest<T extends StripeRecord>(
     idempotencyKey?: string;
   } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (options.body) headers["Content-Type"] = "application/x-www-form-urlencoded";
-  if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
-  const response = await connectors.proxy("stripe", path, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body,
-  });
-  const raw = await response.text();
-  let details: unknown = null;
+  const stripe = getStripeClient();
+  const method = options.method ?? "GET";
+  const requestOptions: Stripe.RawRequestOptions = {};
+  if (options.idempotencyKey) {
+    requestOptions.idempotencyKey = options.idempotencyKey;
+  }
   try {
-    details = raw ? JSON.parse(raw) : null;
-  } catch {
-    details = raw;
+    const params = method === "POST" ? paramsFromBody(options.body) : null;
+    const response = await stripe.rawRequest(method, path, params ?? undefined, requestOptions);
+    return (response ?? {}) as T;
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeError) {
+      throw new StripeRequestError(
+        error.message || "Stripe request failed",
+        stripeErrorStatus(error),
+        error.raw ?? { message: error.message },
+      );
+    }
+    throw error;
   }
-  if (!response.ok) {
-    const message =
-      details && typeof details === "object"
-        ? String((details as StripeRecord).error &&
-            typeof (details as StripeRecord).error === "object"
-          ? ((details as StripeRecord).error as StripeRecord).message
-          : "Stripe request failed")
-        : "Stripe request failed";
-    throw new StripeRequestError(message, response.status, details);
-  }
-  return (details ?? {}) as T;
 }
 
 export function formData(
@@ -122,12 +142,14 @@ export async function retrieveStripeConnectAccount(
   accountId: string,
 ): Promise<StripeConnectAccountStatus> {
   const account = await stripeRequest<Record<string, unknown>>(`/v1/accounts/${accountId}`);
-  const requirements = account.requirements && typeof account.requirements === "object"
-    ? (account.requirements as Record<string, unknown>)
-    : {};
-  const capabilities = account.capabilities && typeof account.capabilities === "object"
-    ? (account.capabilities as Record<string, unknown>)
-    : {};
+  const requirements =
+    account.requirements && typeof account.requirements === "object"
+      ? (account.requirements as Record<string, unknown>)
+      : {};
+  const capabilities =
+    account.capabilities && typeof account.capabilities === "object"
+      ? (account.capabilities as Record<string, unknown>)
+      : {};
   return {
     id: accountId,
     detailsSubmitted: account.details_submitted === true,
@@ -142,38 +164,38 @@ export async function retrieveStripeConnectAccount(
 }
 
 export function verifyStripeSignature(payload: Buffer, signature: string): void {
+  constructVerifiedStripeEvent(payload, signature);
+}
+
+export function constructVerifiedStripeEvent(
+  payload: Buffer,
+  signature: string,
+): {
+  id: string;
+  type: string;
+  data: { object: StripeRecord };
+} {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) {
     throw new Error(
-      "Stripe webhook verification is not configured. Set STRIPE_WEBHOOK_SECRET in Replit Secrets.",
+      "Stripe webhook verification is not configured. Set STRIPE_WEBHOOK_SECRET.",
     );
   }
-  const parts = signature.split(",").map((part) => part.split("=", 2));
-  const timestamp = parts.find(([key]) => key === "t")?.[1];
-  const receivedSignatures = parts
-    .filter(([key]) => key === "v1")
-    .map(([, value]) => value)
-    .filter((value): value is string => Boolean(value));
-  if (!timestamp || receivedSignatures.length === 0 || !/^\d+$/.test(timestamp)) {
-    throw new Error("Invalid Stripe signature");
+  const event = Stripe.webhooks.constructEvent(payload, signature, secret);
+  if (
+    typeof event.id !== "string" ||
+    typeof event.type !== "string" ||
+    !event.data ||
+    !event.data.object ||
+    typeof event.data.object !== "object"
+  ) {
+    throw new Error("Invalid Stripe event payload");
   }
-  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) {
-    throw new Error("Expired Stripe signature");
-  }
-  const expected = createHmac("sha256", secret)
-    .update(`${timestamp}.${payload.toString("utf8")}`)
-    .digest("hex");
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  const valid = receivedSignatures.some((received) => {
-    const receivedBuffer = Buffer.from(received, "utf8");
-    return (
-      expectedBuffer.length === receivedBuffer.length &&
-      timingSafeEqual(expectedBuffer, receivedBuffer)
-    );
-  });
-  if (!valid) {
-    throw new Error("Invalid Stripe signature");
-  }
+  return {
+    id: event.id,
+    type: event.type,
+    data: { object: event.data.object as unknown as StripeRecord },
+  };
 }
 
 export function webhookEventFromPayload(payload: Buffer): {

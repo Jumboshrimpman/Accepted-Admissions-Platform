@@ -203,7 +203,12 @@ function dashboardForRole(
         ],
     recentScores: [],
     reviewSkills: [],
-    credits: { remainingHours: isTutor ? 0 : 4, readOnly: role === "viewer" },
+    credits: {
+      purchasedHours: isTutor ? 0 : 4,
+      usedHours: 0,
+      remainingHours: isTutor ? 0 : 4,
+      readOnly: role === "viewer",
+    },
     progress: {
       totalSessions: isTutor ? 1 : 2,
       completedSessions: 0,

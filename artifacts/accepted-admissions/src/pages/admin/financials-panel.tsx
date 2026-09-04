@@ -177,8 +177,8 @@ export function AdminFinancialsPanel() {
         </section>
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
-            <h3 className="font-semibold">Authoritative SAT offer</h3>
-            <p className="text-sm text-muted-foreground">The public offer is fixed at one 60-minute Xavier session for $150. Legacy packages remain inactive for audit history.</p>
+            <h3 className="font-semibold">Authoritative SAT catalog</h3>
+            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($175 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits). Funds settle to Accepted Admissions; credits grant only after a verified Stripe webhook.</p>
           </div>
           <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
@@ -266,7 +266,7 @@ export function AdminFinancialsPanel() {
         </section>
         <div className="grid gap-3 rounded-2xl border bg-muted/20 p-4 md:grid-cols-[140px_1fr_auto] md:items-end">
           <label className="text-sm font-medium">Hours (+ / −)<Input className="mt-2" type="number" step="0.25" value={hours} onChange={(event) => setHours(event.target.value)} /></label>
-          <label className="text-sm font-medium">Required audit note<Input className="mt-2" value={note} onChange={(event) => setNote(event.target.value)} /></label>
+          <label className="text-sm font-medium">Required auditable reason<Input className="mt-2" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Complimentary or previously paid credit reason" /></label>
           <Button
             variant="secondary"
             disabled={busy || !selectedClient || !Number(hours) || note.trim().length < 3}

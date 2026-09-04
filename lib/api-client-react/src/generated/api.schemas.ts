@@ -132,6 +132,8 @@ export interface CreditLedgerEntry {
 export interface FinancialSummary {
   readOnly: boolean;
   providerStatus: string;
+  purchasedHours: number;
+  usedHours: number;
   remainingHours: number;
   invoices: InvoiceRecord[];
   payments: PaymentRecord[];
@@ -1363,6 +1365,8 @@ export type CurriculumSession = Session & ({
 });
 
 export interface DashboardCredits {
+  purchasedHours: number;
+  usedHours: number;
   remainingHours: number;
   readOnly: boolean;
 }

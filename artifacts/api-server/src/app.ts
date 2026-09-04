@@ -10,10 +10,7 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import { processStripeWebhook } from "./lib/payment-service";
-import {
-  verifyStripeSignature,
-  webhookEventFromPayload,
-} from "./lib/stripe-client";
+import { constructVerifiedStripeEvent } from "./lib/stripe-client";
 
 const app: Express = express();
 
@@ -51,8 +48,8 @@ app.post(
         res.status(400).json({ error: "Stripe webhook body must be raw bytes" });
         return;
       }
-      verifyStripeSignature(req.body, signature);
-      await processStripeWebhook(webhookEventFromPayload(req.body));
+      const event = constructVerifiedStripeEvent(req.body, signature);
+      await processStripeWebhook(event);
       res.status(200).json({ received: true });
     } catch (error) {
       req.log?.warn({ err: error }, "Stripe webhook rejected or failed");

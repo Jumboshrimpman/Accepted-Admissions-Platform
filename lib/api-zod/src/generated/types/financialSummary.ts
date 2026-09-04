@@ -12,6 +12,8 @@ import type { PaymentRecord } from './paymentRecord';
 export interface FinancialSummary {
   readOnly: boolean;
   providerStatus: string;
+  purchasedHours: number;
+  usedHours: number;
   remainingHours: number;
   invoices: InvoiceRecord[];
   payments: PaymentRecord[];
