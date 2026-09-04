@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { useGetDashboard, type CurriculumSession, type Dashboard } from "@workspace/api-client-react";
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users, Video } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,6 +92,24 @@ export function ClientDashboardView({
   adminPreview?: boolean;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
+  const [location, setLocation] = useLocation();
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+
+  useEffect(() => {
+    const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
+    const params = new URLSearchParams(query);
+    if (params.get("payment") !== "success") return;
+    setShowPaymentSuccess(true);
+    params.delete("payment");
+    const nextQuery = params.toString();
+    const pathOnly = location.split("?")[0] || "/portal";
+    setLocation(nextQuery ? `${pathOnly}?${nextQuery}` : pathOnly, { replace: true });
+    const timer = window.setTimeout(() => {
+      document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [location, setLocation]);
+
   const sessions = (dashboard.curriculumSessions?.length
     ? dashboard.curriculumSessions
     : fallbackCurriculumSessions(dashboard))
@@ -137,6 +156,32 @@ export function ClientDashboardView({
           <div>
             <p className="font-semibold">{adminPreview ? "Read-only client preview" : "Curriculum in view-only mode"}</p>
             <p className="mt-1 text-amber-800">{adminPreview ? "You can review the student's curriculum without opening student actions." : "You can review the complete plan, preparation, and published results. Only the student can complete work."}</p>
+          </div>
+        </div>
+      )}
+
+      {showPaymentSuccess && !viewer && (
+        <div
+          role="status"
+          data-testid="payment-success-banner"
+          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+        >
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-semibold">Payment received — credits are ready</p>
+            <p className="mt-1 text-emerald-800">
+              You have {dashboard.credits.remainingHours} prepaid hour
+              {dashboard.credits.remainingHours === 1 ? "" : "s"} available. Choose a tutor and time on the schedule below.
+            </p>
+            <Button
+              className="mt-3 rounded-full"
+              size="sm"
+              onClick={() =>
+                document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              View booking schedule
+            </Button>
           </div>
         </div>
       )}

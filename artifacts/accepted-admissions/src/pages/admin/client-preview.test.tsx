@@ -10,6 +10,7 @@ vi.mock("wouter", () => ({
   Link: ({ href, children }: { href: string; children: ReactNode }) =>
     createElement("a", { href }, children),
   useParams: () => ({ clientId: "student-1" }),
+  useLocation: () => ["/admin/clients/student-1", vi.fn()],
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -62,7 +63,7 @@ describe("administrator client preview", () => {
       previewOffer: {
         name: "Single SAT Session",
         description: "One prepaid 60-minute SAT tutoring session credit.",
-        priceCents: 17500,
+        priceCents: 13000,
         durationMinutes: 60,
       },
       previewFinancials: {
@@ -75,7 +76,7 @@ describe("administrator client preview", () => {
         payments: [
           {
             id: "payment-1",
-            amountCents: 17500,
+            amountCents: 13000,
             refundedAmountCents: 0,
             status: "paid",
             method: "stripe",

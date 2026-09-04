@@ -76,10 +76,25 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
+  getListTutorPayoutsQueryKey: () => ["tutor-payouts"],
+  useListTutorPayouts: () => ({
+    data: [],
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => mocks.queryClient,
+}));
+
+vi.mock("wouter", () => ({
+  Link: ({ href, children, ...props }: { href: string; children: unknown }) => (
+    <a href={href} {...props}>
+      {children as never}
+    </a>
+  ),
+  useLocation: () => ["/portal", vi.fn()],
 }));
 
 import FallWelcomeDashboard, { ClientDashboardView } from "./fall-welcome-dashboard";
