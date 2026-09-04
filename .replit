@@ -42,15 +42,9 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 
+# Role allowlists and OAuth callbacks must be supplied via Secrets / environment
+# variables (see .env.example and docs/accepted-admissions-provisioning.md).
+# Do not commit Clerk user IDs, personal emails, or environment-specific URLs here.
 [userenv]
 
 [userenv.shared]
-ACCEPTED_ADMIN_CLERK_USER_IDS = "user_3IeGScwZqzQA1VYEwiOijPa3U98,user_3IelBhbEVUsWpLzyohpV1UP44kk"
-ACCEPTED_SAT_TUTOR_CLERK_USER_IDS = "user_3IeYrIF9NB1KiaOwOvG62zbchRS"
-ACCEPTED_ADMIN_EMAILS = "admin@acceptedadmissions.org"
-ACCEPTED_SAT_TUTOR_EMAILS = "xsfam6@gmail.com,eunice_chon@berkeley.edu"
-ACCEPTED_ENGLISH_TUTOR_EMAILS = "nika.raiffe@gmail.com"
-ACCEPTED_TUTOR_EMAILS = ""
-ACCEPTED_STUDENT_EMAILS = "taito0525@gmail.com"
-ACCEPTED_VIEWER_EMAILS = "ryo@jaac.co.jp"
-GOOGLE_CALENDAR_REDIRECT_URI = "https://37b01121-5efe-48c5-a064-3ce0cacd0f14-00-3qm3oiov7es7q.reed.replit.dev/api/calendar/oauth/callback"

@@ -2,10 +2,11 @@
 
 The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is provisioned with Clerk user IDs, never by public self-enrollment. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
 
-Set the following environment variables as comma-separated Clerk user IDs. The
-shared development configuration also contains the approved email fallbacks
-listed below; email matching is performed only against Clerk's verified
-server-side primary email.
+Set the following environment variables as comma-separated Clerk user IDs via
+host Secrets or a local `.env` (see `.env.example`). Do not commit allowlist
+values into `.replit` or other tracked config. Email matching is performed only
+against Clerk's verified server-side primary email; the approved email fallback
+roster below is operator documentation, not committed runtime configuration.
 
 - `ACCEPTED_ADMIN_CLERK_USER_IDS`: administrators; administrators can see all courses.
 - `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`: SAT tutors; they receive the SAT subject scope.

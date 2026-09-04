@@ -44,6 +44,36 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.secrets/
+*.secret
+*.secrets
+.envrc
+.env.local.override
+
+# Database dumps and local DB artifacts
+*.sql.gz
+*.dump
+*.pgdump
+*.backup
+*.bak
+db-dumps/
+dumps/
+
+# Local configuration overrides
+*.local
+!.env.example
+config.local.*
+settings.local.*
+
 # Replit
 .cache/
 .local/
