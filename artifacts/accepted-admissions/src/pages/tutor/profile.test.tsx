@@ -71,7 +71,7 @@ describe("tutor profile page", () => {
     fireEvent.click(screen.getByTestId("tutor-profile-save"));
 
     await waitFor(() => {
-      expect(screen.getByText("Your name and photo on file were saved.")).toBeTruthy();
+      expect(screen.getByText("Your name, title, and photo on file were saved.")).toBeTruthy();
     });
 
     const patchCall = mocks.customFetch.mock.calls.find(

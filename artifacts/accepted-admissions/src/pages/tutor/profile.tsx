@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
-import { Camera, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
+import { ProfilePhotoFields } from "@/components/profile-photo-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { defaultPhotoAltText } from "@/lib/profile-photo";
 
 type TutorProfile = {
   id: string;
@@ -52,6 +54,9 @@ export default function TutorProfilePage() {
     setSaving(true);
     setMessage("");
     setError("");
+    const photoAltText =
+      profile.photoAltText?.trim() ||
+      (profile.photoUrl ? defaultPhotoAltText(profile.name, profile.title) : null);
     try {
       const saved = await customFetch<TutorProfile>("/api/tutor/profile", {
         method: "PATCH",
@@ -59,17 +64,17 @@ export default function TutorProfilePage() {
           name: profile.name,
           title: profile.title,
           photoUrl: profile.photoUrl,
-          photoAltText: profile.photoAltText,
+          photoAltText,
           biography: profile.biography,
           subjects: profile.subjects,
           linkedinUrl: profile.linkedinUrl,
         }),
       });
       setProfile(saved);
-      setMessage("Your name and photo on file were saved.");
+      setMessage("Your name, title, and photo on file were saved.");
     } catch (saveError) {
       const detail = (saveError as { data?: { error?: string } } | null)?.data?.error;
-      setError(detail || "Could not save your profile. Check the name and photo fields.");
+      setError(detail || "Could not save your profile. Check the name, title, and photo fields.");
     } finally {
       setSaving(false);
     }
@@ -94,9 +99,11 @@ export default function TutorProfilePage() {
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/65">
           Your profile
         </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight">Name and photo on file</h1>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight">
+          Name, title, and photo on file
+        </h1>
         <p className="mt-2 max-w-2xl text-white/75">
-          Update the name students and administrators see, and add a photo for your public profile.
+          Match the Our Team format: edit your public name and title, then upload a headshot.
         </p>
       </section>
 
@@ -116,23 +123,6 @@ export default function TutorProfilePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="flex flex-wrap items-center gap-4">
-            {profile.photoUrl ? (
-              <img
-                src={profile.photoUrl}
-                alt={profile.photoAltText || profile.name}
-                className="h-24 w-24 rounded-full border object-cover"
-              />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border bg-muted">
-                <Camera className="h-8 w-8 text-muted-foreground" />
-              </div>
-            )}
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Paste an https image URL below. Use clear alt text so the photo remains accessible.
-            </p>
-          </div>
-
           <Field label="Name on file">
             <Input
               value={profile.name}
@@ -144,24 +134,20 @@ export default function TutorProfilePage() {
             <Input
               value={profile.title}
               onChange={(event) => updateField("title", event.target.value)}
+              placeholder="Admissions Tutor"
+              data-testid="tutor-profile-title"
             />
           </Field>
-          <Field label="Photo URL">
-            <Input
-              type="url"
-              value={profile.photoUrl ?? ""}
-              onChange={(event) => updateField("photoUrl", event.target.value || null)}
-              placeholder="https://"
-              data-testid="tutor-profile-photo"
-            />
-          </Field>
-          <Field label="Photo alt text">
-            <Input
-              value={profile.photoAltText ?? ""}
-              onChange={(event) => updateField("photoAltText", event.target.value || null)}
-              data-testid="tutor-profile-photo-alt"
-            />
-          </Field>
+          <ProfilePhotoFields
+            name={profile.name}
+            title={profile.title}
+            photoUrl={profile.photoUrl}
+            photoAltText={profile.photoAltText}
+            photoTestId="tutor-profile-photo"
+            altTestId="tutor-profile-photo-alt"
+            onPhotoUrlChange={(value) => updateField("photoUrl", value)}
+            onPhotoAltTextChange={(value) => updateField("photoAltText", value)}
+          />
           <Field label="Biography">
             <Textarea
               rows={6}

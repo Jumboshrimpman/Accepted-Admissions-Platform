@@ -1344,7 +1344,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         name: "Aurelia Finch",
         title: "Admissions Tutor - UK",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Aurelia Finch"],
-        photoAltText: "Aurelia Finch, Admissions Tutor",
+        photoAltText: "Aurelia Finch, Admissions Tutor - UK",
         biography:
           "Aurelia graduated with an MPhil in Modern Middle Eastern Studies from the University of Oxford in 2024, after completing her undergraduate studies in Arabic and Spanish at the University of Durham with first class honours. She is now Director of the UK-MENA Network.",
         subjects: ["College admissions"],
@@ -3841,7 +3841,19 @@ router.get(
       .select(tutorProfileSelect)
       .from(tutorProfilesTable)
       .orderBy(asc(tutorProfilesTable.name));
-    res.json(tutors);
+    const ordered = [...tutors].sort((left, right) => {
+      const leftIndex = PUBLIC_TUTOR_ORDER.indexOf(
+        left.name as (typeof PUBLIC_TUTOR_ORDER)[number],
+      );
+      const rightIndex = PUBLIC_TUTOR_ORDER.indexOf(
+        right.name as (typeof PUBLIC_TUTOR_ORDER)[number],
+      );
+      if (leftIndex === -1 && rightIndex === -1) return left.name.localeCompare(right.name);
+      if (leftIndex === -1) return 1;
+      if (rightIndex === -1) return -1;
+      return leftIndex - rightIndex;
+    });
+    res.json(ordered);
   },
 );
 

@@ -27,5 +27,18 @@ test("rejects unsafe photo URLs", () => {
     name: "Tutor",
     photoUrl: "javascript:alert(1)",
   });
-  assert.equal(result.error, "A photo URL must use http or https.");
+  assert.equal(
+    result.error,
+    "A photo must be an http(s) image URL or an uploaded jpeg/png/webp/gif under 2 MB.",
+  );
+});
+
+test("accepts uploaded jpeg data URLs", () => {
+  const result = parseTutorProfileEditableFields({
+    name: "Tutor",
+    photoUrl: "data:image/jpeg;base64,/9j/4AAQ",
+    photoAltText: "Tutor headshot",
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.updates.photoUrl?.startsWith("data:image/jpeg;base64,"), true);
 });

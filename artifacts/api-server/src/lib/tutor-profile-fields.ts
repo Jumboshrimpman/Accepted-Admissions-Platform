@@ -1,3 +1,6 @@
+export const MAX_PHOTO_DATA_URL_LENGTH = 2_500_000;
+const ALLOWED_DATA_IMAGE = /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i;
+
 export function safePublicUrl(value: unknown): boolean {
   if (typeof value !== "string" || value.length > 2048) return false;
   try {
@@ -6,6 +9,15 @@ export function safePublicUrl(value: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+export function safePhotoSource(value: unknown): boolean {
+  if (typeof value !== "string" || !value) return false;
+  if (value.startsWith("data:image/")) {
+    if (value.length > MAX_PHOTO_DATA_URL_LENGTH) return false;
+    return ALLOWED_DATA_IMAGE.test(value.replace(/\s+/g, ""));
+  }
+  return safePublicUrl(value);
 }
 
 export type TutorProfileEditable = {
@@ -61,9 +73,13 @@ export function parseTutorProfileEditableFields(
   if (
     updates.photoUrl !== undefined &&
     updates.photoUrl !== null &&
-    !safePublicUrl(updates.photoUrl)
+    !safePhotoSource(updates.photoUrl)
   ) {
-    return { updates, error: "A photo URL must use http or https." };
+    return {
+      updates,
+      error:
+        "A photo must be an http(s) image URL or an uploaded jpeg/png/webp/gif under 2 MB.",
+    };
   }
   if (
     updates.linkedinUrl !== undefined &&
@@ -99,9 +115,9 @@ export function tutorProfileApprovalError(proposed: {
   if (
     proposed.photoUrl !== null &&
     proposed.photoUrl !== undefined &&
-    !safePublicUrl(proposed.photoUrl)
+    !safePhotoSource(proposed.photoUrl)
   ) {
-    return "A headshot URL must use http or https.";
+    return "A headshot must be an http(s) image URL or an uploaded image under 2 MB.";
   }
   if (
     proposed.photoUrl &&
