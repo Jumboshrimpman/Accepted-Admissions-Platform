@@ -54,7 +54,7 @@ export default function Landing() {
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><GraduationCap className="h-5 w-5" /></div>
                   <div>
                     <h2 className="font-semibold">Need SAT tutoring now?</h2>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">One 60-minute SAT tutoring session is currently available to purchase online. Meet the team to learn about our tutors.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Purchase one hour or a ten-hour package at $130 per credit, then book open times with Xavier or Eunice. Meet the team to learn about our tutors.</p>
                   </div>
                 </div>
                 <div className="flex gap-4">

@@ -52,7 +52,8 @@ describe("SAT offer clarity", () => {
         id: "offer-1",
         slug: "single-sat-session",
         name: "Single SAT Session",
-        description: "One prepaid 60-minute SAT tutoring session credit.",
+        description:
+          "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
         durationHours: 1,
         totalPriceCents: 13000,
         effectiveHourlyRateCents: 13000,
@@ -61,7 +62,8 @@ describe("SAT offer clarity", () => {
         id: "offer-10",
         slug: "ten-sat-session-package",
         name: "Ten SAT Session Package",
-        description: "Ten prepaid 60-minute SAT tutoring session credits.",
+        description:
+          "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on Xavier or Eunice’s available calendar.",
         durationHours: 10,
         totalPriceCents: 130000,
         effectiveHourlyRateCents: 13000,

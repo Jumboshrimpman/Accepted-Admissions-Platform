@@ -162,6 +162,13 @@
       "when": 1788900000000,
       "tag": "0023_sat_catalog_130_1300",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0024_sat_hourly_rate_130",
+      "breakpoints": true
     }
   ]
 }

@@ -270,28 +270,34 @@ type AuthedRequest = Request & { appUser?: AppUser };
 
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
+const EUNICE_NAME = "Eunice Chon";
+/** Prepaid SAT credits may be booked with either SAT tutor's calendar. */
+const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME] as const;
 /** Legacy tutor compensation seed only — not used for student Checkout settlement. */
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const SINGLE_SAT_SESSION_SLUG = "single-sat-session";
 const TEN_SAT_SESSION_PACKAGE_SLUG = "ten-sat-session-package";
-const SINGLE_SAT_SESSION_PRICE_CENTS = 13_000;
-const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = 130_000;
+const SAT_HOURLY_RATE_CENTS = 13_000;
+const SINGLE_SAT_SESSION_PRICE_CENTS = SAT_HOURLY_RATE_CENTS;
+const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = SAT_HOURLY_RATE_CENTS * 10;
 const ACCEPTED_SAT_CATALOG = [
   {
     slug: SINGLE_SAT_SESSION_SLUG,
     name: "Single SAT Session",
-    description: "One prepaid 60-minute SAT tutoring session credit.",
+    description:
+      "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
     durationHours: 1,
     totalPriceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
-    effectiveHourlyRateCents: SINGLE_SAT_SESSION_PRICE_CENTS,
+    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
   },
   {
     slug: TEN_SAT_SESSION_PACKAGE_SLUG,
     name: "Ten SAT Session Package",
-    description: "Ten prepaid 60-minute SAT tutoring session credits.",
+    description:
+      "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on Xavier or Eunice’s available calendar.",
     durationHours: 10,
     totalPriceCents: TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
-    effectiveHourlyRateCents: 13_000,
+    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
   },
 ] as const;
 const ACCEPTED_SAT_CATALOG_SLUGS = new Set(ACCEPTED_SAT_CATALOG.map((product) => product.slug));
@@ -1173,7 +1179,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         photoAltText: "Eunice Chon, Scholarship Tutor",
         biography:
           "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
-        subjects: ["Scholarships", "College admissions"],
+        subjects: ["SAT", "Scholarships", "College admissions"],
         linkedinUrl: "https://linkedin.com/in/eunicechon",
         publicApproved: true,
         calendarStatus: "disconnected",
@@ -1403,6 +1409,26 @@ async function ensureUpgradeSeedData(): Promise<void> {
   // Catalog prices are owned by migration 0019_accepted_admissions_sat_catalog.
   // Do not upsert or reset sat_products prices/Stripe IDs from GET-driven seed paths.
   // Complimentary credits are granted only through the audited admin credit-adjustment action.
+
+  // Ensure Eunice remains bookable for prepaid SAT credits without overwriting admin edits
+  // to biography or title; only add SAT when the untouched seed subject list is present.
+  await db
+    .update(tutorProfilesTable)
+    .set({
+      subjects: ["SAT", "Scholarships", "College admissions"],
+      bookingEligible: true,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tutorProfilesTable.email, "eunice_chon@berkeley.edu"),
+        eq(tutorProfilesTable.name, EUNICE_NAME),
+        or(
+          sql`${tutorProfilesTable.subjects} = '["Scholarships", "College admissions"]'::jsonb`,
+          sql`${tutorProfilesTable.subjects} = '["SAT", "Scholarships", "College admissions"]'::jsonb`,
+        ),
+      ),
+    );
 
   const seededTutors = await db
     .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
@@ -3492,6 +3518,7 @@ async function bookingTutor(tutorProfileId: string, allowExistingSessionTutor = 
             eq(tutorProfilesTable.id, tutorProfileId),
             eq(tutorProfilesTable.active, true),
             eq(tutorProfilesTable.bookingEligible, true),
+            inArray(tutorProfilesTable.name, [...SAT_BOOKING_TUTOR_NAMES]),
           ),
     )
     .limit(1);
@@ -4444,6 +4471,7 @@ router.get("/booking/tutors", async (_req: AuthedRequest, res): Promise<void> =>
       and(
         eq(tutorProfilesTable.active, true),
         eq(tutorProfilesTable.bookingEligible, true),
+        inArray(tutorProfilesTable.name, [...SAT_BOOKING_TUTOR_NAMES]),
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
@@ -4479,7 +4507,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
         throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
       }
     } else if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "Prepaid sessions must be exactly 60 minutes.");
+      throw new BookingError(400, "INVALID_DURATION", "SAT sessions must be exactly 60 minutes.");
     }
     const result = await slotsForTutor(
       tutorProfileId,
@@ -4551,7 +4579,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "Prepaid sessions must be exactly 60 minutes.");
+      throw new BookingError(400, "INVALID_DURATION", "SAT sessions must be exactly 60 minutes.");
     }
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
@@ -7752,7 +7780,8 @@ router.get(
         adminPreview: true,
         previewOffer: {
           name: "Single SAT Session",
-          description: "One prepaid 60-minute SAT tutoring session credit.",
+          description:
+            "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
           priceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
           durationMinutes: 60,
         },
