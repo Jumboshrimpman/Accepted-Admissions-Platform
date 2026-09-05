@@ -28,10 +28,10 @@ import {
 
 const operationLinks = [
   { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, then preview a client portal.", icon: Users },
-  { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Participants, Meet links, status, and conflicts.", icon: CalendarDays },
+  { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Assign bank quizzes as pre-work, Meet links, and conflicts.", icon: CalendarDays },
   { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish, archive, and update program details.", icon: BookOpen },
-  { href: "/admin/curriculum?section=curriculum", title: "Materials", detail: "Assignments, library, question bank, and submissions.", icon: ClipboardList },
-  { href: "/admin/curriculum?section=roadmap", title: "Fall plan", detail: "Twelve-date builder snapshot — not the full materials workspace.", icon: CalendarDays },
+  { href: "/admin/curriculum?section=curriculum", title: "Curriculum bank", detail: "Create questions and quizzes, then assign them to sessions.", icon: ClipboardList },
+  { href: "/admin/curriculum?section=roadmap", title: "Fall plan", detail: "Twelve-date snapshot — authoring lives in the bank.", icon: CalendarDays },
   { href: "/admin/financials", title: "Finance", detail: "Invoices and credits.", icon: WalletCards },
   { href: "/admin/content", title: "Website content", detail: "Home, SAT, team, stories, and contact email.", icon: FileText },
 ];

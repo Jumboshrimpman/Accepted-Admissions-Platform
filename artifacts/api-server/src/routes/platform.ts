@@ -7824,11 +7824,11 @@ async function dashboardDataForUser(user: AppUser) {
                 ? "not_started"
                 : "ready";
       const nextAction = latestResult
-        ? "Review feedback"
+        ? "Review answers"
         : attemptStatus === "active" || attemptStatus === "paused"
-          ? "Continue preparation"
+          ? "Continue quiz"
           : preparation
-            ? "Start preparation"
+            ? "Take quiz"
             : "Open session plan";
       return {
         ...dashboardSessionShape(
