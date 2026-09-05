@@ -1235,6 +1235,7 @@ export const CurriculumBlockKind = {
   timer: 'timer',
   file_link: 'file_link',
   divider: 'divider',
+  adaptive_prep: 'adaptive_prep',
 } as const;
 
 export type CurriculumBlockVisibility = typeof CurriculumBlockVisibility[keyof typeof CurriculumBlockVisibility];
@@ -1700,6 +1701,7 @@ export const CurriculumBlockInputKind = {
   timer: 'timer',
   file_link: 'file_link',
   divider: 'divider',
+  adaptive_prep: 'adaptive_prep',
 } as const;
 
 export type CurriculumBlockInputVisibility = typeof CurriculumBlockInputVisibility[keyof typeof CurriculumBlockInputVisibility];
@@ -1744,6 +1746,7 @@ export const CurriculumBlockUpdateKind = {
   timer: 'timer',
   file_link: 'file_link',
   divider: 'divider',
+  adaptive_prep: 'adaptive_prep',
 } as const;
 
 export type CurriculumBlockUpdateVisibility = typeof CurriculumBlockUpdateVisibility[keyof typeof CurriculumBlockUpdateVisibility];

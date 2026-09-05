@@ -2457,7 +2457,7 @@ components:
         libraryAssetId: { type: ["string", "null"] }
         kind:
           type: string
-          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
+          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider, adaptive_prep]
         position: { type: number }
         visibility: { type: string, enum: [student, tutor, both] }
         status: { type: string, enum: [draft, published, archived] }
@@ -2503,7 +2503,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
+          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider, adaptive_prep]
         visibility: { type: string, enum: [student, tutor, both] }
         position: { type: number, minimum: 0 }
         config:
@@ -2514,7 +2514,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider]
+          enum: [heading, rich_text, callout, objectives, timeline, tutor_instructions, student_notes, formula, strategy, external_link, multiple_choice, numeric_response, long_response, writing_response, checklist, homework, timer, file_link, divider, adaptive_prep]
         visibility: { type: string, enum: [student, tutor, both] }
         position: { type: number, minimum: 0 }
         status: { type: string, enum: [draft, published, archived] }
