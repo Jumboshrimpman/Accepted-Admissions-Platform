@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
+
+const {
   clerkPublishableKeyError,
   frontendApiFromPublishableKey,
   isConfiguredPublishableKey,
   resolveClerkPublishableKey,
-} from "./clerk-publishable-key.ts";
+} =
+  // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+  await import("./clerk-publishable-key.ts");
 
 function encodePublishableKey(
   frontendApi: string,
