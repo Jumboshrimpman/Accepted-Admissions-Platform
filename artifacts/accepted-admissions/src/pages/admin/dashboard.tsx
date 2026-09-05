@@ -12,7 +12,7 @@ import {
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, AlertTriangle, BookOpen, CalendarDays, ChevronDown, ClipboardList, FileText, LogIn, MessageSquareText, Save, Users, WalletCards } from "lucide-react";
+import { ArrowRight, AlertTriangle, BookOpen, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +27,13 @@ import {
 } from "@/lib/session-display";
 
 const operationLinks = [
-  { href: "/admin/curriculum?section=people", title: "Clients & tutors", detail: "Provision tutors and students, review people, and subject access.", icon: Users },
+  { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, then preview a client portal.", icon: Users },
+  { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Assign bank quizzes as pre-work, Meet links, and conflicts.", icon: CalendarDays },
   { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish, archive, and update program details.", icon: BookOpen },
-  { href: "/admin/curriculum?section=curriculum", title: "Curriculum", detail: "Assignments, materials, question bank, and submissions.", icon: ClipboardList },
-  { href: "/admin/curriculum?section=sessions", title: "Sessions", detail: "Participants, Meet links, status, and conflicts.", icon: CalendarDays },
+  { href: "/admin/curriculum?section=curriculum", title: "Curriculum bank", detail: "Create questions and quizzes, then assign them to sessions.", icon: ClipboardList },
+  { href: "/admin/curriculum?section=roadmap", title: "Fall plan", detail: "Twelve-date snapshot — authoring lives in the bank.", icon: CalendarDays },
   { href: "/admin/financials", title: "Finance", detail: "Invoices and credits.", icon: WalletCards },
-  { href: "/admin/content", title: "Public content", detail: "Team and student stories.", icon: FileText },
+  { href: "/admin/content", title: "Website content", detail: "Home, SAT, team, stories, and contact email.", icon: FileText },
 ];
 
 const accessRoleCategoryLabels: Record<string, string> = {
@@ -215,6 +216,40 @@ export default function AdminDashboard() {
               <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
             </Link>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-student-portals">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-primary" /> Student portals
+          </CardTitle>
+          <CardDescription>
+            Preview an existing student’s portal. New people must be provisioned and invited in Clerk before they can sign in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(curriculum?.clients ?? []).map((client) => (
+            <div key={client.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">{client.name}</p>
+                <p className="text-sm text-muted-foreground">{client.email}</p>
+              </div>
+              <Button asChild size="sm">
+                <Link href={`/admin/clients/${client.id}/preview`} data-testid={`link-preview-client-${client.id}`}>
+                  <Eye className="mr-2 h-4 w-4" /> Preview client portal
+                </Link>
+              </Button>
+            </div>
+          ))}
+          {(curriculum?.clients ?? []).length === 0 && (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-student-portals">
+              No students on file yet. Provision them under People & access, then invite the same email in Clerk.
+            </p>
+          )}
+          <p className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="hint-michelle-provision">
+            Michelle Makarem (<span className="font-medium">michaelmakarem@gmail.com</span>) must be provisioned via People & access and invited in Clerk before preview or login. There is no Clerkless demo.
+          </p>
         </CardContent>
       </Card>
 

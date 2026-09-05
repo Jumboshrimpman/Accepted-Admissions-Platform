@@ -84,7 +84,7 @@ describe("administrator public content route", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Public team and student-story content",
+        name: "Website content",
       }),
     ).toBeTruthy();
     expect(screen.queryByText("404")).toBeNull();

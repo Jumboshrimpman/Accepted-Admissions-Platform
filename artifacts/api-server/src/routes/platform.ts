@@ -247,6 +247,11 @@ import {
   tutorProfileApprovalError,
 } from "../lib/tutor-profile-fields";
 import {
+  ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
+  evaluateAssignmentClone,
+} from "../lib/assignment-clone";
+import { validateExtractedSourceText } from "../lib/content-source-text";
+import {
   contentSourcesTable,
   assignmentQuestionsTable,
   assignmentsTable,
@@ -304,7 +309,7 @@ const ACCEPTED_SAT_CATALOG = [
     slug: SINGLE_SAT_SESSION_SLUG,
     name: "Single SAT Session",
     description:
-      "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
+      "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
     durationHours: 1,
     totalPriceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
     effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
@@ -313,7 +318,7 @@ const ACCEPTED_SAT_CATALOG = [
     slug: TEN_SAT_SESSION_PACKAGE_SLUG,
     name: "Ten SAT Session Package",
     description:
-      "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on Xavier or Eunice’s available calendar.",
+      "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on our SAT tutors’ available calendar.",
     durationHours: 10,
     totalPriceCents: TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
     effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
@@ -1026,7 +1031,7 @@ async function ensureSeedData(): Promise<string> {
       goalSummary:
         "Build SAT Reading & Writing accuracy, pacing, and IELTS confidence through focused weekly practice.",
       meetUrl: SHARED_FALL_MEETING_URL,
-      driveUrl: "https://drive.google.com/",
+      driveUrl: null,
     })
     .returning();
 
@@ -1433,9 +1438,45 @@ async function ensureUpgradeSeedData(): Promise<void> {
       .where(eq(tutorProfilesTable.photoUrl, legacyUrl));
   }
 
+  await db
+    .update(coursesTable)
+    .set({ driveUrl: null })
+    .where(
+      or(
+        sql`${coursesTable.driveUrl} ILIKE '%drive.google.com%'`,
+        sql`${coursesTable.driveUrl} ILIKE '%docs.google.com%'`,
+      ),
+    );
+
   // Catalog prices are owned by migration 0019_accepted_admissions_sat_catalog.
   // Do not upsert or reset sat_products prices/Stripe IDs from GET-driven seed paths.
   // Complimentary credits are granted only through the audited admin credit-adjustment action.
+  // Soften leftover marketing copy that names individual SAT tutors.
+  await db
+    .update(satProductsTable)
+    .set({
+      description: "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(satProductsTable.slug, SINGLE_SAT_SESSION_SLUG),
+        sql`${satProductsTable.description} ILIKE '%Xavier or Eunice%'`,
+      ),
+    );
+  await db
+    .update(satProductsTable)
+    .set({
+      description:
+        "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on our SAT tutors’ available calendar.",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(satProductsTable.slug, TEN_SAT_SESSION_PACKAGE_SLUG),
+        sql`${satProductsTable.description} ILIKE '%Xavier or Eunice%'`,
+      ),
+    );
 
   // Ensure Eunice remains bookable for prepaid SAT credits without overwriting admin edits
   // to biography or title; only add SAT when the untouched seed subject list is present.
@@ -1535,10 +1576,54 @@ async function ensureUpgradeSeedData(): Promise<void> {
         seoDescription:
           "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
         body: {
+          heroLead:
+            "Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked with our SAT tutors.",
+          offersIntro:
+            "Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on our SAT tutors’ available calendar.",
           sections: [
             "Review the current single-hour and ten-hour SAT tutoring credits available online.",
-            "Sign in to purchase, then use verified prepaid credits to schedule with Xavier or Eunice in the client portal.",
+            "Sign in to purchase, then use verified prepaid credits to schedule with our SAT tutors in the client portal.",
           ],
+        },
+        status: "published",
+        publishedAt: new Date(),
+      },
+      {
+        slug: "home",
+        pageType: "home",
+        title: "A clear next step for your college goals.",
+        seoTitle: "Accepted Admissions | Your next step, made clear",
+        seoDescription:
+          "Explore focused SAT tutoring with the Accepted Admissions team or request a private conversation about broader admissions guidance.",
+        body: {
+          heroEyebrow: "For students and families planning what comes next",
+          heroTitle: "A clear next step for your college goals.",
+          heroLead:
+            "Harvard students and recent graduates provide focused one-on-one SAT tutoring, with thoughtful guidance for families whose needs go beyond a single session.",
+          satPathTitle: "Need SAT tutoring now?",
+          satPathBlurb:
+            "Purchase one hour or a ten-hour package at $130 per credit, then book open times with our SAT tutors.",
+          guidancePathTitle: "Need a broader conversation?",
+          guidancePathBlurb:
+            "Admissions guidance, IELTS support, or another request starts with a private inquiry—not checkout.",
+          satServiceTitle: "SAT tutoring",
+          satServiceBlurb:
+            "Explore the current one-session offer, review what happens after checkout, and meet the team to learn about our tutors.",
+          guidanceServiceTitle: "Broader guidance",
+          guidanceServiceBlurb:
+            "If you are exploring admissions planning, IELTS support, or a different need, share the context privately. We will review it before discussing fit.",
+        },
+        status: "published",
+        publishedAt: new Date(),
+      },
+      {
+        slug: "site-settings",
+        pageType: "settings",
+        title: "Site settings",
+        seoTitle: "Accepted Admissions site settings",
+        seoDescription: "Public contact email and site-wide settings for Accepted Admissions.",
+        body: {
+          contactEmail: "admin@acceptedadmissions.org",
         },
         status: "published",
         publishedAt: new Date(),
@@ -1615,9 +1700,13 @@ async function ensureUpgradeSeedData(): Promise<void> {
   const satSections = Array.isArray(satBody?.sections)
     ? satBody.sections.filter((section): section is string => typeof section === "string")
     : [];
+  const satCopyMentionsNamedTutors = [satBody?.heroLead, satBody?.offersIntro, ...satSections].some(
+    (value) => typeof value === "string" && /Xavier or Eunice/i.test(value),
+  );
   if (
     satSeed &&
-    (satSections.some((section) => section.includes("single SAT tutoring session currently available")) ||
+    (satCopyMentionsNamedTutors ||
+      satSections.some((section) => section.includes("single SAT tutoring session currently available")) ||
       (typeof satSeed.seoDescription === "string" &&
         satSeed.seoDescription.includes("current 60-minute SAT tutoring offer")))
   ) {
@@ -1627,9 +1716,13 @@ async function ensureUpgradeSeedData(): Promise<void> {
         seoDescription:
           "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
         body: {
+          heroLead:
+            "Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked with our SAT tutors.",
+          offersIntro:
+            "Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on our SAT tutors’ available calendar.",
           sections: [
             "Review the current single-hour and ten-hour SAT tutoring credits available online.",
-            "Sign in to purchase, then use verified prepaid credits to schedule with Xavier or Eunice in the client portal.",
+            "Sign in to purchase, then use verified prepaid credits to schedule with our SAT tutors in the client portal.",
           ],
         },
         updatedAt: new Date(),
@@ -3508,6 +3601,41 @@ function publicContentPublicationError(
       }
     }
   }
+  if (pageType === "settings") {
+    const email = body.contactEmail;
+    if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return "A published site-settings record needs a valid contact email.";
+    }
+  }
+  const optionalCopyFields = [
+    "heroEyebrow",
+    "heroTitle",
+    "heroLead",
+    "satPathTitle",
+    "satPathBlurb",
+    "guidancePathTitle",
+    "guidancePathBlurb",
+    "satServiceTitle",
+    "satServiceBlurb",
+    "guidanceServiceTitle",
+    "guidanceServiceBlurb",
+    "offersIntro",
+  ] as const;
+  if (pageType === "home" || pageType === "sat-offerings") {
+    for (const field of optionalCopyFields) {
+      if (field in body && body[field] !== undefined && (typeof body[field] !== "string" || body[field].length > 4000)) {
+        return "Website copy fields must be 4,000 characters or fewer.";
+      }
+    }
+    if ("sections" in body && body.sections !== undefined) {
+      if (!Array.isArray(body.sections) || body.sections.length > 12) {
+        return "SAT page sections must be a list of 12 or fewer items.";
+      }
+      if (body.sections.some((section) => typeof section !== "string" || section.length > 4000)) {
+        return "Each SAT page section must be 4,000 characters or fewer.";
+      }
+    }
+  }
   return null;
 }
 
@@ -4301,7 +4429,6 @@ router.get(
       await db
         .select()
         .from(publicContentTable)
-        .where(inArray(publicContentTable.pageType, ["team", "success"]))
         .orderBy(asc(publicContentTable.slug)),
     );
   },
@@ -6385,7 +6512,7 @@ async function adminProgramShape(course: typeof coursesTable.$inferSelect) {
     status: course.status,
     goalSummary: course.goalSummary,
     meetUrl: meetingUrlForTerm(course.term, course.meetUrl),
-    driveUrl: course.driveUrl,
+    driveUrl: null,
     sessionCount: Number(counts?.total ?? 0),
     completedSessionCount: Number(counts?.completed ?? 0),
   };
@@ -7166,7 +7293,7 @@ router.patch(
         : body.data.meetUrl === undefined
           ? {}
           : { meetUrl: body.data.meetUrl?.trim() || null }),
-      ...(body.data.driveUrl === undefined ? {} : { driveUrl: body.data.driveUrl?.trim() || null }),
+      driveUrl: null,
     };
     const [updated] = await db.update(coursesTable).set(updates).where(eq(coursesTable.id, existing.id)).returning();
     await db.insert(auditLogsTable).values({
@@ -7250,6 +7377,16 @@ router.patch(
       res.status(404).json({ error: "Program not found" });
       return;
     }
+    if (sessionId !== existing.sessionId) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(attemptsTable)
+        .where(eq(attemptsTable.assignmentId, existing.id));
+      if (Number(count) > 0) {
+        res.status(409).json({ error: ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE });
+        return;
+      }
+    }
     if (sessionId) {
       const [session] = await db.select({ courseId: sessionsTable.courseId, subject: sessionsTable.subject }).from(sessionsTable).where(eq(sessionsTable.id, sessionId)).limit(1);
       if (!session || session.courseId !== courseId) {
@@ -7282,6 +7419,128 @@ router.patch(
       metadata: { courseId: updated!.courseId, sessionId: updated!.sessionId, status: updated!.status },
     });
     res.json(UpdateAdminAssignmentResponse.parse(await adminAssignmentShape(updated!)));
+  },
+);
+
+router.post(
+  "/admin/assignments/:assignmentId/clone-to-session",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminAssignmentParams.safeParse(req.params);
+    const sessionId =
+      typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    const allowDuplicate = req.body?.allowDuplicate === true;
+    if (!params.success || !sessionId) {
+      adminMutationError(res, "Invalid assignment clone.");
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.id, params.data.assignmentId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    const [session] = await db
+      .select({
+        id: sessionsTable.id,
+        courseId: sessionsTable.courseId,
+        subject: sessionsTable.subject,
+      })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId))
+      .limit(1);
+    if (!session) {
+      res.status(404).json({ error: "Session not found in this program" });
+      return;
+    }
+    const sourceQuestions = await db
+      .select({
+        questionId: assignmentQuestionsTable.questionId,
+        position: assignmentQuestionsTable.position,
+        predictionFirst: assignmentQuestionsTable.predictionFirst,
+      })
+      .from(assignmentQuestionsTable)
+      .where(eq(assignmentQuestionsTable.assignmentId, existing.id))
+      .orderBy(asc(assignmentQuestionsTable.position));
+    const existingOnTarget = await db
+      .select({
+        id: assignmentsTable.id,
+        title: assignmentsTable.title,
+        status: assignmentsTable.status,
+        deliveryPhase: assignmentsTable.deliveryPhase,
+      })
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.sessionId, session.id));
+    const planned = evaluateAssignmentClone({
+      source: {
+        id: existing.id,
+        courseId: existing.courseId,
+        sessionId: existing.sessionId,
+        subjectFamily: subjectFamily(existing.subject),
+        title: existing.title,
+        status: existing.status,
+        deliveryPhase: existing.deliveryPhase,
+      },
+      targetSession: {
+        id: session.id,
+        courseId: session.courseId,
+        subjectFamily: subjectFamily(session.subject),
+      },
+      sourceQuestions,
+      existingOnTarget,
+      allowDuplicate,
+    });
+    if (!planned.ok) {
+      res.status(planned.status).json({ error: planned.error });
+      return;
+    }
+
+    const created = await db.transaction(async (tx) => {
+      const [cloned] = await tx
+        .insert(assignmentsTable)
+        .values({
+          courseId: existing.courseId,
+          sessionId: planned.targetSessionId,
+          deliveryPhase: existing.deliveryPhase,
+          title: existing.title,
+          subject: existing.subject,
+          instructions: existing.instructions,
+          status: existing.status,
+          deadline: existing.deadline,
+          timeLimitMinutes: existing.timeLimitMinutes,
+          maxAttempts: existing.maxAttempts,
+        })
+        .returning();
+      if (planned.copiedQuestions.length > 0) {
+        await tx.insert(assignmentQuestionsTable).values(
+          planned.copiedQuestions.map((question) => ({
+            assignmentId: cloned!.id,
+            questionId: question.questionId,
+            position: question.position,
+            predictionFirst: question.predictionFirst,
+          })),
+        );
+      }
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "assignment.cloned_to_session",
+        entityType: "assignment",
+        entityId: cloned!.id,
+        metadata: {
+          sourceAssignmentId: existing.id,
+          sourceSessionId: existing.sessionId,
+          sessionId: cloned!.sessionId,
+        },
+      });
+      return cloned!;
+    });
+
+    res
+      .status(201)
+      .json(CreateAdminAssignmentResponse.parse(await adminAssignmentShape(created)));
   },
 );
 
@@ -7506,7 +7765,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
     GetCourseResponse.parse({
       ...base,
        meetUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
-      driveUrl: course?.driveUrl ?? null,
+      driveUrl: null,
       goalSummary: course?.goalSummary ?? null,
       sessions: await Promise.all(
         resolvedSessions.map(async (session) => {
@@ -7702,11 +7961,11 @@ async function dashboardDataForUser(user: AppUser) {
                 ? "not_started"
                 : "ready";
       const nextAction = latestResult
-        ? "Review feedback"
+        ? "Review answers"
         : attemptStatus === "active" || attemptStatus === "paused"
-          ? "Continue preparation"
+          ? "Continue quiz"
           : preparation
-            ? "Start preparation"
+            ? "Take quiz"
             : "Open session plan";
       return {
         ...dashboardSessionShape(
@@ -7989,7 +8248,7 @@ router.get(
         previewOffer: {
           name: "Single SAT Session",
           description:
-            "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
+            "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
           priceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
           durationMinutes: 60,
         },
@@ -9352,10 +9611,9 @@ router.post(
       res.status(404).json({ error: "Course not found" });
       return;
     }
-    if (!body.data.sourceUrl && !body.data.extractedText) {
-      res.status(400).json({
-        error: "Provide a source URL or authorized extracted text",
-      });
+    const extractedText = validateExtractedSourceText(body.data.extractedText);
+    if (!extractedText.ok) {
+      res.status(400).json({ error: extractedText.error });
       return;
     }
     const [source] = await db
@@ -9369,7 +9627,7 @@ router.post(
         sourceUrl: body.data.sourceUrl ?? null,
         originalFilename: body.data.originalFilename ?? null,
         authorizationNote: body.data.authorizationNote.trim(),
-        extractedText: body.data.extractedText ?? null,
+        extractedText: extractedText.text,
         provenance: {
           ...(body.data.provenance ?? {}),
           importedAt: new Date().toISOString(),
@@ -9424,19 +9682,17 @@ router.post(
       return;
     }
 
-    if (!record.source.extractedText?.trim() || record.source.extractedText.trim().length < 40) {
-      res.status(400).json({
-        error:
-          "Authorized extracted text is required before practice can be generated",
-      });
+    const extractedText = validateExtractedSourceText(record.source.extractedText);
+    if (!extractedText.ok) {
+      res.status(400).json({ error: extractedText.error });
       return;
     }
 
-    // Extract concepts, never sentences or answer keys. Drafts use newly written
-    // scenarios so the source informs the practice without being reproduced.
+    // Extract concepts, never sentences or answer keys. Drafts fill hard-coded
+    // templates so the source informs practice without being reproduced.
     const focus = body.data.focus.trim().replace(/\s+/g, " ");
     const count = body.data.count ?? 3;
-    const concepts = sourceConcepts(record.source.extractedText, focus);
+    const concepts = sourceConcepts(extractedText.text, focus);
     if (concepts.length < 2) {
       res.status(400).json({
         error: "The extracted text does not contain enough distinct concepts",

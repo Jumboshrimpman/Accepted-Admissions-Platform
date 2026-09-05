@@ -47,13 +47,25 @@ afterEach(() => {
 
 describe("SAT offer clarity", () => {
   it("shows API-backed SAT session offers and explains the signed-out return", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([
+    vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+      if (String(path).includes("/api/public/content/sat")) {
+        return new Response(JSON.stringify({
+          title: "Prepaid SAT session credits.",
+          seoTitle: "SAT tutoring | Accepted Admissions",
+          seoDescription: "Explore prepaid SAT session credits.",
+          body: {
+            heroLead: "Purchase a single hour or a ten-hour package at $130 per credit with our SAT tutors.",
+            offersIntro: "Use credits anytime on our SAT tutors’ available calendar.",
+          },
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify([
       {
         id: "offer-1",
         slug: "single-sat-session",
         name: "Single SAT Session",
         description:
-          "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
+          "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
         durationHours: 1,
         totalPriceCents: 13000,
         effectiveHourlyRateCents: 13000,
@@ -63,12 +75,13 @@ describe("SAT offer clarity", () => {
         slug: "ten-sat-session-package",
         name: "Ten SAT Session Package",
         description:
-          "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on Xavier or Eunice’s available calendar.",
+          "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on our SAT tutors’ available calendar.",
         durationHours: 10,
         totalPriceCents: 130000,
         effectiveHourlyRateCents: 13000,
       },
-    ]), { status: 200, headers: { "Content-Type": "application/json" } })));
+    ]), { status: 200, headers: { "Content-Type": "application/json" } });
+    }));
 
     render(<SatOfferings />);
 
@@ -79,6 +92,8 @@ describe("SAT offer clarity", () => {
     expect(screen.getByTestId("button-sat-checkout-offer-1").textContent).toContain("Sign in to purchase this session");
     expect(screen.getAllByText("You’ll return to this offer after signing in.").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { level: 1 }).textContent).not.toMatch(/Xavier/i);
+    expect(screen.queryByText(/Xavier or Eunice/i)).toBeNull();
+    expect(screen.getAllByText(/our SAT tutors/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Meet the team" }).getAttribute("href")).toBe("/our-team");
     expect(screen.getByText(/campus tours, college advising/i)).toBeTruthy();
     expect(screen.getByText(/financial aid for SAT tutoring is considered case by case/i)).toBeTruthy();

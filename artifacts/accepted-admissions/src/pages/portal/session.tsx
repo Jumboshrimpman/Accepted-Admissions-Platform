@@ -28,9 +28,9 @@ function RenderBlock({ block }: { block: CurriculumBlock }) {
 }
 
 function assignmentAction(status?: string | null): string {
-  if (status === "submitted" || status === "expired") return "Review result";
-  if (status === "active" || status === "paused") return "Continue preparation";
-  return "Start preparation";
+  if (status === "submitted" || status === "expired") return "Review answers";
+  if (status === "active" || status === "paused") return "Continue quiz";
+  return "Take quiz";
 }
 
 export default function PortalSession() {
@@ -79,7 +79,7 @@ export default function PortalSession() {
       </section>
 
       <div className="grid gap-4 sm:grid-cols-3" aria-label="Session learning loop">
-        <Card className="border-accent/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><PenTool className="h-4 w-4 text-accent" />Before</p><p className="mt-2 text-sm text-muted-foreground">Complete or review subject-specific preparation.</p></CardContent></Card>
+        <Card className="border-accent/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><PenTool className="h-4 w-4 text-accent" />Before</p><p className="mt-2 text-sm text-muted-foreground">Take the assigned quiz, then review right and wrong answers.</p></CardContent></Card>
         <Card className="border-primary/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><BookOpen className="h-4 w-4 text-primary" />During</p><p className="mt-2 text-sm text-muted-foreground">Follow the tutor-approved session sequence.</p></CardContent></Card>
         <Card><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4 text-emerald-600" />After</p><p className="mt-2 text-sm text-muted-foreground">Review feedback and the published report.</p></CardContent></Card>
       </div>

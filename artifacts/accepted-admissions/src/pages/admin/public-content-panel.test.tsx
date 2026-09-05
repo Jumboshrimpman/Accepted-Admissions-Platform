@@ -87,6 +87,39 @@ const content = [
     status: "draft" as const,
     body: {},
   },
+  {
+    id: "home-content",
+    slug: "home",
+    title: "Saved home title",
+    seoTitle: "Saved home SEO",
+    seoDescription: "Saved home description",
+    status: "draft" as const,
+    body: {
+      heroLead: "Saved home introduction.",
+      satPathBlurb: "Book open times with our SAT tutors.",
+    },
+  },
+  {
+    id: "sat-content",
+    slug: "sat",
+    title: "Saved SAT title",
+    seoTitle: "Saved SAT SEO",
+    seoDescription: "Saved SAT description",
+    status: "draft" as const,
+    body: {
+      heroLead: "Saved SAT introduction.",
+      offersIntro: "Use credits with our SAT tutors.",
+    },
+  },
+  {
+    id: "settings-content",
+    slug: "site-settings",
+    title: "Site settings",
+    seoTitle: "Site settings",
+    seoDescription: "Contact email settings.",
+    status: "published" as const,
+    body: { contactEmail: "admin@acceptedadmissions.org" },
+  },
 ];
 
 afterEach(() => {
@@ -156,9 +189,13 @@ describe("administrator public content previews", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Public team and student-story content",
+        name: "Website content",
       }),
     ).toBeTruthy();
+    expect(screen.getByTestId("card-home-content")).toBeTruthy();
+    expect(screen.getByTestId("card-sat-content")).toBeTruthy();
+    expect(screen.getByTestId("card-site-settings")).toBeTruthy();
+    expect(screen.getByDisplayValue("admin@acceptedadmissions.org")).toBeTruthy();
 
     expect(screen.getByText("Current Tutor")).toBeTruthy();
     expect(screen.queryByText("Inactive Tutor")).toBeTruthy();
@@ -195,6 +232,26 @@ describe("administrator public content previews", () => {
     expect(
       within(storiesDialog).getByText("Approved destination details will appear here when available."),
     ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    fireEvent.change(screen.getByDisplayValue("Saved home introduction."), {
+      target: { value: "Unsaved home introduction." },
+    });
+    fireEvent.click(screen.getByTestId("button-preview-home"));
+    const homeDialog = await screen.findByRole("dialog");
+    expect(within(homeDialog).getByRole("heading", { name: "Home preview" })).toBeTruthy();
+    expect(within(homeDialog).getByText("Unsaved home introduction.")).toBeTruthy();
+    expect(within(homeDialog).queryByText(/Xavier or Eunice/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    fireEvent.click(screen.getByTestId("button-preview-sat"));
+    const satDialog = await screen.findByRole("dialog");
+    expect(within(satDialog).getByRole("heading", { name: "SAT tutoring preview" })).toBeTruthy();
+    expect(within(satDialog).getByText("Saved SAT introduction.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

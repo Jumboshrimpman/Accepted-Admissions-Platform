@@ -9,12 +9,12 @@ test("library assets become session blocks with a shared resource link", () => {
     title: "October SAT practice test",
     kind: "practice_test",
     description: "Full timed SAT for the October 2 session.",
-    resourceUrl: "https://drive.google.com/file/example",
+    resourceUrl: "https://example.invalid/october-sat-practice.pdf",
     body: "Complete all four modules.",
   });
   assert.equal(libraryAssetBlockKind({ resourceUrl: config.url }), "external_link");
   assert.equal(config.label, "October SAT practice test");
-  assert.equal(config.url, "https://drive.google.com/file/example");
+  assert.equal(config.url, "https://example.invalid/october-sat-practice.pdf");
   assert.equal(config.libraryKind, "practice_test");
   assert.equal(config.libraryAssetId, "asset-1");
 });

@@ -253,7 +253,7 @@ export default function PortalAssignment() {
             <div className="mt-3 flex gap-4 text-sm text-muted-foreground"><span><Timer className="mr-1 inline h-4 w-4" />{assignment.timeLimitMinutes} min</span><span>{assignment.questionCount} questions</span></div>
           </CardHeader>
           <CardContent className="space-y-4 p-6"><p className="whitespace-pre-wrap text-muted-foreground">{assignment.instructions}</p><p className="text-sm text-muted-foreground">Your timer is tracked on the server. You can pause, and your responses autosave as you work.</p></CardContent>
-          <CardContent className="bg-muted/30"><Button size="lg" className="w-full rounded-full" onClick={() => startAttempt.mutate({ assignmentId }, { onSuccess: (data) => setAttemptId(data.id) })} disabled={viewer || startAttempt.isPending}>{viewer ? "Viewer mode — read only" : startAttempt.isPending ? "Starting…" : "Start assignment"}</Button></CardContent>
+          <CardContent className="bg-muted/30"><Button size="lg" className="w-full rounded-full" onClick={() => startAttempt.mutate({ assignmentId }, { onSuccess: (data) => setAttemptId(data.id) })} disabled={viewer || startAttempt.isPending}>{viewer ? "Viewer mode — read only" : startAttempt.isPending ? "Starting…" : "Start quiz"}</Button></CardContent>
         </Card>
       </div>
     );

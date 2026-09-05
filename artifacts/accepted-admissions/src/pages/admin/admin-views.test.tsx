@@ -78,6 +78,7 @@ const mocks = vi.hoisted(() => ({
     questionStatus: [],
     submissions: [],
     tutors: [],
+    libraryAssets: [],
     clients: [] as Array<{
       id: string;
       name: string;
@@ -118,12 +119,23 @@ vi.mock("@workspace/api-client-react", () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
+  getListQuestionBankQueryKey: (params?: { courseId: string }) => ["/api/question-bank", params],
+  getListContentSourcesQueryKey: (params?: { courseId: string }) => ["/api/content-sources", params],
   useCreateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateAdminLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateAdminLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminProgram: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateCurriculumBlock: () => ({ mutate: vi.fn(), isPending: false }),
+  useAttachSessionLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
+  useListQuestionBank: () => ({ data: [], isLoading: false }),
+  useListContentSources: () => ({ data: [], isLoading: false }),
+  useCreateContentSource: () => ({ mutate: vi.fn(), isPending: false }),
+  useGeneratePracticeQuestions: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateQuestionBankItem: () => ({ mutate: vi.fn(), isPending: false }),
+  useAttachQuestionToAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminGuidanceRequest: () => ({
     mutate: mocks.updateGuidanceRequest,
     isPending: false,
@@ -135,8 +147,8 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 vi.mock("wouter", () => ({
-  Link: ({ href, children }: { href: string; children: ReactNode }) =>
-    createElement("a", { href }, children),
+  Link: ({ href, children, ...props }: { href: string; children: ReactNode }) =>
+    createElement("a", { href, ...props }, children),
   useLocation: () => ["/admin/curriculum?section=people", vi.fn()],
 }));
 
@@ -156,6 +168,7 @@ afterEach(() => {
   mocks.overview.accessConflicts = [];
   mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
+  mocks.curriculum.clients = [];
 });
 
 describe("administrator overview", () => {
@@ -224,6 +237,25 @@ describe("administrator overview", () => {
     expect(screen.getByText("student")).toBeTruthy();
   });
 
+  test("makes client portal preview obvious on overview", () => {
+    mocks.curriculum.clients = [
+      {
+        id: "student-1",
+        name: "Taito Goto",
+        email: "taito@example.invalid",
+        assignedTutors: [],
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByTestId("card-student-portals").textContent).toMatch(/Student portals/);
+    const preview = screen.getByTestId("link-preview-client-student-1");
+    expect(preview.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    expect(preview.textContent).toMatch(/Preview client portal/);
+    expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/Michelle Makarem/);
+  });
+
   test("exposes a client preview action for each student", () => {
     mocks.curriculum.clients = [
       {
@@ -247,8 +279,9 @@ describe("administrator overview", () => {
     expect(screen.getByLabelText("Provision role")).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Administrator" })).toBeNull();
     expect(screen.getByRole("button", { name: /Provision access/i })).toBeTruthy();
-    const previewLink = screen.getByRole("link", { name: /View client/i });
+    const previewLink = screen.getByRole("link", { name: /Preview client portal/i });
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/michaelmakarem@gmail.com/);
     expect(screen.getByText("Nika Raiffe · English")).toBeTruthy();
   });
 

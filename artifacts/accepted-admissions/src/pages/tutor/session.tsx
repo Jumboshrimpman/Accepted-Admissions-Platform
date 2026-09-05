@@ -6,10 +6,7 @@ import {
   getGetSessionQueryKey,
   getGetAdaptiveCurriculumQueryKey,
   getGetAssignmentQueryKey,
-  getListContentSourcesQueryKey,
-  getListQuestionBankQueryKey,
   getListSessionArtifactsQueryKey,
-  type QuestionBankItem,
   useGetAdaptiveCurriculum,
   useGetAssignment,
   useRefreshAdaptiveCurriculum,
@@ -17,15 +14,10 @@ import {
   useUpdateAssignmentQuestion,
   useRemoveQuestionFromAssignment,
   useAttachQuestionToAssignment,
-  useCreateContentSource,
   useCreateCurriculumBlock,
   useUpdateCurriculumBlock,
-  useGeneratePracticeQuestions,
   useGetSession,
-  useListContentSources,
-  useListQuestionBank,
   useListSessionArtifacts,
-  useUpdateQuestionBankItem,
   useUpsertSessionArtifact,
 } from "@workspace/api-client-react";
 import {
@@ -34,7 +26,6 @@ import {
   ArrowUp,
   CheckCircle2,
   ChevronRight,
-  FileInput,
   FileText,
   GripVertical,
   Plus,
@@ -48,8 +39,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,168 +53,6 @@ import {
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 
-function QuestionReviewCard({
-  question,
-  assignments,
-  onChanged,
-}: {
-  question: QuestionBankItem;
-  assignments: Array<{ id: string; title: string }>;
-  onChanged: () => void;
-}) {
-  const updateQuestion = useUpdateQuestionBankItem();
-  const attachQuestion = useAttachQuestionToAssignment();
-  const [prompt, setPrompt] = useState(question.prompt);
-  const [skill, setSkill] = useState(question.skill);
-  const [explanation, setExplanation] = useState(question.explanation);
-  const [tags, setTags] = useState(question.tags.join(", "));
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [attachedAssignmentIds, setAttachedAssignmentIds] = useState<string[]>([]);
-
-  const save = (reviewStatus = question.reviewStatus) => {
-    updateQuestion.mutate(
-      {
-        questionId: question.id,
-        data: {
-          prompt,
-          skill,
-          explanation,
-          tags: tags
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean),
-          reviewStatus,
-          rejectionReason:
-            reviewStatus === "rejected" ? rejectionReason : null,
-        },
-      },
-      { onSuccess: onChanged },
-    );
-  };
-
-  return (
-    <Card className="border-border/70">
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">{question.skill}</CardTitle>
-          <Badge
-            variant={question.reviewStatus === "approved" ? "default" : "outline"}
-          >
-            {question.reviewStatus}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-2">
-          <Label>Prompt</Label>
-          <Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label>Skill</Label>
-            <Input value={skill} onChange={(event) => setSkill(event.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <Label>Tags</Label>
-            <Input value={tags} onChange={(event) => setTags(event.target.value)} />
-          </div>
-        </div>
-        <div className="rounded-lg bg-muted/50 p-3 text-sm">
-          <p className="mb-2 font-medium">Answer choices</p>
-          <ul className="space-y-1 text-muted-foreground">
-            {question.choices.map((choice) => (
-              <li key={choice.id}>
-                {choice.label}. {choice.text}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs font-medium">
-            Correct answer: {question.correctAnswer.toUpperCase()}
-          </p>
-        </div>
-        <div className="grid gap-2">
-          <Label>Explanation</Label>
-          <Textarea
-            value={explanation}
-            onChange={(event) => setExplanation(event.target.value)}
-          />
-        </div>
-        {question.reviewStatus !== "approved" && (
-          <div className="grid gap-2">
-            <Label>Rejection reason</Label>
-            <Input
-              value={rejectionReason}
-              onChange={(event) => setRejectionReason(event.target.value)}
-              placeholder="Required only when rejecting"
-            />
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => save()}
-            disabled={updateQuestion.isPending}
-          >
-            <Save className="mr-2 h-4 w-4" /> Save edits
-          </Button>
-          <Button
-            onClick={() => save("approved")}
-            disabled={updateQuestion.isPending}
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => save("rejected")}
-            disabled={!rejectionReason.trim() || updateQuestion.isPending}
-          >
-            <XCircle className="mr-2 h-4 w-4" /> Reject
-          </Button>
-        </div>
-        {question.reviewStatus === "approved" && assignments.length > 0 && (
-          <div className="border-t pt-3">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Reuse in this session
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {assignments.map((assignment) => (
-                <Button
-                  key={assignment.id}
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    attachQuestion.isPending ||
-                    attachedAssignmentIds.includes(assignment.id)
-                  }
-                  onClick={() =>
-                    attachQuestion.mutate(
-                      {
-                        assignmentId: assignment.id,
-                        data: { questionId: question.id },
-                      },
-                      {
-                        onSuccess: () =>
-                          setAttachedAssignmentIds((current) => [
-                            ...current,
-                            assignment.id,
-                          ]),
-                      },
-                    )
-                  }
-                >
-                  {attachedAssignmentIds.includes(assignment.id)
-                    ? `Added to ${assignment.title}`
-                    : `Add to ${assignment.title}`}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function TutorSession() {
   const params = useParams();
   const sessionId = params.sessionId as string;
@@ -234,21 +61,6 @@ export default function TutorSession() {
     query: {
       enabled: Boolean(sessionId),
       queryKey: getGetSessionQueryKey(sessionId),
-    },
-  });
-  const courseId = session?.courseId ?? "";
-  const sourceParams = { courseId };
-  const questionParams = { courseId };
-  const { data: sources = [] } = useListContentSources(sourceParams, {
-    query: {
-      enabled: Boolean(courseId),
-      queryKey: getListContentSourcesQueryKey(sourceParams),
-    },
-  });
-  const { data: questions = [] } = useListQuestionBank(questionParams, {
-    query: {
-      enabled: Boolean(courseId),
-      queryKey: getListQuestionBankQueryKey(questionParams),
     },
   });
   const { data: artifacts = [] } = useListSessionArtifacts(sessionId, {
@@ -275,8 +87,6 @@ export default function TutorSession() {
   });
   const createBlock = useCreateCurriculumBlock();
   const updateBlock = useUpdateCurriculumBlock();
-  const createSource = useCreateContentSource();
-  const generateQuestions = useGeneratePracticeQuestions();
   const saveArtifact = useUpsertSessionArtifact();
   const refreshAdaptive = useRefreshAdaptiveCurriculum();
   const updateRecommendation = useUpdateAdaptiveRecommendation();
@@ -286,20 +96,9 @@ export default function TutorSession() {
 
   const [addingBlock, setAddingBlock] = useState(false);
   const [newBlockText, setNewBlockText] = useState("");
-  const [sourceTitle, setSourceTitle] = useState("");
-  const [sourceKind, setSourceKind] = useState<"pdf" | "html" | "text">("text");
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [sourceText, setSourceText] = useState("");
-  const [authorizationNote, setAuthorizationNote] = useState("");
-  const [selectedSourceId, setSelectedSourceId] = useState("");
-  const [focus, setFocus] = useState("");
   const [transcript, setTranscript] = useState("");
   const [report, setReport] = useState("");
   const [tutorNotes, setTutorNotes] = useState("");
-
-  useEffect(() => {
-    if (!selectedSourceId && sources[0]) setSelectedSourceId(sources[0].id);
-  }, [selectedSourceId, sources]);
 
   useEffect(() => {
     setTranscript(
@@ -325,14 +124,6 @@ export default function TutorSession() {
 
   if (error || !session) return <div>Session not found</div>;
 
-  const refreshSources = () =>
-    queryClient.invalidateQueries({
-      queryKey: getListContentSourcesQueryKey(sourceParams),
-    });
-  const refreshQuestions = () =>
-    queryClient.invalidateQueries({
-      queryKey: getListQuestionBankQueryKey(questionParams),
-    });
   const refreshArtifacts = () =>
     queryClient.invalidateQueries({
       queryKey: getListSessionArtifactsQueryKey(sessionId),
@@ -383,33 +174,6 @@ export default function TutorSession() {
           queryClient.invalidateQueries({
             queryKey: getGetSessionQueryKey(sessionId),
           });
-        },
-      },
-    );
-  };
-
-  const handleImportSource = () => {
-    if (!sourceTitle.trim() || !authorizationNote.trim()) return;
-    createSource.mutate(
-      {
-        data: {
-          courseId,
-          title: sourceTitle,
-          sourceKind,
-          sourceUrl: sourceUrl || null,
-          extractedText: sourceText || null,
-          authorizationNote,
-          provenance: { sessionId },
-        },
-      },
-      {
-        onSuccess: (source) => {
-          setSelectedSourceId(source.id);
-          setSourceTitle("");
-          setSourceUrl("");
-          setSourceText("");
-          setAuthorizationNote("");
-          refreshSources();
         },
       },
     );
@@ -488,7 +252,7 @@ export default function TutorSession() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-                  AI-native live plan
+                  Prepared live plan
                 </p>
                 <p className="mt-1 text-sm font-medium">{adaptive.sessionPrep.summary}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -564,7 +328,7 @@ export default function TutorSession() {
                       {homework.attemptId && (
                         <Link href={`/tutor/attempts/${homework.attemptId}`}>
                           <Button size="sm" variant="outline" className="mt-3">
-                            Open detailed result
+                            Review right / wrong answers
                           </Button>
                         </Link>
                       )}
@@ -600,165 +364,15 @@ export default function TutorSession() {
         </CardContent>
       </Card>
 
+      <p className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground" data-testid="session-authoring-note">
+        Quiz authoring lives in the admin Curriculum bank. This page reviews the student’s attempt and the live meeting plan.
+      </p>
+
       <Tabs defaultValue="curriculum" className="space-y-6">
-        <TabsList className="grid h-auto w-full grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-2">
           <TabsTrigger value="curriculum">Live plan</TabsTrigger>
-          <TabsTrigger value="practice">Authoring tools</TabsTrigger>
           <TabsTrigger value="records">Records</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="practice" className="space-y-6">
-          <Card className="border-accent/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileInput className="h-5 w-5 text-accent" />
-                Import authorized source
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Register provenance for PDF, HTML, or text you are authorized to use.
-                Source text stays in the tutor workspace and is never returned in
-                student assignment responses.
-              </p>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-4 sm:grid-cols-[1fr_150px]">
-                <div className="grid gap-2">
-                  <Label>Source title</Label>
-                  <Input
-                    value={sourceTitle}
-                    onChange={(event) => setSourceTitle(event.target.value)}
-                    placeholder="Lesson notes — evidence and inference"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Format</Label>
-                  <select
-                    value={sourceKind}
-                    onChange={(event) =>
-                      setSourceKind(event.target.value as "pdf" | "html" | "text")
-                    }
-                    className="h-10 rounded-md border bg-background px-3 text-sm"
-                  >
-                    <option value="text">Text</option>
-                    <option value="pdf">PDF</option>
-                    <option value="html">HTML</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label>Source URL (optional)</Label>
-                <Input
-                  value={sourceUrl}
-                  onChange={(event) => setSourceUrl(event.target.value)}
-                  placeholder="https://…"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Authorized extracted text (optional when a URL is supplied)</Label>
-                <Textarea
-                  value={sourceText}
-                  onChange={(event) => setSourceText(event.target.value)}
-                  placeholder="Paste text extracted from material you are permitted to use."
-                  className="min-h-28"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Authorization and provenance note</Label>
-                <Textarea
-                  value={authorizationNote}
-                  onChange={(event) => setAuthorizationNote(event.target.value)}
-                  placeholder="Example: Tutor-created handout, owned by Accepted Admissions."
-                />
-              </div>
-              <Button
-                className="w-fit"
-                onClick={handleImportSource}
-                disabled={
-                  createSource.isPending ||
-                  !sourceTitle.trim() ||
-                  !authorizationNote.trim() ||
-                  (!sourceUrl.trim() && !sourceText.trim())
-                }
-              >
-                {createSource.isPending ? "Importing…" : "Import source"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-accent" />
-                Generate original practice drafts
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Generation uses your learning objective, not copied source passages.
-                Every item remains a draft until a tutor approves it.
-              </p>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-[220px_1fr_auto]">
-              <select
-                value={selectedSourceId}
-                onChange={(event) => setSelectedSourceId(event.target.value)}
-                className="h-10 rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">Select a source</option>
-                {sources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.title}
-                  </option>
-                ))}
-              </select>
-              <Input
-                value={focus}
-                onChange={(event) => setFocus(event.target.value)}
-                placeholder="Learning objective, e.g. distinguish evidence from inference"
-              />
-              <Button
-                disabled={
-                  !selectedSourceId ||
-                  focus.trim().length < 3 ||
-                  generateQuestions.isPending
-                }
-                onClick={() =>
-                  generateQuestions.mutate(
-                    {
-                      sourceId: selectedSourceId,
-                      data: { focus, count: 3, difficulty: "medium" },
-                    },
-                    { onSuccess: refreshQuestions },
-                  )
-                }
-              >
-                {generateQuestions.isPending ? "Generating…" : "Create drafts"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          <section className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h2 className="flex items-center gap-2 text-2xl font-bold">
-                <BookOpenCheck className="h-5 w-5 text-primary" />
-                Tutor review
-              </h2>
-              <Badge variant="secondary">{questions.length} reusable items</Badge>
-            </div>
-            {questions.length > 0 ? (
-              questions.map((question) => (
-                <QuestionReviewCard
-                  key={question.id}
-                  question={question}
-                  assignments={session.assignments}
-                  onChanged={refreshQuestions}
-                />
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                Import a source and create drafts to begin the tutor review queue.
-              </div>
-            )}
-          </section>
-        </TabsContent>
 
         <TabsContent value="curriculum" className="space-y-4">
           <Card className="border-primary/20 bg-primary/5">

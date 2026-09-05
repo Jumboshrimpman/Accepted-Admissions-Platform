@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateAdminProduct,
@@ -84,7 +85,35 @@ export function AdminFinancialsPanel() {
     updateProduct.isPending;
 
   if (financials.isLoading) return <Skeleton className="h-96 rounded-2xl" />;
-  if (!financials.data) return null;
+  if (financials.isError || !financials.data) {
+    return (
+      <Card data-testid="card-financials-unavailable">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <WalletCards className="h-5 w-5 text-primary" /> Financial operations
+          </CardTitle>
+          <CardDescription>Finance data could not be loaded right now.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {errorText(financials.error) === "The financial action failed."
+              ? "The finance workspace is temporarily unavailable. Retry, or return to the admin overview."
+              : errorText(financials.error)}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" onClick={() => void financials.refetch()} data-testid="button-financials-retry">
+              Retry
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin" data-testid="link-financials-back-admin">
+                Back to admin overview
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   const data = financials.data;
   const selectedClient = clientUserId || data.clients[0]?.id || "";
   const selectedProduct = productId || data.products[0]?.id || "";
@@ -128,7 +157,7 @@ export function AdminFinancialsPanel() {
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
             <h3 className="font-semibold">Authoritative SAT catalog</h3>
-            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($130 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits at $130/hour). Credits book any open hour on Xavier or Eunice’s calendar after a verified Stripe webhook.</p>
+            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($130 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits at $130/hour). Credits book any open hour with our SAT tutors after a verified Stripe payment.</p>
           </div>
           <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
@@ -254,7 +283,12 @@ export function AdminFinancialsPanel() {
               ))}
             </tbody>
           </table>
-          {data.invoices.length === 0 && <p className="py-5 text-sm text-muted-foreground">No invoices recorded.</p>}
+          {data.invoices.length === 0 && (
+            <div className="rounded-xl border border-dashed p-6 text-center" data-testid="empty-financials-invoices">
+              <p className="font-medium">No invoices yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">Create a hosted or manual invoice above when you are ready to bill a student.</p>
+            </div>
+          )}
         </div>
         <div className="overflow-x-auto">
           <h3 className="mb-3 font-semibold">Credit ledger history</h3>
