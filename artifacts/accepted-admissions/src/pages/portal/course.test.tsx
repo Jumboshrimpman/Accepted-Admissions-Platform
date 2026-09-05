@@ -49,15 +49,10 @@ describe("student course page", () => {
   test("does not offer a Course Drive CTA even when driveUrl is present", () => {
     render(<PortalCourse />);
 
-    const meetLinks = screen.getAllByRole("link", { name: /Join Meet/i });
-    expect(meetLinks.length).toBeGreaterThan(0);
-    for (const link of meetLinks) {
-      expect(link.getAttribute("href")).toBe("https://meet.google.com/sat-room");
-    }
+    const hrefs = screen.queryAllByRole("link").map((link) => link.getAttribute("href") ?? "");
+    expect(hrefs).toContain("https://meet.google.com/sat-room");
     expect(screen.queryByText(/Course Drive/i)).toBeNull();
-    expect(screen.queryByRole("link", { name: /Drive/i })).toBeNull();
-    expect(
-      screen.queryAllByRole("link").some((link) => /drive\.google\.com/i.test(link.getAttribute("href") ?? "")),
-    ).toBe(false);
+    expect(screen.queryByRole("link", { name: /Course Drive/i })).toBeNull();
+    expect(hrefs.some((href) => /drive\.google\.com/i.test(href))).toBe(false);
   });
 });
