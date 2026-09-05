@@ -7288,7 +7288,7 @@ router.patch(
         : body.data.meetUrl === undefined
           ? {}
           : { meetUrl: body.data.meetUrl?.trim() || null }),
-      ...(body.data.driveUrl === undefined ? {} : { driveUrl: body.data.driveUrl?.trim() || null }),
+      driveUrl: null,
     };
     const [updated] = await db.update(coursesTable).set(updates).where(eq(coursesTable.id, existing.id)).returning();
     await db.insert(auditLogsTable).values({

@@ -245,4 +245,23 @@ describe("curriculum bank IA", () => {
       "/tutor/attempts/attempt-1",
     );
   });
+
+  test("program edit and library forms do not offer Google Drive fields or CTAs", () => {
+    mocks.location = "/admin/curriculum?section=programs";
+    render(<AdminCurriculum />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
+    expect(screen.getByText("Meet link")).toBeTruthy();
+    expect(screen.queryByText(/Drive link/i)).toBeNull();
+    expect(screen.queryByText(/Google Drive/i)).toBeNull();
+    expect(screen.queryByLabelText(/drive/i)).toBeNull();
+
+    cleanup();
+    mocks.location = "/admin/curriculum?section=curriculum&tab=library";
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /New library asset/i }));
+    expect(screen.getByText("Shared resource URL (PDF or licensed test)")).toBeTruthy();
+    expect(screen.queryByText(/Drive, PDF/i)).toBeNull();
+    expect(screen.queryByText(/Google Drive/i)).toBeNull();
+  });
 });
