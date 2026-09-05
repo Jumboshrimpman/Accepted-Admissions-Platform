@@ -117,6 +117,15 @@ const mocks = vi.hoisted(() => ({
     libraryAssets: [],
     clients: [],
   },
+  assignmentDetails: {
+    "quiz-1": {
+      id: "quiz-1",
+      questions: [
+        { id: "question-1", prompt: "Which choice best supports the claim?" },
+        { id: "question-2", prompt: "What is the function of the third paragraph?" },
+      ],
+    },
+  } as Record<string, { id: string; questions: Array<{ id: string; prompt: string }> }>,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -143,6 +152,14 @@ vi.mock("@workspace/api-client-react", () => ({
   useGeneratePracticeQuestions: () => ({ mutate: mocks.generateQuestions, isPending: false }),
   useUpdateQuestionBankItem: () => ({ mutate: vi.fn(), isPending: false }),
   useAttachQuestionToAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useGetAssignment: (assignmentId: string) => ({
+    data: mocks.assignmentDetails[assignmentId] ?? {
+      id: assignmentId,
+      questions: [],
+    },
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock("@/lib/clone-admin-assignment", () => ({
@@ -168,6 +185,7 @@ afterEach(() => {
   mocks.updateAssignment.mockReset();
   mocks.setLocation.mockReset();
   mocks.location = "/admin/curriculum?section=curriculum";
+  mocks.curriculum.assignments = mocks.curriculum.assignments.filter((assignment) => assignment.id === "quiz-1");
   mocks.curriculum.assignments[0]!.sessionId = null;
   mocks.curriculum.assignments[0]!.sessionTitle = null;
   mocks.curriculum.submissions = [];
@@ -256,6 +274,40 @@ describe("curriculum bank IA", () => {
     mocks.curriculum.sessions.pop();
   });
 
+  test("assign dropdown lists only reusable bank quizzes and omits currently-session labels", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.assignments.push({
+      ...mocks.curriculum.assignments[0]!,
+      id: "quiz-clone",
+      sessionId: "session-2",
+      sessionTitle: "Taito's SAT Session with Eunice",
+      title: "Full SAT Practice Diagnostic",
+      questionCount: 10,
+    });
+    render(<AdminCurriculum />);
+
+    const picker = screen.getByLabelText("Quiz to assign as pre-session work") as HTMLSelectElement;
+    const options = Array.from(picker.options).map((option) => ({
+      value: option.value,
+      label: option.textContent,
+    }));
+    expect(options).toEqual([
+      { value: "quiz-1", label: "October pre-session mini-section · 3 questions" },
+    ]);
+    expect(picker.textContent).not.toMatch(/currently/i);
+    expect(picker.textContent).not.toContain("Taito's SAT Session with Eunice");
+  });
+
+  test("shows an empty assign state when only session-bound quizzes exist", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.assignments[0]!.sessionId = "session-2";
+    mocks.curriculum.assignments[0]!.sessionTitle = "Taito's SAT Session with Eunice";
+    render(<AdminCurriculum />);
+
+    expect(screen.queryByLabelText("Quiz to assign as pre-session work")).toBeNull();
+    expect(screen.getByText("Create a quiz in Curriculum bank (no session) first.")).toBeTruthy();
+  });
+
   test("shows attached quiz and attempt review entry points on the session card", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     mocks.curriculum.assignments[0]!.sessionId = "session-1";
@@ -283,6 +335,9 @@ describe("curriculum bank IA", () => {
     expect(screen.getByRole("link", { name: "Review Taito Goto" }).getAttribute("href")).toBe(
       "/tutor/attempts/attempt-1",
     );
+    fireEvent.click(screen.getByText("View questions"));
+    expect(screen.getByText("Which choice best supports the claim?")).toBeTruthy();
+    expect(screen.getByText("What is the function of the third paragraph?")).toBeTruthy();
   });
 
   test("program edit and library forms do not offer Google Drive fields or CTAs", () => {

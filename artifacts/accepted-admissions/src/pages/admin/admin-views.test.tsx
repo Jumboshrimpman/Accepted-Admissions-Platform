@@ -136,6 +136,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGeneratePracticeQuestions: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateQuestionBankItem: () => ({ mutate: vi.fn(), isPending: false }),
   useAttachQuestionToAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useGetAssignment: () => ({ data: { questions: [] }, isLoading: false, error: null }),
   useUpdateAdminGuidanceRequest: () => ({
     mutate: mocks.updateGuidanceRequest,
     isPending: false,

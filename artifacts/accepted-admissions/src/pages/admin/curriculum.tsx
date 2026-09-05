@@ -20,6 +20,7 @@ import {
   useUpdateAdminSession,
   useUpdateCurriculumBlock,
   useAttachSessionLibraryAsset,
+  useGetAssignment,
 } from "@workspace/api-client-react";
 import type {
   AdminAccessGrant,
@@ -40,6 +41,11 @@ import type {
 } from "@workspace/api-client-react";
 import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, FileText, GraduationCap, Library, Mail, Plus, Save, Sparkles, UserPlus, Users, Video } from "lucide-react";
 import { GenerateDraftsCard, QuestionReviewCard, apiErrorText } from "@/components/question-bank-authoring";
+import {
+  BANK_QUIZ_EMPTY_STATE,
+  assignableBankQuizzes,
+  bankQuizOptionLabel,
+} from "@/lib/assignable-bank-quizzes";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { TEMPLATE_DRAFTS_BANK_HINT } from "@/lib/template-drafts";
 import { Badge } from "@/components/ui/badge";
@@ -965,21 +971,24 @@ function SessionCard({
           {prework.length > 0 ? (
             <div className="mt-2 space-y-2">
               {prework.map((quiz) => (
-                <div key={quiz.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-background px-3 py-2 text-sm">
-                  <div>
-                    <p className="font-medium">{quiz.title}</p>
-                    <p className="text-xs text-muted-foreground">{quiz.questionCount} questions · {quiz.status}</p>
+                <div key={quiz.id} className="rounded-md bg-background px-3 py-2 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{quiz.title}</p>
+                      <p className="text-xs text-muted-foreground">{quiz.questionCount} questions · {quiz.status}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {reviews.filter((item) => item.assignmentId === quiz.id).map((item) => (
+                        <Button key={item.attemptId} asChild size="sm" variant="secondary">
+                          <Link href={`/tutor/attempts/${item.attemptId}`}>Review {item.studentName}</Link>
+                        </Button>
+                      ))}
+                      {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && (
+                        <span className="text-xs text-muted-foreground">No attempt yet</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {reviews.filter((item) => item.assignmentId === quiz.id).map((item) => (
-                      <Button key={item.attemptId} asChild size="sm" variant="secondary">
-                        <Link href={`/tutor/attempts/${item.attemptId}`}>Review {item.studentName}</Link>
-                      </Button>
-                    ))}
-                    {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && (
-                      <span className="text-xs text-muted-foreground">No attempt yet</span>
-                    )}
-                  </div>
+                  <PreworkQuestionPrompts assignmentId={quiz.id} />
                 </div>
               ))}
             </div>
@@ -1001,6 +1010,40 @@ function SessionCard({
   );
 }
 
+function PreworkQuestionPrompts({ assignmentId }: { assignmentId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="mt-2"
+      data-testid={`prework-questions-${assignmentId}`}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+        View questions
+      </summary>
+      {open ? <PreworkQuestionPromptList assignmentId={assignmentId} /> : null}
+    </details>
+  );
+}
+
+function PreworkQuestionPromptList({ assignmentId }: { assignmentId: string }) {
+  const { data, isLoading } = useGetAssignment(assignmentId);
+  if (isLoading) {
+    return <p className="mt-2 text-xs text-muted-foreground">Loading questions…</p>;
+  }
+  const prompts = data?.questions ?? [];
+  if (prompts.length === 0) {
+    return <p className="mt-2 text-xs text-muted-foreground">No questions on this quiz yet.</p>;
+  }
+  return (
+    <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+      {prompts.map((question) => (
+        <li key={question.id}>{question.prompt}</li>
+      ))}
+    </ol>
+  );
+}
+
 function AssignPreworkControl({
   session,
   assignments,
@@ -1011,30 +1054,13 @@ function AssignPreworkControl({
   onChanged: () => void;
 }) {
   const cloneAssignment = useCloneAdminAssignmentToSession();
-  const alreadyAssignedTitles = new Set(
-    assignments
-      .filter(
-        (item) =>
-          item.sessionId === session.id &&
-          item.status !== "archived" &&
-          item.deliveryPhase === "before_session",
-      )
-      .map((item) => item.title.trim().replace(/\s+/g, " ").toLowerCase()),
-  );
-  const assignable = assignments.filter(
-    (item) =>
-      item.courseId === session.courseId &&
-      item.deliveryPhase === "before_session" &&
-      item.status !== "archived" &&
-      item.sessionId !== session.id &&
-      !alreadyAssignedTitles.has(item.title.trim().replace(/\s+/g, " ").toLowerCase()),
-  );
+  const assignable = assignableBankQuizzes(assignments, session);
   const [assignmentId, setAssignmentId] = useState(assignable[0]?.id ?? "");
   const [message, setMessage] = useState("");
   if (assignable.length === 0) {
     return (
       <p className="mt-3 text-xs text-muted-foreground">
-        Create a before-session quiz in the Curriculum bank, then assign it here.
+        {BANK_QUIZ_EMPTY_STATE}
       </p>
     );
   }
@@ -1048,7 +1074,7 @@ function AssignPreworkControl({
       >
         {assignable.map((item) => (
           <option key={item.id} value={item.id}>
-            {item.title} · {item.questionCount} questions{item.sessionTitle ? ` · currently ${item.sessionTitle}` : ""}
+            {bankQuizOptionLabel(item)}
           </option>
         ))}
       </select>
