@@ -29,4 +29,5 @@ export const CurriculumBlockUpdateKind = {
   timer: 'timer',
   file_link: 'file_link',
   divider: 'divider',
+  adaptive_prep: 'adaptive_prep',
 } as const;

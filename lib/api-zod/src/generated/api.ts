@@ -270,7 +270,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
@@ -2041,7 +2041,7 @@ export const GetSessionResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
@@ -2101,7 +2101,7 @@ export const createCurriculumBlockBodyPositionMin = 0;
 
 
 export const CreateCurriculumBlockBody = zod.object({
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "position": zod.number().min(createCurriculumBlockBodyPositionMin).optional(),
   "config": zod.record(zod.string(), zod.unknown())
@@ -2111,7 +2111,7 @@ export const CreateCurriculumBlockResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
@@ -2135,7 +2135,7 @@ export const AttachSessionLibraryAssetResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
@@ -2233,7 +2233,7 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
@@ -2338,7 +2338,7 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
@@ -2415,7 +2415,7 @@ export const updateCurriculumBlockBodyPositionMin = 0;
 
 
 export const UpdateCurriculumBlockBody = zod.object({
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']).optional(),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']).optional(),
   "visibility": zod.enum(['student', 'tutor', 'both']).optional(),
   "position": zod.number().min(updateCurriculumBlockBodyPositionMin).optional(),
   "status": zod.enum(['draft', 'published', 'archived']).optional(),
@@ -2426,7 +2426,7 @@ export const UpdateCurriculumBlockResponse = zod.object({
   "id": zod.string(),
   "sessionId": zod.string(),
   "libraryAssetId": zod.string().nullish(),
-  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider']),
+  "kind": zod.enum(['heading', 'rich_text', 'callout', 'objectives', 'timeline', 'tutor_instructions', 'student_notes', 'formula', 'strategy', 'external_link', 'multiple_choice', 'numeric_response', 'long_response', 'writing_response', 'checklist', 'homework', 'timer', 'file_link', 'divider', 'adaptive_prep']),
   "position": zod.number(),
   "visibility": zod.enum(['student', 'tutor', 'both']),
   "status": zod.enum(['draft', 'published', 'archived']),
