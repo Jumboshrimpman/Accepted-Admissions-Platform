@@ -78,6 +78,7 @@ const mocks = vi.hoisted(() => ({
     questionStatus: [],
     submissions: [],
     tutors: [],
+    libraryAssets: [],
     clients: [] as Array<{
       id: string;
       name: string;
@@ -156,6 +157,7 @@ afterEach(() => {
   mocks.overview.accessConflicts = [];
   mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
+  mocks.curriculum.clients = [];
 });
 
 describe("administrator overview", () => {
@@ -224,6 +226,25 @@ describe("administrator overview", () => {
     expect(screen.getByText("student")).toBeTruthy();
   });
 
+  test("makes client portal preview obvious on overview", () => {
+    mocks.curriculum.clients = [
+      {
+        id: "student-1",
+        name: "Taito Goto",
+        email: "taito@example.invalid",
+        assignedTutors: [],
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByRole("heading", { name: "Student portals" })).toBeTruthy();
+    const preview = screen.getByTestId("link-preview-client-student-1");
+    expect(preview.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    expect(preview.textContent).toMatch(/Preview client portal/);
+    expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/Michelle Makarem/);
+  });
+
   test("exposes a client preview action for each student", () => {
     mocks.curriculum.clients = [
       {
@@ -247,8 +268,9 @@ describe("administrator overview", () => {
     expect(screen.getByLabelText("Provision role")).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Administrator" })).toBeNull();
     expect(screen.getByRole("button", { name: /Provision access/i })).toBeTruthy();
-    const previewLink = screen.getByRole("link", { name: /View client/i });
+    const previewLink = screen.getByRole("link", { name: /Preview client portal/i });
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/michaelmakarem@gmail.com/);
     expect(screen.getByText("Nika Raiffe · English")).toBeTruthy();
   });
 

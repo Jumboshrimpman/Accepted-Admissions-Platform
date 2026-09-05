@@ -12,6 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
+import {
+  DEFAULT_SAT_CONTENT,
+  normalizeSatContent,
+  type SatContent,
+} from "@/lib/public-site-content";
 
 type Product = {
   id: string;
@@ -23,9 +28,31 @@ type Product = {
   effectiveHourlyRateCents: number;
 };
 
+export function SatMarketingContent({ content }: { content: SatContent }) {
+  return (
+    <main>
+      <section className="border-b bg-background">
+        <div className="container mx-auto max-w-3xl px-6 py-16">
+          <p className="font-metadata text-accent">Current online offers</p>
+          <h1 className="font-display mt-4 text-5xl tracking-tight">{content.title}</h1>
+          <p className="mt-6 text-lg leading-relaxed text-muted-foreground">{content.body.heroLead}</p>
+          <p className="mt-6 leading-relaxed text-muted-foreground">
+            {content.body.offersIntro} Visit{" "}
+            <Link href="/our-team" className="font-semibold text-primary hover:underline">
+              Meet the team
+            </Link>{" "}
+            to learn about our tutors.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function SatOfferings() {
   const { isSignedIn } = usePortalAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [content, setContent] = useState<SatContent>(DEFAULT_SAT_CONTENT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [checkoutProductId, setCheckoutProductId] = useState("");
@@ -82,6 +109,9 @@ export default function SatOfferings() {
   useEffect(() => {
     const storedProductId = window.sessionStorage.getItem("accepted:pending-product");
     if (storedProductId) setPendingProductId(storedProductId);
+    fetchPublicJson<unknown>("/api/public/content/sat")
+      .then((result) => setContent(normalizeSatContent(result)))
+      .catch(() => setContent(DEFAULT_SAT_CONTENT));
     fetchPublicJson<unknown>("/api/public/products")
       .then((nextProducts) => {
         if (!Array.isArray(nextProducts)) throw new Error("Products response is malformed");
@@ -156,8 +186,8 @@ export default function SatOfferings() {
   return (
     <PublicSiteShell
       eyebrow="One session, available online"
-      title="SAT tutoring | Accepted Admissions"
-      description="Explore prepaid SAT session credits, see approved prices, and continue to secure checkout."
+      title={content.seoTitle || "SAT tutoring | Accepted Admissions"}
+      description={content.seoDescription || DEFAULT_SAT_CONTENT.seoDescription || ""}
     >
       <main>
         <section className="relative overflow-hidden border-b">
@@ -170,7 +200,7 @@ export default function SatOfferings() {
                  Prepaid <span className="text-accent">SAT session credits.</span>
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                 Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked on Xavier or Eunice’s calendar.
+                 {content.body.heroLead}
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-13 w-full rounded-md bg-primary px-7 text-primary-foreground sm:w-auto">
@@ -222,7 +252,7 @@ export default function SatOfferings() {
           <div className="mb-10 max-w-2xl">
                <p className="font-metadata text-accent">The current offers</p>
                 <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">SAT session credit packages.</h2>
-               <p className="mt-3 text-muted-foreground">Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on Xavier or Eunice’s available calendar. Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
+               <p className="mt-3 text-muted-foreground">{content.body.offersIntro} Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
           </div>
           {loading ? (
              <div className="max-w-2xl" data-testid="status-sat-loading"><Skeleton className="h-72 rounded-lg" /></div>

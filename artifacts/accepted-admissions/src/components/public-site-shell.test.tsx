@@ -12,6 +12,7 @@ import { PublicSiteShell, fetchPublicJson, resolvePublicMediaUrl, resolvePublicP
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   document.head.querySelectorAll('link[rel="canonical"]').forEach((element) => element.remove());
 });
 
@@ -39,8 +40,8 @@ describe("PublicSiteShell", () => {
     expect(screen.getByTestId("button-header-sign-in").getAttribute("href")).toBe("/login");
     expect(screen.getByTestId("button-header-sign-in").textContent).toMatch(/^Sign in$/);
     expect(screen.getByTestId("link-footer-sign-in").getAttribute("href")).toBe("/login");
-    expect(screen.getByRole("link", { name: "info@acceptedadmissions.org" }).getAttribute("href")).toBe(
-      "mailto:info@acceptedadmissions.org",
+    expect(screen.getByRole("link", { name: "admin@acceptedadmissions.org" }).getAttribute("href")).toBe(
+      "mailto:admin@acceptedadmissions.org",
     );
   });
 
@@ -78,6 +79,26 @@ describe("PublicSiteShell", () => {
       headers: { "Content-Type": "application/json" },
     })));
     await expect(fetchPublicJson("/api/public/content/past-success")).rejects.toThrow("malformed JSON");
+  });
+
+  it("uses a published contact email from site settings when available", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+      if (String(path).includes("/api/public/content/site-settings")) {
+        return new Response(JSON.stringify({
+          slug: "site-settings",
+          body: { contactEmail: "hello@acceptedadmissions.org" },
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`Unexpected fetch: ${path}`);
+    }));
+
+    render(<PublicSiteShell><main>Page content</main></PublicSiteShell>);
+
+    expect(await screen.findByRole("link", { name: "hello@acceptedadmissions.org" })).toBeTruthy();
+    expect(screen.getByTestId("link-footer-contact-email").getAttribute("href")).toBe(
+      "mailto:hello@acceptedadmissions.org",
+    );
+    vi.unstubAllGlobals();
   });
 
   it("uses the coordinated A mark in the shared public shell", () => {

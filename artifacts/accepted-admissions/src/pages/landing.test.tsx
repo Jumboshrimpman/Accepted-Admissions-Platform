@@ -23,6 +23,8 @@ describe("Landing visitor paths", () => {
     expect(screen.getByText(/purchase one hour or a ten-hour package at \$130 per credit/i)).toBeTruthy();
     expect(screen.getByText(/harvard students and recent graduates/i)).toBeTruthy();
     expect(screen.getAllByText(/meet the team to learn about our tutors/i)).not.toHaveLength(0);
+    expect(screen.getByText(/our SAT tutors/i)).toBeTruthy();
+    expect(screen.queryByText(/Xavier or Eunice/i)).toBeNull();
     expect(screen.queryByRole("heading", { name: /xavier/i })).toBeNull();
     expect(screen.getByText(/starts with a private inquiry—not checkout/i)).toBeTruthy();
 

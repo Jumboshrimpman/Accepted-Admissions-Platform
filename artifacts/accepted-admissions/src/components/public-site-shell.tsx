@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { WhenSignedIn, WhenSignedOut } from "@/components/portal-auth";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_CONTACT_EMAIL, contactEmailFromBody } from "@/lib/public-site-content";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -97,12 +98,25 @@ export function PublicSiteShell({
 }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [contactEmail, setContactEmail] = useState(DEFAULT_CONTACT_EMAIL);
   const firstMobileLink = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     setMenuOpen(false);
     setPublicMetadata({ title, description });
   }, [location, title, description]);
+
+  useEffect(() => {
+    fetchPublicJson<unknown>("/api/public/content/site-settings")
+      .then((result) => {
+        const body =
+          result && typeof result === "object" && "body" in result
+            ? (result as { body?: unknown }).body
+            : result;
+        setContactEmail(contactEmailFromBody(body));
+      })
+      .catch(() => setContactEmail(DEFAULT_CONTACT_EMAIL));
+  }, []);
 
   useEffect(() => {
     if (menuOpen) firstMobileLink.current?.focus();
@@ -192,8 +206,8 @@ export function PublicSiteShell({
             <Link href="/past-success" className="hover:text-foreground">Student stories</Link>
             <Link href="/client-request" className="hover:text-foreground">Get guidance</Link>
             <Link href="/login" data-testid="link-footer-sign-in" className="hover:text-foreground">Sign in</Link>
-            <a href="mailto:info@acceptedadmissions.org" className="hover:text-foreground">
-              info@acceptedadmissions.org
+            <a href={`mailto:${contactEmail}`} className="hover:text-foreground" data-testid="link-footer-contact-email">
+              {contactEmail}
             </a>
           </div>
         </div>

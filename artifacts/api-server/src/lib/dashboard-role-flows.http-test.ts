@@ -131,7 +131,7 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.deepEqual(preview.body.previewOffer, {
       name: "Single SAT Session",
       description:
-        "One prepaid 60-minute SAT tutoring credit. Book any open hour on Xavier or Eunice’s calendar.",
+        "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
       priceCents: 13000,
       durationMinutes: 60,
     });

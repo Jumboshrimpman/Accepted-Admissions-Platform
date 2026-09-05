@@ -3,7 +3,7 @@ import { useGetCourse, getGetCourseQueryKey } from "@workspace/api-client-react"
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Video, FileText, ChevronRight, Settings } from "lucide-react";
+import { Calendar, Video, ChevronRight, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   displaySessionTitle,
@@ -49,14 +49,6 @@ export default function TutorCourse() {
               <a href={course.meetUrl} target="_blank" rel="noopener noreferrer">
                 <Video className="w-4 h-4 mr-2" />
                 Join Meet
-              </a>
-            </Button>
-          )}
-          {course.driveUrl && (
-            <Button asChild variant="secondary" className="flex-1 md:flex-none rounded-md">
-              <a href={course.driveUrl} target="_blank" rel="noopener noreferrer">
-                <FileText className="w-4 h-4 mr-2" />
-                Course Drive
               </a>
             </Button>
           )}

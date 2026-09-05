@@ -12,7 +12,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { OurTeamContent, orderTeam, type TeamContent, type Tutor } from "@/pages/public/our-team";
 import { PastSuccessContent, type SchoolLogo, type SuccessContent } from "@/pages/public/past-success";
+import { LandingContent } from "@/pages/landing";
+import { SatMarketingContent } from "@/pages/public/sat-offerings";
 import { defaultPhotoAltText } from "@/lib/profile-photo";
+import {
+  DEFAULT_CONTACT_EMAIL,
+  normalizeHomeContent,
+  normalizeSatContent,
+} from "@/lib/public-site-content";
 
 type TutorProfile = Tutor & {
   id: string;
@@ -31,6 +38,20 @@ type PublicContent = {
   status: "draft" | "published" | "archived";
   body: {
     intro?: string;
+    contactEmail?: string;
+    heroEyebrow?: string;
+    heroTitle?: string;
+    heroLead?: string;
+    satPathTitle?: string;
+    satPathBlurb?: string;
+    guidancePathTitle?: string;
+    guidancePathBlurb?: string;
+    satServiceTitle?: string;
+    satServiceBlurb?: string;
+    guidanceServiceTitle?: string;
+    guidanceServiceBlurb?: string;
+    offersIntro?: string;
+    sections?: string[];
     testimonial?: {
       quote?: string;
       attribution?: string;
@@ -54,7 +75,7 @@ export function PublicContentPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const [preview, setPreview] = useState<"team" | "success" | null>(null);
+  const [preview, setPreview] = useState<"team" | "success" | "home" | "sat" | null>(null);
   const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
 
   useEffect(() => {
@@ -169,6 +190,9 @@ export function PublicContentPanel() {
 
   const success = content.find((item) => item.slug === "past-success");
   const team = content.find((item) => item.slug === "our-team");
+  const home = content.find((item) => item.slug === "home");
+  const sat = content.find((item) => item.slug === "sat");
+  const settings = content.find((item) => item.slug === "site-settings");
 
   const previewTutors: Tutor[] = tutors
     .filter((tutor) => tutor.active && tutor.publicApproved)
@@ -207,8 +231,8 @@ export function PublicContentPanel() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Public team and student-story content</h2>
-          <p className="text-sm text-muted-foreground">Edit source-approved copy and control what appears publicly. Only published records are shown on the public site.</p>
+          <h2 className="text-2xl font-bold tracking-tight">Website content</h2>
+          <p className="text-sm text-muted-foreground">Edit home, SAT, team, student stories, and the public contact email. Only published records appear on the public site.</p>
         </div>
         {message && <p role="status" className="text-sm font-medium text-primary">{message}</p>}
       </div>
@@ -367,6 +391,114 @@ export function PublicContentPanel() {
         ))}
       </div>
 
+      {settings && (
+        <Card className="min-w-0" data-testid="card-site-settings">
+          <CardHeader>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="break-words">Site settings</CardTitle>
+                <CardDescription className="break-words">
+                  Public footer contact email. Leave unpublished to keep the default {DEFAULT_CONTACT_EMAIL}.
+                </CardDescription>
+              </div>
+              <Badge variant={settings.status === "published" ? "default" : "outline"} className="capitalize">{settings.status}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="min-w-0 grid gap-5 md:grid-cols-2">
+            <Field label="Contact email">
+              <Input
+                type="email"
+                value={settings.body.contactEmail ?? DEFAULT_CONTACT_EMAIL}
+                onChange={(event) => updateContent(settings.slug, { body: { ...settings.body, contactEmail: event.target.value } })}
+                data-testid="input-contact-email"
+              />
+            </Field>
+            <div className="flex flex-wrap items-center gap-4 md:col-span-2">
+              <label className="flex items-center gap-3 text-sm font-medium">
+                <input type="checkbox" checked={settings.status === "published"} onChange={(event) => updateContent(settings.slug, { status: event.target.checked ? "published" : "draft" })} />
+                Approved and published
+              </label>
+              <Button onClick={() => void saveContent(settings)} disabled={saving === settings.slug}>
+                {saving === settings.slug ? "Saving…" : "Save site settings"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {home && (
+        <Card className="min-w-0" data-testid="card-home-content">
+          <CardHeader>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="break-words">Home page</CardTitle>
+                <CardDescription className="break-words">Marketing copy on the public landing page. Tutor names are optional — the default refers to our SAT tutors.</CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Badge variant={home.status === "published" ? "default" : "outline"} className="capitalize">{home.status}</Badge>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPreview("home")} data-testid="button-preview-home">
+                  <Eye className="mr-2 h-4 w-4" /> Preview
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="min-w-0 grid gap-5 lg:grid-cols-2">
+            <Field label="Page title"><Input maxLength={120} value={home.title} onChange={(event) => updateContent(home.slug, { title: event.target.value })} /></Field>
+            <Field label="SEO title"><Input maxLength={70} value={home.seoTitle ?? ""} onChange={(event) => updateContent(home.slug, { seoTitle: event.target.value })} /></Field>
+            <Field label="SEO description"><Textarea maxLength={180} rows={3} value={home.seoDescription ?? ""} onChange={(event) => updateContent(home.slug, { seoDescription: event.target.value })} /></Field>
+            <Field label="Hero introduction"><Textarea rows={4} value={home.body.heroLead ?? ""} onChange={(event) => updateContent(home.slug, { body: { ...home.body, heroLead: event.target.value } })} /></Field>
+            <Field label="SAT path blurb"><Textarea rows={4} value={home.body.satPathBlurb ?? ""} onChange={(event) => updateContent(home.slug, { body: { ...home.body, satPathBlurb: event.target.value } })} /></Field>
+            <Field label="Guidance path blurb"><Textarea rows={4} value={home.body.guidancePathBlurb ?? ""} onChange={(event) => updateContent(home.slug, { body: { ...home.body, guidancePathBlurb: event.target.value } })} /></Field>
+            <Field label="SAT service blurb"><Textarea rows={4} value={home.body.satServiceBlurb ?? ""} onChange={(event) => updateContent(home.slug, { body: { ...home.body, satServiceBlurb: event.target.value } })} /></Field>
+            <Field label="Guidance service blurb"><Textarea rows={4} value={home.body.guidanceServiceBlurb ?? ""} onChange={(event) => updateContent(home.slug, { body: { ...home.body, guidanceServiceBlurb: event.target.value } })} /></Field>
+            <div className="flex flex-wrap items-center gap-4 lg:col-span-2">
+              <label className="flex items-center gap-3 text-sm font-medium">
+                <input type="checkbox" checked={home.status === "published"} onChange={(event) => updateContent(home.slug, { status: event.target.checked ? "published" : "draft" })} />
+                Approved and published
+              </label>
+              <Button onClick={() => void saveContent(home)} disabled={saving === home.slug}>
+                {saving === home.slug ? "Saving…" : "Save Home"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {sat && (
+        <Card className="min-w-0" data-testid="card-sat-content">
+          <CardHeader>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <CardTitle className="break-words">SAT tutoring page</CardTitle>
+                <CardDescription className="break-words">Public /sat marketing copy. Product prices stay in Finance; this is the surrounding explanation.</CardDescription>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Badge variant={sat.status === "published" ? "default" : "outline"} className="capitalize">{sat.status}</Badge>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPreview("sat")} data-testid="button-preview-sat">
+                  <Eye className="mr-2 h-4 w-4" /> Preview
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="min-w-0 grid gap-5 lg:grid-cols-2">
+            <Field label="Page title"><Input maxLength={120} value={sat.title} onChange={(event) => updateContent(sat.slug, { title: event.target.value })} /></Field>
+            <Field label="SEO title"><Input maxLength={70} value={sat.seoTitle ?? ""} onChange={(event) => updateContent(sat.slug, { seoTitle: event.target.value })} /></Field>
+            <Field label="SEO description"><Textarea maxLength={180} rows={3} value={sat.seoDescription ?? ""} onChange={(event) => updateContent(sat.slug, { seoDescription: event.target.value })} /></Field>
+            <Field label="Hero introduction"><Textarea rows={5} value={sat.body.heroLead ?? sat.body.sections?.[0] ?? ""} onChange={(event) => updateContent(sat.slug, { body: { ...sat.body, heroLead: event.target.value } })} /></Field>
+            <Field label="Offers introduction"><Textarea rows={5} value={sat.body.offersIntro ?? sat.body.sections?.[1] ?? ""} onChange={(event) => updateContent(sat.slug, { body: { ...sat.body, offersIntro: event.target.value } })} /></Field>
+            <div className="flex flex-wrap items-center gap-4 lg:col-span-2">
+              <label className="flex items-center gap-3 text-sm font-medium">
+                <input type="checkbox" checked={sat.status === "published"} onChange={(event) => updateContent(sat.slug, { status: event.target.checked ? "published" : "draft" })} />
+                Approved and published
+              </label>
+              <Button onClick={() => void saveContent(sat)} disabled={saving === sat.slug}>
+                {saving === sat.slug ? "Saving…" : "Save SAT page"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {team && (
         <Card className="min-w-0">
           <CardHeader>
@@ -488,7 +620,15 @@ export function PublicContentPanel() {
       <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
         <DialogContent className="w-[calc(100%-2rem)] max-w-6xl gap-0 overflow-hidden p-0">
           <DialogHeader className="min-w-0 border-b bg-card px-6 py-5 pr-12">
-            <DialogTitle className="break-words">{preview === "team" ? "Our Team preview" : "Student Stories preview"}</DialogTitle>
+            <DialogTitle className="break-words">
+              {preview === "team"
+                ? "Our Team preview"
+                : preview === "success"
+                  ? "Student Stories preview"
+                  : preview === "home"
+                    ? "Home preview"
+                    : "SAT tutoring preview"}
+            </DialogTitle>
             <DialogDescription className="break-words">
               Preview only — this uses the current editor values and does not publish or change the live page.
             </DialogDescription>
@@ -506,6 +646,12 @@ export function PublicContentPanel() {
             )}
             {preview === "success" && successPreview && (
               <PastSuccessContent content={successPreview} />
+            )}
+            {preview === "home" && home && (
+              <LandingContent content={normalizeHomeContent(home)} />
+            )}
+            {preview === "sat" && sat && (
+              <SatMarketingContent content={normalizeSatContent(sat)} />
             )}
           </div>
         </DialogContent>
