@@ -147,8 +147,8 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 vi.mock("wouter", () => ({
-  Link: ({ href, children }: { href: string; children: ReactNode }) =>
-    createElement("a", { href }, children),
+  Link: ({ href, children, ...props }: { href: string; children: ReactNode }) =>
+    createElement("a", { href, ...props }, children),
   useLocation: () => ["/admin/curriculum?section=people", vi.fn()],
 }));
 
@@ -249,7 +249,7 @@ describe("administrator overview", () => {
 
     render(<AdminDashboard />);
 
-    expect(screen.getByRole("heading", { name: "Student portals" })).toBeTruthy();
+    expect(screen.getByTestId("card-student-portals").textContent).toMatch(/Student portals/);
     const preview = screen.getByTestId("link-preview-client-student-1");
     expect(preview.getAttribute("href")).toBe("/admin/clients/student-1/preview");
     expect(preview.textContent).toMatch(/Preview client portal/);

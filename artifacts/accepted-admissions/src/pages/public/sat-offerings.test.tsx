@@ -93,7 +93,7 @@ describe("SAT offer clarity", () => {
     expect(screen.getAllByText("You’ll return to this offer after signing in.").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { level: 1 }).textContent).not.toMatch(/Xavier/i);
     expect(screen.queryByText(/Xavier or Eunice/i)).toBeNull();
-    expect(screen.getByText(/our SAT tutors/i)).toBeTruthy();
+    expect(screen.getAllByText(/our SAT tutors/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Meet the team" }).getAttribute("href")).toBe("/our-team");
     expect(screen.getByText(/campus tours, college advising/i)).toBeTruthy();
     expect(screen.getByText(/financial aid for SAT tutoring is considered case by case/i)).toBeTruthy();

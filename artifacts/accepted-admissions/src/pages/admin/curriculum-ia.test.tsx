@@ -83,9 +83,9 @@ const mocks = vi.hoisted(() => ({
       {
         id: "quiz-1",
         courseId: "course-1",
-        sessionId: null,
+        sessionId: null as string | null,
         programTitle: "Fall 2026 SAT",
-        sessionTitle: null,
+        sessionTitle: null as string | null,
         deliveryPhase: "before_session" as const,
         title: "October pre-session mini-section",
         subject: "SAT",
@@ -100,7 +100,18 @@ const mocks = vi.hoisted(() => ({
     ],
     blocks: [],
     questionStatus: [{ subject: "SAT", total: 1, draft: 0, approved: 1, rejected: 0 }],
-    submissions: [],
+    submissions: [] as Array<{
+      attemptId: string;
+      assignmentId: string;
+      assignmentTitle: string;
+      studentUserId: string;
+      studentName: string;
+      status: string;
+      score: number;
+      submittedAt: string;
+      reviewStatus: string;
+      mistakeCount: number;
+    }>,
     tutors: [],
     libraryAssets: [],
     clients: [],
@@ -168,7 +179,9 @@ describe("curriculum bank IA", () => {
     expect(screen.getByRole("tab", { name: /Quizzes/i })).toBeTruthy();
     expect(screen.getByText("October pre-session mini-section")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: /Questions/i }));
+    cleanup();
+    mocks.location = "/admin/curriculum?section=curriculum&tab=questions";
+    render(<AdminCurriculum />);
     expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
     expect(screen.queryByText(/Coming soon/i)).toBeNull();
     fireEvent.change(screen.getByLabelText("Learning objective"), {

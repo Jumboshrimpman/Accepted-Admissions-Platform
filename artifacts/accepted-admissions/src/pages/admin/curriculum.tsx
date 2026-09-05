@@ -599,7 +599,13 @@ function ProgramsSection({ programs, onSaved }: { programs: AdminProgram[]; onSa
 }
 
 function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum; search: string; onChanged: () => void }) {
-  const [tab, setTab] = useState("quizzes");
+  const [location] = useLocation();
+  const requestedTab = new URLSearchParams(location.split("?")[1] ?? "").get("tab");
+  const [tab, setTab] = useState(
+    requestedTab === "questions" || requestedTab === "library" || requestedTab === "submissions" || requestedTab === "materials"
+      ? requestedTab
+      : "quizzes",
+  );
   const term = search.trim().toLowerCase();
   const assignments = data.assignments.filter((item) => !term || `${item.title} ${item.programTitle} ${item.subject}`.toLowerCase().includes(term));
   const submissions = data.submissions.filter((item) => !term || `${item.assignmentTitle} ${item.studentName}`.toLowerCase().includes(term));
