@@ -276,6 +276,39 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /admin/assignments/{assignmentId}/clone-to-session:
+    post:
+      operationId: cloneAdminAssignmentToSession
+      tags: [administration]
+      summary: Clone a reusable quiz onto a session without moving the original
+      description: >
+        Creates a new session-specific assignment and copies question ordering
+        and configuration. The source assignment, its session association, and
+        all student attempts remain unchanged.
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId: { type: string }
+                allowDuplicate: { type: boolean }
+      responses:
+        "201":
+          description: Cloned assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAssignment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/curriculum/library-assets:
     post:
       operationId: createAdminLibraryAsset
@@ -1229,7 +1262,7 @@ paths:
     post:
       operationId: generatePracticeQuestions
       tags: [content]
-      summary: Generate original draft questions from an authorized source
+      summary: Create template draft questions from an authorized source
       parameters:
         - $ref: "#/components/parameters/SourceId"
       requestBody:
@@ -2872,7 +2905,13 @@ components:
         sourceUrl: { type: ["string", "null"] }
         originalFilename: { type: ["string", "null"], maxLength: 255 }
         authorizationNote: { type: string, minLength: 5, maxLength: 2000 }
-        extractedText: { type: ["string", "null"], maxLength: 50000 }
+        extractedText:
+          type: ["string", "null"]
+          minLength: 40
+          maxLength: 50000
+          description: >
+            Required pasted or extracted text. A URL is optional attribution
+            only and cannot substitute for at least 40 characters of source text.
         provenance:
           type: object
           additionalProperties: true

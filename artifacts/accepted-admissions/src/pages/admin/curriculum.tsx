@@ -40,6 +40,8 @@ import type {
 } from "@workspace/api-client-react";
 import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, FileText, GraduationCap, Library, Mail, Plus, Save, Sparkles, UserPlus, Users, Video } from "lucide-react";
 import { GenerateDraftsCard, QuestionReviewCard, apiErrorText } from "@/components/question-bank-authoring";
+import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
+import { TEMPLATE_DRAFTS_BANK_HINT } from "@/lib/template-drafts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -658,7 +660,7 @@ function QuestionBankManager({ data, onChanged }: { data: AdminCurriculum; onCha
         <div>
           <h3 className="text-lg font-semibold">Question bank</h3>
           <p className="text-sm text-muted-foreground">
-            Generate drafts, edit and approve them, then add approved items to a quiz. This is the only authoring surface for AI drafts.
+            {TEMPLATE_DRAFTS_BANK_HINT}
           </p>
         </div>
         <Field label="Program">
@@ -1008,13 +1010,24 @@ function AssignPreworkControl({
   assignments: AdminAssignment[];
   onChanged: () => void;
 }) {
-  const update = useUpdateAdminAssignment();
+  const cloneAssignment = useCloneAdminAssignmentToSession();
+  const alreadyAssignedTitles = new Set(
+    assignments
+      .filter(
+        (item) =>
+          item.sessionId === session.id &&
+          item.status !== "archived" &&
+          item.deliveryPhase === "before_session",
+      )
+      .map((item) => item.title.trim().replace(/\s+/g, " ").toLowerCase()),
+  );
   const assignable = assignments.filter(
     (item) =>
       item.courseId === session.courseId &&
       item.deliveryPhase === "before_session" &&
       item.status !== "archived" &&
-      item.sessionId !== session.id,
+      item.sessionId !== session.id &&
+      !alreadyAssignedTitles.has(item.title.trim().replace(/\s+/g, " ").toLowerCase()),
   );
   const [assignmentId, setAssignmentId] = useState(assignable[0]?.id ?? "");
   const [message, setMessage] = useState("");
@@ -1042,16 +1055,16 @@ function AssignPreworkControl({
       <Button
         size="sm"
         data-testid={`assign-prework-${session.id}`}
-        disabled={update.isPending || !assignmentId}
+        disabled={cloneAssignment.isPending || !assignmentId}
         onClick={() =>
-          update.mutate(
+          cloneAssignment.mutate(
             {
               assignmentId,
-              data: { sessionId: session.id, deliveryPhase: "before_session" },
+              sessionId: session.id,
             },
             {
               onSuccess: () => {
-                setMessage("Assigned as pre-session homework.");
+                setMessage("Cloned as pre-session homework. The original bank quiz is unchanged.");
                 onChanged();
               },
               onError: (error) => setMessage(errorText(error)),

@@ -10,7 +10,18 @@ import {
   useListContentSources,
   useUpdateQuestionBankItem,
 } from "@workspace/api-client-react";
-import { CheckCircle2, Save, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, Save, XCircle } from "lucide-react";
+import {
+  SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE,
+  validateExtractedSourceText,
+} from "@/lib/content-source-text";
+import {
+  TEMPLATE_DRAFTS_BUTTON_LABEL,
+  TEMPLATE_DRAFTS_DESCRIPTION,
+  TEMPLATE_DRAFTS_EXPERIMENTAL_LABEL,
+  TEMPLATE_DRAFTS_HEADING,
+  TEMPLATE_DRAFTS_IMPORT_NEXT_MESSAGE,
+} from "@/lib/template-drafts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -220,7 +231,7 @@ export function GenerateDraftsCard({
         <CardHeader>
           <CardTitle className="text-base">Import an authorized source</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Paste lesson text you are allowed to use. Generation writes original draft questions from the concepts — it does not copy the source.
+            Paste lesson text you are allowed to use. A URL is optional attribution only — this app does not fetch or extract page content.
           </p>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -263,7 +274,7 @@ export function GenerateDraftsCard({
               id="source-text"
               value={sourceText}
               onChange={(event) => setSourceText(event.target.value)}
-              placeholder="Paste at least a short authorized excerpt (40+ characters) so drafts can be generated."
+              placeholder="Paste at least 40 characters of authorized text. A URL cannot substitute for this field."
               className="min-h-28"
             />
           </div>
@@ -276,9 +287,19 @@ export function GenerateDraftsCard({
               placeholder="Example: Tutor-created handout, owned by Accepted Admissions."
             />
           </div>
+          {validateExtractedSourceText(sourceText).ok ? null : (
+            <p role="alert" data-testid="source-text-validation" className="text-sm text-destructive">
+              {SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE}
+            </p>
+          )}
           <Button
             className="w-fit"
             onClick={() => {
+              const extracted = validateExtractedSourceText(sourceText);
+              if (!extracted.ok) {
+                setMessage(extracted.error);
+                return;
+              }
               createSource.mutate(
                 {
                   data: {
@@ -286,7 +307,7 @@ export function GenerateDraftsCard({
                     title: sourceTitle,
                     sourceKind,
                     sourceUrl: sourceUrl || null,
-                    extractedText: sourceText || null,
+                    extractedText: extracted.text,
                     authorizationNote,
                     provenance: { origin: "curriculum-bank" },
                   },
@@ -298,7 +319,7 @@ export function GenerateDraftsCard({
                     setSourceUrl("");
                     setSourceText("");
                     setAuthorizationNote("");
-                    setMessage("Source imported. Generate drafts next.");
+                    setMessage(TEMPLATE_DRAFTS_IMPORT_NEXT_MESSAGE);
                     refreshSources();
                   },
                   onError: (error) => setMessage(apiErrorText(error)),
@@ -309,7 +330,7 @@ export function GenerateDraftsCard({
               createSource.isPending ||
               !sourceTitle.trim() ||
               !authorizationNote.trim() ||
-              (!sourceUrl.trim() && !sourceText.trim())
+              !validateExtractedSourceText(sourceText).ok
             }
           >
             {createSource.isPending ? "Importing…" : "Import source"}
@@ -320,12 +341,10 @@ export function GenerateDraftsCard({
       <Card className="border-primary/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-primary" />
-            Generate draft questions
+            {TEMPLATE_DRAFTS_HEADING}
+            <Badge variant="outline">{TEMPLATE_DRAFTS_EXPERIMENTAL_LABEL}</Badge>
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Creates original multiple-choice drafts in the bank. Approve them here, then add them to a quiz.
-          </p>
+          <p className="text-sm text-muted-foreground">{TEMPLATE_DRAFTS_DESCRIPTION}</p>
         </CardHeader>
         <CardContent className="grid gap-4">
           {message ? (
@@ -335,7 +354,7 @@ export function GenerateDraftsCard({
           ) : null}
           {sources.length === 0 ? (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-              Import a source with extracted text first. There is no separate AI endpoint beyond this generator.
+              Import a source with at least 40 characters of pasted text first. Template drafts stay in the bank until an admin approves them.
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-[220px_1fr_auto]">
@@ -380,7 +399,7 @@ export function GenerateDraftsCard({
                   )
                 }
               >
-                {generateQuestions.isPending ? "Generating…" : "Create drafts"}
+                {generateQuestions.isPending ? "Creating…" : TEMPLATE_DRAFTS_BUTTON_LABEL}
               </Button>
             </div>
           )}

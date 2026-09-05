@@ -451,10 +451,9 @@ function App() {
         publishableKey={clerkPubKey}
         proxyUrl={clerkProxyUrl}
         signInUrl={`${basePath}/login`}
-        // Cookie sessions (not memory/native). Touch on focus so inactivity
-        // does not drop an otherwise valid Clerk session in the browser.
-        standardBrowser
-        touchSession
+        // Cookie sessions use Clerk defaults. Session lifetime and inactivity
+        // timeout must be configured in the Clerk Dashboard; this app does not
+        // extend them in client code.
         routerPush={(to) => setLocation(stripBase(to))}
         routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
       >

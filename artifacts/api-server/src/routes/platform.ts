@@ -247,6 +247,12 @@ import {
   tutorProfileApprovalError,
 } from "../lib/tutor-profile-fields";
 import {
+  ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
+  buildAssignmentCloneValues,
+  evaluateAssignmentClone,
+} from "../lib/assignment-clone";
+import { validateExtractedSourceText } from "../lib/content-source-text";
+import {
   contentSourcesTable,
   assignmentQuestionsTable,
   assignmentsTable,
@@ -7372,6 +7378,16 @@ router.patch(
       res.status(404).json({ error: "Program not found" });
       return;
     }
+    if (sessionId !== existing.sessionId) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(attemptsTable)
+        .where(eq(attemptsTable.assignmentId, existing.id));
+      if (Number(count) > 0) {
+        res.status(409).json({ error: ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE });
+        return;
+      }
+    }
     if (sessionId) {
       const [session] = await db.select({ courseId: sessionsTable.courseId, subject: sessionsTable.subject }).from(sessionsTable).where(eq(sessionsTable.id, sessionId)).limit(1);
       if (!session || session.courseId !== courseId) {
@@ -7404,6 +7420,133 @@ router.patch(
       metadata: { courseId: updated!.courseId, sessionId: updated!.sessionId, status: updated!.status },
     });
     res.json(UpdateAdminAssignmentResponse.parse(await adminAssignmentShape(updated!)));
+  },
+);
+
+router.post(
+  "/admin/assignments/:assignmentId/clone-to-session",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminAssignmentParams.safeParse(req.params);
+    const sessionId =
+      typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "";
+    const allowDuplicate = req.body?.allowDuplicate === true;
+    if (!params.success || !sessionId) {
+      adminMutationError(res, "Invalid assignment clone.");
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.id, params.data.assignmentId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    const [session] = await db
+      .select({
+        id: sessionsTable.id,
+        courseId: sessionsTable.courseId,
+        subject: sessionsTable.subject,
+      })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId))
+      .limit(1);
+    if (!session) {
+      res.status(404).json({ error: "Session not found in this program" });
+      return;
+    }
+    const sourceQuestions = await db
+      .select({
+        questionId: assignmentQuestionsTable.questionId,
+        position: assignmentQuestionsTable.position,
+        predictionFirst: assignmentQuestionsTable.predictionFirst,
+      })
+      .from(assignmentQuestionsTable)
+      .where(eq(assignmentQuestionsTable.assignmentId, existing.id))
+      .orderBy(asc(assignmentQuestionsTable.position));
+    const existingOnTarget = await db
+      .select({
+        id: assignmentsTable.id,
+        title: assignmentsTable.title,
+        status: assignmentsTable.status,
+        deliveryPhase: assignmentsTable.deliveryPhase,
+      })
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.sessionId, session.id));
+    const planned = evaluateAssignmentClone({
+      source: {
+        id: existing.id,
+        courseId: existing.courseId,
+        sessionId: existing.sessionId,
+        subjectFamily: subjectFamily(existing.subject),
+        title: existing.title,
+        status: existing.status,
+        deliveryPhase: existing.deliveryPhase,
+      },
+      targetSession: {
+        id: session.id,
+        courseId: session.courseId,
+        subjectFamily: subjectFamily(session.subject),
+      },
+      sourceQuestions,
+      existingOnTarget,
+      allowDuplicate,
+    });
+    if (!planned.ok) {
+      res.status(planned.status).json({ error: planned.error });
+      return;
+    }
+
+    const inserts = buildAssignmentCloneValues(
+      existing,
+      planned.targetSessionId,
+      planned.copiedQuestions,
+    );
+    const created = await db.transaction(async (tx) => {
+      const [cloned] = await tx
+        .insert(assignmentsTable)
+        .values({
+          courseId: inserts.assignment.courseId,
+          sessionId: inserts.assignment.sessionId,
+          deliveryPhase: inserts.assignment.deliveryPhase,
+          title: inserts.assignment.title,
+          subject: inserts.assignment.subject,
+          instructions: inserts.assignment.instructions,
+          status: inserts.assignment.status,
+          deadline: inserts.assignment.deadline,
+          timeLimitMinutes: inserts.assignment.timeLimitMinutes,
+          maxAttempts: inserts.assignment.maxAttempts,
+        })
+        .returning();
+      if (inserts.questions.length > 0) {
+        await tx.insert(assignmentQuestionsTable).values(
+          inserts.questions.map((question) => ({
+            assignmentId: cloned!.id,
+            questionId: question.questionId,
+            position: question.position,
+            predictionFirst: question.predictionFirst,
+          })),
+        );
+      }
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "assignment.cloned_to_session",
+        entityType: "assignment",
+        entityId: cloned!.id,
+        metadata: {
+          sourceAssignmentId: existing.id,
+          sourceSessionId: existing.sessionId,
+          sessionId: cloned!.sessionId,
+        },
+      });
+      return cloned!;
+    });
+
+    res
+      .status(201)
+      .json(CreateAdminAssignmentResponse.parse(await adminAssignmentShape(created)));
   },
 );
 
@@ -9474,10 +9617,9 @@ router.post(
       res.status(404).json({ error: "Course not found" });
       return;
     }
-    if (!body.data.sourceUrl && !body.data.extractedText) {
-      res.status(400).json({
-        error: "Provide a source URL or authorized extracted text",
-      });
+    const extractedText = validateExtractedSourceText(body.data.extractedText);
+    if (!extractedText.ok) {
+      res.status(400).json({ error: extractedText.error });
       return;
     }
     const [source] = await db
@@ -9491,7 +9633,7 @@ router.post(
         sourceUrl: body.data.sourceUrl ?? null,
         originalFilename: body.data.originalFilename ?? null,
         authorizationNote: body.data.authorizationNote.trim(),
-        extractedText: body.data.extractedText ?? null,
+        extractedText: extractedText.text,
         provenance: {
           ...(body.data.provenance ?? {}),
           importedAt: new Date().toISOString(),
@@ -9546,19 +9688,17 @@ router.post(
       return;
     }
 
-    if (!record.source.extractedText?.trim() || record.source.extractedText.trim().length < 40) {
-      res.status(400).json({
-        error:
-          "Authorized extracted text is required before practice can be generated",
-      });
+    const extractedText = validateExtractedSourceText(record.source.extractedText);
+    if (!extractedText.ok) {
+      res.status(400).json({ error: extractedText.error });
       return;
     }
 
-    // Extract concepts, never sentences or answer keys. Drafts use newly written
-    // scenarios so the source informs the practice without being reproduced.
+    // Extract concepts, never sentences or answer keys. Drafts fill hard-coded
+    // templates so the source informs practice without being reproduced.
     const focus = body.data.focus.trim().replace(/\s+/g, " ");
     const count = body.data.count ?? 3;
-    const concepts = sourceConcepts(record.source.extractedText, focus);
+    const concepts = sourceConcepts(extractedText.text, focus);
     if (concepts.length < 2) {
       res.status(400).json({
         error: "The extracted text does not contain enough distinct concepts",

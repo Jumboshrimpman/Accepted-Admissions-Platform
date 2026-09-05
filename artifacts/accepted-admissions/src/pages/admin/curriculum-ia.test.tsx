@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   location: "/admin/curriculum?section=curriculum",
   setLocation: vi.fn(),
   generateQuestions: vi.fn(),
+  cloneAssignment: vi.fn(),
   updateAssignment: vi.fn(),
   sources: [
     {
@@ -144,6 +145,10 @@ vi.mock("@workspace/api-client-react", () => ({
   useAttachQuestionToAssignment: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/lib/clone-admin-assignment", () => ({
+  useCloneAdminAssignmentToSession: () => ({ mutate: mocks.cloneAssignment, isPending: false }),
+}));
+
 vi.mock("wouter", () => ({
   Link: ({ href, children }: { href: string; children: ReactNode }) =>
     createElement("a", { href }, children),
@@ -159,12 +164,14 @@ import AdminCurriculum from "./curriculum";
 afterEach(() => {
   cleanup();
   mocks.generateQuestions.mockReset();
+  mocks.cloneAssignment.mockReset();
   mocks.updateAssignment.mockReset();
   mocks.setLocation.mockReset();
   mocks.location = "/admin/curriculum?section=curriculum";
   mocks.curriculum.assignments[0]!.sessionId = null;
   mocks.curriculum.assignments[0]!.sessionTitle = null;
   mocks.curriculum.submissions = [];
+  mocks.curriculum.sessions = mocks.curriculum.sessions.filter((session) => session.id === "session-1");
 });
 
 describe("curriculum bank IA", () => {
@@ -184,6 +191,12 @@ describe("curriculum bank IA", () => {
     render(<AdminCurriculum />);
     expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
     expect(screen.queryByText(/Coming soon/i)).toBeNull();
+    expect(screen.getByText("Create template drafts")).toBeTruthy();
+    expect(screen.getByText("Experimental")).toBeTruthy();
+    expect(screen.getByText(/generic starting points from hard-coded templates/i)).toBeTruthy();
+    expect(screen.queryByText(/AI drafts/i)).toBeNull();
+    expect(screen.queryByText(/College Board/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Create template drafts" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Learning objective"), {
       target: { value: "distinguish evidence from inference" },
     });
@@ -205,16 +218,42 @@ describe("curriculum bank IA", () => {
     expect(screen.getByText("Pre-session quiz")).toBeTruthy();
     expect(screen.getByText("No quiz attached. Assign one from the bank below.")).toBeTruthy();
     fireEvent.click(screen.getByTestId("assign-prework-session-1"));
-    expect(mocks.updateAssignment).toHaveBeenCalledWith(
+    expect(mocks.cloneAssignment).toHaveBeenCalledWith(
       {
         assignmentId: "quiz-1",
-        data: { sessionId: "session-1", deliveryPhase: "before_session" },
+        sessionId: "session-1",
       },
       expect.any(Object),
     );
+    expect(mocks.updateAssignment).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: "Open session review" }).getAttribute("href")).toBe(
       "/tutor/sessions/session-1",
     );
+  });
+
+  test("the same bank quiz stays assignable to a second session without reparenting", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.sessions.push({
+      ...mocks.curriculum.sessions[0]!,
+      id: "session-2",
+      title: "Second SAT session",
+    });
+    render(<AdminCurriculum />);
+
+    fireEvent.click(screen.getByTestId("assign-prework-session-1"));
+    fireEvent.click(screen.getByTestId("assign-prework-session-2"));
+    expect(mocks.cloneAssignment).toHaveBeenNthCalledWith(
+      1,
+      { assignmentId: "quiz-1", sessionId: "session-1" },
+      expect.any(Object),
+    );
+    expect(mocks.cloneAssignment).toHaveBeenNthCalledWith(
+      2,
+      { assignmentId: "quiz-1", sessionId: "session-2" },
+      expect.any(Object),
+    );
+    expect(mocks.updateAssignment).not.toHaveBeenCalled();
+    mocks.curriculum.sessions.pop();
   });
 
   test("shows attached quiz and attempt review entry points on the session card", () => {
