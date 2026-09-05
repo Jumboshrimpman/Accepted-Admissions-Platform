@@ -36,6 +36,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
   });
 
+  // Close the mobile menu on navigation. Must stay above any early returns so
+  // hook order stays stable while useGetCurrentUser goes from loading to ready
+  // (first portal paint after OTP).
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
@@ -60,10 +67,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location]);
 
   const role = apiUser.role;
 
