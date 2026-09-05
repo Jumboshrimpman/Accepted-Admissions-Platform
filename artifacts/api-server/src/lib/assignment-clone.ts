@@ -112,8 +112,9 @@ export function evaluateAssignmentClone(input: {
   };
 }
 
-export function buildAssignmentCloneValues<T extends {
+export type AssignmentCloneInsert = {
   courseId: string;
+  sessionId: string;
   deliveryPhase: string;
   title: string;
   subject: string;
@@ -122,12 +123,14 @@ export function buildAssignmentCloneValues<T extends {
   deadline: Date | null;
   timeLimitMinutes: number;
   maxAttempts: number;
-}>(
-  source: T,
+};
+
+export function buildAssignmentCloneValues(
+  source: Omit<AssignmentCloneInsert, "sessionId">,
   targetSessionId: string,
   sourceQuestions: AssignmentQuestionCopy[],
 ): {
-  assignment: T & { sessionId: string };
+  assignment: AssignmentCloneInsert;
   questions: AssignmentQuestionCopy[];
 } {
   return {

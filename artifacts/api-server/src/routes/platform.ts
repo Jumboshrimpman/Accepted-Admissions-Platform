@@ -248,7 +248,6 @@ import {
 } from "../lib/tutor-profile-fields";
 import {
   ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
-  buildAssignmentCloneValues,
   evaluateAssignmentClone,
 } from "../lib/assignment-clone";
 import { validateExtractedSourceText } from "../lib/content-source-text";
@@ -7499,30 +7498,25 @@ router.post(
       return;
     }
 
-    const inserts = buildAssignmentCloneValues(
-      existing,
-      planned.targetSessionId,
-      planned.copiedQuestions,
-    );
     const created = await db.transaction(async (tx) => {
       const [cloned] = await tx
         .insert(assignmentsTable)
         .values({
-          courseId: inserts.assignment.courseId,
-          sessionId: inserts.assignment.sessionId,
-          deliveryPhase: inserts.assignment.deliveryPhase,
-          title: inserts.assignment.title,
-          subject: inserts.assignment.subject,
-          instructions: inserts.assignment.instructions,
-          status: inserts.assignment.status,
-          deadline: inserts.assignment.deadline,
-          timeLimitMinutes: inserts.assignment.timeLimitMinutes,
-          maxAttempts: inserts.assignment.maxAttempts,
+          courseId: existing.courseId,
+          sessionId: planned.targetSessionId,
+          deliveryPhase: existing.deliveryPhase,
+          title: existing.title,
+          subject: existing.subject,
+          instructions: existing.instructions,
+          status: existing.status,
+          deadline: existing.deadline,
+          timeLimitMinutes: existing.timeLimitMinutes,
+          maxAttempts: existing.maxAttempts,
         })
         .returning();
-      if (inserts.questions.length > 0) {
+      if (planned.copiedQuestions.length > 0) {
         await tx.insert(assignmentQuestionsTable).values(
-          inserts.questions.map((question) => ({
+          planned.copiedQuestions.map((question) => ({
             assignmentId: cloned!.id,
             questionId: question.questionId,
             position: question.position,

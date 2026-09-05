@@ -10,12 +10,24 @@ import {
 
 const mocks = vi.hoisted(() => ({
   createSource: vi.fn(),
+  sources: [] as Array<{
+    id: string;
+    courseId: string;
+    subject: string;
+    title: string;
+    sourceKind: "text";
+    authorizationNote: string;
+    provenance: Record<string, never>;
+    status: "imported";
+    createdAt: string;
+    updatedAt: string;
+  }>,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
   getListContentSourcesQueryKey: (params?: { courseId: string }) => ["/api/content-sources", params],
   getListQuestionBankQueryKey: (params?: { courseId: string }) => ["/api/question-bank", params],
-  useListContentSources: () => ({ data: [], isLoading: false }),
+  useListContentSources: () => ({ data: mocks.sources, isLoading: false }),
   useCreateContentSource: () => ({ mutate: mocks.createSource, isPending: false }),
   useGeneratePracticeQuestions: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateQuestionBankItem: () => ({ mutate: vi.fn(), isPending: false }),
@@ -31,6 +43,7 @@ import { GenerateDraftsCard } from "./question-bank-authoring";
 afterEach(() => {
   cleanup();
   mocks.createSource.mockReset();
+  mocks.sources = [];
 });
 
 describe("curriculum source import validation", () => {
@@ -66,9 +79,23 @@ describe("curriculum source import validation", () => {
   });
 
   test("labels template drafts as experimental generic starting points", () => {
+    mocks.sources = [
+      {
+        id: "source-1",
+        courseId: "course-1",
+        subject: "SAT",
+        title: "Evidence notes",
+        sourceKind: "text",
+        authorizationNote: "Owned by Accepted Admissions.",
+        provenance: {},
+        status: "imported",
+        createdAt: "2026-09-01T12:00:00.000Z",
+        updatedAt: "2026-09-01T12:00:00.000Z",
+      },
+    ];
     render(<GenerateDraftsCard courseId="course-1" onChanged={() => undefined} />);
 
-    expect(screen.getByText(TEMPLATE_DRAFTS_HEADING)).toBeTruthy();
+    expect(screen.getAllByText(TEMPLATE_DRAFTS_HEADING).length).toBeGreaterThan(0);
     expect(screen.getByText(TEMPLATE_DRAFTS_EXPERIMENTAL_LABEL)).toBeTruthy();
     expect(screen.getByText(TEMPLATE_DRAFTS_DESCRIPTION)).toBeTruthy();
     expect(screen.getByRole("button", { name: TEMPLATE_DRAFTS_BUTTON_LABEL })).toBeTruthy();

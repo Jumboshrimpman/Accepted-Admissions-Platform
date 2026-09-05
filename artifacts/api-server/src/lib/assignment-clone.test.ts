@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
-  ASSIGNMENT_ALREADY_ON_SESSION_MESSAGE,
-  assignmentAlreadyOnSession,
-  buildAssignmentCloneValues,
-  evaluateAssignmentClone,
-} from "./assignment-clone.ts";
+import { ASSIGNMENT_ALREADY_ON_SESSION_MESSAGE, assignmentAlreadyOnSession, buildAssignmentCloneValues, evaluateAssignmentClone } from "./assignment-clone.ts";
 
 const sourceQuestions = [
   { questionId: "q-1", position: 0, predictionFirst: true },

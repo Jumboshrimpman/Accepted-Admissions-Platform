@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
-  MIN_SOURCE_EXTRACTED_TEXT_LENGTH,
-  SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE,
-  validateExtractedSourceText,
-} from "./content-source-text.ts";
+import { MIN_SOURCE_EXTRACTED_TEXT_LENGTH, SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE, validateExtractedSourceText } from "./content-source-text.ts";
 
 test("source imports require 40 characters of pasted text and ignore URL-only payloads", () => {
   assert.equal(MIN_SOURCE_EXTRACTED_TEXT_LENGTH, 40);

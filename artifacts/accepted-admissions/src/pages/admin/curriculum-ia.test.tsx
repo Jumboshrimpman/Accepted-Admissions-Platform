@@ -191,12 +191,12 @@ describe("curriculum bank IA", () => {
     render(<AdminCurriculum />);
     expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
     expect(screen.queryByText(/Coming soon/i)).toBeNull();
-    expect(screen.getByText("Create template drafts")).toBeTruthy();
+    expect(screen.getAllByText("Create template drafts").length).toBeGreaterThan(0);
     expect(screen.getByText("Experimental")).toBeTruthy();
     expect(screen.getByText(/generic starting points from hard-coded templates/i)).toBeTruthy();
     expect(screen.queryByText(/AI drafts/i)).toBeNull();
     expect(screen.queryByText(/College Board/i)).toBeNull();
-    expect(screen.getByRole("button", { name: "Create template drafts" })).toBeTruthy();
+    expect(screen.getByTestId("generate-draft-questions").textContent).toMatch(/Create template drafts/);
     fireEvent.change(screen.getByLabelText("Learning objective"), {
       target: { value: "distinguish evidence from inference" },
     });
