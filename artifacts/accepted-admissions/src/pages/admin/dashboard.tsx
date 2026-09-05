@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
+import { previewableStudents } from "@/lib/previewable-students";
 import {
   disclosedSessions,
   displaySessionTitle,
@@ -30,8 +31,7 @@ const operationLinks = [
   { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, then preview a client portal.", icon: Users },
   { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Assign bank quizzes as pre-work, Meet links, and conflicts.", icon: CalendarDays },
   { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish, archive, and update program details.", icon: BookOpen },
-  { href: "/admin/curriculum?section=curriculum", title: "Curriculum bank", detail: "Create questions and quizzes, then assign them to sessions.", icon: ClipboardList },
-  { href: "/admin/curriculum?section=roadmap", title: "Fall plan", detail: "Twelve-date snapshot — authoring lives in the bank.", icon: CalendarDays },
+  { href: "/admin/curriculum?section=curriculum", title: "Quizzes", detail: "Open a quiz, add questions, assign it, review results.", icon: ClipboardList },
   { href: "/admin/financials", title: "Finance", detail: "Invoices and credits.", icon: WalletCards },
   { href: "/admin/content", title: "Website content", detail: "Home, SAT, team, stories, and contact email.", icon: FileText },
 ];
@@ -70,12 +70,16 @@ type AdminOverviewWithPlatform = AdminOverview & {
 export default function AdminDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const { data: overview, isLoading: overviewLoading } = useGetAdminOverview();
-  const { data: curriculum, isLoading: curriculumLoading } = useGetAdminCurriculum();
+  const { data: curriculum } = useGetAdminCurriculum();
   const queryClient = useQueryClient();
   const updateNotification = useUpdateAdminNotification();
-  if (overviewLoading || curriculumLoading) {
+  if (overviewLoading) {
     return <div className="space-y-6"><Skeleton className="h-10 w-72 rounded-xl" /><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-72 rounded-2xl" /></div>;
   }
+  const portalStudents = previewableStudents({
+    curriculumClients: curriculum?.clients,
+    overviewUsers: overview?.users,
+  });
   const platform = (overview as typeof overview & { platform?: { outstandingInvoices: number; upcomingSessions: number; newRequests: number } } | undefined)?.platform;
   const loginActivity = overview?.loginActivity ?? [];
   const guidanceRequests = overview?.guidanceRequests ?? [];
@@ -229,7 +233,7 @@ export default function AdminDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(curriculum?.clients ?? []).map((client) => (
+          {portalStudents.map((client) => (
             <div key={client.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-medium">{client.name}</p>
@@ -242,7 +246,7 @@ export default function AdminDashboard() {
               </Button>
             </div>
           ))}
-          {(curriculum?.clients ?? []).length === 0 && (
+          {portalStudents.length === 0 && (
             <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-student-portals">
               No students on file yet. Provision them under People & access, then invite the same email in Clerk.
             </p>

@@ -133,7 +133,9 @@ vi.mock("@workspace/api-client-react", () => ({
   getListAdminAccessGrantsQueryKey: () => ["/api/admin/access-grants"],
   getListQuestionBankQueryKey: (params?: { courseId: string }) => ["/api/question-bank", params],
   getListContentSourcesQueryKey: (params?: { courseId: string }) => ["/api/content-sources", params],
+  getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   useGetAdminCurriculum: () => ({ data: mocks.curriculum, isLoading: false, error: null }),
+  useGetAdminOverview: () => ({ data: { users: [] }, isLoading: false, error: null }),
   useListAdminAccessGrants: () => ({ data: { grants: [] }, isLoading: false, error: null }),
   useCreateAdminAccessGrant: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminAccessGrant: () => ({ mutate: vi.fn(), isPending: false }),
@@ -193,22 +195,29 @@ afterEach(() => {
 });
 
 describe("curriculum bank IA", () => {
-  test("makes the Bank → Assign → Take → Review path obvious and wires draft generation", () => {
+  test("makes the Quiz → Questions → Assign → Results path obvious and wires draft generation on the quiz", () => {
     render(<AdminCurriculum />);
 
-    expect(screen.getByRole("heading", { name: "Curriculum library / bank" })).toBeTruthy();
-    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/1\. Bank/);
-    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/2\. Assign/);
-    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/3\. Take/);
-    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/4\. Review/);
+    expect(screen.getByRole("heading", { name: "Quiz workspace" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Quizzes" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Fall plan/i })).toBeNull();
+    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/1\. Quiz/);
+    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/2\. Questions/);
+    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/3\. Assign/);
+    expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/4\. Results/);
     expect(screen.getByRole("tab", { name: /Quizzes/i })).toBeTruthy();
     expect(screen.getByText("October pre-session mini-section")).toBeTruthy();
 
     cleanup();
-    mocks.location = "/admin/curriculum?section=curriculum&tab=questions";
+    mocks.location = "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-1";
     render(<AdminCurriculum />);
-    expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
-    expect(screen.queryByText(/Coming soon/i)).toBeNull();
+    expect(screen.getByTestId("quiz-detail-quiz-1")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-list-quiz-1").textContent).toContain(
+      "Which choice best supports the claim?",
+    );
+    expect(screen.getByTestId("quiz-question-list-quiz-1").textContent).toContain(
+      "What is the function of the third paragraph?",
+    );
     expect(screen.getAllByText("Create template drafts").length).toBeGreaterThan(0);
     expect(screen.getByText("Experimental")).toBeTruthy();
     expect(screen.getByText(/generic starting points from hard-coded templates/i)).toBeTruthy();
@@ -226,7 +235,14 @@ describe("curriculum bank IA", () => {
       },
       expect.any(Object),
     );
-    expect(screen.getByText("Which choice best supports the claim?")).toBeTruthy();
+  });
+
+  test("keeps a storage Questions tab without making it the authoring maze", () => {
+    mocks.location = "/admin/curriculum?section=curriculum&tab=questions";
+    render(<AdminCurriculum />);
+    expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
+    expect(screen.queryByText(/Coming soon/i)).toBeNull();
+    expect(screen.getAllByText("Create template drafts").length).toBeGreaterThan(0);
   });
 
   test("assigns an existing bank quiz as pre-session work and links session review", () => {
@@ -334,6 +350,9 @@ describe("curriculum bank IA", () => {
     );
     expect(screen.getByRole("link", { name: "Review Taito Goto" }).getAttribute("href")).toBe(
       "/tutor/attempts/attempt-1",
+    );
+    expect(screen.getByRole("link", { name: "Open quiz" }).getAttribute("href")).toBe(
+      "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-1",
     );
     fireEvent.click(screen.getByText("View questions"));
     expect(screen.getByText("Which choice best supports the claim?")).toBeTruthy();
