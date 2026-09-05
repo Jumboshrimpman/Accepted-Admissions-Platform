@@ -1,13 +1,12 @@
 import express, { type Express } from "express";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
-import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
+import { resolveClerkPublishableKey } from "./lib/clerk-publishable-key";
 import { logger } from "./lib/logger";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
-  getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import { processStripeWebhook } from "./lib/payment-service";
 import { constructVerifiedStripeEvent } from "./lib/stripe-client";
@@ -60,12 +59,17 @@ app.post(
 app.use(express.json({ limit: "3mb" }));
 app.use(express.urlencoded({ extended: true, limit: "3mb" }));
 app.use(
-  clerkMiddleware((req) => ({
-    publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req) ?? "",
+  clerkMiddleware(() => {
+    const clerkPublishableKeyResult = resolveClerkPublishableKey(
       process.env.CLERK_PUBLISHABLE_KEY,
-    ),
-  })),
+    );
+    if (!clerkPublishableKeyResult.ok) {
+      return {};
+    }
+    return {
+      publishableKey: clerkPublishableKeyResult.publishableKey,
+    };
+  }),
 );
 
 app.use("/api", router);
