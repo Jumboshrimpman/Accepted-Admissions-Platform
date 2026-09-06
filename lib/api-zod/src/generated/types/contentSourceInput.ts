@@ -31,6 +31,8 @@ export interface ContentSourceInput {
      */
   authorizationNote: string;
   /**
+     * Required pasted or extracted text. A URL is optional attribution only and cannot substitute for at least 40 characters of source text.
+     * @minLength 40
      * @maxLength 50000
      * @nullable
      */

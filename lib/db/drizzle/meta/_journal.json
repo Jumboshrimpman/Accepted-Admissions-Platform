@@ -197,6 +197,20 @@
       "when": 1789400000000,
       "tag": "0028_remove_google_drive_course_links",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789500000000,
+      "tag": "0029_sat_psat_question_bank",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789600000000,
+      "tag": "0030_sat_bank_official_extract_gaps",
+      "breakpoints": true
     }
   ]
 }

@@ -18,6 +18,7 @@ import {
   useAttachSessionLibraryAsset,
   useGetAssignment,
   useGetAdaptiveCurriculum,
+  useListSatBankCollections,
   useUpdateAdminAssignment,
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
@@ -34,7 +35,8 @@ import type {
   CurriculumLibraryAssetInput,
   ProvisionableRoleCategory,
 } from "@workspace/api-client-react";
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, GraduationCap, Library, Mail, Plus, Sparkles, UserPlus, Users, Video } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, GraduationCap, Library, Mail, Plus, Sparkles, UserPlus, Users, Video } from "lucide-react";
+import { AssignBankPreworkControl, SatBankPanel } from "@/pages/admin/sat-bank-panel";
 import { MissedOnPreworkList } from "@/components/missed-prework-list";
 import {
   BANK_QUIZ_EMPTY_STATE,
@@ -607,13 +609,14 @@ function PeopleSection({
 function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum; search: string; onChanged: () => void }) {
   const [location, setLocation] = useLocation();
   const searchString = useSearch();
-  const { tab, quizId } = readAdminCurriculumSearch(location, searchString);
+  const { tab, quizId, collectionId } = readAdminCurriculumSearch(location, searchString);
   const setTab = (next: string) => {
     setLocation(
       adminCurriculumHref({
         section: "curriculum",
         tab: next as AdminCurriculumTab,
         quiz: next === "quizzes" ? quizId : null,
+        collection: next === "sat-bank" ? collectionId : null,
       }),
     );
   };
@@ -636,11 +639,26 @@ function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum;
     <TabsList className="h-auto flex-wrap justify-start">
       <TabsTrigger value="quizzes"><ClipboardList className="mr-2 h-4 w-4" /> Quizzes</TabsTrigger>
       <TabsTrigger value="questions"><Sparkles className="mr-2 h-4 w-4" /> Questions</TabsTrigger>
+      <TabsTrigger value="sat-bank"><BookOpen className="mr-2 h-4 w-4" /> SAT/PSAT bank</TabsTrigger>
       <TabsTrigger value="library"><Library className="mr-2 h-4 w-4" /> Resources</TabsTrigger>
       <TabsTrigger value="submissions"><CheckCircle2 className="mr-2 h-4 w-4" /> Submissions</TabsTrigger>
     </TabsList>
     <TabsContent value="quizzes" data-testid="admin-tab-quizzes"><QuizWorkspace data={data} assignments={assignments} submissions={submissions} onChanged={onChanged} /></TabsContent>
     <TabsContent value="questions" data-testid="admin-tab-questions"><QuestionBankManager data={data} onChanged={onChanged} /></TabsContent>
+    <TabsContent value="sat-bank" data-testid="admin-tab-sat-bank">
+      <SatBankPanel
+        collectionId={collectionId}
+        onOpenCollection={(id) =>
+          setLocation(
+            adminCurriculumHref({
+              section: "curriculum",
+              tab: "sat-bank",
+              collection: id,
+            }),
+          )
+        }
+      />
+    </TabsContent>
     <TabsContent value="library" data-testid="admin-tab-library"><LibraryManager assets={data.libraryAssets} sessions={data.sessions} search={search} onChanged={onChanged} /></TabsContent>
     <TabsContent value="submissions" data-testid="admin-tab-submissions"><Card><CardHeader><CardTitle>Student submissions</CardTitle><CardDescription>Right/wrong results stay available for session review. Open an attempt from Sessions or the tutor session page.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-3">Student</th><th className="p-3">Quiz</th><th className="p-3">Score</th><th className="p-3">Review</th><th className="p-3">Submitted</th></tr></thead><tbody>{submissions.map((item) => <tr key={item.attemptId} className="border-b"><td className="p-3 font-medium">{item.studentName}</td><td className="p-3">{item.assignmentTitle}</td><td className="p-3">{item.score}% <span className="text-muted-foreground">· {item.mistakeCount} missed</span></td><td className="p-3"><Button asChild size="sm" variant="outline"><Link href={`/tutor/attempts/${item.attemptId}`}>Open review</Link></Button></td><td className="p-3 text-muted-foreground">{new Date(item.submittedAt).toLocaleDateString()}</td></tr>)}</tbody></table>{submissions.length === 0 && <Empty text="No matching submissions." />}</div></CardContent></Card></TabsContent>
   </Tabs>;
@@ -745,6 +763,7 @@ function SessionsSection({
 }) {
   const create = useCreateAdminSession();
   const update = useUpdateAdminSession();
+  const bankCollections = useListSatBankCollections();
   const [editing, setEditing] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState<"upcoming" | "conflicts" | "all">("upcoming");
@@ -812,6 +831,7 @@ function SessionsSection({
             assignments={data.assignments}
             submissions={data.submissions}
             libraryAssets={data.libraryAssets ?? []}
+            bankCollections={bankCollections.data ?? []}
             onChanged={onChanged}
             onEdit={() => {
               setEditing(session.id);
@@ -843,6 +863,7 @@ function SessionCard({
   assignments,
   submissions,
   libraryAssets,
+  bankCollections,
   onChanged,
   onEdit,
 }: {
@@ -850,6 +871,7 @@ function SessionCard({
   assignments: AdminAssignment[];
   submissions: AdminSubmission[];
   libraryAssets: CurriculumLibraryAsset[];
+  bankCollections: Array<{ id: string; title: string; questionCount: number }>;
   onChanged: () => void;
   onEdit: () => void;
 }) {
@@ -941,6 +963,11 @@ function SessionCard({
             session={session}
             assignments={assignments}
             existing={prework}
+            onChanged={onChanged}
+          />
+          <AssignBankPreworkControl
+            sessionId={session.id}
+            collections={bankCollections}
             onChanged={onChanged}
           />
         </div>

@@ -771,6 +771,200 @@ export const portalAccessGrantsTable = pgTable(
   ],
 );
 
+export const examSourceCollectionsTable = pgTable(
+  "exam_source_collections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    examFamily: text("exam_family").notNull(),
+    examVariant: text("exam_variant"),
+    practiceTestNumber: numeric("practice_test_number", { mode: "number" }),
+    formCode: text("form_code"),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    notes: text("notes"),
+    extractStatus: text("extract_status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("exam_source_collections_slug_idx").on(table.slug)],
+);
+
+export const examSourceAssetsTable = pgTable("exam_source_assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  collectionId: uuid("collection_id")
+    .notNull()
+    .references(() => examSourceCollectionsTable.id),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  resourceUrl: text("resource_url"),
+  originalFilename: text("original_filename"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const bankQuestionsTable = pgTable(
+  "bank_questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceKey: text("source_key").notNull(),
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => examSourceCollectionsTable.id),
+    examFamily: text("exam_family").notNull(),
+    examVariant: text("exam_variant"),
+    practiceTestNumber: numeric("practice_test_number", { mode: "number" }),
+    formCode: text("form_code"),
+    section: text("section").notNull(),
+    module: numeric("module", { mode: "number" }).notNull(),
+    questionNumber: numeric("question_number", { mode: "number" }).notNull(),
+    position: numeric("position", { mode: "number" }).notNull(),
+    prompt: text("prompt").notNull(),
+    stimulus: text("stimulus"),
+    choices: jsonb("choices")
+      .$type<Array<{ id: string; label: string; text: string }>>()
+      .notNull()
+      .default([]),
+    correctAnswer: text("correct_answer").notNull(),
+    officialExplanation: text("official_explanation").notNull().default(""),
+    figures: jsonb("figures")
+      .$type<Array<{ url?: string; path?: string; alt?: string }>>()
+      .notNull()
+      .default([]),
+    scoring: jsonb("scoring").$type<Record<string, unknown>>().notNull().default({}),
+    skill: text("skill"),
+    domain: text("domain"),
+    difficulty: text("difficulty"),
+    questionType: text("question_type").notNull().default("mcq"),
+    estimatedSeconds: numeric("estimated_seconds", { mode: "number" }).notNull(),
+    sourceKind: text("source_kind").notNull().default("official_extract"),
+    extractGaps: jsonb("extract_gaps")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    sourceFiles: jsonb("source_files")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    linkedQuestionId: uuid("linked_question_id").references(() => questionsTable.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("bank_questions_source_key_idx").on(table.sourceKey),
+    uniqueIndex("bank_questions_dedup_idx").on(
+      table.examFamily,
+      table.examVariant,
+      table.practiceTestNumber,
+      table.section,
+      table.module,
+      table.questionNumber,
+    ),
+  ],
+);
+
+export const bankQuestionAssetsTable = pgTable("bank_question_assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bankQuestionId: uuid("bank_question_id")
+    .notNull()
+    .references(() => bankQuestionsTable.id),
+  assetId: uuid("asset_id").references(() => examSourceAssetsTable.id),
+  kind: text("kind").notNull(),
+  resourceUrl: text("resource_url"),
+  pageNumber: numeric("page_number", { mode: "number" }),
+  note: text("note"),
+});
+
+export const bankAiAnnotationsTable = pgTable(
+  "bank_ai_annotations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bankQuestionId: uuid("bank_question_id")
+      .notNull()
+      .references(() => bankQuestionsTable.id),
+    selectedWrongAnswer: text("selected_wrong_answer"),
+    studentFeedback: text("student_feedback"),
+    tutorGuidance: text("tutor_guidance"),
+    skillWeaknessAnalysis: text("skill_weakness_analysis"),
+    analogousProblemPrompt: text("analogous_problem_prompt"),
+    generatedBy: text("generated_by").notNull().default("none"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("bank_ai_annotations_question_idx").on(table.bankQuestionId),
+  ],
+);
+
+export const sessionPreworkPlansTable = pgTable(
+  "session_prework_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessionsTable.id),
+    assignmentId: uuid("assignment_id")
+      .notNull()
+      .references(() => assignmentsTable.id),
+    homeworkKind: text("homework_kind").notNull().default("routine"),
+    targetMinutes: numeric("target_minutes", { mode: "number" }).notNull().default(60),
+    estimatedSeconds: numeric("estimated_seconds", { mode: "number" }).notNull(),
+    status: text("status").notNull().default("assigned"),
+    createdByUserId: uuid("created_by_user_id").references(() => usersTable.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("session_prework_plans_session_idx").on(table.sessionId)],
+);
+
+export const homeworkWeaknessGroupsTable = pgTable(
+  "homework_weakness_groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessionsTable.id),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => attemptsTable.id),
+    skill: text("skill").notNull(),
+    domain: text("domain").notNull().default(""),
+    missCount: numeric("miss_count", { mode: "number" }).notNull(),
+    priority: numeric("priority", { mode: "number" }).notNull(),
+    bankQuestionIds: jsonb("bank_question_ids").$type<string[]>().notNull().default([]),
+    questionIds: jsonb("question_ids").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("homework_weakness_groups_session_attempt_idx").on(
+      table.sessionId,
+      table.attemptId,
+    ),
+  ],
+);
+
+export const remediationRetriesTable = pgTable("remediation_retries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id")
+    .notNull()
+    .references(() => sessionsTable.id),
+  sourceAttemptId: uuid("source_attempt_id")
+    .notNull()
+    .references(() => attemptsTable.id),
+  sourceBankQuestionId: uuid("source_bank_question_id").references(
+    () => bankQuestionsTable.id,
+  ),
+  sourceQuestionId: uuid("source_question_id").references(() => questionsTable.id),
+  retryBankQuestionId: uuid("retry_bank_question_id").references(
+    () => bankQuestionsTable.id,
+  ),
+  retryQuestionId: uuid("retry_question_id").references(() => questionsTable.id),
+  source: text("source").notNull(),
+  blockedReason: text("blocked_reason"),
+  studentAnswer: text("student_answer"),
+  correct: boolean("correct"),
+  outcome: text("outcome").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
 export const insertCurriculumBlockSchema =
   createInsertSchema(curriculumBlocksTable).omit({
     id: true,
@@ -780,3 +974,5 @@ export const insertCurriculumBlockSchema =
 export type AppUser = typeof usersTable.$inferSelect;
 export type Attempt = typeof attemptsTable.$inferSelect;
 export type PortalAccessGrant = typeof portalAccessGrantsTable.$inferSelect;
+export type BankQuestion = typeof bankQuestionsTable.$inferSelect;
+export type ExamSourceCollection = typeof examSourceCollectionsTable.$inferSelect;

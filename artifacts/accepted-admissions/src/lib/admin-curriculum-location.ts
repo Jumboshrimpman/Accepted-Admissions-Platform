@@ -11,6 +11,7 @@ export const ADMIN_CURRICULUM_SECTIONS = [
 export const ADMIN_CURRICULUM_TABS = [
   "quizzes",
   "questions",
+  "sat-bank",
   "library",
   "submissions",
 ] as const;
@@ -46,6 +47,7 @@ export function parseAdminCurriculumSearch(search: string): {
   section: AdminCurriculumSection;
   tab: AdminCurriculumTab;
   quizId: string | null;
+  collectionId: string | null;
 } {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const section = resolveAdminCurriculumSection(params.get("section"));
@@ -53,13 +55,20 @@ export function parseAdminCurriculumSearch(search: string): {
   const tab =
     requestedTab && TAB_SET.has(requestedTab) ? (requestedTab as AdminCurriculumTab) : "quizzes";
   const quiz = params.get("quiz")?.trim() ?? "";
-  return { section, tab, quizId: quiz.length > 0 ? quiz : null };
+  const collection = params.get("collection")?.trim() ?? "";
+  return {
+    section,
+    tab,
+    quizId: quiz.length > 0 ? quiz : null,
+    collectionId: collection.length > 0 ? collection : null,
+  };
 }
 
 export function adminCurriculumHref(input: {
   section?: string | null;
   tab?: string | null;
   quiz?: string | null;
+  collection?: string | null;
 } = {}): string {
   const section = resolveAdminCurriculumSection(input.section ?? null);
   const params = new URLSearchParams();
@@ -70,6 +79,9 @@ export function adminCurriculumHref(input: {
     params.set("tab", tab);
     if (tab === "quizzes" && input.quiz) {
       params.set("quiz", input.quiz);
+    }
+    if (tab === "sat-bank" && input.collection) {
+      params.set("collection", input.collection);
     }
   }
   return `${ADMIN_CURRICULUM_PATH}?${params.toString()}`;

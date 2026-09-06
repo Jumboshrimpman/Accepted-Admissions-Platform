@@ -261,6 +261,12 @@ import {
   generateQuestionsWithProvider,
   questionGenerationStatus,
 } from "../lib/question-generation";
+import satBankRouter from "./sat-bank";
+import {
+  homeworkKindForAssignment,
+  persistWeaknessGroups,
+} from "../lib/sat-bank-service";
+import { answersMatch } from "../lib/sat-bank-retry";
 import {
   contentSourcesTable,
   assignmentQuestionsTable,
@@ -2940,6 +2946,8 @@ type AttemptResultPayload = {
   }>;
   analysis: AttemptAnalysisPayload;
   studentFeedback: string;
+  homeworkKind?: "diagnostic" | "routine" | null;
+  scoreReporting?: "none" | "estimated_diagnostic";
 };
 
 async function storedAttemptResult(
@@ -2992,6 +3000,7 @@ function deterministicAnalysis(
   >,
   score: number,
   assignmentTitle?: string | null,
+  homeworkKind?: "diagnostic" | "routine" | null,
 ): AttemptAnalysisPayload {
   return buildAttemptAnalysis(
     breakdown,
@@ -3003,7 +3012,7 @@ function deterministicAnalysis(
       subject: item.subject ?? attemptSubjectFromAssignment(assignmentTitle),
     })),
     score,
-    { assignmentTitle },
+    { assignmentTitle, homeworkKind },
   );
 }
 
@@ -3079,7 +3088,7 @@ async function finalizeAttemptResult(
   for (const item of joined) {
     const current = bySkill.get(item.question.skill) ?? { correct: 0, total: 0 };
     current.total += 1;
-    if (item.response?.finalAnswer === item.question.correctAnswer) current.correct += 1;
+    if (answersMatch(item.response?.finalAnswer, item.question.correctAnswer)) current.correct += 1;
     bySkill.set(item.question.skill, current);
   }
   const breakdown = [...bySkill.entries()].map(([skill, value]) => ({
@@ -3089,7 +3098,7 @@ async function finalizeAttemptResult(
   }));
   const items = joined.map(({ response, question }) => ({
     questionId: question.id,
-    correct: response?.finalAnswer === question.correctAnswer,
+    correct: answersMatch(response?.finalAnswer, question.correctAnswer),
     prediction: response?.prediction ?? null,
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,
@@ -3105,7 +3114,16 @@ async function finalizeAttemptResult(
     domain: question.domain,
     subject: question.subject,
   }));
-  const analysis = deterministicAnalysis(breakdown, items, score, attempt.assignment.title);
+  const homeworkKind = await homeworkKindForAssignment(attempt.assignment.id);
+  const analysis = deterministicAnalysis(
+    breakdown,
+    items,
+    score,
+    attempt.assignment.title,
+    homeworkKind,
+  );
+  const scoreReporting =
+    homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
   const result: AttemptResultPayload = {
     attemptId: attempt.attempt.id,
     assignmentId: attempt.assignment.id,
@@ -3125,6 +3143,8 @@ async function finalizeAttemptResult(
     items,
     analysis,
     studentFeedback: analysis.feedback,
+    homeworkKind,
+    scoreReporting,
   };
   await db
     .update(attemptsTable)
@@ -3155,6 +3175,16 @@ async function finalizeAttemptResult(
     })),
   });
   if (attempt.session) {
+    await persistWeaknessGroups({
+      sessionId: attempt.session.id,
+      attemptId: attempt.attempt.id,
+      items: items.map((item) => ({
+        questionId: item.questionId,
+        skill: item.skill,
+        domain: item.domain,
+        correct: item.correct,
+      })),
+    });
     await prepareSessionCurriculum(attempt.session);
   }
   return result;
@@ -4583,6 +4613,7 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
 });
 
 router.use(requireAppUser);
+router.use(satBankRouter);
 
 router.use((req: AuthedRequest, res: Response, next: () => void) => {
   if (

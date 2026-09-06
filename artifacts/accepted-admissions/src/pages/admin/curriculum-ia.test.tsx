@@ -237,6 +237,28 @@ vi.mock("@workspace/api-client-react", () => ({
         : null,
     },
   }),
+  getListSatBankCollectionsQueryKey: () => ["/api/admin/sat-bank/collections"],
+  getListSatBankQuestionsQueryKey: () => ["/api/admin/sat-bank/questions"],
+  getGetSatBankCollectionQueryKey: (id: string) => ["/api/admin/sat-bank/collections", id],
+  useListSatBankCollections: () => ({
+    data: [
+      {
+        id: "col-11",
+        title: "SAT Practice Test 11",
+        slug: "sat-practice-test-11",
+        examFamily: "sat",
+        extractStatus: "partial",
+        questionCount: 2,
+        officialExplanationCount: 0,
+        assets: [],
+      },
+    ],
+    isLoading: false,
+  }),
+  useListSatBankQuestions: () => ({ data: [], isLoading: false }),
+  useGetSatBankCollection: () => ({ data: undefined, isLoading: false }),
+  useImportSatBank: () => ({ mutate: vi.fn(), isPending: false }),
+  useAssignSatBankPrework: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/lib/clone-admin-assignment", () => ({
@@ -643,5 +665,19 @@ describe("curriculum bank IA", () => {
     expect(screen.getByText("Shared resource URL (PDF or licensed test)")).toBeTruthy();
     expect(screen.queryByText(/Drive, PDF/i)).toBeNull();
     expect(screen.queryByText(/Google Drive/i)).toBeNull();
+  });
+
+  test("SAT/PSAT bank tab and 60-minute session assign stay on existing operations pages", () => {
+    mocks.location = "/admin/curriculum?section=curriculum&tab=sat-bank";
+    render(<AdminCurriculum />);
+    expect(screen.getByTestId("sat-bank-panel").textContent).toMatch(/SAT\/PSAT question bank/);
+    expect(screen.getByText("SAT Practice Test 11")).toBeTruthy();
+    cleanup();
+    mocks.location = "/admin/curriculum?section=sessions";
+    render(<AdminCurriculum />);
+    expect(screen.getByTestId("assign-bank-prework-session-1").textContent).toMatch(
+      /60-minute bank pre-work/,
+    );
+    expect(screen.getByRole("button", { name: /Assign 60-min pre-work/i })).toBeTruthy();
   });
 });

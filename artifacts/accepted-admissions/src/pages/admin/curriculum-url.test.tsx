@@ -154,6 +154,28 @@ vi.mock("@workspace/api-client-react", () => ({
     error: null,
   }),
   useGetAdaptiveCurriculum: () => ({ data: { mistakes: [], homework: null } }),
+  getListSatBankCollectionsQueryKey: () => ["/api/admin/sat-bank/collections"],
+  getListSatBankQuestionsQueryKey: () => ["/api/admin/sat-bank/questions"],
+  getGetSatBankCollectionQueryKey: (id: string) => ["/api/admin/sat-bank/collections", id],
+  useListSatBankCollections: () => ({
+    data: [
+      {
+        id: "col-11",
+        title: "SAT Practice Test 11",
+        slug: "sat-practice-test-11",
+        examFamily: "sat",
+        extractStatus: "partial",
+        questionCount: 2,
+        officialExplanationCount: 0,
+        assets: [],
+      },
+    ],
+    isLoading: false,
+  }),
+  useListSatBankQuestions: () => ({ data: [], isLoading: false }),
+  useGetSatBankCollection: () => ({ data: undefined, isLoading: false }),
+  useImportSatBank: () => ({ mutate: vi.fn(), isPending: false }),
+  useAssignSatBankPrework: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/lib/clone-admin-assignment", () => ({
@@ -208,6 +230,7 @@ describe("admin curriculum URL sync", () => {
       { path: "/admin/curriculum?section=curriculum&tab=quizzes", panel: "admin-tab-quizzes", copy: /Reusable bank quizzes only/ },
       { path: "/admin/curriculum?section=curriculum&tab=questions", panel: "admin-tab-questions", copy: /Question bank/ },
       { path: "/admin/curriculum?section=curriculum&tab=library", panel: "admin-tab-library", copy: /Curriculum library/ },
+      { path: "/admin/curriculum?section=curriculum&tab=sat-bank", panel: "admin-tab-sat-bank", copy: /SAT\/PSAT question bank/ },
       { path: "/admin/curriculum?section=curriculum&tab=submissions", panel: "admin-tab-submissions", copy: /Student submissions/ },
     ];
 
@@ -282,9 +305,20 @@ describe("admin curriculum URL sync", () => {
     expect(location.history.at(-1)).toBe("/admin/curriculum?section=curriculum&tab=library");
     expect(screen.getByTestId("admin-tab-library").getAttribute("data-state")).toBe("active");
 
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^SAT\/PSAT bank$/i }));
+    expect(location.history.at(-1)).toBe("/admin/curriculum?section=curriculum&tab=sat-bank");
+    expect(screen.getByTestId("admin-tab-sat-bank").getAttribute("data-state")).toBe("active");
+    expect(screen.getByText(/SAT\/PSAT question bank/)).toBeTruthy();
+
     fireEvent.mouseDown(screen.getByRole("tab", { name: /^Submissions$/i }));
     expect(location.history.at(-1)).toBe("/admin/curriculum?section=curriculum&tab=submissions");
     expect(screen.getByTestId("admin-tab-submissions").getAttribute("data-state")).toBe("active");
+  });
+
+  test("deep-links a SAT/PSAT source collection from the query string", () => {
+    renderAt("/admin/curriculum?section=curriculum&tab=sat-bank&collection=col-11");
+    expect(screen.getByTestId("admin-tab-sat-bank").getAttribute("data-state")).toBe("active");
+    expect(screen.getByTestId("sat-bank-panel")).toBeTruthy();
   });
 
   test("navigating from Sessions to a quiz URL opens that quiz's questions", () => {

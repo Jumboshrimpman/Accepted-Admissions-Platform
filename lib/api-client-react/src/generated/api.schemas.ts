@@ -2059,6 +2059,14 @@ export const AttemptResultReviewStatus = {
   reviewed: 'reviewed',
 } as const;
 
+export type AttemptResultScoreReporting = typeof AttemptResultScoreReporting[keyof typeof AttemptResultScoreReporting];
+
+
+export const AttemptResultScoreReporting = {
+  none: 'none',
+  estimated_diagnostic: 'estimated_diagnostic',
+} as const;
+
 export interface AttemptResult {
   attemptId: string;
   assignmentId: string;
@@ -2084,6 +2092,9 @@ export interface AttemptResult {
   /** @nullable */
   tutorNotes?: string | null;
   reviewStatus?: AttemptResultReviewStatus;
+  /** @nullable */
+  homeworkKind?: string | null;
+  scoreReporting?: AttemptResultScoreReporting;
 }
 
 export interface Attempt {
@@ -2235,6 +2246,8 @@ export interface ContentSourceInput {
      */
   authorizationNote: string;
   /**
+     * Required pasted or extracted text. A URL is optional attribution only and cannot substitute for at least 40 characters of source text.
+     * @minLength 40
      * @maxLength 50000
      * @nullable
      */
@@ -2463,6 +2476,338 @@ export interface SessionArtifactInput {
   status?: SessionArtifactInputStatus;
 }
 
+export interface SatBankImportInput {
+  /** @maxLength 400 */
+  rootDir?: string;
+  /** @maxLength 200000 */
+  payloadText?: string;
+}
+
+export interface SatBankImportResult {
+  rootDir: string;
+  filesScanned: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  duplicatesInFile: number;
+  collectionsEnsured: number;
+}
+
+export interface SatBankAsset {
+  id: string;
+  kind: string;
+  title: string;
+  /** @nullable */
+  resourceUrl: string | null;
+}
+
+export type SatBankQuestionSection = typeof SatBankQuestionSection[keyof typeof SatBankQuestionSection];
+
+
+export const SatBankQuestionSection = {
+  rw: 'rw',
+  math: 'math',
+} as const;
+
+export type SatBankQuestionChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export type SatBankQuestionExtractGaps = { [key: string]: unknown };
+
+export interface SatBankQuestion {
+  id: string;
+  sourceKey: string;
+  collectionId: string;
+  examFamily: string;
+  /** @nullable */
+  examVariant?: string | null;
+  /** @nullable */
+  practiceTestNumber?: number | null;
+  /** @nullable */
+  formCode?: string | null;
+  section: SatBankQuestionSection;
+  module: number;
+  questionNumber: number;
+  position: number;
+  prompt: string;
+  /** @nullable */
+  stimulus?: string | null;
+  choices?: SatBankQuestionChoicesItem[];
+  /** @nullable */
+  skill?: string | null;
+  /** @nullable */
+  domain?: string | null;
+  /** @nullable */
+  difficulty?: string | null;
+  questionType: string;
+  estimatedSeconds: number;
+  sourceKind: string;
+  extractGaps?: SatBankQuestionExtractGaps;
+  assignable?: boolean;
+  hasOfficialExplanation: boolean;
+  /** @nullable */
+  linkedQuestionId?: string | null;
+}
+
+export interface SatBankCollection {
+  id: string;
+  examFamily: string;
+  /** @nullable */
+  examVariant?: string | null;
+  /** @nullable */
+  practiceTestNumber?: number | null;
+  /** @nullable */
+  formCode?: string | null;
+  title: string;
+  slug: string;
+  /** @nullable */
+  notes?: string | null;
+  extractStatus: string;
+  questionCount: number;
+  officialExplanationCount: number;
+  assets: SatBankAsset[];
+}
+
+export type SatBankCollectionDetail = SatBankCollection & {
+  questions: SatBankQuestion[];
+};
+
+export type SatBankPreworkInputHomeworkKind = typeof SatBankPreworkInputHomeworkKind[keyof typeof SatBankPreworkInputHomeworkKind];
+
+
+export const SatBankPreworkInputHomeworkKind = {
+  diagnostic: 'diagnostic',
+  routine: 'routine',
+} as const;
+
+export interface SatBankPreworkInput {
+  /** @nullable */
+  collectionId?: string | null;
+  bankQuestionIds?: string[];
+  homeworkKind?: SatBankPreworkInputHomeworkKind;
+  /**
+     * @minimum 15
+     * @maximum 180
+     */
+  targetMinutes?: number;
+}
+
+export type SatBankPreworkAssignmentHomeworkKind = typeof SatBankPreworkAssignmentHomeworkKind[keyof typeof SatBankPreworkAssignmentHomeworkKind];
+
+
+export const SatBankPreworkAssignmentHomeworkKind = {
+  diagnostic: 'diagnostic',
+  routine: 'routine',
+} as const;
+
+export interface SatBankPreworkAssignment {
+  planId: string;
+  assignmentId: string;
+  homeworkKind: SatBankPreworkAssignmentHomeworkKind;
+  targetMinutes: number;
+  estimatedSeconds: number;
+  questionCount: number;
+  withinTolerance: boolean;
+  extractIncomplete: boolean;
+}
+
+export type SessionLessonMissChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export interface SessionLessonMiss {
+  questionId: string;
+  /** @nullable */
+  bankQuestionId?: string | null;
+  skill: string;
+  domain?: string;
+  prompt: string;
+  /** @nullable */
+  stimulus?: string | null;
+  choices?: SessionLessonMissChoicesItem[];
+  /** @nullable */
+  studentAnswer?: string | null;
+  correctAnswer: string;
+  officialExplanation?: string;
+  /** @nullable */
+  aiStudentFeedback?: string | null;
+  /** @nullable */
+  aiTutorGuidance?: string | null;
+  /** @nullable */
+  aiSkillAnalysis?: string | null;
+  /** @nullable */
+  sourceKey?: string | null;
+  /** @nullable */
+  sourceKind?: string | null;
+}
+
+export type SessionLessonRetrySource = typeof SessionLessonRetrySource[keyof typeof SessionLessonRetrySource];
+
+
+export const SessionLessonRetrySource = {
+  bank: 'bank',
+  ai: 'ai',
+  blocked: 'blocked',
+} as const;
+
+export type SessionLessonRetryOutcome = typeof SessionLessonRetryOutcome[keyof typeof SessionLessonRetryOutcome];
+
+
+export const SessionLessonRetryOutcome = {
+  pending: 'pending',
+  mastered: 'mastered',
+  still_struggling: 'still_struggling',
+} as const;
+
+export type SessionLessonRetryChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export interface SessionLessonRetry {
+  id: string;
+  /** @nullable */
+  sourceQuestionId?: string | null;
+  /** @nullable */
+  sourceBankQuestionId?: string | null;
+  /** @nullable */
+  retryQuestionId?: string | null;
+  source: SessionLessonRetrySource;
+  /** @nullable */
+  blockedReason?: string | null;
+  outcome: SessionLessonRetryOutcome;
+  /** @nullable */
+  correct?: boolean | null;
+  /** @nullable */
+  prompt?: string | null;
+  /** @nullable */
+  stimulus?: string | null;
+  /** @nullable */
+  skill?: string | null;
+  choices?: SessionLessonRetryChoicesItem[];
+}
+
+export type SessionLessonScoreReporting = typeof SessionLessonScoreReporting[keyof typeof SessionLessonScoreReporting];
+
+
+export const SessionLessonScoreReporting = {
+  none: 'none',
+  estimated_diagnostic: 'estimated_diagnostic',
+} as const;
+
+/**
+ * @nullable
+ */
+export type SessionLessonPlan = {
+  id?: string;
+  assignmentId?: string;
+  homeworkKind?: string;
+  targetMinutes?: number;
+  estimatedSeconds?: number;
+  status?: string;
+} | null;
+
+export type SessionLessonWeaknessGroupsItem = {
+  id: string;
+  skill: string;
+  domain?: string;
+  missCount: number;
+  priority: number;
+  questionIds: string[];
+  bankQuestionIds?: string[];
+};
+
+export interface SessionLesson {
+  sessionId: string;
+  /** @nullable */
+  homeworkKind?: string | null;
+  scoreReporting: SessionLessonScoreReporting;
+  scoreHonesty: string;
+  /** @nullable */
+  plan?: SessionLessonPlan;
+  /** @nullable */
+  assignmentTitle?: string | null;
+  /** @nullable */
+  attemptId?: string | null;
+  /** @nullable */
+  attemptStatus?: string | null;
+  /** @nullable */
+  accuracyPercent?: number | null;
+  weaknessGroups: SessionLessonWeaknessGroupsItem[];
+  misses: SessionLessonMiss[];
+  retries: SessionLessonRetry[];
+}
+
+export interface SessionRetryInput {
+  sourceQuestionId: string;
+}
+
+export type SessionRetryQuestionChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export interface SessionRetryQuestion {
+  id: string;
+  prompt: string;
+  /** @nullable */
+  stimulus?: string | null;
+  choices?: SessionRetryQuestionChoicesItem[];
+  skill: string;
+  domain?: string;
+  difficulty?: string;
+}
+
+export type SessionRetrySource = typeof SessionRetrySource[keyof typeof SessionRetrySource];
+
+
+export const SessionRetrySource = {
+  bank: 'bank',
+  ai: 'ai',
+  blocked: 'blocked',
+} as const;
+
+export interface SessionRetry {
+  retryId: string;
+  source: SessionRetrySource;
+  /** @nullable */
+  blockedReason?: string | null;
+  requiredEnv?: string[];
+  reason?: string;
+  question?: SessionRetryQuestion | null;
+}
+
+export interface RetryOutcomeInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  studentAnswer: string;
+}
+
+export type RetryOutcomeOutcome = typeof RetryOutcomeOutcome[keyof typeof RetryOutcomeOutcome];
+
+
+export const RetryOutcomeOutcome = {
+  mastered: 'mastered',
+  still_struggling: 'still_struggling',
+} as const;
+
+export interface RetryOutcome {
+  retryId: string;
+  correct: boolean;
+  outcome: RetryOutcomeOutcome;
+  correctAnswer?: string;
+  explanation?: string;
+}
+
 /**
  * Authentication required
  */
@@ -2501,6 +2846,34 @@ export type BadGatewayResponse = Error;
 export type GetAdminCurriculumParams = {
 courseId?: string;
 };
+
+export type CloneAdminAssignmentToSessionBody = {
+  sessionId: string;
+  allowDuplicate?: boolean;
+};
+
+export type ListSatBankQuestionsParams = {
+examFamily?: ListSatBankQuestionsExamFamily;
+collectionId?: string;
+section?: ListSatBankQuestionsSection;
+skill?: string;
+};
+
+export type ListSatBankQuestionsExamFamily = typeof ListSatBankQuestionsExamFamily[keyof typeof ListSatBankQuestionsExamFamily];
+
+
+export const ListSatBankQuestionsExamFamily = {
+  sat: 'sat',
+  psat: 'psat',
+} as const;
+
+export type ListSatBankQuestionsSection = typeof ListSatBankQuestionsSection[keyof typeof ListSatBankQuestionsSection];
+
+
+export const ListSatBankQuestionsSection = {
+  rw: 'rw',
+  math: 'math',
+} as const;
 
 export type GetBookingAvailabilityParams = {
 tutorProfileId: string;
