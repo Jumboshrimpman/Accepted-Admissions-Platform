@@ -3285,12 +3285,13 @@ components:
         resourceUrl: { type: ["string", "null"] }
     SatBankQuestion:
       type: object
-      required: [id, sourceKey, collectionId, examFamily, section, module, questionNumber, position, prompt, skill, domain, difficulty, questionType, estimatedSeconds, sourceKind, hasOfficialExplanation]
+      required: [id, sourceKey, collectionId, examFamily, section, module, questionNumber, position, prompt, questionType, estimatedSeconds, sourceKind, hasOfficialExplanation]
       properties:
         id: { type: string }
         sourceKey: { type: string }
         collectionId: { type: string }
         examFamily: { type: string }
+        examVariant: { type: ["string", "null"] }
         practiceTestNumber: { type: ["number", "null"] }
         formCode: { type: ["string", "null"] }
         section: { type: string, enum: [rw, math] }
@@ -3308,12 +3309,14 @@ components:
               id: { type: string }
               label: { type: string }
               text: { type: string }
-        skill: { type: string }
-        domain: { type: string }
-        difficulty: { type: string }
+        skill: { type: ["string", "null"] }
+        domain: { type: ["string", "null"] }
+        difficulty: { type: ["string", "null"] }
         questionType: { type: string }
         estimatedSeconds: { type: number }
         sourceKind: { type: string }
+        extractGaps: { type: object, additionalProperties: true }
+        assignable: { type: boolean }
         hasOfficialExplanation: { type: boolean }
         linkedQuestionId: { type: ["string", "null"] }
     SatBankCollection:
@@ -3322,6 +3325,7 @@ components:
       properties:
         id: { type: string }
         examFamily: { type: string }
+        examVariant: { type: ["string", "null"] }
         practiceTestNumber: { type: ["number", "null"] }
         formCode: { type: ["string", "null"] }
         title: { type: string }

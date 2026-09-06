@@ -73,3 +73,18 @@ test("records mastered vs still struggling without exposing the answer first", (
   assert.equal("officialExplanation" in safe, false);
   assert.equal(safe.prompt, "Which choice?");
 });
+
+test("accepts semicolon-separated SPR forms without requiring A–D", () => {
+  assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "9", correctAnswer: "9; 9.0" }), {
+    correct: true,
+    outcome: "mastered",
+  });
+  assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "9.0", correctAnswer: "9; 9.0" }), {
+    correct: true,
+    outcome: "mastered",
+  });
+  assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "8", correctAnswer: "9; 9.0" }), {
+    correct: false,
+    outcome: "still_struggling",
+  });
+});

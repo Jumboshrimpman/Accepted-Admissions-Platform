@@ -59,9 +59,10 @@ export function SatBankPanel({
             <Library className="h-5 w-5 text-primary" /> SAT/PSAT question bank
           </CardTitle>
           <CardDescription>
-            Canonical College Board source questions. Official explanations stay separate from AI
-            notes. Official extracts may still be pending — import JSON/JSONL from{" "}
-            <code>content/college-board/</code> without recreating official wording.
+            Canonical College Board source questions (SAT digital 4–11 + PSAT packs). Official
+            explanations stay separate from AI notes. Import JSON/JSONL from{" "}
+            <code>content/college-board/</code>. Skill/difficulty are null in these PDFs; figure-heavy
+            items may have an empty stem. Do not recreate official wording.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -126,7 +127,8 @@ export function SatBankPanel({
             ))}
             {(collections.data ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Import extracts or seed fixtures to create SAT Practice Test 4–11 and PSAT packs.
+                Import the 15 official JSONL packs to create SAT Practice Test 4–11 and the PSAT
+                collections.
               </p>
             ) : null}
           </CardContent>
@@ -158,15 +160,23 @@ export function SatBankPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">Q{index + 1}</Badge>
                   <Badge variant="outline">{question.section === "rw" ? "R&W" : "Math"}</Badge>
-                  <Badge variant="outline">{question.skill}</Badge>
+                  <Badge variant="outline">{question.skill || "Skill not in PDF"}</Badge>
+                  {question.questionType === "spr" ? <Badge variant="outline">SPR</Badge> : null}
+                  {question.assignable === false ? (
+                    <Badge variant="outline">Figure/choices incomplete</Badge>
+                  ) : null}
                   {question.sourceKind === "seed" ? (
                     <Badge variant="outline">Seed fixture</Badge>
                   ) : null}
                 </div>
-                <p className="mt-2 text-sm">{question.prompt}</p>
+                <p className="mt-2 text-sm">
+                  {question.prompt ||
+                    "Prompt was not recovered from this figure-heavy PDF page. Official explanation is on file; do not invent the stem."}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {question.sourceKey} · {question.estimatedSeconds}s
                   {question.hasOfficialExplanation ? " · official explanation on file" : " · official explanation pending"}
+                  {question.assignable === false ? " · not used in 60-min pre-work until enriched" : ""}
                 </p>
               </div>
             ))}

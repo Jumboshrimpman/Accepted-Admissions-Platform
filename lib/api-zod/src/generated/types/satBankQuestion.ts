@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SatBankQuestionChoicesItem } from './satBankQuestionChoicesItem';
+import type { SatBankQuestionExtractGaps } from './satBankQuestionExtractGaps';
 import type { SatBankQuestionSection } from './satBankQuestionSection';
 
 export interface SatBankQuestion {
@@ -13,6 +14,8 @@ export interface SatBankQuestion {
   sourceKey: string;
   collectionId: string;
   examFamily: string;
+  /** @nullable */
+  examVariant?: string | null;
   /** @nullable */
   practiceTestNumber?: number | null;
   /** @nullable */
@@ -25,12 +28,17 @@ export interface SatBankQuestion {
   /** @nullable */
   stimulus?: string | null;
   choices?: SatBankQuestionChoicesItem[];
-  skill: string;
-  domain: string;
-  difficulty: string;
+  /** @nullable */
+  skill?: string | null;
+  /** @nullable */
+  domain?: string | null;
+  /** @nullable */
+  difficulty?: string | null;
   questionType: string;
   estimatedSeconds: number;
   sourceKind: string;
+  extractGaps?: SatBankQuestionExtractGaps;
+  assignable?: boolean;
   hasOfficialExplanation: boolean;
   /** @nullable */
   linkedQuestionId?: string | null;

@@ -14,12 +14,38 @@ test("builds a stable SAT source key from exam + test + module + q#", () => {
   assert.equal(
     bankSourceKey({
       examFamily: "sat",
+      examVariant: "sat",
       practiceTestNumber: 11,
       section: "rw",
       module: 1,
       questionNumber: 3,
     }),
-    "sat:11:rw:1:3",
+    "sat-pt11-rw-m1-q3",
+  );
+});
+
+test("keeps PSAT variants from colliding on the same practice-test number", () => {
+  assert.equal(
+    bankSourceKey({
+      examFamily: "psat",
+      examVariant: "psat8_9",
+      practiceTestNumber: 1,
+      section: "rw",
+      module: 1,
+      questionNumber: 1,
+    }),
+    "psat8_9-pt1-rw-m1-q1",
+  );
+  assert.equal(
+    bankSourceKey({
+      examFamily: "psat",
+      examVariant: "psat10",
+      practiceTestNumber: 1,
+      section: "rw",
+      module: 1,
+      questionNumber: 1,
+    }),
+    "psat10-pt1-rw-m1-q1",
   );
 });
 
@@ -44,10 +70,17 @@ test("normalizes exam family and section aliases", () => {
 });
 
 test("names SAT collections from practice test number", () => {
-  assert.equal(collectionSlug({ examFamily: "sat", practiceTestNumber: 11 }), "sat-practice-test-11");
   assert.equal(
-    collectionTitle({ examFamily: "sat", practiceTestNumber: 11 }),
+    collectionSlug({ examFamily: "sat", examVariant: "sat", practiceTestNumber: 11 }),
+    "sat-practice-test-11-digital",
+  );
+  assert.equal(
+    collectionTitle({ examFamily: "sat", examVariant: "sat", practiceTestNumber: 11 }),
     "SAT Practice Test 11",
+  );
+  assert.equal(
+    collectionTitle({ examFamily: "psat", examVariant: "psat8_9", practiceTestNumber: 2 }),
+    "PSAT 8/9 Practice Test 2",
   );
 });
 

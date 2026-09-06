@@ -1,0 +1,319 @@
+{
+  "countsPerPack": {
+    "psat-10-practice-test-1": 120,
+    "psat-10-practice-test-2": 120,
+    "psat-8-9-practice-test-1": 120,
+    "psat-8-9-practice-test-2": 120,
+    "psat-8-9-practice-test-3": 120,
+    "psat-nmsqt-10-practice-test-3": 120,
+    "psat-nmsqt-practice-test-1": 120,
+    "sat-practice-test-10-digital": 120,
+    "sat-practice-test-11-digital": 120,
+    "sat-practice-test-4-digital": 120,
+    "sat-practice-test-5-digital": 120,
+    "sat-practice-test-6-digital": 120,
+    "sat-practice-test-7-digital": 120,
+    "sat-practice-test-8-digital": 120,
+    "sat-practice-test-9-digital": 120
+  },
+  "totalQuestions": 1800,
+  "coveragePerPack": {
+    "psat-10-practice-test-1": {
+      "withPrompt": 118,
+      "withChoices": 100,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "psat-10-practice-test-2": {
+      "withPrompt": 117,
+      "withChoices": 95,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "psat-8-9-practice-test-1": {
+      "withPrompt": 115,
+      "withChoices": 94,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "psat-8-9-practice-test-2": {
+      "withPrompt": 117,
+      "withChoices": 98,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "psat-8-9-practice-test-3": {
+      "withPrompt": 116,
+      "withChoices": 101,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "psat-nmsqt-10-practice-test-3": {
+      "withPrompt": 120,
+      "withChoices": 95,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "psat-nmsqt-practice-test-1": {
+      "withPrompt": 118,
+      "withChoices": 100,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-10-digital": {
+      "withPrompt": 113,
+      "withChoices": 91,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-11-digital": {
+      "withPrompt": 116,
+      "withChoices": 95,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-4-digital": {
+      "withPrompt": 116,
+      "withChoices": 95,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-5-digital": {
+      "withPrompt": 104,
+      "withChoices": 89,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-6-digital": {
+      "withPrompt": 104,
+      "withChoices": 86,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-7-digital": {
+      "withPrompt": 107,
+      "withChoices": 78,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-8-digital": {
+      "withPrompt": 104,
+      "withChoices": 83,
+      "withCorrect": 120,
+      "withExplanation": 120
+    },
+    "sat-practice-test-9-digital": {
+      "withPrompt": 113,
+      "withChoices": 93,
+      "withCorrect": 120,
+      "withExplanation": 120
+    }
+  },
+  "filesWritten": [
+    "psat-10-practice-test-1.jsonl",
+    "psat-10-practice-test-2.jsonl",
+    "psat-8-9-practice-test-1.jsonl",
+    "psat-8-9-practice-test-2.jsonl",
+    "psat-8-9-practice-test-3.jsonl",
+    "psat-nmsqt-10-practice-test-3.jsonl",
+    "psat-nmsqt-practice-test-1.jsonl",
+    "sat-practice-test-10-digital.jsonl",
+    "sat-practice-test-11-digital.jsonl",
+    "sat-practice-test-4-digital.jsonl",
+    "sat-practice-test-5-digital.jsonl",
+    "sat-practice-test-6-digital.jsonl",
+    "sat-practice-test-7-digital.jsonl",
+    "sat-practice-test-8-digital.jsonl",
+    "sat-practice-test-9-digital.jsonl",
+    "manifest.json",
+    "extraction-report.json"
+  ],
+  "sampleQuestions": [
+    {
+      "id": "sat-pt4-rw-m1-q1",
+      "examFamily": "sat",
+      "practiceTestNumber": 4,
+      "section": "rw",
+      "module": 1,
+      "questionNumber": 1,
+      "questionType": "mcq",
+      "prompt": "The spacecraft OSIRIS-REx briefly made contact\nwith the asteroid 101955 Bennu in 2020. NASA\nscientist Daniella DellaGiustina reports that despite\nfacing the unexpected obstacle of a surface mostly\ncovered in boulders, OSIRIS-REx successfully\n______ a sample of the surface, gathering pieces of\nit to bring back to Earth.\nWhich choice completes the text with the most\nlogical and precise word or phrase?",
+      "choices": [
+        {
+          "label": "A",
+          "text": "attached"
+        },
+        {
+          "label": "B",
+          "text": "collected"
+        },
+        {
+          "label": "C",
+          "text": "followed"
+        },
+        {
+          "label": "D",
+          "text": "replaced"
+        }
+      ],
+      "correctAnswer": "B",
+      "explanationPreview": "Choice B is the best answer because it most logically completes the text’s \ndiscussion of the OSIRIS-REx spacecraft’s contact with the asteroid 101955 \nBennu. In this context, “collected” means acquired and took away. The text \nindicates that although the boulders on the asteroid’s surface caused some \nunforeseen problems, OSIRIS-REx was able to ga",
+      "skill": null,
+      "difficulty": null
+    },
+    {
+      "id": "sat-pt4-math-m1-q6",
+      "examFamily": "sat",
+      "practiceTestNumber": 4,
+      "section": "math",
+      "module": 1,
+      "questionNumber": 6,
+      "questionType": "spr",
+      "prompt": "A customer spent $ 27 to purchase oranges at $ 3 per\npound. How many pounds of oranges did the\ncustomer purchase?",
+      "choices": null,
+      "correctAnswer": "9",
+      "explanationPreview": "The correct answer is 9. It’s given that the customer spent $27 to purchase \noranges at $3 per pound. Therefore, the number of pounds of oranges the \ncustomer purchased is \n(\n)\n1 pound\n$3\n$27\n, or 9 pounds.",
+      "skill": null,
+      "difficulty": null
+    }
+  ],
+  "importArchitectureFlags": [
+    {
+      "severity": "high",
+      "code": "SKILL_DIFFICULTY_ABSENT",
+      "message": "skill/topic and difficulty are not present in College Board paper/digital-accommodation PDFs; always null. Importers must not require them or must join Bluebook/other metadata later."
+    },
+    {
+      "severity": "high",
+      "code": "FIGURE_CONTENT_INCOMPLETE",
+      "message": "Test PDFs are two-column with embedded figures/tables. Raster/figure pixels were not extracted into structured fields; some math/RW items have null prompt and/or choices. Platform should support figure asset attachment or skip those items until enriched."
+    },
+    {
+      "severity": "medium",
+      "code": "SPR_ANSWER_SCHEMA",
+      "message": "Student-produced response (SPR) items use questionType=spr, choices=null, and correctAnswer as a string that may list multiple accepted forms separated by semicolons (from scoring guides). Import schema must allow non A-D answers."
+    },
+    {
+      "severity": "medium",
+      "code": "PARTIAL_CHOICE_RECOVERY",
+      "message": "MCQ choices recovery is incomplete on some figure-heavy pages (especially SAT 5–8). correctAnswer+officialExplanation are complete for all 1800 items; prompts/choices are best-effort."
+    },
+    {
+      "severity": "low",
+      "code": "EXPLANATION_PLAINTEXT",
+      "message": "officialExplanation is plain text from PDFs (may include soft line breaks). Normalize whitespace for UI; no HTML."
+    },
+    {
+      "severity": "low",
+      "code": "PSAT_QUESTION_COUNTS",
+      "message": "These staged PSAT packs use the same 33+33+27+27 linear digital-accommodation layout as SAT in the PDFs (not shorter adaptive Bluebook lengths). Treat counts as source-of-truth for these files."
+    }
+  ],
+  "perPackFieldGaps": [
+    {
+      "packId": "psat-10-practice-test-1",
+      "nullPrompts": 2,
+      "nullChoices": 20,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "psat-10-practice-test-2",
+      "nullPrompts": 3,
+      "nullChoices": 25,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "psat-8-9-practice-test-1",
+      "nullPrompts": 5,
+      "nullChoices": 26,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "psat-8-9-practice-test-2",
+      "nullPrompts": 3,
+      "nullChoices": 22,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "psat-8-9-practice-test-3",
+      "nullPrompts": 4,
+      "nullChoices": 19,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "psat-nmsqt-10-practice-test-3",
+      "nullPrompts": 0,
+      "nullChoices": 25,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "psat-nmsqt-practice-test-1",
+      "nullPrompts": 2,
+      "nullChoices": 20,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-10-digital",
+      "nullPrompts": 7,
+      "nullChoices": 29,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-11-digital",
+      "nullPrompts": 4,
+      "nullChoices": 25,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-4-digital",
+      "nullPrompts": 4,
+      "nullChoices": 25,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-5-digital",
+      "nullPrompts": 16,
+      "nullChoices": 31,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-6-digital",
+      "nullPrompts": 16,
+      "nullChoices": 34,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-7-digital",
+      "nullPrompts": 13,
+      "nullChoices": 42,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-8-digital",
+      "nullPrompts": 16,
+      "nullChoices": 37,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    },
+    {
+      "packId": "sat-practice-test-9-digital",
+      "nullPrompts": 7,
+      "nullChoices": 27,
+      "nullCorrect": 0,
+      "nullExplanation": 0
+    }
+  ]
+}

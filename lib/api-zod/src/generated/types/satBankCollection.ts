@@ -11,6 +11,8 @@ export interface SatBankCollection {
   id: string;
   examFamily: string;
   /** @nullable */
+  examVariant?: string | null;
+  /** @nullable */
   practiceTestNumber?: number | null;
   /** @nullable */
   formCode?: string | null;

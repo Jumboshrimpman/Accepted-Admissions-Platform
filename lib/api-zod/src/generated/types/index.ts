@@ -226,6 +226,7 @@ export * from './satBankPreworkInput';
 export * from './satBankPreworkInputHomeworkKind';
 export * from './satBankQuestion';
 export * from './satBankQuestionChoicesItem';
+export * from './satBankQuestionExtractGaps';
 export * from './satBankQuestionSection';
 export * from './satProduct';
 export * from './scoreBreakdown';

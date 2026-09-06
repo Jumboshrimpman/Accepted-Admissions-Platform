@@ -776,6 +776,7 @@ export const examSourceCollectionsTable = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     examFamily: text("exam_family").notNull(),
+    examVariant: text("exam_variant"),
     practiceTestNumber: numeric("practice_test_number", { mode: "number" }),
     formCode: text("form_code"),
     title: text("title").notNull(),
@@ -809,6 +810,7 @@ export const bankQuestionsTable = pgTable(
       .notNull()
       .references(() => examSourceCollectionsTable.id),
     examFamily: text("exam_family").notNull(),
+    examVariant: text("exam_variant"),
     practiceTestNumber: numeric("practice_test_number", { mode: "number" }),
     formCode: text("form_code"),
     section: text("section").notNull(),
@@ -828,12 +830,16 @@ export const bankQuestionsTable = pgTable(
       .notNull()
       .default([]),
     scoring: jsonb("scoring").$type<Record<string, unknown>>().notNull().default({}),
-    skill: text("skill").notNull(),
-    domain: text("domain").notNull(),
-    difficulty: text("difficulty").notNull(),
+    skill: text("skill"),
+    domain: text("domain"),
+    difficulty: text("difficulty"),
     questionType: text("question_type").notNull().default("mcq"),
     estimatedSeconds: numeric("estimated_seconds", { mode: "number" }).notNull(),
     sourceKind: text("source_kind").notNull().default("official_extract"),
+    extractGaps: jsonb("extract_gaps")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     sourceFiles: jsonb("source_files")
       .$type<Record<string, unknown>>()
       .notNull()
@@ -842,7 +848,17 @@ export const bankQuestionsTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("bank_questions_source_key_idx").on(table.sourceKey)],
+  (table) => [
+    uniqueIndex("bank_questions_source_key_idx").on(table.sourceKey),
+    uniqueIndex("bank_questions_dedup_idx").on(
+      table.examFamily,
+      table.examVariant,
+      table.practiceTestNumber,
+      table.section,
+      table.module,
+      table.questionNumber,
+    ),
+  ],
 );
 
 export const bankQuestionAssetsTable = pgTable("bank_question_assets", {

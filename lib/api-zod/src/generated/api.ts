@@ -1114,6 +1114,7 @@ export const ImportSatBankResponse = zod.object({
 export const ListSatBankCollectionsResponseItem = zod.object({
   "id": zod.string(),
   "examFamily": zod.string(),
+  "examVariant": zod.string().nullish(),
   "practiceTestNumber": zod.number().nullish(),
   "formCode": zod.string().nullish(),
   "title": zod.string(),
@@ -1142,6 +1143,7 @@ export const GetSatBankCollectionParams = zod.object({
 export const GetSatBankCollectionResponse = zod.object({
   "id": zod.string(),
   "examFamily": zod.string(),
+  "examVariant": zod.string().nullish(),
   "practiceTestNumber": zod.number().nullish(),
   "formCode": zod.string().nullish(),
   "title": zod.string(),
@@ -1162,6 +1164,7 @@ export const GetSatBankCollectionResponse = zod.object({
   "sourceKey": zod.string(),
   "collectionId": zod.string(),
   "examFamily": zod.string(),
+  "examVariant": zod.string().nullish(),
   "practiceTestNumber": zod.number().nullish(),
   "formCode": zod.string().nullish(),
   "section": zod.enum(['rw', 'math']),
@@ -1175,12 +1178,14 @@ export const GetSatBankCollectionResponse = zod.object({
   "label": zod.string(),
   "text": zod.string()
 })).optional(),
-  "skill": zod.string(),
-  "domain": zod.string(),
-  "difficulty": zod.string(),
+  "skill": zod.string().nullish(),
+  "domain": zod.string().nullish(),
+  "difficulty": zod.string().nullish(),
   "questionType": zod.string(),
   "estimatedSeconds": zod.number(),
   "sourceKind": zod.string(),
+  "extractGaps": zod.record(zod.string(), zod.unknown()).optional(),
+  "assignable": zod.boolean().optional(),
   "hasOfficialExplanation": zod.boolean(),
   "linkedQuestionId": zod.string().nullish()
 }))
@@ -1202,6 +1207,7 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "sourceKey": zod.string(),
   "collectionId": zod.string(),
   "examFamily": zod.string(),
+  "examVariant": zod.string().nullish(),
   "practiceTestNumber": zod.number().nullish(),
   "formCode": zod.string().nullish(),
   "section": zod.enum(['rw', 'math']),
@@ -1215,12 +1221,14 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "label": zod.string(),
   "text": zod.string()
 })).optional(),
-  "skill": zod.string(),
-  "domain": zod.string(),
-  "difficulty": zod.string(),
+  "skill": zod.string().nullish(),
+  "domain": zod.string().nullish(),
+  "difficulty": zod.string().nullish(),
   "questionType": zod.string(),
   "estimatedSeconds": zod.number(),
   "sourceKind": zod.string(),
+  "extractGaps": zod.record(zod.string(), zod.unknown()).optional(),
+  "assignable": zod.boolean().optional(),
   "hasOfficialExplanation": zod.boolean(),
   "linkedQuestionId": zod.string().nullish()
 })

@@ -266,6 +266,7 @@ import {
   homeworkKindForAssignment,
   persistWeaknessGroups,
 } from "../lib/sat-bank-service";
+import { answersMatch } from "../lib/sat-bank-retry";
 import {
   contentSourcesTable,
   assignmentQuestionsTable,
@@ -3087,7 +3088,7 @@ async function finalizeAttemptResult(
   for (const item of joined) {
     const current = bySkill.get(item.question.skill) ?? { correct: 0, total: 0 };
     current.total += 1;
-    if (item.response?.finalAnswer === item.question.correctAnswer) current.correct += 1;
+    if (answersMatch(item.response?.finalAnswer, item.question.correctAnswer)) current.correct += 1;
     bySkill.set(item.question.skill, current);
   }
   const breakdown = [...bySkill.entries()].map(([skill, value]) => ({
@@ -3097,7 +3098,7 @@ async function finalizeAttemptResult(
   }));
   const items = joined.map(({ response, question }) => ({
     questionId: question.id,
-    correct: response?.finalAnswer === question.correctAnswer,
+    correct: answersMatch(response?.finalAnswer, question.correctAnswer),
     prediction: response?.prediction ?? null,
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,

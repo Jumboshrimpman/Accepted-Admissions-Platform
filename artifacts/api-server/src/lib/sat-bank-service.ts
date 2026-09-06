@@ -20,7 +20,11 @@ import {
 import {
   DEFAULT_COLLEGE_BOARD_ROOT,
   STAGED_COLLECTION_STUBS,
+  collectionStubsFromManifest,
+  isAssignableBankItem,
+  parseCollegeBoardManifest,
   parseCollegeBoardPayload,
+  type CollectionStub,
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
 import { generateQuestionsWithProvider } from "./question-generation.ts";
@@ -94,7 +98,13 @@ async function walkExtractFiles(root: string): Promise<string[]> {
         await visit(full);
         continue;
       }
-      if (/\.(json|jsonl)$/i.test(entry) && !/schema\.json$/i.test(entry)) {
+      if (
+        /\.(json|jsonl)$/i.test(entry) &&
+        !/schema\.json$/i.test(entry) &&
+        !/manifest\.json$/i.test(entry) &&
+        !/extraction-report\.json$/i.test(entry) &&
+        !/(^|\/)fixtures(\/|$)/i.test(full)
+      ) {
         files.push(full);
       }
     }
@@ -103,9 +113,20 @@ async function walkExtractFiles(root: string): Promise<string[]> {
   return files.sort();
 }
 
+async function collectionStubs(rootDir = SAT_BANK_IMPORT_ROOT): Promise<CollectionStub[]> {
+  try {
+    const text = await readFile(path.join(rootDir, "manifest.json"), "utf8");
+    const packs = parseCollegeBoardManifest(text);
+    if (packs.length > 0) return collectionStubsFromManifest(packs);
+  } catch {
+    // Fall back to the built-in SAT 4–11 + PSAT pack list.
+  }
+  return STAGED_COLLECTION_STUBS;
+}
+
 export async function ensureStagedCollections(): Promise<number> {
   let upserted = 0;
-  for (const stub of STAGED_COLLECTION_STUBS) {
+  for (const stub of await collectionStubs()) {
     const [existing] = await db
       .select()
       .from(examSourceCollectionsTable)
@@ -118,11 +139,13 @@ export async function ensureStagedCollections(): Promise<number> {
             .insert(examSourceCollectionsTable)
             .values({
               examFamily: stub.examFamily,
+              examVariant: stub.examVariant,
               practiceTestNumber: stub.practiceTestNumber,
               formCode: stub.formCode,
               title: stub.title,
               slug: stub.slug,
-              notes: "Staged College Board collection. Official JSON/JSONL extracts may still be pending.",
+              notes:
+                "Official College Board extract. skill/topic/difficulty are null in these PDFs. Figures may be incomplete. PSAT packs use the same 120-item linear layout as these SAT PDFs.",
               extractStatus: "pending",
             })
             .returning({ id: examSourceCollectionsTable.id })
@@ -160,6 +183,7 @@ async function upsertCollectionForRecord(record: ParsedBankRecord) {
     .insert(examSourceCollectionsTable)
     .values({
       examFamily: record.examFamily,
+      examVariant: record.examVariant,
       practiceTestNumber: record.practiceTestNumber,
       formCode: record.formCode,
       title: record.collectionTitle,
@@ -205,6 +229,7 @@ export async function upsertBankRecords(records: ParsedBankRecord[]): Promise<{
     const values = {
       collectionId: collection.id,
       examFamily: record.examFamily,
+      examVariant: record.examVariant,
       practiceTestNumber: record.practiceTestNumber,
       formCode: record.formCode,
       section: record.section,
@@ -224,6 +249,7 @@ export async function upsertBankRecords(records: ParsedBankRecord[]): Promise<{
       questionType: record.questionType,
       estimatedSeconds: record.estimatedSeconds,
       sourceKind: record.sourceKind,
+      extractGaps: record.extractGaps,
       sourceFiles: record.sourceFiles,
       updatedAt: new Date(),
     };
@@ -303,7 +329,10 @@ export async function importCollegeBoardExtracts(input: {
     }
   }
   const unique = new Map<string, ParsedBankRecord>();
+  const seenDedup = new Set<string>();
   for (const record of parsed.records) {
+    if (seenDedup.has(record.dedupKey)) continue;
+    seenDedup.add(record.dedupKey);
     unique.set(record.sourceKey, record);
   }
   const { inserted, updated } = await upsertBankRecords([...unique.values()]);
@@ -337,12 +366,12 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
     .insert(questionsTable)
     .values({
       subject: quizSubject(bank.section),
-      domain: bank.domain,
-      skill: bank.skill,
+      domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
+      skill: bank.skill || "Skill not in extract",
       questionType: bank.questionType,
-      difficulty: bank.difficulty,
+      difficulty: bank.difficulty || "unspecified",
       stimulus: bank.stimulus,
-      prompt: bank.prompt,
+      prompt: bank.prompt || "Figure or table was not recovered from this PDF page. Open the linked source PDF.",
       choices: bank.choices,
       correctAnswer: bank.correctAnswer,
       explanation: bank.officialExplanation,
@@ -417,6 +446,18 @@ export async function assignPreworkFromBank(input: {
     const allowed = new Set(input.bankQuestionIds);
     pool = pool.filter((row) => allowed.has(row.id));
   }
+  pool = pool.filter((row) =>
+    isAssignableBankItem({
+      prompt: row.prompt,
+      questionType: row.questionType,
+      choices: Array.isArray(row.choices) ? row.choices : [],
+      correctAnswer: row.correctAnswer,
+      extractGaps: (row.extractGaps ?? {}) as {
+        missingPrompt?: boolean;
+        missingChoices?: boolean;
+      },
+    }),
+  );
   if (pool.length === 0) {
     throw Object.assign(
       new Error(
@@ -576,6 +617,7 @@ export async function listBankCollections() {
     return {
       id: collection.id,
       examFamily: collection.examFamily,
+      examVariant: collection.examVariant,
       practiceTestNumber: asFiniteNumberOrNull(collection.practiceTestNumber),
       formCode: collection.formCode,
       title: collection.title,
@@ -619,6 +661,7 @@ export function bankQuestionShape(row: typeof bankQuestionsTable.$inferSelect) {
     sourceKey: row.sourceKey,
     collectionId: row.collectionId,
     examFamily: row.examFamily,
+    examVariant: row.examVariant,
     practiceTestNumber: asFiniteNumberOrNull(row.practiceTestNumber),
     formCode: row.formCode,
     section: row.section === "math" ? ("math" as const) : ("rw" as const),
@@ -634,6 +677,17 @@ export function bankQuestionShape(row: typeof bankQuestionsTable.$inferSelect) {
     questionType: row.questionType,
     estimatedSeconds: asFiniteNumber(row.estimatedSeconds),
     sourceKind: row.sourceKind,
+    extractGaps: row.extractGaps ?? {},
+    assignable: isAssignableBankItem({
+      prompt: row.prompt,
+      questionType: row.questionType,
+      choices: asChoices(row.choices),
+      correctAnswer: row.correctAnswer,
+      extractGaps: (row.extractGaps ?? {}) as {
+        missingPrompt?: boolean;
+        missingChoices?: boolean;
+      },
+    }),
     hasOfficialExplanation: Boolean(row.officialExplanation.trim()),
     linkedQuestionId: row.linkedQuestionId,
   };

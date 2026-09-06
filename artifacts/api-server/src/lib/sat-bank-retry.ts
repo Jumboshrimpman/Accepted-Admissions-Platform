@@ -62,13 +62,33 @@ export function decideRetrySource(input: {
   };
 }
 
+export function acceptedAnswerForms(correctAnswer: string): string[] {
+  return correctAnswer
+    .split(";")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function answersMatch(
+  studentAnswer: string | null | undefined,
+  correctAnswer: string,
+): boolean {
+  const given = (studentAnswer ?? "").trim().toLowerCase();
+  if (!given) return false;
+  const forms = acceptedAnswerForms(correctAnswer);
+  if (forms.includes(given)) return true;
+  const numeric = Number(given);
+  if (Number.isFinite(numeric) && forms.some((form) => Number(form) === numeric)) {
+    return true;
+  }
+  return false;
+}
+
 export function retryOutcomeFromAnswer(input: {
   studentAnswer: string | null | undefined;
   correctAnswer: string;
 }): { correct: boolean; outcome: "mastered" | "still_struggling" } {
-  const given = (input.studentAnswer ?? "").trim().toLowerCase();
-  const expected = input.correctAnswer.trim().toLowerCase();
-  const correct = Boolean(given) && given === expected;
+  const correct = answersMatch(input.studentAnswer, input.correctAnswer);
   return { correct, outcome: correct ? "mastered" : "still_struggling" };
 }
 

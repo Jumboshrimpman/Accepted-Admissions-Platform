@@ -1,19 +1,33 @@
 import {
+  bankDedupKey,
   bankSourceKey,
   collectionSlug,
   collectionTitle,
   defaultEstimatedSeconds,
+  extractStableId,
   normalizeExamFamily,
   normalizeExamSection,
+  normalizeExamVariant,
   type ExamFamily,
   type ExamSection,
 } from "./sat-bank-source-key.ts";
 
 export type BankChoice = { id: string; label: string; text: string };
 
+export type ExtractGaps = {
+  skillDifficultyAbsent: boolean;
+  missingPrompt: boolean;
+  missingChoices: boolean;
+  figuresIncomplete: boolean;
+  spr: boolean;
+  notes: string[];
+};
+
 export type ParsedBankRecord = {
   sourceKey: string;
+  dedupKey: string;
   examFamily: ExamFamily;
+  examVariant: string;
   practiceTestNumber: number | null;
   formCode: string | null;
   section: ExamSection;
@@ -29,14 +43,16 @@ export type ParsedBankRecord = {
   officialExplanation: string;
   figures: Array<{ url?: string; path?: string; alt?: string }>;
   scoring: Record<string, unknown>;
-  skill: string;
-  domain: string;
-  difficulty: string;
+  skill: string | null;
+  domain: string | null;
+  difficulty: string | null;
   questionType: string;
   estimatedSeconds: number;
   sourceKind: "official_extract" | "seed";
   sourceFiles: Record<string, unknown>;
   assets: Array<{ kind: string; title: string; resourceUrl: string }>;
+  extractGaps: ExtractGaps;
+  assignable: boolean;
 };
 
 export type ImportParseResult = {
@@ -65,7 +81,8 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function parseChoices(raw: unknown): BankChoice[] {
+function parseChoices(raw: unknown): BankChoice[] | null {
+  if (raw == null) return null;
   if (!Array.isArray(raw)) return [];
   return raw
     .map((choice, index) => {
@@ -77,11 +94,45 @@ function parseChoices(raw: unknown): BankChoice[] {
       if (!row) return null;
       const text = asString(row.text) || asString(row.choice) || asString(row.value);
       if (!text) return null;
-      const id = asString(row.id).toLowerCase() || CHOICE_IDS[index] || String.fromCharCode(97 + index);
-      const label = asString(row.label) || id.toUpperCase();
-      return { id, label, text };
+      const label = asString(row.label) || asString(row.id).toUpperCase();
+      const id =
+        asString(row.id).toLowerCase() ||
+        label.toLowerCase() ||
+        CHOICE_IDS[index] ||
+        String.fromCharCode(97 + index);
+      return { id, label: label || id.toUpperCase(), text };
     })
     .filter((choice): choice is BankChoice => Boolean(choice));
+}
+
+function normalizeExtractText(value: string): string {
+  return value
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function pdfPath(filename: string): string {
+  const name = filename.trim();
+  if (!name) return "";
+  if (name.startsWith("content/") || name.startsWith("http://") || name.startsWith("https://")) {
+    return name;
+  }
+  return `content/college-board/pdfs/${name}`;
+}
+
+export function isAssignableBankItem(input: {
+  prompt: string;
+  questionType: string;
+  choices: BankChoice[];
+  correctAnswer: string;
+  extractGaps?: ExtractGaps;
+}): boolean {
+  if (!input.correctAnswer.trim()) return false;
+  if (!input.prompt.trim() || input.extractGaps?.missingPrompt) return false;
+  if (input.questionType === "spr") return true;
+  return input.choices.length >= 2 && !input.extractGaps?.missingChoices;
 }
 
 function parseAssets(record: Record<string, unknown>): Array<{
@@ -89,7 +140,7 @@ function parseAssets(record: Record<string, unknown>): Array<{
   title: string;
   resourceUrl: string;
 }> {
-  const files = asObject(record.sourceFiles) ?? asObject(record.bundles) ?? {};
+  const files = asObject(record.sourceFiles) ?? asObject(record.bundles) ?? asObject(record.source) ?? {};
   const assets: Array<{ kind: string; title: string; resourceUrl: string }> = [];
   const mapping: Array<[string, string, string]> = [
     ["testPdf", "test_pdf", "Test PDF"],
@@ -98,16 +149,20 @@ function parseAssets(record: Record<string, unknown>): Array<{
     ["answers_explanations", "answers_explanations", "Answers and explanations"],
     ["scoringGuide", "scoring_guide", "Scoring guide"],
     ["scoring_guide", "scoring_guide", "Scoring guide"],
+    ["scoringPdf", "scoring_guide", "Scoring guide"],
+    ["test", "test_pdf", "Test PDF"],
+    ["answers", "answers_explanations", "Answers and explanations"],
+    ["scoring", "scoring_guide", "Scoring guide"],
   ];
   for (const [key, kind, title] of mapping) {
-    const url = asString(files[key] ?? record[key]);
+    const url = pdfPath(asString(files[key] ?? record[key]));
     if (url) assets.push({ kind, title, resourceUrl: url });
   }
   const extra = Array.isArray(record.assets) ? record.assets : [];
   for (const item of extra) {
     const row = asObject(item);
     if (!row) continue;
-    const resourceUrl = asString(row.resourceUrl) || asString(row.url) || asString(row.path);
+    const resourceUrl = pdfPath(asString(row.resourceUrl) || asString(row.url) || asString(row.path));
     if (!resourceUrl) continue;
     assets.push({
       kind: asString(row.kind) || "other",
@@ -139,87 +194,158 @@ export function parseCollegeBoardRecord(
   const module = asNumber(row.module) ?? asNumber(row.moduleNumber);
   const questionNumber =
     asNumber(row.questionNumber) ?? asNumber(row.question_number) ?? asNumber(row.q);
-  const prompt = asString(row.prompt) || asString(row.stem) || asString(row.question);
+  const promptRaw = asString(row.prompt) || asString(row.stem) || asString(row.question);
+  const prompt = normalizeExtractText(promptRaw);
   if (!examFamily) return { skip: `${source}: missing examFamily` };
   if (!section) return { skip: `${source}: missing section` };
   if (module == null || module < 1) return { skip: `${source}: missing module` };
   if (questionNumber == null || questionNumber < 1) return { skip: `${source}: missing questionNumber` };
-  if (prompt.length < 4) return { skip: `${source}: missing prompt` };
 
   const practiceTestNumber =
     asNumber(row.practiceTestNumber) ?? asNumber(row.practice_test_number) ?? asNumber(row.testNumber);
+  const sourceObj = asObject(row.source);
+  const examVariant =
+    normalizeExamVariant(
+      asString(row.examVariant) || asString(row.exam_variant) || asString(sourceObj?.examVariant),
+      examFamily,
+    ) ?? examFamily;
+  const packId =
+    asString(row.packId) ||
+    asString(sourceObj?.packId) ||
+    asString(row.collectionSlug) ||
+    null;
   const formCode = asString(row.formCode) || asString(row.form_code) || asString(row.pack) || null;
-  const choices = parseChoices(row.choices);
-  const correctAnswer = asString(row.correctAnswer) || asString(row.correct_answer) || asString(row.answer);
-  const normalizedCorrect = correctAnswer.toLowerCase();
+  const parsedChoices = parseChoices(row.choices);
+  const questionTypeRaw = asString(row.questionType) || asString(row.question_type);
+  const questionType =
+    questionTypeRaw ||
+    (parsedChoices === null ? "spr" : parsedChoices.length ? "mcq" : "spr");
+  const choices = parsedChoices ?? [];
+  const correctAnswerRaw =
+    asString(row.correctAnswer) || asString(row.correct_answer) || asString(row.answer);
+  if (!correctAnswerRaw) return { skip: `${source}: missing correctAnswer` };
+  const officialExplanation = normalizeExtractText(
+    asString(row.officialExplanation) ||
+      asString(row.official_explanation) ||
+      asString(row.explanation),
+  );
+  const skill = asString(row.skill) || null;
+  const topic = asString(row.topic) || asString(row.domain) || null;
+  const difficulty = asString(row.difficulty) || null;
+  const notes = Array.isArray(row.extractionNotes)
+    ? row.extractionNotes.filter((item): item is string => typeof item === "string")
+    : [];
+  const missingPrompt = prompt.length < 4;
+  const missingChoices = questionType !== "spr" && (parsedChoices === null || choices.length < 2);
+  const spr = questionType === "spr" || parsedChoices === null;
+  const extractGaps: ExtractGaps = {
+    skillDifficultyAbsent: !skill && !difficulty,
+    missingPrompt,
+    missingChoices,
+    figuresIncomplete: missingPrompt || missingChoices || notes.some((note) => /figure/i.test(note)),
+    spr,
+    notes,
+  };
   const identity = {
     examFamily,
+    examVariant,
     practiceTestNumber,
     formCode,
     section,
     module,
     questionNumber,
   };
+  const providedId = asString(row.id) || asString(row.sourceKey);
+  const sourceKey =
+    providedId ||
+    (practiceTestNumber != null
+      ? extractStableId({
+          examVariant,
+          practiceTestNumber,
+          section,
+          module,
+          questionNumber,
+        })
+      : bankSourceKey(identity));
   const sourceKind = asString(row.sourceKind) === "seed" ? "seed" : "official_extract";
-  return {
-    record: {
-      sourceKey: asString(row.sourceKey) || bankSourceKey(identity),
+  const acceptedForms = correctAnswerRaw
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const normalizedCorrect = correctAnswerRaw.toLowerCase();
+  const choiceMatch = choices.find(
+    (choice) => choice.id === normalizedCorrect || choice.label.toLowerCase() === normalizedCorrect,
+  );
+  const record: ParsedBankRecord = {
+    sourceKey,
+    dedupKey: bankDedupKey(identity),
+    examFamily,
+    examVariant,
+    practiceTestNumber,
+    formCode,
+    section,
+    module,
+    questionNumber,
+    position: asNumber(row.position) ?? module * 100 + questionNumber,
+    collectionSlug: collectionSlug({
       examFamily,
+      examVariant,
       practiceTestNumber,
       formCode,
-      section,
-      module,
-      questionNumber,
-      position:
-        asNumber(row.position) ??
-        module * 100 + questionNumber,
-      collectionSlug:
-        asString(row.collectionSlug) ||
-        collectionSlug({ examFamily, practiceTestNumber, formCode }),
-      collectionTitle: collectionTitle({
-        examFamily,
-        practiceTestNumber,
-        formCode,
-        title: asString(row.collectionTitle) || asString(row.collection),
-      }),
-      prompt,
-      stimulus: asString(row.stimulus) || asString(row.passage) || null,
-      choices,
-      correctAnswer: choices.some((choice) => choice.id === normalizedCorrect)
-        ? normalizedCorrect
-        : correctAnswer || (choices[0]?.id ?? ""),
-      officialExplanation:
-        asString(row.officialExplanation) ||
-        asString(row.official_explanation) ||
-        asString(row.explanation),
-      figures: Array.isArray(row.figures)
-        ? row.figures.flatMap((figure) => {
-            const item = asObject(figure);
-            if (!item) return [];
-            return [
-              {
-                url: asString(item.url) || undefined,
-                path: asString(item.path) || undefined,
-                alt: asString(item.alt) || undefined,
-              },
-            ];
-          })
-        : [],
-      scoring: asObject(row.scoring) ?? {},
-      skill: asString(row.skill) || "Unspecified skill",
-      domain: asString(row.domain) || (section === "math" ? "SAT Math" : "Information and Ideas"),
-      difficulty: asString(row.difficulty) || "medium",
-      questionType: asString(row.questionType) || asString(row.question_type) || (choices.length ? "mcq" : "spr"),
-      estimatedSeconds: defaultEstimatedSeconds({
-        section,
-        questionType: asString(row.questionType) || asString(row.question_type),
-        estimatedSeconds: asNumber(row.estimatedSeconds) ?? asNumber(row.estimated_seconds),
-      }),
-      sourceKind,
-      sourceFiles: asObject(row.sourceFiles) ?? asObject(row.bundles) ?? {},
-      assets: parseAssets(row),
+      packId,
+    }),
+    collectionTitle: collectionTitle({
+      examFamily,
+      examVariant,
+      practiceTestNumber,
+      formCode,
+      title: asString(row.collectionTitle) || asString(row.collection),
+    }),
+    prompt,
+    stimulus: normalizeExtractText(asString(row.stimulus) || asString(row.passage)) || null,
+    choices,
+    correctAnswer: choiceMatch?.id ?? correctAnswerRaw,
+    officialExplanation,
+    figures: Array.isArray(row.figures)
+      ? row.figures.flatMap((figure) => {
+          const item = asObject(figure);
+          if (!item) return [];
+          return [
+            {
+              url: asString(item.url) || undefined,
+              path: asString(item.path) || undefined,
+              alt: asString(item.alt) || undefined,
+            },
+          ];
+        })
+      : [],
+    scoring: {
+      ...(asObject(row.scoring) ?? {}),
+      acceptedForms,
+      layout: "linear_120",
     },
+    skill,
+    domain: topic,
+    difficulty,
+    questionType,
+    estimatedSeconds: defaultEstimatedSeconds({
+      section,
+      questionType,
+      estimatedSeconds: asNumber(row.estimatedSeconds) ?? asNumber(row.estimated_seconds),
+    }),
+    sourceKind,
+    sourceFiles: asObject(row.sourceFiles) ?? asObject(row.bundles) ?? sourceObj ?? {},
+    assets: parseAssets(row),
+    extractGaps,
+    assignable: isAssignableBankItem({
+      prompt,
+      questionType,
+      choices,
+      correctAnswer: correctAnswerRaw,
+      extractGaps,
+    }),
   };
+  return { record };
 }
 
 export function parseCollegeBoardPayload(text: string, source = "payload"): ImportParseResult {
@@ -236,11 +362,12 @@ export function parseCollegeBoardPayload(text: string, source = "payload"): Impo
       return;
     }
     const record = parsed.record!;
-    if (seen.has(record.sourceKey)) {
+    if (seen.has(record.sourceKey) || seen.has(record.dedupKey)) {
       duplicatesInFile.push(record.sourceKey);
       return;
     }
     seen.add(record.sourceKey);
+    seen.add(record.dedupKey);
     records.push(record);
   };
 
@@ -298,93 +425,188 @@ export function parseCollegeBoardPayload(text: string, source = "payload"): Impo
 
 export const DEFAULT_COLLEGE_BOARD_ROOT = "content/college-board";
 
-export const STAGED_COLLECTION_STUBS: Array<{
+export type ManifestPack = {
+  packId: string;
   examFamily: ExamFamily;
+  examVariant: string;
+  practiceTestNumber: number;
+  pdfs: { test?: string; answers?: string; scoring?: string };
+  outputFile: string;
+  questionCount: number;
+};
+
+export type CollectionStub = {
+  examFamily: ExamFamily;
+  examVariant: string;
   practiceTestNumber: number | null;
   formCode: string | null;
   title: string;
   slug: string;
   assets: Array<{ kind: string; title: string; resourceUrl: string }>;
-}> = [
-  ...[4, 5, 6, 7, 8, 9, 10, 11].map((n) => ({
-    examFamily: "sat" as const,
-    practiceTestNumber: n,
-    formCode: null,
-    title: `SAT Practice Test ${n}`,
-    slug: `sat-practice-test-${n}`,
+};
+
+export function parseCollegeBoardManifest(text: string): ManifestPack[] {
+  const obj = asObject(JSON.parse(text) as unknown);
+  const packs = Array.isArray(obj?.packs) ? obj.packs : [];
+  return packs.flatMap((item) => {
+    const row = asObject(item);
+    if (!row) return [];
+    const examFamily = normalizeExamFamily(asString(row.examFamily));
+    const practiceTestNumber = asNumber(row.practiceTestNumber);
+    const packId = asString(row.packId);
+    if (!examFamily || practiceTestNumber == null || !packId) return [];
+    const pdfs = asObject(row.pdfs) ?? {};
+    return [
+      {
+        packId,
+        examFamily,
+        examVariant: normalizeExamVariant(asString(row.examVariant), examFamily) ?? examFamily,
+        practiceTestNumber,
+        pdfs: {
+          test: asString(pdfs.test) || undefined,
+          answers: asString(pdfs.answers) || undefined,
+          scoring: asString(pdfs.scoring) || undefined,
+        },
+        outputFile: asString(row.outputFile) || `${packId}.jsonl`,
+        questionCount: asNumber(row.questionCount) ?? 0,
+      },
+    ];
+  });
+}
+
+export function collectionStubsFromManifest(packs: ManifestPack[]): CollectionStub[] {
+  return packs.map((pack) => ({
+    examFamily: pack.examFamily,
+    examVariant: pack.examVariant,
+    practiceTestNumber: pack.practiceTestNumber,
+    formCode: pack.examVariant === "sat" ? null : pack.examVariant,
+    title: collectionTitle({
+      examFamily: pack.examFamily,
+      examVariant: pack.examVariant,
+      practiceTestNumber: pack.practiceTestNumber,
+    }),
+    slug: pack.packId,
     assets: [
-      {
-        kind: "test_pdf",
-        title: `SAT Practice Test ${n} PDF`,
-        resourceUrl: `content/college-board/sat/practice-test-${n}/test.pdf`,
-      },
-      {
-        kind: "answers_explanations",
-        title: `SAT Practice Test ${n} answers`,
-        resourceUrl: `content/college-board/sat/practice-test-${n}/answers.pdf`,
-      },
-      {
-        kind: "scoring_guide",
-        title: `SAT Practice Test ${n} scoring`,
-        resourceUrl: `content/college-board/sat/practice-test-${n}/scoring.pdf`,
-      },
-    ],
+      pack.pdfs.test
+        ? { kind: "test_pdf", title: "Test PDF", resourceUrl: pdfPath(pack.pdfs.test) }
+        : null,
+      pack.pdfs.answers
+        ? {
+            kind: "answers_explanations",
+            title: "Answers and explanations",
+            resourceUrl: pdfPath(pack.pdfs.answers),
+          }
+        : null,
+      pack.pdfs.scoring
+        ? { kind: "scoring_guide", title: "Scoring guide", resourceUrl: pdfPath(pack.pdfs.scoring) }
+        : null,
+    ].filter((asset): asset is NonNullable<typeof asset> => Boolean(asset)),
+  }));
+}
+
+export const STAGED_COLLECTION_STUBS: CollectionStub[] = collectionStubsFromManifest([
+  ...[4, 5, 6, 7, 8, 9, 10, 11].map((n) => ({
+    packId: `sat-practice-test-${n}-digital`,
+    examFamily: "sat" as const,
+    examVariant: "sat",
+    practiceTestNumber: n,
+    pdfs: {
+      test: `sat-practice-test-${n}-digital.pdf`,
+      answers: `sat-practice-test-${n}-answers-digital.pdf`,
+      scoring: `scoring-sat-practice-test-${n}-digital.pdf`,
+    },
+    outputFile: `sat-practice-test-${n}-digital.jsonl`,
+    questionCount: 120,
   })),
   {
+    packId: "psat-10-practice-test-1",
     examFamily: "psat",
-    practiceTestNumber: null,
-    formCode: "8-9",
-    title: "PSAT 8/9",
-    slug: "psat-8-9",
-    assets: [
-      {
-        kind: "test_pdf",
-        title: "PSAT 8/9 test PDF",
-        resourceUrl: "content/college-board/psat/8-9/test.pdf",
-      },
-      {
-        kind: "answers_explanations",
-        title: "PSAT 8/9 answers",
-        resourceUrl: "content/college-board/psat/8-9/answers.pdf",
-      },
-    ],
+    examVariant: "psat10",
+    practiceTestNumber: 1,
+    pdfs: {
+      test: "psat-10-practice-test-1.pdf",
+      answers: "psat-10-practice-test-1-answer-explanations.pdf",
+      scoring: "psat-10-practice-test-1-scoring-guide.pdf",
+    },
+    outputFile: "psat-10-practice-test-1.jsonl",
+    questionCount: 120,
   },
   {
+    packId: "psat-10-practice-test-2",
     examFamily: "psat",
-    practiceTestNumber: null,
-    formCode: "10",
-    title: "PSAT 10",
-    slug: "psat-10",
-    assets: [
-      {
-        kind: "test_pdf",
-        title: "PSAT 10 test PDF",
-        resourceUrl: "content/college-board/psat/10/test.pdf",
-      },
-      {
-        kind: "answers_explanations",
-        title: "PSAT 10 answers",
-        resourceUrl: "content/college-board/psat/10/answers.pdf",
-      },
-    ],
+    examVariant: "psat10",
+    practiceTestNumber: 2,
+    pdfs: {
+      test: "psat-10-practice-test-2.pdf",
+      answers: "psat-10-practice-test-2-answer-explanations.pdf",
+      scoring: "psat-10-practice-test-2-scoring-guide.pdf",
+    },
+    outputFile: "psat-10-practice-test-2.jsonl",
+    questionCount: 120,
   },
   {
+    packId: "psat-8-9-practice-test-1",
     examFamily: "psat",
-    practiceTestNumber: null,
-    formCode: "nmsqt",
-    title: "PSAT/NMSQT",
-    slug: "psat-nmsqt",
-    assets: [
-      {
-        kind: "test_pdf",
-        title: "PSAT/NMSQT test PDF",
-        resourceUrl: "content/college-board/psat/nmsqt/test.pdf",
-      },
-      {
-        kind: "answers_explanations",
-        title: "PSAT/NMSQT answers",
-        resourceUrl: "content/college-board/psat/nmsqt/answers.pdf",
-      },
-    ],
+    examVariant: "psat8_9",
+    practiceTestNumber: 1,
+    pdfs: {
+      test: "psat-8-9-practice-test-1.pdf",
+      answers: "psat-8-9-practice-test-1-answers.pdf",
+      scoring: "psat-8-9-practice-test-1-scoring-guide.pdf",
+    },
+    outputFile: "psat-8-9-practice-test-1.jsonl",
+    questionCount: 120,
   },
-];
+  {
+    packId: "psat-8-9-practice-test-2",
+    examFamily: "psat",
+    examVariant: "psat8_9",
+    practiceTestNumber: 2,
+    pdfs: {
+      test: "psat-8-9-practice-test-2.pdf",
+      answers: "psat-8-9-practice-test-2-answers.pdf",
+      scoring: "psat-8-9-practice-test-2-scoring-guide.pdf",
+    },
+    outputFile: "psat-8-9-practice-test-2.jsonl",
+    questionCount: 120,
+  },
+  {
+    packId: "psat-8-9-practice-test-3",
+    examFamily: "psat",
+    examVariant: "psat8_9",
+    practiceTestNumber: 3,
+    pdfs: {
+      test: "psat-8-9-practice-test-3.pdf",
+      answers: "psat-8-9-practice-test-3-answers.pdf",
+      scoring: "psat-8-9-practice-test-3-scoring-guide.pdf",
+    },
+    outputFile: "psat-8-9-practice-test-3.jsonl",
+    questionCount: 120,
+  },
+  {
+    packId: "psat-nmsqt-practice-test-1",
+    examFamily: "psat",
+    examVariant: "psat_nmsqt",
+    practiceTestNumber: 1,
+    pdfs: {
+      test: "psat-nmsqt-practice-test-1.pdf",
+      answers: "psat-nmsqt-practice-test-1-answers.pdf",
+      scoring: "scoring-psat-nmsqt-practice-test-1.pdf",
+    },
+    outputFile: "psat-nmsqt-practice-test-1.jsonl",
+    questionCount: 120,
+  },
+  {
+    packId: "psat-nmsqt-10-practice-test-3",
+    examFamily: "psat",
+    examVariant: "psat_nmsqt_10",
+    practiceTestNumber: 3,
+    pdfs: {
+      test: "psat-nmsqt-psat-10-practice-test-3.pdf",
+      answers: "psat-nmsqt-psat-10-practice-test-3-answers.pdf",
+      scoring: "psat-nmsqt-psat-10-practice-test-3-scoring-guide.pdf",
+    },
+    outputFile: "psat-nmsqt-10-practice-test-3.jsonl",
+    questionCount: 120,
+  },
+]);
