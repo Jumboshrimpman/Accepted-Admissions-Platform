@@ -127,11 +127,20 @@ describe("OurTeam publication gate", () => {
       ["Sama Noori", "sama"],
     ] as const;
     const approvedPortraits: Record<string, string> = {
+      xavier: "/media/team/xavier-morales.jpg",
+      eunice: "/media/team/eunice-chon.jpg",
       kya: "/media/team/kya-brooks.jpg",
       michael: "/media/team/michael-pecorara.jpg",
       kyle: "/media/team/kyle-englander.jpg",
       daniel: "/media/team/daniel-salgado-alvarez.png",
       sama: "/media/team/sama-noori.jpg",
+    };
+    const approvedBiographies: Record<string, string> = {
+      xavier:
+        "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
+      eunice:
+        "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.",
+      kya: "Kya is a senior at Harvard studying economics and the History of Art and Literature.",
     };
     const tutors = [...approvedRoster].reverse().map(([name, id]) => ({
       id,
@@ -139,10 +148,7 @@ describe("OurTeam publication gate", () => {
       title: name === "Kya Brooks" ? "Admissions Tutor" : "Tutor",
       photoUrl: approvedPortraits[id] ?? `https://example.com/${id}.jpg`,
       photoAltText: `${name}, ${name === "Kya Brooks" ? "Admissions Tutor" : "Tutor"}`,
-      biography:
-        name === "Kya Brooks"
-          ? "Kya is a senior at Harvard studying economics and the History of Art and Literature."
-          : `Approved biography for ${name}.`,
+      biography: approvedBiographies[id] ?? `Approved biography for ${name}.`,
       subjects: [],
       linkedinUrl: name === "Michael Pecorara"
         ? "https://www.linkedin.com/in/michaelpecorara/"
@@ -180,12 +186,22 @@ describe("OurTeam publication gate", () => {
         .map((heading) => heading.textContent),
     ).toEqual(approvedRoster.map(([name]) => name));
 
+    const xavierCard = screen.getByTestId("card-team-xavier");
+    const euniceCard = screen.getByTestId("card-team-eunice");
     const kyaCard = screen.getByTestId("card-team-kya");
     const michaelCard = screen.getByTestId("card-team-michael");
+    const xavierImage = within(xavierCard).getByAltText("Xavier Morales, Tutor");
+    const euniceImage = within(euniceCard).getByAltText("Eunice Chon, Tutor");
     const kyaImage = within(kyaCard).getByAltText("Kya Brooks, Admissions Tutor");
     const michaelImage = within(michaelCard).getByAltText("Michael Pecorara, Tutor");
+    expect(xavierImage.getAttribute("src")).toContain("/media/team/xavier-morales.jpg");
+    expect(euniceImage.getAttribute("src")).toContain("/media/team/eunice-chon.jpg");
     expect(kyaImage.getAttribute("src")).toContain("/media/team/kya-brooks.jpg");
     expect(michaelImage.getAttribute("src")).toContain("/media/team/michael-pecorara.jpg");
+    expect(within(xavierCard).getByText(/Jane Street Capital/)).toBeTruthy();
+    expect(within(xavierCard).queryByText(/2029 Harvard Law School/)).toBeNull();
+    expect(within(euniceCard).getByText(/Harvard Medical School\/Massachusetts General Hospital/)).toBeTruthy();
+    expect(within(euniceCard).queryByText(/third-year at Harvard College/)).toBeNull();
     expect(within(kyaCard).getByText(/Kya is a senior at Harvard/)).toBeTruthy();
     expect(
       within(michaelCard)
