@@ -272,6 +272,17 @@ import {
   resolveProductionClerkUser,
 } from "../lib/clerk-production-users";
 import {
+  isRetiredOverviewUser,
+  retireDuplicateXavierIdentities,
+} from "../lib/retire-duplicate-xavier";
+import {
+  CANONICAL_XAVIER_CLERK_USER_ID,
+  CANONICAL_XAVIER_EMAIL,
+  isCanonicalXavierEmail,
+  isRetiredXavierClerkUserId,
+  isRetiredXavierEmail,
+} from "../lib/xavier-identity";
+import {
   parseTutorProfileEditableFields,
   safePublicUrl,
   tutorProfileApprovalError,
@@ -1120,6 +1131,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
 }
 
 async function ensureSeedData(): Promise<string> {
+  await retireDuplicateXavierIdentities();
   const [existing] = await db
     .select({ id: coursesTable.id })
     .from(coursesTable)
@@ -1298,6 +1310,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         WHERE lower(other.email) = lower('xaver.rmz6@gmail.com')
       )
   `);
+  await retireDuplicateXavierIdentities();
   await db
     .insert(tutorProfilesTable)
     .values([
@@ -1627,10 +1640,17 @@ async function ensureUpgradeSeedData(): Promise<void> {
     );
 
   const seededTutors = await db
-    .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
+    .select({
+      id: tutorProfilesTable.id,
+      name: tutorProfilesTable.name,
+      email: tutorProfilesTable.email,
+    })
     .from(tutorProfilesTable)
     .where(inArray(tutorProfilesTable.name, ["Xavier Morales", "Eunice Chon"]));
   for (const tutor of seededTutors) {
+    if (tutor.name === XAVIER_NAME && tutor.email !== CANONICAL_XAVIER_EMAIL) {
+      continue;
+    }
     if (tutor.name === XAVIER_NAME) {
       await db
         .update(tutorCompensationRatesTable)
@@ -2008,11 +2028,20 @@ async function ensureProvisionedAppUser(input: {
   clerkUserId?: string | null;
 }): Promise<AppUser> {
   const email = normalizeProvisionedEmail(input.email);
+  if (isRetiredXavierEmail(email)) {
+    throw new Error("RETIRED_XAVIER_EMAIL");
+  }
   const access = accessFromRoleCategory(input.roleCategory);
   const desiredClerkUserId =
-    input.clerkUserId && looksLikeClerkUserId(input.clerkUserId)
-      ? input.clerkUserId.trim()
-      : pendingClerkUserId(email);
+    isCanonicalXavierEmail(email)
+      ? input.clerkUserId &&
+          looksLikeClerkUserId(input.clerkUserId) &&
+          !isRetiredXavierClerkUserId(input.clerkUserId)
+        ? input.clerkUserId.trim()
+        : CANONICAL_XAVIER_CLERK_USER_ID
+      : input.clerkUserId && looksLikeClerkUserId(input.clerkUserId)
+        ? input.clerkUserId.trim()
+        : pendingClerkUserId(email);
 
   const [byEmail] = await db
     .select()
@@ -2037,7 +2066,9 @@ async function ensureProvisionedAppUser(input: {
   if (existing) {
     const nextClerkUserId =
       existing.clerkUserId.startsWith("pending:") ||
-      existing.clerkUserId === desiredClerkUserId
+      existing.clerkUserId === desiredClerkUserId ||
+      isRetiredXavierClerkUserId(existing.clerkUserId) ||
+      isCanonicalXavierEmail(email)
         ? desiredClerkUserId
         : existing.clerkUserId;
     [user] = await db
@@ -2259,6 +2290,13 @@ async function requireAppUser(
     claimString(auth.sessionClaims, "userId") ?? auth.userId ?? undefined;
   if (!clerkUserId) {
     res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  if (isRetiredXavierClerkUserId(clerkUserId)) {
+    res.status(403).json({
+      code: "IDENTITY_NOT_PROVISIONED",
+      error: "Portal access has not been provisioned for this account",
+    });
     return;
   }
 
@@ -6570,8 +6608,9 @@ router.get(
         ),
     ]);
     const userById = new Map(users.map((user) => [user.id, user]));
+    const visibleUsers = users.filter((user) => !isRetiredOverviewUser(user));
     res.json({
-      users,
+      users: visibleUsers,
       memberships,
       assignments: assignments.map((assignment) => ({
         ...assignment,
@@ -7104,6 +7143,13 @@ router.post(
         res.status(409).json({
           error:
             "That Clerk user ID is already linked to a different email address.",
+        });
+        return;
+      }
+      if (error instanceof Error && error.message === "RETIRED_XAVIER_EMAIL") {
+        res.status(400).json({
+          error:
+            "Xavier Morales must be provisioned as xaver.rmz6@gmail.com. The misspelled or outdated address is retired.",
         });
         return;
       }

@@ -314,6 +314,53 @@ test("keeps administrator and viewer env-only even when a student grant exists f
   );
 });
 
+test("denies the retired Xavier Clerk id even when it remains on the SAT allowlist", async () => {
+  const { resolvePortalAccess } =
+    // @ts-expect-error Node's strip-types test runner resolves the source extension.
+    await import("./access-config.ts");
+  const {
+    CANONICAL_XAVIER_CLERK_USER_ID,
+    CANONICAL_XAVIER_EMAIL,
+    RETIRED_XAVIER_CLERK_USER_ID,
+  } =
+    // @ts-expect-error Native Node test execution requires the source extension.
+    await import("./xavier-identity.ts");
+
+  const env = {
+    ACCEPTED_SAT_TUTOR_CLERK_USER_IDS: RETIRED_XAVIER_CLERK_USER_ID,
+    ACCEPTED_SAT_TUTOR_EMAILS: "xavier.rmz6@gmail.com, xsfam6@gmail.com",
+  };
+
+  assert.deepEqual(
+    resolvePortalAccess(RETIRED_XAVIER_CLERK_USER_ID, "xavier.rmz6@gmail.com", {
+      env,
+      databaseGrants: [
+        {
+          email: "xavier.rmz6@gmail.com",
+          clerkUserId: RETIRED_XAVIER_CLERK_USER_ID,
+          roleCategory: "sat_tutor",
+          active: true,
+        },
+      ],
+    }),
+    { access: null, conflict: false },
+  );
+  assert.deepEqual(
+    resolvePortalAccess(CANONICAL_XAVIER_CLERK_USER_ID, CANONICAL_XAVIER_EMAIL, {
+      env: {},
+      databaseGrants: [
+        {
+          email: CANONICAL_XAVIER_EMAIL,
+          clerkUserId: CANONICAL_XAVIER_CLERK_USER_ID,
+          roleCategory: "sat_tutor",
+          active: true,
+        },
+      ],
+    }),
+    { access: { role: "tutor", subject: "SAT" }, conflict: false },
+  );
+});
+
 test("revokes email access when Clerk's current primary email changes", () => {
   const changedPrimaryEmail = verifiedPrimaryEmail({
     primaryEmailAddress: {

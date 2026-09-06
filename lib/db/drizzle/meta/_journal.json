@@ -232,6 +232,13 @@
       "when": 1789900000000,
       "tag": "0033_expand_past_success_school_logos",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790000000000,
+      "tag": "0034_retire_duplicate_xavier_clerk",
+      "breakpoints": true
     }
   ]
 }

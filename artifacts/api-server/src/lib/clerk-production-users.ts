@@ -1,6 +1,12 @@
 import { clerkClient } from "@clerk/express";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { normalizeProvisionedEmail } from "./access-config.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import {
+  CANONICAL_XAVIER_EMAIL,
+  isRetiredXavierClerkUserId,
+  isRetiredXavierEmail,
+} from "./xavier-identity.ts";
 
 export type ProductionClerkUser = {
   id: string;
@@ -77,6 +83,9 @@ const PASTED_ID_MISSING_WARNING =
 const PASTED_ID_EMAIL_MISMATCH_WARNING =
   "The pasted Clerk user ID is in Production but belongs to a different email, so it was ignored and replaced with the Production user for this email.";
 
+const RETIRED_XAVIER_PASTED_ID_WARNING =
+  "That Clerk user is the retired Xavier duplicate. Production access uses xaver.rmz6@gmail.com / user_3IxUfoT1xRnDsqhlx5NN1eGfRg6.";
+
 let clientOverride: ProductionClerkUsersClient | null = null;
 
 export function setProductionClerkUsersClientForTests(
@@ -90,7 +99,8 @@ export function looksLikeClerkUserId(value: string): boolean {
   return (
     trimmed.length >= 3 &&
     !trimmed.includes("@") &&
-    !trimmed.startsWith("pending:")
+    !trimmed.startsWith("pending:") &&
+    !trimmed.startsWith("retired:")
   );
 }
 
@@ -252,11 +262,22 @@ export async function resolveProductionClerkUser(
     );
   }
 
+  if (isRetiredXavierEmail(email)) {
+    throw new ClerkProductionUserError(
+      "CLERK_PRODUCTION_LOOKUP_FAILED",
+      `Xavier Morales must be provisioned as ${CANONICAL_XAVIER_EMAIL} (not ${email}). The misspelled / outdated address is retired.`,
+      400,
+    );
+  }
+
   const pasted = input.pastedClerkUserId?.trim() || null;
   let ignoredPastedClerkUserId: string | null = null;
   let warning: string | null = null;
 
-  if (pasted && looksLikeClerkUserId(pasted)) {
+  if (pasted && isRetiredXavierClerkUserId(pasted)) {
+    ignoredPastedClerkUserId = pasted;
+    warning = RETIRED_XAVIER_PASTED_ID_WARNING;
+  } else if (pasted && looksLikeClerkUserId(pasted)) {
     try {
       const existing = await client.getUser(pasted);
       if (userHasEmail(existing, email)) {

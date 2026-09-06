@@ -1,4 +1,6 @@
 import type { AppUser } from "@workspace/db";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { isRetiredXavierIdentity } from "./xavier-identity.ts";
 
 export type ConfiguredAccess = {
   role: AppUser["role"];
@@ -299,6 +301,9 @@ export function resolvePortalAccess(
     databaseGrants?: DatabaseAccessGrant[];
   } = {},
 ): AccessDecision {
+  if (isRetiredXavierIdentity(clerkUserId, email)) {
+    return { access: null, conflict: false };
+  }
   const env = options.env ?? process.env;
   const adminIds = configuredSet(env, "ACCEPTED_ADMIN_CLERK_USER_IDS");
   const satTutorIds = configuredSet(env, "ACCEPTED_SAT_TUTOR_CLERK_USER_IDS");
@@ -388,6 +393,9 @@ export function envRoleCategoriesForIdentity(
   email: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
 ): AccessRoleCategory[] {
+  if (isRetiredXavierIdentity(clerkUserId, email)) {
+    return [];
+  }
   const categories = new Set<AccessRoleCategory>();
   const normalizedEmail = email ? normalizeProvisionedEmail(email) : "";
   for (const definition of accessAllowlistDefinitions) {

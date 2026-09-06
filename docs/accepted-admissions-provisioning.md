@@ -9,7 +9,7 @@ against Clerk's verified server-side primary email; the approved email fallback
 roster below is operator documentation, not committed runtime configuration.
 
 - `ACCEPTED_ADMIN_CLERK_USER_IDS`: administrators; administrators can see all courses.
-- `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`: optional legacy SAT tutor override. New SAT tutors should be provisioned under People instead.
+- `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`: optional legacy SAT tutor override. New SAT tutors should be provisioned under People instead. If this fallback is still set, it must include Xavier’s Production id `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6` and must **not** include the retired duplicate `user_3IsvKVDGAg5KdvwHhvODf2VFqtd`. DB grants remain the source of truth (PR #25).
 - `ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS`: optional legacy English/IELTS tutor override. New IELTS tutors should be provisioned under People instead.
 - `ACCEPTED_TUTOR_CLERK_USER_IDS`: optional legacy tutor allowlist for a tutor who is intentionally assigned to all subjects.
 - `ACCEPTED_STUDENT_CLERK_USER_IDS`: optional legacy student override. New students should be provisioned under People instead.
@@ -20,7 +20,7 @@ The approved shared/development email roster is:
 | Email | Role | Scope |
 | --- | --- | --- |
 | `admin@acceptedadmissions.org` | administrator | all courses |
-| `xaver.rmz6@gmail.com` | SAT tutor | SAT |
+| `xaver.rmz6@gmail.com` | SAT tutor | SAT. Production Clerk id `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6`. Do not use `xavier.rmz6@gmail.com`, `xsfam6@gmail.com`, or Clerk id `user_3IsvKVDGAg5KdvwHhvODf2VFqtd`. |
 | `eunice_chon@berkeley.edu` | SAT tutor | SAT |
 | `taito0525@gmail.com` | student/client | Fall 2026 student course and sessions |
 | `nika.raiffe@gmail.com` | English/IELTS tutor | IELTS/English |
@@ -33,6 +33,30 @@ on whether Ryo or Taito signs in first. Viewer writes are rejected with
 `VIEW_ONLY`.
 
 People provisioning does **not** send Clerk invitation emails. Sign-in uses the Production Clerk account created or linked from the provisioned email (OTP works after admin email verification).
+
+## Xavier Morales identity (canonical vs retired duplicate)
+
+A wrong email was provisioned first, which created a second Production Clerk user and a second People / portal Xavier.
+
+| | Keep | Retire |
+| --- | --- | --- |
+| Email | `xaver.rmz6@gmail.com` (not `xavier.rmz6`) | `xavier.rmz6@gmail.com`, `xsfam6@gmail.com` |
+| Production Clerk id | `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6` | `user_3IsvKVDGAg5KdvwHhvODf2VFqtd` |
+
+Migration `0034_retire_duplicate_xavier_clerk` and startup reconcile:
+
+- Re-point sessions, tutor assignments, course memberships, calendar rows, and grants from the retired app user to the canonical Xavier when both rows exist. API start runs this reconcile before the #33 SAT capability-test session seed so that session stays on `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6`.
+- Soft-retire the duplicate app user and tutor profile (unlink, deactivate, mark `SUPERSEDED`). Rows are not hard-deleted.
+- Deny the retired Clerk id / emails even if they remain on a Railway allowlist, so the duplicate cannot be re-created on sign-in.
+
+### Owner steps after deploy
+
+1. Confirm People shows one Xavier: `xaver.rmz6@gmail.com` / `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6`.
+2. **Railway allowlist (only if `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS` is still used as a fallback):** set it to include `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6` and remove `user_3IsvKVDGAg5KdvwHhvODf2VFqtd`. Restart the API service. Prefer leaving SAT tutor access on the People DB grant (PR #25) instead of the env list.
+3. Xavier signs in at `/login` with **`xaver.rmz6@gmail.com`** and completes Google Calendar consent at `/tutor` if the calendar is still disconnected.
+4. **Clerk Dashboard (manual, optional):** after the app-side retire is live and the Railway allowlist no longer contains the bad id, the retired Clerk user `user_3IsvKVDGAg5KdvwHhvODf2VFqtd` may be deleted in the Production Clerk Dashboard. Do not delete `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6`. This repo does not call Clerk delete APIs and does not send invites.
+
+Eunice Chon is unchanged: `eunice_chon@berkeley.edu`.
 
 ## Owner onboarding checklist
 

@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
 
@@ -27,6 +28,7 @@ app.listen(port, (err) => {
   void ensureOfficialExtractsImported()
     .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
     .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
+    .then(() => retireDuplicateXavierIdentities())
     .then(() => ensureXavierSatCapabilitySession())
     .then((result) => logger.info(result, "Xavier SAT capability session ready"))
     .catch((err) =>
