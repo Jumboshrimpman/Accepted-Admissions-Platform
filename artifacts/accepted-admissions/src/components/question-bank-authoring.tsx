@@ -10,7 +10,7 @@ import {
   useListContentSources,
   useUpdateQuestionBankItem,
 } from "@workspace/api-client-react";
-import { CheckCircle2, Save, XCircle } from "lucide-react";
+import { Save } from "lucide-react";
 import { questionStatusHelp, questionStatusLabel } from "@/lib/question-status";
 import {
   SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE,
@@ -51,7 +51,6 @@ export function QuestionReviewCard({
   const [skill, setSkill] = useState(question.skill);
   const [explanation, setExplanation] = useState(question.explanation);
   const [tags, setTags] = useState(question.tags.join(", "));
-  const [rejectionReason, setRejectionReason] = useState("");
   const [attachedAssignmentIds, setAttachedAssignmentIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
 
@@ -68,7 +67,6 @@ export function QuestionReviewCard({
             .map((tag) => tag.trim())
             .filter(Boolean),
           reviewStatus,
-          rejectionReason: reviewStatus === "rejected" ? rejectionReason : null,
         },
       },
       {
@@ -120,29 +118,9 @@ export function QuestionReviewCard({
           <Label>Explanation</Label>
           <Textarea value={explanation} onChange={(event) => setExplanation(event.target.value)} />
         </div>
-        {question.reviewStatus !== "approved" && (
-          <div className="grid gap-2">
-            <Label>Rejection reason</Label>
-            <Input
-              value={rejectionReason}
-              onChange={(event) => setRejectionReason(event.target.value)}
-              placeholder="Required only when rejecting"
-            />
-          </div>
-        )}
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => save()} disabled={updateQuestion.isPending}>
             <Save className="mr-2 h-4 w-4" /> Save edits
-          </Button>
-          <Button onClick={() => save("approved")} disabled={updateQuestion.isPending}>
-            <CheckCircle2 className="mr-2 h-4 w-4" /> Mark ready for quiz
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => save("rejected")}
-            disabled={!rejectionReason.trim() || updateQuestion.isPending}
-          >
-            <XCircle className="mr-2 h-4 w-4" /> Reject
           </Button>
         </div>
         {question.reviewStatus !== "rejected" && assignments.length > 0 && attachedAssignmentIds.length === 0 && (

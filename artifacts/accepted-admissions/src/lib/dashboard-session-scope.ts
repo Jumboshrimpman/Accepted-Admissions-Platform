@@ -10,8 +10,11 @@ export function sessionsForDashboardRole<T>(
     if (viewer.role === "tutor") {
       return row.tutor?.id === viewer.id;
     }
-    if (viewer.role === "student" || viewer.role === "viewer") {
+    if (viewer.role === "student") {
       return row.student?.id === viewer.id;
+    }
+    if (viewer.role === "viewer") {
+      return Boolean(row.student?.id);
     }
     return true;
   });

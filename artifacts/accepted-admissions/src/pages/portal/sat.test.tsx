@@ -7,6 +7,16 @@ const mocks = vi.hoisted(() => ({
     data: {
       credits: { selfServeSatBooking: true, remainingHours: 0, purchasedHours: 0, usedHours: 0 },
       user: { role: "student", id: "student-1", displayName: "Michelle" },
+      upcomingSessions: [
+        {
+          id: "sat-1",
+          subject: "SAT",
+          title: "Michelle’s SAT Session with Xavier",
+          dateTime: "2026-10-02T16:00:00.000Z",
+          timezone: "America/New_York",
+          tutor: { name: "Xavier Morales" },
+        },
+      ],
     },
     isLoading: false,
     error: null,
@@ -74,6 +84,8 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-page")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
     expect(screen.getByTestId("portal-sat-purchase")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
     expect(screen.queryByText(/Finance/i)).toBeNull();
   });
 
@@ -81,6 +93,7 @@ describe("portal SAT book/pay", () => {
     mocks.dashboard.data.credits.selfServeSatBooking = false;
     render(<PortalSat />);
     expect(screen.getByTestId("portal-sat-off-platform")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.queryByTestId("portal-sat-purchase")).toBeNull();
   });
 });

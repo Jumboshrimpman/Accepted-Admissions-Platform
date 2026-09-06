@@ -96,6 +96,10 @@ export default function PortalSat() {
   const selfServe = dashboard.data?.credits.selfServeSatBooking ?? false;
   const remainingHours = dashboard.data?.credits.remainingHours ?? 0;
   const canCheckout = currentUser?.role === "student" && selfServe;
+  const upcomingSat = (dashboard.data?.upcomingSessions ?? []).filter((session) => {
+    const subject = session.subject?.toLowerCase() ?? "";
+    return subject.startsWith("sat") || /sat/i.test(session.title);
+  });
 
   const startCheckout = (productId: string) => {
     setCheckoutMessage("");
@@ -149,6 +153,28 @@ export default function PortalSat() {
           Checkout was canceled. No charge was made. You can try again below.
         </p>
       ) : null}
+
+      <Card data-testid="portal-sat-upcoming">
+        <CardHeader>
+          <CardTitle>Upcoming SAT sessions</CardTitle>
+          <CardDescription>Booked SAT meetings that belong to this client stay in the portal.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {upcomingSat.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No upcoming SAT sessions are on this account yet.</p>
+          ) : (
+            upcomingSat.map((session) => (
+              <div key={session.id} className="rounded-xl border p-3 text-sm" data-testid={`portal-sat-upcoming-${session.id}`}>
+                <p className="font-medium">{session.title}</p>
+                <p className="mt-1 text-muted-foreground">
+                  {new Date(session.dateTime).toLocaleString()} · {session.timezone}
+                  {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
+                </p>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       {!selfServe ? (
         <Card data-testid="portal-sat-off-platform">

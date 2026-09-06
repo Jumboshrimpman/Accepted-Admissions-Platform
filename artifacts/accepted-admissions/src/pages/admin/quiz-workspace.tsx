@@ -20,6 +20,7 @@ import {
   type QuestionBankItem,
 } from "@workspace/api-client-react";
 import { ArrowLeft, CheckCircle2, ClipboardList, Edit3, Plus } from "lucide-react";
+import { GenerateQuestionsCard } from "@/components/generate-questions-card";
 import { GenerateDraftsCard, apiErrorText } from "@/components/question-bank-authoring";
 import { isReusableBankQuiz } from "@/lib/assignable-bank-quizzes";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
@@ -460,7 +461,7 @@ function QuizQuestionEditor({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Questions on this quiz</CardTitle>
         <CardDescription>
-          Add and edit this quiz’s questions here. Creating template drafts adds them to this quiz and marks them ready.
+          Add questions here manually or generate them for this quiz. Template drafts stay experimental and are not a model provider.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -519,8 +520,13 @@ function QuizQuestionEditor({
           })}
         </ol>
         {(data?.questions ?? []).length === 0 && !isLoading ? (
-          <p className="text-sm text-muted-foreground">No questions yet. Import source text below and create template drafts — they land on this quiz.</p>
+          <p className="text-sm text-muted-foreground">No questions yet. Generate them for this quiz or add one from the bank.</p>
         ) : null}
+        <GenerateQuestionsCard
+          assignmentId={quiz.id}
+          defaultSkill={quiz.subject}
+          onGenerated={onChanged}
+        />
         <div className="rounded-xl border bg-muted/20 p-3">
           <GenerateDraftsCard
             courseId={quiz.courseId}

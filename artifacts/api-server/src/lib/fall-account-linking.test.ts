@@ -181,6 +181,26 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
     assert.ok(euniceSessions.every((session) => session.subject === "SAT"));
     assert.ok(nikaSessions.every((session) => session.subject === "IELTS"));
 
+    const [unassigned] = await db
+      .insert(sessionsTable)
+      .values({
+        courseId,
+        dateTime: new Date("2026-12-19T12:00:00.000Z"),
+        timezone: "Asia/Tokyo",
+        subject: "SAT",
+        title: "Unassigned SAT session",
+        status: "published",
+        bookingStatus: "confirmed",
+      })
+      .returning();
+    await reconcileTaitoSessions(courseId);
+    const [assignedOpen] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, unassigned!.id));
+    assert.equal(assignedOpen?.clientUserId, student!.id);
+    assert.equal(assignedOpen?.tutorUserId, eunice!.id);
+
     const otherStudent = await findOrCreateUser(
       `other-student-${suffix}@example.com`,
       "Other Student",
@@ -236,6 +256,12 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
     assert.equal(adminScoped.some((session) => session.id === otherSession!.id), true);
     assert.ok(studentScoped.every((session) => session.clientUserId === student.id));
     assert.ok(viewerScoped.every((session) => session.clientUserId === student.id));
+    await reconcileTaitoSessions(courseId);
+    const [otherStillTheirs] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, otherSession!.id));
+    assert.equal(otherStillTheirs?.clientUserId, otherStudent.id);
 
     const privateCalendarFields = {
       eventTitle: `Private event title ${suffix}`,

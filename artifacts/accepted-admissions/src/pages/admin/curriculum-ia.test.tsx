@@ -300,10 +300,19 @@ describe("curriculum bank IA", () => {
     expect((screen.getByLabelText("Question 1 prompt") as HTMLTextAreaElement).value).toContain(
       "Which choice best supports the claim?",
     );
-    expect(screen.getByRole("button", { name: "Save question" })).toBeTruthy();
+    expect(
+      screen.getByTestId("quiz-question-editor-question-1").querySelector("button"),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByRole("button", { name: "Save question" }).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByTestId("quiz-question-list-quiz-1").textContent).toContain(
       "What is the function of the third paragraph?",
     );
+    expect(screen.getByTestId("generate-questions-card")).toBeTruthy();
+    expect(screen.getByText("Generate questions")).toBeTruthy();
+    expect(screen.getByTestId("generate-questions-blocked")).toBeTruthy();
+    expect(screen.getAllByText(/OPENAI_API_KEY/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Create template drafts").length).toBeGreaterThan(0);
     expect(screen.getByText("Experimental")).toBeTruthy();
     expect(screen.getByText(/generic starting points from hard-coded templates/i)).toBeTruthy();
@@ -327,10 +336,11 @@ describe("curriculum bank IA", () => {
     mocks.location = "/admin/curriculum?section=curriculum&tab=questions";
     render(<AdminCurriculum />);
     expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
-    expect(screen.getByText(/Generate only from an open quiz/i)).toBeTruthy();
+    expect(screen.getByText(/Author inside an open quiz/i)).toBeTruthy();
     expect(screen.getByText("Ready for quiz")).toBeTruthy();
     expect(screen.getByTestId("question-row-question-1")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Approve$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Mark ready for quiz/i })).toBeNull();
     expect(screen.queryByText(/Coming soon/i)).toBeNull();
     expect(screen.queryByTestId("generate-draft-questions")).toBeNull();
     expect(screen.getByRole("link", { name: /Open a quiz to generate/i }).getAttribute("href")).toMatch(
@@ -486,6 +496,7 @@ describe("curriculum bank IA", () => {
       expect.any(Object),
     );
     expect(screen.queryByRole("button", { name: /^Approve$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Mark ready for quiz/i })).toBeNull();
   });
 
   test("shows attached quiz and attempt review entry points on the session card", () => {
@@ -612,7 +623,12 @@ describe("curriculum bank IA", () => {
     fireEvent.change(screen.getByLabelText("Session tutor search"), {
       target: { value: "nika@" },
     });
-    expect(screen.getByLabelText("Session tutor").textContent).toMatch(/Nika Raiffe · nika@example.invalid/);
+    const tutorOptions = Array.from(
+      (screen.getByLabelText("Session tutor") as HTMLSelectElement).options,
+    ).map((option) => option.textContent);
+    expect(tutorOptions.some((label) => /Nika Raiffe/.test(label ?? "") && /nika@/.test(label ?? ""))).toBe(
+      true,
+    );
     fireEvent.change(screen.getByLabelText("Session tutor search"), {
       target: { value: "Eunice" },
     });

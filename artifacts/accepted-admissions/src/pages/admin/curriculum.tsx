@@ -1016,9 +1016,12 @@ function PersonSelect({
   const [query, setQuery] = useState("");
   const visible = filterPeopleByQuery(people, query);
   const selected = people.find((person) => person.id === value);
-  const options = selected && !visible.some((person) => person.id === selected.id)
-    ? [selected, ...visible]
-    : visible;
+  const options =
+    query.trim()
+      ? visible
+      : selected && !visible.some((person) => person.id === selected.id)
+        ? [selected, ...visible]
+        : visible;
   return (
     <Field label={label}>
       <Input

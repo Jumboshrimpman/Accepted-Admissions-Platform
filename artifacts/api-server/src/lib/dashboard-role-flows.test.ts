@@ -65,6 +65,10 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
       "Dashboard’s SAT Session with SAT",
     );
     assert.equal("providerEventId" in studentSessionResponse, false);
+    assert.deepEqual(studentSessionResponse.student, {
+      id: fixture.student.id,
+      name: fixture.student.displayName,
+    });
     assert.deepEqual(Object.keys(studentSessionResponse).sort(), [
       "calendarEventUrl",
       "courseId",
@@ -75,6 +79,7 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
       "id",
       "meetingUrl",
       "status",
+      "student",
       "subject",
       "timezone",
       "title",

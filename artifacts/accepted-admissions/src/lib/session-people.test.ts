@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterPeopleByQuery, mergeSessionPeople, personOptionLabel } from "./session-people";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { filterPeopleByQuery, mergeSessionPeople, personOptionLabel } from "./session-people.ts";
 
 test("session edit can pick Taito, Eunice, and Nika by name or email when IDs exist", () => {
   const clients = mergeSessionPeople(
