@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetCurrentUserQueryKey,
+  getGetDashboardQueryKey,
   useCreatePaymentCheckout,
   useGetCurrentUser,
   useGetDashboard,
@@ -13,6 +15,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingCard } from "@/pages/portal/booking-card";
 import { PORTAL_SAT_HREF } from "@/lib/portal-sat";
+import {
+  type PaymentCreditBanner,
+  paymentCreditBannerCopy,
+  paymentCreditBannerState,
+} from "@/lib/portal-sat-payment";
 
 type Product = {
   id: string;
@@ -30,8 +37,12 @@ function apiPath(path: string): string {
   return `${basePath}${path}`;
 }
 
+const CREDIT_POLL_MS = 2_000;
+const CREDIT_POLL_TIMEOUT_MS = 16_000;
+
 export default function PortalSat() {
   const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const dashboard = useGetDashboard();
   const checkout = useCreatePaymentCheckout();
   const { data: currentUser } = useGetCurrentUser({
@@ -42,14 +53,20 @@ export default function PortalSat() {
   const [productError, setProductError] = useState(false);
   const [checkoutProductId, setCheckoutProductId] = useState("");
   const [checkoutMessage, setCheckoutMessage] = useState("");
-  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [awaitingWebhook, setAwaitingWebhook] = useState(false);
   const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
+  const [baselineHours, setBaselineHours] = useState<number | null>(null);
+  const [ledgerHours, setLedgerHours] = useState<number | null>(null);
+  const [creditPollTimedOut, setCreditPollTimedOut] = useState(false);
 
   useEffect(() => {
     const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
     const params = new URLSearchParams(query);
     const payment = params.get("payment");
-    if (payment === "success") setShowPaymentSuccess(true);
+    if (payment === "success") {
+      setAwaitingWebhook(true);
+      setCreditPollTimedOut(false);
+    }
     if (payment === "canceled") setShowPaymentCanceled(true);
     if (!payment) return;
     params.delete("payment");
@@ -84,6 +101,49 @@ export default function PortalSat() {
       .finally(() => setLoadingProducts(false));
   }, []);
 
+  useEffect(() => {
+    if (!awaitingWebhook || dashboard.isLoading || !dashboard.data || baselineHours !== null) return;
+    setBaselineHours(dashboard.data.credits.remainingHours);
+  }, [awaitingWebhook, baselineHours, dashboard.data, dashboard.isLoading]);
+
+  useEffect(() => {
+    if (!awaitingWebhook || baselineHours === null || creditPollTimedOut) return;
+    let cancelled = false;
+    let timer = 0;
+    const started = Date.now();
+    const tick = () => {
+      fetch(apiPath("/api/credits"))
+        .then((response) => {
+          if (!response.ok) throw new Error("credits");
+          return response.json() as Promise<{ remainingHours?: number }>;
+        })
+        .then((data) => {
+          if (cancelled || typeof data.remainingHours !== "number") return;
+          setLedgerHours(data.remainingHours);
+          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+          if (data.remainingHours > baselineHours) return;
+          if (Date.now() - started >= CREDIT_POLL_TIMEOUT_MS) {
+            setCreditPollTimedOut(true);
+            return;
+          }
+          timer = window.setTimeout(tick, CREDIT_POLL_MS);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (Date.now() - started >= CREDIT_POLL_TIMEOUT_MS) {
+            setCreditPollTimedOut(true);
+            return;
+          }
+          timer = window.setTimeout(tick, CREDIT_POLL_MS);
+        });
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [awaitingWebhook, baselineHours, creditPollTimedOut, queryClient]);
+
   if (dashboard.isLoading) {
     return (
       <div className="mx-auto max-w-5xl space-y-5">
@@ -94,8 +154,21 @@ export default function PortalSat() {
   }
 
   const selfServe = dashboard.data?.credits.selfServeSatBooking ?? false;
-  const remainingHours = dashboard.data?.credits.remainingHours ?? 0;
+  const remainingHours = ledgerHours ?? dashboard.data?.credits.remainingHours ?? 0;
   const canCheckout = currentUser?.role === "student" && selfServe;
+  const paymentBannerState: PaymentCreditBanner | null =
+    awaitingWebhook && baselineHours !== null
+      ? paymentCreditBannerState({
+          remainingHours,
+          baselineHours,
+          timedOut: creditPollTimedOut,
+        })
+      : awaitingWebhook
+        ? "confirming"
+        : null;
+  const paymentBanner = paymentBannerState
+    ? paymentCreditBannerCopy(paymentBannerState, remainingHours)
+    : null;
   const upcomingSat = (dashboard.data?.upcomingSessions ?? []).filter((session) => {
     const subject = session.subject?.toLowerCase() ?? "";
     return subject.startsWith("sat") || /sat/i.test(session.title);
@@ -133,18 +206,25 @@ export default function PortalSat() {
         </p>
       </div>
 
-      {showPaymentSuccess ? (
+      {paymentBanner ? (
         <div
           role="status"
           data-testid="portal-sat-payment-success"
-          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+          data-credit-state={paymentBannerState}
+          className={`flex items-start gap-3 rounded-2xl border p-4 text-sm ${
+            paymentBannerState === "granted"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-amber-200 bg-amber-50 text-amber-950"
+          }`}
         >
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <CheckCircle2
+            className={`mt-0.5 h-5 w-5 shrink-0 ${
+              paymentBannerState === "granted" ? "text-emerald-600" : "text-amber-700"
+            }`}
+          />
           <div>
-            <p className="font-semibold">Payment received — credits are ready</p>
-            <p className="mt-1 text-emerald-800">
-              You have {remainingHours} prepaid hour{remainingHours === 1 ? "" : "s"} available. Choose a tutor and time below.
-            </p>
+            <p className="font-semibold">{paymentBanner.title}</p>
+            <p className="mt-1">{paymentBanner.body}</p>
           </div>
         </div>
       ) : null}

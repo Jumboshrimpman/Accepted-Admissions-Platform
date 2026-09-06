@@ -1,8 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { PORTAL_SAT_HREF } from "@/lib/portal-sat";
+import {
+  PAYMENT_CONFIRMING_TITLE,
+  PAYMENT_GRANTED_TITLE,
+} from "@/lib/portal-sat-payment";
 
 const mocks = vi.hoisted(() => ({
+  location: "/portal/sat",
+  setLocation: vi.fn(),
+  remainingHours: 0,
   dashboard: {
     data: {
       credits: { selfServeSatBooking: true, remainingHours: 0, purchasedHours: 0, usedHours: 0 },
@@ -43,7 +50,7 @@ vi.mock("wouter", () => ({
   Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
   ),
-  useLocation: () => [PORTAL_SAT_HREF, vi.fn()],
+  useLocation: () => [mocks.location, mocks.setLocation],
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -55,26 +62,38 @@ import PortalSat from "./sat";
 afterEach(() => {
   cleanup();
   mocks.dashboard.data.credits.selfServeSatBooking = true;
+  mocks.dashboard.data.credits.remainingHours = 0;
+  mocks.location = PORTAL_SAT_HREF;
+  mocks.remainingHours = 0;
   vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({
-      ok: true,
-      json: async () => [
-        {
-          id: "prod-1",
-          slug: "sat-hour",
-          name: "Single SAT session",
-          description: "One prepaid hour",
-          durationHours: 1,
-          totalPriceCents: 13000,
-          effectiveHourlyRateCents: 13000,
-        },
-      ],
-    })),
+    vi.fn(async (input: RequestInfo) => {
+      const url = String(input);
+      if (url.includes("/api/credits")) {
+        return {
+          ok: true,
+          json: async () => ({ remainingHours: mocks.remainingHours }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => [
+          {
+            id: "prod-1",
+            slug: "sat-hour",
+            name: "Single SAT session",
+            description: "One prepaid hour",
+            durationHours: 1,
+            totalPriceCents: 13000,
+            effectiveHourlyRateCents: 13000,
+          },
+        ],
+      };
+    }),
   );
 });
 
@@ -95,5 +114,31 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-off-platform")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.queryByTestId("portal-sat-purchase")).toBeNull();
+  });
+
+  test("checkout return does not claim credits are ready while the ledger is still 0", async () => {
+    mocks.location = `${PORTAL_SAT_HREF}?payment=success`;
+    mocks.dashboard.data.credits.remainingHours = 0;
+    mocks.remainingHours = 0;
+    render(<PortalSat />);
+    const banner = await screen.findByTestId("portal-sat-payment-success");
+    expect(banner.getAttribute("data-credit-state")).toBe("confirming");
+    expect(banner.textContent).toContain(PAYMENT_CONFIRMING_TITLE);
+    expect(banner.textContent).toMatch(/signed Stripe webhook/i);
+    expect(banner.textContent).not.toMatch(/credits are ready/i);
+    expect(banner.textContent).not.toMatch(/You have 0 prepaid hour/);
+  });
+
+  test("says Stripe confirmed only after the credit ledger increases", async () => {
+    mocks.location = `${PORTAL_SAT_HREF}?payment=success`;
+    mocks.dashboard.data.credits.remainingHours = 0;
+    mocks.remainingHours = 1;
+    render(<PortalSat />);
+    await waitFor(() => {
+      const banner = screen.getByTestId("portal-sat-payment-success");
+      expect(banner.getAttribute("data-credit-state")).toBe("granted");
+      expect(banner.textContent).toContain(PAYMENT_GRANTED_TITLE);
+      expect(banner.textContent).toMatch(/1 prepaid hour/);
+    });
   });
 });
