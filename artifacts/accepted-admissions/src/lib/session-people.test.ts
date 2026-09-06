@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { assignmentSubjectOptions, filterPeopleByQuery, mergeSessionPeople, personOptionLabel } from "./session-people.ts";
+import {
+  assignmentSubjectOptions,
+  filterPeopleByQuery,
+  isSupersededAccessGrant,
+  isVisiblePeopleTutor,
+  mergeSessionPeople,
+  personOptionLabel,
+} from "./session-people.ts";
 
 test("session edit can pick Taito, Eunice, and Nika by name or email when IDs exist", () => {
   const clients = mergeSessionPeople(
@@ -65,4 +72,40 @@ test("assignment subjects always include SAT and IELTS and fold English into IEL
     "IELTS",
     "College admissions",
   ]);
+});
+
+test("People hides the superseded Xavier grant and inactive typo profile", () => {
+  assert.equal(
+    isSupersededAccessGrant({
+      active: false,
+      notes: "SUPERSEDED: duplicate Xavier Clerk user.",
+      clerkUserId: "retired:user_3IsvKVDGAg5KdvwHhvODf2VFqtd",
+      email: "xavier.rmz6@gmail.com",
+    }),
+    true,
+  );
+  assert.equal(
+    isSupersededAccessGrant({
+      active: true,
+      clerkUserId: "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6",
+      email: "xaver.rmz6@gmail.com",
+    }),
+    false,
+  );
+  assert.equal(
+    isVisiblePeopleTutor({
+      active: false,
+      name: "Xavier Morales",
+      email: "xavier.rmz6@gmail.com",
+    }),
+    false,
+  );
+  assert.equal(
+    isVisiblePeopleTutor({
+      active: true,
+      name: "Xavier Morales",
+      email: "xaver.rmz6@gmail.com",
+    }),
+    true,
+  );
 });

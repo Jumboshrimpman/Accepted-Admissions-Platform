@@ -49,7 +49,7 @@ import {
   sessionPreworkQuizzes,
 } from "@/lib/assignable-bank-quizzes";
 import { questionStatusHelp, questionStatusLabel } from "@/lib/question-status";
-import { filterPeopleByQuery, mergeSessionPeople, personOptionLabel } from "@/lib/session-people";
+import { filterPeopleByQuery, isSupersededAccessGrant, isVisiblePeopleTutor, mergeSessionPeople, personOptionLabel } from "@/lib/session-people";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { previewableStudents } from "@/lib/previewable-students";
 import { TEMPLATE_DRAFTS_BANK_HINT } from "@/lib/template-drafts";
@@ -251,12 +251,13 @@ function PeopleSection({
   });
   const [message, setMessage] = useState("");
   const term = search.trim().toLowerCase();
-  const tutors = data?.tutors.filter((item) => !term || `${item.name} ${item.email} ${item.subjects.join(" ")}`.toLowerCase().includes(term)) ?? [];
+  const tutors = data?.tutors.filter((item) => isVisiblePeopleTutor(item) && (!term || `${item.name} ${item.email} ${item.subjects.join(" ")}`.toLowerCase().includes(term))) ?? [];
   const clients = data?.clients.filter((item) => !term || `${item.name} ${item.email}`.toLowerCase().includes(term)) ?? [];
   const grants = (grantsQuery.data?.grants ?? []).filter(
     (grant) =>
-      !term ||
-      `${grant.displayName} ${grant.email} ${grant.roleCategory}`.toLowerCase().includes(term),
+      !isSupersededAccessGrant(grant) &&
+      (!term ||
+      `${grant.displayName} ${grant.email} ${grant.roleCategory}`.toLowerCase().includes(term)),
   );
 
   const refreshPeople = () => {

@@ -119,7 +119,68 @@ test("splits display names for Clerk createUser", () => {
 test("rejects pending placeholders as Clerk user IDs", () => {
   assert.equal(looksLikeClerkUserId("user_abc"), true);
   assert.equal(looksLikeClerkUserId("pending:sama@example.com"), false);
+  assert.equal(looksLikeClerkUserId("retired:user_3IsvKVDGAg5KdvwHhvODf2VFqtd"), false);
   assert.equal(looksLikeClerkUserId("sama@example.com"), false);
+});
+
+test("ignores the retired Xavier Clerk id and refuses retired Xavier emails", async () => {
+  const canonical = {
+    id: "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6",
+    primaryEmailAddress: {
+      id: "idn_xavier",
+      emailAddress: "xaver.rmz6@gmail.com",
+      verification: { status: "verified" },
+    },
+    emailAddresses: [
+      {
+        id: "idn_xavier",
+        emailAddress: "xaver.rmz6@gmail.com",
+        verification: { status: "verified" },
+      },
+    ],
+  };
+  const mock = createMockClient({
+    usersById: {
+      user_3IsvKVDGAg5KdvwHhvODf2VFqtd: {
+        id: "user_3IsvKVDGAg5KdvwHhvODf2VFqtd",
+        primaryEmailAddress: {
+          id: "idn_typo",
+          emailAddress: "xavier.rmz6@gmail.com",
+          verification: { status: "verified" },
+        },
+      },
+    },
+    usersByEmail: { "xaver.rmz6@gmail.com": canonical },
+  });
+
+  const result = await resolveProductionClerkUser(
+    {
+      email: "xaver.rmz6@gmail.com",
+      displayName: "Xavier Morales",
+      pastedClerkUserId: "user_3IsvKVDGAg5KdvwHhvODf2VFqtd",
+    },
+    mock.client,
+  );
+  assert.equal(result.clerkUserId, "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6");
+  assert.equal(result.created, false);
+  assert.equal(result.ignoredPastedClerkUserId, "user_3IsvKVDGAg5KdvwHhvODf2VFqtd");
+  assert.match(result.warning ?? "", /retired Xavier duplicate/);
+  assert.equal(mock.calls.createUser.length, 0);
+
+  await assert.rejects(
+    () =>
+      resolveProductionClerkUser(
+        {
+          email: "xavier.rmz6@gmail.com",
+          displayName: "Xavier Morales",
+        },
+        mock.client,
+      ),
+    (error: unknown) =>
+      error instanceof ClerkProductionUserError &&
+      error.httpStatus === 400 &&
+      /xaver\.rmz6@gmail\.com/.test(error.message),
+  );
 });
 
 test("creates a Production Clerk user when the email is missing and never invites", async () => {

@@ -55,3 +55,35 @@ export function assignmentSubjectOptions(tutorSubjects: string[] = []): string[]
   for (const subject of tutorSubjects) add(subject);
   return options;
 }
+
+export function isSupersededAccessGrant(grant: {
+  active: boolean;
+  notes?: string | null;
+  clerkUserId?: string | null;
+  email?: string | null;
+}): boolean {
+  if (grant.active) return false;
+  const notes = grant.notes ?? "";
+  const clerkUserId = grant.clerkUserId ?? "";
+  const email = (grant.email ?? "").trim().toLowerCase();
+  return (
+    notes.startsWith("SUPERSEDED:") ||
+    clerkUserId.startsWith("retired:") ||
+    clerkUserId === "user_3IsvKVDGAg5KdvwHhvODf2VFqtd" ||
+    email === "xavier.rmz6@gmail.com" ||
+    email === "xsfam6@gmail.com" ||
+    email.endsWith("@retired.accepted.local")
+  );
+}
+
+export function isVisiblePeopleTutor(tutor: {
+  active: boolean;
+  name: string;
+  email: string;
+}): boolean {
+  if (tutor.active) return true;
+  const email = tutor.email.trim().toLowerCase();
+  return !(
+    tutor.name === "Xavier Morales" && email !== "xaver.rmz6@gmail.com"
+  );
+}

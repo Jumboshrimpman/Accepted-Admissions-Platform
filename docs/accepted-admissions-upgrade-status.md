@@ -30,6 +30,8 @@ Xavier payout tracking stays **out** (schema leftovers only; no tutor payout UI)
 
 Migration `0026_xavier_email_xaver_rmz6` corrects Xavier’s live email from the 0008 alias `xsfam6@gmail.com` to `xaver.rmz6@gmail.com` on `tutor_profiles`, `users`, and `portal_access_grants`. Historical migration 0008 is left unchanged.
 
+Migration `0034_retire_duplicate_xavier_clerk` soft-retires the duplicate Production Clerk user `user_3IsvKVDGAg5KdvwHhvODf2VFqtd` (wrong email) and keeps `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6` + `xaver.rmz6@gmail.com` as the canonical SAT tutor. Sessions and relationships are remapped when safe. If Railway still has `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`, remove the retired id and include the canonical id; DB grants remain the source of truth. The retired Clerk user may be deleted manually in the Clerk Dashboard after that allowlist cleanup. This app does not send Clerk invites or call Clerk delete.
+
 ## Shared Google Meet collision
 
 The Fall room `https://meet.google.com/rih-iayt-okb` is assigned to Fall 2026 curriculum sessions and to SAT self-serve bookings. Availability omits occupied slots; booking (and admin session create/update) returns `SCHEDULE_CONFLICT` when another active session already claims that room. This covers Michelle booking Xavier/Eunice at the same time as Taito’s Eunice/Nika Fall sessions.
