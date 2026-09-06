@@ -12,6 +12,8 @@ import {
 import { publicSessionShape, visibleSessionsForUser } from "./session-privacy.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { isTaitoFallSession, sessionTitle, TAITO_STUDENT_DISPLAY_NAME, calendarEventUrlForSession } from "./session-schedule.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { sessionDisplayTitle } from "./xavier-sat-capability-session.ts";
 
 async function visibleCourseIds(user: AppUser): Promise<string[]> {
   if (user.role === "administrator") {
@@ -142,7 +144,10 @@ export function dashboardSessionShape(
   return {
     ...publicSessionShape(
       session,
-      sessionTitle(clientName ?? resolvedStudent?.name, session.subject, tutor?.name),
+      sessionDisplayTitle(
+        session,
+        sessionTitle(clientName ?? resolvedStudent?.name, session.subject, tutor?.name),
+      ),
     ),
     tutor,
     meetingUrl,

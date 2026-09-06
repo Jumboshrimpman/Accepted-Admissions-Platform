@@ -22,6 +22,8 @@ import {
   sessionTitle,
   taitoSessionDateTime,
 } from "./session-schedule.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isXavierSatCapabilitySession } from "./xavier-sat-capability-session.ts";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -79,6 +81,7 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
   const student = users.find((user) => user.email === TAITO_STUDENT_EMAIL);
   const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
   for (const session of courseSessions) {
+    if (isXavierSatCapabilitySession(session)) continue;
     const dateKey = session.dateTime.toISOString().slice(0, 10);
     if (!sessionsByDate.has(dateKey)) sessionsByDate.set(dateKey, session);
   }
@@ -162,6 +165,7 @@ export async function assignKnownPeopleOnCourse(
     .where(eq(sessionsTable.courseId, courseId));
   for (const session of sessions) {
     if (session.status === "archived" || session.bookingStatus === "cancelled") continue;
+    if (isXavierSatCapabilitySession(session)) continue;
     const otherClient =
       Boolean(session.clientUserId) &&
       Boolean(people.studentId) &&

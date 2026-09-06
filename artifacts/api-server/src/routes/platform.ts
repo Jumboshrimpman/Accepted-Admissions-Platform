@@ -91,6 +91,11 @@ import {
   visibleSessionsForUser,
 } from "../lib/session-privacy";
 import {
+  ensureXavierSatCapabilitySession,
+  isXavierSatCapabilitySession,
+  sessionDisplayTitle,
+} from "../lib/xavier-sat-capability-session";
+import {
   clientForAdminPreview,
   dashboardSessionShape,
   dashboardSessionsForUser,
@@ -1123,6 +1128,7 @@ async function ensureSeedData(): Promise<string> {
   if (existing) {
     await reconcileTaitoSessions(existing.id);
     await ensureSatAssessmentSeed(existing.id);
+    await ensureXavierSatCapabilitySession({ courseId: existing.id });
     return existing.id;
   }
 
@@ -1278,6 +1284,7 @@ async function ensureSeedData(): Promise<string> {
   );
 
   await ensureSatAssessmentSeed(course.id);
+  await ensureXavierSatCapabilitySession({ courseId: course.id });
   return course.id;
 }
 
@@ -2793,11 +2800,14 @@ function tutorShape(user: AppUser | null) {
 async function sessionTutorShape(session: {
   tutorUserId: string | null;
   dateTime: Date;
+  title?: string | null;
 }) {
-  const scheduled = TAITO_FALL_2026_SESSIONS.find(
-    (candidate) =>
-      candidate.dateKey === session.dateTime.toISOString().slice(0, 10),
-  );
+  const scheduled = isXavierSatCapabilitySession(session)
+    ? undefined
+    : TAITO_FALL_2026_SESSIONS.find(
+        (candidate) =>
+          candidate.dateKey === session.dateTime.toISOString().slice(0, 10),
+      );
   if (scheduled) {
     const [profile] = await db
       .select({
@@ -6939,7 +6949,7 @@ async function adminSessionShape(
     dateTime: session.dateTime,
     timezone: session.timezone,
     subject: session.subject,
-    title: canonicalTitle,
+    title: sessionDisplayTitle(session, canonicalTitle),
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
@@ -8226,7 +8236,10 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
           return {
             ...publicSessionShape(
               session,
-              sessionTitle(student?.name, session.subject, tutor?.name),
+              sessionDisplayTitle(
+                session,
+                sessionTitle(student?.name, session.subject, tutor?.name),
+              ),
             ),
             tutor,
             meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
