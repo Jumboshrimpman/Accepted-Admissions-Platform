@@ -102,12 +102,18 @@ import {
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   APPROVED_SCHOOL_LOGOS,
+  EUNICE_LEGACY_PUBLIC_BIOGRAPHIES,
+  EUNICE_PUBLIC_BIOGRAPHY,
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
+  NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
+  NIKA_PUBLIC_BIOGRAPHY,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
   rewriteLegacyWixSchoolLogos,
+  XAVIER_LEGACY_PUBLIC_BIOGRAPHIES,
+  XAVIER_PUBLIC_BIOGRAPHY,
 } from "../lib/public-team-roster";
 import {
   createCheckoutSession,
@@ -1217,8 +1223,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT & Math Tutor",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
         photoAltText: "Xavier Morales, SAT and Math Tutor",
-        biography:
-          "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He is a 2024 Rhodes Scholar, studying Philosophy for his Masters at Oxford until 2026. Xavier is also an incoming member of the 2029 Harvard Law School class.",
+        biography: XAVIER_PUBLIC_BIOGRAPHY,
         subjects: ["SAT", "Math"],
         linkedinUrl: "https://www.linkedin.com/in/xavier-morales-8830821a5/",
         publicApproved: true,
@@ -1231,8 +1236,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "Scholarship Tutor",
         photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Eunice Chon"],
         photoAltText: "Eunice Chon, Scholarship Tutor",
-        biography:
-          "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
+        biography: EUNICE_PUBLIC_BIOGRAPHY,
         subjects: ["SAT", "Scholarships", "College admissions"],
         linkedinUrl: "https://linkedin.com/in/eunicechon",
         publicApproved: true,
@@ -1248,8 +1252,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         subjects: ["College admissions"],
         linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
         publicApproved: true,
-        biography:
-          "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+        biography: NIKA_PUBLIC_BIOGRAPHY,
         calendarStatus: "disconnected",
         bookingEligible: true,
       },
@@ -1373,8 +1376,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
       title: "Admissions Tutor",
       photoUrl: NIKA_APPROVED_PHOTO_URL,
       photoAltText: "Nika Raiffe, Admissions Tutor",
-      biography:
-        "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+      biography: NIKA_PUBLIC_BIOGRAPHY,
       subjects: ["College admissions"],
       linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
       publicApproved: true,
@@ -1499,6 +1501,26 @@ async function ensureUpgradeSeedData(): Promise<void> {
         sql`${satProductsTable.description} ILIKE '%Xavier or Eunice%'`,
       ),
     );
+
+  // Refresh stale public bios that still match the original seed copy.
+  // Administrator-edited biographies that no longer match those strings stay in place.
+  for (const [name, legacyBios, nextBio] of [
+    [XAVIER_NAME, XAVIER_LEGACY_PUBLIC_BIOGRAPHIES, XAVIER_PUBLIC_BIOGRAPHY],
+    [EUNICE_NAME, EUNICE_LEGACY_PUBLIC_BIOGRAPHIES, EUNICE_PUBLIC_BIOGRAPHY],
+    [NIKA_NAME, NIKA_LEGACY_PUBLIC_BIOGRAPHIES, NIKA_PUBLIC_BIOGRAPHY],
+  ] as const) {
+    for (const legacyBio of legacyBios) {
+      await db
+        .update(tutorProfilesTable)
+        .set({ biography: nextBio, updatedAt: new Date() })
+        .where(
+          and(
+            eq(tutorProfilesTable.name, name),
+            eq(tutorProfilesTable.biography, legacyBio),
+          ),
+        );
+    }
+  }
 
   // Ensure Eunice remains bookable for prepaid SAT credits without overwriting admin edits
   // to biography or title; only add SAT when the untouched seed subject list is present.

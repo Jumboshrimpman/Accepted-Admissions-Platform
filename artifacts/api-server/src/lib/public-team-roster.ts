@@ -14,6 +14,27 @@ export const PUBLIC_TUTOR_ORDER = [
 
 export type PublicTutorName = (typeof PUBLIC_TUTOR_ORDER)[number];
 
+export const XAVIER_PUBLIC_BIOGRAPHY =
+  "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.";
+
+export const XAVIER_LEGACY_PUBLIC_BIOGRAPHIES = [
+  "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He is a 2024 Rhodes Scholar, studying Philosophy for his Masters at Oxford until 2026. Xavier is also an incoming member of the 2029 Harvard Law School class.",
+] as const;
+
+export const EUNICE_PUBLIC_BIOGRAPHY =
+  "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.";
+
+export const EUNICE_LEGACY_PUBLIC_BIOGRAPHIES = [
+  "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
+] as const;
+
+export const NIKA_PUBLIC_BIOGRAPHY =
+  "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.";
+
+export const NIKA_LEGACY_PUBLIC_BIOGRAPHIES = [
+  "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+] as const;
+
 /** First-party public portraits served from this app (not Wix CDN). */
 export const APPROVED_PUBLIC_TEAM_PORTRAITS: Record<PublicTutorName, string> = {
   "Rosanna Kataja": "/media/team/rosanna-kataja.jpg",
@@ -147,6 +168,7 @@ export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
     previousPhotoUrl:
       "https://static.wixstatic.com/media/2c8654_422915d7e4da4b1a911f446b01e3a25d~mv2.webp/v1/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Xavierheadshot.webp",
     photoAltText: "Xavier Morales, SAT and Math Tutor",
+    biography: XAVIER_PUBLIC_BIOGRAPHY,
   },
   {
     email: "eunice_chon@berkeley.edu",
@@ -154,6 +176,7 @@ export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
     previousPhotoUrl:
       "https://static.wixstatic.com/media/2c8654_3d3d703b8ea343ef8805961027f1406a~mv2.jpg/v1/crop/x_32,y_0,w_537,h_400/fill/w_448,h_334,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Manuel.jpg",
     photoAltText: "Eunice Chon, Scholarship Tutor",
+    biography: EUNICE_PUBLIC_BIOGRAPHY,
   },
   {
     email: "public-rosanna-kataja@seed.invalid",
