@@ -470,7 +470,7 @@ export function PublicContentPanel() {
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <CardTitle className="break-words">SAT tutoring page</CardTitle>
-                <CardDescription className="break-words">Public /sat marketing copy. Product prices stay in Finance; this is the surrounding explanation.</CardDescription>
+                <CardDescription className="break-words">Public /sat marketing copy. Product prices stay on the public SAT page and in the client portal book/pay flow.</CardDescription>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Badge variant={sat.status === "published" ? "default" : "outline"} className="capitalize">{sat.status}</Badge>

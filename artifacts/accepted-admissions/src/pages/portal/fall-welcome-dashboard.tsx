@@ -221,7 +221,7 @@ export function ClientDashboardView({
             {!viewer && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild className="rounded-full">
-                  <Link href="/sat" data-testid="link-portal-sat-pay">
+                  <Link href="/portal/sat" data-testid="link-portal-sat-pay">
                     {dashboard.credits.remainingHours <= 0 ? "Purchase session credits" : "Buy more SAT credits"}
                   </Link>
                 </Button>

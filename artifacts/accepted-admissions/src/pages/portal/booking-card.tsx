@@ -452,7 +452,7 @@ export function BookingCard() {
                       You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here.
                     </p>
                     <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/sat">Purchase SAT hours</Link>
+                      <Link href="/portal/sat">Purchase SAT hours</Link>
                     </Button>
                   </div>
                 )}

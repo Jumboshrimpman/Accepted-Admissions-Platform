@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { MIN_SOURCE_EXTRACTED_TEXT_LENGTH, SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE, validateExtractedSourceText } from "./content-source-text.ts";
+import { conceptsForTemplateDrafts, MIN_SOURCE_EXTRACTED_TEXT_LENGTH, SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE, validateExtractedSourceText } from "./content-source-text.ts";
 
 test("source imports require 40 characters of pasted text and ignore URL-only payloads", () => {
   assert.equal(MIN_SOURCE_EXTRACTED_TEXT_LENGTH, 40);
@@ -26,4 +26,14 @@ test("source imports require 40 characters of pasted text and ignore URL-only pa
   if (accepted.ok) {
     assert.ok(accepted.text.length >= MIN_SOURCE_EXTRACTED_TEXT_LENGTH);
   }
+});
+
+test("template drafts still get two concepts from short pasted text so generate is not a dead end", () => {
+  const concepts = conceptsForTemplateDrafts(
+    "Authorized notes on SAT evidence. ".repeat(2),
+    "evidence",
+  );
+  assert.ok(concepts.length >= 2);
+  const sparse = conceptsForTemplateDrafts("a".repeat(40), "rw");
+  assert.ok(sparse.length >= 2);
 });

@@ -406,7 +406,9 @@ describe("authenticated role dashboard flows", () => {
 
     expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
     expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Purchase session credits/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Purchase session credits/i }).getAttribute("href")).toBe(
+      "/portal/sat",
+    );
     expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
   });
 });

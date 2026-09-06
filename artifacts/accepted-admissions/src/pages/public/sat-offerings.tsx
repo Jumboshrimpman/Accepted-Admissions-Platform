@@ -214,6 +214,14 @@ export default function SatOfferings() {
                   </Link>
                 </Button>
               </div>
+              {isSignedIn && currentUser?.role === "student" ? (
+                <p className="mt-4 text-sm">
+                  <Link href="/portal/sat" className="font-semibold text-primary hover:underline" data-testid="link-sat-stay-in-portal">
+                    Book and pay inside your client portal
+                  </Link>
+                  {" "}if you already have an account — this page is the public offer.
+                </p>
+              ) : null}
               <p className="mt-4 text-sm text-muted-foreground">
                 Looking for a different service? Campus tours, college advising, and other requests use the{" "}
                 <Link href="/client-request" className="font-semibold text-primary hover:underline">

@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => ({
     ],
     platform: {
       upcomingSessions: 0,
-      outstandingInvoices: 0,
+      outstandingInvoices: 3,
       newRequests: 0,
     },
     guidanceRequests: [] as Array<{
@@ -264,6 +264,7 @@ describe("administrator overview", () => {
     expect(screen.queryByText("Fall plan")).toBeNull();
     expect(screen.queryByRole("link", { name: /Finance/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^Programs$/i })).toBeNull();
+    expect(screen.queryByText(/outstanding invoice/i)).toBeNull();
   });
 
   test("keeps client preview when curriculum clients are missing by using overview students", () => {

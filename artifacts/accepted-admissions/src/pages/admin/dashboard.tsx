@@ -102,7 +102,6 @@ export default function AdminDashboard() {
           {upcomingSessions.length} upcoming session{upcomingSessions.length === 1 ? "" : "s"}
           {" · "}
           {newRequestCount} new guidance request{newRequestCount === 1 ? "" : "s"}
-          {platform?.outstandingInvoices ? ` · ${platform.outstandingInvoices} outstanding invoice${platform.outstandingInvoices === 1 ? "" : "s"}` : ""}
         </p>
       </div>
 

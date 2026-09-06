@@ -254,7 +254,8 @@ import {
   QUESTION_ALREADY_ON_QUIZ_MESSAGE,
   questionCanAttachToAssignment,
 } from "../lib/question-single-quiz";
-import { validateExtractedSourceText } from "../lib/content-source-text";
+import { conceptsForTemplateDrafts, validateExtractedSourceText } from "../lib/content-source-text";
+import { hydrateMistakePrompts, selectActivePrework } from "../lib/session-homework";
 import {
   contentSourcesTable,
   assignmentQuestionsTable,
@@ -5198,8 +5199,8 @@ router.post(
         product,
         invoiceId: invoice.id,
         paymentId: payment.id,
-        successUrl: `${origin}/portal?payment=success`,
-        cancelUrl: `${origin}/sat?payment=canceled`,
+        successUrl: `${origin}/portal/sat?payment=success`,
+        cancelUrl: `${origin}/portal/sat?payment=canceled`,
       });
       await db
         .update(paymentsTable)
@@ -8501,10 +8502,7 @@ async function adaptiveCurriculumForSession(
   user: AppUser,
 ) {
   const summaries = await assignmentSummariesForUser(user, session.courseId, session.id);
-  const homework =
-    summaries.find((assignment) => assignment.deliveryPhase === "before_session") ??
-    summaries[0] ??
-    null;
+  const homework = selectActivePrework(summaries);
   const subjectUserId = session.clientUserId ?? (await dataSubjectUserId(user));
   const [latestAttempt] = homework
     ? await db
@@ -8543,7 +8541,7 @@ async function adaptiveCurriculumForSession(
       attachedQuestionCount: prep.attachedQuestionCount,
     };
   }
-  const mistakes =
+  const rawMistakes =
     isStaff && completed
       ? (result?.items ?? [])
           .filter((item) => item.correct === false)
@@ -8556,6 +8554,20 @@ async function adaptiveCurriculumForSession(
             reason: `The latest assessment response missed ${item.skill}.`,
           }))
       : [];
+  const missingPromptIds = rawMistakes
+    .filter((item) => !item.prompt?.trim())
+    .map((item) => item.questionId);
+  const promptRows =
+    missingPromptIds.length > 0
+      ? await db
+          .select({ id: questionsTable.id, prompt: questionsTable.prompt })
+          .from(questionsTable)
+          .where(inArray(questionsTable.id, missingPromptIds))
+      : [];
+  const mistakes = hydrateMistakePrompts(
+    rawMistakes,
+    new Map(promptRows.map((row) => [row.id, row.prompt])),
+  );
   const recommendationRows =
     isStaff && completed
       ? await db
@@ -9501,59 +9513,6 @@ function questionBankShape(question: typeof questionsTable.$inferSelect) {
   };
 }
 
-function sourceConcepts(text: string, focus: string): string[] {
-  const stopWords = new Set([
-    "about",
-    "after",
-    "again",
-    "because",
-    "before",
-    "being",
-    "between",
-    "could",
-    "every",
-    "first",
-    "from",
-    "have",
-    "into",
-    "lesson",
-    "more",
-    "other",
-    "should",
-    "their",
-    "there",
-    "these",
-    "they",
-    "this",
-    "through",
-    "using",
-    "were",
-    "which",
-    "while",
-    "with",
-    "would",
-  ]);
-  const counts = new Map<string, number>();
-  const words = text
-    .replace(/<[^>]+>/g, " ")
-    .toLowerCase()
-    .match(/[a-z][a-z'-]{3,}/g) ?? [];
-  for (const word of words) {
-    if (stopWords.has(word)) continue;
-    counts.set(word, (counts.get(word) ?? 0) + 1);
-  }
-  const extracted = [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .map(([word]) => word)
-    .slice(0, 16);
-  return [
-    ...new Set([
-      ...focus.toLowerCase().match(/[a-z][a-z'-]{3,}/g) ?? [],
-      ...extracted,
-    ]),
-  ];
-}
-
 router.get(
   "/content-sources",
   ensureRole(["administrator", "tutor"]),
@@ -9696,13 +9655,7 @@ router.post(
     // templates so the source informs practice without being reproduced.
     const focus = body.data.focus.trim().replace(/\s+/g, " ");
     const count = body.data.count ?? 3;
-    const concepts = sourceConcepts(extractedText.text, focus);
-    if (concepts.length < 2) {
-      res.status(400).json({
-        error: "The extracted text does not contain enough distinct concepts",
-      });
-      return;
-    }
+    const concepts = conceptsForTemplateDrafts(extractedText.text, focus);
     const templates = [
       {
         prompt: (primary: string, secondary: string) =>

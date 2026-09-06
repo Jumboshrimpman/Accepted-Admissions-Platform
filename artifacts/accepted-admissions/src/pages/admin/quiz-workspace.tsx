@@ -8,6 +8,7 @@ import {
   useCreateAdminAssignment,
   useGetAssignment,
   useListQuestionBank,
+  useRemoveQuestionFromAssignment,
   useUpdateAdminAssignment,
   useUpdateQuestionBankItem,
   type AdminAssignment,
@@ -428,6 +429,7 @@ function QuizQuestionEditor({
   );
   const attach = useAttachQuestionToAssignment();
   const updateQuestion = useUpdateQuestionBankItem();
+  const removeQuestion = useRemoveQuestionFromAssignment();
   const [generated, setGenerated] = useState<QuestionBankItem[]>([]);
   const [questionId, setQuestionId] = useState("");
   const [message, setMessage] = useState("");
@@ -458,31 +460,81 @@ function QuizQuestionEditor({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Questions on this quiz</CardTitle>
         <CardDescription>
-          See and edit this quiz’s questions here. Adding a draft marks it ready for this quiz only.
+          Add and edit this quiz’s questions here. Creating template drafts adds them to this quiz and marks them ready.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
         {isLoading ? <p className="text-sm text-muted-foreground">Loading questions…</p> : null}
-        <ol className="list-decimal space-y-2 pl-5 text-sm" data-testid={`quiz-question-list-${quiz.id}`}>
-          {(data?.questions ?? []).map((question) => (
-            <li key={question.id}>{question.prompt}</li>
-          ))}
+        <ol className="space-y-3" data-testid={`quiz-question-list-${quiz.id}`}>
+          {(data?.questions ?? []).map((question, index) => {
+            const bankItem = bank.find((item) => item.id === question.id);
+            return (
+              <li key={question.id}>
+                <QuizQuestionEditorCard
+                  index={index + 1}
+                  questionId={question.id}
+                  prompt={question.prompt}
+                  skill={question.skill}
+                  choices={question.choices?.length ? question.choices : bankItem?.choices ?? []}
+                  explanation={bankItem?.explanation ?? ""}
+                  correctAnswer={bankItem?.correctAnswer ?? "a"}
+                  pending={updateQuestion.isPending || removeQuestion.isPending}
+                  onSave={(payload) =>
+                    updateQuestion.mutate(
+                      {
+                        questionId: question.id,
+                        data: {
+                          prompt: payload.prompt,
+                          skill: payload.skill,
+                          explanation: payload.explanation,
+                          choices: payload.choices,
+                          correctAnswer: payload.correctAnswer,
+                        },
+                      },
+                      {
+                        onSuccess: () => {
+                          setMessage("Question saved on this quiz.");
+                          onChanged();
+                        },
+                        onError: (error) => setMessage(apiErrorText(error)),
+                      },
+                    )
+                  }
+                  onRemove={() =>
+                    removeQuestion.mutate(
+                      { assignmentId: quiz.id, questionId: question.id },
+                      {
+                        onSuccess: () => {
+                          setMessage("Question removed from this quiz.");
+                          onChanged();
+                        },
+                        onError: (error) => setMessage(apiErrorText(error)),
+                      },
+                    )
+                  }
+                />
+              </li>
+            );
+          })}
         </ol>
         {(data?.questions ?? []).length === 0 && !isLoading ? (
-          <p className="text-sm text-muted-foreground">No questions yet. Import source text below, create drafts, then add them here.</p>
+          <p className="text-sm text-muted-foreground">No questions yet. Import source text below and create template drafts — they land on this quiz.</p>
         ) : null}
         <div className="rounded-xl border bg-muted/20 p-3">
           <GenerateDraftsCard
             courseId={quiz.courseId}
             compact
-            onGenerated={(items) => setGenerated(items)}
+            onGenerated={(items) => {
+              setGenerated(items);
+              items.forEach((item) => addToQuiz(item.id));
+            }}
             onChanged={onChanged}
           />
         </div>
         {pendingDrafts.length > 0 ? (
           <div className="space-y-2" data-testid="quiz-generated-drafts">
-            <p className="text-sm font-medium">New drafts for this quiz</p>
+            <p className="text-sm font-medium">Adding drafts to this quiz…</p>
             {pendingDrafts.map((question) => (
               <div key={question.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background px-3 py-2 text-sm">
                 <p className="min-w-0 flex-1">{question.prompt}</p>
@@ -522,6 +574,127 @@ function QuizQuestionEditor({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function QuizQuestionEditorCard({
+  index,
+  questionId,
+  prompt,
+  skill,
+  choices,
+  explanation,
+  correctAnswer,
+  pending,
+  onSave,
+  onRemove,
+}: {
+  index: number;
+  questionId: string;
+  prompt: string;
+  skill: string;
+  choices: Array<{ id: string; label: string; text: string }>;
+  explanation: string;
+  correctAnswer: string;
+  pending: boolean;
+  onSave: (payload: {
+    prompt: string;
+    skill: string;
+    explanation: string;
+    choices: Array<{ id: string; label: string; text: string }>;
+    correctAnswer: string;
+  }) => void;
+  onRemove: () => void;
+}) {
+  const [draftPrompt, setDraftPrompt] = useState(prompt);
+  const [draftSkill, setDraftSkill] = useState(skill);
+  const [draftExplanation, setDraftExplanation] = useState(explanation);
+  const [draftChoices, setDraftChoices] = useState(choices);
+  const [draftAnswer, setDraftAnswer] = useState(correctAnswer);
+  return (
+    <div className="rounded-xl border bg-background p-4" data-testid={`quiz-question-editor-${questionId}`}>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Question {index}</p>
+      <div className="grid gap-3">
+        <div className="space-y-2">
+          <Label>Prompt</Label>
+          <Textarea
+            aria-label={`Question ${index} prompt`}
+            value={draftPrompt}
+            onChange={(event) => setDraftPrompt(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Skill</Label>
+          <Input
+            aria-label={`Question ${index} skill`}
+            value={draftSkill}
+            onChange={(event) => setDraftSkill(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Answer choices</Label>
+          {draftChoices.map((choice, choiceIndex) => (
+            <Input
+              key={choice.id || choice.label || choiceIndex}
+              aria-label={`Question ${index} choice ${choice.label || choiceIndex + 1}`}
+              value={choice.text}
+              onChange={(event) =>
+                setDraftChoices((current) =>
+                  current.map((item, itemIndex) =>
+                    itemIndex === choiceIndex ? { ...item, text: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Correct answer</Label>
+            <select
+              aria-label={`Question ${index} correct answer`}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              value={draftAnswer}
+              onChange={(event) => setDraftAnswer(event.target.value)}
+            >
+              {(draftChoices.length ? draftChoices : [{ id: "a", label: "A", text: "" }]).map((choice) => (
+                <option key={choice.id || choice.label} value={(choice.id || choice.label || "a").toLowerCase()}>
+                  {choice.label || choice.id}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label>Explanation</Label>
+            <Textarea
+              aria-label={`Question ${index} explanation`}
+              value={draftExplanation}
+              onChange={(event) => setDraftExplanation(event.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={pending || draftPrompt.trim().length < 2}
+            onClick={() =>
+              onSave({
+                prompt: draftPrompt,
+                skill: draftSkill,
+                explanation: draftExplanation,
+                choices: draftChoices,
+                correctAnswer: draftAnswer,
+              })
+            }
+          >
+            Save question
+          </Button>
+          <Button size="sm" variant="outline" disabled={pending} onClick={onRemove}>
+            Remove from quiz
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -104,7 +104,7 @@ export function FinancialCard({
         )}
         {!readOnly && !adminPreview && (
           <Button asChild className="rounded-full">
-            <Link href="/sat">Purchase SAT session credits</Link>
+            <Link href="/portal/sat">Purchase SAT session credits</Link>
           </Button>
         )}
         {adminPreview && (

@@ -250,7 +250,7 @@ describe("client availability calendar", () => {
         screen.getByText(/Buy a single hour \(\$130\) or the 10-hour package \(\$1,300\)/),
       ).toBeTruthy();
     });
-    expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/sat");
+    expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");
     expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
     vi.unstubAllGlobals();
   });
