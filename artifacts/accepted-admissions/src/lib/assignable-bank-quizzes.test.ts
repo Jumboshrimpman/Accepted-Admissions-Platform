@@ -5,6 +5,7 @@ import {
   assignableBankQuizzes,
   bankQuizOptionLabel,
   isReusableBankQuiz,
+  sessionPreworkQuizzes,
   type BankQuizCandidate,
 } from "./assignable-bank-quizzes.ts";
 
@@ -20,6 +21,21 @@ function quiz(overrides: Partial<BankQuizCandidate> = {}): BankQuizCandidate {
     ...overrides,
   };
 }
+
+test("session pre-work excludes archived clones", () => {
+  const prework = sessionPreworkQuizzes(
+    [
+      quiz({ id: "active-clone", sessionId: "session-1" }),
+      quiz({ id: "archived-clone", sessionId: "session-1", status: "archived" }),
+      quiz({ id: "bank", sessionId: null }),
+    ],
+    { id: "session-1" },
+  );
+  assert.deepEqual(
+    prework.map((item) => item.id),
+    ["active-clone"],
+  );
+});
 
 test("reusable bank quizzes are session-less, published or draft, and before-session", () => {
   assert.equal(isReusableBankQuiz(quiz()), true);
@@ -68,6 +84,30 @@ test("option labels are title and question count without currently-session text"
   assert.equal(
     BANK_QUIZ_EMPTY_STATE,
     "Create a quiz in the Quizzes workspace (no session) first.",
+  );
+});
+
+test("replace-pre-work can list bank quizzes even if a same-title clone exists", () => {
+  const assignable = assignableBankQuizzes(
+    [
+      quiz({ id: "quiz-bank" }),
+      quiz({
+        id: "quiz-other",
+        title: "Second SAT quiz",
+        questionCount: 4,
+      }),
+      quiz({
+        id: "quiz-clone",
+        sessionId: "session-1",
+        title: "Full SAT Practice Diagnostic",
+      }),
+    ],
+    { id: "session-1", courseId: "course-1" },
+    { includeAssignedTitles: true },
+  );
+  assert.deepEqual(
+    assignable.map((item) => item.id),
+    ["quiz-bank", "quiz-other"],
   );
 });
 

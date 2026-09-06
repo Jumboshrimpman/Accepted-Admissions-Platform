@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import {
   displaySessionTitle,
   disclosedSessions,
@@ -64,7 +65,7 @@ export default function TutorDashboard() {
 
   const openQueue = queue?.filter((item) => item.status === "open") ?? [];
   const upcomingSessions = disclosedSessions(
-    dashboard.upcomingSessions,
+    sessionsForDashboardRole(dashboard.upcomingSessions, dashboard.user),
     showAllSessions,
   );
   const fallCourse =

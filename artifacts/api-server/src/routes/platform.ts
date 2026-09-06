@@ -250,6 +250,10 @@ import {
   ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
   evaluateAssignmentClone,
 } from "../lib/assignment-clone";
+import {
+  QUESTION_ALREADY_ON_QUIZ_MESSAGE,
+  questionCanAttachToAssignment,
+} from "../lib/question-single-quiz";
 import { validateExtractedSourceText } from "../lib/content-source-text";
 import {
   contentSourcesTable,
@@ -7577,7 +7581,7 @@ router.post(
         durationMinutes: body.data.durationMinutes,
         courseId: body.data.courseId,
         subject: body.data.subject,
-      }, undefined, { checkProvider: true, strictProvider: true });
+      }, undefined, { checkProvider: true, strictProvider: false });
     } catch (error) {
       if (error instanceof BookingError) {
         sendBookingError(error, res);
@@ -7668,7 +7672,7 @@ router.patch(
         ? []
         : await adminSessionConflicts(next, existing.id, {
             checkProvider: !unchangedCalendarMeeting,
-            strictProvider: true,
+            strictProvider: false,
           });
     } catch (error) {
       if (error instanceof BookingError) {
@@ -10013,11 +10017,51 @@ router.post(
       res.status(404).json({ error: "Assignment or question not found" });
       return;
     }
-    if (questionRecord.question.reviewStatus !== "approved") {
+    if (questionRecord.question.reviewStatus === "rejected") {
       res.status(400).json({
-        error: "Only tutor-approved questions can be attached to assignments",
+        error: "Rejected questions cannot be attached to a quiz.",
       });
       return;
+    }
+    const existingLinks = await db
+      .select({
+        assignmentId: assignmentQuestionsTable.assignmentId,
+        sessionId: assignmentsTable.sessionId,
+        title: assignmentsTable.title,
+      })
+      .from(assignmentQuestionsTable)
+      .innerJoin(
+        assignmentsTable,
+        eq(assignmentsTable.id, assignmentQuestionsTable.assignmentId),
+      )
+      .where(eq(assignmentQuestionsTable.questionId, questionRecord.question.id));
+    if (
+      !questionCanAttachToAssignment(existingLinks, {
+        assignmentId: assignment.id,
+        sessionId: assignment.sessionId,
+        title: assignment.title,
+      })
+    ) {
+      res.status(409).json({ error: QUESTION_ALREADY_ON_QUIZ_MESSAGE });
+      return;
+    }
+    if (
+      questionRecord.question.reviewStatus === "draft" ||
+      questionRecord.question.reviewStatus === "reviewed"
+    ) {
+      const [readied] = await db
+        .update(questionsTable)
+        .set({
+          reviewStatus: "approved",
+          reviewedBy: req.appUser!.id,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(questionsTable.id, questionRecord.question.id))
+        .returning();
+      if (readied) {
+        questionRecord.question = readied;
+      }
     }
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })

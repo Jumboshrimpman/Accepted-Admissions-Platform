@@ -36,6 +36,7 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
+import { MissedOnPreworkList } from "@/components/missed-prework-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -453,27 +454,13 @@ export default function TutorSession() {
                 </div>
               </div>
 
-              {adaptive && adaptive.mistakes.length > 0 && (
-                <div className="rounded-xl border bg-background p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <ListChecks className="h-4 w-4 text-primary" />
-                    <p className="font-semibold">Latest result — missed skills</p>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {[...new Set(adaptive.mistakes.map((mistake) => mistake.skill))].map(
-                      (skill) => (
-                        <div key={skill} className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
-                          <span className="font-medium">{skill}</span>
-                          <span className="ml-2 text-muted-foreground">
-                            {adaptive.mistakes.filter((mistake) => mistake.skill === skill).length}{" "}
-                            missed
-                          </span>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                </div>
-              )}
+              <MissedOnPreworkList
+                mistakes={(adaptive?.mistakes ?? []).map((item) => ({
+                  skill: item.skill,
+                  prompt: "prompt" in item ? String((item as { prompt?: string | null }).prompt ?? "") : "",
+                }))}
+                reviewHref={adaptive?.homework?.latestAttemptId ? `/tutor/attempts/${adaptive.homework.latestAttemptId}` : session.homework?.find((item) => item.attemptId)?.attemptId ? `/tutor/attempts/${session.homework.find((item) => item.attemptId)!.attemptId}` : null}
+              />
 
               {adaptive && adaptive.recommendations.length > 0 && (
                 <div className="space-y-3">

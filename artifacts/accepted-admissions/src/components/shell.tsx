@@ -82,13 +82,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
         return [
           { href: "/admin", label: "Overview", icon: Settings },
           { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
-          { href: "/admin/financials", label: "Finance", icon: WalletCards },
           { href: "/admin/content", label: "Content", icon: FileText },
           { href: "/tutor", label: "Tutor view", icon: BookOpen },
         ];
       default:
         return [
           { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
+          { href: "/sat", label: "Book SAT", icon: WalletCards },
         ];
     }
   };

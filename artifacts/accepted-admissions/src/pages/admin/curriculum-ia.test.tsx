@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   setLocation: vi.fn(),
   generateQuestions: vi.fn(),
   cloneAssignment: vi.fn(),
+  createAssignment: vi.fn(),
   updateAssignment: vi.fn(),
   updateQuestion: vi.fn(),
   attachQuestion: vi.fn(),
@@ -141,7 +142,18 @@ vi.mock("@workspace/api-client-react", () => ({
   useListAdminAccessGrants: () => ({ data: { grants: [] }, isLoading: false, error: null }),
   useCreateAdminAccessGrant: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminAccessGrant: () => ({ mutate: vi.fn(), isPending: false }),
-  useCreateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateAdminAssignment: () => ({
+    mutate: (vars: unknown, options?: { onSuccess?: (created: unknown) => void }) => {
+      mocks.createAssignment(vars, options);
+      options?.onSuccess?.({
+        ...mocks.curriculum.assignments[0],
+        id: "quiz-created",
+        title: "New SAT quiz",
+        questionCount: 0,
+      });
+    },
+    isPending: false,
+  }),
   useCreateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminAssignment: () => ({ mutate: mocks.updateAssignment, isPending: false }),
@@ -163,6 +175,16 @@ vi.mock("@workspace/api-client-react", () => ({
     },
     isLoading: false,
     error: null,
+  }),
+  useGetAdaptiveCurriculum: () => ({
+    data: {
+      mistakes: mocks.curriculum.submissions.length
+        ? [{ skill: "Transitions", prompt: "Which transition best connects the paragraphs?" }]
+        : [],
+      homework: mocks.curriculum.submissions[0]
+        ? { latestAttemptId: mocks.curriculum.submissions[0].attemptId }
+        : null,
+    },
   }),
 }));
 
@@ -186,7 +208,9 @@ afterEach(() => {
   cleanup();
   mocks.generateQuestions.mockReset();
   mocks.cloneAssignment.mockReset();
+  mocks.createAssignment.mockReset();
   mocks.updateAssignment.mockReset();
+  mocks.updateAssignment.mockImplementation((_vars, options) => options?.onSuccess?.({}));
   mocks.updateQuestion.mockReset();
   mocks.attachQuestion.mockReset();
   mocks.setLocation.mockReset();
@@ -211,6 +235,9 @@ describe("curriculum bank IA", () => {
     expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/3\. Assign/);
     expect(screen.getByTestId("curriculum-bank-path").textContent).toMatch(/4\. Results/);
     expect(screen.getByRole("tab", { name: /Quizzes/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Programs$/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Session blocks/i })).toBeNull();
+    expect(screen.queryByText("Finance")).toBeNull();
     expect(screen.getByText("October pre-session mini-section")).toBeTruthy();
 
     cleanup();
@@ -242,10 +269,14 @@ describe("curriculum bank IA", () => {
     );
   });
 
-  test("keeps a storage Questions tab without making it the authoring maze", () => {
+  test("keeps a compact Questions tab and points generate at the quiz workspace", () => {
     mocks.location = "/admin/curriculum?section=curriculum&tab=questions";
     render(<AdminCurriculum />);
     expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
+    expect(screen.getByText(/Prefer generating from an open quiz/i)).toBeTruthy();
+    expect(screen.getByText("Ready for quiz")).toBeTruthy();
+    expect(screen.getByTestId("question-row-question-1")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Approve$/i })).toBeNull();
     expect(screen.queryByText(/Coming soon/i)).toBeNull();
     expect(screen.getAllByText("Create template drafts").length).toBeGreaterThan(0);
   });
@@ -362,7 +393,7 @@ describe("curriculum bank IA", () => {
     mocks.curriculum.assignments[0]!.status = "published";
   });
 
-  test("Approve & add clears the generated draft so a second click cannot re-attach", () => {
+  test("Add to quiz clears the generated draft so a second click cannot re-attach", () => {
     mocks.location = "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-1";
     mocks.generateQuestions.mockImplementation((_vars, options) => {
       options?.onSuccess?.([
@@ -397,14 +428,13 @@ describe("curriculum bank IA", () => {
       "Generated draft prompt for this quiz",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Approve & add/i }));
-    expect(mocks.updateQuestion).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Add to quiz/i }));
     expect(mocks.attachQuestion).toHaveBeenCalledWith(
       { assignmentId: "quiz-1", data: { questionId: "draft-1" } },
       expect.any(Object),
     );
     expect(screen.queryByTestId("quiz-generated-drafts")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Approve & add/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add to quiz/i })).toBeNull();
   });
 
   test("shows attached quiz and attempt review entry points on the session card", () => {
@@ -440,6 +470,74 @@ describe("curriculum bank IA", () => {
     fireEvent.click(screen.getByText("View questions"));
     expect(screen.getByText("Which choice best supports the claim?")).toBeTruthy();
     expect(screen.getByText("What is the function of the third paragraph?")).toBeTruthy();
+    expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Missed on pre-work/);
+    expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Which transition best connects/);
+  });
+
+  test("opening a quiz from Sessions via URL shows its questions", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    const view = render(<AdminCurriculum />);
+    expect(screen.getByText("Sessions & meetings")).toBeTruthy();
+
+    mocks.location = "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-1";
+    view.rerender(<AdminCurriculum />);
+    expect(screen.getByTestId("quiz-detail-quiz-1")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-list-quiz-1").textContent).toContain(
+      "Which choice best supports the claim?",
+    );
+  });
+
+  test("creating a quiz opens the workspace instead of dumping back to the list", () => {
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /New quiz/i }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "New SAT quiz" } });
+    fireEvent.change(screen.getByLabelText("Instructions / explanation"), {
+      target: { value: "Complete before the meeting." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create quiz" }));
+    expect(mocks.createAssignment).toHaveBeenCalled();
+    expect(mocks.setLocation).toHaveBeenCalledWith(
+      "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-created",
+    );
+  });
+
+  test("replacing and removing session pre-work archives the previous session copy", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.assignments.push({
+      ...mocks.curriculum.assignments[0]!,
+      id: "quiz-clone",
+      sessionId: "session-1",
+      sessionTitle: "Taito SAT with Eunice",
+    });
+    mocks.curriculum.assignments.push({
+      ...mocks.curriculum.assignments[0]!,
+      id: "quiz-2",
+      title: "Replacement SAT quiz",
+      sessionId: null,
+      sessionTitle: null,
+      questionCount: 2,
+    });
+
+    render(<AdminCurriculum />);
+    expect(screen.getByRole("button", { name: "Replace pre-work" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Quiz to assign as pre-session work"), {
+      target: { value: "quiz-2" },
+    });
+    fireEvent.click(screen.getByTestId("assign-prework-session-1"));
+    expect(mocks.updateAssignment).toHaveBeenCalledWith(
+      { assignmentId: "quiz-clone", data: { status: "archived" } },
+      expect.any(Object),
+    );
+    expect(mocks.cloneAssignment).toHaveBeenCalledWith(
+      { assignmentId: "quiz-2", sessionId: "session-1" },
+      expect.any(Object),
+    );
+
+    fireEvent.click(screen.getByTestId("remove-prework-session-1"));
+    expect(mocks.updateAssignment).toHaveBeenCalledWith(
+      { assignmentId: "quiz-clone", data: { status: "archived" } },
+      expect.any(Object),
+    );
   });
 
   test("program edit and library forms do not offer Google Drive fields or CTAs", () => {
