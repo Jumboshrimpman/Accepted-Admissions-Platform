@@ -7,11 +7,13 @@ const currentUser = vi.hoisted(() => ({
     | {
         role: "student" | "tutor" | "administrator";
         displayName: string;
+        title?: string | null;
         avatarUrl: string | null;
       }
     | undefined,
   isLoading: true,
   error: null as unknown,
+  refetch: vi.fn(),
 }));
 
 vi.mock("@clerk/react", () => ({
@@ -102,5 +104,39 @@ describe("Shell", () => {
       </ErrorBoundary>,
     );
     expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe("/portal/sat");
+  });
+
+  it("shows the signed-in display name instead of Accepted Admissions User", () => {
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "student",
+      displayName: "Accepted Admissions user",
+      title: null,
+      avatarUrl: null,
+    };
+
+    renderShell();
+
+    expect(screen.getByTestId("portal-profile-display-name").textContent).toBe("Test User");
+    expect(screen.queryByText("Accepted Admissions User")).toBeNull();
+    expect(screen.queryByText("Accepted Admissions user")).toBeNull();
+  });
+
+  it("shows a persisted title in the header chrome", () => {
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "administrator",
+      displayName: "Sama Noori",
+      title: "Founder",
+      avatarUrl: "https://example.com/sama.jpg",
+    };
+
+    renderShell();
+
+    expect(screen.getByTestId("portal-profile-display-name").textContent).toBe("Sama Noori");
+    expect(screen.getByTestId("portal-profile-title-label").textContent).toBe("Founder");
+    expect(screen.getByTestId("portal-profile-menu").querySelector("img")?.getAttribute("src")).toBe(
+      "https://example.com/sama.jpg",
+    );
   });
 });
