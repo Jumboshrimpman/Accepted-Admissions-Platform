@@ -17,7 +17,7 @@ vi.mock("@workspace/api-client-react", () => ({
         examFamily: "sat",
         extractStatus: "partial",
         questionCount: 1,
-        officialExplanationCount: 0,
+        officialExplanationCount: 1,
         assets: [],
       },
     ],
@@ -31,35 +31,35 @@ vi.mock("@workspace/api-client-react", () => ({
       examFamily: "sat",
       extractStatus: "partial",
       questionCount: 1,
-      officialExplanationCount: 0,
+      officialExplanationCount: 1,
       assets: [
-        {
-          id: "a1",
-          kind: "test_pdf",
-          title: "Test PDF",
-          resourceUrl: "content/college-board/sat/practice-test-11/test.pdf",
-        },
-      ],
-      questions: [
-        {
-          id: "bq1",
-          sourceKey: "sat:11:rw:1:1",
-          collectionId: "col-11",
-          examFamily: "sat",
-          section: "rw",
-          module: 1,
-          questionNumber: 1,
-          position: 1,
-          prompt: "Which choice most logically completes the text?",
-          skill: "Command of Evidence",
-          domain: "Information and Ideas",
-          difficulty: "medium",
-          questionType: "mcq",
-          estimatedSeconds: 450,
-          sourceKind: "seed",
-          hasOfficialExplanation: false,
-        },
-      ],
+          {
+            id: "a1",
+            kind: "test_pdf",
+            title: "Test PDF",
+            resourceUrl: "content/college-board/pdfs/sat-practice-test-11-digital.pdf",
+          },
+        ],
+        questions: [
+          {
+            id: "bq1",
+            sourceKey: "sat-pt11-rw-m1-q1",
+            collectionId: "col-11",
+            examFamily: "sat",
+            section: "rw",
+            module: 1,
+            questionNumber: 1,
+            position: 1,
+            prompt: "Which choice most logically completes the text?",
+            skill: null,
+            domain: null,
+            difficulty: null,
+            questionType: "mcq",
+            estimatedSeconds: 450,
+            sourceKind: "official_extract",
+            hasOfficialExplanation: true,
+          },
+        ],
     },
     isLoading: false,
   }),
@@ -90,11 +90,11 @@ describe("SAT/PSAT bank panel", () => {
     expect(screen.getByTestId("sat-bank-collection-sat-practice-test-11").textContent).toMatch(
       /SAT Practice Test 11/,
     );
-    expect(screen.getByTestId("sat-bank-question-sat:11:rw:1:1").textContent).toMatch(
+    expect(screen.getByTestId("sat-bank-question-sat-pt11-rw-m1-q1").textContent).toMatch(
       /Which choice most logically completes the text/,
     );
-    expect(screen.getByText(/official explanation pending/i)).toBeTruthy();
-    expect(screen.getByText(/Seed fixture/)).toBeTruthy();
+    expect(screen.getByText(/official explanation on file/i)).toBeTruthy();
+    expect(screen.queryByText(/Seed fixture/)).toBeNull();
     fireEvent.click(screen.getByTestId("import-sat-bank"));
     expect(importMutate).toHaveBeenCalled();
   });

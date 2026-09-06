@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,7 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  void ensureOfficialExtractsImported()
+    .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
+    .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"));
 });

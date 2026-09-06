@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   bankDedupKey,
   bankSourceKey,
@@ -424,6 +428,75 @@ export function parseCollegeBoardPayload(text: string, source = "payload"): Impo
 }
 
 export const DEFAULT_COLLEGE_BOARD_ROOT = "content/college-board";
+
+const SKIP_EXTRACT_NAMES = /^(manifest|extraction-report|schema)\.json$/i;
+const SKIP_EXTRACT_DIRS = /(^|\/)fixtures(\/|$)/i;
+const SKIP_EXTRACT_FILES = /sample-extract\.jsonl$/i;
+
+export function isOfficialExtractFile(filePath: string): boolean {
+  const normalized = filePath.replaceAll("\\", "/");
+  const base = normalized.split("/").pop() ?? "";
+  if (SKIP_EXTRACT_DIRS.test(normalized)) return false;
+  if (SKIP_EXTRACT_FILES.test(base)) return false;
+  if (SKIP_EXTRACT_NAMES.test(base)) return false;
+  return /\.(json|jsonl)$/i.test(base);
+}
+
+export async function listOfficialExtractFiles(root: string): Promise<string[]> {
+  const files: string[] = [];
+  async function visit(dir: string) {
+    let entries: string[] = [];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry);
+      let info;
+      try {
+        info = await stat(full);
+      } catch {
+        continue;
+      }
+      if (info.isDirectory()) {
+        await visit(full);
+        continue;
+      }
+      if (isOfficialExtractFile(full)) files.push(full);
+    }
+  }
+  await visit(root);
+  return files.sort();
+}
+
+function moduleRelativeCollegeBoardRoots(): string[] {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    return [
+      path.resolve(here, "../../../content/college-board"),
+      path.resolve(here, "../../../../content/college-board"),
+    ];
+  } catch {
+    return [];
+  }
+}
+
+export function resolveCollegeBoardRoot(preferred?: string): string {
+  const candidates = [
+    preferred,
+    process.env.SAT_BANK_ROOT,
+    process.env.SAT_BANK_IMPORT_ROOT,
+    DEFAULT_COLLEGE_BOARD_ROOT,
+    path.resolve(process.cwd(), DEFAULT_COLLEGE_BOARD_ROOT),
+    path.resolve(process.cwd(), "../../content/college-board"),
+    ...moduleRelativeCollegeBoardRoots(),
+  ].filter((item): item is string => Boolean(item));
+  for (const dir of candidates) {
+    if (existsSync(path.join(dir, "manifest.json"))) return dir;
+  }
+  return preferred || DEFAULT_COLLEGE_BOARD_ROOT;
+}
 
 export type ManifestPack = {
   packId: string;

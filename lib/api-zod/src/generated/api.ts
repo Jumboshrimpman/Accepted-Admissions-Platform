@@ -3799,6 +3799,7 @@ export const GetSessionLessonResponse = zod.object({
   "text": zod.string()
 })).optional(),
   "studentAnswer": zod.string().nullish(),
+  "correctAnswer": zod.string(),
   "officialExplanation": zod.string().optional(),
   "aiStudentFeedback": zod.string().nullish(),
   "aiTutorGuidance": zod.string().nullish(),

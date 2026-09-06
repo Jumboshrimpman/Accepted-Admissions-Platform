@@ -3,10 +3,11 @@ import { questionGenerationStatus } from "./question-generation.ts";
 export type RetryCandidate = {
   id: string;
   sourceKey: string;
-  skill: string;
+  skill: string | null;
   section: "rw" | "math";
   module: number;
   questionNumber: number;
+  difficulty?: string | null;
 };
 
 export type RetryDecision =
@@ -14,12 +15,42 @@ export type RetryDecision =
   | { kind: "ai"; status: ReturnType<typeof questionGenerationStatus>; reason: string }
   | { kind: "blocked"; status: ReturnType<typeof questionGenerationStatus>; reason: string };
 
+const DIFFICULTY_RANK: Record<string, number> = {
+  foundational: 1,
+  easy: 1,
+  medium: 2,
+  hard: 3,
+};
+
+function difficultyDistance(left?: string | null, right?: string | null): number {
+  if (!left || !right) return 50;
+  const a = DIFFICULTY_RANK[left.toLowerCase()];
+  const b = DIFFICULTY_RANK[right.toLowerCase()];
+  if (a == null || b == null) return 50;
+  return Math.abs(a - b);
+}
+
+function pickPreferred(
+  candidates: readonly RetryCandidate[],
+  sourceDifficulty?: string | null,
+): RetryCandidate | undefined {
+  if (candidates.length === 0) return undefined;
+  return [...candidates].sort((left, right) => {
+    const byDifficulty =
+      difficultyDistance(left.difficulty, sourceDifficulty) -
+      difficultyDistance(right.difficulty, sourceDifficulty);
+    if (byDifficulty !== 0) return byDifficulty;
+    return left.questionNumber - right.questionNumber;
+  })[0];
+}
+
 /**
  * Bank-first similar retry. Unused same-skill / same-section item wins.
+ * When several unused matches remain, prefer the closest known difficulty.
  * AI is only offered when OPENAI is configured. Never reveals the answer.
  */
 export function decideRetrySource(input: {
-  source: Pick<RetryCandidate, "id" | "skill" | "section" | "sourceKey">;
+  source: Pick<RetryCandidate, "id" | "skill" | "section" | "sourceKey" | "difficulty">;
   unusedBank: readonly RetryCandidate[];
   usedSourceKeys?: ReadonlySet<string>;
   env?: NodeJS.ProcessEnv;
@@ -31,11 +62,15 @@ export function decideRetrySource(input: {
       item.sourceKey !== input.source.sourceKey &&
       !used.has(item.sourceKey),
   );
-  const sameSkill = unused.filter(
-    (item) => item.skill.toLowerCase() === input.source.skill.toLowerCase(),
-  );
+  const sourceSkill = (input.source.skill ?? "").trim();
+  const sameSkill = sourceSkill
+    ? unused.filter((item) => (item.skill ?? "").toLowerCase() === sourceSkill.toLowerCase())
+    : [];
   const sameSection = unused.filter((item) => item.section === input.source.section);
-  const candidate = sameSkill[0] ?? sameSection[0] ?? unused[0];
+  const candidate =
+    pickPreferred(sameSkill, input.source.difficulty) ??
+    pickPreferred(sameSection, input.source.difficulty) ??
+    pickPreferred(unused, input.source.difficulty);
   if (candidate) {
     return {
       kind: "bank",

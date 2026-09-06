@@ -19,6 +19,7 @@ export interface SessionLessonMiss {
   choices?: SessionLessonMissChoicesItem[];
   /** @nullable */
   studentAnswer?: string | null;
+  correctAnswer: string;
   officialExplanation?: string;
   /** @nullable */
   aiStudentFeedback?: string | null;

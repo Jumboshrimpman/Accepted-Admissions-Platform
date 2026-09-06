@@ -17,7 +17,7 @@ content/college-board/
   …
   psat-nmsqt-practice-test-1.jsonl
   pdfs/                         # expected linked PDF filenames from the manifest (may be staged separately)
-  fixtures/sample-extract.jsonl # seed only — skipped by the importer
+  fixtures/sample-extract.jsonl # test fixture only — never a production seed; importer skips fixtures/
 ```
 
 Stable id: `{examVariant}-pt{N}-{rw|math}-m{1|2}-q{N}`  

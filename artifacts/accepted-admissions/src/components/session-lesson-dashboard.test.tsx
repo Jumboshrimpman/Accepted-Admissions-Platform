@@ -27,8 +27,15 @@ vi.mock("@workspace/api-client-react", () => ({
           questionId: "q1",
           skill: "Transitions",
           prompt: "Which transition best connects the paragraphs?",
+          choices: [
+            { id: "a", label: "A", text: "Similarly" },
+            { id: "b", label: "B", text: "However" },
+            { id: "c", label: "C", text: "For example" },
+            { id: "d", label: "D", text: "Therefore" },
+          ],
           officialExplanation: "However signals contrast.",
           studentAnswer: "a",
+          correctAnswer: "b",
         },
       ],
       retries: [
@@ -70,6 +77,10 @@ describe("session lesson dashboard", () => {
     expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/Official explanation/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/However signals contrast/);
+    expect(screen.getByTestId("opened-miss-choices").textContent).toMatch(/Similarly/);
+    expect(screen.getByTestId("opened-miss-choices").textContent).toMatch(/However/);
+    expect(screen.getByTestId("opened-miss").textContent).toMatch(/Student answer:\s*A\. Similarly/);
+    expect(screen.getByTestId("opened-miss-correct-answer").textContent).toMatch(/B\. However/);
     expect(screen.getByTestId("retry-prompt-retry-1").textContent).toMatch(
       /Which transition best completes the second draft/,
     );

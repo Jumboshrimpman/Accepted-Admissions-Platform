@@ -16,6 +16,19 @@ function errorText(error: unknown): string {
   return data?.blockedReason || data?.error || "The lesson request could not be completed.";
 }
 
+function formatAnswer(
+  answer: string | null | undefined,
+  choices?: Array<{ id: string; label: string; text: string }>,
+) {
+  if (!answer) return "Not answered";
+  const match = choices?.find(
+    (choice) =>
+      choice.id.toLowerCase() === answer.toLowerCase() ||
+      choice.label.toLowerCase() === answer.toLowerCase(),
+  );
+  return match ? `${match.label}. ${match.text}` : answer;
+}
+
 export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
   const queryClient = useQueryClient();
   const lesson = useGetSessionLesson(sessionId, {
@@ -119,9 +132,22 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
                 {selectedMiss.stimulus ? (
                   <p className="mt-2 text-sm text-muted-foreground">{selectedMiss.stimulus}</p>
                 ) : null}
+                {selectedMiss.choices && selectedMiss.choices.length > 0 ? (
+                  <ul className="mt-3 space-y-1 text-sm" data-testid="opened-miss-choices">
+                    {selectedMiss.choices.map((choice) => (
+                      <li key={choice.id}>
+                        {choice.label}. {choice.text}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <p className="mt-3 text-sm">
                   <span className="font-medium">Student answer:</span>{" "}
-                  {selectedMiss.studentAnswer || "Not answered"}
+                  {formatAnswer(selectedMiss.studentAnswer, selectedMiss.choices)}
+                </p>
+                <p className="mt-2 text-sm" data-testid="opened-miss-correct-answer">
+                  <span className="font-medium">Correct answer:</span>{" "}
+                  {formatAnswer(selectedMiss.correctAnswer, selectedMiss.choices)}
                 </p>
                 <div className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
                   <p className="font-medium">Official explanation</p>

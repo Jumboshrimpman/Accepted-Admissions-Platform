@@ -74,6 +74,37 @@ test("records mastered vs still struggling without exposing the answer first", (
   assert.equal(safe.prompt, "Which choice?");
 });
 
+test("prefers a closer difficulty when several unused same-skill items remain", () => {
+  const decision = decideRetrySource({
+    source: { ...source, difficulty: "medium" },
+    unusedBank: [
+      {
+        id: "hard-1",
+        sourceKey: "sat:9:rw:2:8",
+        skill: "Transitions",
+        section: "rw",
+        module: 2,
+        questionNumber: 8,
+        difficulty: "hard",
+      },
+      {
+        id: "medium-1",
+        sourceKey: "sat:10:rw:2:4",
+        skill: "Transitions",
+        section: "rw",
+        module: 2,
+        questionNumber: 4,
+        difficulty: "medium",
+      },
+    ],
+    env: {} as NodeJS.ProcessEnv,
+  });
+  assert.equal(decision.kind, "bank");
+  if (decision.kind === "bank") {
+    assert.equal(decision.candidate.sourceKey, "sat:10:rw:2:4");
+  }
+});
+
 test("accepts semicolon-separated SPR forms without requiring A–D", () => {
   assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "9", correctAnswer: "9; 9.0" }), {
     correct: true,

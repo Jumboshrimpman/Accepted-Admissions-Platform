@@ -5,8 +5,11 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   STAGED_COLLECTION_STUBS,
+  isOfficialExtractFile,
+  listOfficialExtractFiles,
   parseCollegeBoardManifest,
   parseCollegeBoardPayload,
+  resolveCollegeBoardRoot,
 } from "./sat-bank-import.ts";
 
 const jsonl = [
@@ -161,8 +164,26 @@ test("stages SAT 4–11 and the seven PSAT packs from the official layout", () =
   assert.equal(STAGED_COLLECTION_STUBS.length, 15);
 });
 
+test("treats fixtures/sample-extract.jsonl as a non-production file", async () => {
+  assert.equal(isOfficialExtractFile("content/college-board/fixtures/sample-extract.jsonl"), false);
+  assert.equal(isOfficialExtractFile("content/college-board/manifest.json"), false);
+  assert.equal(isOfficialExtractFile("content/college-board/sat-practice-test-11-digital.jsonl"), true);
+  const root = resolveCollegeBoardRoot(path.resolve(process.cwd(), "../../content/college-board"));
+  const fixture = parseCollegeBoardPayload(
+    await readFile(path.join(root, "fixtures/sample-extract.jsonl"), "utf8"),
+    "fixtures/sample-extract.jsonl",
+  );
+  assert.ok(fixture.records.length > 0);
+  assert.ok(fixture.records.every((row) => row.sourceKind === "seed"));
+  assert.ok(fixture.records.every((row) => !row.officialExplanation.trim()));
+});
+
 test("official on-disk extracts parse to 1800 unique graded questions", async () => {
-  const root = path.resolve(process.cwd(), "../../content/college-board");
+  const root = resolveCollegeBoardRoot(path.resolve(process.cwd(), "../../content/college-board"));
+  const files = await listOfficialExtractFiles(root);
+  assert.equal(files.length, 15);
+  assert.ok(files.every((file) => !file.includes(`${path.sep}fixtures${path.sep}`)));
+  assert.ok(files.every((file) => !file.endsWith("sample-extract.jsonl")));
   const manifest = parseCollegeBoardManifest(await readFile(path.join(root, "manifest.json"), "utf8"));
   assert.equal(manifest.length, 15);
   const records = [];

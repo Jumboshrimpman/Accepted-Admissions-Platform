@@ -3369,7 +3369,7 @@ components:
         extractIncomplete: { type: boolean }
     SessionLessonMiss:
       type: object
-      required: [questionId, skill, prompt]
+      required: [questionId, skill, prompt, correctAnswer]
       properties:
         questionId: { type: string }
         bankQuestionId: { type: ["string", "null"] }
@@ -3387,6 +3387,7 @@ components:
               label: { type: string }
               text: { type: string }
         studentAnswer: { type: ["string", "null"] }
+        correctAnswer: { type: string }
         officialExplanation: { type: string }
         aiStudentFeedback: { type: ["string", "null"] }
         aiTutorGuidance: { type: ["string", "null"] }

@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   assignmentQuestionsTable,
@@ -18,12 +18,13 @@ import {
   sessionsTable,
 } from "@workspace/db";
 import {
-  DEFAULT_COLLEGE_BOARD_ROOT,
   STAGED_COLLECTION_STUBS,
   collectionStubsFromManifest,
   isAssignableBankItem,
+  listOfficialExtractFiles,
   parseCollegeBoardManifest,
   parseCollegeBoardPayload,
+  resolveCollegeBoardRoot,
   type CollectionStub,
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
@@ -39,7 +40,7 @@ import {
 } from "./sat-bank-timing.ts";
 import { groupMissesByWeakness } from "./sat-bank-weakness.ts";
 
-export const SAT_BANK_IMPORT_ROOT = DEFAULT_COLLEGE_BOARD_ROOT;
+export const SAT_BANK_IMPORT_ROOT = resolveCollegeBoardRoot();
 
 function quizSubject(section: string): string {
   return section === "math" ? "SAT Math" : "SAT Reading & Writing";
@@ -78,39 +79,7 @@ function asChoices(value: unknown): Array<{ id: string; label: string; text: str
 }
 
 async function walkExtractFiles(root: string): Promise<string[]> {
-  const files: string[] = [];
-  async function visit(dir: string) {
-    let entries: string[] = [];
-    try {
-      entries = await readdir(dir);
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry);
-      let info;
-      try {
-        info = await stat(full);
-      } catch {
-        continue;
-      }
-      if (info.isDirectory()) {
-        await visit(full);
-        continue;
-      }
-      if (
-        /\.(json|jsonl)$/i.test(entry) &&
-        !/schema\.json$/i.test(entry) &&
-        !/manifest\.json$/i.test(entry) &&
-        !/extraction-report\.json$/i.test(entry) &&
-        !/(^|\/)fixtures(\/|$)/i.test(full)
-      ) {
-        files.push(full);
-      }
-    }
-  }
-  await visit(root);
-  return files.sort();
+  return listOfficialExtractFiles(root);
 }
 
 async function collectionStubs(rootDir = SAT_BANK_IMPORT_ROOT): Promise<CollectionStub[]> {
@@ -316,7 +285,7 @@ export async function importCollegeBoardExtracts(input: {
     ? parseCollegeBoardPayload(input.payloadText, input.payloadSource ?? "body")
     : { records: [] as ParsedBankRecord[], skipped: [], duplicatesInFile: [] };
   let filesScanned = 0;
-  const rootDir = input.rootDir ?? SAT_BANK_IMPORT_ROOT;
+  const rootDir = resolveCollegeBoardRoot(input.rootDir ?? SAT_BANK_IMPORT_ROOT);
   if (!input.payloadText) {
     const files = await walkExtractFiles(rootDir);
     filesScanned = files.length;
@@ -328,6 +297,18 @@ export async function importCollegeBoardExtracts(input: {
       parsed.duplicatesInFile.push(...fileParsed.duplicatesInFile);
     }
   }
+  const productionRecords: ParsedBankRecord[] = [];
+  for (const record of parsed.records) {
+    if (record.sourceKind === "seed") {
+      parsed.skipped.push({
+        reason: `${record.sourceKey}: seed fixture is not a production extract`,
+        source: record.sourceKey,
+      });
+      continue;
+    }
+    productionRecords.push(record);
+  }
+  parsed.records = productionRecords;
   const unique = new Map<string, ParsedBankRecord>();
   const seenDedup = new Set<string>();
   for (const record of parsed.records) {
@@ -345,6 +326,33 @@ export async function importCollegeBoardExtracts(input: {
     duplicatesInFile: parsed.duplicatesInFile.length + (parsed.records.length - unique.size),
     collectionsEnsured,
   };
+}
+
+let officialImportPromise: Promise<{ imported: boolean; officialCount: number }> | null = null;
+
+export async function ensureOfficialExtractsImported(): Promise<{
+  imported: boolean;
+  officialCount: number;
+}> {
+  if (officialImportPromise) return officialImportPromise;
+  officialImportPromise = (async () => {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bankQuestionsTable)
+      .where(eq(bankQuestionsTable.sourceKind, "official_extract"));
+    const officialCount = Number(count ?? 0);
+    if (officialCount > 0) {
+      return { imported: false, officialCount };
+    }
+    const result = await importCollegeBoardExtracts({});
+    return { imported: true, officialCount: result.inserted + result.updated };
+  })();
+  try {
+    return await officialImportPromise;
+  } catch (error) {
+    officialImportPromise = null;
+    throw error;
+  }
 }
 
 export async function materializeBankQuestion(bankQuestionId: string): Promise<string> {
@@ -433,6 +441,7 @@ export async function assignPreworkFromBank(input: {
   if (!session) {
     throw Object.assign(new Error("Session not found"), { status: 404 });
   }
+  await ensureOfficialExtractsImported().catch(() => undefined);
   const targetMinutes = input.targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES;
   const homeworkKind = input.homeworkKind ?? "routine";
   let pool = await db
@@ -461,7 +470,7 @@ export async function assignPreworkFromBank(input: {
   if (pool.length === 0) {
     throw Object.assign(
       new Error(
-        "The SAT/PSAT bank has no matching questions yet. Import a College Board extract or the seed fixture first.",
+        "The SAT/PSAT bank has no matching official extract questions yet. Import the 15 College Board JSONL packs from content/college-board/.",
       ),
       { status: 409 },
     );
@@ -601,10 +610,12 @@ export async function persistWeaknessGroups(input: {
       questionIds: group.questionIds,
     });
   }
+  // Follow-up: still_struggling retries are not yet written into future session priorities.
   return groups.length;
 }
 
 export async function listBankCollections() {
+  await ensureOfficialExtractsImported().catch(() => undefined);
   await ensureStagedCollections();
   const collections = await db
     .select()
@@ -810,6 +821,7 @@ export async function getSessionLesson(sessionId: string) {
       stimulus: bank?.stimulus ?? null,
       choices: asChoices(bank?.choices),
       studentAnswer: item.finalAnswer ?? null,
+      correctAnswer: bank?.correctAnswer || item.correctAnswer || "",
       officialExplanation: bank?.officialExplanation || item.explanation || "",
       aiStudentFeedback: annotation?.studentFeedback ?? null,
       aiTutorGuidance: annotation?.tutorGuidance ?? null,
@@ -968,6 +980,7 @@ export async function requestSimilarRetry(input: {
       sourceKey: sourceBank?.sourceKey ?? sourceQuestion.id,
       skill: sourceBank?.skill ?? sourceQuestion.skill,
       section: (sourceBank?.section as "rw" | "math") ?? "rw",
+      difficulty: sourceBank?.difficulty ?? sourceQuestion.difficulty,
     },
     unusedBank: unusedBank.map((row) => ({
       id: row.id,
@@ -976,6 +989,7 @@ export async function requestSimilarRetry(input: {
       section: row.section as "rw" | "math",
       module: row.module,
       questionNumber: row.questionNumber,
+      difficulty: row.difficulty,
     })),
     usedSourceKeys: used,
     env: input.env,
