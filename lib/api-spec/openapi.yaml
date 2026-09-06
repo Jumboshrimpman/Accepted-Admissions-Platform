@@ -148,8 +148,10 @@ paths:
       summary: Provision a tutor or student for portal access
       description: >
         Creates or reactivates a database access grant for a tutor or student.
+        Resolves the Production Clerk user by email (find or create, no invitation).
+        A pasted clerkUserId is used only if it exists in Production for this email;
+        otherwise it is replaced and a warning is returned.
         Administrator and viewer roles cannot be provisioned from this endpoint.
-        Does not send Clerk invitations.
       requestBody:
         required: true
         content:
@@ -2087,6 +2089,9 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         revokedAt: { type: ["string", "null"], format: date-time }
+        warning:
+          type: ["string", "null"]
+          description: Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.
     AdminAccessGrantList:
       type: object
       required: [grants]
@@ -2105,7 +2110,10 @@ components:
         roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
         clerkUserId:
           type: ["string", "null"]
-          description: Optional Clerk user ID when already known; otherwise access matches the verified primary email.
+          description: >
+            Optional Production Clerk user ID. If the ID is not in the Production
+            Clerk instance (or belongs to a different email), it is ignored and
+            replaced by an email lookup or create.
           minLength: 3
           maxLength: 128
         notes: { type: ["string", "null"], maxLength: 500 }

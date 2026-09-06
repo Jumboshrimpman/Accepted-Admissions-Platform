@@ -1,4 +1,4 @@
-import { clerkClient, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
 import {
   and,
   asc,
@@ -241,6 +241,12 @@ import {
   type ProvisionableRoleCategory,
   verifiedPrimaryEmail,
 } from "../lib/access-config";
+import {
+  ClerkProductionUserError,
+  getProductionClerkUser,
+  looksLikeClerkUserId,
+  resolveProductionClerkUser,
+} from "../lib/clerk-production-users";
 import {
   parseTutorProfileEditableFields,
   safePublicUrl,
@@ -1850,7 +1856,10 @@ async function resolveIdentityAccess(
   return resolvePortalAccess(clerkUserId, email, { databaseGrants });
 }
 
-function adminAccessGrantShape(grant: PortalAccessGrant) {
+function adminAccessGrantShape(
+  grant: PortalAccessGrant,
+  extra: { warning?: string | null } = {},
+) {
   const access = accessFromRoleCategory(grant.roleCategory);
   return {
     id: grant.id,
@@ -1866,6 +1875,7 @@ function adminAccessGrantShape(grant: PortalAccessGrant) {
     createdAt: grant.createdAt.toISOString(),
     updatedAt: grant.updatedAt.toISOString(),
     revokedAt: grant.revokedAt ? grant.revokedAt.toISOString() : null,
+    warning: extra.warning ?? null,
   };
 }
 
@@ -1873,13 +1883,16 @@ function pendingClerkUserId(email: string): string {
   return `pending:${normalizeProvisionedEmail(email)}`;
 }
 
-function looksLikeClerkUserId(value: string): boolean {
-  const trimmed = value.trim();
-  return (
-    trimmed.length >= 3 &&
-    !trimmed.includes("@") &&
-    !trimmed.startsWith("pending:")
-  );
+function clerkProductionProvisionError(
+  res: Response,
+  error: unknown,
+): boolean {
+  if (!(error instanceof ClerkProductionUserError)) return false;
+  res.status(error.httpStatus).json({
+    code: error.code,
+    error: error.message,
+  });
+  return true;
 }
 
 async function ensureProvisionedAppUser(input: {
@@ -2114,7 +2127,7 @@ async function clerkIdentity(
     !email ||
     appUser?.email.endsWith("@users.accepted.local") === true;
   if (needsVerifiedIdentity || !displayName) {
-    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    const clerkUser = await getProductionClerkUser(clerkUserId);
     email =
       (requireVerifiedEmail
         ? verifiedPrimaryEmail(clerkUser)
@@ -6790,17 +6803,32 @@ router.post(
       adminMutationError(res, "A valid email address is required.");
       return;
     }
-    const clerkUserId =
+    const pastedClerkUserId =
       body.data.clerkUserId === undefined || body.data.clerkUserId === null
         ? null
         : body.data.clerkUserId.trim();
-    if (clerkUserId && !looksLikeClerkUserId(clerkUserId)) {
+    if (pastedClerkUserId && !looksLikeClerkUserId(pastedClerkUserId)) {
       adminMutationError(res, "Clerk user ID looks invalid.");
       return;
     }
 
+    let productionClerk: Awaited<
+      ReturnType<typeof resolveProductionClerkUser>
+    >;
+    try {
+      productionClerk = await resolveProductionClerkUser({
+        email,
+        displayName: body.data.displayName,
+        pastedClerkUserId,
+      });
+    } catch (error) {
+      if (clerkProductionProvisionError(res, error)) return;
+      throw error;
+    }
+    const clerkUserId = productionClerk.clerkUserId;
+
     const envCategories = envRoleCategoriesForIdentity(
-      clerkUserId ?? undefined,
+      clerkUserId,
       email,
     );
     if (envCategories.includes("administrator") || envCategories.includes("viewer")) {
@@ -6885,12 +6913,19 @@ router.post(
         role: desiredAccess.role,
         subject: desiredAccess.subject,
         userId: user.id,
+        clerkUserId,
+        createdClerkUser: productionClerk.created,
+        ignoredPastedClerkUserId: productionClerk.ignoredPastedClerkUserId,
       },
     });
 
     res
       .status(201)
-      .json(CreateAdminAccessGrantResponse.parse(adminAccessGrantShape(grant!)));
+      .json(
+        CreateAdminAccessGrantResponse.parse(
+          adminAccessGrantShape(grant!, { warning: productionClerk.warning }),
+        ),
+      );
   },
 );
 
@@ -6921,13 +6956,13 @@ router.patch(
       });
       return;
     }
-    const nextClerkUserId =
+    const requestedClerkUserId =
       body.data.clerkUserId === undefined
         ? existing.clerkUserId
         : body.data.clerkUserId === null
           ? null
           : body.data.clerkUserId.trim();
-    if (nextClerkUserId && !looksLikeClerkUserId(nextClerkUserId)) {
+    if (requestedClerkUserId && !looksLikeClerkUserId(requestedClerkUserId)) {
       adminMutationError(res, "Clerk user ID looks invalid.");
       return;
     }
@@ -6938,6 +6973,24 @@ router.patch(
       body.data.notes === undefined
         ? existing.notes
         : body.data.notes?.trim() || null;
+
+    let productionClerk: Awaited<
+      ReturnType<typeof resolveProductionClerkUser>
+    > | null = null;
+    let nextClerkUserId = requestedClerkUserId;
+    if (nextActive) {
+      try {
+        productionClerk = await resolveProductionClerkUser({
+          email: existing.email,
+          displayName: nextDisplayName,
+          pastedClerkUserId: requestedClerkUserId,
+        });
+        nextClerkUserId = productionClerk.clerkUserId;
+      } catch (error) {
+        if (clerkProductionProvisionError(res, error)) return;
+        throw error;
+      }
+    }
 
     if (nextActive) {
       const envCategories = envRoleCategoriesForIdentity(
@@ -7019,11 +7072,18 @@ router.patch(
         email: grant!.email,
         roleCategory: grant!.roleCategory,
         active: grant!.active,
+        clerkUserId: grant!.clerkUserId,
+        ignoredPastedClerkUserId:
+          productionClerk?.ignoredPastedClerkUserId ?? null,
       },
     });
 
     res.json(
-      UpdateAdminAccessGrantResponse.parse(adminAccessGrantShape(grant!)),
+      UpdateAdminAccessGrantResponse.parse(
+        adminAccessGrantShape(grant!, {
+          warning: productionClerk?.warning ?? null,
+        }),
+      ),
     );
   },
 );

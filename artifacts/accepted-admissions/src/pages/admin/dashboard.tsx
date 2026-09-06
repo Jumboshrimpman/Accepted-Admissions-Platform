@@ -226,7 +226,7 @@ export default function AdminDashboard() {
             <Eye className="h-5 w-5 text-primary" /> Student portals
           </CardTitle>
           <CardDescription>
-            Preview an existing student’s portal. New people must be provisioned and invited in Clerk before they can sign in.
+            Preview an existing student’s portal. New people must be provisioned under People & access before they can sign in.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -245,11 +245,11 @@ export default function AdminDashboard() {
           ))}
           {portalStudents.length === 0 && (
             <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-student-portals">
-              No students on file yet. Provision them under People & access, then invite the same email in Clerk.
+              No students on file yet. Provision them under People & access, then they can sign in at /login.
             </p>
           )}
           <p className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="hint-michelle-provision">
-            Michelle Makarem (<span className="font-medium">michaelmakarem@gmail.com</span>) must be provisioned via People & access and invited in Clerk before preview or login. There is no Clerkless demo.
+            Michelle Makarem (<span className="font-medium">michaelmakarem@gmail.com</span>) must be provisioned via People & access before preview or login. There is no Clerkless demo.
           </p>
         </CardContent>
       </Card>

@@ -353,13 +353,14 @@ export const ListAdminAccessGrantsResponse = zod.object({
   "userId": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
-  "revokedAt": zod.coerce.date().nullable()
+  "revokedAt": zod.coerce.date().nullable(),
+  "warning": zod.string().nullish().describe('Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.')
 }))
 })
 
 
 /**
- * Creates or reactivates a database access grant for a tutor or student. Administrator and viewer roles cannot be provisioned from this endpoint. Does not send Clerk invitations.
+ * Creates or reactivates a database access grant for a tutor or student. Resolves the Production Clerk user by email (find or create, no invitation). A pasted clerkUserId is used only if it exists in Production for this email; otherwise it is replaced and a warning is returned. Administrator and viewer roles cannot be provisioned from this endpoint.
  * @summary Provision a tutor or student for portal access
  */
 export const createAdminAccessGrantBodyEmailMin = 3;
@@ -377,7 +378,7 @@ export const CreateAdminAccessGrantBody = zod.object({
   "email": zod.string().min(createAdminAccessGrantBodyEmailMin),
   "displayName": zod.string().min(1).max(createAdminAccessGrantBodyDisplayNameMax),
   "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
-  "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Clerk user ID when already known; otherwise access matches the verified primary email.'),
+  "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Production Clerk user ID. If the ID is not in the Production Clerk instance (or belongs to a different email), it is ignored and replaced by an email lookup or create.'),
   "notes": zod.string().max(createAdminAccessGrantBodyNotesMax).nullish()
 })
 
@@ -394,7 +395,8 @@ export const CreateAdminAccessGrantResponse = zod.object({
   "userId": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
-  "revokedAt": zod.coerce.date().nullable()
+  "revokedAt": zod.coerce.date().nullable(),
+  "warning": zod.string().nullish().describe('Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.')
 })
 
 
@@ -435,7 +437,8 @@ export const UpdateAdminAccessGrantResponse = zod.object({
   "userId": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
-  "revokedAt": zod.coerce.date().nullable()
+  "revokedAt": zod.coerce.date().nullable(),
+  "warning": zod.string().nullish().describe('Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.')
 })
 
 

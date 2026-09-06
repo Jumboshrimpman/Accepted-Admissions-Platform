@@ -215,7 +215,7 @@ function ClientPreviewCard({
         ))}
         {students.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No students on file yet. Provision them under People, then invite the same email in Clerk.
+            No students on file yet. Provision them under People — they can sign in at /login without a Railway allowlist update.
           </p>
         ) : null}
       </CardContent>
@@ -283,7 +283,11 @@ function PeopleSection({
       { data: payload },
       {
         onSuccess: (grant) => {
-          setMessage(`${grant.displayName} provisioned as ${roleLabel(grant.roleCategory)}. They can sign in once invited in Clerk.`);
+          setMessage(
+            grant.warning
+              ? `${grant.displayName} provisioned as ${roleLabel(grant.roleCategory)}. ${grant.warning} They can sign in at /login.`
+              : `${grant.displayName} provisioned as ${roleLabel(grant.roleCategory)}. They can sign in at /login. Production Clerk access was created or linked for this email (no invitation email).`,
+          );
           setDraft({
             email: "",
             displayName: "",
@@ -340,7 +344,7 @@ function PeopleSection({
             <UserPlus className="h-5 w-5 text-primary" /> Provision people
           </CardTitle>
           <CardDescription>
-            Grant portal access as a student or tutor. This does not send Clerk invitations — invite the same email in Clerk before they can sign in or be previewed.
+            Grant portal access as a student or tutor. Production Clerk finds or creates the account from this email. No invitation email is sent, and Railway allowlists do not need to be updated.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -381,7 +385,7 @@ function PeopleSection({
                 <option value="tutor">Tutor (all subjects)</option>
               </select>
             </Field>
-            <Field label="Clerk user ID (optional)">
+            <Field label="Clerk user ID (optional, Production only)">
               <Input
                 value={draft.clerkUserId ?? ""}
                 onChange={(event) =>
@@ -420,10 +424,10 @@ function PeopleSection({
               <Plus className="mr-2 h-4 w-4" /> Provision access
             </Button>
             <p className="text-sm text-muted-foreground">
-              After provisioning, invite them in Clerk with the same email, then they sign in at /login.
+              After provisioning they can sign in at /login. A pasted ID from another Clerk instance is ignored and replaced.
             </p>
             <p className="text-sm text-muted-foreground" data-testid="hint-michelle-provision">
-              Michelle Makarem (michaelmakarem@gmail.com) is not available as a Clerkless demo. Provision her here, send a Clerk invite, then use Preview client portal.
+              Michelle Makarem (michaelmakarem@gmail.com) is not available as a Clerkless demo. Provision her here, then use Preview client portal. No Clerk invitation email is sent.
             </p>
           </div>
         </CardContent>

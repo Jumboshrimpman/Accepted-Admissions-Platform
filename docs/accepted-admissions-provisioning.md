@@ -1,6 +1,6 @@
 # Accepted Admissions production provisioning
 
-The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is provisioned with Clerk user IDs, never by public self-enrollment. Administrators can also provision **tutors** and **students** from `/admin/curriculum?section=people` without editing environment allowlists; administrator and viewer roles remain environment-only. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
+The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is never opened by public self-enrollment. Administrators provision **tutors** and **students** from `/admin/curriculum?section=people`. That path is the source of truth for those roles: the API finds or creates the user in **Production Clerk** (`CLERK_SECRET_KEY`), marks the email verified when the API allows, and stores the real Production `clerkUserId` on `portal_access_grants`. **Do not update Railway `ACCEPTED_*_CLERK_USER_IDS` / `ACCEPTED_*_EMAILS` for People-provisioned tutors or students.** Administrator and viewer roles remain environment-only. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
 
 Set the following environment variables as comma-separated Clerk user IDs via
 host Secrets or a local `.env` (see `.env.example`). Do not commit allowlist
@@ -9,11 +9,11 @@ against Clerk's verified server-side primary email; the approved email fallback
 roster below is operator documentation, not committed runtime configuration.
 
 - `ACCEPTED_ADMIN_CLERK_USER_IDS`: administrators; administrators can see all courses.
-- `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`: SAT tutors; they receive the SAT subject scope.
-- `ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS`: English/IELTS tutors; they receive the IELTS subject scope.
+- `ACCEPTED_SAT_TUTOR_CLERK_USER_IDS`: optional legacy SAT tutor override. New SAT tutors should be provisioned under People instead.
+- `ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS`: optional legacy English/IELTS tutor override. New IELTS tutors should be provisioned under People instead.
 - `ACCEPTED_TUTOR_CLERK_USER_IDS`: optional legacy tutor allowlist for a tutor who is intentionally assigned to all subjects.
-- `ACCEPTED_STUDENT_CLERK_USER_IDS`: students enrolled in the seeded Fall 2026 course.
-- `ACCEPTED_VIEWER_CLERK_USER_IDS`: read-only viewers; the current viewer policy links to Taito’s student record when it exists.
+- `ACCEPTED_STUDENT_CLERK_USER_IDS`: optional legacy student override. New students should be provisioned under People instead.
+- `ACCEPTED_VIEWER_CLERK_USER_IDS`: read-only viewers; the current viewer policy links to Taito’s student record when it exists. Administrator and viewer identities are never created from the People UI.
 
 The approved shared/development email roster is:
 
@@ -32,28 +32,34 @@ reconciled on either account's first authorized request, so it does not depend
 on whether Ryo or Taito signs in first. Viewer writes are rejected with
 `VIEW_ONLY`.
 
-Do not send invitations until the owner confirms these production addresses.
+People provisioning does **not** send Clerk invitation emails. Sign-in uses the Production Clerk account created or linked from the provisioned email (OTP works after admin email verification).
 
 ## Owner onboarding checklist
 
-1. In the Clerk Development or Production instance, create or invite the confirmed email addresses. Do not enable a public sign-up path for this private portal.
-2. After each invited user has a Clerk account, copy the Clerk user ID into the matching role-specific environment variable. Never use an email address as the authorization key. The approved shared/development email roster remains as a fallback when a user ID changes between sign-in providers.
-3. Restart the **API Server** workflow after changing the environment configuration so the new allowlists are loaded.
-4. Reload the browser preview after the API restart, then have each invited user sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
+1. Keep public sign-up disabled on the Production Clerk instance. Administrator and viewer identities still use environment allowlists (`ACCEPTED_ADMIN_*` / `ACCEPTED_VIEWER_*`).
+2. For **tutors and students**, use **Provision people** at
+   `/admin/curriculum?section=people`. Enter the email (and optional Production
+   Clerk user ID). The API looks up the Production user; if missing, it creates
+   one without an invitation. A pasted ID from another Clerk instance is
+   ignored and replaced. Railway env sync is not required for these roles.
+3. Restart the **API Server** workflow only after changing **administrator or
+   viewer** environment allowlists. Tutor/student People grants take effect
+   without a Railway variable change.
+4. Have the provisioned person sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
 5. On the first authorized request, the API records the application user and the appropriate PostgreSQL course membership. Tutors also receive a subject-scoped tutor assignment to provisioned students in that course.
 6. Sign in as the administrator and review **Clients & tutors** at
    `/admin/curriculum?section=people`. Use **Provision people** to grant
    student or tutor access without editing environment allowlists.
    Administrator and viewer roles remain environment-only.
 7. To revoke in-app grants, use **Revoke** on the access grant. To revoke
-   environment allowlist access, remove the Clerk user ID from the allowlist,
-   restart the API workflow, and revoke the Clerk session/invitation. Remove
+   environment allowlist access for administrators or viewers, remove the
+   Clerk user ID from the allowlist and restart the API workflow. Remove
    old PostgreSQL memberships or tutor assignments as part of the offboarding
    review.
 
-An identity not present in an allowlist can authenticate with Clerk but receives no application user, course membership, or private course/session/assignment/attempt/review data. Existing database roles are never selected by the browser. The API records denied requests for previously provisioned users without storing session tokens or passwords.
+An identity that is not an administrator/viewer on the environment allowlists and does not have an active `portal_access_grants` row (or a legacy tutor/student env override) can authenticate with Clerk but receives no application user, course membership, or private course/session/assignment/attempt/review data. Existing database roles are never selected by the browser. The API records denied requests for previously provisioned users without storing session tokens or passwords.
 
-There is no development auto-enrollment exception: preview identities must also be explicitly allowlisted. This prevents a test identity from becoming a student merely by signing in.
+There is no development auto-enrollment exception: preview identities must also be explicitly provisioned (People grant or env allowlist). This prevents a test identity from becoming a student merely by signing in.
 
 ## Preview verification
 
