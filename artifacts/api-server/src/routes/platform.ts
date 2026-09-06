@@ -15,18 +15,25 @@ import {
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import {
+  CalendarOAuthError,
+  classifyGoogleProviderError,
   createGoogleEvent,
   decryptCalendarToken,
   deleteGoogleEvent,
   exchangeGoogleCode,
   getGoogleCalendarConfig,
+  googleAccountMatchesPortalEmails,
   googleCalendarCompletionHtml,
   googleCalendarAuthorizationUrl,
   normalizeGoogleCalendarStatus,
   listGoogleBusyWindows,
+  publicOriginFromForwardedHeaders,
   readCalendarOAuthState,
   refreshGoogleAccessToken,
+  resolveOAuthRedirectUriForRequest,
+  safeCalendarReturnTo,
   updateGoogleEvent,
+  type CalendarOAuthOutcome,
 } from "../lib/google-calendar";
 import {
   disconnectGoogleCalendarConnection,
@@ -3969,6 +3976,20 @@ function sendBookingError(error: unknown, res: Response): void {
   res.status(500).json({ error: "Booking service temporarily unavailable" });
 }
 
+function sendCalendarOAuthPage(
+  res: Response,
+  status: number,
+  options: {
+    success?: boolean;
+    outcome?: CalendarOAuthOutcome;
+    message?: string;
+    returnTo?: string;
+    redirectUri?: string;
+  },
+): void {
+  res.status(status).type("html").send(googleCalendarCompletionHtml(options));
+}
+
 router.get(
   "/calendar/oauth/callback",
   async (req: AuthedRequest, res): Promise<void> => {
@@ -3976,40 +3997,51 @@ router.get(
     const code = typeof req.query.code === "string" ? req.query.code : "";
     const providerError =
       typeof req.query.error === "string" ? req.query.error : undefined;
+    const providerErrorDescription =
+      typeof req.query.error_description === "string"
+        ? req.query.error_description
+        : undefined;
     if (!state) {
-      res
-        .status(400)
-        .type("html")
-        .send(
-          googleCalendarCompletionHtml({
-            success: false,
-            outcome: "failed",
-            message: "Calendar authorization was not completed.",
-          }),
-        );
+      sendCalendarOAuthPage(res, 400, {
+        success: false,
+        outcome: "failed",
+        message: "Calendar authorization was not completed. Start Connect again from the dashboard.",
+      });
+      return;
+    }
+    const stateData = readCalendarOAuthState(state);
+    if (!stateData) {
+      sendCalendarOAuthPage(res, 400, {
+        success: false,
+        outcome: "expired",
+        message:
+          "This authorization link expired or is no longer valid. Start Connect again from the dashboard.",
+      });
+      return;
+    }
+    if (providerError) {
+      const classified = classifyGoogleProviderError(
+        providerError,
+        providerErrorDescription,
+      );
+      sendCalendarOAuthPage(res, 400, {
+        success: false,
+        outcome: classified.outcome,
+        message: classified.message,
+        returnTo: stateData.returnTo,
+        redirectUri: stateData.redirectUri,
+      });
       return;
     }
     try {
-      const stateData = readCalendarOAuthState(state);
-      if (!stateData) {
-        res
-          .status(400)
-          .type("html")
-          .send(
-            googleCalendarCompletionHtml({
-              success: false,
-              outcome: "failed",
-              message: "Calendar authorization expired. Please try again.",
-            }),
-          );
-        return;
-      }
       const [profile] = await db
         .select({
           id: tutorProfilesTable.id,
           email: tutorProfilesTable.email,
+          userEmail: usersTable.email,
         })
         .from(tutorProfilesTable)
+        .leftJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
         .where(
           and(
             eq(tutorProfilesTable.id, stateData.tutorProfileId),
@@ -4018,81 +4050,77 @@ router.get(
         )
         .limit(1);
       if (!profile) {
-        res
-          .status(403)
-          .type("html")
-          .send(
-            googleCalendarCompletionHtml({
-              success: false,
-              outcome: "rejected",
-              message: "Calendar authorization belongs to a different portal account.",
-            }),
-          );
-        return;
-      }
-      if (providerError) {
-        res
-          .status(400)
-          .type("html")
-          .send(
-            googleCalendarCompletionHtml({
-              success: false,
-              outcome: "cancelled",
-              message: "Google authorization was cancelled. No calendar changes were made.",
-            }),
-          );
+        sendCalendarOAuthPage(res, 403, {
+          success: false,
+          outcome: "rejected",
+          message: "Calendar authorization belongs to a different portal account.",
+          returnTo: stateData.returnTo,
+          redirectUri: stateData.redirectUri,
+        });
         return;
       }
       if (!code) {
-        res
-          .status(400)
-          .type("html")
-          .send(
-            googleCalendarCompletionHtml({
-              success: false,
-              outcome: "failed",
-              message: "Google did not return an authorization code. Please try again.",
-            }),
-          );
+        sendCalendarOAuthPage(res, 400, {
+          success: false,
+          outcome: "failed",
+          message: "Google did not return an authorization code. Start Connect again from the dashboard.",
+          returnTo: stateData.returnTo,
+          redirectUri: stateData.redirectUri,
+        });
         return;
       }
-      const tokens = await exchangeGoogleCode(code);
-      if (tokens.email.trim().toLowerCase() !== profile.email.trim().toLowerCase()) {
-        res
-          .status(403)
-          .type("html")
-          .send(
-            googleCalendarCompletionHtml({
-              success: false,
-              outcome: "rejected",
-              message: "Choose the Google account that matches your portal sign-in.",
-            }),
-          );
+      const tokens = await exchangeGoogleCode(code, stateData.redirectUri || undefined);
+      if (
+        !googleAccountMatchesPortalEmails(tokens.email, [profile.email, profile.userEmail])
+      ) {
+        sendCalendarOAuthPage(res, 403, {
+          success: false,
+          outcome: "rejected",
+          message: "Choose the Google account that matches your portal sign-in email.",
+          returnTo: stateData.returnTo,
+          redirectUri: stateData.redirectUri,
+        });
         return;
       }
       const verificationStart = new Date();
-      await listGoogleBusyWindows(
-        tokens.accessToken,
-        "primary",
-        verificationStart,
-        new Date(verificationStart.getTime() + 60_000),
-      );
+      try {
+        await listGoogleBusyWindows(
+          tokens.accessToken,
+          "primary",
+          verificationStart,
+          new Date(verificationStart.getTime() + 60_000),
+        );
+      } catch {
+        throw new CalendarOAuthError(
+          "unavailable",
+          "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+        );
+      }
       await persistGoogleCalendarConnection(
         stateData.tutorProfileId,
         tokens,
       );
-      res.status(200).type("html").send(googleCalendarCompletionHtml());
-    } catch {
-      res
-        .status(502)
-        .type("html")
-        .send(
-          googleCalendarCompletionHtml({
-            success: false,
-            outcome: "failed",
-            message: "Google Calendar authorization failed. Please try again.",
-          }),
-        );
+      sendCalendarOAuthPage(res, 200, {
+        success: true,
+        outcome: "connected",
+        returnTo: stateData.returnTo,
+        redirectUri: stateData.redirectUri,
+      });
+    } catch (error) {
+      const oauthError =
+        error instanceof CalendarOAuthError
+          ? error
+          : new CalendarOAuthError(
+              "failed",
+              "Google Calendar authorization failed. Close this window and try again.",
+            );
+      sendCalendarOAuthPage(res, oauthError.outcome === "unavailable" ? 502 : 400, {
+        success: false,
+        outcome: oauthError.outcome,
+        message: oauthError.message,
+        returnTo: stateData.returnTo,
+        redirectUri: stateData.redirectUri,
+      });
     }
   },
 );
@@ -4695,6 +4723,35 @@ router.get(
   "/calendar/connect",
   ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    const useRedirect = req.query.redirect === "1";
+    const returnTo = safeCalendarReturnTo(
+      typeof req.query.returnTo === "string" ? req.query.returnTo : undefined,
+    );
+    const requestOrigin = publicOriginFromForwardedHeaders({
+      host: req.get("host"),
+      forwardedHost: req.get("x-forwarded-host"),
+      forwardedProto: req.get("x-forwarded-proto"),
+      protocol: req.protocol,
+    });
+    const redirectUri = resolveOAuthRedirectUriForRequest(requestOrigin);
+    const sendConnectFailure = (
+      status: number,
+      code: string,
+      error: string,
+      outcome: CalendarOAuthOutcome,
+    ) => {
+      if (useRedirect) {
+        sendCalendarOAuthPage(res, status, {
+          success: false,
+          outcome,
+          message: error,
+          returnTo,
+          redirectUri: redirectUri ?? undefined,
+        });
+        return;
+      }
+      res.status(status).json({ code, error });
+    };
     const requestedProfileId =
       typeof req.query.tutorProfileId === "string" ? req.query.tutorProfileId : undefined;
     const profile = await resolveCalendarProfileForUser(
@@ -4703,26 +4760,53 @@ router.get(
       true,
     );
     if (!profile || profile.userId !== req.appUser!.id) {
-      res.status(404).json({ code: "TUTOR_NOT_FOUND", error: "Tutor profile not found." });
+      sendConnectFailure(
+        404,
+        "TUTOR_NOT_FOUND",
+        "Tutor profile not found.",
+        "rejected",
+      );
       return;
     }
-    if (!getGoogleCalendarConfig()) {
-      res.status(503).json({
-        code: "CALENDAR_NOT_CONFIGURED",
-        error: "Google Calendar OAuth is not configured for this workspace.",
-      });
+    if (!getGoogleCalendarConfig() || !redirectUri) {
+      sendConnectFailure(
+        503,
+        "CALENDAR_NOT_CONFIGURED",
+        "Google Calendar is not configured for this workspace.",
+        "misconfigured",
+      );
       return;
     }
-    const authorizationUrl = googleCalendarAuthorizationUrl(
-      profile.id,
-      req.appUser!.id,
-      profile.email,
-    );
-    if (req.query.redirect === "1") {
-      res.redirect(authorizationUrl);
-      return;
+    try {
+      const authorizationUrl = googleCalendarAuthorizationUrl(
+        profile.id,
+        req.appUser!.id,
+        {
+          loginHint: profile.email,
+          returnTo,
+          redirectUri,
+        },
+      );
+      if (useRedirect) {
+        res.redirect(authorizationUrl);
+        return;
+      }
+      res.json({ authorizationUrl });
+    } catch (error) {
+      const oauthError =
+        error instanceof CalendarOAuthError
+          ? error
+          : new CalendarOAuthError(
+              "misconfigured",
+              "Google Calendar is not configured for this workspace.",
+            );
+      sendConnectFailure(
+        503,
+        "CALENDAR_NOT_CONFIGURED",
+        oauthError.message,
+        oauthError.outcome,
+      );
     }
-    res.json({ authorizationUrl });
   },
 );
 

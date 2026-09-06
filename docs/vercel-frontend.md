@@ -56,11 +56,17 @@ The portal does not call Railway from the browser. `fetch('/api/...')` is same-o
 - **Cookie / Clerk session** stays first-party on the Vercel host. `customFetch` uses default `fetch` credentials (`same-origin`). `@clerk/express` `clerkMiddleware` reads the Clerk session from those forwarded cookies (this app does not store bearer tokens in `localStorage`).
 - Railway already prefers `X-Forwarded-Host` for the Clerk frontend proxy host (`getClerkProxyHost`). Vercel external rewrites set that header to the Vercel hostname, which is what Clerk proxy URL generation needs.
 
-**You must set `APP_ORIGIN` on Railway** to the Vercel HTTPS origin once it exists (for example `https://<project>.vercel.app`). Do not invent a production custom domain here. `APP_ORIGIN` is used for Stripe Checkout success/cancel URLs and, when `GOOGLE_CALENDAR_REDIRECT_URI` is unset, the Google Calendar OAuth callback (`${APP_ORIGIN}/api/calendar/oauth/callback`). Those paths then hit Vercel `/api/...` and are rewritten to Railway.
+**You must set `APP_ORIGIN` on Railway** to the public HTTPS origin tutors actually use (production: `https://app.acceptedadmissions.org`). `APP_ORIGIN` is used for Stripe Checkout success/cancel URLs and, when `GOOGLE_CALENDAR_REDIRECT_URI` is unset, the Google Calendar OAuth callback (`${APP_ORIGIN}/api/calendar/oauth/callback`). Those paths then hit Vercel `/api/...` and are rewritten to Railway.
 
-Until `APP_ORIGIN` is that Vercel URL, hosted payment redirects and Calendar OAuth return URLs will not land on this frontend.
+For tutor Calendar, also set `GOOGLE_CALENDAR_REDIRECT_URI` on Railway to exactly:
 
-Also add the same Vercel HTTPS origin in the Clerk Dashboard as an allowed/authorized domain (and in Google’s OAuth redirect URIs if tutors use Calendar). Stripe webhooks should continue to post **directly to Railway**, not through Vercel.
+`https://app.acceptedadmissions.org/api/calendar/oauth/callback`
+
+and allowlist that same URI on the Google Cloud OAuth client. Do not register only a `*.vercel.app` callback if tutors open the portal on `app.acceptedadmissions.org`.
+
+Until `APP_ORIGIN` is the public portal origin, hosted payment redirects and Calendar OAuth return URLs will not land on this frontend.
+
+Also add the same public HTTPS origin in the Clerk Dashboard as an allowed/authorized domain. Stripe webhooks should continue to post **directly to Railway**, not through Vercel.
 
 ## Private test portal
 

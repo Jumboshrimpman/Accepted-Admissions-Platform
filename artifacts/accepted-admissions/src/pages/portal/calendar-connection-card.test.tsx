@@ -1,26 +1,31 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
+const mocks = vi.hoisted(() => {
+  type CalendarRow = {
+    id: string;
+    tutorProfileId: string;
+    provider: string;
+    status: string;
+  };
+  return {
   currentUserQuery: {
     data: { role: "tutor" },
   },
   connectionsQuery: {
-    data: [] as Array<{
-      id: string;
-      tutorProfileId: string;
-      provider: string;
-      status: string;
-    }>,
+    data: [] as CalendarRow[],
     isLoading: false,
-    refetch: vi.fn(async () => undefined),
+    refetch: vi.fn(async (): Promise<{ data: CalendarRow[] }> => ({
+      data: [],
+    })),
   },
   disconnectMutation: {
     isPending: false,
     mutate: vi.fn(),
   },
   trackCalendarConnection: vi.fn(),
-}));
+  };
+});
 
 vi.mock("@workspace/api-client-react", () => ({
   useGetCurrentUser: () => mocks.currentUserQuery,
@@ -32,9 +37,15 @@ vi.mock("@/lib/analytics", () => ({
   trackCalendarConnection: mocks.trackCalendarConnection,
 }));
 
-import { CalendarConnectionCard } from "./calendar-connection-card";
+import {
+  CalendarConnectionCard,
+  calendarConnectUrl,
+  messageForCalendarOutcome,
+  readCalendarReturnQuery,
+} from "./calendar-connection-card";
 
 const location = "tutor_dashboard" as const;
+const connectUrl = "/api/calendar/connect?redirect=1&returnTo=%2Ftutor";
 const connectedCalendar = {
   id: "calendar-connection-1",
   tutorProfileId: "tutor-profile-1",
@@ -62,12 +73,46 @@ beforeEach(() => {
   mocks.currentUserQuery.data = { role: "tutor" };
   mocks.connectionsQuery.data = [];
   mocks.connectionsQuery.isLoading = false;
+  mocks.connectionsQuery.refetch = vi.fn(async () => ({ data: [] }));
   mocks.disconnectMutation.isPending = false;
+  window.history.replaceState(null, "", "/tutor");
 });
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+describe("calendar connection helpers", () => {
+  test("builds a connect URL that returns to the tutor dashboard", () => {
+    expect(calendarConnectUrl("tutor_dashboard")).toBe(connectUrl);
+    expect(calendarConnectUrl("admin_dashboard")).toBe(
+      "/api/calendar/connect?redirect=1&returnTo=%2Fadmin",
+    );
+  });
+
+  test("maps failure outcomes to concrete tutor-visible reasons", () => {
+    expect(messageForCalendarOutcome("cancelled")).toContain("cancelled");
+    expect(messageForCalendarOutcome("rejected")).toContain("does not match");
+    expect(messageForCalendarOutcome("misconfigured")).toContain("not configured");
+    expect(messageForCalendarOutcome("redirect_mismatch")).toContain("allowlist");
+    expect(messageForCalendarOutcome("unavailable")).toContain("temporarily unavailable");
+    expect(messageForCalendarOutcome("expired")).toContain("expired");
+    expect(messageForCalendarOutcome("failed")).toContain("authorization failed");
+  });
+
+  test("reads connected and error return query parameters", () => {
+    expect(readCalendarReturnQuery("?calendar=connected")).toEqual({
+      success: true,
+      outcome: "connected",
+      message: "Google Calendar connected successfully.",
+    });
+    expect(readCalendarReturnQuery("?calendar=error&reason=redirect_mismatch")).toEqual({
+      success: false,
+      outcome: "redirect_mismatch",
+      message: messageForCalendarOutcome("redirect_mismatch"),
+    });
+  });
 });
 
 describe("calendar connection funnel tracking", () => {
@@ -80,7 +125,7 @@ describe("calendar connection funnel tracking", () => {
     );
 
     expect(window.open).toHaveBeenCalledWith(
-      "/api/calendar/connect?redirect=1",
+      connectUrl,
       "accepted-google-calendar",
     );
     expect(mocks.trackCalendarConnection).toHaveBeenCalledWith(
@@ -90,12 +135,17 @@ describe("calendar connection funnel tracking", () => {
     );
     expect(
       screen.getByText(
-        "Google authorization opened in a separate window. Return here after granting access.",
+        "Google authorization opened in a separate window. Return here after granting access, or continue in this tab if the window does not update.",
       ),
     ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Continue in this tab" })
+        .getAttribute("href"),
+    ).toBe(connectUrl);
   });
 
-  test("tracks a blocked popup and exposes the direct authorization link", () => {
+  test("tracks a blocked popup and exposes popup plus same-tab fallbacks", () => {
     vi.spyOn(window, "open").mockReturnValue(null);
     renderCard();
 
@@ -117,14 +167,19 @@ describe("calendar connection funnel tracking", () => {
     );
     expect(
       screen.getByText(
-        "Your browser blocked the Google authorization window. Use the link below to open it directly.",
+        "Your browser blocked the Google authorization window. Continue in this tab or open it in a new window.",
       ),
     ).toBeTruthy();
     expect(
       screen
         .getByRole("link", { name: "Open Google authorization" })
         .getAttribute("href"),
-    ).toBe("/api/calendar/connect?redirect=1");
+    ).toBe(connectUrl);
+    expect(
+      screen
+        .getByRole("link", { name: "Continue in this tab" })
+        .getAttribute("target"),
+    ).toBeNull();
   });
 
   test("tracks a successful callback, refreshes connections, and updates the UI", () => {
@@ -147,26 +202,92 @@ describe("calendar connection funnel tracking", () => {
   });
 
   test.each([
-    ["cancelled", "cancelled"],
-    ["rejected", "rejected"],
-    ["unknown failure", "failed"],
-  ])("tracks a %s authorization callback", (_label, outcome) => {
+    ["cancelled", "You cancelled Google authorization. No calendar changes were made."],
+    [
+      "rejected",
+      "Google rejected authorization, or the chosen account does not match this portal email.",
+    ],
+    [
+      "misconfigured",
+      "Google Calendar is not configured for this workspace. Ask an administrator to check the Calendar environment variables.",
+    ],
+    [
+      "redirect_mismatch",
+      "Google rejected the return URL. An administrator must allowlist the exact Calendar callback URL in Google Cloud Console.",
+    ],
+    ["unavailable", "Google Calendar is temporarily unavailable. Try again in a few minutes."],
+    [
+      "expired",
+      "This authorization link expired or is no longer valid. Start Connect again from the dashboard.",
+    ],
+    ["unknown failure", "Google Calendar authorization failed. Close the authorization window and try again."],
+  ])("shows a concrete %s authorization message", (label, message) => {
     renderCard();
 
     sendCalendarMessage({
       type: "accepted-admissions:calendar-connection-failed",
-      outcome,
+      outcome: label === "unknown failure" ? "not-a-real-outcome" : label,
     });
 
     expect(mocks.trackCalendarConnection).toHaveBeenCalledWith(
       "tutor",
       location,
-      outcome === "unknown failure" ? "failed" : outcome,
+      label === "unknown failure" ? "failed" : label,
+    );
+    expect(screen.getByText(message)).toBeTruthy();
+  });
+
+  test("prefers the callback message when the completion page sends one", () => {
+    renderCard();
+
+    sendCalendarMessage({
+      type: "accepted-admissions:calendar-connection-failed",
+      outcome: "rejected",
+      message: "Choose the Google account that matches your portal sign-in email.",
+    });
+
+    expect(
+      screen.getByText("Choose the Google account that matches your portal sign-in email."),
+    ).toBeTruthy();
+  });
+
+  test("applies a full-page return query and clears it from the URL", () => {
+    window.history.replaceState(null, "", "/tutor?calendar=error&reason=cancelled&keep=1");
+    renderCard();
+
+    expect(mocks.trackCalendarConnection).toHaveBeenCalledWith(
+      "tutor",
+      location,
+      "cancelled",
     );
     expect(
-      screen.getByText(
-        "Google Calendar authorization was not completed. Check the authorization window and try again.",
-      ),
+      screen.getByText("You cancelled Google authorization. No calendar changes were made."),
+    ).toBeTruthy();
+    expect(window.location.search).toBe("?keep=1");
+  });
+
+  test("refetches connections when the tutor returns to the tab after launching OAuth", async () => {
+    vi.spyOn(window, "open").mockReturnValue({} as Window);
+    mocks.connectionsQuery.refetch.mockResolvedValue({
+      data: [connectedCalendar],
+    });
+    renderCard();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Connect Google Calendar" }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(mocks.connectionsQuery.refetch).toHaveBeenCalled();
+    expect(mocks.trackCalendarConnection).toHaveBeenCalledWith(
+      "tutor",
+      location,
+      "connected",
+    );
+    expect(
+      screen.getByText("Google Calendar connected successfully."),
     ).toBeTruthy();
   });
 
@@ -238,12 +359,12 @@ describe("calendar connection funnel tracking", () => {
     }).not.toThrow();
 
     expect(window.open).toHaveBeenCalledWith(
-      "/api/calendar/connect?redirect=1",
+      connectUrl,
       "accepted-google-calendar",
     );
     expect(
       screen.getByText(
-        "Google authorization opened in a separate window. Return here after granting access.",
+        "Google authorization opened in a separate window. Return here after granting access, or continue in this tab if the window does not update.",
       ),
     ).toBeTruthy();
   });
