@@ -6,6 +6,7 @@ const recordOutcome = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetSessionLessonQueryKey: (id: string) => ["/api/sessions", id, "lesson"],
+  useGetCurrentUser: () => ({ data: { role: "tutor" } }),
   useGetSessionLesson: () => ({
     data: {
       sessionId: "session-1",
@@ -75,6 +76,11 @@ describe("session lesson dashboard", () => {
     render(<SessionLessonDashboard sessionId="session-1" />);
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/not an official SAT score/);
     expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
+    expect(screen.getByTestId("opened-miss").className).toMatch(/bg-brand-ink/);
+    expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(
+      /Open a miss, discuss it, try a similar problem/,
+    );
+    expect(screen.getByTestId("opened-miss").textContent).toMatch(/Work this miss together/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/Official explanation/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/However signals contrast/);
     expect(screen.getByTestId("opened-miss-choices").textContent).toMatch(/Similarly/);

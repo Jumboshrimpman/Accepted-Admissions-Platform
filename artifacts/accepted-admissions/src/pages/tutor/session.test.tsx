@@ -7,6 +7,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetAdaptiveCurriculumQueryKey: (id: string) => ["/api/adaptive", id],
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getListSessionArtifactsQueryKey: (id: string) => ["/api/artifacts", id],
+  useGetCurrentUser: () => ({ data: { role: "tutor" } }),
   useGetSession: () => ({
     data: {
       id: "session-1",

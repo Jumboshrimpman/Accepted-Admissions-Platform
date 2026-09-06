@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetSessionLessonQueryKey,
+  useGetCurrentUser,
   useGetSessionLesson,
   useRecordRetryOutcome,
   useRequestSessionRetry,
@@ -29,8 +30,16 @@ function formatAnswer(
   return match ? `${match.label}. ${match.text}` : answer;
 }
 
-export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
+export function SessionLessonDashboard({
+  sessionId,
+  audience = "tutor",
+}: {
+  sessionId: string;
+  audience?: "tutor" | "student";
+}) {
   const queryClient = useQueryClient();
+  const { data: currentUser } = useGetCurrentUser();
+  const canRecord = currentUser?.role !== "viewer";
   const lesson = useGetSessionLesson(sessionId, {
     query: {
       enabled: Boolean(sessionId),
@@ -64,8 +73,12 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
     <Card className="border-primary/20" data-testid="session-lesson-dashboard">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
-          <BookOpenCheck className="h-5 w-5 text-primary" /> Session lesson from pre-work
+          <BookOpenCheck className="h-5 w-5 text-primary" />{" "}
+          {audience === "student" ? "Practice together from pre-work" : "Session lesson from pre-work"}
         </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Open a miss, discuss it, try a similar problem, and record the outcome together.
+        </p>
         <p className="text-sm text-muted-foreground">{data.scoreHonesty}</p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -93,7 +106,7 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
           <p className="text-sm text-muted-foreground">
             {data.attemptId
               ? "No grouped misses. Use leftover time on harder bank items if needed."
-              : "Waiting on the student to submit the 60-minute pre-work."}
+              : "Waiting on pre-work to be submitted so you can open misses together."}
           </p>
         ) : (
           <div className="space-y-2">
@@ -126,14 +139,17 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
               ))}
             </div>
             {selectedMiss ? (
-              <div className="rounded-xl border p-4" data-testid="opened-miss">
-                <Badge variant="outline">{selectedMiss.skill}</Badge>
+              <div className="rounded-3xl bg-brand-ink p-5 text-white shadow-lg" data-testid="opened-miss">
+                <Badge className="border-0 bg-white/20 text-white">{selectedMiss.skill}</Badge>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Work this miss together
+                </p>
                 <p className="mt-2 font-medium">{selectedMiss.prompt}</p>
                 {selectedMiss.stimulus ? (
-                  <p className="mt-2 text-sm text-muted-foreground">{selectedMiss.stimulus}</p>
+                  <p className="mt-2 text-sm text-white/75">{selectedMiss.stimulus}</p>
                 ) : null}
                 {selectedMiss.choices && selectedMiss.choices.length > 0 ? (
-                  <ul className="mt-3 space-y-1 text-sm" data-testid="opened-miss-choices">
+                  <ul className="mt-3 space-y-1 text-sm text-white/90" data-testid="opened-miss-choices">
                     {selectedMiss.choices.map((choice) => (
                       <li key={choice.id}>
                         {choice.label}. {choice.text}
@@ -149,66 +165,85 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
                   <span className="font-medium">Correct answer:</span>{" "}
                   {formatAnswer(selectedMiss.correctAnswer, selectedMiss.choices)}
                 </p>
-                <div className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
+                <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
                   <p className="font-medium">Official explanation</p>
-                  <p className="mt-1 text-muted-foreground">
+                  <p className="mt-1 text-white/75">
                     {selectedMiss.officialExplanation ||
                       "Official explanation is not in the extract yet. Do not invent College Board wording."}
                   </p>
                 </div>
                 {selectedMiss.aiTutorGuidance ? (
-                  <div className="mt-3 rounded-lg border p-3 text-sm">
+                  <div className="mt-3 rounded-lg border border-white/20 p-3 text-sm">
                     <p className="font-medium">AI tutor guidance (separate)</p>
-                    <p className="mt-1 text-muted-foreground">{selectedMiss.aiTutorGuidance}</p>
+                    <p className="mt-1 text-white/75">{selectedMiss.aiTutorGuidance}</p>
                   </div>
                 ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <p className="mt-3 text-xs text-white/70">
                     No AI annotation yet. Official explanation is preferred when present.
                   </p>
                 )}
-                <Button
-                  size="sm"
-                  className="mt-3"
-                  disabled={requestRetry.isPending}
-                  data-testid="request-similar-retry"
-                  onClick={() =>
-                    requestRetry.mutate(
-                      { sessionId, data: { sourceQuestionId: selectedMiss.questionId } },
-                      {
-                        onSuccess: (retry) => {
-                          if (retry.source === "blocked") {
-                            setMessage(
-                              retry.blockedReason ||
-                                "Retry blocked. OPENAI_API_KEY is required only after the bank is exhausted.",
-                            );
-                          } else {
-                            setMessage(
-                              retry.source === "bank"
-                                ? "Unused similar bank question ready. Answer is hidden until you record the outcome."
-                                : "Analogous original item drafted. Official wording was not copied.",
-                            );
-                          }
-                          refresh();
+                {canRecord ? (
+                  <Button
+                    size="sm"
+                    className="mt-3 bg-white text-foreground hover:bg-white/90"
+                    disabled={requestRetry.isPending}
+                    data-testid="request-similar-retry"
+                    onClick={() =>
+                      requestRetry.mutate(
+                        { sessionId, data: { sourceQuestionId: selectedMiss.questionId } },
+                        {
+                          onSuccess: (retry) => {
+                            if (retry.source === "blocked") {
+                              setMessage(
+                                retry.blockedReason ||
+                                  "Retry blocked. OPENAI_API_KEY is required only after the bank is exhausted.",
+                              );
+                            } else {
+                              setMessage(
+                                retry.source === "bank"
+                                  ? "Similar problem ready. Discuss it, choose together, then record the outcome."
+                                  : "Analogous original item drafted. Official wording was not copied.",
+                              );
+                            }
+                            refresh();
+                          },
+                          onError: (error) => setMessage(errorText(error)),
                         },
-                        onError: (error) => setMessage(errorText(error)),
-                      },
-                    )
-                  }
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {requestRetry.isPending ? "Finding retry…" : "Request similar retry"}
-                </Button>
+                      )
+                    }
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {requestRetry.isPending ? "Finding similar…" : "Open a similar problem"}
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </div>
         ) : null}
 
         {data.retries.length > 0 ? (
-          <div className="space-y-2">
-            <p className="font-medium">Retry outcomes</p>
+          <div className="space-y-3">
+            <p className="font-medium">Similar problems</p>
             {data.retries.map((retry) => (
-              <div key={retry.id} className="rounded-lg border p-3 text-sm" data-testid={`retry-${retry.id}`}>
-                <Badge variant="outline">{retry.source}</Badge>{" "}
+              <div
+                key={retry.id}
+                className={
+                  retry.outcome === "pending" && retry.retryQuestionId
+                    ? "rounded-3xl bg-brand-ink p-5 text-white shadow-lg"
+                    : "rounded-lg border p-3 text-sm"
+                }
+                data-testid={`retry-${retry.id}`}
+              >
+                <Badge
+                  variant="outline"
+                  className={
+                    retry.outcome === "pending" && retry.retryQuestionId
+                      ? "border-white/30 text-white"
+                      : undefined
+                  }
+                >
+                  {retry.source}
+                </Badge>{" "}
                 <span>{retry.outcome.replaceAll("_", " ")}</span>
                 {retry.prompt ? (
                   <p className="mt-2" data-testid={`retry-prompt-${retry.id}`}>
@@ -216,20 +251,39 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
                   </p>
                 ) : null}
                 {retry.choices && retry.choices.length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-muted-foreground">
-                    {retry.choices.map((choice) => (
-                      <li key={choice.id}>
-                        {choice.label}. {choice.text}
-                      </li>
-                    ))}
-                  </ul>
+                  retry.outcome === "pending" && retry.retryQuestionId ? (
+                    <div className="mt-3 space-y-2">
+                      {retry.choices.map((choice) => (
+                        <button
+                          key={choice.id}
+                          type="button"
+                          className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left ${
+                            retryAnswer === choice.id
+                              ? "border-white bg-white/15"
+                              : "border-white/25 hover:bg-white/10"
+                          }`}
+                          onClick={() => setRetryAnswer(choice.id)}
+                        >
+                          <span className="font-medium">{choice.label}.</span> {choice.text}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <ul className="mt-2 space-y-1 text-muted-foreground">
+                      {retry.choices.map((choice) => (
+                        <li key={choice.id}>
+                          {choice.label}. {choice.text}
+                        </li>
+                      ))}
+                    </ul>
+                  )
                 ) : null}
                 {retry.blockedReason ? (
                   <p className="mt-1 text-muted-foreground">{retry.blockedReason}</p>
                 ) : null}
               </div>
             ))}
-            {activeRetry ? (
+            {activeRetry && canRecord ? (
               <div className="flex flex-wrap gap-2">
                 <input
                   aria-label="Retry answer"

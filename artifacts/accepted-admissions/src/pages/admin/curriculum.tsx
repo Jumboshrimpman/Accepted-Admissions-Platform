@@ -973,6 +973,9 @@ function SessionCard({
             sessionId={session.id}
             collections={bankCollections}
             onChanged={onChanged}
+            isFirstSatSession={
+              session.subject === "SAT" && session.dateTime.slice(0, 10) === "2026-10-02"
+            }
           />
         </div>
         <SessionMissedPrework

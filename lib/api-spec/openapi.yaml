@@ -483,6 +483,51 @@ paths:
                 items: { $ref: "#/components/schemas/SatBankQuestion" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/sat-bank/reset-first-sat-prework:
+    post:
+      operationId: resetFirstSatPrework
+      tags: [administration]
+      summary: Reset October 2 Taito SAT pre-work attempts and re-attach the full diagnostic
+      description: >
+        Deletes only that session's before_session attempts and dependents
+        (responses, timer events, review queue, adaptive recs, weakness groups,
+        remediations), archives the old pre-work, and by default assigns a
+        full-length SAT diagnostic. Does not wipe the College Board bank.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reassignDiagnostic: { type: boolean, default: true }
+      responses:
+        "201":
+          description: Reset result
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/sessions/{sessionId}/reset-prework:
+    post:
+      operationId: resetSessionPrework
+      tags: [administration]
+      summary: Reset one session's pre-work attempts without wiping the bank
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reassignDiagnostic: { type: boolean, default: true }
+      responses:
+        "201":
+          description: Reset result
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/sessions/{sessionId}/prework-from-bank:
     post:
       operationId: assignSatBankPrework
@@ -1535,7 +1580,7 @@ paths:
     get:
       operationId: getSessionLesson
       tags: [curriculum]
-      summary: Tutor lesson dashboard grouped by homework weakness
+      summary: Session lesson dashboard for tutor + student collaborative practice
       parameters:
         - $ref: "#/components/parameters/SessionId"
       responses:
@@ -3021,6 +3066,17 @@ components:
         reviewStatus: { type: string, enum: [new, in_review, reviewed] }
         homeworkKind: { type: ["string", "null"] }
         scoreReporting: { type: string, enum: [none, estimated_diagnostic] }
+        estimatedSatScore:
+          type: object
+          nullable: true
+          properties:
+            total: { type: ["number", "null"] }
+            rangeLow: { type: ["number", "null"] }
+            rangeHigh: { type: ["number", "null"] }
+            readingWriting: { type: ["number", "null"] }
+            math: { type: ["number", "null"] }
+            label: { type: string }
+            methodology: { type: string }
     ReviewSubmission:
       type: object
       required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, sessionId, sessionDateTime, status, score, submittedAt, reviewStatus]

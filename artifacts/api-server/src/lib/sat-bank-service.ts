@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  adaptiveRecommendationsTable,
   assignmentQuestionsTable,
   assignmentsTable,
   attemptsTable,
@@ -14,8 +15,11 @@ import {
   homeworkWeaknessGroupsTable,
   questionsTable,
   remediationRetriesTable,
+  responsesTable,
+  reviewQueueTable,
   sessionPreworkPlansTable,
   sessionsTable,
+  timerEventsTable,
 } from "@workspace/db";
 import {
   STAGED_COLLECTION_STUBS,
@@ -36,9 +40,17 @@ import {
 } from "./sat-bank-retry.ts";
 import {
   DEFAULT_PREWORK_TARGET_MINUTES,
+  diagnosticTimeLimitMinutes,
+  preferSatDiagnosticCollection,
+  selectFullPracticeCollection,
   selectQuestionsForTimeBudget,
+  shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
+
+export { shouldReplaceFirstSessionPrework };
 import { groupMissesByWeakness } from "./sat-bank-weakness.ts";
+import { isTaitoFirstSatSession } from "./session-schedule.ts";
+import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 
 export const SAT_BANK_IMPORT_ROOT = resolveCollegeBoardRoot();
 
@@ -442,14 +454,22 @@ export async function assignPreworkFromBank(input: {
     throw Object.assign(new Error("Session not found"), { status: 404 });
   }
   await ensureOfficialExtractsImported().catch(() => undefined);
-  const targetMinutes = input.targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES;
   const homeworkKind = input.homeworkKind ?? "routine";
+  let collectionId = input.collectionId ?? null;
+  if (homeworkKind === "diagnostic" && !collectionId && !input.bankQuestionIds?.length) {
+    const collections = await listBankCollections();
+    collectionId = preferSatDiagnosticCollection(collections)?.id ?? null;
+  }
+  const targetMinutes =
+    homeworkKind === "diagnostic"
+      ? (input.targetMinutes ?? null)
+      : (input.targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES);
   let pool = await db
     .select()
     .from(bankQuestionsTable)
     .orderBy(asc(bankQuestionsTable.position), asc(bankQuestionsTable.questionNumber));
-  if (input.collectionId) {
-    pool = pool.filter((row) => row.collectionId === input.collectionId);
+  if (collectionId) {
+    pool = pool.filter((row) => row.collectionId === collectionId);
   }
   if (input.bankQuestionIds && input.bankQuestionIds.length > 0) {
     const allowed = new Set(input.bankQuestionIds);
@@ -482,17 +502,24 @@ export async function assignPreworkFromBank(input: {
     estimatedSeconds: row.estimatedSeconds,
     position: row.position,
   }));
-  const selection = selectQuestionsForTimeBudget(timed, {
-    targetMinutes,
-    preferOriginalOrder: Boolean(input.collectionId || input.bankQuestionIds?.length),
-  });
+  const selection =
+    homeworkKind === "diagnostic"
+      ? selectFullPracticeCollection(timed)
+      : selectQuestionsForTimeBudget(timed, {
+          targetMinutes: targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES,
+          preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
+        });
   const selected = selection.selected
     .map((item) => pool.find((row) => row.id === item.id)!)
     .filter(Boolean);
+  const resolvedMinutes =
+    homeworkKind === "diagnostic"
+      ? diagnosticTimeLimitMinutes(selection.estimatedSeconds)
+      : (targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES);
   await archiveSessionPrework(session.id);
   const title =
     homeworkKind === "diagnostic"
-      ? `SAT diagnostic pre-work — ${session.title}`
+      ? `Full-length SAT diagnostic — ${session.title}`
       : `60-minute SAT pre-work — ${session.title}`;
   const [assignment] = await db
     .insert(assignmentsTable)
@@ -504,10 +531,10 @@ export async function assignPreworkFromBank(input: {
       subject: session.subject || "SAT",
       instructions:
         homeworkKind === "diagnostic"
-          ? "Timed diagnostic from the SAT/PSAT bank. This is not an official College Board score."
+          ? "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score."
           : "About 60 minutes of selected bank questions for this session. Accuracy is recorded; this is not an official SAT score.",
       status: "published",
-      timeLimitMinutes: targetMinutes,
+      timeLimitMinutes: resolvedMinutes,
       maxAttempts: 1,
     })
     .returning();
@@ -517,6 +544,7 @@ export async function assignPreworkFromBank(input: {
       assignmentId: assignment!.id,
       questionId,
       position: index,
+      predictionFirst: false,
     });
   }
   const [existingPlan] = await db
@@ -527,7 +555,7 @@ export async function assignPreworkFromBank(input: {
   const planValues = {
     assignmentId: assignment!.id,
     homeworkKind,
-    targetMinutes,
+    targetMinutes: resolvedMinutes,
     estimatedSeconds: selection.estimatedSeconds,
     status: "assigned",
     createdByUserId: input.actorUserId ?? null,
@@ -555,7 +583,7 @@ export async function assignPreworkFromBank(input: {
     planId: plan.id,
     assignmentId: assignment!.id,
     homeworkKind,
-    targetMinutes,
+    targetMinutes: resolvedMinutes,
     estimatedSeconds: selection.estimatedSeconds,
     questionCount: selected.length,
     withinTolerance: selection.withinTolerance,
@@ -852,7 +880,7 @@ export async function getSessionLesson(sessionId: string) {
     scoreHonesty:
       scoreReporting === "none"
         ? "This 60-minute pre-work reports accuracy only. It is not an official SAT score."
-        : "Any projected SAT band is estimated from a labeled diagnostic. It is not an official College Board score.",
+        : "Estimated SAT score range based on College Board scoring-guide methodology for linear paper/digital practice. Not an official College Board adaptive digital score.",
     plan: plan
       ? {
           id: plan.id,
@@ -1174,6 +1202,127 @@ export async function recordRetryOutcome(input: {
     outcome: graded.outcome,
     correctAnswer: question.correctAnswer,
     explanation: question.explanation,
+  };
+}
+
+async function deleteAttemptsByIds(attemptIds: string[]): Promise<number> {
+  if (attemptIds.length === 0) return 0;
+  await db.delete(reviewQueueTable).where(inArray(reviewQueueTable.attemptId, attemptIds));
+  await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, attemptIds));
+  await db.delete(responsesTable).where(inArray(responsesTable.attemptId, attemptIds));
+  await db
+    .delete(adaptiveRecommendationsTable)
+    .where(inArray(adaptiveRecommendationsTable.sourceAttemptId, attemptIds));
+  await db
+    .delete(homeworkWeaknessGroupsTable)
+    .where(inArray(homeworkWeaknessGroupsTable.attemptId, attemptIds));
+  await db
+    .delete(remediationRetriesTable)
+    .where(inArray(remediationRetriesTable.sourceAttemptId, attemptIds));
+  await db.delete(attemptsTable).where(inArray(attemptsTable.id, attemptIds));
+  return attemptIds.length;
+}
+
+async function beforeSessionAssignments(sessionId: string) {
+  return db
+    .select()
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, sessionId),
+        eq(assignmentsTable.deliveryPhase, "before_session"),
+      ),
+    );
+}
+
+export async function resetSessionPreworkState(sessionId: string): Promise<{
+  sessionId: string;
+  archivedAssignments: number;
+  deletedAttempts: number;
+}> {
+  const assignments = await beforeSessionAssignments(sessionId);
+  const assignmentIds = assignments.map((row) => row.id);
+  const attempts =
+    assignmentIds.length === 0
+      ? []
+      : await db
+          .select({ id: attemptsTable.id })
+          .from(attemptsTable)
+          .where(inArray(attemptsTable.assignmentId, assignmentIds));
+  const deletedAttempts = await deleteAttemptsByIds(attempts.map((row) => row.id));
+  await db.delete(sessionPreworkPlansTable).where(eq(sessionPreworkPlansTable.sessionId, sessionId));
+  let archivedAssignments = 0;
+  for (const row of assignments) {
+    if (row.status === "archived") continue;
+    await db
+      .update(assignmentsTable)
+      .set({ status: "archived" })
+      .where(eq(assignmentsTable.id, row.id));
+    archivedAssignments += 1;
+  }
+  await db
+    .update(sessionsTable)
+    .set({ hasHomework: false, updatedAt: new Date() })
+    .where(eq(sessionsTable.id, sessionId));
+  return {
+    sessionId,
+    archivedAssignments,
+    deletedAttempts,
+  };
+}
+
+export async function clearBrokenEmptyPreworkAttempts(sessionId: string): Promise<number> {
+  const assignments = await beforeSessionAssignments(sessionId);
+  const assignmentIds = assignments.map((row) => row.id);
+  if (assignmentIds.length === 0) return 0;
+  const attempts = await db
+    .select({ id: attemptsTable.id, status: attemptsTable.status })
+    .from(attemptsTable)
+    .where(inArray(attemptsTable.assignmentId, assignmentIds));
+  const brokenIds: string[] = [];
+  for (const attempt of attempts) {
+    const responses = await db
+      .select({ finalAnswer: responsesTable.finalAnswer })
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, attempt.id));
+    const answeredCount = responses.filter((row) => row.finalAnswer?.trim()).length;
+    if (isBrokenEmptyAttempt({ status: attempt.status, answeredCount })) {
+      brokenIds.push(attempt.id);
+    }
+  }
+  return deleteAttemptsByIds(brokenIds);
+}
+
+export async function findTaitoFirstSatSession(): Promise<typeof sessionsTable.$inferSelect | null> {
+  const sessions = await db.select().from(sessionsTable);
+  return sessions.find((session) => isTaitoFirstSatSession(session)) ?? null;
+}
+
+export async function resetTaitoFirstSatPrework(input: {
+  actorUserId?: string;
+  reassignDiagnostic?: boolean;
+}): Promise<{
+  sessionId: string;
+  archivedAssignments: number;
+  deletedAttempts: number;
+  reassigned: Awaited<ReturnType<typeof assignPreworkFromBank>> | null;
+}> {
+  const session = await findTaitoFirstSatSession();
+  if (!session) {
+    throw Object.assign(new Error("October 2 Taito SAT session was not found."), { status: 404 });
+  }
+  const reset = await resetSessionPreworkState(session.id);
+  const reassigned =
+    input.reassignDiagnostic === false
+      ? null
+      : await assignPreworkFromBank({
+          sessionId: session.id,
+          actorUserId: input.actorUserId,
+          homeworkKind: "diagnostic",
+        });
+  return {
+    ...reset,
+    reassigned,
   };
 }
 

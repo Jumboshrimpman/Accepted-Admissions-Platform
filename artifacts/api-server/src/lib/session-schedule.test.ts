@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -22,6 +22,24 @@ function easternParts(date: Date) {
     zone: value("timeZoneName"),
   };
 }
+
+test("October 2 is the first Taito SAT session used for the full-length diagnostic", () => {
+  assert.equal(TAITO_FIRST_SAT_DATE_KEY, "2026-10-02");
+  assert.equal(
+    isTaitoFirstSatSession({
+      dateTime: taitoSessionDateTime("2026-10-02"),
+      subject: "SAT",
+    }),
+    true,
+  );
+  assert.equal(
+    isTaitoFirstSatSession({
+      dateTime: taitoSessionDateTime("2026-10-09"),
+      subject: "SAT",
+    }),
+    false,
+  );
+});
 
 test("defines Taito's 12 unique Fall 2026 sessions with the requested tutors", () => {
   assert.equal(TAITO_FALL_2026_SESSIONS.length, 12);

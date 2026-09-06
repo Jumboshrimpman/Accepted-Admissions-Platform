@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { selectQuestionsForTimeBudget } from "./sat-bank-timing.ts";
+import {
+  diagnosticTimeLimitMinutes,
+  isFullLengthDiagnosticSelection,
+  preferSatDiagnosticCollection,
+  selectFullPracticeCollection,
+  selectQuestionsForTimeBudget,
+  shouldReplaceFirstSessionPrework,
+} from "./sat-bank-timing.ts";
 
 const items = [
   { id: "rw-1", section: "rw" as const, skill: "Transitions", estimatedSeconds: 450, position: 1 },
@@ -37,6 +44,52 @@ test("preserves original collection order when assigning from a source test", ()
   );
   assert.ok(result.estimatedSeconds <= 30 * 60 + 8 * 60);
   assert.ok(result.estimatedSeconds >= 30 * 60 - 8 * 60);
+});
+
+test("diagnostic assign uses the full collection in original order, not a 60-minute slice", () => {
+  const many = Array.from({ length: 12 }, (_, index) => ({
+    id: `q-${index + 1}`,
+    section: index % 2 === 0 ? ("rw" as const) : ("math" as const),
+    skill: "Skill",
+    estimatedSeconds: 450,
+    position: index + 1,
+  }));
+  const result = selectFullPracticeCollection(many);
+  assert.equal(result.selected.length, 12);
+  assert.deepEqual(
+    result.selected.map((item) => item.id),
+    many.map((item) => item.id),
+  );
+  assert.equal(result.leftoverCount, 0);
+  assert.ok(diagnosticTimeLimitMinutes(result.estimatedSeconds) >= 134);
+});
+
+test("routine stays time-boxed at ~60 minutes while diagnostic prefers SAT Practice Tests 4–11", () => {
+  const routine = selectQuestionsForTimeBudget(items, { targetMinutes: 60, toleranceMinutes: 8 });
+  assert.ok(routine.estimatedSeconds <= 60 * 60 + 8 * 60);
+  assert.ok(routine.selected.length < 80);
+  const preferred = preferSatDiagnosticCollection([
+    { examFamily: "psat", practiceTestNumber: 1, slug: "psat-10-practice-test-1", questionCount: 120 },
+    { examFamily: "sat", practiceTestNumber: 4, slug: "sat-practice-test-4-digital", questionCount: 120 },
+    { examFamily: "sat", practiceTestNumber: 11, slug: "sat-practice-test-11-digital", questionCount: 90 },
+  ]);
+  assert.equal(preferred?.slug, "sat-practice-test-4-digital");
+  assert.equal(
+    isFullLengthDiagnosticSelection({ homeworkKind: "diagnostic", questionCount: 120, targetMinutes: 164 }),
+    true,
+  );
+  assert.equal(
+    isFullLengthDiagnosticSelection({ homeworkKind: "routine", questionCount: 24, targetMinutes: 60 }),
+    false,
+  );
+  assert.equal(
+    shouldReplaceFirstSessionPrework({ homeworkKind: "diagnostic", questionCount: 120, title: "Full-length SAT diagnostic" }),
+    false,
+  );
+  assert.equal(
+    shouldReplaceFirstSessionPrework({ homeworkKind: null, questionCount: 24, title: "Full SAT Practice Diagnostic" }),
+    true,
+  );
 });
 
 test("does not overshoot the time band when later items are long", () => {

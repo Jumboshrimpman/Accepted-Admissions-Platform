@@ -2100,6 +2100,16 @@ export interface AttemptResult {
   /** @nullable */
   homeworkKind?: string | null;
   scoreReporting?: AttemptResultScoreReporting;
+  /** @nullable */
+  estimatedSatScore?: {
+    total: number | null;
+    rangeLow: number | null;
+    rangeHigh: number | null;
+    readingWriting: number | null;
+    math: number | null;
+    label: string;
+    methodology: string;
+  } | null;
 }
 
 export interface Attempt {
