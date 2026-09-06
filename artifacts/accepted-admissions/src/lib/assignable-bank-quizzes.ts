@@ -1,5 +1,7 @@
 export const BANK_QUIZ_EMPTY_STATE =
-  "Create a quiz in Curriculum bank (no session) first.";
+  "Create a quiz in the Quizzes workspace (no session) first.";
+
+export const ASSIGNABLE_BANK_QUIZ_STATUSES = ["published", "draft"] as const;
 
 export type BankQuizCandidate = {
   id: string;
@@ -15,9 +17,14 @@ function normalizeTitle(title: string): string {
   return title.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+export function isAssignableBankQuizStatus(status: string): boolean {
+  return (ASSIGNABLE_BANK_QUIZ_STATUSES as readonly string[]).includes(status);
+}
+
 export function isReusableBankQuiz(item: BankQuizCandidate): boolean {
   return (
     item.sessionId == null &&
+    isAssignableBankQuizStatus(item.status) &&
     item.status !== "archived" &&
     item.deliveryPhase === "before_session"
   );
@@ -33,6 +40,9 @@ export function assignableBankQuizzes(
   assignments: BankQuizCandidate[],
   session: { id: string; courseId: string },
 ): BankQuizCandidate[] {
+  // Title-only dedupe: AdminAssignment / clone payload has no sourceAssignmentId
+  // (assignments table stores no clone lineage). Renaming a session copy lets the
+  // same bank quiz be offered again for that session.
   const alreadyAssignedTitles = new Set(
     assignments
       .filter(

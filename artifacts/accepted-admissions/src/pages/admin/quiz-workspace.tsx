@@ -19,6 +19,7 @@ import {
 } from "@workspace/api-client-react";
 import { ArrowLeft, CheckCircle2, ClipboardList, Edit3, Plus } from "lucide-react";
 import { GenerateDraftsCard, apiErrorText } from "@/components/question-bank-authoring";
+import { isReusableBankQuiz } from "@/lib/assignable-bank-quizzes";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,7 @@ function QuizList({
       },
     );
   };
+  const bankQuizzes = assignments.filter((item) => item.sessionId == null);
   return (
     <div className="space-y-4">
       {message ? <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p> : null}
@@ -143,7 +145,7 @@ function QuizList({
         <div>
           <h2 className="text-xl font-semibold">Quizzes</h2>
           <p className="text-sm text-muted-foreground">
-            Open a quiz to see its questions, generate more, assign it to a session, and review results.
+            Reusable bank quizzes only. Open one to add questions and assign it. Session copies live on Sessions (Open quiz).
           </p>
         </div>
         <Button
@@ -167,7 +169,7 @@ function QuizList({
         />
       ) : null}
       <div className="grid gap-3">
-        {assignments.map((assignment) => {
+        {bankQuizzes.map((assignment) => {
           const results = submissions.filter((item) => item.assignmentId === assignment.id);
           return (
             <Card key={assignment.id} data-testid={`quiz-card-${assignment.id}`}>
@@ -197,9 +199,9 @@ function QuizList({
           );
         })}
       </div>
-      {assignments.length === 0 ? (
+      {bankQuizzes.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No quizzes yet. Create one, add questions here, then assign it as pre-session work.
+          No bank quizzes yet. Create one, add questions here, then assign it as pre-session work.
         </div>
       ) : null}
     </div>
@@ -340,14 +342,17 @@ function QuizQuestionEditor({
   const [questionId, setQuestionId] = useState("");
   const [message, setMessage] = useState("");
   const attachedIds = new Set((data?.questions ?? []).map((item) => item.id));
+  const pendingDrafts = generated.filter((item) => !attachedIds.has(item.id));
   const approved = bank.filter((item) => item.reviewStatus === "approved" && !attachedIds.has(item.id));
-  const attachableId = questionId || approved[0]?.id || "";
+  const attachableId = approved.some((item) => item.id === questionId) ? questionId : (approved[0]?.id || "");
   const addApproved = (id: string) => {
     attach.mutate(
       { assignmentId: quiz.id, data: { questionId: id } },
       {
         onSuccess: () => {
+          setGenerated((items) => items.filter((item) => item.id !== id));
           setMessage("Question added to this quiz.");
+          // Parent refreshQuiz invalidates getGetAssignmentQueryKey so the list is not stale.
           onChanged();
         },
         onError: (error) => setMessage(apiErrorText(error)),
@@ -397,15 +402,15 @@ function QuizQuestionEditor({
             onChanged={onChanged}
           />
         </div>
-        {generated.length > 0 ? (
+        {pendingDrafts.length > 0 ? (
           <div className="space-y-2" data-testid="quiz-generated-drafts">
             <p className="text-sm font-medium">New drafts for this quiz</p>
-            {generated.map((question) => (
+            {pendingDrafts.map((question) => (
               <div key={question.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-background px-3 py-2 text-sm">
                 <p className="min-w-0 flex-1">{question.prompt}</p>
                 <Button
                   size="sm"
-                  disabled={updateQuestion.isPending || attach.isPending}
+                  disabled={updateQuestion.isPending || attach.isPending || attachedIds.has(question.id)}
                   onClick={() => approveAndAdd(question)}
                 >
                   <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Approve & add
@@ -457,6 +462,7 @@ function QuizAssignControl({
   const [sessionId, setSessionId] = useState("");
   const [message, setMessage] = useState("");
   const title = quiz.title.trim().replace(/\s+/g, " ").toLowerCase();
+  // Same title-only limitation as assignableBankQuizzes: no clone lineage on the payload.
   const targets = sessions.filter((session) => {
     if (session.courseId !== quiz.courseId) return false;
     return !assignments.some(
@@ -467,7 +473,9 @@ function QuizAssignControl({
         item.title.trim().replace(/\s+/g, " ").toLowerCase() === title,
     );
   });
-  const selectedId = sessionId || targets[0]?.id || "";
+  const selectedId = targets.some((session) => session.id === sessionId)
+    ? sessionId
+    : (targets[0]?.id || "");
   if (quiz.sessionId) {
     return (
       <Card>
@@ -477,7 +485,7 @@ function QuizAssignControl({
       </Card>
     );
   }
-  if (quiz.status === "archived" || quiz.deliveryPhase !== "before_session") {
+  if (!isReusableBankQuiz(quiz)) {
     return (
       <Card>
         <CardContent className="p-4 text-sm text-muted-foreground">

@@ -1028,6 +1028,9 @@ function AssignPreworkControl({
   const assignable = assignableBankQuizzes(assignments, session);
   const [assignmentId, setAssignmentId] = useState(assignable[0]?.id ?? "");
   const [message, setMessage] = useState("");
+  const selectedId = assignable.some((item) => item.id === assignmentId)
+    ? assignmentId
+    : (assignable[0]?.id ?? "");
   if (assignable.length === 0) {
     return (
       <p className="mt-3 text-xs text-muted-foreground">
@@ -1040,7 +1043,7 @@ function AssignPreworkControl({
       <select
         aria-label="Quiz to assign as pre-session work"
         className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
-        value={assignmentId}
+        value={selectedId}
         onChange={(event) => setAssignmentId(event.target.value)}
       >
         {assignable.map((item) => (
@@ -1052,11 +1055,11 @@ function AssignPreworkControl({
       <Button
         size="sm"
         data-testid={`assign-prework-${session.id}`}
-        disabled={cloneAssignment.isPending || !assignmentId}
+        disabled={cloneAssignment.isPending || !selectedId}
         onClick={() =>
           cloneAssignment.mutate(
             {
-              assignmentId,
+              assignmentId: selectedId,
               sessionId: session.id,
             },
             {

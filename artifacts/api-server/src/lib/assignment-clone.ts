@@ -59,6 +59,9 @@ export function assignmentAlreadyOnSession(
   source: Pick<AssignmentCloneSource, "id" | "title" | "deliveryPhase">,
   existingOnTarget: AssignmentCloneExisting[],
 ): boolean {
+  // Clones are not persisted with sourceAssignmentId / lineage. Duplicate
+  // detection is title + deliveryPhase (plus exact source id). Renaming a
+  // session copy therefore allows re-assigning the same bank quiz.
   const title = normalizeAssignmentTitle(source.title);
   return existingOnTarget.some(
     (item) =>
