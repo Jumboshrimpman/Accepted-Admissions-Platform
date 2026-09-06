@@ -185,9 +185,13 @@ export function QuestionReviewCard({
 export function GenerateDraftsCard({
   courseId,
   onChanged,
+  compact = false,
+  onGenerated,
 }: {
   courseId: string;
   onChanged: () => void;
+  compact?: boolean;
+  onGenerated?: (items: QuestionBankItem[]) => void;
 }) {
   const queryClient = useQueryClient();
   const sourceParams = { courseId };
@@ -225,8 +229,7 @@ export function GenerateDraftsCard({
     );
   }
 
-  return (
-    <div className="space-y-4">
+  const importCard = (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Import an authorized source</CardTitle>
@@ -337,6 +340,18 @@ export function GenerateDraftsCard({
           </Button>
         </CardContent>
       </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      {compact ? (
+        <details>
+          <summary className="cursor-pointer text-sm font-medium">Import an authorized source</summary>
+          <div className="mt-3">{importCard}</div>
+        </details>
+      ) : (
+        importCard
+      )}
 
       <Card className="border-primary/20">
         <CardHeader>
@@ -388,7 +403,12 @@ export function GenerateDraftsCard({
                     },
                     {
                       onSuccess: (created) => {
-                        setMessage(`${created.length} draft questions added to the bank.`);
+                        setMessage(
+                          compact
+                            ? `${created.length} template drafts ready to approve onto this quiz.`
+                            : `${created.length} draft questions added to the bank.`,
+                        );
+                        onGenerated?.(created);
                         queryClient.invalidateQueries({
                           queryKey: getListQuestionBankQueryKey({ courseId }),
                         });

@@ -121,6 +121,7 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   getListQuestionBankQueryKey: (params?: { courseId: string }) => ["/api/question-bank", params],
   getListContentSourcesQueryKey: (params?: { courseId: string }) => ["/api/content-sources", params],
+  getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   useCreateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
@@ -136,6 +137,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGeneratePracticeQuestions: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateQuestionBankItem: () => ({ mutate: vi.fn(), isPending: false }),
   useAttachQuestionToAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  useGetAssignment: () => ({ data: { questions: [] }, isLoading: false, error: null }),
   useUpdateAdminGuidanceRequest: () => ({
     mutate: mocks.updateGuidanceRequest,
     isPending: false,
@@ -144,6 +146,10 @@ vi.mock("@workspace/api-client-react", () => ({
     mutate: mocks.updateNotification,
     isPending: false,
   }),
+}));
+
+vi.mock("@/lib/clone-admin-assignment", () => ({
+  useCloneAdminAssignmentToSession: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("wouter", () => ({
@@ -169,6 +175,7 @@ afterEach(() => {
   mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
   mocks.curriculum.clients = [];
+  mocks.overview.users = [];
 });
 
 describe("administrator overview", () => {
@@ -254,6 +261,27 @@ describe("administrator overview", () => {
     expect(preview.getAttribute("href")).toBe("/admin/clients/student-1/preview");
     expect(preview.textContent).toMatch(/Preview client portal/);
     expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/Michelle Makarem/);
+    expect(screen.queryByText("Fall plan")).toBeNull();
+  });
+
+  test("keeps client preview when curriculum clients are missing by using overview students", () => {
+    mocks.curriculum.clients = [];
+    mocks.overview.users = [
+      {
+        id: "student-1",
+        clerkUserId: "user_student",
+        email: "taito@example.invalid",
+        displayName: "Taito Goto",
+        role: "student",
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    const preview = screen.getByTestId("link-preview-client-student-1");
+    expect(preview.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    mocks.overview.users = [];
   });
 
   test("exposes a client preview action for each student", () => {

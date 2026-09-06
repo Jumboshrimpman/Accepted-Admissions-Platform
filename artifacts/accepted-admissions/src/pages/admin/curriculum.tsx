@@ -1,32 +1,29 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminCurriculumQueryKey,
   getListAdminAccessGrantsQueryKey,
   getListQuestionBankQueryKey,
-  useAttachQuestionToAssignment,
   useCreateAdminAccessGrant,
-  useCreateAdminAssignment,
   useCreateAdminLibraryAsset,
   useCreateAdminSession,
   useGetAdminCurriculum,
+  useGetAdminOverview,
   useListAdminAccessGrants,
   useListQuestionBank,
   useUpdateAdminAccessGrant,
-  useUpdateAdminAssignment,
   useUpdateAdminLibraryAsset,
   useUpdateAdminProgram,
   useUpdateAdminSession,
   useUpdateCurriculumBlock,
   useAttachSessionLibraryAsset,
+  useGetAssignment,
 } from "@workspace/api-client-react";
 import type {
   AdminAccessGrant,
   AdminAccessGrantInput,
   AdminAssignment,
-  AdminAssignmentInput,
-  AdminAssignmentUpdate,
   AdminCurriculum,
   AdminProgram,
   AdminProgramUpdate,
@@ -39,9 +36,16 @@ import type {
   ProvisionableRoleCategory,
 } from "@workspace/api-client-react";
 import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, FileText, GraduationCap, Library, Mail, Plus, Save, Sparkles, UserPlus, Users, Video } from "lucide-react";
-import { GenerateDraftsCard, QuestionReviewCard, apiErrorText } from "@/components/question-bank-authoring";
+import { GenerateDraftsCard, QuestionReviewCard } from "@/components/question-bank-authoring";
+import {
+  BANK_QUIZ_EMPTY_STATE,
+  assignableBankQuizzes,
+  bankQuizOptionLabel,
+} from "@/lib/assignable-bank-quizzes";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
+import { previewableStudents } from "@/lib/previewable-students";
 import { TEMPLATE_DRAFTS_BANK_HINT } from "@/lib/template-drafts";
+import { QuizWorkspace } from "@/pages/admin/quiz-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,8 +67,7 @@ const sectionLinks: Array<{ id: Section; label: string; detail: string; icon: ty
   { id: "people", label: "People", detail: "Provision and preview", icon: Users },
   { id: "sessions", label: "Sessions", detail: "Assign pre-work, Meet", icon: CalendarDays },
   { id: "programs", label: "Programs", detail: "Titles and Meet links", icon: GraduationCap },
-  { id: "curriculum", label: "Curriculum bank", detail: "Questions, quizzes, materials", icon: Library },
-  { id: "roadmap", label: "Fall plan", detail: "Twelve-date snapshot", icon: ClipboardList },
+  { id: "curriculum", label: "Quizzes", detail: "Questions, assign, results", icon: ClipboardList },
 ];
 
 function errorText(error: unknown): string {
@@ -90,12 +93,21 @@ function statusVariant(status: string): "default" | "secondary" | "outline" {
 export default function AdminCurriculum() {
   const [location, setLocation] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] ?? "");
-  const initialSection = (params.get("section") as Section | null) ?? "roadmap";
-  const [section, setSection] = useState<Section>(sectionLinks.some((item) => item.id === initialSection) ? initialSection : "roadmap");
+  const initialSection = (params.get("section") as Section | null) ?? "curriculum";
+  const [section, setSection] = useState<Section>(
+    initialSection === "roadmap" || sectionLinks.some((item) => item.id === initialSection)
+      ? initialSection
+      : "curriculum",
+  );
   const [search, setSearch] = useState("");
   const curriculum = useGetAdminCurriculum();
+  const overview = useGetAdminOverview();
   const queryClient = useQueryClient();
   const refresh = () => queryClient.invalidateQueries({ queryKey: getGetAdminCurriculumQueryKey() });
+  const previewStudents = previewableStudents({
+    curriculumClients: curriculum.data?.clients,
+    overviewUsers: overview.data?.users,
+  });
 
   const selectSection = (next: Section) => {
     setSection(next);
@@ -106,7 +118,17 @@ export default function AdminCurriculum() {
     return <div className="space-y-6"><Skeleton className="h-10 w-72 rounded-xl" /><Skeleton className="h-12 w-full rounded-xl" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;
   }
   if (curriculum.error || !curriculum.data) {
-    return <Card><CardContent className="p-8"><p className="font-semibold">Curriculum operations are unavailable.</p><p className="mt-2 text-sm text-muted-foreground">{errorText(curriculum.error)}</p></CardContent></Card>;
+    return (
+      <div className="mx-auto max-w-7xl space-y-6">
+        <Card>
+          <CardContent className="p-8">
+            <p className="font-semibold">Curriculum operations are unavailable.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{errorText(curriculum.error)}</p>
+          </CardContent>
+        </Card>
+        <ClientPreviewCard students={previewStudents} />
+      </div>
+    );
   }
 
   const data = curriculum.data;
@@ -121,15 +143,15 @@ export default function AdminCurriculum() {
             <ChevronRight className="h-4 w-4" />
             <span>Operations</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">People, sessions, and curriculum bank</h1>
+          <h1 className="text-3xl font-bold tracking-tight">People, sessions, and quizzes</h1>
           <p className="mt-1 text-muted-foreground">
-            Build reusable quizzes in the bank, assign them as pre-session work, then review the attempt in the meeting. Fall plan is a snapshot — not a second authoring workspace.
+            Open a quiz to edit its questions, assign it to a session, then review the attempt. Preview a student portal from People or Overview.
           </p>
         </div>
         <Input className="w-full sm:w-72" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this section…" aria-label="Search operations" />
       </div>
 
-      <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-5" aria-label="Admin operation sections">
+      <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-4" aria-label="Admin operation sections">
         {sectionLinks.map(({ id, label, detail, icon: Icon }) => (
           <Button key={id} variant={section === id ? "default" : "ghost"} className="h-auto flex-col items-start justify-start gap-1 px-3 py-2 text-left" onClick={() => selectSection(id)}>
             <span className="flex items-center gap-2 font-medium"><Icon className="h-4 w-4" /> {label}</span>
@@ -138,8 +160,16 @@ export default function AdminCurriculum() {
         ))}
       </nav>
 
-      {section === "roadmap" && <RoadmapSection data={data} />}
-      {section === "people" && <PeopleSection data={data} search={search} />}
+      {section === "roadmap" && (
+        <p className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+          The Fall plan snapshot was removed so it does not duplicate Sessions.{" "}
+          <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => selectSection("sessions")}>
+            Open Sessions
+          </button>
+          .
+        </p>
+      )}
+      {section === "people" && <PeopleSection data={data} search={search} previewStudents={previewStudents} />}
       {section === "programs" && <ProgramsSection programs={data.programs.filter((item) => filtered(item.title) || filtered(item.subject) || filtered(item.term))} onSaved={refresh} />}
       {section === "curriculum" && <CurriculumSection data={data} search={search} onChanged={refresh} />}
       {section === "sessions" && <SessionsSection data={data} search={search} onChanged={refresh} />}
@@ -147,12 +177,54 @@ export default function AdminCurriculum() {
   );
 }
 
-const fallDateOrder = [
-  "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
-  "2026-10-30", "2026-11-06", "2026-11-13", "2026-11-20",
-  "2026-11-27", "2026-12-04", "2026-12-11", "2026-12-18",
-];
-function PeopleSection({ data, search }: { data: AdminCurriculum; search: string }) {
+function ClientPreviewCard({
+  students,
+}: {
+  students: Array<{ id: string; name: string; email: string }>;
+}) {
+  return (
+    <Card data-testid="card-student-portals">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Eye className="h-5 w-5 text-primary" /> Client preview
+        </CardTitle>
+        <CardDescription>
+          Open a student portal from here even if quizzes or sessions fail to load. Financial details stay in Finance.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {students.map((student) => (
+          <div key={student.id} className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">{student.name}</p>
+              <p className="text-sm text-muted-foreground">{student.email}</p>
+            </div>
+            <Button asChild size="sm">
+              <Link href={`/admin/clients/${student.id}/preview`} data-testid={`link-preview-client-${student.id}`}>
+                <Eye className="mr-2 h-3.5 w-3.5" /> Preview client portal
+              </Link>
+            </Button>
+          </div>
+        ))}
+        {students.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No students on file yet. Provision them under People, then invite the same email in Clerk.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PeopleSection({
+  data,
+  search,
+  previewStudents,
+}: {
+  data: AdminCurriculum;
+  search: string;
+  previewStudents: Array<{ id: string; name: string; email: string }>;
+}) {
   const queryClient = useQueryClient();
   const grantsQuery = useListAdminAccessGrants();
   const createGrant = useCreateAdminAccessGrant();
@@ -254,6 +326,7 @@ function PeopleSection({ data, search }: { data: AdminCurriculum; search: string
 
   return (
     <div className="space-y-6">
+      <ClientPreviewCard students={previewStudents.filter((student) => !term || `${student.name} ${student.email}`.toLowerCase().includes(term))} />
       <Card className="border-primary/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -419,7 +492,7 @@ function PeopleSection({ data, search }: { data: AdminCurriculum; search: string
               <Users className="h-5 w-5 text-primary" /> Clients / students
             </CardTitle>
             <CardDescription>
-              Existing students (including Taito) can be previewed here. Financial details stay in Finance.
+              Relationships and assigned tutors. Use Client preview above to open a portal.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -432,11 +505,6 @@ function PeopleSection({ data, search }: { data: AdminCurriculum; search: string
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">Student</Badge>
-                    <Button asChild size="sm">
-                      <Link href={`/admin/clients/${client.id}/preview`} data-testid={`link-preview-client-${client.id}`}>
-                        <Eye className="mr-2 h-3.5 w-3.5" /> Preview client portal
-                      </Link>
-                    </Button>
                   </div>
                 </div>
                 <div className="mt-3 border-t pt-3">
@@ -613,16 +681,16 @@ function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum;
   const submissions = data.submissions.filter((item) => !term || `${item.assignmentTitle} ${item.studentName}`.toLowerCase().includes(term));
   return <Tabs value={tab} onValueChange={setTab} className="space-y-5">
     <div>
-      <h2 className="text-xl font-semibold">Curriculum library / bank</h2>
+      <h2 className="text-xl font-semibold">Quiz workspace</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Author questions and quizzes here. Sessions only attach existing bank items as pre-session homework.
+        A quiz is the unit of work: open it, add questions, assign it to a session, then review results.
       </p>
     </div>
     <ol className="grid gap-2 rounded-2xl border bg-muted/20 p-3 text-sm sm:grid-cols-4" data-testid="curriculum-bank-path" aria-label="Curriculum path">
-      <li className="rounded-xl bg-background p-3"><span className="font-semibold">1. Bank</span><p className="mt-1 text-muted-foreground">Create questions and quizzes.</p></li>
-      <li className="rounded-xl bg-background p-3"><span className="font-semibold">2. Assign</span><p className="mt-1 text-muted-foreground">Attach a quiz as pre-session work.</p></li>
-      <li className="rounded-xl bg-background p-3"><span className="font-semibold">3. Take</span><p className="mt-1 text-muted-foreground">Student submits from the dashboard.</p></li>
-      <li className="rounded-xl bg-background p-3"><span className="font-semibold">4. Review</span><p className="mt-1 text-muted-foreground">Open the attempt in the session.</p></li>
+      <li className="rounded-xl bg-background p-3"><span className="font-semibold">1. Quiz</span><p className="mt-1 text-muted-foreground">Open or create the quiz.</p></li>
+      <li className="rounded-xl bg-background p-3"><span className="font-semibold">2. Questions</span><p className="mt-1 text-muted-foreground">Add or generate questions on that quiz.</p></li>
+      <li className="rounded-xl bg-background p-3"><span className="font-semibold">3. Assign</span><p className="mt-1 text-muted-foreground">Clone it onto a session as pre-work.</p></li>
+      <li className="rounded-xl bg-background p-3"><span className="font-semibold">4. Results</span><p className="mt-1 text-muted-foreground">Review the student attempt.</p></li>
     </ol>
     <TabsList className="h-auto flex-wrap justify-start">
       <TabsTrigger value="quizzes"><ClipboardList className="mr-2 h-4 w-4" /> Quizzes</TabsTrigger>
@@ -631,7 +699,7 @@ function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum;
       <TabsTrigger value="submissions"><CheckCircle2 className="mr-2 h-4 w-4" /> Submissions</TabsTrigger>
       <TabsTrigger value="materials"><FileText className="mr-2 h-4 w-4" /> Session blocks</TabsTrigger>
     </TabsList>
-    <TabsContent value="quizzes"><AssignmentManager data={data} assignments={assignments} onChanged={onChanged} /></TabsContent>
+    <TabsContent value="quizzes"><QuizWorkspace data={data} assignments={assignments} submissions={submissions} onChanged={onChanged} /></TabsContent>
     <TabsContent value="questions"><QuestionBankManager data={data} onChanged={onChanged} /></TabsContent>
     <TabsContent value="library"><LibraryManager assets={data.libraryAssets} sessions={data.sessions} search={search} onChanged={onChanged} /></TabsContent>
     <TabsContent value="submissions"><Card><CardHeader><CardTitle>Student submissions</CardTitle><CardDescription>Right/wrong results stay available for session review. Open an attempt from Sessions or the tutor session page.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-3">Student</th><th className="p-3">Quiz</th><th className="p-3">Score</th><th className="p-3">Review</th><th className="p-3">Submitted</th></tr></thead><tbody>{submissions.map((item) => <tr key={item.attemptId} className="border-b"><td className="p-3 font-medium">{item.studentName}</td><td className="p-3">{item.assignmentTitle}</td><td className="p-3">{item.score}% <span className="text-muted-foreground">· {item.mistakeCount} missed</span></td><td className="p-3"><Button asChild size="sm" variant="outline"><Link href={`/tutor/attempts/${item.attemptId}`}>Open review</Link></Button></td><td className="p-3 text-muted-foreground">{new Date(item.submittedAt).toLocaleDateString()}</td></tr>)}</tbody></table>{submissions.length === 0 && <Empty text="No matching submissions." />}</div></CardContent></Card></TabsContent>
@@ -713,89 +781,6 @@ function QuestionBankManager({ data, onChanged }: { data: AdminCurriculum; onCha
         )}
       </div>
     </div>
-  );
-}
-
-function AssignmentManager({ data, assignments, onChanged }: { data: AdminCurriculum; assignments: AdminAssignment[]; onChanged: () => void }) {
-  const create = useCreateAdminAssignment();
-  const update = useUpdateAdminAssignment();
-  const [editing, setEditing] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [draft, setDraft] = useState<AdminAssignmentInput>({ courseId: data.programs[0]?.id ?? "", title: "", subject: data.programs[0]?.subject ?? "", instructions: "", deliveryPhase: "before_session", timeLimitMinutes: 30, maxAttempts: 1, status: "draft", sessionId: null, deadline: null });
-  const [message, setMessage] = useState("");
-  const reset = () => setDraft({ courseId: data.programs[0]?.id ?? "", title: "", subject: data.programs[0]?.subject ?? "", instructions: "", deliveryPhase: "before_session", timeLimitMinutes: 30, maxAttempts: 1, status: "draft", sessionId: null, deadline: null });
-  const save = () => {
-    const payload = { ...draft, deadline: draft.deadline ? new Date(draft.deadline).toISOString() : null };
-    if (editing) update.mutate({ assignmentId: editing, data: payload as AdminAssignmentUpdate }, { onSuccess: () => { setEditing(null); setMessage("Assignment saved."); onChanged(); }, onError: (error) => setMessage(errorText(error)) });
-    else create.mutate({ data: payload }, { onSuccess: () => { setShowCreate(false); reset(); setMessage("Assignment created."); onChanged(); }, onError: (error) => setMessage(errorText(error)) });
-  };
-  const form = <Card className="border-primary/30"><CardContent className="grid gap-4 p-5"><div className="grid gap-3 md:grid-cols-3"><Field label="Program"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.courseId} onChange={(event) => setDraft({ ...draft, courseId: event.target.value })}>{data.programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}</select></Field><Field label="Session (optional)"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.sessionId ?? ""} onChange={(event) => setDraft({ ...draft, sessionId: event.target.value || null })}><option value="">Program-level assignment</option>{data.sessions.filter((session) => session.courseId === draft.courseId).map((session) => <option key={session.id} value={session.id}>{session.title}</option>)}</select></Field><Field label="Phase"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.deliveryPhase} onChange={(event) => setDraft({ ...draft, deliveryPhase: event.target.value as AdminAssignmentInput["deliveryPhase"] })}><option value="before_session">Before session</option><option value="during_session">During session</option></select></Field></div><div className="grid gap-3 md:grid-cols-2"><Field label="Title"><Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field><Field label="Subject"><Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></Field></div><Field label="Instructions / explanation"><Textarea value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder="Explain the task and what the learner should demonstrate." /></Field><div className="grid gap-3 md:grid-cols-4"><Field label="Due date"><Input type="datetime-local" value={dateInput(draft.deadline)} onChange={(event) => setDraft({ ...draft, deadline: toIso(event.target.value) })} /></Field><Field label="Time limit (minutes)"><Input type="number" min="1" value={draft.timeLimitMinutes} onChange={(event) => setDraft({ ...draft, timeLimitMinutes: Number(event.target.value) })} /></Field><Field label="Max attempts"><Input type="number" min="1" value={draft.maxAttempts ?? 1} onChange={(event) => setDraft({ ...draft, maxAttempts: Number(event.target.value) })} /></Field><Field label="Publication state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.status ?? "draft"} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminAssignmentInput["status"] })}><option value="draft">Draft</option><option value="published">Published</option><option value="completed">Completed</option><option value="archived">Archived</option></select></Field></div><div className="flex gap-2"><Button onClick={save} disabled={create.isPending || update.isPending || draft.title.trim().length < 2 || draft.instructions.trim().length < 1}>{editing ? "Save quiz" : "Create quiz"}</Button><Button variant="ghost" onClick={() => { setEditing(null); setShowCreate(false); }}>Cancel</Button></div></CardContent></Card>;
-  return <div className="space-y-4">{message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}<div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold">Quizzes</h2><p className="text-sm text-muted-foreground">Reusable pre-session quizzes. Add questions from the bank, then assign the quiz on the Sessions tab.</p></div><Button onClick={() => { reset(); setEditing(null); setShowCreate(true); }}><Plus className="mr-2 h-4 w-4" /> New quiz</Button></div>{(showCreate || editing) && form}{editing && <QuizQuestionAttach courseId={draft.courseId} assignmentId={editing} onChanged={onChanged} />}<div className="grid gap-3">{assignments.map((assignment) => <Card key={assignment.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{assignment.title}</h3><Badge variant={statusVariant(assignment.status)}>{assignment.status}</Badge><Badge variant="outline">{assignment.deliveryPhase.replace("_", " ")}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{assignment.programTitle}{assignment.sessionTitle ? ` · ${assignment.sessionTitle}` : " · not assigned to a session yet"} · {assignment.subject}</p><p className="mt-2 line-clamp-2 text-sm">{assignment.instructions}</p><p className="mt-2 text-xs text-muted-foreground">{assignment.questionCount} questions · {assignment.submissionCount} submissions · due {assignment.deadline ? new Date(assignment.deadline).toLocaleString() : "not set"}</p></div><Button variant="outline" size="sm" onClick={() => { setEditing(assignment.id); setShowCreate(false); setDraft({ courseId: assignment.courseId, sessionId: assignment.sessionId, deliveryPhase: assignment.deliveryPhase, title: assignment.title, subject: assignment.subject, instructions: assignment.instructions, status: assignment.status, deadline: assignment.deadline, timeLimitMinutes: assignment.timeLimitMinutes, maxAttempts: assignment.maxAttempts }); }}><Edit3 className="mr-2 h-4 w-4" /> Edit</Button></CardContent></Card>)}</div>{assignments.length === 0 && <Empty text="No quizzes yet. Create one, add questions from the bank, then assign it as pre-session work." />}</div>;
-}
-
-function QuizQuestionAttach({
-  courseId,
-  assignmentId,
-  onChanged,
-}: {
-  courseId: string;
-  assignmentId: string;
-  onChanged: () => void;
-}) {
-  const attach = useAttachQuestionToAssignment();
-  const { data: questions = [] } = useListQuestionBank({ courseId }, {
-    query: {
-      enabled: Boolean(courseId),
-      queryKey: getListQuestionBankQueryKey({ courseId }),
-    },
-  });
-  const approved = questions.filter((item) => item.reviewStatus === "approved");
-  const [questionId, setQuestionId] = useState(approved[0]?.id ?? "");
-  const [message, setMessage] = useState("");
-  useEffect(() => {
-    if (!questionId && approved[0]) setQuestionId(approved[0].id);
-  }, [approved, questionId]);
-  return (
-    <Card>
-      <CardContent className="space-y-3 p-4">
-        <p className="text-sm font-medium">Add an approved bank question to this quiz</p>
-        {approved.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Approve questions in the Questions tab first.</p>
-        ) : (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              aria-label="Approved question to add"
-              className="h-9 max-w-xl rounded-md border bg-background px-2 text-sm"
-              value={questionId}
-              onChange={(event) => setQuestionId(event.target.value)}
-            >
-              {approved.map((item) => (
-                <option key={item.id} value={item.id}>{item.skill} · {item.prompt.slice(0, 80)}</option>
-              ))}
-            </select>
-            <Button
-              size="sm"
-              disabled={attach.isPending || !questionId}
-              onClick={() =>
-                attach.mutate(
-                  { assignmentId, data: { questionId } },
-                  {
-                    onSuccess: () => {
-                      setMessage("Question added to this quiz.");
-                      onChanged();
-                    },
-                    onError: (error) => setMessage(apiErrorText(error)),
-                  },
-                )
-              }
-            >
-              Add question
-            </Button>
-          </div>
-        )}
-        {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -965,21 +950,27 @@ function SessionCard({
           {prework.length > 0 ? (
             <div className="mt-2 space-y-2">
               {prework.map((quiz) => (
-                <div key={quiz.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-background px-3 py-2 text-sm">
-                  <div>
-                    <p className="font-medium">{quiz.title}</p>
-                    <p className="text-xs text-muted-foreground">{quiz.questionCount} questions · {quiz.status}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {reviews.filter((item) => item.assignmentId === quiz.id).map((item) => (
-                      <Button key={item.attemptId} asChild size="sm" variant="secondary">
-                        <Link href={`/tutor/attempts/${item.attemptId}`}>Review {item.studentName}</Link>
+                <div key={quiz.id} className="rounded-md bg-background px-3 py-2 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{quiz.title}</p>
+                      <p className="text-xs text-muted-foreground">{quiz.questionCount} questions · {quiz.status}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {reviews.filter((item) => item.assignmentId === quiz.id).map((item) => (
+                        <Button key={item.attemptId} asChild size="sm" variant="secondary">
+                          <Link href={`/tutor/attempts/${item.attemptId}`}>Review {item.studentName}</Link>
+                        </Button>
+                      ))}
+                      {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && (
+                        <span className="text-xs text-muted-foreground">No attempt yet</span>
+                      )}
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/admin/curriculum?section=curriculum&tab=quizzes&quiz=${quiz.id}`}>Open quiz</Link>
                       </Button>
-                    ))}
-                    {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && (
-                      <span className="text-xs text-muted-foreground">No attempt yet</span>
-                    )}
+                    </div>
                   </div>
+                  <PreworkQuestionPrompts assignmentId={quiz.id} />
                 </div>
               ))}
             </div>
@@ -1001,6 +992,29 @@ function SessionCard({
   );
 }
 
+function PreworkQuestionPrompts({ assignmentId }: { assignmentId: string }) {
+  const { data, isLoading } = useGetAssignment(assignmentId);
+  const prompts = data?.questions ?? [];
+  return (
+    <details className="mt-2" data-testid={`prework-questions-${assignmentId}`}>
+      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+        View questions
+      </summary>
+      {isLoading ? (
+        <p className="mt-2 text-xs text-muted-foreground">Loading questions…</p>
+      ) : prompts.length === 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">No questions on this quiz yet.</p>
+      ) : (
+        <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+          {prompts.map((question) => (
+            <li key={question.id}>{question.prompt}</li>
+          ))}
+        </ol>
+      )}
+    </details>
+  );
+}
+
 function AssignPreworkControl({
   session,
   assignments,
@@ -1011,30 +1025,16 @@ function AssignPreworkControl({
   onChanged: () => void;
 }) {
   const cloneAssignment = useCloneAdminAssignmentToSession();
-  const alreadyAssignedTitles = new Set(
-    assignments
-      .filter(
-        (item) =>
-          item.sessionId === session.id &&
-          item.status !== "archived" &&
-          item.deliveryPhase === "before_session",
-      )
-      .map((item) => item.title.trim().replace(/\s+/g, " ").toLowerCase()),
-  );
-  const assignable = assignments.filter(
-    (item) =>
-      item.courseId === session.courseId &&
-      item.deliveryPhase === "before_session" &&
-      item.status !== "archived" &&
-      item.sessionId !== session.id &&
-      !alreadyAssignedTitles.has(item.title.trim().replace(/\s+/g, " ").toLowerCase()),
-  );
+  const assignable = assignableBankQuizzes(assignments, session);
   const [assignmentId, setAssignmentId] = useState(assignable[0]?.id ?? "");
   const [message, setMessage] = useState("");
+  const selectedId = assignable.some((item) => item.id === assignmentId)
+    ? assignmentId
+    : (assignable[0]?.id ?? "");
   if (assignable.length === 0) {
     return (
       <p className="mt-3 text-xs text-muted-foreground">
-        Create a before-session quiz in the Curriculum bank, then assign it here.
+        {BANK_QUIZ_EMPTY_STATE}
       </p>
     );
   }
@@ -1043,23 +1043,23 @@ function AssignPreworkControl({
       <select
         aria-label="Quiz to assign as pre-session work"
         className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
-        value={assignmentId}
+        value={selectedId}
         onChange={(event) => setAssignmentId(event.target.value)}
       >
         {assignable.map((item) => (
           <option key={item.id} value={item.id}>
-            {item.title} · {item.questionCount} questions{item.sessionTitle ? ` · currently ${item.sessionTitle}` : ""}
+            {bankQuizOptionLabel(item)}
           </option>
         ))}
       </select>
       <Button
         size="sm"
         data-testid={`assign-prework-${session.id}`}
-        disabled={cloneAssignment.isPending || !assignmentId}
+        disabled={cloneAssignment.isPending || !selectedId}
         onClick={() =>
           cloneAssignment.mutate(
             {
-              assignmentId,
+              assignmentId: selectedId,
               sessionId: session.id,
             },
             {
@@ -1371,106 +1371,4 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{text}</div>;
-}
-
-function RoadmapSection({ data }: { data: AdminCurriculum }) {
-  const sessions = data.sessions
-    .filter((session) => fallDateOrder.includes(session.dateTime.slice(0, 10)))
-    .sort((left, right) => fallDateOrder.indexOf(left.dateTime.slice(0, 10)) - fallDateOrder.indexOf(right.dateTime.slice(0, 10)));
-  const diagnostic = data.assignments.find((assignment) =>
-    /full sat practice diagnostic|sat diagnostic/i.test(assignment.title),
-  );
-  const allExceptions = [
-    ...sessions.filter((session) => session.conflict).map((session) => ({
-      kind: "schedule",
-      severity: "urgent" as const,
-      label: "Schedule conflict",
-      detail: `${displaySessionTitle(session.title, session.subject)} has a scheduling conflict.`,
-    })),
-    ...sessions.filter((session) => !session.tutor || !session.student).map((session) => ({
-      kind: "staffing",
-      severity: "warning" as const,
-      label: "Assignment needed",
-      detail: `${displaySessionTitle(session.title, session.subject)} needs ${!session.tutor ? "a tutor" : "a student"}.`,
-    })),
-    ...data.assignments.filter((assignment) => assignment.status === "draft").map((assignment) => ({
-      kind: "assignment",
-      severity: "warning" as const,
-      label: "Draft preparation",
-      detail: `${assignment.title} is not published yet.`,
-    })),
-  ];
-  const exceptions = allExceptions.slice(0, 6);
-  const newSubmissions = data.submissions.filter((item) => item.reviewStatus !== "reviewed").slice(0, 5);
-
-  return <div className="space-y-5">
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>Fall plan snapshot</CardTitle>
-        <CardDescription>
-          Twelve meeting dates, the diagnostic, and exceptions. Edit people, sessions, and materials in the other tabs.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="rounded-xl border bg-muted/20 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pre–Oct 2 diagnostic</p>
-          <p className="mt-2 font-semibold">{diagnostic?.title ?? "Full SAT Practice Diagnostic"}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {diagnostic
-              ? `${diagnostic.questionCount} questions · ${diagnostic.timeLimitMinutes} min · ${diagnostic.submissionCount} submissions`
-              : "Seeded when Fall sessions are reconciled."}
-          </p>
-        </div>
-        <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-          Open a date below to prepare the live plan. Session Meet links stay on the session card.
-        </div>
-      </CardContent>
-    </Card>
-    <div className="grid gap-4 sm:grid-cols-3">
-      <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">Fall meetings</p><p className="mt-2 text-3xl font-bold">{sessions.length} / 12</p></CardContent></Card>
-      <Card><CardContent className="p-5"><p className="text-sm text-muted-foreground">English / IELTS</p><p className="mt-2 text-3xl font-bold">{sessions.filter((session) => session.subject.toUpperCase() === "IELTS").length} / 3</p></CardContent></Card>
-      <Card className={exceptions.length ? "border-amber-400/40" : ""}><CardContent className="p-5"><p className="text-sm text-muted-foreground">Exceptions</p><p className="mt-2 text-3xl font-bold">{allExceptions.length}</p></CardContent></Card>
-    </div>
-    {newSubmissions.length > 0 && (
-      <Card className="border-accent/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Latest submission alerts</CardTitle>
-          <CardDescription>New homework results waiting for tutor review and live-plan prep.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {newSubmissions.map((item) => (
-            <div key={item.attemptId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-sm">
-              <div>
-                <p className="font-medium">{item.studentName} · {item.assignmentTitle}</p>
-                <p className="text-muted-foreground">{Math.round(item.score)}% · {item.mistakeCount} misses · {item.reviewStatus}</p>
-              </div>
-              <Badge variant="outline">{new Date(item.submittedAt).toLocaleDateString()}</Badge>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    )}
-    {exceptions.length > 0 && <details className="rounded-2xl border border-amber-400/40 bg-amber-500/5 p-4">
-      <summary className="cursor-pointer font-semibold"><AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />Review {allExceptions.length} exception{allExceptions.length === 1 ? "" : "s"}</summary>
-      <div className="mt-4 grid gap-2 md:grid-cols-2">{exceptions.map((item, index) => <div key={`${item.kind}-${index}`} className="rounded-xl border bg-background p-3 text-sm"><Badge variant={item.severity === "urgent" ? "destructive" : "outline"}>{item.label}</Badge><p className="mt-2 text-muted-foreground">{item.detail}</p></div>)}</div>
-    </details>}
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b"><CardTitle>Twelve-date curriculum builder</CardTitle><CardDescription>Each date already carries before-session homework and during-session practice. Open a brief to auto-prepare the live plan from the latest submission.</CardDescription></CardHeader>
-      <CardContent className="p-0">
-        {sessions.length ? <div className="divide-y">{sessions.map((session, index) => {
-          const assignments = data.assignments.filter((assignment) => assignment.sessionId === session.id);
-          const preparation = assignments.find((assignment) => assignment.deliveryPhase === "before_session");
-          const during = assignments.find((assignment) => assignment.deliveryPhase === "during_session");
-          const ready = session.status === "published" && Boolean(session.tutor) && Boolean(session.student);
-          return <div key={session.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
-            <div><p className="font-semibold">{new Date(session.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: session.timezone })}</p><Badge variant="outline" className="mt-1">{sessionSubjectLabel(session.subject)}</Badge></div>
-            <div><p className="text-sm font-medium">{displaySessionTitle(session.title, session.subject)}</p><p className="mt-1 text-xs text-muted-foreground">Before: {preparation ? `${preparation.title} (${preparation.status})` : "not required"} · During: {during ? during.status : "auto-prepared in session"} · Report: {session.hasReport ? "ready" : "pending"}</p></div>
-            <Badge variant={ready ? "default" : "secondary"} className="w-fit">{ready ? "Ready" : "Needs setup"}</Badge>
-            <Button asChild size="sm" variant="outline"><Link href={`/tutor/sessions/${session.id}`}>Open session review <ChevronRight className="ml-2 h-4 w-4" /></Link></Button>
-          </div>;
-        })}</div> : <Empty text="No Fall curriculum dates are available." />}
-      </CardContent>
-    </Card>
-  </div>;
 }
