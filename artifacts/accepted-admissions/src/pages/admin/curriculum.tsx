@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminCurriculumQueryKey,
@@ -62,8 +62,14 @@ import {
   sessionSubjectLabel,
 } from "@/lib/session-display";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import {
+  adminCurriculumHref,
+  readAdminCurriculumSearch,
+  type AdminCurriculumSection,
+  type AdminCurriculumTab,
+} from "@/lib/admin-curriculum-location";
 
-type Section = "roadmap" | "people" | "programs" | "curriculum" | "sessions";
+type Section = AdminCurriculumSection;
 
 const sectionLinks: Array<{ id: Section; label: string; detail: string; icon: typeof Users }> = [
   { id: "people", label: "People", detail: "Provision and preview", icon: Users },
@@ -92,14 +98,9 @@ function statusVariant(status: string): "default" | "secondary" | "outline" {
 }
 
 export default function AdminCurriculum() {
-  const [location, setLocation] = useLocation();
-  const params = new URLSearchParams(location.split("?")[1] ?? "");
-  const requestedSection = (params.get("section") as Section | null) ?? "curriculum";
-  const section: Section = sectionLinks.some((item) => item.id === requestedSection)
-    ? requestedSection
-    : requestedSection === "roadmap" || requestedSection === "programs"
-      ? "sessions"
-      : "curriculum";
+  const [location] = useLocation();
+  const searchString = useSearch();
+  const { section } = readAdminCurriculumSearch(location, searchString);
   const [search, setSearch] = useState("");
   const curriculum = useGetAdminCurriculum();
   const overview = useGetAdminOverview();
@@ -109,10 +110,6 @@ export default function AdminCurriculum() {
     curriculumClients: curriculum.data?.clients,
     overviewUsers: overview.data?.users,
   });
-
-  const selectSection = (next: Section) => {
-    setLocation(`/admin/curriculum?section=${next}`);
-  };
 
   if (curriculum.isLoading) {
     return <div className="space-y-6"><Skeleton className="h-10 w-72 rounded-xl" /><Skeleton className="h-12 w-full rounded-xl" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;
@@ -152,22 +149,34 @@ export default function AdminCurriculum() {
 
       <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-3" aria-label="Admin operation sections">
         {sectionLinks.map(({ id, label, detail, icon: Icon }) => (
-          <Button key={id} variant={section === id ? "default" : "ghost"} className="h-auto flex-col items-start justify-start gap-1 px-3 py-2 text-left" onClick={() => selectSection(id)}>
-            <span className="flex items-center gap-2 font-medium"><Icon className="h-4 w-4" /> {label}</span>
-            <span className={`text-xs font-normal ${section === id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{detail}</span>
+          <Button key={id} variant={section === id ? "default" : "ghost"} className="h-auto flex-col items-start justify-start gap-1 px-3 py-2 text-left" asChild>
+            <Link href={adminCurriculumHref({ section: id })} data-testid={`admin-section-link-${id}`}>
+              <span className="flex items-center gap-2 font-medium"><Icon className="h-4 w-4" /> {label}</span>
+              <span className={`text-xs font-normal ${section === id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{detail}</span>
+            </Link>
           </Button>
         ))}
       </nav>
 
-      {section === "people" && <PeopleSection data={data} search={search} previewStudents={previewStudents} />}
-      {section === "curriculum" && <CurriculumSection data={data} search={search} onChanged={refresh} />}
+      {section === "people" && (
+        <div data-testid="admin-section-people">
+          <PeopleSection data={data} search={search} previewStudents={previewStudents} />
+        </div>
+      )}
+      {section === "curriculum" && (
+        <div data-testid="admin-section-curriculum">
+          <CurriculumSection data={data} search={search} onChanged={refresh} />
+        </div>
+      )}
       {section === "sessions" && (
-        <SessionsSection
-          data={data}
-          search={search}
-          onChanged={refresh}
-          overviewUsers={overview.data?.users ?? []}
-        />
+        <div data-testid="admin-section-sessions">
+          <SessionsSection
+            data={data}
+            search={search}
+            onChanged={refresh}
+            overviewUsers={overview.data?.users ?? []}
+          />
+        </div>
       )}
     </div>
   );
@@ -597,17 +606,16 @@ function PeopleSection({
 
 function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum; search: string; onChanged: () => void }) {
   const [location, setLocation] = useLocation();
-  const requestedTab = new URLSearchParams(location.split("?")[1] ?? "").get("tab");
-  const tab =
-    requestedTab === "questions" || requestedTab === "library" || requestedTab === "submissions"
-      ? requestedTab
-      : "quizzes";
+  const searchString = useSearch();
+  const { tab, quizId } = readAdminCurriculumSearch(location, searchString);
   const setTab = (next: string) => {
-    const params = new URLSearchParams(location.split("?")[1] ?? "");
-    params.set("section", "curriculum");
-    params.set("tab", next);
-    if (next !== "quizzes") params.delete("quiz");
-    setLocation(`/admin/curriculum?${params.toString()}`);
+    setLocation(
+      adminCurriculumHref({
+        section: "curriculum",
+        tab: next as AdminCurriculumTab,
+        quiz: next === "quizzes" ? quizId : null,
+      }),
+    );
   };
   const term = search.trim().toLowerCase();
   const assignments = data.assignments.filter((item) => !term || `${item.title} ${item.programTitle} ${item.subject}`.toLowerCase().includes(term));
@@ -631,10 +639,10 @@ function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum;
       <TabsTrigger value="library"><Library className="mr-2 h-4 w-4" /> Resources</TabsTrigger>
       <TabsTrigger value="submissions"><CheckCircle2 className="mr-2 h-4 w-4" /> Submissions</TabsTrigger>
     </TabsList>
-    <TabsContent value="quizzes"><QuizWorkspace data={data} assignments={assignments} submissions={submissions} onChanged={onChanged} /></TabsContent>
-    <TabsContent value="questions"><QuestionBankManager data={data} onChanged={onChanged} /></TabsContent>
-    <TabsContent value="library"><LibraryManager assets={data.libraryAssets} sessions={data.sessions} search={search} onChanged={onChanged} /></TabsContent>
-    <TabsContent value="submissions"><Card><CardHeader><CardTitle>Student submissions</CardTitle><CardDescription>Right/wrong results stay available for session review. Open an attempt from Sessions or the tutor session page.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-3">Student</th><th className="p-3">Quiz</th><th className="p-3">Score</th><th className="p-3">Review</th><th className="p-3">Submitted</th></tr></thead><tbody>{submissions.map((item) => <tr key={item.attemptId} className="border-b"><td className="p-3 font-medium">{item.studentName}</td><td className="p-3">{item.assignmentTitle}</td><td className="p-3">{item.score}% <span className="text-muted-foreground">· {item.mistakeCount} missed</span></td><td className="p-3"><Button asChild size="sm" variant="outline"><Link href={`/tutor/attempts/${item.attemptId}`}>Open review</Link></Button></td><td className="p-3 text-muted-foreground">{new Date(item.submittedAt).toLocaleDateString()}</td></tr>)}</tbody></table>{submissions.length === 0 && <Empty text="No matching submissions." />}</div></CardContent></Card></TabsContent>
+    <TabsContent value="quizzes" data-testid="admin-tab-quizzes"><QuizWorkspace data={data} assignments={assignments} submissions={submissions} onChanged={onChanged} /></TabsContent>
+    <TabsContent value="questions" data-testid="admin-tab-questions"><QuestionBankManager data={data} onChanged={onChanged} /></TabsContent>
+    <TabsContent value="library" data-testid="admin-tab-library"><LibraryManager assets={data.libraryAssets} sessions={data.sessions} search={search} onChanged={onChanged} /></TabsContent>
+    <TabsContent value="submissions" data-testid="admin-tab-submissions"><Card><CardHeader><CardTitle>Student submissions</CardTitle><CardDescription>Right/wrong results stay available for session review. Open an attempt from Sessions or the tutor session page.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-3">Student</th><th className="p-3">Quiz</th><th className="p-3">Score</th><th className="p-3">Review</th><th className="p-3">Submitted</th></tr></thead><tbody>{submissions.map((item) => <tr key={item.attemptId} className="border-b"><td className="p-3 font-medium">{item.studentName}</td><td className="p-3">{item.assignmentTitle}</td><td className="p-3">{item.score}% <span className="text-muted-foreground">· {item.mistakeCount} missed</span></td><td className="p-3"><Button asChild size="sm" variant="outline"><Link href={`/tutor/attempts/${item.attemptId}`}>Open review</Link></Button></td><td className="p-3 text-muted-foreground">{new Date(item.submittedAt).toLocaleDateString()}</td></tr>)}</tbody></table>{submissions.length === 0 && <Empty text="No matching submissions." />}</div></CardContent></Card></TabsContent>
   </Tabs>;
 }
 
@@ -680,11 +688,11 @@ function QuestionBankManager({ data, onChanged }: { data: AdminCurriculum; onCha
           </Field>
           <Button asChild variant="outline">
             <Link
-              href={
-                bankQuizzes[0]
-                  ? `/admin/curriculum?section=curriculum&tab=quizzes&quiz=${bankQuizzes[0].id}`
-                  : "/admin/curriculum?section=curriculum&tab=quizzes"
-              }
+              href={adminCurriculumHref({
+                section: "curriculum",
+                tab: "quizzes",
+                quiz: bankQuizzes[0]?.id ?? null,
+              })}
             >
               Open a quiz to generate
             </Link>

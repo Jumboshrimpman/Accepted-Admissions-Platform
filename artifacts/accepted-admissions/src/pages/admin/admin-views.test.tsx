@@ -156,6 +156,7 @@ vi.mock("wouter", () => ({
   Link: ({ href, children, ...props }: { href: string; children: ReactNode }) =>
     createElement("a", { href, ...props }, children),
   useLocation: () => ["/admin/curriculum?section=people", vi.fn()],
+  useSearch: () => "section=people",
 }));
 
 vi.mock("@tanstack/react-query", () => ({

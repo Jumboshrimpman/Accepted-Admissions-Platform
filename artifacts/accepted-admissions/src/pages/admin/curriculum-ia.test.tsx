@@ -247,6 +247,7 @@ vi.mock("wouter", () => ({
   Link: ({ href, children }: { href: string; children: ReactNode }) =>
     createElement("a", { href }, children),
   useLocation: () => [mocks.location, mocks.setLocation],
+  useSearch: () => mocks.location.split("?")[1] ?? "",
 }));
 
 vi.mock("@tanstack/react-query", () => ({

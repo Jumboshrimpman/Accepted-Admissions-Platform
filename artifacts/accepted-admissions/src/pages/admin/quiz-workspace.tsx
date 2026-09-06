@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAssignmentQueryKey,
@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { adminCurriculumHref, readAdminCurriculumSearch } from "@/lib/admin-curriculum-location";
 
 function errorText(error: unknown): string {
   const data = (error as { data?: { error?: string; conflicts?: string[] } } | null)?.data;
@@ -38,9 +39,7 @@ function errorText(error: unknown): string {
 }
 
 function quizHref(quizId?: string) {
-  const params = new URLSearchParams({ section: "curriculum", tab: "quizzes" });
-  if (quizId) params.set("quiz", quizId);
-  return `/admin/curriculum?${params.toString()}`;
+  return adminCurriculumHref({ section: "curriculum", tab: "quizzes", quiz: quizId ?? null });
 }
 
 function statusVariant(status: string): "default" | "secondary" | "outline" {
@@ -84,8 +83,9 @@ export function QuizWorkspace({
   onChanged: () => void;
 }) {
   const [location, setLocation] = useLocation();
+  const searchString = useSearch();
   const [openedQuiz, setOpenedQuiz] = useState<AdminAssignment | null>(null);
-  const quizId = new URLSearchParams(location.split("?")[1] ?? "").get("quiz");
+  const quizId = readAdminCurriculumSearch(location, searchString).quizId;
   const selected =
     data.assignments.find((item) => item.id === quizId) ??
     (openedQuiz?.id === quizId ? openedQuiz : null) ??
