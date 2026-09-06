@@ -96,4 +96,4 @@ Do not invent or commit secrets.
 
 - Workspace typecheck, Accepted Admissions tests, API unit tests that do not need Postgres (`shared-meet-conflict`, session-schedule, access-config, public-team-roster, curriculum-library), journal↔SQL 1:1 (includes `0026`), and both production builds should be run after this pass.
 - Database-backed API tests (`booking-credits` including Michelle vs Taito shared-Meet occupancy, `calendar-persistence`, `dashboard-role-flows`, `fall-account-linking`, `login-activity`, `payment-credits`, `tutor-assignment-reconciliation`) require `DATABASE_URL` and were not run in this environment unless a database is provisioned.
-- Public media files for the approved roster and seven school logos are present in-repo.
+- Public media files for the approved roster and nineteen school logos are present in-repo.

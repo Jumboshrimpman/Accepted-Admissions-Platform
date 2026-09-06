@@ -79,6 +79,16 @@ export const LEGACY_WIX_PUBLIC_TEAM_PORTRAITS: Record<PublicTutorName, string> =
     "https://static.wixstatic.com/media/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg/v1/fill/w_457,h_763,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_fb647c84910a4d97bd9a13d22f9dc124~mv2.jpg",
 };
 
+export type ApprovedSchoolLogo = {
+  name: string;
+  src: string;
+  alt: string;
+};
+
+/**
+ * First-party school logos for /past-success, in legacy www display order.
+ * Harvard College, Harvard Law, and Harvard GSAS stay separate tiles.
+ */
 export const APPROVED_SCHOOL_LOGOS = [
   {
     name: "Harvard University",
@@ -96,6 +106,46 @@ export const APPROVED_SCHOOL_LOGOS = [
     alt: "MIT logo",
   },
   {
+    name: "Northeastern University",
+    src: "/media/schools/northeastern.jpg",
+    alt: "Northeastern University logo",
+  },
+  {
+    name: "UC San Diego",
+    src: "/media/schools/uc-san-diego.png",
+    alt: "UC San Diego logo",
+  },
+  {
+    name: "University of Maryland",
+    src: "/media/schools/maryland.png",
+    alt: "University of Maryland logo",
+  },
+  {
+    name: "Harvard Law School",
+    src: "/media/schools/harvard-law.png",
+    alt: "Harvard Law School logo",
+  },
+  {
+    name: "Harvard GSAS",
+    src: "/media/schools/harvard-gsas.jpg",
+    alt: "Harvard GSAS logo",
+  },
+  {
+    name: "University of Oxford",
+    src: "/media/schools/oxford.jpg",
+    alt: "University of Oxford logo",
+  },
+  {
+    name: "Stanford University",
+    src: "/media/schools/stanford.png",
+    alt: "Stanford University logo",
+  },
+  {
+    name: "Cornell University",
+    src: "/media/schools/cornell.png",
+    alt: "Cornell University logo",
+  },
+  {
     name: "University of Chicago",
     src: "/media/schools/chicago.jpg",
     alt: "University of Chicago logo",
@@ -106,33 +156,119 @@ export const APPROVED_SCHOOL_LOGOS = [
     alt: "Georgetown University logo",
   },
   {
+    name: "Pomona College",
+    src: "/media/schools/pomona.png",
+    alt: "Pomona College logo",
+  },
+  {
     name: "Boston University",
     src: "/media/schools/boston-university.png",
     alt: "Boston University seal",
+  },
+  {
+    name: "Washington University in St. Louis",
+    src: "/media/schools/washu.png",
+    alt: "Washington University in St. Louis logo",
   },
   {
     name: "Claremont McKenna College",
     src: "/media/schools/claremont-mckenna.png",
     alt: "Claremont McKenna College seal",
   },
-] as const;
+  {
+    name: "University of Virginia",
+    src: "/media/schools/uva.png",
+    alt: "University of Virginia logo",
+  },
+  {
+    name: "Pepperdine University",
+    src: "/media/schools/pepperdine.png",
+    alt: "Pepperdine University logo",
+  },
+] as const satisfies readonly ApprovedSchoolLogo[];
 
 /** Known historical Wix school-logo URLs → local assets. */
 export const LEGACY_WIX_SCHOOL_LOGO_URLS: Record<string, string> = {
   "https://static.wixstatic.com/media/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png":
     "/media/schools/harvard.png",
+  "https://static.wixstatic.com/media/2c8654_4afb30eddba44c779b732a0a35fb3a80~mv2.png":
+    "/media/schools/harvard.png",
   "https://static.wixstatic.com/media/2c8654_d6d5f4729bd048ddb2366f66b32506c4~mv2.png/v1/fill/w_274,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/princeton%20logo.png":
+    "/media/schools/princeton.png",
+  "https://static.wixstatic.com/media/2c8654_d6d5f4729bd048ddb2366f66b32506c4~mv2.png":
     "/media/schools/princeton.png",
   "https://static.wixstatic.com/media/2c8654_e7dedad8e02d43e6965cb5d8054d6c15~mv2.jpg/v1/crop/x_276,y_222,w_528,h_425/fill/w_296,h_238,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/MIT_edited.jpg":
     "/media/schools/mit.jpg",
+  "https://static.wixstatic.com/media/2c8654_e7dedad8e02d43e6965cb5d8054d6c15~mv2.jpg":
+    "/media/schools/mit.jpg",
   "https://static.wixstatic.com/media/2c8654_dfa69976a1274e4f9de87500d1409fc0~mv2.jpg":
+    "/media/schools/chicago.jpg",
+  "https://static.wixstatic.com/media/2c8654_dfa69976a1274e4f9de87500d1409fc0~mv2.jpg/v1/fill/w_250,h_249,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/UChicago-logo.jpg":
     "/media/schools/chicago.jpg",
   "https://static.wixstatic.com/media/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png/v1/fill/w_266,h_266,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Georgetown-University-Logo.png":
     "/media/schools/georgetown.png",
+  "https://static.wixstatic.com/media/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png/v1/fill/w_266,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png":
+    "/media/schools/georgetown.png",
+  "https://static.wixstatic.com/media/2c8654_3ffd9a0cd2a544b29f175c556c4ad6ce~mv2.png":
+    "/media/schools/georgetown.png",
   "https://static.wixstatic.com/media/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png/v1/fill/w_250,h_250,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Boston_University_seal.svg.png":
+    "/media/schools/boston-university.png",
+  "https://static.wixstatic.com/media/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png/v1/fill/w_250,h_250,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png":
+    "/media/schools/boston-university.png",
+  "https://static.wixstatic.com/media/2c8654_956294ec39b0406ba76455aa5d2f615e~mv2.png":
     "/media/schools/boston-university.png",
   "https://static.wixstatic.com/media/2c8654_69f9b18f19db4eb68fa898beeaec3768~mv2.png/v1/fill/w_266,h_277,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/CMC%20Seal.png":
     "/media/schools/claremont-mckenna.png",
+  "https://static.wixstatic.com/media/2c8654_69f9b18f19db4eb68fa898beeaec3768~mv2.png":
+    "/media/schools/claremont-mckenna.png",
+  "https://static.wixstatic.com/media/2c8654_98f54bd2e0524ac7bc3420560cb534ea~mv2.jpg/v1/fill/w_250,h_250,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_98f54bd2e0524ac7bc3420560cb534ea~mv2.jpg":
+    "/media/schools/northeastern.jpg",
+  "https://static.wixstatic.com/media/2c8654_98f54bd2e0524ac7bc3420560cb534ea~mv2.jpg":
+    "/media/schools/northeastern.jpg",
+  "https://static.wixstatic.com/media/2c8654_7badca46b23e4ac18c43e338718969f5~mv2.png/v1/fill/w_250,h_250,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_7badca46b23e4ac18c43e338718969f5~mv2.png":
+    "/media/schools/uc-san-diego.png",
+  "https://static.wixstatic.com/media/2c8654_7badca46b23e4ac18c43e338718969f5~mv2.png":
+    "/media/schools/uc-san-diego.png",
+  "https://static.wixstatic.com/media/2c8654_9e7629415ec54631b276463c2cfcb0c5~mv2.png/v1/fill/w_244,h_244,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_9e7629415ec54631b276463c2cfcb0c5~mv2.png":
+    "/media/schools/maryland.png",
+  "https://static.wixstatic.com/media/2c8654_9e7629415ec54631b276463c2cfcb0c5~mv2.png":
+    "/media/schools/maryland.png",
+  "https://static.wixstatic.com/media/2c8654_6836fcc515314bd9bdce33595cbbefe5~mv2.webp/v1/fill/w_176,h_278,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/shield-stack.webp":
+    "/media/schools/harvard-law.png",
+  "https://static.wixstatic.com/media/2c8654_6836fcc515314bd9bdce33595cbbefe5~mv2.webp":
+    "/media/schools/harvard-law.png",
+  "https://static.wixstatic.com/media/2c8654_b6afee5d4f7b45e282b6c07209aa3623~mv2.jpg/v1/fill/w_372,h_211,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/gsas_shield_16x9.jpg":
+    "/media/schools/harvard-gsas.jpg",
+  "https://static.wixstatic.com/media/2c8654_b6afee5d4f7b45e282b6c07209aa3623~mv2.jpg":
+    "/media/schools/harvard-gsas.jpg",
+  "https://static.wixstatic.com/media/2c8654_66a18563da3c4186b81d3a6d58475a0b~mv2.jpg/v1/fill/w_286,h_286,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_66a18563da3c4186b81d3a6d58475a0b~mv2.jpg":
+    "/media/schools/oxford.jpg",
+  "https://static.wixstatic.com/media/2c8654_66a18563da3c4186b81d3a6d58475a0b~mv2.jpg":
+    "/media/schools/oxford.jpg",
+  "https://static.wixstatic.com/media/2c8654_1c42ffba51cc4f229aee5c1a1aa45d06~mv2.png/v1/fill/w_266,h_266,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_1c42ffba51cc4f229aee5c1a1aa45d06~mv2.png":
+    "/media/schools/stanford.png",
+  "https://static.wixstatic.com/media/2c8654_1c42ffba51cc4f229aee5c1a1aa45d06~mv2.png":
+    "/media/schools/stanford.png",
+  "https://static.wixstatic.com/media/2c8654_a3d9ef9f5a294dcdae6d996ba43f410f~mv2.png/v1/fill/w_266,h_266,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_a3d9ef9f5a294dcdae6d996ba43f410f~mv2.png":
+    "/media/schools/cornell.png",
+  "https://static.wixstatic.com/media/2c8654_a3d9ef9f5a294dcdae6d996ba43f410f~mv2.png":
+    "/media/schools/cornell.png",
+  "https://static.wixstatic.com/media/2c8654_678dd5ee85284e1a9ad002517c069449~mv2.png/v1/fill/w_153,h_250,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_678dd5ee85284e1a9ad002517c069449~mv2.png":
+    "/media/schools/pomona.png",
+  "https://static.wixstatic.com/media/2c8654_678dd5ee85284e1a9ad002517c069449~mv2.png":
+    "/media/schools/pomona.png",
+  "https://static.wixstatic.com/media/2c8654_e435388057834dfc83c5b1e40d8bf993~mv2.png/v1/fill/w_258,h_258,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_e435388057834dfc83c5b1e40d8bf993~mv2.png":
+    "/media/schools/washu.png",
+  "https://static.wixstatic.com/media/2c8654_e435388057834dfc83c5b1e40d8bf993~mv2.png":
+    "/media/schools/washu.png",
+  "https://static.wixstatic.com/media/2c8654_83ab38633dc74d3da6ee7d91a92e92ba~mv2.png/v1/fill/w_377,h_201,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_83ab38633dc74d3da6ee7d91a92e92ba~mv2.png":
+    "/media/schools/uva.png",
+  "https://static.wixstatic.com/media/2c8654_83ab38633dc74d3da6ee7d91a92e92ba~mv2.png":
+    "/media/schools/uva.png",
+  "https://static.wixstatic.com/media/2c8654_695af7ff84a7402ea6de96506bed410d~mv2.png/v1/fill/w_249,h_249,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_695af7ff84a7402ea6de96506bed410d~mv2.png":
+    "/media/schools/pepperdine.png",
+  "https://static.wixstatic.com/media/2c8654_695af7ff84a7402ea6de96506bed410d~mv2.png":
+    "/media/schools/pepperdine.png",
 };
 
 const LEGACY_WIX_MEDIA_REWRITES: Record<string, string> = {
@@ -231,9 +367,43 @@ export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
   },
 ] as const;
 
+function normalizeSchoolLogos(logos: unknown): ApprovedSchoolLogo[] | null {
+  if (!Array.isArray(logos)) return null;
+  return logos.flatMap((logo) => {
+    if (!logo || typeof logo !== "object" || Array.isArray(logo)) return [];
+    const item = logo as Record<string, unknown>;
+    if (typeof item.name !== "string" || typeof item.src !== "string" || typeof item.alt !== "string") {
+      return [];
+    }
+    return [{
+      name: item.name,
+      src: rewriteLegacyWixMediaUrl(item.src),
+      alt: item.alt,
+    }];
+  });
+}
+
+function isApprovedSchoolLogo(logo: ApprovedSchoolLogo) {
+  return APPROVED_SCHOOL_LOGOS.some(
+    (approved) =>
+      approved.name.trim().toLowerCase() === logo.name.trim().toLowerCase() ||
+      approved.src === logo.src,
+  );
+}
+
+function schoolLogosEqual(left: ApprovedSchoolLogo[], right: ApprovedSchoolLogo[]) {
+  return (
+    left.length === right.length &&
+    left.every((logo, index) => {
+      const other = right[index];
+      return logo.name === other.name && logo.src === other.src && logo.alt === other.alt;
+    })
+  );
+}
+
 export function rewriteLegacyWixSchoolLogos(
   logos: unknown,
-): { name: string; src: string; alt: string }[] | null {
+): ApprovedSchoolLogo[] | null {
   if (!Array.isArray(logos)) return null;
   let changed = false;
   const next = logos.flatMap((logo) => {
@@ -247,4 +417,30 @@ export function rewriteLegacyWixSchoolLogos(
     return [{ name: item.name, src: rewritten, alt: item.alt }];
   });
   return changed ? next : null;
+}
+
+/**
+ * Expand stored past-success logos to the full approved set without dropping
+ * custom admin tiles. When every stored tile is already an approved school,
+ * restore www display order (including separate Harvard / Harvard Law / GSAS).
+ */
+export function mergeApprovedSchoolLogos(logos: unknown): ApprovedSchoolLogo[] | null {
+  const current = normalizeSchoolLogos(logos) ?? [];
+  const extras = current.filter((logo) => !isApprovedSchoolLogo(logo));
+  const approved = APPROVED_SCHOOL_LOGOS.map((logo) => ({ ...logo }));
+  const next =
+    extras.length === 0
+      ? approved
+      : [
+          ...current,
+          ...approved.filter(
+            (logo) =>
+              !current.some(
+                (existing) =>
+                  existing.name.trim().toLowerCase() === logo.name.trim().toLowerCase() ||
+                  existing.src === logo.src,
+              ),
+          ),
+        ];
+  return schoolLogosEqual(current, next) ? null : next;
 }

@@ -21,6 +21,7 @@ const {
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
   rewriteLegacyWixSchoolLogos,
+  mergeApprovedSchoolLogos,
   XAVIER_LEGACY_PUBLIC_BIOGRAPHIES,
   XAVIER_PUBLIC_BIOGRAPHY,
 } = roster;
@@ -169,7 +170,31 @@ test("reconciles only the known mirrored offset without positional image lookup"
 });
 
 test("rewrites known Wix school logos to local assets", () => {
-  assert.equal(APPROVED_SCHOOL_LOGOS.length, 7);
+  assert.equal(APPROVED_SCHOOL_LOGOS.length, 19);
+  assert.deepEqual(
+    APPROVED_SCHOOL_LOGOS.map((logo) => logo.name),
+    [
+      "Harvard University",
+      "Princeton University",
+      "MIT",
+      "Northeastern University",
+      "UC San Diego",
+      "University of Maryland",
+      "Harvard Law School",
+      "Harvard GSAS",
+      "University of Oxford",
+      "Stanford University",
+      "Cornell University",
+      "University of Chicago",
+      "Georgetown University",
+      "Pomona College",
+      "Boston University",
+      "Washington University in St. Louis",
+      "Claremont McKenna College",
+      "University of Virginia",
+      "Pepperdine University",
+    ],
+  );
   for (const logo of APPROVED_SCHOOL_LOGOS) {
     assert.match(logo.src, /^\/media\/schools\//);
     assert.equal(
@@ -195,4 +220,32 @@ test("rewrites known Wix school logos to local assets", () => {
     APPROVED_PUBLIC_TEAM_PORTRAITS["Rosanna Kataja"],
   );
   assert.equal(rewriteLegacyWixSchoolLogos([{ name: "Custom", src: "/media/schools/custom.png", alt: "Custom" }]), null);
+});
+
+test("merges missing approved school logos without dropping custom tiles", () => {
+  const originalSeven = [
+    { name: "Harvard University", src: "/media/schools/harvard.png", alt: "Harvard University logo" },
+    { name: "Princeton University", src: "/media/schools/princeton.png", alt: "Princeton University logo" },
+    { name: "MIT", src: "/media/schools/mit.jpg", alt: "MIT logo" },
+    { name: "University of Chicago", src: "/media/schools/chicago.jpg", alt: "University of Chicago logo" },
+    { name: "Georgetown University", src: "/media/schools/georgetown.png", alt: "Georgetown University logo" },
+    { name: "Boston University", src: "/media/schools/boston-university.png", alt: "Boston University seal" },
+    { name: "Claremont McKenna College", src: "/media/schools/claremont-mckenna.png", alt: "Claremont McKenna College seal" },
+  ];
+  const expanded = mergeApprovedSchoolLogos(originalSeven);
+  assert.ok(expanded);
+  assert.equal(expanded?.length, 19);
+  assert.deepEqual(expanded, APPROVED_SCHOOL_LOGOS.map((logo) => ({ ...logo })));
+  assert.equal(mergeApprovedSchoolLogos(expanded), null);
+
+  const custom = [
+    ...originalSeven,
+    { name: "Custom College", src: "/media/schools/custom.png", alt: "Custom College logo" },
+  ];
+  const withCustom = mergeApprovedSchoolLogos(custom);
+  assert.ok(withCustom);
+  assert.equal(withCustom?.some((logo) => logo.name === "Custom College"), true);
+  assert.equal(withCustom?.some((logo) => logo.name === "Harvard Law School"), true);
+  assert.equal(withCustom?.some((logo) => logo.name === "Harvard GSAS"), true);
+  assert.equal(withCustom?.[7]?.name, "Custom College");
 });

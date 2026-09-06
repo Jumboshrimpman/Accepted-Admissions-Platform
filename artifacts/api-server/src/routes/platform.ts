@@ -110,7 +110,7 @@ import {
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
-  rewriteLegacyWixSchoolLogos,
+  mergeApprovedSchoolLogos,
   XAVIER_LEGACY_PUBLIC_BIOGRAPHIES,
   XAVIER_PUBLIC_BIOGRAPHY,
 } from "../lib/public-team-roster";
@@ -1876,9 +1876,9 @@ async function ensureUpgradeSeedData(): Promise<void> {
       .where(eq(publicContentTable.id, successSeed.id));
   }
 
-  // Rewrite known Wix CDN school logos on every past-success record so published
-  // pages keep working after the Wix site is shut down. Custom admin URLs that
-  // are not in the legacy map are left unchanged.
+  // Rewrite known Wix CDN school logos and merge any missing approved tiles
+  // into every past-success record. Intro/testimonial copy is left untouched.
+  // Custom admin logos that are not in the approved set are preserved.
   const pastSuccessPages = await db
     .select({ id: publicContentTable.id, body: publicContentTable.body })
     .from(publicContentTable)
@@ -1886,12 +1886,12 @@ async function ensureUpgradeSeedData(): Promise<void> {
   for (const page of pastSuccessPages) {
     if (!page.body || typeof page.body !== "object" || Array.isArray(page.body)) continue;
     const body = page.body as Record<string, unknown>;
-    const rewrittenLogos = rewriteLegacyWixSchoolLogos(body.schoolLogos);
-    if (!rewrittenLogos) continue;
+    const mergedLogos = mergeApprovedSchoolLogos(body.schoolLogos);
+    if (!mergedLogos) continue;
     await db
       .update(publicContentTable)
       .set({
-        body: { ...body, schoolLogos: rewrittenLogos },
+        body: { ...body, schoolLogos: mergedLogos },
         updatedAt: new Date(),
       })
       .where(eq(publicContentTable.id, page.id));

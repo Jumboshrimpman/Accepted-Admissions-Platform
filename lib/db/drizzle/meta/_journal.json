@@ -225,6 +225,13 @@
       "when": 1789800000000,
       "tag": "0032_user_profile_title_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789900000000,
+      "tag": "0033_expand_past_success_school_logos",
+      "breakpoints": true
     }
   ]
 }
