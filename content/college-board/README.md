@@ -1,6 +1,6 @@
 # College Board extracts
 
-Official digital SAT practice tests 4–11 and PSAT packs (Chief of Staff, 2026-09-06).
+Official digital SAT practice tests 4–11 and PSAT packs (Chief of Staff, 2026-09-06). Folded from `origin/cursor/college-board-extracts` (`9d12c1f`) onto this product PR — 15 JSONL packs + `manifest.json` + `extraction-report.json`.
 
 15 JSONL packs × 120 questions = **1800** canonical rows. Every row has `correctAnswer` and `officialExplanation`. Official wording is not AI-recreated.
 
