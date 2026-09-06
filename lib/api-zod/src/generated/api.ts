@@ -25,6 +25,26 @@ export const GetCurrentUserResponse = zod.object({
   "displayName": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
+  "title": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update the signed-in user's name, title, or profile picture
+ */
+export const UpdateCurrentUserBody = zod.object({
+  "displayName": zod.string().min(1).max(200).optional(),
+  "title": zod.string().max(120).nullish(),
+  "avatarUrl": zod.string().nullish()
+})
+
+export const UpdateCurrentUserResponse = zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
+  "title": zod.string().nullish(),
   "avatarUrl": zod.string().nullish()
 })
 

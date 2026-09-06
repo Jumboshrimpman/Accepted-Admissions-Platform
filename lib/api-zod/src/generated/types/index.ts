@@ -133,6 +133,7 @@ export * from './courseStatus';
 export * from './creditAdjustmentInput';
 export * from './creditLedgerEntry';
 export * from './currentUser';
+export * from './currentUserUpdate';
 export * from './curriculumBlock';
 export * from './curriculumBlockConfig';
 export * from './curriculumBlockInput';

@@ -50,6 +50,27 @@ paths:
                 $ref: "#/components/schemas/CurrentUser"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateCurrentUser
+      tags: [auth]
+      summary: Update the signed-in user's name, title, or profile picture
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CurrentUserUpdate"
+      responses:
+        "200":
+          description: Updated current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /admin/overview:
     get:
       operationId: getAdminOverview
@@ -2135,6 +2156,15 @@ components:
         displayName: { type: string }
         email: { type: string }
         role: { $ref: "#/components/schemas/Role" }
+        title: { type: ["string", "null"] }
+        avatarUrl: { type: ["string", "null"] }
+    CurrentUserUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 200 }
+        title: { type: ["string", "null"], maxLength: 120 }
         avatarUrl: { type: ["string", "null"] }
     AdminOverview:
       type: object

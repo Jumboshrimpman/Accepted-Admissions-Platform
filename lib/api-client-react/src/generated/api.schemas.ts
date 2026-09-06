@@ -575,6 +575,23 @@ export interface CurrentUser {
   email: string;
   role: Role;
   /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
+export interface CurrentUserUpdate {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  displayName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  title?: string | null;
+  /** @nullable */
   avatarUrl?: string | null;
 }
 

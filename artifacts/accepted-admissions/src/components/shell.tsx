@@ -25,14 +25,17 @@ import {
   getGetCurrentUserQueryKey,
   useGetCurrentUser,
 } from "@workspace/api-client-react";
+import { PortalProfileEditor } from "@/components/portal-profile-editor";
+import { portalAvatarUrl, portalDisplayName } from "@/lib/portal-profile";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  const { data: apiUser, isLoading, error } = useGetCurrentUser({
+  const { data: apiUser, isLoading, error, refetch } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
   });
 
@@ -94,6 +97,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
 
   const links = getLinks();
+  const displayName = portalDisplayName(
+    apiUser.displayName,
+    user?.fullName || user?.firstName,
+  );
+  const title =
+    apiUser.title?.trim() ||
+    ({
+      administrator: "Administrator",
+      tutor: "Tutor",
+      student: "Student",
+      viewer: "Viewer",
+    }[role] ?? role);
+  const avatarUrl = portalAvatarUrl(apiUser.avatarUrl, user?.imageUrl);
   const linkActive = (href: string) =>
     location === href ||
     (href !== "/portal" &&
@@ -151,35 +167,61 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2 px-2">
+                <Button variant="ghost" size="sm" className="gap-2 px-2" data-testid="portal-profile-menu">
                   <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent overflow-hidden">
-                    {apiUser.avatarUrl || user?.imageUrl ? (
+                    {avatarUrl ? (
                       <img
-                        src={apiUser.avatarUrl || user?.imageUrl}
-                        alt={apiUser.displayName || user?.fullName || ""}
+                        src={avatarUrl}
+                        alt=""
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <span className="font-medium text-xs">
-                        {apiUser.displayName?.charAt(0) || user?.firstName?.charAt(0) || "U"}
+                        {displayName.charAt(0) || "U"}
                       </span>
                     )}
                   </div>
                   <div className="hidden sm:flex flex-col items-start text-left">
-                    <span className="text-sm font-medium leading-none">
-                      {apiUser.displayName || user?.fullName}
+                    <span className="text-sm font-medium leading-none" data-testid="portal-profile-display-name">
+                      {displayName}
                     </span>
-                    <span className="text-xs text-muted-foreground capitalize leading-none">{role}</span>
+                    <span className="text-xs text-muted-foreground leading-none" data-testid="portal-profile-title-label">
+                      {title}
+                    </span>
                   </div>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setProfileOpen(true);
+                  }}
+                >
+                  <UserRound className="w-4 h-4 mr-2" />
+                  Edit profile
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => signOut()} className="text-destructive cursor-pointer">
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <PortalProfileEditor
+              open={profileOpen}
+              onOpenChange={setProfileOpen}
+              profile={{
+                displayName: apiUser.displayName,
+                title: apiUser.title ?? null,
+                avatarUrl: apiUser.avatarUrl ?? null,
+              }}
+              clerkName={user?.fullName || user?.firstName}
+              clerkImageUrl={user?.imageUrl}
+              onSaved={() => {
+                void refetch();
+              }}
+            />
           </div>
         </div>
         {menuOpen && (

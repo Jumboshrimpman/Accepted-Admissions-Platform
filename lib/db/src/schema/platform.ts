@@ -38,6 +38,8 @@ export const usersTable = pgTable(
     clerkUserId: text("clerk_user_id").notNull(),
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
+    title: text("title"),
+    avatarUrl: text("avatar_url"),
   stripeCustomerId: text("stripe_customer_id"),
     role: roleEnum("role").notNull().default("student"),
     timezone: text("timezone").notNull().default("America/New_York"),

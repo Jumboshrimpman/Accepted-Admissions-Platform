@@ -169,6 +169,7 @@ import {
   GetCourseParams,
   GetCourseResponse,
   GetCurrentUserResponse,
+  UpdateCurrentUserBody,
   GetDashboardResponse,
   GetSessionParams,
   GetSessionResponse,
@@ -258,6 +259,12 @@ import {
   safePublicUrl,
   tutorProfileApprovalError,
 } from "../lib/tutor-profile-fields";
+import {
+  isPlaceholderDisplayName,
+  parseUserProfileEditableFields,
+  provisionedDisplayName,
+  resolveDisplayName,
+} from "../lib/user-profile-fields";
 import {
   ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
   evaluateAssignmentClone,
@@ -2281,7 +2288,7 @@ async function requireAppUser(
         ? normalizeProvisionedEmail(identity.email)
         : undefined) ??
       `${clerkUserId.replace(/[^a-zA-Z0-9_-]/g, "")}@users.accepted.local`;
-    const displayName = identity?.displayName ?? "Accepted Admissions user";
+    const displayName = provisionedDisplayName(identity?.displayName, email);
     const [existingUser] = await db
       .select()
       .from(usersTable)
@@ -2324,11 +2331,32 @@ async function requireAppUser(
       .update(usersTable)
       .set({
         email: normalizeProvisionedEmail(identity.email),
-        ...(identity.displayName ? { displayName: identity.displayName } : {}),
+        ...(identity.displayName && isPlaceholderDisplayName(appUser.displayName)
+          ? { displayName: identity.displayName }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(usersTable.id, appUser.id))
       .returning();
+  } else if (isPlaceholderDisplayName(appUser.displayName)) {
+    const claimsName =
+      claimString(auth.sessionClaims, "name") ??
+      claimString(auth.sessionClaims, "firstName");
+    const nextName = resolveDisplayName(
+      appUser.displayName,
+      identity?.displayName ?? claimsName,
+      identity?.email ?? appUser.email,
+    );
+    if (nextName !== appUser.displayName) {
+      [appUser] = await db
+        .update(usersTable)
+        .set({
+          displayName: nextName,
+          updatedAt: new Date(),
+        })
+        .where(eq(usersTable.id, appUser.id))
+        .returning();
+    }
   }
   if (appUser.role !== configured.role) {
     await db.insert(auditLogsTable).values({
@@ -7826,22 +7854,70 @@ router.patch(
   },
 );
 
+async function currentUserPayload(
+  user: AppUser,
+  identityName?: string,
+) {
+  const displayName = resolveDisplayName(user.displayName, identityName, user.email);
+  let title = user.title ?? null;
+  let avatarUrl = user.avatarUrl ?? null;
+  if ((!title || !avatarUrl) && (user.role === "tutor" || user.role === "administrator")) {
+    const profile = await resolveCalendarProfileForUser(user);
+    title = title || profile?.title || null;
+    avatarUrl = avatarUrl || profile?.photoUrl || null;
+  }
+  return {
+    id: user.id,
+    displayName,
+    email: user.email,
+    role: user.role,
+    title,
+    avatarUrl,
+  };
+}
+
 router.get("/me", async (req: AuthedRequest, res): Promise<void> => {
   const user = req.appUser!;
-  let avatarUrl: string | null = null;
-  if (user.role === "tutor" || user.role === "administrator") {
-    const profile = await resolveCalendarProfileForUser(user);
-    avatarUrl = profile?.photoUrl ?? null;
+  const auth = getAuth(req);
+  const claimsName =
+    claimString(auth.sessionClaims, "name") ??
+    claimString(auth.sessionClaims, "firstName");
+  res.json(GetCurrentUserResponse.parse(await currentUserPayload(user, claimsName)));
+});
+
+router.patch("/me", async (req: AuthedRequest, res): Promise<void> => {
+  const user = req.appUser!;
+  const parsed = UpdateCurrentUserBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
   }
-  res.json(
-    GetCurrentUserResponse.parse({
-      id: user.id,
-      displayName: user.displayName,
-      email: user.email,
-      role: user.role,
-      avatarUrl,
-    }),
-  );
+  const fields = parseUserProfileEditableFields(parsed.data);
+  if (fields.error) {
+    res.status(400).json({ error: fields.error });
+    return;
+  }
+  const [updated] = await db
+    .update(usersTable)
+    .set({
+      ...fields.updates,
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, user.id))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  await db.insert(auditLogsTable).values({
+    actorUserId: user.id,
+    action: "profile.updated",
+    entityType: "user",
+    entityId: user.id,
+    metadata: { fields: Object.keys(fields.updates) },
+  });
+  req.appUser = updated;
+  res.json(GetCurrentUserResponse.parse(await currentUserPayload(updated)));
 });
 
 router.get("/courses", async (req: AuthedRequest, res): Promise<void> => {

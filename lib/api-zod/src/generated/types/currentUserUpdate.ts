@@ -5,14 +5,17 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
-import type { Role } from './role';
 
-export interface CurrentUser {
-  id: string;
-  displayName: string;
-  email: string;
-  role: Role;
-  /** @nullable */
+export interface CurrentUserUpdate {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  displayName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
   title?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
