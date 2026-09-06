@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const {
   CANONICAL_XAVIER_CLERK_USER_ID,
@@ -52,12 +53,19 @@ test("retired identity is clerk-or-email", () => {
 });
 
 test("shares Production Xavier ids with the SAT capability-session seed", async () => {
-  const seed =
-    // @ts-expect-error Native Node test execution requires the source extension.
-    await import("./xavier-sat-capability-session.ts");
-  assert.equal(seed.XAVIER_TUTOR_EMAIL, CANONICAL_XAVIER_EMAIL);
-  assert.equal(seed.XAVIER_CANONICAL_CLERK_USER_ID, CANONICAL_XAVIER_CLERK_USER_ID);
-  assert.equal(seed.XAVIER_DUPLICATE_CLERK_USER_ID, RETIRED_XAVIER_CLERK_USER_ID);
+  const source = await readFile(
+    new URL("./xavier-sat-capability-session.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, new RegExp(`XAVIER_TUTOR_EMAIL = "${CANONICAL_XAVIER_EMAIL}"`));
+  assert.match(
+    source,
+    new RegExp(`XAVIER_CANONICAL_CLERK_USER_ID =\\s*"${CANONICAL_XAVIER_CLERK_USER_ID}"`),
+  );
+  assert.match(
+    source,
+    new RegExp(`XAVIER_DUPLICATE_CLERK_USER_ID =\\s*"${RETIRED_XAVIER_CLERK_USER_ID}"`),
+  );
 });
 
 test("hides only inactive superseded grants", () => {
