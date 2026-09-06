@@ -276,7 +276,14 @@ import {
   shouldReplaceFirstSessionPrework,
 } from "../lib/sat-bank-service";
 import { answersMatch } from "../lib/sat-bank-retry";
-import { countRecordedAnswers, emptyAttemptSubmitError } from "../lib/student-attempt-guards";
+import {
+  canFinalizeAttemptResult,
+  countRecordedAnswers,
+  countsTowardAttemptLimit,
+  emptyAttemptSubmitError,
+  isResumableIncompleteAttempt,
+  shouldFinalizeExpiredAttempt,
+} from "../lib/student-attempt-guards";
 import { estimateSatScoreFromScoringGuide } from "../lib/sat-scoring-guide";
 import {
   contentSourcesTable,
@@ -3121,6 +3128,13 @@ async function finalizeAttemptResult(
       sessionId: attempt.session?.id ?? null,
       sessionDateTime: attempt.session?.dateTime ?? null,
     };
+  }
+  const existingResponses = await db
+    .select({ finalAnswer: responsesTable.finalAnswer })
+    .from(responsesTable)
+    .where(eq(responsesTable.attemptId, attempt.attempt.id));
+  if (!canFinalizeAttemptResult(countRecordedAnswers(existingResponses))) {
+    return null;
   }
 
   const assignedQuestions = await db
@@ -8692,7 +8706,8 @@ async function adaptiveCurriculumForSession(
     | null
     | undefined;
   const isStaff = user.role === "administrator" || user.role === "tutor";
-  const completed = latestAttempt?.status === "submitted" || latestAttempt?.status === "expired";
+  const completed = Boolean(latestAttempt?.result) &&
+    (latestAttempt?.status === "submitted" || latestAttempt?.status === "expired");
   let sessionPrep: {
     mode: string;
     summary: string;
@@ -9082,14 +9097,36 @@ router.post(
         ),
       )
       .orderBy(desc(attemptsTable.startedAt));
-    const resumable = existing.find(
-      (attempt) => attempt.status === "active" || attempt.status === "paused",
+    const resumable = existing.find((attempt) =>
+      isResumableIncompleteAttempt({
+        status: attempt.status,
+        hasResult: Boolean(attempt.result),
+      }),
     );
     if (resumable) {
+      if (
+        (resumable.status === "expired" || resumable.status === "submitted") &&
+        !resumable.result
+      ) {
+        await db
+          .update(attemptsTable)
+          .set({ status: "active" })
+          .where(eq(attemptsTable.id, resumable.id));
+        await db.insert(timerEventsTable).values({
+          attemptId: resumable.id,
+          type: "started",
+        });
+      }
       res.status(201).json(StartAttemptResponse.parse(await attemptShape(resumable.id)));
       return;
     }
-    if (existing.length >= assignment.maxAttempts) {
+    const completedCount = existing.filter((attempt) =>
+      countsTowardAttemptLimit({
+        status: attempt.status,
+        hasResult: Boolean(attempt.result),
+      }),
+    ).length;
+    if (completedCount >= assignment.maxAttempts) {
       res.status(409).json({ error: "Attempt limit reached" });
       return;
     }
@@ -9121,7 +9158,18 @@ router.get("/attempts/:attemptId", async (req: AuthedRequest, res): Promise<void
     return;
   }
   if (attempt.status === "expired" && !attempt.result) {
-    await finalizeAttemptResult(attempt.id, "expired");
+    const expiredResponses = await db
+      .select({ finalAnswer: responsesTable.finalAnswer })
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, attempt.id));
+    if (
+      shouldFinalizeExpiredAttempt({
+        hasResult: false,
+        answeredCount: countRecordedAnswers(expiredResponses),
+      })
+    ) {
+      await finalizeAttemptResult(attempt.id, "expired");
+    }
   }
   res.json(GetAttemptResponse.parse(await attemptShape(attempt.id)));
 });
@@ -9140,7 +9188,18 @@ router.get(
       return;
     }
     if (access.attempt.status === "expired" && !access.attempt.result) {
-      await finalizeAttemptResult(access.attempt.id, "expired");
+      const expiredResponses = await db
+        .select({ finalAnswer: responsesTable.finalAnswer })
+        .from(responsesTable)
+        .where(eq(responsesTable.attemptId, access.attempt.id));
+      if (
+        shouldFinalizeExpiredAttempt({
+          hasResult: false,
+          answeredCount: countRecordedAnswers(expiredResponses),
+        })
+      ) {
+        await finalizeAttemptResult(access.attempt.id, "expired");
+      }
     }
     const result = await storedAttemptResult(
       params.data.attemptId,

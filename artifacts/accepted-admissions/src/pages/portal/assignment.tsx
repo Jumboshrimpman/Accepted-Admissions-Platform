@@ -40,6 +40,7 @@ import {
   canSubmitStudentAttempt,
   isCollaborativeSessionPractice,
   shouldAutoSubmitOnExpiry,
+  studentSeesFinishedResult,
   studentSeesPredictionStep,
 } from "@/lib/student-attempt-ui";
 
@@ -512,11 +513,31 @@ export default function PortalAssignment() {
     );
   }
   if (attempt.status === "submitted" || attempt.status === "expired") {
-    if (resultQuery.isError) {
+    const finished = studentSeesFinishedResult({
+      status: attempt.status,
+      hasResult: Boolean(resultQuery.data),
+      resultError: resultQuery.isError,
+    });
+    if (!finished && (resultQuery.isError || !resultQuery.isLoading)) {
       return (
         <div className="mx-auto max-w-3xl space-y-4 py-10">
           <h2 className="text-2xl font-bold">Attempt not submitted</h2>
           <p className="text-muted-foreground">{EMPTY_SUBMIT_MESSAGE}</p>
+          {viewer ? (
+            <p className="text-sm text-muted-foreground">Viewer mode is read only.</p>
+          ) : (
+            <Button
+              size="lg"
+              className="rounded-full"
+              data-testid="restart-empty-attempt"
+              onClick={() =>
+                startAttempt.mutate({ assignmentId }, { onSuccess: (data) => setAttemptId(data.id) })
+              }
+              disabled={startAttempt.isPending}
+            >
+              {startAttempt.isPending ? "Starting…" : "Start again"}
+            </Button>
+          )}
         </div>
       );
     }

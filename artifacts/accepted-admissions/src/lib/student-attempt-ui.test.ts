@@ -6,6 +6,7 @@ import {
   isCollaborativeSessionPractice,
   shouldAutoSubmitOnExpiry,
   studentCanSeeAnswerChoices,
+  studentSeesFinishedResult,
   studentSeesPredictionStep,
 } from "./student-attempt-ui.ts";
 
@@ -27,4 +28,14 @@ test("empty submit is blocked and cannot glitch forward to results", () => {
 test("in-session practice is collaborative, not a prediction quiz", () => {
   assert.equal(isCollaborativeSessionPractice("during_session"), true);
   assert.equal(isCollaborativeSessionPractice("before_session"), false);
+});
+
+test("timer expiry with zero answers does not show a finished result", () => {
+  assert.equal(
+    studentSeesFinishedResult({ status: "expired", hasResult: false, resultError: true }),
+    false,
+  );
+  assert.equal(studentSeesFinishedResult({ status: "expired", hasResult: false }), false);
+  assert.equal(studentSeesFinishedResult({ status: "active", hasResult: false }), false);
+  assert.equal(studentSeesFinishedResult({ status: "expired", hasResult: true }), true);
 });

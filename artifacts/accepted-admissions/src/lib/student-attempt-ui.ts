@@ -34,6 +34,16 @@ export function shouldAutoSubmitOnExpiry(answeredCount: number): boolean {
   return answeredCount > 0;
 }
 
+export function studentSeesFinishedResult(input: {
+  status?: string | null;
+  hasResult: boolean;
+  resultError?: boolean;
+}): boolean {
+  if (input.status !== "submitted" && input.status !== "expired") return false;
+  if (input.resultError || !input.hasResult) return false;
+  return true;
+}
+
 export function isCollaborativeSessionPractice(deliveryPhase?: string | null): boolean {
   return deliveryPhase === "during_session";
 }

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 const submitMutate = vi.fn();
 const saveMutate = vi.fn();
+const startMutate = vi.fn();
 
 const mocks = vi.hoisted(() => ({
   deliveryPhase: "before_session" as "before_session" | "during_session",
@@ -52,6 +53,7 @@ const mocks = vi.hoisted(() => ({
     }>,
   },
   result: null as null | Record<string, unknown>,
+  resultError: false,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -77,8 +79,12 @@ vi.mock("@workspace/api-client-react", () => ({
     data: mocks.attempt,
     isLoading: false,
   }),
-  useGetAttemptResult: () => ({ data: mocks.result, isLoading: false, isError: false }),
-  useStartAttempt: () => ({ mutate: vi.fn(), isPending: false }),
+  useGetAttemptResult: () => ({
+    data: mocks.result,
+    isLoading: false,
+    isError: mocks.resultError,
+  }),
+  useStartAttempt: () => ({ mutate: startMutate, isPending: false }),
   usePauseAttempt: () => ({ mutate: vi.fn(), isPending: false }),
   useResumeAttempt: () => ({ mutate: vi.fn(), isPending: false }),
   useSaveAttemptResponse: () => ({ mutate: saveMutate, isPending: false }),
@@ -100,10 +106,13 @@ afterEach(() => {
   cleanup();
   submitMutate.mockReset();
   saveMutate.mockReset();
+  startMutate.mockReset();
   mocks.deliveryPhase = "before_session";
   mocks.attempt.status = "active";
+  mocks.attempt.remainingSeconds = 1200;
   mocks.attempt.responses = [];
   mocks.result = null;
+  mocks.resultError = false;
 });
 
 describe("student attempt UI", () => {
@@ -219,5 +228,35 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByTestId("finish-practice"));
     expect(submitMutate).not.toHaveBeenCalled();
     expect(screen.getByTestId("empty-submit-error").textContent).toMatch(/empty attempt is not saved/i);
+  });
+
+  test("timer expiry with zero answers does not auto-submit or show a finished result", () => {
+    mocks.attempt.remainingSeconds = 0;
+    mocks.attempt.responses = [];
+    render(<PortalAssignment />);
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.queryByText("Submitted")).toBeNull();
+    expect(screen.queryByText("Time expired")).toBeNull();
+    expect(screen.getByTestId("answer-choices")).toBeTruthy();
+    expect(screen.getByTestId("empty-submit-error").textContent).toMatch(/empty attempt is not saved/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
+    expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  test("empty expired attempt stays incomplete and can be restarted", () => {
+    mocks.attempt.status = "expired";
+    mocks.attempt.remainingSeconds = 0;
+    mocks.attempt.responses = [];
+    mocks.result = null;
+    mocks.resultError = true;
+    render(<PortalAssignment />);
+    expect(screen.getByText("Attempt not submitted")).toBeTruthy();
+    expect(screen.queryByText("Time expired")).toBeNull();
+    expect(screen.queryByText(/0%/)).toBeNull();
+    fireEvent.click(screen.getByTestId("restart-empty-attempt"));
+    expect(startMutate).toHaveBeenCalledWith({ assignmentId: "asg-1" }, expect.any(Object));
+    expect(submitMutate).not.toHaveBeenCalled();
   });
 });
