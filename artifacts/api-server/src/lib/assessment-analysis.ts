@@ -1,3 +1,11 @@
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
+  SAT_ESTIMATED_SCORE_LABEL,
+  SAT_SCORING_METHODOLOGY,
+  estimateSatScoreFromScoringGuide,
+  formatEstimatedSatRange,
+} from "./sat-scoring-guide.ts";
+
 export type SkillBreakdown = {
   skill: string;
   correct: number;
@@ -28,6 +36,10 @@ export type ScoreProjection = {
   readingWriting: number | null;
   math: number | null;
   total: number | null;
+  rangeLow?: number | null;
+  rangeHigh?: number | null;
+  label?: string;
+  methodology?: string;
 };
 
 function clampScore(value: number): number {
@@ -69,38 +81,23 @@ export function classifySection(item: AnalysisItem): "rw" | "math" | "other" {
 }
 
 export function projectSatScores(items: AnalysisItem[]): ScoreProjection {
-  const buckets = {
-    rw: { correct: 0, total: 0 },
-    math: { correct: 0, total: 0 },
-    other: { correct: 0, total: 0 },
+  const estimated = estimateSatScoreFromScoringGuide(
+    items.map((item) => ({
+      correct: item.correct,
+      subject: item.subject,
+      domain: item.domain,
+      skill: item.skill,
+    })),
+  );
+  return {
+    readingWriting: estimated.readingWriting,
+    math: estimated.math,
+    total: estimated.total,
+    rangeLow: estimated.rangeLow,
+    rangeHigh: estimated.rangeHigh,
+    label: estimated.label,
+    methodology: estimated.methodology,
   };
-  for (const item of items) {
-    const section = classifySection(item);
-    buckets[section].total += 1;
-    if (item.correct) buckets[section].correct += 1;
-  }
-
-  const rwAccuracy =
-    buckets.rw.total > 0 ? (buckets.rw.correct / buckets.rw.total) * 100 : null;
-  const mathAccuracy =
-    buckets.math.total > 0 ? (buckets.math.correct / buckets.math.total) * 100 : null;
-  const otherAccuracy =
-    buckets.other.total > 0 ? (buckets.other.correct / buckets.other.total) * 100 : null;
-
-  const readingWriting =
-    rwAccuracy != null
-      ? projectSatSectionScore(rwAccuracy)
-      : otherAccuracy != null && buckets.math.total === 0
-        ? projectSatSectionScore(otherAccuracy)
-        : null;
-  const math = mathAccuracy != null ? projectSatSectionScore(mathAccuracy) : null;
-
-  let total: number | null = null;
-  if (readingWriting != null && math != null) total = readingWriting + math;
-  else if (readingWriting != null) total = readingWriting * 2;
-  else if (math != null) total = math * 2;
-
-  return { readingWriting, math, total };
 }
 
 export function buildAttemptAnalysis(
@@ -146,15 +143,10 @@ export function buildAttemptAnalysis(
     options.homeworkKind === "diagnostic" ||
     (options.homeworkKind !== "routine" &&
       /diagnostic|full sat|practice test/i.test(options.assignmentTitle ?? ""));
+  const estimated = estimateSatScoreFromScoringGuide(items);
   const projectionLine =
-    isDiagnostic && projection.total != null
-      ? ` Estimated SAT projection: ${projection.total}${
-          projection.readingWriting != null
-            ? ` (Reading & Writing ${projection.readingWriting}`
-            : ""
-        }${projection.math != null ? `, Math ${projection.math}` : ""}${
-          projection.readingWriting != null ? ")" : ""
-        }.`
+    isDiagnostic && estimated.total != null
+      ? ` Estimated SAT score range: ${formatEstimatedSatRange(estimated)}. ${SAT_SCORING_METHODOLOGY}`
       : "";
 
   const coaching =
@@ -174,7 +166,7 @@ export function buildAttemptAnalysis(
   return {
     source: "deterministic",
     label: isDiagnostic
-      ? "Adaptive SAT diagnostic analysis"
+      ? SAT_ESTIMATED_SCORE_LABEL
       : "Adaptive skill analysis",
     provider: null,
     strengths:

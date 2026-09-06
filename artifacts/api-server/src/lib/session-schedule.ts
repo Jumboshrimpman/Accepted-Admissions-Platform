@@ -20,8 +20,10 @@ export function meetingUrlForTerm(
   return isFall2026Term(term) ? SHARED_FALL_MEETING_URL : fallback;
 }
 
+export const TAITO_FIRST_SAT_DATE_KEY = "2026-10-02";
+
 export const TAITO_FALL_2026_SESSIONS = [
-  { dateKey: "2026-10-02", subject: "SAT", tutorName: "Eunice Chon", tutorEmail: EUNICE_TUTOR_EMAIL },
+  { dateKey: TAITO_FIRST_SAT_DATE_KEY, subject: "SAT", tutorName: "Eunice Chon", tutorEmail: EUNICE_TUTOR_EMAIL },
   { dateKey: "2026-10-09", subject: "SAT", tutorName: "Eunice Chon", tutorEmail: EUNICE_TUTOR_EMAIL },
   { dateKey: "2026-10-16", subject: "SAT", tutorName: "Eunice Chon", tutorEmail: EUNICE_TUTOR_EMAIL },
   { dateKey: "2026-10-23", subject: "IELTS", tutorName: "Nika Raiffe", tutorEmail: NIKA_TUTOR_EMAIL },
@@ -37,6 +39,16 @@ export const TAITO_FALL_2026_SESSIONS = [
 
 export function taitoSessionDateTime(dateKey: string): Date {
   return zonedDateTimeToUtc(dateKey, TAITO_SESSION_TIME, TAITO_SESSION_TIMEZONE);
+}
+
+export function isTaitoFirstSatSession(session: {
+  dateTime: Date;
+  subject: string;
+}): boolean {
+  return (
+    normalizedSessionSubject(session.subject) === "SAT" &&
+    session.dateTime.getTime() === taitoSessionDateTime(TAITO_FIRST_SAT_DATE_KEY).getTime()
+  );
 }
 
 export function isTaitoFallSession(session: {

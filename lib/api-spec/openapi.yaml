@@ -3021,6 +3021,17 @@ components:
         reviewStatus: { type: string, enum: [new, in_review, reviewed] }
         homeworkKind: { type: ["string", "null"] }
         scoreReporting: { type: string, enum: [none, estimated_diagnostic] }
+        estimatedSatScore:
+          type: object
+          nullable: true
+          properties:
+            total: { type: ["number", "null"] }
+            rangeLow: { type: ["number", "null"] }
+            rangeHigh: { type: ["number", "null"] }
+            readingWriting: { type: ["number", "null"] }
+            math: { type: ["number", "null"] }
+            label: { type: string }
+            methodology: { type: string }
     ReviewSubmission:
       type: object
       required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, sessionId, sessionDateTime, status, score, submittedAt, reviewStatus]

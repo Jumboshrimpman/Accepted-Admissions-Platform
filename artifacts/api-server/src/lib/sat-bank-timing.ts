@@ -1,5 +1,8 @@
 export const DEFAULT_PREWORK_TARGET_MINUTES = 60;
 export const PREWORK_TOLERANCE_MINUTES = 8;
+/** Official digital SAT total time (RW 64 + Math 70). Linear 120-item forms use this as a floor. */
+export const DIGITAL_SAT_STANDARD_MINUTES = 134;
+export const SAT_DIAGNOSTIC_TEST_NUMBERS = [4, 5, 6, 7, 8, 9, 10, 11] as const;
 
 export type TimedBankItem = {
   id: string;
@@ -91,4 +94,68 @@ export function selectQuestionsForTimeBudget<T extends TimedBankItem>(
 export function formatEstimatedMinutes(seconds: number): string {
   const minutes = Math.max(1, Math.round(seconds / 60));
   return `~${minutes} min`;
+}
+
+export function selectFullPracticeCollection<T extends TimedBankItem>(
+  items: readonly T[],
+): TimeSelectionResult<T> {
+  const selected = [...items].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const estimatedSeconds = selected.reduce((sum, item) => sum + Math.max(0, item.estimatedSeconds), 0);
+  const targetSeconds = Math.max(DIGITAL_SAT_STANDARD_MINUTES * 60, estimatedSeconds);
+  return {
+    selected,
+    estimatedSeconds,
+    targetSeconds,
+    withinTolerance: selected.length > 0,
+    leftoverCount: 0,
+  };
+}
+
+export function diagnosticTimeLimitMinutes(estimatedSeconds: number): number {
+  return Math.min(
+    180,
+    Math.max(DIGITAL_SAT_STANDARD_MINUTES, Math.round(estimatedSeconds / 60) || DIGITAL_SAT_STANDARD_MINUTES),
+  );
+}
+
+export function preferSatDiagnosticCollection<T extends {
+  examFamily: string;
+  practiceTestNumber?: number | null;
+  slug?: string | null;
+  questionCount: number;
+}>(collections: readonly T[]): T | null {
+  const sat = collections.filter((collection) => {
+    const n = collection.practiceTestNumber;
+    const slug = collection.slug ?? "";
+    const numbered = n != null && n >= 4 && n <= 11;
+    const slugMatch = /sat-practice-test-([4-9]|1[01])\b/.test(slug);
+    return collection.examFamily === "sat" && (numbered || slugMatch);
+  });
+  sat.sort((a, b) => {
+    const countDelta = (b.questionCount ?? 0) - (a.questionCount ?? 0);
+    if (countDelta !== 0) return countDelta;
+    return (a.practiceTestNumber ?? 99) - (b.practiceTestNumber ?? 99);
+  });
+  return sat[0] ?? null;
+}
+
+export function shouldReplaceFirstSessionPrework(input: {
+  homeworkKind?: string | null;
+  questionCount: number;
+  title?: string | null;
+}): boolean {
+  if (input.homeworkKind === "diagnostic" && input.questionCount >= 80) return false;
+  return true;
+}
+
+export function isFullLengthDiagnosticSelection(input: {
+  homeworkKind?: "diagnostic" | "routine" | null;
+  questionCount: number;
+  targetMinutes?: number | null;
+}): boolean {
+  return (
+    input.homeworkKind === "diagnostic" &&
+    input.questionCount >= 80 &&
+    (input.targetMinutes == null || input.targetMinutes >= DIGITAL_SAT_STANDARD_MINUTES)
+  );
 }

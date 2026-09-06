@@ -126,14 +126,17 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
               ))}
             </div>
             {selectedMiss ? (
-              <div className="rounded-xl border p-4" data-testid="opened-miss">
-                <Badge variant="outline">{selectedMiss.skill}</Badge>
+              <div className="rounded-3xl bg-brand-ink p-5 text-white shadow-lg" data-testid="opened-miss">
+                <Badge className="border-0 bg-white/20 text-white">{selectedMiss.skill}</Badge>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Work this miss together
+                </p>
                 <p className="mt-2 font-medium">{selectedMiss.prompt}</p>
                 {selectedMiss.stimulus ? (
-                  <p className="mt-2 text-sm text-muted-foreground">{selectedMiss.stimulus}</p>
+                  <p className="mt-2 text-sm text-white/75">{selectedMiss.stimulus}</p>
                 ) : null}
                 {selectedMiss.choices && selectedMiss.choices.length > 0 ? (
-                  <ul className="mt-3 space-y-1 text-sm" data-testid="opened-miss-choices">
+                  <ul className="mt-3 space-y-1 text-sm text-white/90" data-testid="opened-miss-choices">
                     {selectedMiss.choices.map((choice) => (
                       <li key={choice.id}>
                         {choice.label}. {choice.text}
@@ -149,26 +152,26 @@ export function SessionLessonDashboard({ sessionId }: { sessionId: string }) {
                   <span className="font-medium">Correct answer:</span>{" "}
                   {formatAnswer(selectedMiss.correctAnswer, selectedMiss.choices)}
                 </p>
-                <div className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
+                <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
                   <p className="font-medium">Official explanation</p>
-                  <p className="mt-1 text-muted-foreground">
+                  <p className="mt-1 text-white/75">
                     {selectedMiss.officialExplanation ||
                       "Official explanation is not in the extract yet. Do not invent College Board wording."}
                   </p>
                 </div>
                 {selectedMiss.aiTutorGuidance ? (
-                  <div className="mt-3 rounded-lg border p-3 text-sm">
+                  <div className="mt-3 rounded-lg border border-white/20 p-3 text-sm">
                     <p className="font-medium">AI tutor guidance (separate)</p>
-                    <p className="mt-1 text-muted-foreground">{selectedMiss.aiTutorGuidance}</p>
+                    <p className="mt-1 text-white/75">{selectedMiss.aiTutorGuidance}</p>
                   </div>
                 ) : (
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <p className="mt-3 text-xs text-white/70">
                     No AI annotation yet. Official explanation is preferred when present.
                   </p>
                 )}
                 <Button
                   size="sm"
-                  className="mt-3"
+                  className="mt-3 bg-white text-foreground hover:bg-white/90"
                   disabled={requestRetry.isPending}
                   data-testid="request-similar-retry"
                   onClick={() =>

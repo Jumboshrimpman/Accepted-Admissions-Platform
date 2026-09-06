@@ -2806,7 +2806,16 @@ export const StartAttemptResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 }).nullish()
 })
 
@@ -2894,7 +2903,16 @@ export const GetAttemptResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 }).nullish()
 })
 
@@ -2961,7 +2979,16 @@ export const GetAttemptResultResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 })
 
 
@@ -3036,7 +3063,16 @@ export const UpdateAttemptReviewResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 })
 
 
@@ -3157,7 +3193,16 @@ export const PauseAttemptResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 }).nullish()
 })
 
@@ -3245,7 +3290,16 @@ export const ResumeAttemptResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 }).nullish()
 })
 
@@ -3316,7 +3370,16 @@ export const SubmitAttemptResponse = zod.object({
   "tutorNotes": zod.string().nullish(),
   "reviewStatus": zod.enum(['new', 'in_review', 'reviewed']).optional(),
   "homeworkKind": zod.string().nullish(),
-  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional()
+  "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
+  "estimatedSatScore": zod.object({
+  "total": zod.number().nullable(),
+  "rangeLow": zod.number().nullable(),
+  "rangeHigh": zod.number().nullable(),
+  "readingWriting": zod.number().nullable(),
+  "math": zod.number().nullable(),
+  "label": zod.string(),
+  "methodology": zod.string()
+}).nullish()
 })
 
 

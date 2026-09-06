@@ -22,6 +22,8 @@ test("builds combined RW + Math projections for the full diagnostic", () => {
   assert.equal(projection.readingWriting, 500);
   assert.equal(projection.math, 800);
   assert.equal(projection.total, 1300);
+  assert.ok(projection.rangeLow != null && projection.rangeHigh != null);
+  assert.match(projection.methodology ?? "", /not an official College Board adaptive/i);
 });
 
 test("diagnostic analysis includes estimated score coaching for tutors and students", () => {
@@ -49,8 +51,9 @@ test("diagnostic analysis includes estimated score coaching for tutors and stude
     50,
     { assignmentTitle: "Full SAT Practice Diagnostic" },
   );
-  assert.match(analysis.label, /diagnostic/i);
-  assert.match(analysis.feedback, /Estimated SAT projection/);
+  assert.match(analysis.label, /estimated SAT score range/i);
+  assert.match(analysis.feedback, /Estimated SAT score range/);
+  assert.match(analysis.feedback, /not an official College Board adaptive/i);
   assert.match(analysis.feedback, /Tutor focus/);
   assert.deepEqual(analysis.nextFocus, ["Transitions"]);
 });

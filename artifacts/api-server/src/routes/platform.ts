@@ -71,7 +71,6 @@ import {
 } from "../lib/session-schedule";
 import { buildAttemptAnalysis } from "../lib/assessment-analysis";
 import {
-  FULL_SAT_DIAGNOSTIC_QUESTIONS,
   HARD_BANK_SEED_QUESTIONS,
 } from "../lib/sat-assessment-content";
 import {
@@ -269,10 +268,15 @@ import {
 } from "../lib/question-generation";
 import satBankRouter from "./sat-bank";
 import {
+  assignPreworkFromBank,
   homeworkKindForAssignment,
   persistWeaknessGroups,
+  resetSessionPreworkState,
+  shouldReplaceFirstSessionPrework,
 } from "../lib/sat-bank-service";
 import { answersMatch } from "../lib/sat-bank-retry";
+import { countRecordedAnswers, emptyAttemptSubmitError } from "../lib/student-attempt-guards";
+import { estimateSatScoreFromScoringGuide } from "../lib/sat-scoring-guide";
 import {
   contentSourcesTable,
   assignmentQuestionsTable,
@@ -300,6 +304,7 @@ import {
   reviewQueueTable,
   satProductsTable,
   sessionArtifactsTable,
+  sessionPreworkPlansTable,
   sessionsTable,
   stripeTransfersTable,
   timerEventsTable,
@@ -420,8 +425,6 @@ function isAcceptedSatCatalogProduct(product: {
       product.totalPriceCents === expected.totalPriceCents,
   );
 }
-
-const SAT_DIAGNOSTIC_QUESTIONS = FULL_SAT_DIAGNOSTIC_QUESTIONS;
 
 const SAT_HOMEWORK_SETS = [
   {
@@ -834,6 +837,53 @@ type SeedSatQuestion = {
   subject?: string;
 };
 
+async function ensureOctober2FullDiagnostic(sessionId: string): Promise<void> {
+  const existing = await db
+    .select({
+      assignmentId: assignmentsTable.id,
+      title: assignmentsTable.title,
+      homeworkKind: sessionPreworkPlansTable.homeworkKind,
+    })
+    .from(assignmentsTable)
+    .leftJoin(
+      sessionPreworkPlansTable,
+      eq(sessionPreworkPlansTable.assignmentId, assignmentsTable.id),
+    )
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, sessionId),
+        eq(assignmentsTable.deliveryPhase, "before_session"),
+      ),
+    );
+  const questionCounts = await Promise.all(
+    existing.map(async (row) => {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(assignmentQuestionsTable)
+        .where(eq(assignmentQuestionsTable.assignmentId, row.assignmentId));
+      return {
+        homeworkKind: row.homeworkKind,
+        questionCount: Number(count),
+        title: row.title,
+      };
+    }),
+  );
+  const keepExisting = questionCounts.some(
+    (row) =>
+      !shouldReplaceFirstSessionPrework({
+        homeworkKind: row.homeworkKind,
+        questionCount: row.questionCount,
+        title: row.title,
+      }),
+  );
+  if (keepExisting) return;
+  await resetSessionPreworkState(sessionId);
+  await assignPreworkFromBank({
+    sessionId,
+    homeworkKind: "diagnostic",
+  });
+}
+
 async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   const sessions = await db
     .select()
@@ -955,7 +1005,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
           assignmentId: assignment.id,
           questionId: storedQuestion.id,
           position,
-          predictionFirst: position % 3 !== 1,
+          predictionFirst: false,
         });
       }
     }
@@ -965,15 +1015,11 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
     taitoSessionDateTime("2026-10-02").getTime(),
   );
   if (diagnosticSession) {
-    await ensureAssignment(
-      diagnosticSession,
-      "Full SAT Practice Diagnostic",
-      "Complete this original timed SAT practice test (Reading & Writing + Math) independently before the October 2 session. Your score and adaptive analysis help your tutors understand strengths, weaknesses, and the first session focus.",
-      65,
-      new Date("2026-10-01T12:00:00.000Z"),
-      1,
-      SAT_DIAGNOSTIC_QUESTIONS,
-    );
+    try {
+      await ensureOctober2FullDiagnostic(diagnosticSession.id);
+    } catch {
+      // Bank extract import may still be pending; keep later seed homework intact.
+    }
   }
   for (const homework of SAT_HOMEWORK_SETS) {
     const session = satSessions.get(taitoSessionDateTime(homework.dateKey).getTime());
@@ -1190,7 +1236,7 @@ async function ensureSeedData(): Promise<string> {
       assignmentId: assignment.id,
       questionId: question.id,
       position: index,
-      predictionFirst: index !== 1,
+      predictionFirst: false,
     })),
   );
 
@@ -2961,6 +3007,15 @@ type AttemptResultPayload = {
   studentFeedback: string;
   homeworkKind?: "diagnostic" | "routine" | null;
   scoreReporting?: "none" | "estimated_diagnostic";
+  estimatedSatScore?: {
+    total: number | null;
+    rangeLow: number | null;
+    rangeHigh: number | null;
+    readingWriting: number | null;
+    math: number | null;
+    label: string;
+    methodology: string;
+  } | null;
 };
 
 async function storedAttemptResult(
@@ -3137,6 +3192,10 @@ async function finalizeAttemptResult(
   );
   const scoreReporting =
     homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
+  const estimatedSatScore =
+    scoreReporting === "estimated_diagnostic"
+      ? estimateSatScoreFromScoringGuide(items)
+      : null;
   const result: AttemptResultPayload = {
     attemptId: attempt.attempt.id,
     assignmentId: attempt.assignment.id,
@@ -3158,6 +3217,17 @@ async function finalizeAttemptResult(
     studentFeedback: analysis.feedback,
     homeworkKind,
     scoreReporting,
+    estimatedSatScore: estimatedSatScore
+      ? {
+          total: estimatedSatScore.total,
+          rangeLow: estimatedSatScore.rangeLow,
+          rangeHigh: estimatedSatScore.rangeHigh,
+          readingWriting: estimatedSatScore.readingWriting,
+          math: estimatedSatScore.math,
+          label: estimatedSatScore.label,
+          methodology: estimatedSatScore.methodology,
+        }
+      : null,
   };
   await db
     .update(attemptsTable)
@@ -8584,7 +8654,7 @@ async function ensureDuringSessionAssignment(
       title: `During session practice — ${session.title}`,
       subject: session.subject,
       instructions:
-        "Work through this original practice sequence with your tutor during the session.",
+        "Work through these problems together with your tutor. Discuss, choose an answer, and record the outcome. This is collaborative session practice — not a timed prediction quiz.",
       status: "draft",
       timeLimitMinutes: 30,
       maxAttempts: 1,
@@ -8939,18 +9009,10 @@ router.get(
           questionType: question.questionType,
           prompt: question.prompt,
           stimulus: question.stimulus,
-          choices:
-            !assignmentQuestion.predictionFirst ||
-            savedResponses.some(
-              (response) =>
-                response.questionId === question.id &&
-                response.predictionLocked,
-            )
-              ? question.choices
-              : [],
+          choices: question.choices,
           skill: question.skill,
           difficulty: question.difficulty,
-          predictionFirst: assignmentQuestion.predictionFirst,
+          predictionFirst: false,
         })),
       }),
     );
@@ -9279,6 +9341,16 @@ router.post(
     const currentAttempt = await enforceTimeLimit(attempt.id);
     if (!currentAttempt) {
       res.status(409).json({ error: "Attempt cannot be submitted" });
+      return;
+    }
+    const submittedResponses = await db
+      .select()
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, attempt.id));
+    const answeredCount = countRecordedAnswers(submittedResponses);
+    const emptyError = emptyAttemptSubmitError(answeredCount);
+    if (emptyError) {
+      res.status(409).json({ error: emptyError });
       return;
     }
     const resultStatus = currentAttempt.status === "expired" ? "expired" : "submitted";

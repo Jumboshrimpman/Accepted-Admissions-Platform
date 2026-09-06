@@ -112,5 +112,10 @@ describe("SAT/PSAT bank panel", () => {
     );
     expect(screen.getByLabelText("Homework type").textContent).toMatch(/Routine \(no SAT score\)/);
     expect(screen.getByRole("button", { name: /Assign 60-min pre-work/ })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Homework type"), { target: { value: "diagnostic" } });
+    expect(screen.getByRole("button", { name: /Assign full diagnostic/ })).toBeTruthy();
+    expect(screen.getByTestId("assign-bank-prework-session-1").textContent).toMatch(
+      /Full-length diagnostic pre-work/,
+    );
   });
 });

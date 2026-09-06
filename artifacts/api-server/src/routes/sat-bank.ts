@@ -33,6 +33,7 @@ import {
   listBankQuestions,
   recordRetryOutcome,
   requestSimilarRetry,
+  resetSessionPreworkState,
 } from "../lib/sat-bank-service";
 
 type AuthedRequest = Request & { appUser?: AppUser };
@@ -114,6 +115,45 @@ router.get(
     }
     const questions = await listBankQuestions(query.data);
     res.json(ListSatBankQuestionsResponse.parse(questions));
+  },
+);
+
+router.post(
+  "/admin/sessions/:sessionId/reset-prework",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const sessionId =
+      typeof req.params.sessionId === "string" ? req.params.sessionId.trim() : "";
+    if (!sessionId) {
+      res.status(400).json({ error: "Session id is required" });
+      return;
+    }
+    const [session] = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId))
+      .limit(1);
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    try {
+      const reset = await resetSessionPreworkState(session.id);
+      const reassignDiagnostic = req.body?.reassignDiagnostic !== false;
+      const assigned = reassignDiagnostic
+        ? await assignPreworkFromBank({
+            sessionId: session.id,
+            actorUserId: req.appUser?.id,
+            homeworkKind: "diagnostic",
+          })
+        : null;
+      res.status(201).json({
+        ...reset,
+        reassigned: assigned,
+      });
+    } catch (error) {
+      serviceError(res, error, "Could not reset session pre-work");
+    }
   },
 );
 

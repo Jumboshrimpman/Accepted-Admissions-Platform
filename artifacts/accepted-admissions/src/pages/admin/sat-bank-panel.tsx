@@ -216,7 +216,9 @@ export function AssignBankPreworkControl({
   const [message, setMessage] = useState("");
   return (
     <div className="mt-3 space-y-2" data-testid={`assign-bank-prework-${sessionId}`}>
-      <p className="text-sm font-medium">60-minute bank pre-work</p>
+      <p className="text-sm font-medium">
+        {homeworkKind === "diagnostic" ? "Full-length diagnostic pre-work" : "60-minute bank pre-work"}
+      </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           aria-label="SAT bank collection for 60-minute pre-work"
@@ -251,7 +253,7 @@ export function AssignBankPreworkControl({
                 data: {
                   collectionId: collectionId || null,
                   homeworkKind,
-                  targetMinutes: 60,
+                  ...(homeworkKind === "routine" ? { targetMinutes: 60 } : {}),
                 },
               },
               {
@@ -271,7 +273,11 @@ export function AssignBankPreworkControl({
           }
         >
           <BookOpen className="mr-2 h-4 w-4" />
-          {assign.isPending ? "Assigning…" : "Assign 60-min pre-work"}
+          {assign.isPending
+            ? "Assigning…"
+            : homeworkKind === "diagnostic"
+              ? "Assign full diagnostic"
+              : "Assign 60-min pre-work"}
         </Button>
       </div>
       {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}

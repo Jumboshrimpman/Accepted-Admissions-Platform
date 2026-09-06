@@ -54,11 +54,11 @@ afterEach(() => {
 });
 
 describe("student session quiz path", () => {
-  test("offers Take quiz before the meeting and links to the assignment", () => {
+  test("offers Start pre-work before the meeting and links to the assignment", () => {
     render(<PortalSession />);
 
-    expect(screen.getByText("Take the assigned quiz, then review right and wrong answers.")).toBeTruthy();
-    const takeQuiz = screen.getByRole("link", { name: /Take quiz/i });
+    expect(screen.getByText("Complete the assigned pre-work, then review right and wrong answers with your tutor.")).toBeTruthy();
+    const takeQuiz = screen.getByRole("link", { name: /Start pre-work/i });
     expect(takeQuiz.getAttribute("href")).toBe("/portal/assignments/quiz-1");
   });
 });
