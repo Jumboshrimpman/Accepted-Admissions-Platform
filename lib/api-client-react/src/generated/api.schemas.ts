@@ -515,9 +515,9 @@ export interface AdminAccessGrant {
   /** @nullable */
   revokedAt: string | null;
   /**
-   * Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.
-   * @nullable
-   */
+     * Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.
+     * @nullable
+     */
   warning?: string | null;
 }
 
@@ -1192,6 +1192,7 @@ export const AdminCurriculumTutorsItemCalendarStatus = {
 
 export interface AdminRelationship {
   id: string;
+  assignmentId: string;
   name: string;
   courseId: string;
   courseTitle: string;
@@ -1307,6 +1308,29 @@ export interface AdminCurriculum {
   submissions: AdminSubmission[];
   tutors: AdminCurriculumTutorsItem[];
   clients: AdminCurriculumClientsItem[];
+}
+
+export interface AdminTutorAssignmentInput {
+  /** @minLength 1 */
+  tutorUserId: string;
+  /** @minLength 1 */
+  studentUserId: string;
+  /** @minLength 1 */
+  courseId: string;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  subject: string;
+}
+
+export interface AdminTutorAssignment {
+  id: string;
+  tutorUserId: string;
+  studentUserId: string;
+  courseId: string;
+  courseTitle: string;
+  subject: string;
 }
 
 export type CourseStatus = typeof CourseStatus[keyof typeof CourseStatus];

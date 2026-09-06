@@ -114,6 +114,7 @@ describe("administrator client preview", () => {
 
     expect(screen.getByText("Administrator client preview")).toBeTruthy();
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
+    expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
     expect(screen.getByText("Single SAT Session")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Checkout disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);

@@ -9,6 +9,7 @@ import {
   db,
   sessionsTable,
   tutorAssignmentsTable,
+  tutorProfilesTable,
   usersTable,
   type AppUser,
 } from "@workspace/db";
@@ -17,6 +18,8 @@ const reconciliationModule = await import("./tutor-assignment-reconciliation.ts"
 const {
   APPROVED_TUTOR_ASSIGNMENTS,
   courseForTutorAssignments,
+  createTutorStudentAssignment,
+  deleteTutorStudentAssignment,
   reconcileTutorAssignments,
 } = reconciliationModule;
 
@@ -211,32 +214,32 @@ test("reconciles only approved tutor relationships regardless of sign-in order",
       .select()
       .from(tutorAssignmentsTable)
       .where(eq(tutorAssignmentsTable.courseId, courseId));
-    assert.deepEqual(
-      reconciled
-        .filter((assignment) => assignment.tutorUserId !== otherTutor.id)
-        .map((assignment) => ({
-          tutorUserId: assignment.tutorUserId,
-          studentUserId: assignment.studentUserId,
-          subject: assignment.subject,
-        }))
-        .sort((left, right) =>
-          `${left.subject}:${left.tutorUserId}`.localeCompare(
-            `${right.subject}:${right.tutorUserId}`,
-          ),
+    const approvedPairs = [
+      { tutorUserId: nika.id, studentUserId: taito.id, subject: "IELTS" },
+      { tutorUserId: eunice.id, studentUserId: taito.id, subject: "SAT" },
+      { tutorUserId: xavier.id, studentUserId: michelle.id, subject: "SAT" },
+    ];
+    for (const expected of approvedPairs) {
+      assert.equal(
+        reconciled.some(
+          (assignment) =>
+            assignment.tutorUserId === expected.tutorUserId &&
+            assignment.studentUserId === expected.studentUserId &&
+            assignment.subject === expected.subject,
         ),
-      [
-        { tutorUserId: nika.id, studentUserId: taito.id, subject: "IELTS" },
-        { tutorUserId: eunice.id, studentUserId: taito.id, subject: "SAT" },
-        {
-          tutorUserId: xavier.id,
-          studentUserId: michelle.id,
-          subject: "SAT",
-        },
-      ].sort((left, right) =>
-        `${left.subject}:${left.tutorUserId}`.localeCompare(
-          `${right.subject}:${right.tutorUserId}`,
-        ),
+        true,
+        `approved ${expected.subject} assignment must exist`,
+      );
+    }
+    assert.equal(
+      reconciled.some(
+        (assignment) =>
+          assignment.tutorUserId === eunice.id &&
+          assignment.studentUserId === michelle.id &&
+          assignment.subject === "all",
       ),
+      true,
+      "admin-created extras among named people persist through reconcile",
     );
     assert.equal(
       reconciled.some(
@@ -304,29 +307,17 @@ test("reconciles only approved tutor relationships regardless of sign-in order",
         courseForTutorAssignments(courseId, eunice),
         courseForTutorAssignments(courseId, xavier),
       ]);
-    assert.deepEqual(
-      taitoTutors.map(({ user, subject }) => [user.id, subject]).sort(),
-      [
-        [nika.id, "IELTS"],
-        [eunice.id, "SAT"],
-      ].sort(),
-    );
-    assert.deepEqual(
-      michelleTutors.map(({ user, subject }) => [user.id, subject]),
-      [[xavier.id, "SAT"]],
-    );
-    assert.deepEqual(
-      nikaStudents.map(({ user, subject }) => [user.id, subject]),
-      [[taito.id, "IELTS"]],
-    );
-    assert.deepEqual(
-      euniceStudents.map(({ user, subject }) => [user.id, subject]),
-      [[taito.id, "SAT"]],
-    );
-    assert.deepEqual(
-      xavierStudents.map(({ user, subject }) => [user.id, subject]),
-      [[michelle.id, "SAT"]],
-    );
+    const includesPair = (
+      rows: Array<{ user: { id: string }; subject: string }>,
+      userId: string,
+      subject: string,
+    ) => rows.some((row) => row.user.id === userId && row.subject === subject);
+    assert.equal(includesPair(taitoTutors, nika.id, "IELTS"), true);
+    assert.equal(includesPair(taitoTutors, eunice.id, "SAT"), true);
+    assert.equal(includesPair(michelleTutors, xavier.id, "SAT"), true);
+    assert.equal(includesPair(nikaStudents, taito.id, "IELTS"), true);
+    assert.equal(includesPair(euniceStudents, taito.id, "SAT"), true);
+    assert.equal(includesPair(xavierStudents, michelle.id, "SAT"), true);
 
     const preservedSessions = await db
       .select()
@@ -379,6 +370,117 @@ test("reconciles only approved tutor relationships regardless of sign-in order",
     await db
       .delete(courseMembershipsTable)
       .where(eq(courseMembershipsTable.courseId, courseId));
+    await db.delete(coursesTable).where(eq(coursesTable.id, courseId));
+    if (userIds.length > 0) {
+      await db.delete(usersTable).where(inArray(usersTable.id, userIds));
+    }
+  }
+});
+
+test("admin create/delete persists and survive later roster reconcile", async () => {
+  const suffix = randomUUID();
+  const emails = {
+    eunice: `eunice-admin-${suffix}@example.invalid`,
+    taito: `taito-admin-${suffix}@example.invalid`,
+    student: `student-admin-${suffix}@example.invalid`,
+  };
+  const roster = [
+    {
+      tutorEmail: emails.eunice,
+      studentEmail: emails.taito,
+      tutorSubject: "SAT",
+      studentSubject: "all",
+    },
+  ] as const;
+  const [course] = await db
+    .insert(coursesTable)
+    .values({
+      title: `Admin tutor assign ${suffix}`,
+      subject: "SAT",
+      term: "Fall 2026",
+      status: "active",
+    })
+    .returning();
+  const courseId = course!.id;
+  const createdUsers: AppUser[] = [];
+  const createUser = async (
+    email: string,
+    displayName: string,
+    role: AppUser["role"],
+  ) => {
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        clerkUserId: `admin-assign:${email}`,
+        email,
+        displayName,
+        role,
+      })
+      .returning();
+    createdUsers.push(user!);
+    return user!;
+  };
+
+  try {
+    const eunice = await createUser(emails.eunice, "Eunice Fixture", "tutor");
+    const taito = await createUser(emails.taito, "Taito Fixture", "student");
+    const student = await createUser(emails.student, "New Student", "student");
+    await reconcileTutorAssignments(courseId, roster);
+
+    const created = await createTutorStudentAssignment({
+      tutorUserId: eunice.id,
+      studentUserId: student.id,
+      courseId,
+      subject: "SAT",
+    });
+    assert.equal(created.tutorUserId, eunice.id);
+    assert.equal(created.studentUserId, student.id);
+    assert.equal(created.subject, "SAT");
+    assert.equal(created.courseTitle, course!.title);
+
+    await reconcileTutorAssignments(courseId, roster);
+    const afterReconcile = await db
+      .select()
+      .from(tutorAssignmentsTable)
+      .where(eq(tutorAssignmentsTable.id, created.id));
+    assert.equal(afterReconcile.length, 1, "People assign must survive roster reconcile");
+
+    const removed = await deleteTutorStudentAssignment(created.id);
+    assert.equal(removed, true);
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(tutorAssignmentsTable)
+          .where(eq(tutorAssignmentsTable.id, created.id))
+      ).length,
+      0,
+    );
+
+    const approved = await db
+      .select()
+      .from(tutorAssignmentsTable)
+      .where(
+        and(
+          eq(tutorAssignmentsTable.courseId, courseId),
+          eq(tutorAssignmentsTable.tutorUserId, eunice.id),
+          eq(tutorAssignmentsTable.studentUserId, taito.id),
+        ),
+      );
+    assert.equal(approved.length, 1);
+  } finally {
+    const userIds = createdUsers.map((user) => user.id);
+    await db
+      .delete(tutorAssignmentsTable)
+      .where(eq(tutorAssignmentsTable.courseId, courseId));
+    await db
+      .delete(courseMembershipsTable)
+      .where(eq(courseMembershipsTable.courseId, courseId));
+    if (userIds.length > 0) {
+      await db
+        .delete(tutorProfilesTable)
+        .where(inArray(tutorProfilesTable.userId, userIds));
+    }
     await db.delete(coursesTable).where(eq(coursesTable.id, courseId));
     if (userIds.length > 0) {
       await db.delete(usersTable).where(inArray(usersTable.id, userIds));

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   updateGuidanceRequest: vi.fn(),
   updateNotification: vi.fn(),
+  createTutorAssignment: vi.fn(),
+  deleteTutorAssignment: vi.fn(),
   setQueryData: vi.fn(),
   overview: {
     users: [] as Array<{
@@ -77,14 +79,32 @@ const mocks = vi.hoisted(() => ({
     blocks: [],
     questionStatus: [],
     submissions: [],
-    tutors: [],
     libraryAssets: [],
+    tutors: [] as Array<{
+      id: string;
+      name: string;
+      email: string;
+      subjects: string[];
+      active: boolean;
+      calendarStatus: "connected" | "disconnected" | "unavailable";
+      sessionCount: number;
+      upcomingSessionCount: number;
+      assignedStudents: Array<{
+        id: string;
+        assignmentId: string;
+        name: string;
+        courseId: string;
+        courseTitle: string;
+        subject: string;
+      }>;
+    }>,
     clients: [] as Array<{
       id: string;
       name: string;
       email: string;
       assignedTutors: Array<{
         id: string;
+        assignmentId: string;
         name: string;
         courseId: string;
         courseTitle: string;
@@ -117,6 +137,14 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   useUpdateAdminAccessGrant: () => ({
     mutate: vi.fn(),
+    isPending: false,
+  }),
+  useCreateAdminTutorAssignment: () => ({
+    mutate: mocks.createTutorAssignment,
+    isPending: false,
+  }),
+  useDeleteAdminTutorAssignment: () => ({
+    mutate: mocks.deleteTutorAssignment,
     isPending: false,
   }),
   getListQuestionBankQueryKey: (params?: { courseId: string }) => ["/api/question-bank", params],
@@ -178,12 +206,16 @@ afterEach(() => {
   cleanup();
   mocks.updateGuidanceRequest.mockReset();
   mocks.updateNotification.mockReset();
+  mocks.createTutorAssignment.mockReset();
+  mocks.deleteTutorAssignment.mockReset();
   mocks.setQueryData.mockReset();
   mocks.overview.users = [];
   mocks.overview.accessConflicts = [];
   mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
   mocks.curriculum.clients = [];
+  mocks.curriculum.tutors = [];
+  mocks.curriculum.programs = [];
   mocks.overview.users = [];
 });
 
@@ -305,6 +337,7 @@ describe("administrator overview", () => {
         assignedTutors: [
           {
             id: "tutor-1",
+            assignmentId: "link-nika-taito",
             name: "Nika Raiffe",
             courseId: "course-1",
             courseTitle: "Fall 2026 SAT & IELTS",
@@ -323,6 +356,97 @@ describe("administrator overview", () => {
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
     expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/michaelmakarem@gmail.com/);
     expect(screen.getByText("Nika Raiffe · English")).toBeTruthy();
+    expect(screen.getByTestId("card-student-portals").textContent).toMatch(
+      /Preview cannot create or remove tutor–student links/,
+    );
+  });
+
+  test("assigns and unassigns a tutor–student link from People", () => {
+    mocks.curriculum.programs = [
+      {
+        id: "course-1",
+        title: "Fall 2026 SAT & IELTS",
+        subject: "SAT",
+        term: "Fall 2026",
+        status: "active" as const,
+        goalSummary: null,
+        meetUrl: null,
+        driveUrl: null,
+        sessionCount: 1,
+        completedSessionCount: 0,
+      },
+    ];
+    mocks.curriculum.tutors = [
+      {
+        id: "tutor-eunice",
+        name: "Eunice Chon",
+        email: "eunice_chon@berkeley.edu",
+        subjects: ["SAT"],
+        active: true,
+        calendarStatus: "connected",
+        sessionCount: 1,
+        upcomingSessionCount: 1,
+        assignedStudents: [],
+      },
+    ];
+    mocks.curriculum.clients = [
+      {
+        id: "student-1",
+        name: "Taito Goto",
+        email: "taito@example.invalid",
+        assignedTutors: [
+          {
+            id: "tutor-1",
+            assignmentId: "link-nika-taito",
+            name: "Nika Raiffe",
+            courseId: "course-1",
+            courseTitle: "Fall 2026 SAT & IELTS",
+            subject: "IELTS",
+          },
+        ],
+      },
+    ];
+    mocks.createTutorAssignment.mockImplementation(
+      (_vars: unknown, options?: { onSuccess?: () => void }) => {
+        options?.onSuccess?.();
+      },
+    );
+    mocks.deleteTutorAssignment.mockImplementation(
+      (_vars: unknown, options?: { onSuccess?: () => void }) => {
+        options?.onSuccess?.();
+      },
+    );
+
+    render(<AdminCurriculum />);
+
+    fireEvent.change(screen.getByTestId("assign-tutor-student-1-person"), {
+      target: { value: "tutor-eunice" },
+    });
+    fireEvent.change(screen.getByTestId("assign-tutor-student-1-subject"), {
+      target: { value: "SAT" },
+    });
+    fireEvent.click(screen.getByTestId("assign-tutor-student-1-submit"));
+
+    expect(mocks.createTutorAssignment).toHaveBeenCalledWith(
+      {
+        data: {
+          tutorUserId: "tutor-eunice",
+          studentUserId: "student-1",
+          courseId: "course-1",
+          subject: "SAT",
+        },
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    expect(screen.getByTestId("people-assign-status").textContent).toMatch(
+      /Tutor–student assignment saved/,
+    );
+
+    fireEvent.click(screen.getByTestId("button-unassign-link-nika-taito"));
+    expect(mocks.deleteTutorAssignment).toHaveBeenCalledWith(
+      { assignmentId: "link-nika-taito" },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 
   test("shows role categories and remediation when portal allowlists conflict", () => {

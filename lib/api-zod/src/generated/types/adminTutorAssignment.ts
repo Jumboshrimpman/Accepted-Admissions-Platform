@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AdminRelationship {
+export interface AdminTutorAssignment {
   id: string;
-  assignmentId: string;
-  name: string;
+  tutorUserId: string;
+  studentUserId: string;
   courseId: string;
   courseTitle: string;
   subject: string;
