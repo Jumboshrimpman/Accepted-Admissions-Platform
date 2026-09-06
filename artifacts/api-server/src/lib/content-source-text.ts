@@ -16,3 +16,56 @@ export function validateExtractedSourceText(
   }
   return { ok: true, text: trimmed };
 }
+
+const CONCEPT_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "because",
+  "before",
+  "being",
+  "between",
+  "could",
+  "every",
+  "first",
+  "from",
+  "have",
+  "into",
+  "lesson",
+  "more",
+  "other",
+  "should",
+  "their",
+  "there",
+  "these",
+  "they",
+  "this",
+  "through",
+  "using",
+  "were",
+  "which",
+  "while",
+  "with",
+  "would",
+]);
+
+/** Enough distinct words for the experimental template-draft path, even from short pasted text. */
+export function conceptsForTemplateDrafts(text: string, focus: string): string[] {
+  const counts = new Map<string, number>();
+  const words = text
+    .replace(/<[^>]+>/g, " ")
+    .toLowerCase()
+    .match(/[a-z][a-z'-]{3,}/g) ?? [];
+  for (const word of words) {
+    if (CONCEPT_STOP_WORDS.has(word)) continue;
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+  const extracted = [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([word]) => word)
+    .slice(0, 16);
+  const focusWords = focus.toLowerCase().match(/[a-z][a-z'-]{3,}/g) ?? [];
+  const concepts = [...new Set([...focusWords, ...extracted])];
+  if (concepts.length >= 2) return concepts;
+  return [...new Set([...concepts, ...focusWords, "practice", "example"])].slice(0, 16);
+}

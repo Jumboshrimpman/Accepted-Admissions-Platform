@@ -88,7 +88,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       default:
         return [
           { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
-          { href: "/sat", label: "Book SAT", icon: WalletCards },
+          { href: "/portal/sat", label: "Book SAT", icon: WalletCards },
         ];
     }
   };

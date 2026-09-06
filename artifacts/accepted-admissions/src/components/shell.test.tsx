@@ -101,6 +101,6 @@ describe("Shell", () => {
         <Shell>Portal content</Shell>
       </ErrorBoundary>,
     );
-    expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe("/sat");
+    expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe("/portal/sat");
   });
 });

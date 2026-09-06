@@ -164,6 +164,7 @@ function dashboardForRole(
             meetingUrl: "https://meet.google.com/sat-room",
             calendarEventUrl: "https://calendar.google.com/calendar/r/day?date=20261002",
             tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+            student: { id: role === "viewer" ? "student-user" : `${role}-user`, name: "Taito Goto" },
           },
           {
             id: "session-ielts",
@@ -177,6 +178,7 @@ function dashboardForRole(
             meetingUrl: "https://meet.google.com/ielts-room",
             calendarEventUrl: "https://calendar.google.com/calendar/r/day?date=20261023",
             tutor: { id: "tutor-2", name: "Nika Raiffe", specialty: "IELTS Tutor", avatarUrl: null },
+            student: { id: role === "viewer" ? "student-user" : `${role}-user`, name: "Taito Goto" },
           },
         ],
     assignments: isTutor
@@ -406,7 +408,9 @@ describe("authenticated role dashboard flows", () => {
 
     expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
     expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Purchase session credits/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Purchase session credits/i }).getAttribute("href")).toBe(
+      "/portal/sat",
+    );
     expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
   });
 });

@@ -10,7 +10,18 @@ import {
   type AppUser,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_DISPLAY_NAME, isFall2026Term, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import {
+  EUNICE_TUTOR_EMAIL,
+  NIKA_TUTOR_EMAIL,
+  SHARED_FALL_MEETING_URL,
+  TAITO_FALL_2026_SESSIONS,
+  TAITO_SESSION_TIMEZONE,
+  TAITO_STUDENT_DISPLAY_NAME,
+  TAITO_STUDENT_EMAIL,
+  isFall2026Term,
+  sessionTitle,
+  taitoSessionDateTime,
+} from "./session-schedule.ts";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -42,10 +53,7 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       })
       .from(tutorProfilesTable)
       .where(
-        inArray(tutorProfilesTable.email, [
-          "eunice_chon@berkeley.edu",
-          "nika.raiffe@gmail.com",
-        ]),
+        inArray(tutorProfilesTable.email, [EUNICE_TUTOR_EMAIL, NIKA_TUTOR_EMAIL]),
       ),
     db
       .select({
@@ -55,9 +63,9 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       .from(usersTable)
       .where(
         inArray(usersTable.email, [
-          "taito0525@gmail.com",
-          "eunice_chon@berkeley.edu",
-          "nika.raiffe@gmail.com",
+          TAITO_STUDENT_EMAIL,
+          EUNICE_TUTOR_EMAIL,
+          NIKA_TUTOR_EMAIL,
         ]),
       ),
   ]);
@@ -68,7 +76,7 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       .set({ meetUrl: SHARED_FALL_MEETING_URL })
       .where(eq(coursesTable.id, courseId));
   }
-  const student = users.find((user) => user.email === "taito0525@gmail.com");
+  const student = users.find((user) => user.email === TAITO_STUDENT_EMAIL);
   const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
   for (const session of courseSessions) {
     const dateKey = session.dateTime.toISOString().slice(0, 10);
@@ -123,6 +131,59 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
         bookingStatus: "confirmed",
       });
     }
+  }
+
+  await assignKnownPeopleOnCourse(courseId, {
+    studentId: student?.id ?? null,
+    satTutorId:
+      tutorProfiles.find((profile) => profile.email === EUNICE_TUTOR_EMAIL)?.userId ??
+      users.find((user) => user.email === EUNICE_TUTOR_EMAIL)?.id ??
+      null,
+    englishTutorId:
+      tutorProfiles.find((profile) => profile.email === NIKA_TUTOR_EMAIL)?.userId ??
+      users.find((user) => user.email === NIKA_TUTOR_EMAIL)?.id ??
+      null,
+  });
+}
+
+/** Data-only assignment for current course sessions. Does not create users. */
+export async function assignKnownPeopleOnCourse(
+  courseId: string,
+  people: {
+    studentId: string | null;
+    satTutorId: string | null;
+    englishTutorId: string | null;
+  },
+): Promise<void> {
+  if (!people.studentId && !people.satTutorId && !people.englishTutorId) return;
+  const sessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.courseId, courseId));
+  for (const session of sessions) {
+    if (session.status === "archived" || session.bookingStatus === "cancelled") continue;
+    const otherClient =
+      Boolean(session.clientUserId) &&
+      Boolean(people.studentId) &&
+      session.clientUserId !== people.studentId;
+    if (otherClient) continue;
+    const family = subjectFamily(session.subject);
+    const nextClient = session.clientUserId ?? people.studentId ?? null;
+    const nextTutor =
+      family === "sat"
+        ? people.satTutorId ?? session.tutorUserId
+        : family === "ielts"
+          ? people.englishTutorId ?? session.tutorUserId
+          : session.tutorUserId;
+    if (nextClient === session.clientUserId && nextTutor === session.tutorUserId) continue;
+    await db
+      .update(sessionsTable)
+      .set({
+        clientUserId: nextClient,
+        tutorUserId: nextTutor,
+        updatedAt: new Date(),
+      })
+      .where(eq(sessionsTable.id, session.id));
   }
 }
 

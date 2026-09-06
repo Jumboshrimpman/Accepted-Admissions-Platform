@@ -254,7 +254,13 @@ import {
   QUESTION_ALREADY_ON_QUIZ_MESSAGE,
   questionCanAttachToAssignment,
 } from "../lib/question-single-quiz";
-import { validateExtractedSourceText } from "../lib/content-source-text";
+import { conceptsForTemplateDrafts, validateExtractedSourceText } from "../lib/content-source-text";
+import { hydrateMistakePrompts, selectActivePrework } from "../lib/session-homework";
+import {
+  QuestionGenerationError,
+  generateQuestionsWithProvider,
+  questionGenerationStatus,
+} from "../lib/question-generation";
 import {
   contentSourcesTable,
   assignmentQuestionsTable,
@@ -5198,8 +5204,8 @@ router.post(
         product,
         invoiceId: invoice.id,
         paymentId: payment.id,
-        successUrl: `${origin}/portal?payment=success`,
-        cancelUrl: `${origin}/sat?payment=canceled`,
+        successUrl: `${origin}/portal/sat?payment=success`,
+        cancelUrl: `${origin}/portal/sat?payment=canceled`,
       });
       await db
         .update(paymentsTable)
@@ -8501,10 +8507,7 @@ async function adaptiveCurriculumForSession(
   user: AppUser,
 ) {
   const summaries = await assignmentSummariesForUser(user, session.courseId, session.id);
-  const homework =
-    summaries.find((assignment) => assignment.deliveryPhase === "before_session") ??
-    summaries[0] ??
-    null;
+  const homework = selectActivePrework(summaries);
   const subjectUserId = session.clientUserId ?? (await dataSubjectUserId(user));
   const [latestAttempt] = homework
     ? await db
@@ -8543,7 +8546,7 @@ async function adaptiveCurriculumForSession(
       attachedQuestionCount: prep.attachedQuestionCount,
     };
   }
-  const mistakes =
+  const rawMistakes =
     isStaff && completed
       ? (result?.items ?? [])
           .filter((item) => item.correct === false)
@@ -8556,6 +8559,20 @@ async function adaptiveCurriculumForSession(
             reason: `The latest assessment response missed ${item.skill}.`,
           }))
       : [];
+  const missingPromptIds = rawMistakes
+    .filter((item) => !item.prompt?.trim())
+    .map((item) => item.questionId);
+  const promptRows =
+    missingPromptIds.length > 0
+      ? await db
+          .select({ id: questionsTable.id, prompt: questionsTable.prompt })
+          .from(questionsTable)
+          .where(inArray(questionsTable.id, missingPromptIds))
+      : [];
+  const mistakes = hydrateMistakePrompts(
+    rawMistakes,
+    new Map(promptRows.map((row) => [row.id, row.prompt])),
+  );
   const recommendationRows =
     isStaff && completed
       ? await db
@@ -9501,59 +9518,6 @@ function questionBankShape(question: typeof questionsTable.$inferSelect) {
   };
 }
 
-function sourceConcepts(text: string, focus: string): string[] {
-  const stopWords = new Set([
-    "about",
-    "after",
-    "again",
-    "because",
-    "before",
-    "being",
-    "between",
-    "could",
-    "every",
-    "first",
-    "from",
-    "have",
-    "into",
-    "lesson",
-    "more",
-    "other",
-    "should",
-    "their",
-    "there",
-    "these",
-    "they",
-    "this",
-    "through",
-    "using",
-    "were",
-    "which",
-    "while",
-    "with",
-    "would",
-  ]);
-  const counts = new Map<string, number>();
-  const words = text
-    .replace(/<[^>]+>/g, " ")
-    .toLowerCase()
-    .match(/[a-z][a-z'-]{3,}/g) ?? [];
-  for (const word of words) {
-    if (stopWords.has(word)) continue;
-    counts.set(word, (counts.get(word) ?? 0) + 1);
-  }
-  const extracted = [...counts.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .map(([word]) => word)
-    .slice(0, 16);
-  return [
-    ...new Set([
-      ...focus.toLowerCase().match(/[a-z][a-z'-]{3,}/g) ?? [],
-      ...extracted,
-    ]),
-  ];
-}
-
 router.get(
   "/content-sources",
   ensureRole(["administrator", "tutor"]),
@@ -9696,13 +9660,7 @@ router.post(
     // templates so the source informs practice without being reproduced.
     const focus = body.data.focus.trim().replace(/\s+/g, " ");
     const count = body.data.count ?? 3;
-    const concepts = sourceConcepts(extractedText.text, focus);
-    if (concepts.length < 2) {
-      res.status(400).json({
-        error: "The extracted text does not contain enough distinct concepts",
-      });
-      return;
-    }
+    const concepts = conceptsForTemplateDrafts(extractedText.text, focus);
     const templates = [
       {
         prompt: (primary: string, secondary: string) =>
@@ -9803,6 +9761,120 @@ router.post(
       .json(
         GeneratePracticeQuestionsResponse.parse(created.map(questionBankShape)),
       );
+  },
+);
+
+router.get(
+  "/question-generation",
+  ensureRole(["administrator", "tutor"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    res.json(questionGenerationStatus());
+  },
+);
+
+router.post(
+  "/assignments/:assignmentId/generate-questions",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const assignmentId =
+      typeof req.params.assignmentId === "string" ? req.params.assignmentId : "";
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const count = Math.max(1, Math.min(Number(body.count) || 3, 10));
+    const sourceText = typeof body.sourceText === "string" ? body.sourceText : "";
+    const skill = typeof body.skill === "string" ? body.skill.trim() : "";
+    const difficulty =
+      body.difficulty === "easy" || body.difficulty === "hard" ? body.difficulty : "medium";
+    const [assignment] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.id, assignmentId))
+      .limit(1);
+    if (!assignment || !(await canAccessCourse(req.appUser!, assignment.courseId, assignment.subject))) {
+      res.status(404).json({ error: "Quiz not found" });
+      return;
+    }
+    try {
+      const generated = await generateQuestionsWithProvider({
+        subject: assignment.subject,
+        count,
+        sourceText,
+        skill: skill || assignment.subject,
+        difficulty,
+      });
+      const extracted = validateExtractedSourceText(
+        sourceText.trim() ||
+          `${assignment.title} ${assignment.subject} ${skill || "practice"} question generation notes for this quiz.`.repeat(2),
+      );
+      const [source] = await db
+        .insert(contentSourcesTable)
+        .values({
+          courseId: assignment.courseId,
+          importedBy: req.appUser!.id,
+          subject: assignment.subject,
+          title: `Generated for ${assignment.title}`.slice(0, 200),
+          sourceKind: "text",
+          authorizationNote: "Generated for the open quiz by an administrator or tutor.",
+          extractedText: extracted.ok ? extracted.text : `${assignment.title} ${assignment.subject} practice notes for generated questions.`.repeat(2),
+          provenance: { origin: "quiz-generate", assignmentId: assignment.id },
+        })
+        .returning();
+      const created = await db
+        .insert(questionsTable)
+        .values(
+          generated.map((question) => ({
+            subject: assignment.subject,
+            domain: question.domain,
+            skill: question.skill,
+            questionType: "multiple_choice",
+            difficulty: question.difficulty,
+            prompt: question.prompt,
+            choices: question.choices,
+            correctAnswer: question.correctAnswer,
+            explanation: question.explanation,
+            sourceType: "authorized-source-derived",
+            sourceId: source!.id,
+            reviewStatus: "approved",
+            tags: [question.skill.toLowerCase()],
+            generationMethod: "openai",
+            reviewedBy: req.appUser!.id,
+            reviewedAt: new Date(),
+          })),
+        )
+        .returning();
+      const [{ count: existingCount }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(assignmentQuestionsTable)
+        .where(eq(assignmentQuestionsTable.assignmentId, assignment.id));
+      await db.insert(assignmentQuestionsTable).values(
+        created.map((question, index) => ({
+          assignmentId: assignment.id,
+          questionId: question.id,
+          position: Number(existingCount) + index,
+          predictionFirst: false,
+        })),
+      );
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "practice_questions.generated_for_quiz",
+        entityType: "assignment",
+        entityId: assignment.id,
+        metadata: { count: created.length, provider: "openai" },
+      });
+      res.status(201).json({
+        status: questionGenerationStatus(),
+        questions: created.map(questionBankShape),
+      });
+    } catch (error) {
+      if (error instanceof QuestionGenerationError) {
+        res.status(error.status).json({
+          error: error.message,
+          code: error.code,
+          ...error.statusPayload,
+        });
+        return;
+      }
+      throw error;
+    }
   },
 );
 

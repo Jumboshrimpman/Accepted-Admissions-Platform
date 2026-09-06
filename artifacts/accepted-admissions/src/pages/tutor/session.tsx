@@ -455,10 +455,19 @@ export default function TutorSession() {
               </div>
 
               <MissedOnPreworkList
-                mistakes={(adaptive?.mistakes ?? []).map((item) => ({
-                  skill: item.skill,
-                  prompt: "prompt" in item ? String((item as { prompt?: string | null }).prompt ?? "") : "",
-                }))}
+                mistakes={
+                  (adaptive?.mistakes ?? []).length > 0
+                    ? (adaptive?.mistakes ?? []).map((item) => ({
+                        skill: item.skill,
+                        prompt: "prompt" in item ? String((item as { prompt?: string | null }).prompt ?? "") : "",
+                      }))
+                    : (session.homework ?? [])
+                        .filter((item) => (item.mistakeCount ?? 0) > 0)
+                        .map((item) => ({
+                          skill: item.title,
+                          prompt: `${item.mistakeCount} incorrect on pre-work`,
+                        }))
+                }
                 reviewHref={adaptive?.homework?.latestAttemptId ? `/tutor/attempts/${adaptive.homework.latestAttemptId}` : session.homework?.find((item) => item.attemptId)?.attemptId ? `/tutor/attempts/${session.homework.find((item) => item.attemptId)!.attemptId}` : null}
               />
 

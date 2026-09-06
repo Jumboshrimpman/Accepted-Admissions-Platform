@@ -126,10 +126,19 @@ export function dashboardSessionShape(
   clientName?: string | null,
 ) {
   const resolvedStudent =
-    student ??
-    (isTaitoFallSession(session)
-      ? { name: TAITO_STUDENT_DISPLAY_NAME }
-      : null);
+    student !== undefined
+      ? student ??
+        (isTaitoFallSession(session) ? { name: TAITO_STUDENT_DISPLAY_NAME } : null)
+      : session.clientUserId
+        ? {
+            id: session.clientUserId,
+            name:
+              clientName ??
+              (isTaitoFallSession(session) ? TAITO_STUDENT_DISPLAY_NAME : "Student"),
+          }
+        : isTaitoFallSession(session)
+          ? { name: TAITO_STUDENT_DISPLAY_NAME }
+          : undefined;
   return {
     ...publicSessionShape(
       session,
@@ -138,10 +147,6 @@ export function dashboardSessionShape(
     tutor,
     meetingUrl,
     calendarEventUrl: calendarEventUrlForSession(session),
-    ...(student === undefined
-      ? {}
-      : {
-          student: resolvedStudent,
-        }),
+    ...(resolvedStudent !== undefined ? { student: resolvedStudent } : {}),
   };
 }

@@ -47,9 +47,9 @@ import TutorAttempt from '@/pages/tutor/attempt';
 import AdminDashboard from '@/pages/admin/dashboard';
 import AdminCurriculum from '@/pages/admin/curriculum';
 import AdminClientPreview from '@/pages/admin/client-preview';
-import { AdminFinancialsPanel } from '@/pages/admin/financials-panel';
 import { PublicContentPanel } from '@/pages/admin/public-content-panel';
 import SatOfferings from '@/pages/public/sat-offerings';
+import PortalSat from '@/pages/portal/sat';
 import OurTeam from '@/pages/public/our-team';
 import PastSuccess from '@/pages/public/past-success';
 import ClientRequest from '@/pages/public/client-request';
@@ -149,6 +149,17 @@ function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/portal/sat">
+          <SignedIn>
+            <Shell>
+              <PortalSat />
+            </Shell>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/portal/curriculum">
           <SignedIn>
             <Shell>
@@ -187,6 +198,7 @@ function Router() {
             <Shell>
               <Switch>
                 <Route path="/portal" component={PortalEntry} />
+                <Route path="/portal/sat" component={PortalSat} />
                 <Route path="/portal/curriculum" component={PortalDashboard} />
                 <Route path="/portal/courses/:courseId" component={PortalCourse} />
                 <Route path="/portal/courses/:courseId/sessions/:sessionId" component={PortalSession} />
@@ -306,7 +318,7 @@ function Router() {
                 <Route path="/admin/clients/:clientId/preview" component={AdminClientPreview} />
                 <Route path="/admin/curriculum" component={AdminCurriculum} />
                 <Route path="/admin/financials">
-                  <div className="mx-auto max-w-7xl"><AdminFinancialsPanel /></div>
+                  <Redirect to="/admin" />
                 </Route>
                 <Route path="/admin/content">
                   <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>

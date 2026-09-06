@@ -28,7 +28,7 @@ test("clients only see their assigned sessions", () => {
   );
 });
 
-test("sessions with no student do not appear for a student viewer", () => {
+test("sessions with no student do not appear for a student or viewer", () => {
   const unassigned = { id: "open", tutor: { id: "eunice" }, student: null };
   assert.deepEqual(
     sessionsForDashboardRole([sat, unassigned], { id: "taito", role: "student" }).map((item) => item.id),
@@ -37,5 +37,12 @@ test("sessions with no student do not appear for a student viewer", () => {
   assert.deepEqual(
     sessionsForDashboardRole([unassigned], { id: "michelle", role: "viewer" }).map((item) => item.id),
     [],
+  );
+});
+
+test("viewers see assigned student sessions without matching the viewer id", () => {
+  assert.deepEqual(
+    sessionsForDashboardRole([sat, english, other], { id: "parent", role: "viewer" }).map((item) => item.id),
+    ["sat", "eng", "other"],
   );
 });
