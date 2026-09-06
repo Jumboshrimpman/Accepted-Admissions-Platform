@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  customFetch,
   getGetSatBankCollectionQueryKey,
   getListSatBankCollectionsQueryKey,
   getListSatBankQuestionsQueryKey,
@@ -205,15 +206,18 @@ export function AssignBankPreworkControl({
   sessionId,
   collections,
   onChanged,
+  isFirstSatSession = false,
 }: {
   sessionId: string;
   collections: Array<{ id: string; title: string; questionCount: number }>;
   onChanged: () => void;
+  isFirstSatSession?: boolean;
 }) {
   const assign = useAssignSatBankPrework();
   const [collectionId, setCollectionId] = useState(collections[0]?.id ?? "");
   const [homeworkKind, setHomeworkKind] = useState<"routine" | "diagnostic">("routine");
   const [message, setMessage] = useState("");
+  const [resetting, setResetting] = useState(false);
   return (
     <div className="mt-3 space-y-2" data-testid={`assign-bank-prework-${sessionId}`}>
       <p className="text-sm font-medium">
@@ -278,6 +282,45 @@ export function AssignBankPreworkControl({
             : homeworkKind === "diagnostic"
               ? "Assign full diagnostic"
               : "Assign 60-min pre-work"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={resetting}
+          data-testid={`reset-prework-${sessionId}`}
+          onClick={() => {
+            setResetting(true);
+            const path = isFirstSatSession
+              ? "/api/admin/sat-bank/reset-first-sat-prework"
+              : `/api/admin/sessions/${sessionId}/reset-prework`;
+            customFetch<{
+              archivedAssignments?: number;
+              deletedAttempts?: number;
+              reassigned?: { questionCount?: number; targetMinutes?: number } | null;
+            }>(path, {
+              method: "POST",
+              body: JSON.stringify({ reassignDiagnostic: isFirstSatSession || homeworkKind === "diagnostic" }),
+            })
+              .then((result) => {
+                const assigned = result.reassigned;
+                setMessage(
+                  `Reset ${result.deletedAttempts ?? 0} attempt(s) and archived ${result.archivedAssignments ?? 0} assignment(s).${
+                    assigned
+                      ? ` Re-attached ${assigned.questionCount ?? 0} diagnostic questions (~${assigned.targetMinutes ?? "—"} min).`
+                      : ""
+                  } Bank questions were not deleted.`,
+                );
+                onChanged();
+              })
+              .catch((error) => setMessage(errorText(error)))
+              .finally(() => setResetting(false));
+          }}
+        >
+          {resetting
+            ? "Resetting…"
+            : isFirstSatSession
+              ? "Reset Oct 2 diagnostic"
+              : "Reset this session pre-work"}
         </Button>
       </div>
       {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}

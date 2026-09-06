@@ -3,6 +3,7 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const importMutate = vi.fn();
+const resetFetch = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => ({
   getListSatBankCollectionsQueryKey: () => ["/api/admin/sat-bank/collections"],
@@ -65,6 +66,7 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   useImportSatBank: () => ({ mutate: importMutate, isPending: false }),
   useAssignSatBankPrework: () => ({ mutate: vi.fn(), isPending: false }),
+  customFetch: (...args: unknown[]) => resetFetch(...args),
 }));
 
 vi.mock("wouter", () => ({
@@ -81,6 +83,7 @@ import { AssignBankPreworkControl, SatBankPanel } from "./sat-bank-panel";
 afterEach(() => {
   cleanup();
   importMutate.mockReset();
+  resetFetch.mockReset();
 });
 
 describe("SAT/PSAT bank panel", () => {
@@ -116,6 +119,31 @@ describe("SAT/PSAT bank panel", () => {
     expect(screen.getByRole("button", { name: /Assign full diagnostic/ })).toBeTruthy();
     expect(screen.getByTestId("assign-bank-prework-session-1").textContent).toMatch(
       /Full-length diagnostic pre-work/,
+    );
+    expect(screen.getByRole("button", { name: /Reset this session pre-work/ })).toBeTruthy();
+  });
+
+  test("offers a first-session diagnostic reset that does not wipe the bank", () => {
+    resetFetch.mockResolvedValue({
+      deletedAttempts: 1,
+      archivedAssignments: 1,
+      reassigned: { questionCount: 98, targetMinutes: 164 },
+    });
+    render(
+      <AssignBankPreworkControl
+        sessionId="oct2"
+        collections={[{ id: "col-11", title: "SAT Practice Test 11", questionCount: 1 }]}
+        onChanged={() => undefined}
+        isFirstSatSession
+      />,
+    );
+    fireEvent.click(screen.getByTestId("reset-prework-oct2"));
+    expect(resetFetch).toHaveBeenCalledWith(
+      "/api/admin/sat-bank/reset-first-sat-prework",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ reassignDiagnostic: true }),
+      }),
     );
   });
 });

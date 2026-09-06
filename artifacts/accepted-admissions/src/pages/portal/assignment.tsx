@@ -231,16 +231,21 @@ function AnswerChoices({
   selected,
   disabled,
   onSelect,
+  tone = "default",
 }: {
   question: AssignmentQuestion;
   selected?: string;
   disabled?: boolean;
   onSelect: (value: string) => void;
+  tone?: "default" | "ink";
 }) {
+  const ink = tone === "ink";
   if (question.choices && question.choices.length > 0) {
     return (
       <div className="space-y-3" data-testid="answer-choices">
-        <h3 className="text-lg font-semibold">Select your answer</h3>
+        <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
+          {ink ? "Choose together" : "Select your answer"}
+        </h3>
         {question.choices.map((choice) => {
           const isSelected = selected === choice.id;
           return (
@@ -249,10 +254,26 @@ function AnswerChoices({
               type="button"
               disabled={disabled}
               onClick={() => onSelect(choice.id)}
-              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-all ${isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/40 hover:bg-muted/50"} ${disabled ? "cursor-default" : ""}`}
+              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-all ${
+                ink
+                  ? isSelected
+                    ? "border-white bg-white/15 text-white shadow-sm"
+                    : "border-white/25 text-white hover:border-white/60 hover:bg-white/10"
+                  : isSelected
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border hover:border-primary/40 hover:bg-muted/50"
+              } ${disabled ? "cursor-default" : ""}`}
             >
               <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-medium ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-medium ${
+                  ink
+                    ? isSelected
+                      ? "bg-white text-foreground"
+                      : "bg-white/15 text-white"
+                    : isSelected
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                }`}
               >
                 {choice.label}
               </div>
@@ -265,13 +286,15 @@ function AnswerChoices({
   }
   return (
     <div className="space-y-3" data-testid="spr-answer">
-      <h3 className="text-lg font-semibold">Enter your answer</h3>
+      <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
+        {ink ? "Write the answer together" : "Enter your answer"}
+      </h3>
       <Textarea
         value={selected ?? ""}
         disabled={disabled}
         onChange={(event) => onSelect(event.target.value)}
         placeholder="Type the student-produced response"
-        className="min-h-24"
+        className={`min-h-24 ${ink ? "border-white/30 bg-white/10 text-white placeholder:text-white/50" : ""}`}
       />
     </div>
   );
@@ -540,14 +563,114 @@ export default function PortalAssignment() {
   if (!question) return null;
   const response = localResponses[question.id] ?? {};
   const showPrediction = studentSeesPredictionStep(question.predictionFirst);
+  const recordedHere = Boolean(response.finalAnswer?.trim());
+
+  if (collaborative) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 pb-16">
+        <p className="text-sm text-muted-foreground">
+          Open any problem, discuss it with your tutor, and record the answer you agree on. This is
+          not a timed quiz.
+        </p>
+        <div className="flex flex-wrap gap-2" data-testid="practice-problem-picker">
+          {assignment.questions.map((item, index) => {
+            const recorded = Boolean(localResponses[item.id]?.finalAnswer?.trim());
+            return (
+              <Button
+                key={item.id}
+                size="sm"
+                variant={index === currentQuestionIndex ? "default" : "outline"}
+                onClick={() => setCurrentQuestionIndex(index)}
+              >
+                {index + 1}
+                {recorded ? " · recorded" : ""}
+              </Button>
+            );
+          })}
+        </div>
+        <section
+          className="rounded-3xl bg-brand-ink p-6 text-white shadow-xl sm:p-8"
+          data-testid="session-practice-board"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+            Tutor + student practice
+          </p>
+          <p className="mt-2 text-sm text-white/80">{COLLABORATIVE_PRACTICE_COPY}</p>
+          {question.skill ? (
+            <Badge className="mt-4 border-0 bg-white/20 text-white">{question.skill}</Badge>
+          ) : null}
+          {question.stimulus ? (
+            <p className="mt-5 whitespace-pre-wrap text-white/90">{question.stimulus}</p>
+          ) : null}
+          <p className="mt-5 text-xl font-medium leading-relaxed">{question.prompt}</p>
+          <div className="mt-6">
+            {showPrediction ? (
+              <p data-testid="prediction-step">Prediction first</p>
+            ) : (
+              <AnswerChoices
+                question={question}
+                selected={response.finalAnswer}
+                disabled={viewer}
+                tone="ink"
+                onSelect={(value) => updateResponse(question.id, { finalAnswer: value })}
+              />
+            )}
+          </div>
+          {recordedHere ? (
+            <p className="mt-4 text-sm text-white/75">Recorded. Keep discussing or open another problem.</p>
+          ) : (
+            <p className="mt-4 text-sm text-white/70">Choose an answer together to record this problem.</p>
+          )}
+        </section>
+        {submitError || (!submitGuard.ok && submitGuard.reason === "empty") ? (
+          <p
+            role="alert"
+            className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
+            data-testid="empty-submit-error"
+          >
+            {submitError || EMPTY_SUBMIT_MESSAGE}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            onClick={() => setCurrentQuestionIndex((index) => Math.max(0, index - 1))}
+            disabled={currentQuestionIndex === 0}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" /> Previous problem
+          </Button>
+          <Button
+            variant="outline"
+            onClick={submit}
+            disabled={!submitGuard.ok}
+            data-testid="finish-practice"
+          >
+            {submitAttempt.isPending
+              ? "Saving…"
+              : viewer
+                ? "Viewer mode"
+                : "Finish practice"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setCurrentQuestionIndex((index) => Math.min(assignment.questions.length - 1, index + 1))
+            }
+            disabled={currentQuestionIndex >= assignment.questions.length - 1}
+          >
+            Next problem <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-24">
       <div className="sticky top-16 z-30 flex items-center justify-between border-b bg-background/95 py-4 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold">
-            {collaborative ? "Practice" : "Question"} {currentQuestionIndex + 1} of{" "}
-            {assignment.questions.length}
+            Question {currentQuestionIndex + 1} of {assignment.questions.length}
           </span>
           <Button
             variant="ghost"
@@ -559,17 +682,13 @@ export default function PortalAssignment() {
           </Button>
         </div>
         <div className="flex items-center gap-3">
-          {collaborative ? (
-            <Badge variant="outline">Together · no timed auto-submit</Badge>
-          ) : (
-            <div
-              className={`rounded-md px-3 py-1 font-mono text-lg font-bold ${remainingSeconds <= 60 ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}
-            >
-              <Timer className="mr-1 inline h-4 w-4" />
-              {formatTime(remainingSeconds)}
-            </div>
-          )}
-          {!viewer && !collaborative && (
+          <div
+            className={`rounded-md px-3 py-1 font-mono text-lg font-bold ${remainingSeconds <= 60 ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}
+          >
+            <Timer className="mr-1 inline h-4 w-4" />
+            {formatTime(remainingSeconds)}
+          </div>
+          {!viewer && (
             <Button
               variant="outline"
               size="sm"
@@ -586,33 +705,20 @@ export default function PortalAssignment() {
           )}
         </div>
       </div>
-      {collaborative ? (
-        <section className="rounded-3xl bg-brand-ink p-6 text-white shadow-xl sm:p-8" data-testid="session-practice-board">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-            Tutor + student practice
-          </p>
-          <p className="mt-2 text-sm text-white/80">{COLLABORATIVE_PRACTICE_COPY}</p>
-          {question.stimulus ? (
-            <p className="mt-5 whitespace-pre-wrap text-white/90">{question.stimulus}</p>
-          ) : null}
-          <p className="mt-5 text-xl font-medium leading-relaxed">{question.prompt}</p>
-        </section>
-      ) : (
-        <div className="grid gap-8 pt-4 md:grid-cols-2">
-          <div className="space-y-6">
-            {question.stimulus && (
-              <Card className="border-0 bg-muted/30 shadow-none">
-                <CardContent className="p-6">
-                  <p className="whitespace-pre-wrap">{question.stimulus}</p>
-                </CardContent>
-              </Card>
-            )}
-            <div className="text-lg font-medium leading-relaxed">{question.prompt}</div>
-          </div>
-          <div />
+      <div className="grid gap-8 pt-4 md:grid-cols-2">
+        <div className="space-y-6">
+          {question.stimulus && (
+            <Card className="border-0 bg-muted/30 shadow-none">
+              <CardContent className="p-6">
+                <p className="whitespace-pre-wrap">{question.stimulus}</p>
+              </CardContent>
+            </Card>
+          )}
+          <div className="text-lg font-medium leading-relaxed">{question.prompt}</div>
         </div>
-      )}
-      <div className={collaborative ? "" : "-mt-4"}>
+        <div />
+      </div>
+      <div className="-mt-4">
         {showPrediction ? (
           <p data-testid="prediction-step">Prediction first</p>
         ) : (
@@ -657,13 +763,7 @@ export default function PortalAssignment() {
               onClick={submit}
               disabled={!submitGuard.ok}
             >
-              {submitAttempt.isPending
-                ? "Submitting…"
-                : viewer
-                  ? "Viewer mode"
-                  : collaborative
-                    ? "Save recorded answers"
-                    : "Submit assignment"}{" "}
+              {submitAttempt.isPending ? "Submitting…" : viewer ? "Viewer mode" : "Submit assignment"}{" "}
               <CheckCircle className="ml-2 h-5 w-5" />
             </Button>
           )}

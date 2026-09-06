@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { countRecordedAnswers, emptyAttemptSubmitError } from "./student-attempt-guards.ts";
+import {
+  countRecordedAnswers,
+  emptyAttemptSubmitError,
+  isBrokenEmptyAttempt,
+} from "./student-attempt-guards.ts";
 
 test("empty submit is blocked when no final answers were recorded", () => {
   assert.equal(countRecordedAnswers([]), 0);
@@ -15,4 +19,11 @@ test("recorded answers count only non-empty finals, not predictions", () => {
     countRecordedAnswers([{ finalAnswer: "B" }, { finalAnswer: "  " }, { finalAnswer: "9" }]),
     2,
   );
+});
+
+test("broken empty submits are the only attempts the first-session cleanup targets", () => {
+  assert.equal(isBrokenEmptyAttempt({ status: "submitted", answeredCount: 0 }), true);
+  assert.equal(isBrokenEmptyAttempt({ status: "expired", answeredCount: 0 }), true);
+  assert.equal(isBrokenEmptyAttempt({ status: "submitted", answeredCount: 3 }), false);
+  assert.equal(isBrokenEmptyAttempt({ status: "active", answeredCount: 0 }), false);
 });

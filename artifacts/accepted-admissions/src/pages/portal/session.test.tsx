@@ -39,6 +39,33 @@ vi.mock("@workspace/api-client-react", () => ({
   }),
   useGetAdaptiveCurriculum: () => ({ data: null, isLoading: false, isError: false }),
   useListSessionArtifacts: () => ({ data: [] }),
+  getGetSessionLessonQueryKey: (id: string) => ["/api/sessions", id, "lesson"],
+  useGetSessionLesson: () => ({
+    data: {
+      sessionId: "session-1",
+      scoreReporting: "estimated_diagnostic",
+      scoreHonesty: "Estimated SAT range only. Not official adaptive scoring.",
+      accuracyPercent: null,
+      weaknessGroups: [],
+      misses: [
+        {
+          questionId: "q1",
+          skill: "Transitions",
+          prompt: "Which transition best connects the paragraphs?",
+          studentAnswer: "a",
+          correctAnswer: "b",
+        },
+      ],
+      retries: [],
+    },
+    isLoading: false,
+  }),
+  useRequestSessionRetry: () => ({ mutate: vi.fn(), isPending: false }),
+  useRecordRetryOutcome: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
 vi.mock("wouter", () => ({
@@ -60,5 +87,8 @@ describe("student session quiz path", () => {
     expect(screen.getByText("Complete the assigned pre-work, then review right and wrong answers with your tutor.")).toBeTruthy();
     const takeQuiz = screen.getByRole("link", { name: /Start pre-work/i });
     expect(takeQuiz.getAttribute("href")).toBe("/portal/assignments/quiz-1");
+    expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/Practice together from pre-work/);
+    expect(screen.getByTestId("opened-miss").className).toMatch(/bg-brand-ink/);
+    expect(screen.getByText(/Open a miss or similar problem and work it with your tutor/)).toBeTruthy();
   });
 });

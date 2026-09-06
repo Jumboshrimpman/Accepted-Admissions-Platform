@@ -210,10 +210,14 @@ describe("student attempt UI", () => {
     render(<PortalAssignment />);
     expect(screen.getByTestId("session-practice-board").textContent).toMatch(/Tutor \+ student practice/);
     expect(screen.getByTestId("session-practice-board").className).toMatch(/bg-brand-ink/);
+    expect(screen.getByTestId("session-practice-board").textContent).toMatch(/However/);
+    expect(screen.getByTestId("practice-problem-picker").textContent).toMatch(/1/);
     expect(screen.queryByText("Prediction first")).toBeNull();
-    expect(screen.getByText(/Together · no timed auto-submit/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Save recorded answers/i }));
+    expect(screen.queryByText(/Together · no timed auto-submit/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Submit assignment/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /2/ }));
+    fireEvent.click(screen.getByTestId("finish-practice"));
     expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("empty-submit-error").textContent).toMatch(/empty attempt is not saved/i);
   });
 });

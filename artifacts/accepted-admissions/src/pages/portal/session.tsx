@@ -22,6 +22,7 @@ import {
 } from "@/lib/session-display";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
   return <CurriculumBlockView block={block} />;
@@ -85,7 +86,7 @@ export default function PortalSession() {
 
       <div className="grid gap-4 sm:grid-cols-3" aria-label="Session learning loop">
         <Card className="border-accent/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><PenTool className="h-4 w-4 text-accent" />Before</p><p className="mt-2 text-sm text-muted-foreground">Complete the assigned pre-work, then review right and wrong answers with your tutor.</p></CardContent></Card>
-        <Card className="border-primary/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><BookOpen className="h-4 w-4 text-primary" />During</p><p className="mt-2 text-sm text-muted-foreground">Follow the tutor-approved session sequence.</p></CardContent></Card>
+        <Card className="border-primary/25"><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><BookOpen className="h-4 w-4 text-primary" />During</p><p className="mt-2 text-sm text-muted-foreground">Open a miss or similar problem and work it with your tutor.</p></CardContent></Card>
         <Card><CardContent className="p-5"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4 text-emerald-600" />After</p><p className="mt-2 text-sm text-muted-foreground">Review feedback and the published report.</p></CardContent></Card>
       </div>
 
@@ -110,8 +111,9 @@ export default function PortalSession() {
       </Card>
 
       <Card className="border-primary/25">
-        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-primary" />During the session</CardTitle><CardDescription>The sequence below is published or approved by the tutor.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-primary" />During the session</CardTitle><CardDescription>Work through misses and similar problems together — teaching practice, not a solo quiz.</CardDescription></CardHeader>
         <CardContent className="space-y-5">
+          <SessionLessonDashboard sessionId={sessionId} audience="student" />
           {studentBlocks.length ? studentBlocks.map((block) => <div key={block.id} className="rounded-xl border p-4"><RenderBlock block={block} /></div>) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">The tutor has not published this sequence yet.</p>}
           {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white"><div><p className="font-medium">{assignment.title}</p><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={`/portal/assignments/${assignment.id}`}>{assignmentAction(assignment.latestAttemptStatus, true)}</Link></Button></div>)}
           {adaptiveLoading && <p className="text-sm text-muted-foreground">Loading the approved adaptive sequence…</p>}

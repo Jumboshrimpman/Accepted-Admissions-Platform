@@ -259,6 +259,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetSatBankCollection: () => ({ data: undefined, isLoading: false }),
   useImportSatBank: () => ({ mutate: vi.fn(), isPending: false }),
   useAssignSatBankPrework: () => ({ mutate: vi.fn(), isPending: false }),
+  customFetch: vi.fn(),
 }));
 
 vi.mock("@/lib/clone-admin-assignment", () => ({

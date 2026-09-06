@@ -42,4 +42,4 @@ export const EMPTY_SUBMIT_MESSAGE =
   "Submit is blocked until at least one question has an answer. An empty attempt is not saved as completed.";
 
 export const COLLABORATIVE_PRACTICE_COPY =
-  "Work through this problem together. Discuss, choose an answer, and record the outcome — this is teaching practice, not a timed quiz.";
+  "Work through this problem together. Open any item, discuss it, choose an answer, and record the outcome — teaching practice, not a timed quiz.";

@@ -19,9 +19,8 @@ import {
   RequestSessionRetryParams,
   RequestSessionRetryResponse,
 } from "@workspace/api-zod";
-import { sessionsTable, type AppUser } from "@workspace/db";
+import { db, remediationRetriesTable, sessionsTable, type AppUser } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { db } from "@workspace/db";
 import { QuestionGenerationError } from "../lib/question-generation";
 import { canViewSession } from "../lib/session-privacy";
 import {
@@ -34,6 +33,7 @@ import {
   recordRetryOutcome,
   requestSimilarRetry,
   resetSessionPreworkState,
+  resetTaitoFirstSatPrework,
 } from "../lib/sat-bank-service";
 
 type AuthedRequest = Request & { appUser?: AppUser };
@@ -119,6 +119,22 @@ router.get(
 );
 
 router.post(
+  "/admin/sat-bank/reset-first-sat-prework",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    try {
+      const result = await resetTaitoFirstSatPrework({
+        actorUserId: req.appUser?.id,
+        reassignDiagnostic: req.body?.reassignDiagnostic !== false,
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not reset the October 2 SAT pre-work");
+    }
+  },
+);
+
+router.post(
   "/admin/sessions/:sessionId/reset-prework",
   ensureRole(["administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
@@ -185,7 +201,7 @@ router.post(
 
 router.get(
   "/sessions/:sessionId/lesson",
-  ensureRole(["administrator", "tutor"]),
+  ensureRole(["administrator", "tutor", "student", "viewer"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const params = GetSessionLessonParams.safeParse(req.params);
     if (!params.success) {
@@ -208,7 +224,7 @@ router.get(
 
 router.post(
   "/sessions/:sessionId/lesson",
-  ensureRole(["administrator", "tutor"]),
+  ensureRole(["administrator", "tutor", "student"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const params = RequestSessionRetryParams.safeParse(req.params);
     const body = RequestSessionRetryBody.safeParse(req.body ?? {});
@@ -249,7 +265,7 @@ router.post(
 
 router.post(
   "/retries/:retryId/outcome",
-  ensureRole(["administrator", "tutor"]),
+  ensureRole(["administrator", "tutor", "student"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const params = RecordRetryOutcomeParams.safeParse(req.params);
     const body = RecordRetryOutcomeBody.safeParse(req.body ?? {});
@@ -258,6 +274,22 @@ router.post(
       return;
     }
     try {
+      const [retry] = await db
+        .select({ sessionId: remediationRetriesTable.sessionId })
+        .from(remediationRetriesTable)
+        .where(eq(remediationRetriesTable.id, params.data.retryId))
+        .limit(1);
+      const [session] = retry
+        ? await db
+            .select()
+            .from(sessionsTable)
+            .where(eq(sessionsTable.id, retry.sessionId))
+            .limit(1)
+        : [];
+      if (!session || !(await canViewSession(req.appUser!, session))) {
+        res.status(404).json({ error: "Retry not found" });
+        return;
+      }
       const result = await recordRetryOutcome({
         retryId: params.data.retryId,
         studentAnswer: body.data.studentAnswer,

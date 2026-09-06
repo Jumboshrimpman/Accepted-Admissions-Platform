@@ -49,6 +49,8 @@ import {
 
 export { shouldReplaceFirstSessionPrework };
 import { groupMissesByWeakness } from "./sat-bank-weakness.ts";
+import { isTaitoFirstSatSession } from "./session-schedule.ts";
+import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 
 export const SAT_BANK_IMPORT_ROOT = resolveCollegeBoardRoot();
 
@@ -1203,12 +1205,26 @@ export async function recordRetryOutcome(input: {
   };
 }
 
-export async function resetSessionPreworkState(sessionId: string): Promise<{
-  sessionId: string;
-  archivedAssignments: number;
-  deletedAttempts: number;
-}> {
-  const assignments = await db
+async function deleteAttemptsByIds(attemptIds: string[]): Promise<number> {
+  if (attemptIds.length === 0) return 0;
+  await db.delete(reviewQueueTable).where(inArray(reviewQueueTable.attemptId, attemptIds));
+  await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, attemptIds));
+  await db.delete(responsesTable).where(inArray(responsesTable.attemptId, attemptIds));
+  await db
+    .delete(adaptiveRecommendationsTable)
+    .where(inArray(adaptiveRecommendationsTable.sourceAttemptId, attemptIds));
+  await db
+    .delete(homeworkWeaknessGroupsTable)
+    .where(inArray(homeworkWeaknessGroupsTable.attemptId, attemptIds));
+  await db
+    .delete(remediationRetriesTable)
+    .where(inArray(remediationRetriesTable.sourceAttemptId, attemptIds));
+  await db.delete(attemptsTable).where(inArray(attemptsTable.id, attemptIds));
+  return attemptIds.length;
+}
+
+async function beforeSessionAssignments(sessionId: string) {
+  return db
     .select()
     .from(assignmentsTable)
     .where(
@@ -1217,6 +1233,14 @@ export async function resetSessionPreworkState(sessionId: string): Promise<{
         eq(assignmentsTable.deliveryPhase, "before_session"),
       ),
     );
+}
+
+export async function resetSessionPreworkState(sessionId: string): Promise<{
+  sessionId: string;
+  archivedAssignments: number;
+  deletedAttempts: number;
+}> {
+  const assignments = await beforeSessionAssignments(sessionId);
   const assignmentIds = assignments.map((row) => row.id);
   const attempts =
     assignmentIds.length === 0
@@ -1225,22 +1249,7 @@ export async function resetSessionPreworkState(sessionId: string): Promise<{
           .select({ id: attemptsTable.id })
           .from(attemptsTable)
           .where(inArray(attemptsTable.assignmentId, assignmentIds));
-  const attemptIds = attempts.map((row) => row.id);
-  if (attemptIds.length > 0) {
-    await db.delete(reviewQueueTable).where(inArray(reviewQueueTable.attemptId, attemptIds));
-    await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, attemptIds));
-    await db.delete(responsesTable).where(inArray(responsesTable.attemptId, attemptIds));
-    await db
-      .delete(adaptiveRecommendationsTable)
-      .where(inArray(adaptiveRecommendationsTable.sourceAttemptId, attemptIds));
-    await db
-      .delete(homeworkWeaknessGroupsTable)
-      .where(inArray(homeworkWeaknessGroupsTable.attemptId, attemptIds));
-    await db
-      .delete(remediationRetriesTable)
-      .where(inArray(remediationRetriesTable.sourceAttemptId, attemptIds));
-    await db.delete(attemptsTable).where(inArray(attemptsTable.id, attemptIds));
-  }
+  const deletedAttempts = await deleteAttemptsByIds(attempts.map((row) => row.id));
   await db.delete(sessionPreworkPlansTable).where(eq(sessionPreworkPlansTable.sessionId, sessionId));
   let archivedAssignments = 0;
   for (const row of assignments) {
@@ -1258,7 +1267,62 @@ export async function resetSessionPreworkState(sessionId: string): Promise<{
   return {
     sessionId,
     archivedAssignments,
-    deletedAttempts: attemptIds.length,
+    deletedAttempts,
+  };
+}
+
+export async function clearBrokenEmptyPreworkAttempts(sessionId: string): Promise<number> {
+  const assignments = await beforeSessionAssignments(sessionId);
+  const assignmentIds = assignments.map((row) => row.id);
+  if (assignmentIds.length === 0) return 0;
+  const attempts = await db
+    .select({ id: attemptsTable.id, status: attemptsTable.status })
+    .from(attemptsTable)
+    .where(inArray(attemptsTable.assignmentId, assignmentIds));
+  const brokenIds: string[] = [];
+  for (const attempt of attempts) {
+    const responses = await db
+      .select({ finalAnswer: responsesTable.finalAnswer })
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, attempt.id));
+    const answeredCount = responses.filter((row) => row.finalAnswer?.trim()).length;
+    if (isBrokenEmptyAttempt({ status: attempt.status, answeredCount })) {
+      brokenIds.push(attempt.id);
+    }
+  }
+  return deleteAttemptsByIds(brokenIds);
+}
+
+export async function findTaitoFirstSatSession(): Promise<typeof sessionsTable.$inferSelect | null> {
+  const sessions = await db.select().from(sessionsTable);
+  return sessions.find((session) => isTaitoFirstSatSession(session)) ?? null;
+}
+
+export async function resetTaitoFirstSatPrework(input: {
+  actorUserId?: string;
+  reassignDiagnostic?: boolean;
+}): Promise<{
+  sessionId: string;
+  archivedAssignments: number;
+  deletedAttempts: number;
+  reassigned: Awaited<ReturnType<typeof assignPreworkFromBank>> | null;
+}> {
+  const session = await findTaitoFirstSatSession();
+  if (!session) {
+    throw Object.assign(new Error("October 2 Taito SAT session was not found."), { status: 404 });
+  }
+  const reset = await resetSessionPreworkState(session.id);
+  const reassigned =
+    input.reassignDiagnostic === false
+      ? null
+      : await assignPreworkFromBank({
+          sessionId: session.id,
+          actorUserId: input.actorUserId,
+          homeworkKind: "diagnostic",
+        });
+  return {
+    ...reset,
+    reassigned,
   };
 }
 

@@ -272,6 +272,7 @@ import {
   homeworkKindForAssignment,
   persistWeaknessGroups,
   resetSessionPreworkState,
+  clearBrokenEmptyPreworkAttempts,
   shouldReplaceFirstSessionPrework,
 } from "../lib/sat-bank-service";
 import { answersMatch } from "../lib/sat-bank-retry";
@@ -876,7 +877,10 @@ async function ensureOctober2FullDiagnostic(sessionId: string): Promise<void> {
         title: row.title,
       }),
   );
-  if (keepExisting) return;
+  if (keepExisting) {
+    await clearBrokenEmptyPreworkAttempts(sessionId);
+    return;
+  }
   await resetSessionPreworkState(sessionId);
   await assignPreworkFromBank({
     sessionId,
