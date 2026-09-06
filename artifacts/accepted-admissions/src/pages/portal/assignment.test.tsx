@@ -112,6 +112,7 @@ describe("student attempt UI", () => {
     expect(screen.queryByText("Prediction first")).toBeNull();
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/However/);
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
     expect(submitMutate).not.toHaveBeenCalled();
     expect(screen.getByTestId("empty-submit-error").textContent).toMatch(/empty attempt is not saved/i);

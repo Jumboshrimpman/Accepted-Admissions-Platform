@@ -624,9 +624,9 @@ export default function PortalAssignment() {
           />
         )}
       </div>
-      {submitError ? (
+      {submitError || (!submitGuard.ok && submitGuard.reason === "empty") ? (
         <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900" data-testid="empty-submit-error">
-          {submitError}
+          {submitError || EMPTY_SUBMIT_MESSAGE}
         </p>
       ) : null}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background p-4">
