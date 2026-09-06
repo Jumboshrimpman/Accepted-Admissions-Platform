@@ -34,6 +34,7 @@ test("parses section, tab, and quiz from the search string", () => {
       section: "curriculum",
       tab: "quizzes",
       quizId: "09c1bf31-309c-4835-86c4-b86881ec8ec2",
+      collectionId: null,
     },
   );
   assert.equal(parseAdminCurriculumSearch("section=people").section, "people");
@@ -43,6 +44,11 @@ test("parses section, tab, and quiz from the search string", () => {
   assert.equal(parseAdminCurriculumSearch("section=curriculum&tab=questions").tab, "questions");
   assert.equal(parseAdminCurriculumSearch("section=curriculum&tab=library").tab, "library");
   assert.equal(parseAdminCurriculumSearch("section=curriculum&tab=submissions").tab, "submissions");
+  assert.equal(parseAdminCurriculumSearch("section=curriculum&tab=sat-bank").tab, "sat-bank");
+  assert.equal(
+    parseAdminCurriculumSearch("section=curriculum&tab=sat-bank&collection=col-1").collectionId,
+    "col-1",
+  );
 });
 
 test("defaults unknown or missing params instead of inventing a view", () => {
@@ -50,6 +56,7 @@ test("defaults unknown or missing params instead of inventing a view", () => {
     section: "curriculum",
     tab: "quizzes",
     quizId: null,
+    collectionId: null,
   });
   assert.equal(parseAdminCurriculumSearch("section=finance").section, "curriculum");
   assert.equal(parseAdminCurriculumSearch("tab=blocks").tab, "quizzes");
@@ -71,6 +78,10 @@ test("builds deep-link hrefs that keep section, tab, and quiz in sync", () => {
   assert.equal(
     adminCurriculumHref({ section: "curriculum", tab: "submissions" }),
     "/admin/curriculum?section=curriculum&tab=submissions",
+  );
+  assert.equal(
+    adminCurriculumHref({ section: "curriculum", tab: "sat-bank", collection: "col-1" }),
+    "/admin/curriculum?section=curriculum&tab=sat-bank&collection=col-1",
   );
   assert.equal(
     adminCurriculumHref({

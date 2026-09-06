@@ -37,6 +37,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { MissedOnPreworkList } from "@/components/missed-prework-list";
+import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -453,6 +454,8 @@ export default function TutorSession() {
                   </p>
                 </div>
               </div>
+
+              <SessionLessonDashboard sessionId={sessionId} />
 
               <MissedOnPreworkList
                 mistakes={

@@ -67,14 +67,31 @@ function ResultView({
               <Badge className="mb-3 border-0 bg-white/20 text-white">
                 {result.status === "expired" ? "Time expired" : "Submitted"}
               </Badge>
-              <h1 className="text-3xl font-bold">Your SAT result</h1>
+              <h1 className="text-3xl font-bold">
+                {result.homeworkKind === "diagnostic"
+                  ? "Diagnostic result"
+                  : result.homeworkKind === "routine"
+                    ? "Pre-work result"
+                    : "Your SAT result"}
+              </h1>
               <p className="mt-2 text-white/80">
                 {result.correctCount} of {result.totalCount} correct · {formatTime(result.activeSeconds)} active
               </p>
+              {result.homeworkKind === "diagnostic" || result.scoreReporting === "estimated_diagnostic" ? (
+                <p className="mt-2 text-sm text-white/70">
+                  Any projected SAT band is estimated. This is not an official College Board score.
+                </p>
+              ) : result.homeworkKind === "routine" ? (
+                <p className="mt-2 text-sm text-white/70">
+                  Accuracy only — this 60-minute set is not an official SAT score.
+                </p>
+              ) : null}
             </div>
             <div className="rounded-2xl bg-white/15 px-6 py-4 text-center">
               <div className="text-5xl font-bold">{Math.round(result.score)}%</div>
-              <div className="text-sm text-white/75">overall score</div>
+              <div className="text-sm text-white/75">
+                {result.homeworkKind ? "accuracy" : "overall score"}
+              </div>
             </div>
           </div>
         </div>

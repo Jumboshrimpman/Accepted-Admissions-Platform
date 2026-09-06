@@ -397,6 +397,113 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /admin/sat-bank/import:
+    post:
+      operationId: importSatBank
+      tags: [administration]
+      summary: Import College Board JSON/JSONL extracts into the SAT/PSAT bank
+      description: >
+        Idempotent by source key (exam + test/form + module + question number).
+        Does not invent official College Board wording. Official explanations
+        stay separate from AI annotations.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SatBankImportInput" }
+      responses:
+        "200":
+          description: Import summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SatBankImportResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/sat-bank/collections:
+    get:
+      operationId: listSatBankCollections
+      tags: [administration]
+      summary: List SAT/PSAT source collections in original-test order
+      responses:
+        "200":
+          description: Source collections
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SatBankCollection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/sat-bank/collections/{collectionId}:
+    get:
+      operationId: getSatBankCollection
+      tags: [administration]
+      summary: Open a source collection in original question order
+      parameters:
+        - name: collectionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Collection with questions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SatBankCollectionDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/sat-bank/questions:
+    get:
+      operationId: listSatBankQuestions
+      tags: [administration]
+      summary: Browse canonical SAT/PSAT bank questions
+      parameters:
+        - name: examFamily
+          in: query
+          schema: { type: string, enum: [sat, psat] }
+        - name: collectionId
+          in: query
+          schema: { type: string }
+        - name: section
+          in: query
+          schema: { type: string, enum: [rw, math] }
+        - name: skill
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Bank questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SatBankQuestion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/sessions/{sessionId}/prework-from-bank:
+    post:
+      operationId: assignSatBankPrework
+      tags: [administration]
+      summary: Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SatBankPreworkInput" }
+      responses:
+        "201":
+          description: Assigned pre-work
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SatBankPreworkAssignment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /financials:
     get:
       operationId: getFinancials
@@ -1422,6 +1529,79 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /sessions/{sessionId}/lesson:
+    get:
+      operationId: getSessionLesson
+      tags: [curriculum]
+      summary: Tutor lesson dashboard grouped by homework weakness
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Session lesson
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionLesson" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: requestSessionRetry
+      tags: [curriculum]
+      summary: Request a similar retry for a missed pre-work question
+      description: >
+        Uses an unused similar bank question first. If none remain and
+        OPENAI_API_KEY is configured, drafts an analogous original item.
+        Otherwise returns an honest blocked state. Does not reveal the answer.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SessionRetryInput" }
+      responses:
+        "201":
+          description: Retry created or blocked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionRetry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503":
+          description: Analog generation blocked without OPENAI_API_KEY
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionRetry" }
+  /retries/{retryId}/outcome:
+    post:
+      operationId: recordRetryOutcome
+      tags: [curriculum]
+      summary: Record mastered vs still struggling for a retry
+      parameters:
+        - name: retryId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetryOutcomeInput" }
+      responses:
+        "200":
+          description: Graded retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetryOutcome" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 components:
   parameters:
     CourseId:
@@ -2831,6 +3011,8 @@ components:
         studentFeedback: { type: string }
         tutorNotes: { type: ["string", "null"] }
         reviewStatus: { type: string, enum: [new, in_review, reviewed] }
+        homeworkKind: { type: ["string", "null"] }
+        scoreReporting: { type: string, enum: [none, estimated_diagnostic] }
     ReviewSubmission:
       type: object
       required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, sessionId, sessionDateTime, status, score, submittedAt, reviewStatus]
@@ -3077,3 +3259,254 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ReviewSubmission" }
         openReviewCount: { type: number }
+    SatBankImportInput:
+      type: object
+      properties:
+        rootDir: { type: string, maxLength: 400 }
+        payloadText: { type: string, maxLength: 200000 }
+    SatBankImportResult:
+      type: object
+      required: [rootDir, filesScanned, inserted, updated, skipped, duplicatesInFile, collectionsEnsured]
+      properties:
+        rootDir: { type: string }
+        filesScanned: { type: number }
+        inserted: { type: number }
+        updated: { type: number }
+        skipped: { type: number }
+        duplicatesInFile: { type: number }
+        collectionsEnsured: { type: number }
+    SatBankAsset:
+      type: object
+      required: [id, kind, title, resourceUrl]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        resourceUrl: { type: ["string", "null"] }
+    SatBankQuestion:
+      type: object
+      required: [id, sourceKey, collectionId, examFamily, section, module, questionNumber, position, prompt, skill, domain, difficulty, questionType, estimatedSeconds, sourceKind, hasOfficialExplanation]
+      properties:
+        id: { type: string }
+        sourceKey: { type: string }
+        collectionId: { type: string }
+        examFamily: { type: string }
+        practiceTestNumber: { type: ["number", "null"] }
+        formCode: { type: ["string", "null"] }
+        section: { type: string, enum: [rw, math] }
+        module: { type: number }
+        questionNumber: { type: number }
+        position: { type: number }
+        prompt: { type: string }
+        stimulus: { type: ["string", "null"] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        skill: { type: string }
+        domain: { type: string }
+        difficulty: { type: string }
+        questionType: { type: string }
+        estimatedSeconds: { type: number }
+        sourceKind: { type: string }
+        hasOfficialExplanation: { type: boolean }
+        linkedQuestionId: { type: ["string", "null"] }
+    SatBankCollection:
+      type: object
+      required: [id, examFamily, title, slug, extractStatus, questionCount, officialExplanationCount, assets]
+      properties:
+        id: { type: string }
+        examFamily: { type: string }
+        practiceTestNumber: { type: ["number", "null"] }
+        formCode: { type: ["string", "null"] }
+        title: { type: string }
+        slug: { type: string }
+        notes: { type: ["string", "null"] }
+        extractStatus: { type: string }
+        questionCount: { type: number }
+        officialExplanationCount: { type: number }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/SatBankAsset" }
+    SatBankCollectionDetail:
+      allOf:
+        - $ref: "#/components/schemas/SatBankCollection"
+        - type: object
+          required: [questions]
+          properties:
+            questions:
+              type: array
+              items: { $ref: "#/components/schemas/SatBankQuestion" }
+    SatBankPreworkInput:
+      type: object
+      properties:
+        collectionId: { type: ["string", "null"] }
+        bankQuestionIds:
+          type: array
+          items: { type: string }
+        homeworkKind: { type: string, enum: [diagnostic, routine] }
+        targetMinutes: { type: number, minimum: 15, maximum: 180 }
+    SatBankPreworkAssignment:
+      type: object
+      required: [planId, assignmentId, homeworkKind, targetMinutes, estimatedSeconds, questionCount, withinTolerance, extractIncomplete]
+      properties:
+        planId: { type: string }
+        assignmentId: { type: string }
+        homeworkKind: { type: string, enum: [diagnostic, routine] }
+        targetMinutes: { type: number }
+        estimatedSeconds: { type: number }
+        questionCount: { type: number }
+        withinTolerance: { type: boolean }
+        extractIncomplete: { type: boolean }
+    SessionLessonMiss:
+      type: object
+      required: [questionId, skill, prompt]
+      properties:
+        questionId: { type: string }
+        bankQuestionId: { type: ["string", "null"] }
+        skill: { type: string }
+        domain: { type: string }
+        prompt: { type: string }
+        stimulus: { type: ["string", "null"] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        studentAnswer: { type: ["string", "null"] }
+        officialExplanation: { type: string }
+        aiStudentFeedback: { type: ["string", "null"] }
+        aiTutorGuidance: { type: ["string", "null"] }
+        aiSkillAnalysis: { type: ["string", "null"] }
+        sourceKey: { type: ["string", "null"] }
+        sourceKind: { type: ["string", "null"] }
+    SessionLessonRetry:
+      type: object
+      required: [id, source, outcome]
+      properties:
+        id: { type: string }
+        sourceQuestionId: { type: ["string", "null"] }
+        sourceBankQuestionId: { type: ["string", "null"] }
+        retryQuestionId: { type: ["string", "null"] }
+        source: { type: string, enum: [bank, ai, blocked] }
+        blockedReason: { type: ["string", "null"] }
+        outcome: { type: string, enum: [pending, mastered, still_struggling] }
+        correct: { type: ["boolean", "null"] }
+        prompt: { type: ["string", "null"] }
+        stimulus: { type: ["string", "null"] }
+        skill: { type: ["string", "null"] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+    SessionLesson:
+      type: object
+      required: [sessionId, scoreReporting, scoreHonesty, weaknessGroups, misses, retries]
+      properties:
+        sessionId: { type: string }
+        homeworkKind: { type: ["string", "null"] }
+        scoreReporting: { type: string, enum: [none, estimated_diagnostic] }
+        scoreHonesty: { type: string }
+        plan:
+          type: ["object", "null"]
+          properties:
+            id: { type: string }
+            assignmentId: { type: string }
+            homeworkKind: { type: string }
+            targetMinutes: { type: number }
+            estimatedSeconds: { type: number }
+            status: { type: string }
+        assignmentTitle: { type: ["string", "null"] }
+        attemptId: { type: ["string", "null"] }
+        attemptStatus: { type: ["string", "null"] }
+        accuracyPercent: { type: ["number", "null"] }
+        weaknessGroups:
+          type: array
+          items:
+            type: object
+            required: [id, skill, missCount, priority, questionIds]
+            properties:
+              id: { type: string }
+              skill: { type: string }
+              domain: { type: string }
+              missCount: { type: number }
+              priority: { type: number }
+              questionIds:
+                type: array
+                items: { type: string }
+              bankQuestionIds:
+                type: array
+                items: { type: string }
+        misses:
+          type: array
+          items: { $ref: "#/components/schemas/SessionLessonMiss" }
+        retries:
+          type: array
+          items: { $ref: "#/components/schemas/SessionLessonRetry" }
+    SessionRetryInput:
+      type: object
+      required: [sourceQuestionId]
+      properties:
+        sourceQuestionId: { type: string }
+    SessionRetryQuestion:
+      type: object
+      required: [id, prompt, skill]
+      properties:
+        id: { type: string }
+        prompt: { type: string }
+        stimulus: { type: ["string", "null"] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        skill: { type: string }
+        domain: { type: string }
+        difficulty: { type: string }
+    SessionRetry:
+      type: object
+      required: [retryId, source]
+      properties:
+        retryId: { type: string }
+        source: { type: string, enum: [bank, ai, blocked] }
+        blockedReason: { type: ["string", "null"] }
+        requiredEnv:
+          type: array
+          items: { type: string }
+        reason: { type: string }
+        question:
+          anyOf:
+            - $ref: "#/components/schemas/SessionRetryQuestion"
+            - type: "null"
+    RetryOutcomeInput:
+      type: object
+      required: [studentAnswer]
+      properties:
+        studentAnswer: { type: string, minLength: 1, maxLength: 200 }
+    RetryOutcome:
+      type: object
+      required: [retryId, correct, outcome]
+      properties:
+        retryId: { type: string }
+        correct: { type: boolean }
+        outcome: { type: string, enum: [mastered, still_struggling] }
+        correctAnswer: { type: string }
+        explanation: { type: string }

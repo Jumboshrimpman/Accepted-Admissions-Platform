@@ -69,6 +69,24 @@ test("full diagnostic seed covers RW and Math with explanations", () => {
   }
 });
 
+test("routine 60-minute pre-work does not invent an official SAT score", () => {
+  const analysis = buildAttemptAnalysis(
+    [{ skill: "Transitions", correct: 0, total: 1, accuracy: 0 }],
+    [
+      {
+        correct: false,
+        skill: "Transitions",
+        subject: "SAT Reading & Writing",
+        domain: "Expression of Ideas",
+      },
+    ],
+    0,
+    { assignmentTitle: "60-minute SAT pre-work — October 9", homeworkKind: "routine" },
+  );
+  assert.doesNotMatch(analysis.feedback, /Estimated SAT projection/);
+  assert.doesNotMatch(analysis.label, /diagnostic/i);
+});
+
 test("session prep modes explain the live curriculum behavior", () => {
   assert.match(
     describeSessionPrepMode("complete_homework_in_session"),

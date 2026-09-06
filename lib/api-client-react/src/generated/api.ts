@@ -65,6 +65,7 @@ import type {
   CancelBookingInput,
   CheckoutInput,
   CheckoutSession,
+  CloneAdminAssignmentToSessionBody,
   ConflictResponse,
   ContentSource,
   ContentSourceInput,
@@ -95,6 +96,7 @@ import type {
   ListAssignmentsParams,
   ListContentSourcesParams,
   ListQuestionBankParams,
+  ListSatBankQuestionsParams,
   NotFoundResponse,
   OfflinePaymentInput,
   PaymentRecord,
@@ -103,13 +105,25 @@ import type {
   QuestionBankItem,
   QuestionBankUpdate,
   RescheduleBookingInput,
+  RetryOutcome,
+  RetryOutcomeInput,
   ReviewQueueItem,
   ReviewQueueUpdate,
   ReviewSubmission,
+  SatBankCollection,
+  SatBankCollectionDetail,
+  SatBankImportInput,
+  SatBankImportResult,
+  SatBankPreworkAssignment,
+  SatBankPreworkInput,
+  SatBankQuestion,
   SatProduct,
   SessionArtifact,
   SessionArtifactInput,
   SessionDetail,
+  SessionLesson,
+  SessionRetry,
+  SessionRetryInput,
   UnauthorizedResponse
 } from './api.schemas';
 
@@ -1068,7 +1082,7 @@ export const updateAdminAssignment = async (assignmentId: string,
 
 
 
-export const getUpdateAdminAssignmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+export const getUpdateAdminAssignmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAssignment>>, TError,{assignmentId: string;data: BodyType<AdminAssignmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateAdminAssignment>>, TError,{assignmentId: string;data: BodyType<AdminAssignmentUpdate>}, TContext> => {
 
@@ -1097,12 +1111,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateAdminAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminAssignment>>>
     export type UpdateAdminAssignmentMutationBody = BodyType<AdminAssignmentUpdate>
-    export type UpdateAdminAssignmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+    export type UpdateAdminAssignmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
 
     /**
  * @summary Edit, publish, or archive an assignment
  */
-export const useUpdateAdminAssignment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+export const useUpdateAdminAssignment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAssignment>>, TError,{assignmentId: string;data: BodyType<AdminAssignmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateAdminAssignment>>,
@@ -1111,6 +1125,79 @@ export const useUpdateAdminAssignment = <TError = ErrorType<BadRequestResponse |
         TContext
       > => {
       return useMutation(getUpdateAdminAssignmentMutationOptions(options));
+    }
+
+export const getCloneAdminAssignmentToSessionUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/admin/assignments/${assignmentId}/clone-to-session`
+}
+
+/**
+ * Creates a new session-specific assignment and copies question ordering and configuration. The source assignment, its session association, and all student attempts remain unchanged.
+ * @summary Clone a reusable quiz onto a session without moving the original
+ */
+export const cloneAdminAssignmentToSession = async (assignmentId: string,
+    cloneAdminAssignmentToSessionBody: CloneAdminAssignmentToSessionBody, options?: Parameters<typeof customFetch>[1]): Promise<AdminAssignment> => {
+
+  return customFetch<AdminAssignment>(getCloneAdminAssignmentToSessionUrl(assignmentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cloneAdminAssignmentToSessionBody)
+  }
+);}
+
+
+
+
+
+export const getCloneAdminAssignmentToSessionMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneAdminAssignmentToSession>>, TError,{assignmentId: string;data: BodyType<CloneAdminAssignmentToSessionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cloneAdminAssignmentToSession>>, TError,{assignmentId: string;data: BodyType<CloneAdminAssignmentToSessionBody>}, TContext> => {
+
+const mutationKey = ['cloneAdminAssignmentToSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cloneAdminAssignmentToSession>>, {assignmentId: string;data: BodyType<CloneAdminAssignmentToSessionBody>}> = (props) => {
+          const {assignmentId,data} = props ?? {};
+
+          return  cloneAdminAssignmentToSession(assignmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloneAdminAssignmentToSessionMutationResult = NonNullable<Awaited<ReturnType<typeof cloneAdminAssignmentToSession>>>
+    export type CloneAdminAssignmentToSessionMutationBody = BodyType<CloneAdminAssignmentToSessionBody>
+    export type CloneAdminAssignmentToSessionMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Clone a reusable quiz onto a session without moving the original
+ */
+export const useCloneAdminAssignmentToSession = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneAdminAssignmentToSession>>, TError,{assignmentId: string;data: BodyType<CloneAdminAssignmentToSessionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cloneAdminAssignmentToSession>>,
+        TError,
+        {assignmentId: string;data: BodyType<CloneAdminAssignmentToSessionBody>},
+        TContext
+      > => {
+      return useMutation(getCloneAdminAssignmentToSessionMutationOptions(options));
     }
 
 export const getCreateAdminLibraryAssetUrl = () => {
@@ -1398,6 +1485,388 @@ export const useUpdateAdminSession = <TError = ErrorType<BadRequestResponse | Un
         TContext
       > => {
       return useMutation(getUpdateAdminSessionMutationOptions(options));
+    }
+
+export const getImportSatBankUrl = () => {
+
+
+
+
+  return `/api/admin/sat-bank/import`
+}
+
+/**
+ * Idempotent by source key (exam + test/form + module + question number). Does not invent official College Board wording. Official explanations stay separate from AI annotations.
+ * @summary Import College Board JSON/JSONL extracts into the SAT/PSAT bank
+ */
+export const importSatBank = async (satBankImportInput?: SatBankImportInput, options?: Parameters<typeof customFetch>[1]): Promise<SatBankImportResult> => {
+
+  return customFetch<SatBankImportResult>(getImportSatBankUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(satBankImportInput)
+  }
+);}
+
+
+
+
+
+export const getImportSatBankMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importSatBank>>, TError,{data?: BodyType<SatBankImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importSatBank>>, TError,{data?: BodyType<SatBankImportInput>}, TContext> => {
+
+const mutationKey = ['importSatBank'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importSatBank>>, {data?: BodyType<SatBankImportInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importSatBank(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportSatBankMutationResult = NonNullable<Awaited<ReturnType<typeof importSatBank>>>
+    export type ImportSatBankMutationBody = BodyType<SatBankImportInput> | undefined
+    export type ImportSatBankMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+    /**
+ * @summary Import College Board JSON/JSONL extracts into the SAT/PSAT bank
+ */
+export const useImportSatBank = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importSatBank>>, TError,{data?: BodyType<SatBankImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importSatBank>>,
+        TError,
+        {data?: BodyType<SatBankImportInput>},
+        TContext
+      > => {
+      return useMutation(getImportSatBankMutationOptions(options));
+    }
+
+export const getListSatBankCollectionsUrl = () => {
+
+
+
+
+  return `/api/admin/sat-bank/collections`
+}
+
+/**
+ * @summary List SAT/PSAT source collections in original-test order
+ */
+export const listSatBankCollections = async ( options?: Parameters<typeof customFetch>[1]): Promise<SatBankCollection[]> => {
+
+  return customFetch<SatBankCollection[]>(getListSatBankCollectionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSatBankCollectionsQueryKey = () => {
+    return [
+    `/api/admin/sat-bank/collections`
+    ] as const;
+    }
+
+
+export const getListSatBankCollectionsQueryOptions = <TData = Awaited<ReturnType<typeof listSatBankCollections>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSatBankCollections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSatBankCollectionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSatBankCollections>>> = ({ signal }) => listSatBankCollections({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSatBankCollections>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSatBankCollectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listSatBankCollections>>>
+export type ListSatBankCollectionsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary List SAT/PSAT source collections in original-test order
+ */
+
+export function useListSatBankCollections<TData = Awaited<ReturnType<typeof listSatBankCollections>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSatBankCollections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSatBankCollectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSatBankCollectionUrl = (collectionId: string,) => {
+
+
+
+
+  return `/api/admin/sat-bank/collections/${collectionId}`
+}
+
+/**
+ * @summary Open a source collection in original question order
+ */
+export const getSatBankCollection = async (collectionId: string, options?: Parameters<typeof customFetch>[1]): Promise<SatBankCollectionDetail> => {
+
+  return customFetch<SatBankCollectionDetail>(getGetSatBankCollectionUrl(collectionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSatBankCollectionQueryKey = (collectionId: string,) => {
+    return [
+    `/api/admin/sat-bank/collections/${collectionId}`
+    ] as const;
+    }
+
+
+export const getGetSatBankCollectionQueryOptions = <TData = Awaited<ReturnType<typeof getSatBankCollection>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(collectionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSatBankCollection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSatBankCollectionQueryKey(collectionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSatBankCollection>>> = ({ signal }) => getSatBankCollection(collectionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: collectionId !== null && collectionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSatBankCollection>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSatBankCollectionQueryResult = NonNullable<Awaited<ReturnType<typeof getSatBankCollection>>>
+export type GetSatBankCollectionQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+/**
+ * @summary Open a source collection in original question order
+ */
+
+export function useGetSatBankCollection<TData = Awaited<ReturnType<typeof getSatBankCollection>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ collectionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSatBankCollection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSatBankCollectionQueryOptions(collectionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListSatBankQuestionsUrl = (params?: ListSatBankQuestionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/sat-bank/questions?${stringifiedParams}` : `/api/admin/sat-bank/questions`
+}
+
+/**
+ * @summary Browse canonical SAT/PSAT bank questions
+ */
+export const listSatBankQuestions = async (params?: ListSatBankQuestionsParams, options?: Parameters<typeof customFetch>[1]): Promise<SatBankQuestion[]> => {
+
+  return customFetch<SatBankQuestion[]>(getListSatBankQuestionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSatBankQuestionsQueryKey = (params?: ListSatBankQuestionsParams,) => {
+    return [
+    `/api/admin/sat-bank/questions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSatBankQuestionsQueryOptions = <TData = Awaited<ReturnType<typeof listSatBankQuestions>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(params?: ListSatBankQuestionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSatBankQuestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSatBankQuestionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSatBankQuestions>>> = ({ signal }) => listSatBankQuestions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSatBankQuestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSatBankQuestionsQueryResult = NonNullable<Awaited<ReturnType<typeof listSatBankQuestions>>>
+export type ListSatBankQuestionsQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse>
+
+
+/**
+ * @summary Browse canonical SAT/PSAT bank questions
+ */
+
+export function useListSatBankQuestions<TData = Awaited<ReturnType<typeof listSatBankQuestions>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
+ params?: ListSatBankQuestionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSatBankQuestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSatBankQuestionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAssignSatBankPreworkUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/admin/sessions/${sessionId}/prework-from-bank`
+}
+
+/**
+ * @summary Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session
+ */
+export const assignSatBankPrework = async (sessionId: string,
+    satBankPreworkInput?: SatBankPreworkInput, options?: Parameters<typeof customFetch>[1]): Promise<SatBankPreworkAssignment> => {
+
+  return customFetch<SatBankPreworkAssignment>(getAssignSatBankPreworkUrl(sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(satBankPreworkInput)
+  }
+);}
+
+
+
+
+
+export const getAssignSatBankPreworkMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignSatBankPrework>>, TError,{sessionId: string;data?: BodyType<SatBankPreworkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignSatBankPrework>>, TError,{sessionId: string;data?: BodyType<SatBankPreworkInput>}, TContext> => {
+
+const mutationKey = ['assignSatBankPrework'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignSatBankPrework>>, {sessionId: string;data?: BodyType<SatBankPreworkInput>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  assignSatBankPrework(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignSatBankPreworkMutationResult = NonNullable<Awaited<ReturnType<typeof assignSatBankPrework>>>
+    export type AssignSatBankPreworkMutationBody = BodyType<SatBankPreworkInput> | undefined
+    export type AssignSatBankPreworkMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session
+ */
+export const useAssignSatBankPrework = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignSatBankPrework>>, TError,{sessionId: string;data?: BodyType<SatBankPreworkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignSatBankPrework>>,
+        TError,
+        {sessionId: string;data?: BodyType<SatBankPreworkInput>},
+        TContext
+      > => {
+      return useMutation(getAssignSatBankPreworkMutationOptions(options));
     }
 
 export const getGetFinancialsUrl = () => {
@@ -4694,7 +5163,7 @@ export const getGeneratePracticeQuestionsUrl = (sourceId: string,) => {
 }
 
 /**
- * @summary Generate original draft questions from an authorized source
+ * @summary Create template draft questions from an authorized source
  */
 export const generatePracticeQuestions = async (sourceId: string,
     generateQuestionsInput: GenerateQuestionsInput, options?: Parameters<typeof customFetch>[1]): Promise<QuestionBankItem[]> => {
@@ -4744,7 +5213,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type GeneratePracticeQuestionsMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
 
     /**
- * @summary Generate original draft questions from an authorized source
+ * @summary Create template draft questions from an authorized source
  */
 export const useGeneratePracticeQuestions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generatePracticeQuestions>>, TError,{sourceId: string;data: BodyType<GenerateQuestionsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -5279,5 +5748,227 @@ export const useUpsertSessionArtifact = <TError = ErrorType<BadRequestResponse |
         TContext
       > => {
       return useMutation(getUpsertSessionArtifactMutationOptions(options));
+    }
+
+export const getGetSessionLessonUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/lesson`
+}
+
+/**
+ * @summary Tutor lesson dashboard grouped by homework weakness
+ */
+export const getSessionLesson = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<SessionLesson> => {
+
+  return customFetch<SessionLesson>(getGetSessionLessonUrl(sessionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSessionLessonQueryKey = (sessionId: string,) => {
+    return [
+    `/api/sessions/${sessionId}/lesson`
+    ] as const;
+    }
+
+
+export const getGetSessionLessonQueryOptions = <TData = Awaited<ReturnType<typeof getSessionLesson>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(sessionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionLesson>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSessionLessonQueryKey(sessionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSessionLesson>>> = ({ signal }) => getSessionLesson(sessionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: sessionId !== null && sessionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSessionLesson>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSessionLessonQueryResult = NonNullable<Awaited<ReturnType<typeof getSessionLesson>>>
+export type GetSessionLessonQueryError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+/**
+ * @summary Tutor lesson dashboard grouped by homework weakness
+ */
+
+export function useGetSessionLesson<TData = Awaited<ReturnType<typeof getSessionLesson>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ sessionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSessionLesson>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSessionLessonQueryOptions(sessionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestSessionRetryUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/lesson`
+}
+
+/**
+ * Uses an unused similar bank question first. If none remain and OPENAI_API_KEY is configured, drafts an analogous original item. Otherwise returns an honest blocked state. Does not reveal the answer.
+ * @summary Request a similar retry for a missed pre-work question
+ */
+export const requestSessionRetry = async (sessionId: string,
+    sessionRetryInput: SessionRetryInput, options?: Parameters<typeof customFetch>[1]): Promise<SessionRetry> => {
+
+  return customFetch<SessionRetry>(getRequestSessionRetryUrl(sessionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sessionRetryInput)
+  }
+);}
+
+
+
+
+
+export const getRequestSessionRetryMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | SessionRetry>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestSessionRetry>>, TError,{sessionId: string;data: BodyType<SessionRetryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestSessionRetry>>, TError,{sessionId: string;data: BodyType<SessionRetryInput>}, TContext> => {
+
+const mutationKey = ['requestSessionRetry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestSessionRetry>>, {sessionId: string;data: BodyType<SessionRetryInput>}> = (props) => {
+          const {sessionId,data} = props ?? {};
+
+          return  requestSessionRetry(sessionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestSessionRetryMutationResult = NonNullable<Awaited<ReturnType<typeof requestSessionRetry>>>
+    export type RequestSessionRetryMutationBody = BodyType<SessionRetryInput>
+    export type RequestSessionRetryMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | SessionRetry>
+
+    /**
+ * @summary Request a similar retry for a missed pre-work question
+ */
+export const useRequestSessionRetry = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse | SessionRetry>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestSessionRetry>>, TError,{sessionId: string;data: BodyType<SessionRetryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestSessionRetry>>,
+        TError,
+        {sessionId: string;data: BodyType<SessionRetryInput>},
+        TContext
+      > => {
+      return useMutation(getRequestSessionRetryMutationOptions(options));
+    }
+
+export const getRecordRetryOutcomeUrl = (retryId: string,) => {
+
+
+
+
+  return `/api/retries/${retryId}/outcome`
+}
+
+/**
+ * @summary Record mastered vs still struggling for a retry
+ */
+export const recordRetryOutcome = async (retryId: string,
+    retryOutcomeInput: RetryOutcomeInput, options?: Parameters<typeof customFetch>[1]): Promise<RetryOutcome> => {
+
+  return customFetch<RetryOutcome>(getRecordRetryOutcomeUrl(retryId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retryOutcomeInput)
+  }
+);}
+
+
+
+
+
+export const getRecordRetryOutcomeMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordRetryOutcome>>, TError,{retryId: string;data: BodyType<RetryOutcomeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordRetryOutcome>>, TError,{retryId: string;data: BodyType<RetryOutcomeInput>}, TContext> => {
+
+const mutationKey = ['recordRetryOutcome'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordRetryOutcome>>, {retryId: string;data: BodyType<RetryOutcomeInput>}> = (props) => {
+          const {retryId,data} = props ?? {};
+
+          return  recordRetryOutcome(retryId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordRetryOutcomeMutationResult = NonNullable<Awaited<ReturnType<typeof recordRetryOutcome>>>
+    export type RecordRetryOutcomeMutationBody = BodyType<RetryOutcomeInput>
+    export type RecordRetryOutcomeMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Record mastered vs still struggling for a retry
+ */
+export const useRecordRetryOutcome = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordRetryOutcome>>, TError,{retryId: string;data: BodyType<RetryOutcomeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordRetryOutcome>>,
+        TError,
+        {retryId: string;data: BodyType<RetryOutcomeInput>},
+        TContext
+      > => {
+      return useMutation(getRecordRetryOutcomeMutationOptions(options));
     }
 

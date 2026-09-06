@@ -74,6 +74,36 @@ vi.mock("@workspace/api-client-react", () => ({
   useAttachQuestionToAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAssignmentQuestion: () => ({ mutate: vi.fn(), isPending: false }),
   useRemoveQuestionFromAssignment: () => ({ mutate: vi.fn(), isPending: false }),
+  getGetSessionLessonQueryKey: (id: string) => ["/api/sessions", id, "lesson"],
+  useGetSessionLesson: () => ({
+    data: {
+      sessionId: "session-1",
+      scoreReporting: "none",
+      scoreHonesty: "This 60-minute pre-work reports accuracy only. It is not an official SAT score.",
+      weaknessGroups: [
+        {
+          id: "g1",
+          skill: "Transitions",
+          domain: "Expression of Ideas",
+          missCount: 2,
+          priority: 1,
+          questionIds: ["q1"],
+        },
+      ],
+      misses: [
+        {
+          questionId: "q1",
+          skill: "Transitions",
+          prompt: "Which transition best connects the paragraphs?",
+          officialExplanation: "",
+        },
+      ],
+      retries: [],
+    },
+    isLoading: false,
+  }),
+  useRequestSessionRetry: () => ({ mutate: vi.fn(), isPending: false }),
+  useRecordRetryOutcome: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("wouter", () => ({
@@ -108,5 +138,7 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Transitions/);
     expect(screen.getByRole("tab", { name: "Live plan" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Records" })).toBeTruthy();
+    expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/not an official SAT score/);
+    expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
   });
 });

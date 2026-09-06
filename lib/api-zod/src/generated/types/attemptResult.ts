@@ -8,6 +8,7 @@
 import type { AttemptAnalysis } from './attemptAnalysis';
 import type { AttemptResultItem } from './attemptResultItem';
 import type { AttemptResultReviewStatus } from './attemptResultReviewStatus';
+import type { AttemptResultScoreReporting } from './attemptResultScoreReporting';
 import type { AttemptResultStatus } from './attemptResultStatus';
 import type { ScoreBreakdown } from './scoreBreakdown';
 
@@ -36,4 +37,7 @@ export interface AttemptResult {
   /** @nullable */
   tutorNotes?: string | null;
   reviewStatus?: AttemptResultReviewStatus;
+  /** @nullable */
+  homeworkKind?: string | null;
+  scoreReporting?: AttemptResultScoreReporting;
 }

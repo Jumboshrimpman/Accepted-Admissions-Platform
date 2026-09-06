@@ -107,7 +107,10 @@ export function buildAttemptAnalysis(
   breakdown: SkillBreakdown[],
   items: AnalysisItem[],
   score: number,
-  options: { assignmentTitle?: string | null } = {},
+  options: {
+    assignmentTitle?: string | null;
+    homeworkKind?: "diagnostic" | "routine" | null;
+  } = {},
 ): AttemptAnalysis {
   const strengths = breakdown
     .filter((skill) => skill.accuracy >= 80)
@@ -139,9 +142,10 @@ export function buildAttemptAnalysis(
   }
 
   const projection = projectSatScores(items);
-  const isDiagnostic = /diagnostic|full sat|practice test/i.test(
-    options.assignmentTitle ?? "",
-  );
+  const isDiagnostic =
+    options.homeworkKind === "diagnostic" ||
+    (options.homeworkKind !== "routine" &&
+      /diagnostic|full sat|practice test/i.test(options.assignmentTitle ?? ""));
   const projectionLine =
     isDiagnostic && projection.total != null
       ? ` Estimated SAT projection: ${projection.total}${
