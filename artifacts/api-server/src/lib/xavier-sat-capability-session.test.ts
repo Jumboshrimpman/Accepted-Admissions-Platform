@@ -258,6 +258,9 @@ test("seeds one Xavier SAT capability session for Sama and stays idempotent", as
   } finally {
     await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course.id));
     await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course.id));
+    await db
+      .delete(tutorProfilesTable)
+      .where(inArray(tutorProfilesTable.email, [xavier.email, duplicate.email]));
     await db.delete(coursesTable).where(eq(coursesTable.id, course.id));
     await db
       .delete(usersTable)
@@ -350,6 +353,9 @@ test("falls back to Taito, then tutor-only, and never uses the duplicate Xavier 
     assert.equal(withTaito.tutorUserId, xavier.id);
 
     await db.delete(sessionsTable).where(eq(sessionsTable.id, withTaito.sessionId!));
+    await db
+      .delete(courseMembershipsTable)
+      .where(eq(courseMembershipsTable.userId, taito.id));
     await db.delete(usersTable).where(eq(usersTable.id, taito.id));
 
     const tutorOnly = await ensureXavierSatCapabilitySession({
@@ -373,6 +379,9 @@ test("falls back to Taito, then tutor-only, and never uses the duplicate Xavier 
   } finally {
     await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course.id));
     await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course.id));
+    await db
+      .delete(tutorProfilesTable)
+      .where(inArray(tutorProfilesTable.email, [xavier.email, duplicate.email]));
     await db.delete(coursesTable).where(eq(coursesTable.id, course.id));
     await db
       .delete(usersTable)
