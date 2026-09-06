@@ -11,7 +11,7 @@ export function sessionsForDashboardRole<T>(
       return row.tutor?.id === viewer.id;
     }
     if (viewer.role === "student" || viewer.role === "viewer") {
-      return !row.student?.id || row.student.id === viewer.id;
+      return row.student?.id === viewer.id;
     }
     return true;
   });

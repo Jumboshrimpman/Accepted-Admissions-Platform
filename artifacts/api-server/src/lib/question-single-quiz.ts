@@ -18,6 +18,8 @@ export function questionCanAttachToAssignment(
 ): boolean {
   return existing.every((item) => {
     if (item.assignmentId === target.assignmentId) return true;
-    return normalizeTitle(item.title) === normalizeTitle(target.title);
+    const sameTitle = normalizeTitle(item.title) === normalizeTitle(target.title);
+    const cloneLineage = item.sessionId != null || target.sessionId != null;
+    return sameTitle && cloneLineage;
   });
 }

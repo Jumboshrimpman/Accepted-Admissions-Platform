@@ -36,3 +36,14 @@ test("a question cannot attach to a second bank quiz", () => {
     "This question is already on another quiz. A question can only belong to one quiz.",
   );
 });
+
+test("same-title bank quizzes cannot share a question", () => {
+  const sameTitleBank = {
+    assignmentId: "quiz-bank-copy",
+    sessionId: null,
+    title: "October pre-session mini-section",
+  };
+  assert.equal(questionCanAttachToAssignment([bank], sameTitleBank), false);
+  assert.equal(questionCanAttachToAssignment([sameTitleBank], bank), false);
+  assert.equal(questionCanAttachToAssignment([bank, clone], sameTitleBank), false);
+});
