@@ -6,6 +6,7 @@ import {
   getListAdminAccessGrantsQueryKey,
   getListQuestionBankQueryKey,
   useCreateAdminAccessGrant,
+  useCreateAdminTutorAssignment,
   useCreateAdminLibraryAsset,
   useCreateAdminSession,
   useGetAdminCurriculum,
@@ -13,6 +14,7 @@ import {
   useListAdminAccessGrants,
   useListQuestionBank,
   useUpdateAdminAccessGrant,
+  useDeleteAdminTutorAssignment,
   useUpdateAdminLibraryAsset,
   useUpdateAdminSession,
   useAttachSessionLibraryAsset,
@@ -27,6 +29,7 @@ import type {
   AdminAccessGrantInput,
   AdminAssignment,
   AdminCurriculum,
+  AdminTutorAssignmentInput,
   AdminSession,
   AdminSessionInput,
   AdminSessionUpdate,
@@ -35,7 +38,8 @@ import type {
   CurriculumLibraryAssetInput,
   ProvisionableRoleCategory,
 } from "@workspace/api-client-react";
-import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, GraduationCap, Library, Mail, Plus, Sparkles, UserPlus, Users, Video } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, Library, Mail, Plus, Sparkles, UserPlus, Users, Video } from "lucide-react";
+import { PeopleRelationshipLists } from "@/pages/admin/people-relationships";
 import { AssignBankPreworkControl, SatBankPanel } from "@/pages/admin/sat-bank-panel";
 import { MissedOnPreworkList } from "@/components/missed-prework-list";
 import {
@@ -74,7 +78,7 @@ import {
 type Section = AdminCurriculumSection;
 
 const sectionLinks: Array<{ id: Section; label: string; detail: string; icon: typeof Users }> = [
-  { id: "people", label: "People", detail: "Provision and preview", icon: Users },
+  { id: "people", label: "People", detail: "Provision, assign, preview", icon: Users },
   { id: "sessions", label: "Sessions", detail: "Assign pre-work, Meet", icon: CalendarDays },
   { id: "curriculum", label: "Quizzes", detail: "Questions, assign, results", icon: ClipboardList },
 ];
@@ -143,7 +147,7 @@ export default function AdminCurriculum() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight">People, sessions, and quizzes</h1>
           <p className="mt-1 text-muted-foreground">
-            Open a quiz to edit its questions, assign it to a session, then review the attempt. Preview a student portal from People or Overview.
+            Provision people, assign tutors and students, then preview a client portal. Quizzes and sessions stay in their own tabs.
           </p>
         </div>
         <Input className="w-full sm:w-72" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this section…" aria-label="Search operations" />
@@ -196,7 +200,7 @@ function ClientPreviewCard({
           <Eye className="h-5 w-5 text-primary" /> Client preview
         </CardTitle>
         <CardDescription>
-          Open a student portal from here even if quizzes or sessions fail to load.
+          Read-only live portal. Preview cannot create or remove tutor–student links — assign those in the lists below.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -236,6 +240,8 @@ function PeopleSection({
   const grantsQuery = useListAdminAccessGrants();
   const createGrant = useCreateAdminAccessGrant();
   const updateGrant = useUpdateAdminAccessGrant();
+  const createAssignment = useCreateAdminTutorAssignment();
+  const deleteAssignment = useDeleteAdminTutorAssignment();
   const [draft, setDraft] = useState<AdminAccessGrantInput>({
     email: "",
     displayName: "",
@@ -315,6 +321,32 @@ function PeopleSection({
     );
   };
 
+  const assignLink = (payload: AdminTutorAssignmentInput) => {
+    createAssignment.mutate(
+      { data: payload },
+      {
+        onSuccess: () => {
+          setMessage("Tutor–student assignment saved. Client preview now shows this live link.");
+          refreshPeople();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+
+  const unassignLink = (assignmentId: string) => {
+    deleteAssignment.mutate(
+      { assignmentId },
+      {
+        onSuccess: () => {
+          setMessage("Tutor–student assignment removed.");
+          refreshPeople();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+
   const reactivate = (grant: AdminAccessGrant) => {
     updateGrant.mutate(
       {
@@ -348,7 +380,7 @@ function PeopleSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}
+          {message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm" data-testid="people-assign-status">{message}</p>}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Display name">
               <Input
@@ -496,116 +528,15 @@ function PeopleSection({
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" /> Clients / students
-            </CardTitle>
-            <CardDescription>
-              Relationships and assigned tutors. Use Client preview above to open a portal.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {clients.map((client) => (
-              <div key={client.id} className="rounded-xl border p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-medium">{client.name}</p>
-                    <p className="text-sm text-muted-foreground">{client.email}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">Student</Badge>
-                  </div>
-                </div>
-                <div className="mt-3 border-t pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Assigned tutors
-                  </p>
-                  {client.assignedTutors.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {client.assignedTutors.map((tutor) => (
-                        <Badge
-                          key={`${tutor.id}-${tutor.courseId}-${tutor.subject}`}
-                          variant="secondary"
-                        >
-                          {tutor.name} · {sessionSubjectLabel(tutor.subject)}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      No tutor relationship is provisioned yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-            {clients.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">No matching clients.</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-primary" /> Tutors
-            </CardTitle>
-            <CardDescription>
-              Subject access, approved clients, and activity. Compensation is never returned by this operational view.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {tutors.map((tutor) => (
-              <div key={tutor.id} className="rounded-xl border p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{tutor.name}</p>
-                    <p className="text-sm text-muted-foreground">{tutor.email}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {tutor.subjects.map((subject) => (
-                        <Badge key={subject} variant="secondary">
-                          {sessionSubjectLabel(subject)}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {tutor.sessionCount} total sessions · {tutor.upcomingSessionCount} upcoming
-                    </p>
-                  </div>
-                  <Badge variant={tutor.active ? "default" : "outline"}>
-                    {tutor.active ? "Active" : "Inactive"}
-                  </Badge>
-                </div>
-                <div className="mt-3 border-t pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Assigned clients
-                  </p>
-                  {tutor.assignedStudents.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {tutor.assignedStudents.map((student) => (
-                        <Badge
-                          key={`${student.id}-${student.courseId}-${student.subject}`}
-                          variant="secondary"
-                        >
-                          {student.name} · {sessionSubjectLabel(student.subject)}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      No client relationship is provisioned yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-            {tutors.length === 0 && (
-              <p className="py-8 text-center text-sm text-muted-foreground">No matching tutors.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <PeopleRelationshipLists
+        clients={clients}
+        tutors={tutors}
+        programs={data.programs}
+        onAssign={assignLink}
+        onUnassign={unassignLink}
+        assignPending={createAssignment.isPending}
+        unassignPending={deleteAssignment.isPending}
+      />
     </div>
   );
 }

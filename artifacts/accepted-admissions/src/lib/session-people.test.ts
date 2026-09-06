@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { filterPeopleByQuery, mergeSessionPeople, personOptionLabel } from "./session-people.ts";
+import { assignmentSubjectOptions, filterPeopleByQuery, mergeSessionPeople, personOptionLabel } from "./session-people.ts";
 
 test("session edit can pick Taito, Eunice, and Nika by name or email when IDs exist", () => {
   const clients = mergeSessionPeople(
@@ -57,4 +57,12 @@ test("session edit can pick Taito, Eunice, and Nika by name or email when IDs ex
   assert.equal(eunice[0]?.id, "eunice");
   assert.equal(nika[0]?.id, "nika");
   assert.match(personOptionLabel(nika[0]!), /Nika Raiffe · nika@/);
+});
+
+test("assignment subjects always include SAT and IELTS and fold English into IELTS", () => {
+  assert.deepEqual(assignmentSubjectOptions(["English", "College admissions"]), [
+    "SAT",
+    "IELTS",
+    "College admissions",
+  ]);
 });

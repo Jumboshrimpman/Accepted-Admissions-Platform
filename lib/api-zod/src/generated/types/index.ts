@@ -75,6 +75,8 @@ export * from './adminSessionUpdateBookingStatus';
 export * from './adminSessionUpdateStatus';
 export * from './adminSubmission';
 export * from './adminSubmissionStatus';
+export * from './adminTutorAssignment';
+export * from './adminTutorAssignmentInput';
 export * from './assignmentDetail';
 export * from './assignmentQuestion';
 export * from './assignmentQuestionChoicesItem';

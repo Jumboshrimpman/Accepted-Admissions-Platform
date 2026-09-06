@@ -28,7 +28,7 @@ import {
 } from "@/lib/session-display";
 
 const operationLinks = [
-  { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, then preview a client portal.", icon: Users },
+  { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, assign them to each other, then preview a client portal.", icon: Users },
   { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Assign bank quizzes as pre-work, Meet links, and conflicts.", icon: CalendarDays },
   { href: "/admin/curriculum?section=curriculum", title: "Quizzes", detail: "Open a quiz, add questions, assign it, review results.", icon: ClipboardList },
   { href: "/admin/content", title: "Website content", detail: "Home, SAT, team, stories, and contact email.", icon: FileText },

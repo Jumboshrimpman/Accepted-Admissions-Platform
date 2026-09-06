@@ -39,3 +39,19 @@ export function filterPeopleByQuery<T extends NamedPerson>(people: T[], query: s
 export function personOptionLabel(person: NamedPerson): string {
   return person.email ? `${person.name} · ${person.email}` : person.name;
 }
+
+export function assignmentSubjectOptions(tutorSubjects: string[] = []): string[] {
+  const options: string[] = [];
+  const add = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const normalized = trimmed.toUpperCase() === "ENGLISH" ? "IELTS" : trimmed;
+    if (!options.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
+      options.push(normalized);
+    }
+  };
+  add("SAT");
+  add("IELTS");
+  for (const subject of tutorSubjects) add(subject);
+  return options;
+}

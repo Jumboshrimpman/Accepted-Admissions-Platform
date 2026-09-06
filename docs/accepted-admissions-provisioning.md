@@ -46,10 +46,11 @@ People provisioning does **not** send Clerk invitation emails. Sign-in uses the 
    viewer** environment allowlists. Tutor/student People grants take effect
    without a Railway variable change.
 4. Have the provisioned person sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
-5. On the first authorized request, the API records the application user and the appropriate PostgreSQL course membership. Tutors also receive a subject-scoped tutor assignment to provisioned students in that course.
+5. On the first authorized request, the API records the application user and the appropriate PostgreSQL course membership. The approved seed roster (Taito/Nika/Eunice/Michelle) still receives those tutor assignments automatically. Additional links are created only from People assign.
 6. Sign in as the administrator and review **Clients & tutors** at
    `/admin/curriculum?section=people`. Use **Provision people** to grant
-   student or tutor access without editing environment allowlists.
+   student or tutor access, then **Assign** to link tutors and students.
+   Client preview is read-only and reflects those live links.
    Administrator and viewer roles remain environment-only.
 7. To revoke in-app grants, use **Revoke** on the access grant. To revoke
    environment allowlist access for administrators or viewers, remove the

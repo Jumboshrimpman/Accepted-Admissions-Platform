@@ -27,8 +27,8 @@ export interface AdminAccessGrant {
   /** @nullable */
   revokedAt: Date | null;
   /**
-   * Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.
-   * @nullable
-   */
+     * Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.
+     * @nullable
+     */
   warning?: string | null;
 }

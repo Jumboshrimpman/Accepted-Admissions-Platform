@@ -335,6 +335,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "upcomingSessionCount": zod.number(),
   "assignedStudents": zod.array(zod.object({
   "id": zod.string(),
+  "assignmentId": zod.string(),
   "name": zod.string(),
   "courseId": zod.string(),
   "courseTitle": zod.string(),
@@ -347,6 +348,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "email": zod.string(),
   "assignedTutors": zod.array(zod.object({
   "id": zod.string(),
+  "assignmentId": zod.string(),
   "name": zod.string(),
   "courseId": zod.string(),
   "courseTitle": zod.string(),
@@ -398,7 +400,7 @@ export const CreateAdminAccessGrantBody = zod.object({
   "email": zod.string().min(createAdminAccessGrantBodyEmailMin),
   "displayName": zod.string().min(1).max(createAdminAccessGrantBodyDisplayNameMax),
   "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
-  "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Production Clerk user ID. If the ID is not in the Production Clerk instance (or belongs to a different email), it is ignored and replaced by an email lookup or create.'),
+  "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Production Clerk user ID. If the ID is not in the Production Clerk instance (or belongs to a different email), it is ignored and replaced by an email lookup or create.\n'),
   "notes": zod.string().max(createAdminAccessGrantBodyNotesMax).nullish()
 })
 
@@ -460,6 +462,44 @@ export const UpdateAdminAccessGrantResponse = zod.object({
   "revokedAt": zod.coerce.date().nullable(),
   "warning": zod.string().nullish().describe('Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.')
 })
+
+
+/**
+ * Creates a tutor–student relationship for a program and subject. This is the People assign/unassign source of truth. Portal preview reflects the live link and cannot create or remove it. Does not send invitations or change deny-by-default portal access.
+ * @summary Assign a tutor to a student
+ */
+
+
+
+export const createAdminTutorAssignmentBodySubjectMax = 40;
+
+
+
+export const CreateAdminTutorAssignmentBody = zod.object({
+  "tutorUserId": zod.string().min(1),
+  "studentUserId": zod.string().min(1),
+  "courseId": zod.string().min(1),
+  "subject": zod.string().min(1).max(createAdminTutorAssignmentBodySubjectMax)
+})
+
+export const CreateAdminTutorAssignmentResponse = zod.object({
+  "id": zod.string(),
+  "tutorUserId": zod.string(),
+  "studentUserId": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "subject": zod.string()
+})
+
+
+/**
+ * @summary Remove a tutor–student assignment
+ */
+export const DeleteAdminTutorAssignmentParams = zod.object({
+  "assignmentId": zod.coerce.string()
+})
+
+export const DeleteAdminTutorAssignmentResponse = zod.void()
 
 
 /**

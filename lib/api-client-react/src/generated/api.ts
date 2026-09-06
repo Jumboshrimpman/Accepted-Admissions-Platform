@@ -43,6 +43,8 @@ import type {
   AdminSession,
   AdminSessionInput,
   AdminSessionUpdate,
+  AdminTutorAssignment,
+  AdminTutorAssignmentInput,
   AssignmentDetail,
   AssignmentQuestion,
   AssignmentQuestionUpdate,
@@ -900,6 +902,149 @@ export const useUpdateAdminAccessGrant = <TError = ErrorType<BadRequestResponse 
         TContext
       > => {
       return useMutation(getUpdateAdminAccessGrantMutationOptions(options));
+    }
+
+export const getCreateAdminTutorAssignmentUrl = () => {
+
+
+
+
+  return `/api/admin/tutor-assignments`
+}
+
+/**
+ * Creates a tutor–student relationship for a program and subject. This is the People assign/unassign source of truth. Portal preview reflects the live link and cannot create or remove it. Does not send invitations or change deny-by-default portal access.
+ * @summary Assign a tutor to a student
+ */
+export const createAdminTutorAssignment = async (adminTutorAssignmentInput: AdminTutorAssignmentInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminTutorAssignment> => {
+
+  return customFetch<AdminTutorAssignment>(getCreateAdminTutorAssignmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminTutorAssignmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminTutorAssignmentMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminTutorAssignment>>, TError,{data: BodyType<AdminTutorAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminTutorAssignment>>, TError,{data: BodyType<AdminTutorAssignmentInput>}, TContext> => {
+
+const mutationKey = ['createAdminTutorAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminTutorAssignment>>, {data: BodyType<AdminTutorAssignmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminTutorAssignment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminTutorAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminTutorAssignment>>>
+    export type CreateAdminTutorAssignmentMutationBody = BodyType<AdminTutorAssignmentInput>
+    export type CreateAdminTutorAssignmentMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
+
+    /**
+ * @summary Assign a tutor to a student
+ */
+export const useCreateAdminTutorAssignment = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminTutorAssignment>>, TError,{data: BodyType<AdminTutorAssignmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminTutorAssignment>>,
+        TError,
+        {data: BodyType<AdminTutorAssignmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminTutorAssignmentMutationOptions(options));
+    }
+
+export const getDeleteAdminTutorAssignmentUrl = (assignmentId: string,) => {
+
+
+
+
+  return `/api/admin/tutor-assignments/${assignmentId}`
+}
+
+/**
+ * @summary Remove a tutor–student assignment
+ */
+export const deleteAdminTutorAssignment = async (assignmentId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteAdminTutorAssignmentUrl(assignmentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAdminTutorAssignmentMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTutorAssignment>>, TError,{assignmentId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTutorAssignment>>, TError,{assignmentId: string}, TContext> => {
+
+const mutationKey = ['deleteAdminTutorAssignment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminTutorAssignment>>, {assignmentId: string}> = (props) => {
+          const {assignmentId} = props ?? {};
+
+          return  deleteAdminTutorAssignment(assignmentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAdminTutorAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminTutorAssignment>>>
+
+    export type DeleteAdminTutorAssignmentMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+    /**
+ * @summary Remove a tutor–student assignment
+ */
+export const useDeleteAdminTutorAssignment = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminTutorAssignment>>, TError,{assignmentId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAdminTutorAssignment>>,
+        TError,
+        {assignmentId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteAdminTutorAssignmentMutationOptions(options));
     }
 
 export const getGetAdminClientDashboardUrl = (clientId: string,) => {

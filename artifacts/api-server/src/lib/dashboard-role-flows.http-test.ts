@@ -217,15 +217,13 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     const courseTitle = curriculum.body.programs.find(
       (course: { id: string }) => course.id === fixture.courseId,
     ).title;
-    assert.deepEqual(satTutor.assignedStudents, [
-      {
-        id: fixture.student.id,
-        name: fixture.student.displayName,
-        courseId: fixture.courseId,
-        courseTitle,
-        subject: "SAT",
-      },
-    ]);
+    assert.equal(satTutor.assignedStudents.length, 1);
+    assert.equal(satTutor.assignedStudents[0].id, fixture.student.id);
+    assert.equal(satTutor.assignedStudents[0].name, fixture.student.displayName);
+    assert.equal(satTutor.assignedStudents[0].courseId, fixture.courseId);
+    assert.equal(satTutor.assignedStudents[0].courseTitle, courseTitle);
+    assert.equal(satTutor.assignedStudents[0].subject, "SAT");
+    assert.equal(typeof satTutor.assignedStudents[0].assignmentId, "string");
   } finally {
     await studentServer?.close();
     await administratorServer?.close();

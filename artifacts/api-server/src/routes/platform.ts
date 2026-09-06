@@ -90,7 +90,10 @@ import {
 } from "../lib/dashboard-data";
 import {
   courseForTutorAssignments,
+  createTutorStudentAssignment,
+  deleteTutorStudentAssignment,
   reconcileTutorAssignments,
+  TutorAssignmentError,
 } from "../lib/tutor-assignment-reconciliation";
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
@@ -131,6 +134,9 @@ import {
   CreateAdminAssignmentResponse,
   CreateAdminAccessGrantBody,
   CreateAdminAccessGrantResponse,
+  CreateAdminTutorAssignmentBody,
+  CreateAdminTutorAssignmentResponse,
+  DeleteAdminTutorAssignmentParams,
   CreateAdminLibraryAssetBody,
   CreateAdminLibraryAssetResponse,
   CreateAdminSessionBody,
@@ -7226,6 +7232,64 @@ router.patch(
   },
 );
 
+router.post(
+  "/admin/tutor-assignments",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateAdminTutorAssignmentBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, "Invalid tutor assignment.");
+      return;
+    }
+    try {
+      const assignment = await createTutorStudentAssignment(body.data);
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "tutor_assignment.created",
+        entityType: "tutor_assignment",
+        entityId: assignment.id,
+        metadata: {
+          tutorUserId: assignment.tutorUserId,
+          studentUserId: assignment.studentUserId,
+          courseId: assignment.courseId,
+          subject: assignment.subject,
+        },
+      });
+      res.status(201).json(CreateAdminTutorAssignmentResponse.parse(assignment));
+    } catch (error) {
+      if (error instanceof TutorAssignmentError) {
+        res.status(error.status).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
+  },
+);
+
+router.delete(
+  "/admin/tutor-assignments/:assignmentId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = DeleteAdminTutorAssignmentParams.safeParse(req.params);
+    if (!params.success) {
+      adminMutationError(res, "Invalid tutor assignment.");
+      return;
+    }
+    const removed = await deleteTutorStudentAssignment(params.data.assignmentId);
+    if (!removed) {
+      res.status(404).json({ error: "Tutor assignment not found" });
+      return;
+    }
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "tutor_assignment.removed",
+      entityType: "tutor_assignment",
+      entityId: params.data.assignmentId,
+    });
+    res.status(204).send();
+  },
+);
+
 router.get(
   "/admin/curriculum",
   ensureRole(["administrator"]),
@@ -7299,6 +7363,7 @@ router.get(
           .orderBy(asc(usersTable.displayName)),
         db
           .select({
+            id: tutorAssignmentsTable.id,
             courseId: tutorAssignmentsTable.courseId,
             courseTitle: coursesTable.title,
             tutorUserId: tutorAssignmentsTable.tutorUserId,
@@ -7326,11 +7391,25 @@ router.get(
     const assignments = await Promise.all(allAssignments.map(({ assignment }) => adminAssignmentShape(assignment)));
     const assignedStudentsByTutor = new Map<
       string,
-      Array<{ id: string; name: string; courseId: string; courseTitle: string; subject: string }>
+      Array<{
+        id: string;
+        assignmentId: string;
+        name: string;
+        courseId: string;
+        courseTitle: string;
+        subject: string;
+      }>
     >();
     const assignedTutorsByClient = new Map<
       string,
-      Array<{ id: string; name: string; courseId: string; courseTitle: string; subject: string }>
+      Array<{
+        id: string;
+        assignmentId: string;
+        name: string;
+        courseId: string;
+        courseTitle: string;
+        subject: string;
+      }>
     >();
     for (const relationship of relationshipRows) {
       const tutor = tutorProfiles.find(
@@ -7342,6 +7421,7 @@ router.get(
       if (!tutor || !student) continue;
       const studentSummary = {
         id: student.id,
+        assignmentId: relationship.id,
         name: student.name,
         courseId: relationship.courseId,
         courseTitle: relationship.courseTitle,
@@ -7349,6 +7429,7 @@ router.get(
       };
       const tutorSummary = {
         id: tutor.id,
+        assignmentId: relationship.id,
         name: tutor.name,
         courseId: relationship.courseId,
         courseTitle: relationship.courseTitle,

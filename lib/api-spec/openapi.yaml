@@ -211,6 +211,45 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /admin/tutor-assignments:
+    post:
+      operationId: createAdminTutorAssignment
+      tags: [administration]
+      summary: Assign a tutor to a student
+      description: >
+        Creates a tutor–student relationship for a program and subject.
+        This is the People assign/unassign source of truth. Portal preview
+        reflects the live link and cannot create or remove it.
+        Does not send invitations or change deny-by-default portal access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminTutorAssignmentInput" }
+      responses:
+        "201":
+          description: Created tutor–student assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTutorAssignment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /admin/tutor-assignments/{assignmentId}:
+    delete:
+      operationId: deleteAdminTutorAssignment
+      tags: [administration]
+      summary: Remove a tutor–student assignment
+      parameters:
+        - $ref: "#/components/parameters/TutorAssignmentId"
+      responses:
+        "204":
+          description: Assignment removed
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/clients/{clientId}/dashboard:
     get:
       operationId: getAdminClientDashboard
@@ -1737,6 +1776,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    TutorAssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     Unauthorized:
       description: Authentication required
@@ -2582,10 +2626,31 @@ components:
                 items: { $ref: "#/components/schemas/AdminRelationship" }
     AdminRelationship:
       type: object
-      required: [id, name, courseId, courseTitle, subject]
+      required: [id, assignmentId, name, courseId, courseTitle, subject]
       properties:
         id: { type: string }
+        assignmentId: { type: string }
         name: { type: string }
+        courseId: { type: string }
+        courseTitle: { type: string }
+        subject: { type: string }
+    AdminTutorAssignmentInput:
+      type: object
+      required: [tutorUserId, studentUserId, courseId, subject]
+      additionalProperties: false
+      properties:
+        tutorUserId: { type: string, minLength: 1 }
+        studentUserId: { type: string, minLength: 1 }
+        courseId: { type: string, minLength: 1 }
+        subject: { type: string, minLength: 1, maxLength: 40 }
+    AdminTutorAssignment:
+      type: object
+      required: [id, tutorUserId, studentUserId, courseId, courseTitle, subject]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        tutorUserId: { type: string }
+        studentUserId: { type: string }
         courseId: { type: string }
         courseTitle: { type: string }
         subject: { type: string }
