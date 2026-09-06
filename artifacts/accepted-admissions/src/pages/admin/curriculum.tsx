@@ -16,9 +16,11 @@ import {
   useUpdateAdminLibraryAsset,
   useUpdateAdminProgram,
   useUpdateAdminSession,
-  useUpdateCurriculumBlock,
   useAttachSessionLibraryAsset,
   useGetAssignment,
+  useGetAdaptiveCurriculum,
+  useUpdateAdminAssignment,
+  type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
 import type {
   AdminAccessGrant,
@@ -35,13 +37,16 @@ import type {
   CurriculumLibraryAssetInput,
   ProvisionableRoleCategory,
 } from "@workspace/api-client-react";
-import { AlertTriangle, Archive, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, FileText, GraduationCap, Library, Mail, Plus, Save, Sparkles, UserPlus, Users, Video } from "lucide-react";
-import { GenerateDraftsCard, QuestionReviewCard } from "@/components/question-bank-authoring";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Edit3, ExternalLink, Eye, GraduationCap, Library, Mail, Plus, Save, Sparkles, UserPlus, Users, Video } from "lucide-react";
+import { GenerateDraftsCard } from "@/components/question-bank-authoring";
+import { MissedOnPreworkList } from "@/components/missed-prework-list";
 import {
   BANK_QUIZ_EMPTY_STATE,
   assignableBankQuizzes,
   bankQuizOptionLabel,
+  sessionPreworkQuizzes,
 } from "@/lib/assignable-bank-quizzes";
+import { questionStatusHelp, questionStatusLabel } from "@/lib/question-status";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { previewableStudents } from "@/lib/previewable-students";
 import { TEMPLATE_DRAFTS_BANK_HINT } from "@/lib/template-drafts";
@@ -66,7 +71,6 @@ type Section = "roadmap" | "people" | "programs" | "curriculum" | "sessions";
 const sectionLinks: Array<{ id: Section; label: string; detail: string; icon: typeof Users }> = [
   { id: "people", label: "People", detail: "Provision and preview", icon: Users },
   { id: "sessions", label: "Sessions", detail: "Assign pre-work, Meet", icon: CalendarDays },
-  { id: "programs", label: "Programs", detail: "Titles and Meet links", icon: GraduationCap },
   { id: "curriculum", label: "Quizzes", detail: "Questions, assign, results", icon: ClipboardList },
 ];
 
@@ -93,12 +97,13 @@ function statusVariant(status: string): "default" | "secondary" | "outline" {
 export default function AdminCurriculum() {
   const [location, setLocation] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] ?? "");
-  const initialSection = (params.get("section") as Section | null) ?? "curriculum";
-  const [section, setSection] = useState<Section>(
-    initialSection === "roadmap" || sectionLinks.some((item) => item.id === initialSection)
-      ? initialSection
-      : "curriculum",
-  );
+  const requestedSection = (params.get("section") as Section | null) ?? "curriculum";
+  const section: Section =
+    requestedSection === "roadmap" ||
+    requestedSection === "programs" ||
+    sectionLinks.some((item) => item.id === requestedSection)
+      ? requestedSection
+      : "curriculum";
   const [search, setSearch] = useState("");
   const curriculum = useGetAdminCurriculum();
   const overview = useGetAdminOverview();
@@ -110,7 +115,6 @@ export default function AdminCurriculum() {
   });
 
   const selectSection = (next: Section) => {
-    setSection(next);
     setLocation(`/admin/curriculum?section=${next}`);
   };
 
@@ -151,7 +155,7 @@ export default function AdminCurriculum() {
         <Input className="w-full sm:w-72" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this section…" aria-label="Search operations" />
       </div>
 
-      <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-4" aria-label="Admin operation sections">
+      <nav className="grid grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-3" aria-label="Admin operation sections">
         {sectionLinks.map(({ id, label, detail, icon: Icon }) => (
           <Button key={id} variant={section === id ? "default" : "ghost"} className="h-auto flex-col items-start justify-start gap-1 px-3 py-2 text-left" onClick={() => selectSection(id)}>
             <span className="flex items-center gap-2 font-medium"><Icon className="h-4 w-4" /> {label}</span>
@@ -172,7 +176,14 @@ export default function AdminCurriculum() {
       {section === "people" && <PeopleSection data={data} search={search} previewStudents={previewStudents} />}
       {section === "programs" && <ProgramsSection programs={data.programs.filter((item) => filtered(item.title) || filtered(item.subject) || filtered(item.term))} onSaved={refresh} />}
       {section === "curriculum" && <CurriculumSection data={data} search={search} onChanged={refresh} />}
-      {section === "sessions" && <SessionsSection data={data} search={search} onChanged={refresh} />}
+      {section === "sessions" && (
+        <SessionsSection
+          data={data}
+          search={search}
+          onChanged={refresh}
+          overviewUsers={overview.data?.users ?? []}
+        />
+      )}
     </div>
   );
 }
@@ -189,7 +200,7 @@ function ClientPreviewCard({
           <Eye className="h-5 w-5 text-primary" /> Client preview
         </CardTitle>
         <CardDescription>
-          Open a student portal from here even if quizzes or sessions fail to load. Financial details stay in Finance.
+          Open a student portal from here even if quizzes or sessions fail to load.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -669,13 +680,19 @@ function ProgramsSection({ programs, onSaved }: { programs: AdminProgram[]; onSa
 }
 
 function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum; search: string; onChanged: () => void }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const requestedTab = new URLSearchParams(location.split("?")[1] ?? "").get("tab");
-  const [tab, setTab] = useState(
-    requestedTab === "questions" || requestedTab === "library" || requestedTab === "submissions" || requestedTab === "materials"
+  const tab =
+    requestedTab === "questions" || requestedTab === "library" || requestedTab === "submissions"
       ? requestedTab
-      : "quizzes",
-  );
+      : "quizzes";
+  const setTab = (next: string) => {
+    const params = new URLSearchParams(location.split("?")[1] ?? "");
+    params.set("section", "curriculum");
+    params.set("tab", next);
+    if (next !== "quizzes") params.delete("quiz");
+    setLocation(`/admin/curriculum?${params.toString()}`);
+  };
   const term = search.trim().toLowerCase();
   const assignments = data.assignments.filter((item) => !term || `${item.title} ${item.programTitle} ${item.subject}`.toLowerCase().includes(term));
   const submissions = data.submissions.filter((item) => !term || `${item.assignmentTitle} ${item.studentName}`.toLowerCase().includes(term));
@@ -697,13 +714,11 @@ function CurriculumSection({ data, search, onChanged }: { data: AdminCurriculum;
       <TabsTrigger value="questions"><Sparkles className="mr-2 h-4 w-4" /> Questions</TabsTrigger>
       <TabsTrigger value="library"><Library className="mr-2 h-4 w-4" /> Resources</TabsTrigger>
       <TabsTrigger value="submissions"><CheckCircle2 className="mr-2 h-4 w-4" /> Submissions</TabsTrigger>
-      <TabsTrigger value="materials"><FileText className="mr-2 h-4 w-4" /> Session blocks</TabsTrigger>
     </TabsList>
     <TabsContent value="quizzes"><QuizWorkspace data={data} assignments={assignments} submissions={submissions} onChanged={onChanged} /></TabsContent>
     <TabsContent value="questions"><QuestionBankManager data={data} onChanged={onChanged} /></TabsContent>
     <TabsContent value="library"><LibraryManager assets={data.libraryAssets} sessions={data.sessions} search={search} onChanged={onChanged} /></TabsContent>
     <TabsContent value="submissions"><Card><CardHeader><CardTitle>Student submissions</CardTitle><CardDescription>Right/wrong results stay available for session review. Open an attempt from Sessions or the tutor session page.</CardDescription></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-3">Student</th><th className="p-3">Quiz</th><th className="p-3">Score</th><th className="p-3">Review</th><th className="p-3">Submitted</th></tr></thead><tbody>{submissions.map((item) => <tr key={item.attemptId} className="border-b"><td className="p-3 font-medium">{item.studentName}</td><td className="p-3">{item.assignmentTitle}</td><td className="p-3">{item.score}% <span className="text-muted-foreground">· {item.mistakeCount} missed</span></td><td className="p-3"><Button asChild size="sm" variant="outline"><Link href={`/tutor/attempts/${item.attemptId}`}>Open review</Link></Button></td><td className="p-3 text-muted-foreground">{new Date(item.submittedAt).toLocaleDateString()}</td></tr>)}</tbody></table>{submissions.length === 0 && <Empty text="No matching submissions." />}</div></CardContent></Card></TabsContent>
-    <TabsContent value="materials"><MaterialsManager data={data} onChanged={onChanged} /></TabsContent>
   </Tabs>;
 }
 
@@ -717,79 +732,90 @@ function QuestionBankManager({ data, onChanged }: { data: AdminCurriculum; onCha
       queryKey: getListQuestionBankQueryKey(questionParams),
     },
   });
-  const quizzes = data.assignments.filter((item) => item.courseId === courseId && item.status !== "archived");
+  const bankQuizzes = data.assignments.filter(
+    (item) => item.courseId === courseId && item.sessionId == null && item.status !== "archived",
+  );
   const refreshQuestions = () => {
     queryClient.invalidateQueries({ queryKey: getListQuestionBankQueryKey(questionParams) });
     onChanged();
   };
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold">Question bank</h3>
-          <p className="text-sm text-muted-foreground">
-            {TEMPLATE_DRAFTS_BANK_HINT}
+          <p className="text-sm text-muted-foreground">{TEMPLATE_DRAFTS_BANK_HINT}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Draft means not on a quiz yet. Ready for quiz means it can sit on one quiz. Adding a question to a quiz marks it ready.
           </p>
         </div>
-        <Field label="Program">
-          <select
-            aria-label="Question bank program"
-            className="h-10 min-w-56 rounded-md border bg-background px-3 text-sm"
-            value={courseId}
-            onChange={(event) => setCourseId(event.target.value)}
-          >
-            {data.programs.map((program) => (
-              <option key={program.id} value={program.id}>{program.title}</option>
-            ))}
-          </select>
-        </Field>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Program">
+            <select
+              aria-label="Question bank program"
+              className="h-10 min-w-56 rounded-md border bg-background px-3 text-sm"
+              value={courseId}
+              onChange={(event) => setCourseId(event.target.value)}
+            >
+              {data.programs.map((program) => (
+                <option key={program.id} value={program.id}>{program.title}</option>
+              ))}
+            </select>
+          </Field>
+          {bankQuizzes[0] ? (
+            <Button asChild variant="outline">
+              <Link href={`/admin/curriculum?section=curriculum&tab=quizzes&quiz=${bankQuizzes[0].id}`}>
+                Open a quiz to generate
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
-      {data.questionStatus.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {data.questionStatus.map((item) => (
-            <Card key={item.subject}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">{item.subject}</CardTitle>
-                <CardDescription>{item.total} bank items</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Badge variant="secondary">{item.approved} approved</Badge>
-                <Badge variant="outline">{item.draft} draft</Badge>
-                <Badge variant="outline">{item.rejected} rejected</Badge>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-      <GenerateDraftsCard courseId={courseId} onChanged={refreshQuestions} />
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Review queue</h3>
-          <Badge variant="secondary">{questions.length} items</Badge>
-        </div>
-        {isLoading ? <p className="text-sm text-muted-foreground">Loading questions…</p> : null}
-        {questions.map((question) => (
-          <QuestionReviewCard
-            key={question.id}
-            question={question}
-            assignments={quizzes.map((item) => ({ id: item.id, title: item.title }))}
-            onChanged={refreshQuestions}
-          />
-        ))}
-        {!isLoading && questions.length === 0 && (
-          <Empty text="No questions in this program yet. Import a source and create drafts, or add items when the bank is seeded." />
-        )}
+      <GenerateDraftsCard courseId={courseId} compact onChanged={refreshQuestions} />
+      <div className="overflow-x-auto rounded-xl border">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="border-b text-xs uppercase text-muted-foreground">
+            <tr>
+              <th className="p-3">Skill</th>
+              <th className="p-3">Prompt</th>
+              <th className="p-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {questions.map((question) => (
+              <tr key={question.id} className="border-b" data-testid={`question-row-${question.id}`}>
+                <td className="p-3 font-medium">{question.skill}</td>
+                <td className="p-3 text-muted-foreground">{question.prompt.slice(0, 120)}</td>
+                <td className="p-3">
+                  <Badge variant={question.reviewStatus === "approved" || question.reviewStatus === "reviewed" ? "default" : "outline"}>
+                    {questionStatusLabel(question.reviewStatus)}
+                  </Badge>
+                  <p className="mt-1 text-xs text-muted-foreground">{questionStatusHelp(question.reviewStatus)}</p>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {isLoading ? <p className="p-3 text-sm text-muted-foreground">Loading questions…</p> : null}
+        {!isLoading && questions.length === 0 ? (
+          <Empty text="No questions yet. Open a quiz and generate drafts there." />
+        ) : null}
       </div>
     </div>
   );
 }
 
-function MaterialsManager({ data, onChanged }: { data: AdminCurriculum; onChanged: () => void }) {
-  const update = useUpdateCurriculumBlock();
-  return <Card><CardHeader><CardTitle>Session materials</CardTitle><CardDescription>Review each block's publication state and audience. Changes are audited and server-authorized.</CardDescription></CardHeader><CardContent className="space-y-3">{data.blocks.map((block) => <div key={block.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap gap-2"><Badge variant="secondary">{block.kind}</Badge><Badge variant="outline">{block.visibility}</Badge><Badge variant={statusVariant(block.status)}>{block.status}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{String(block.config.text ?? block.config.title ?? "Configured curriculum material")} · session {block.sessionId.slice(0, 8)}</p></div><div className="flex flex-wrap items-center gap-2"><select aria-label={`Visibility for ${block.kind}`} className="h-9 rounded-md border bg-background px-2 text-xs" value={block.visibility} disabled={update.isPending} onChange={(event) => update.mutate({ blockId: block.id, data: { visibility: event.target.value as "student" | "tutor" | "both" } }, { onSuccess: onChanged })}><option value="student">Student</option><option value="tutor">Tutor</option><option value="both">Both</option></select><Button size="sm" variant="outline" disabled={update.isPending} onClick={() => update.mutate({ blockId: block.id, data: { status: block.status === "published" ? "draft" : "published" } }, { onSuccess: onChanged })}>{block.status === "published" ? "Unpublish" : "Publish"}</Button><Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={update.isPending} onClick={() => update.mutate({ blockId: block.id, data: { status: block.status === "archived" ? "draft" : "archived" } }, { onSuccess: onChanged })}><Archive className="mr-1 h-3 w-3" /> {block.status === "archived" ? "Restore" : "Archive"}</Button></div></div>)}{data.blocks.length === 0 && <Empty text="No session materials yet." />}</CardContent></Card>;
-}
-
-function SessionsSection({ data, search, onChanged }: { data: AdminCurriculum; search: string; onChanged: () => void }) {
+function SessionsSection({
+  data,
+  search,
+  onChanged,
+  overviewUsers,
+}: {
+  data: AdminCurriculum;
+  search: string;
+  onChanged: () => void;
+  overviewUsers: AdminOverviewUsersItem[];
+}) {
   const create = useCreateAdminSession();
   const update = useUpdateAdminSession();
   const [editing, setEditing] = useState<string | null>(null);
@@ -808,10 +834,32 @@ function SessionsSection({ data, search, onChanged }: { data: AdminCurriculum; s
     return true;
   });
   const conflictCount = matched.filter((item) => item.conflict).length;
-  const selectedTutor = data.tutors.find((tutor) => tutor.id === draft.tutorUserId);
-  const calendarBlocked = Boolean(selectedTutor && selectedTutor.calendarStatus !== "connected");
-  const reconnectMailto = selectedTutor
-    ? `mailto:${selectedTutor.email}?subject=${encodeURIComponent("Reconnect Google Calendar before session assignment")}&body=${encodeURIComponent(`Please sign in to Accepted Admissions and reconnect Google Calendar from your tutor dashboard before this session is assigned.`)}`
+  const students = [
+    ...data.clients,
+    ...overviewUsers
+      .filter((user) => user.role === "student" && !data.clients.some((client) => client.id === user.id))
+      .map((user) => ({ id: user.id, name: user.displayName, email: user.email, assignedTutors: [] })),
+  ];
+  const tutors = [
+    ...data.tutors,
+    ...overviewUsers
+      .filter((user) => user.role === "tutor" && !data.tutors.some((tutor) => tutor.id === user.id))
+      .map((user) => ({
+        id: user.id,
+        name: user.displayName,
+        email: user.email,
+        subjects: [] as string[],
+        active: true,
+        calendarStatus: "unavailable" as const,
+        sessionCount: 0,
+        upcomingSessionCount: 0,
+        assignedStudents: [],
+      })),
+  ];
+  const selectedTutor = tutors.find((tutor) => tutor.id === draft.tutorUserId);
+  const calendarDisconnected = Boolean(selectedTutor && selectedTutor.calendarStatus !== "connected");
+  const reconnectMailto = selectedTutor && "email" in selectedTutor && selectedTutor.email
+    ? `mailto:${selectedTutor.email}?subject=${encodeURIComponent("Reconnect Google Calendar (optional)")}&body=${encodeURIComponent("You can reconnect Google Calendar from the tutor dashboard. Scheduling assign does not require calendar or full portal provisioning.")}`
     : "";
   const reset = () => setDraft({ courseId: data.programs[0]?.id ?? "", dateTime: new Date().toISOString(), timezone: "America/New_York", subject: data.programs[0]?.subject ?? "", durationMinutes: 60, status: "draft", bookingStatus: "confirmed", clientUserId: data.clients[0]?.id ?? null, tutorUserId: data.tutors[0]?.id ?? null });
   const save = () => {
@@ -819,7 +867,7 @@ function SessionsSection({ data, search, onChanged }: { data: AdminCurriculum; s
     if (editing) update.mutate({ sessionId: editing, data: payload as AdminSessionUpdate }, { onSuccess: () => { setEditing(null); setMessage("Session saved."); onChanged(); }, onError: (error) => setMessage(errorText(error)) });
     else create.mutate({ data: payload }, { onSuccess: () => { setShowCreate(false); reset(); setMessage("Session created."); onChanged(); }, onError: (error) => setMessage(errorText(error) + " Check the conflict card before trying again.") });
   };
-  const form = <Card className="border-primary/30"><CardContent className="grid gap-4 p-5"><div className="grid gap-3 md:grid-cols-3"><Field label="Program"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.courseId} onChange={(event) => setDraft({ ...draft, courseId: event.target.value })}>{data.programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}</select></Field><Field label="Student"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.clientUserId ?? ""} onChange={(event) => setDraft({ ...draft, clientUserId: event.target.value || null })}><option value="">Unassigned</option>{data.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></Field><Field label="Tutor"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.tutorUserId ?? ""} onChange={(event) => setDraft({ ...draft, tutorUserId: event.target.value || null })}><option value="">Unassigned</option>{data.tutors.map((tutor) => <option key={tutor.id} value={tutor.id}>{tutor.name} — Calendar {tutor.calendarStatus}</option>)}</select></Field></div>{selectedTutor && <div className={`rounded-xl border p-3 text-sm ${calendarBlocked ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-300 bg-emerald-50 text-emerald-950"}`} role={calendarBlocked ? "alert" : "status"}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Google Calendar: {selectedTutor.calendarStatus}</p><p className="mt-1">{calendarBlocked ? selectedTutor.calendarStatus === "unavailable" ? "Google Calendar is currently unavailable. The tutor must reconnect Google Calendar from their tutor dashboard before this session can be assigned." : "This tutor must reconnect Google Calendar from their tutor dashboard before this session can be assigned." : "The tutor calendar is connected and will be checked again before assignment."}</p></div>{calendarBlocked && <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-400 bg-white"><a href={reconnectMailto}><Mail className="mr-2 h-4 w-4" />Email tutor to reconnect</a></Button>}</div></div>}<div className="grid gap-3 md:grid-cols-3"><Field label="Subject"><Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></Field><Field label="Start time"><Input type="datetime-local" value={dateInput(draft.dateTime)} onChange={(event) => setDraft({ ...draft, dateTime: new Date(event.target.value).toISOString() })} /></Field><Field label="Duration (minutes)"><Input type="number" min="15" max="480" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: Number(event.target.value) })} /></Field></div><div className="grid gap-3 md:grid-cols-3"><Field label="Timezone"><Input value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /></Field><Field label="Session state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.status ?? "draft"} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminSessionInput["status"] })}><option value="draft">Draft</option><option value="published">Published</option><option value="completed">Completed</option><option value="archived">Archived</option></select></Field><Field label="Booking state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.bookingStatus ?? "confirmed"} onChange={(event) => setDraft({ ...draft, bookingStatus: event.target.value as AdminSessionInput["bookingStatus"] })}><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="rescheduled">Rescheduled</option><option value="cancelled">Cancelled</option></select></Field></div><p className="text-sm text-muted-foreground">The appointment name is generated from the assigned student, subject, and tutor.</p><div className="flex gap-2"><Button onClick={save} disabled={create.isPending || update.isPending || calendarBlocked}>{editing ? "Save session" : "Create session"}</Button><Button variant="ghost" onClick={() => { setEditing(null); setShowCreate(false); }}>Cancel</Button></div></CardContent></Card>;
+  const form = <Card className="border-primary/30"><CardContent className="grid gap-4 p-5"><div className="grid gap-3 md:grid-cols-3"><Field label="Program"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.courseId} onChange={(event) => setDraft({ ...draft, courseId: event.target.value })}>{data.programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}</select></Field><Field label="Student"><select aria-label="Session student" className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.clientUserId ?? ""} onChange={(event) => setDraft({ ...draft, clientUserId: event.target.value || null })}><option value="">Unassigned</option>{students.map((client) => <option key={client.id} value={client.id}>{client.name}{client.email ? ` · ${client.email}` : ""}</option>)}</select></Field><Field label="Tutor"><select aria-label="Session tutor" className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.tutorUserId ?? ""} onChange={(event) => setDraft({ ...draft, tutorUserId: event.target.value || null })}><option value="">Unassigned</option>{tutors.map((tutor) => <option key={tutor.id} value={tutor.id}>{tutor.name}{tutor.email ? ` · ${tutor.email}` : ""} — Calendar {tutor.calendarStatus}</option>)}</select></Field></div>{selectedTutor && <div className={`rounded-xl border p-3 text-sm ${calendarDisconnected ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-300 bg-emerald-50 text-emerald-950"}`} role="status"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Google Calendar: {selectedTutor.calendarStatus}</p><p className="mt-1">{calendarDisconnected ? "Calendar is not connected. You can still assign this student and tutor for scheduling. This does not grant curriculum-bank admin or portal access." : "The tutor calendar is connected. Scheduling assign still does not grant curriculum-bank admin."}</p></div>{calendarDisconnected && reconnectMailto ? <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-400 bg-white"><a href={reconnectMailto}><Mail className="mr-2 h-4 w-4" />Email tutor to reconnect</a></Button> : null}</div></div>}<div className="grid gap-3 md:grid-cols-3"><Field label="Subject"><Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></Field><Field label="Start time"><Input type="datetime-local" value={dateInput(draft.dateTime)} onChange={(event) => setDraft({ ...draft, dateTime: new Date(event.target.value).toISOString() })} /></Field><Field label="Duration (minutes)"><Input type="number" min="15" max="480" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: Number(event.target.value) })} /></Field></div><div className="grid gap-3 md:grid-cols-3"><Field label="Timezone"><Input value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /></Field><Field label="Session state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.status ?? "draft"} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminSessionInput["status"] })}><option value="draft">Draft</option><option value="published">Published</option><option value="completed">Completed</option><option value="archived">Archived</option></select></Field><Field label="Booking state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.bookingStatus ?? "confirmed"} onChange={(event) => setDraft({ ...draft, bookingStatus: event.target.value as AdminSessionInput["bookingStatus"] })}><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="rescheduled">Rescheduled</option><option value="cancelled">Cancelled</option></select></Field></div><p className="text-sm text-muted-foreground">The appointment name is generated from the assigned student, subject, and tutor. Scheduling assign is allowed even if the person is not fully provisioned for the portal.</p><div className="flex gap-2"><Button onClick={save} disabled={create.isPending || update.isPending}>{editing ? "Save session" : "Create session"}</Button><Button variant="ghost" onClick={() => { setEditing(null); setShowCreate(false); }}>Cancel</Button></div></CardContent></Card>;
   return (
     <div className="space-y-4">
       {message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}
@@ -891,9 +939,7 @@ function SessionCard({
   onChanged: () => void;
   onEdit: () => void;
 }) {
-  const prework = assignments.filter(
-    (item) => item.sessionId === session.id && item.deliveryPhase === "before_session",
-  );
+  const prework = sessionPreworkQuizzes(assignments, session);
   const reviews = submissions.filter((item) => prework.some((quiz) => quiz.id === item.assignmentId));
   return (
     <Card className={session.conflict ? "border-destructive/50 bg-destructive/5" : ""}>
@@ -980,9 +1026,11 @@ function SessionCard({
           <AssignPreworkControl
             session={session}
             assignments={assignments}
+            existing={prework}
             onChanged={onChanged}
           />
         </div>
+        <SessionMissedPrework sessionId={session.id} reviewHref={reviews[0] ? `/tutor/attempts/${reviews[0].attemptId}` : null} />
         <details className="rounded-lg border bg-muted/20 px-3 py-2">
           <summary className="cursor-pointer text-sm font-medium">Attach library material</summary>
           <AttachLibraryControl sessionId={session.id} assets={libraryAssets} onChanged={onChanged} />
@@ -1015,23 +1063,79 @@ function PreworkQuestionPrompts({ assignmentId }: { assignmentId: string }) {
   );
 }
 
+function SessionMissedPrework({
+  sessionId,
+  reviewHref,
+}: {
+  sessionId: string;
+  reviewHref: string | null;
+}) {
+  const { data: adaptive } = useGetAdaptiveCurriculum(sessionId);
+  const mistakes = (adaptive?.mistakes ?? []).map((item) => ({
+    skill: item.skill,
+    prompt: "prompt" in item ? String(item.prompt ?? "") : "",
+  }));
+  return <MissedOnPreworkList mistakes={mistakes} reviewHref={reviewHref} />;
+}
+
 function AssignPreworkControl({
   session,
   assignments,
+  existing,
   onChanged,
 }: {
   session: AdminSession;
   assignments: AdminAssignment[];
+  existing: AdminAssignment[];
   onChanged: () => void;
 }) {
   const cloneAssignment = useCloneAdminAssignmentToSession();
-  const assignable = assignableBankQuizzes(assignments, session);
+  const updateAssignment = useUpdateAdminAssignment();
+  const replacing = existing.length > 0;
+  const assignable = assignableBankQuizzes(assignments, session, {
+    includeAssignedTitles: replacing,
+  });
   const [assignmentId, setAssignmentId] = useState(assignable[0]?.id ?? "");
   const [message, setMessage] = useState("");
   const selectedId = assignable.some((item) => item.id === assignmentId)
     ? assignmentId
     : (assignable[0]?.id ?? "");
-  if (assignable.length === 0) {
+  const archiveExisting = (then?: () => void) => {
+    const next = (index: number) => {
+      if (index >= existing.length) {
+        then?.();
+        return;
+      }
+      updateAssignment.mutate(
+        { assignmentId: existing[index]!.id, data: { status: "archived" } },
+        {
+          onSuccess: () => next(index + 1),
+          onError: (error) => setMessage(errorText(error)),
+        },
+      );
+    };
+    next(0);
+  };
+  const cloneSelected = () => {
+    cloneAssignment.mutate(
+      {
+        assignmentId: selectedId,
+        sessionId: session.id,
+      },
+      {
+        onSuccess: () => {
+          setMessage(
+            replacing
+              ? "Replaced pre-work. The previous session copy was archived; the bank quiz is unchanged."
+              : "Cloned as pre-session homework. The original bank quiz is unchanged.",
+          );
+          onChanged();
+        },
+        onError: (error) => setMessage(errorText(error)),
+      },
+    );
+  };
+  if (assignable.length === 0 && existing.length === 0) {
     return (
       <p className="mt-3 text-xs text-muted-foreground">
         {BANK_QUIZ_EMPTY_STATE}
@@ -1040,40 +1144,46 @@ function AssignPreworkControl({
   }
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-      <select
-        aria-label="Quiz to assign as pre-session work"
-        className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
-        value={selectedId}
-        onChange={(event) => setAssignmentId(event.target.value)}
-      >
-        {assignable.map((item) => (
-          <option key={item.id} value={item.id}>
-            {bankQuizOptionLabel(item)}
-          </option>
-        ))}
-      </select>
-      <Button
-        size="sm"
-        data-testid={`assign-prework-${session.id}`}
-        disabled={cloneAssignment.isPending || !selectedId}
-        onClick={() =>
-          cloneAssignment.mutate(
-            {
-              assignmentId: selectedId,
-              sessionId: session.id,
-            },
-            {
-              onSuccess: () => {
-                setMessage("Cloned as pre-session homework. The original bank quiz is unchanged.");
-                onChanged();
-              },
-              onError: (error) => setMessage(errorText(error)),
-            },
-          )
-        }
-      >
-        Assign as pre-work
-      </Button>
+      {assignable.length > 0 ? (
+        <select
+          aria-label="Quiz to assign as pre-session work"
+          className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
+          value={selectedId}
+          onChange={(event) => setAssignmentId(event.target.value)}
+        >
+          {assignable.map((item) => (
+            <option key={item.id} value={item.id}>
+              {bankQuizOptionLabel(item)}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      {assignable.length > 0 ? (
+        <Button
+          size="sm"
+          data-testid={`assign-prework-${session.id}`}
+          disabled={cloneAssignment.isPending || updateAssignment.isPending || !selectedId}
+          onClick={() => (replacing ? archiveExisting(cloneSelected) : cloneSelected())}
+        >
+          {replacing ? "Replace pre-work" : "Assign as pre-work"}
+        </Button>
+      ) : null}
+      {existing.length > 0 ? (
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid={`remove-prework-${session.id}`}
+          disabled={cloneAssignment.isPending || updateAssignment.isPending}
+          onClick={() =>
+            archiveExisting(() => {
+              setMessage("Removed pre-work from this session. The session copy is archived.");
+              onChanged();
+            })
+          }
+        >
+          Remove pre-work
+        </Button>
+      ) : null}
       {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
     </div>
   );

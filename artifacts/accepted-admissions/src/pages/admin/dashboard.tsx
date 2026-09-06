@@ -12,7 +12,7 @@ import {
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, AlertTriangle, BookOpen, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users, WalletCards } from "lucide-react";
+import { ArrowRight, AlertTriangle, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,9 +30,7 @@ import {
 const operationLinks = [
   { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, then preview a client portal.", icon: Users },
   { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Assign bank quizzes as pre-work, Meet links, and conflicts.", icon: CalendarDays },
-  { href: "/admin/curriculum?section=programs", title: "Programs", detail: "Publish, archive, and update program details.", icon: BookOpen },
   { href: "/admin/curriculum?section=curriculum", title: "Quizzes", detail: "Open a quiz, add questions, assign it, review results.", icon: ClipboardList },
-  { href: "/admin/financials", title: "Finance", detail: "Invoices and credits.", icon: WalletCards },
   { href: "/admin/content", title: "Website content", detail: "Home, SAT, team, stories, and contact email.", icon: FileText },
 ];
 

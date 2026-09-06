@@ -36,22 +36,29 @@ export function bankQuizOptionLabel(
   return `${item.title} · ${item.questionCount} questions`;
 }
 
+export function sessionPreworkQuizzes<T extends BankQuizCandidate>(
+  assignments: T[],
+  session: { id: string },
+): T[] {
+  return assignments.filter(
+    (item) =>
+      item.sessionId === session.id &&
+      item.deliveryPhase === "before_session" &&
+      item.status !== "archived",
+  );
+}
+
 export function assignableBankQuizzes(
   assignments: BankQuizCandidate[],
   session: { id: string; courseId: string },
+  options: { includeAssignedTitles?: boolean } = {},
 ): BankQuizCandidate[] {
   // Title-only dedupe: AdminAssignment / clone payload has no sourceAssignmentId
   // (assignments table stores no clone lineage). Renaming a session copy lets the
-  // same bank quiz be offered again for that session.
+  // same bank quiz be offered again for that session. Replace-pre-work passes
+  // includeAssignedTitles after the previous session copy is archived.
   const alreadyAssignedTitles = new Set(
-    assignments
-      .filter(
-        (item) =>
-          item.sessionId === session.id &&
-          item.status !== "archived" &&
-          item.deliveryPhase === "before_session",
-      )
-      .map((item) => normalizeTitle(item.title)),
+    sessionPreworkQuizzes(assignments, session).map((item) => normalizeTitle(item.title)),
   );
   const seen = new Set<string>();
   const result: BankQuizCandidate[] = [];
@@ -60,7 +67,9 @@ export function assignableBankQuizzes(
     seen.add(item.id);
     if (item.courseId !== session.courseId) continue;
     if (!isReusableBankQuiz(item)) continue;
-    if (alreadyAssignedTitles.has(normalizeTitle(item.title))) continue;
+    if (!options.includeAssignedTitles && alreadyAssignedTitles.has(normalizeTitle(item.title))) {
+      continue;
+    }
     result.push(item);
   }
   return result;

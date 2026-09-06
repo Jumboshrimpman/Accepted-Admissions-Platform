@@ -13,6 +13,7 @@ import {
   sessionDateKey,
   sessionSubjectLabel,
 } from "@/lib/session-display";
+import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard } from "@/pages/portal/booking-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
 
@@ -111,9 +112,12 @@ export function ClientDashboardView({
     return () => window.clearTimeout(timer);
   }, [location, setLocation]);
 
-  const sessions = (dashboard.curriculumSessions?.length
-    ? dashboard.curriculumSessions
-    : fallbackCurriculumSessions(dashboard))
+  const sessions = sessionsForDashboardRole(
+    dashboard.curriculumSessions?.length
+      ? dashboard.curriculumSessions
+      : fallbackCurriculumSessions(dashboard),
+    dashboard.user,
+  )
     .filter((session) => FALL_DATES.includes(sessionDateKey(session) as (typeof FALL_DATES)[number]))
     .sort(
       (left, right) =>
@@ -214,10 +218,24 @@ export function ClientDashboardView({
                 <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
               </div>
             </div>
-            {!viewer && dashboard.credits.remainingHours <= 0 && (
-              <Button asChild className="mt-4 rounded-full">
-                <Link href="/sat">Purchase session credits</Link>
-              </Button>
+            {!viewer && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild className="rounded-full">
+                  <Link href="/sat" data-testid="link-portal-sat-pay">
+                    {dashboard.credits.remainingHours <= 0 ? "Purchase session credits" : "Buy more SAT credits"}
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() =>
+                    document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
+                >
+                  Book a SAT session
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

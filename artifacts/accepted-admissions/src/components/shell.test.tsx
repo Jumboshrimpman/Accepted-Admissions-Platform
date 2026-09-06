@@ -79,4 +79,28 @@ describe("Shell", () => {
     expect(screen.queryByText("Something went wrong")).toBeNull();
     expect(screen.getByRole("navigation", { name: "Portal navigation" })).toBeTruthy();
   });
+
+  it("hides Finance from admin nav and offers Book SAT from the client portal", () => {
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "administrator",
+      displayName: "Sama",
+      avatarUrl: null,
+    };
+    const { rerender } = renderShell();
+    expect(screen.queryByRole("link", { name: /Finance/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Curriculum" })).toBeTruthy();
+
+    currentUser.data = {
+      role: "student",
+      displayName: "Michelle",
+      avatarUrl: null,
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe("/sat");
+  });
 });

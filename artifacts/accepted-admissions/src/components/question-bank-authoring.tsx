@@ -11,6 +11,7 @@ import {
   useUpdateQuestionBankItem,
 } from "@workspace/api-client-react";
 import { CheckCircle2, Save, XCircle } from "lucide-react";
+import { questionStatusHelp, questionStatusLabel } from "@/lib/question-status";
 import {
   SOURCE_EXTRACTED_TEXT_REQUIRED_MESSAGE,
   validateExtractedSourceText,
@@ -82,13 +83,14 @@ export function QuestionReviewCard({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">{question.skill}</CardTitle>
-          <Badge variant={question.reviewStatus === "approved" ? "default" : "outline"}>
-            {question.reviewStatus}
+          <Badge variant={question.reviewStatus === "approved" || question.reviewStatus === "reviewed" ? "default" : "outline"}>
+            {questionStatusLabel(question.reviewStatus)}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {message ? <p role="status" className="text-sm text-destructive">{message}</p> : null}
+        <p className="text-xs text-muted-foreground">{questionStatusHelp(question.reviewStatus)}</p>
         <div className="grid gap-2">
           <Label>Prompt</Label>
           <Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
@@ -133,7 +135,7 @@ export function QuestionReviewCard({
             <Save className="mr-2 h-4 w-4" /> Save edits
           </Button>
           <Button onClick={() => save("approved")} disabled={updateQuestion.isPending}>
-            <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+            <CheckCircle2 className="mr-2 h-4 w-4" /> Mark ready for quiz
           </Button>
           <Button
             variant="destructive"
@@ -143,18 +145,21 @@ export function QuestionReviewCard({
             <XCircle className="mr-2 h-4 w-4" /> Reject
           </Button>
         </div>
-        {question.reviewStatus === "approved" && assignments.length > 0 && (
+        {question.reviewStatus !== "rejected" && assignments.length > 0 && attachedAssignmentIds.length === 0 && (
           <div className="border-t pt-3">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Add to a quiz
+              Add to one quiz
+            </p>
+            <p className="mb-2 text-xs text-muted-foreground">
+              A question can only belong to one quiz. Prefer adding from the quiz workspace.
             </p>
             <div className="flex flex-wrap gap-2">
-              {assignments.map((assignment) => (
+              {assignments.filter((item) => !item.title.toLowerCase().includes("(assigned)")).slice(0, 4).map((assignment) => (
                 <Button
                   key={assignment.id}
                   size="sm"
                   variant="secondary"
-                  disabled={attachQuestion.isPending || attachedAssignmentIds.includes(assignment.id)}
+                  disabled={attachQuestion.isPending || attachedAssignmentIds.length > 0}
                   onClick={() =>
                     attachQuestion.mutate(
                       {
@@ -169,14 +174,15 @@ export function QuestionReviewCard({
                     )
                   }
                 >
-                  {attachedAssignmentIds.includes(assignment.id)
-                    ? `Added to ${assignment.title}`
-                    : `Add to ${assignment.title}`}
+                  Add to {assignment.title}
                 </Button>
               ))}
             </div>
           </div>
         )}
+        {attachedAssignmentIds.length > 0 ? (
+          <p className="text-xs text-muted-foreground">Added to one quiz. Open that quiz to edit it.</p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -345,13 +351,13 @@ export function GenerateDraftsCard({
   return (
     <div className="space-y-4">
       {compact ? (
-        <details>
-          <summary className="cursor-pointer text-sm font-medium">Import an authorized source</summary>
-          <div className="mt-3">{importCard}</div>
-        </details>
-      ) : (
-        importCard
-      )}
+        <ol className="grid gap-2 rounded-xl border bg-muted/20 p-3 text-sm sm:grid-cols-3" data-testid="quiz-generate-path">
+          <li><span className="font-semibold">1. Import</span><p className="mt-1 text-muted-foreground">Paste authorized source text (≥40 characters).</p></li>
+          <li><span className="font-semibold">2. Drafts</span><p className="mt-1 text-muted-foreground">Create template drafts (Experimental).</p></li>
+          <li><span className="font-semibold">3. Quiz</span><p className="mt-1 text-muted-foreground">Add drafts here — they stay on this quiz.</p></li>
+        </ol>
+      ) : null}
+      {importCard}
 
       <Card className="border-primary/20">
         <CardHeader>
@@ -369,7 +375,7 @@ export function GenerateDraftsCard({
           ) : null}
           {sources.length === 0 ? (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-              Import a source with at least 40 characters of pasted text first. Template drafts stay in the bank until an admin approves them.
+              Import a source with at least 40 characters of pasted text first. Then create template drafts and add them to a quiz.
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-[220px_1fr_auto]">
@@ -405,8 +411,8 @@ export function GenerateDraftsCard({
                       onSuccess: (created) => {
                         setMessage(
                           compact
-                            ? `${created.length} template drafts ready to approve onto this quiz.`
-                            : `${created.length} draft questions added to the bank.`,
+                            ? `${created.length} template drafts ready to add to this quiz.`
+                            : `${created.length} draft questions added. Open a quiz to attach them.`,
                         );
                         onGenerated?.(created);
                         queryClient.invalidateQueries({

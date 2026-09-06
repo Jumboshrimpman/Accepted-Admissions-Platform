@@ -11,6 +11,7 @@ import {
   useUpdateAdminAssignment,
   useUpdateQuestionBankItem,
   type AdminAssignment,
+  type AssignmentDetail,
   type AdminAssignmentInput,
   type AdminAssignmentUpdate,
   type AdminCurriculum,
@@ -81,14 +82,38 @@ export function QuizWorkspace({
   onChanged: () => void;
 }) {
   const [location, setLocation] = useLocation();
+  const [openedQuiz, setOpenedQuiz] = useState<AdminAssignment | null>(null);
   const quizId = new URLSearchParams(location.split("?")[1] ?? "").get("quiz");
-  const selected = assignments.find((item) => item.id === quizId) ?? null;
-  if (selected) {
+  const selected =
+    data.assignments.find((item) => item.id === quizId) ??
+    (openedQuiz?.id === quizId ? openedQuiz : null) ??
+    assignments.find((item) => item.id === quizId) ??
+    null;
+  const openQuiz = (quiz: AdminAssignment | string) => {
+    if (typeof quiz === "string") {
+      setLocation(quizHref(quiz));
+      return;
+    }
+    setOpenedQuiz(quiz);
+    setLocation(quizHref(quiz.id));
+  };
+  if (quizId && selected) {
     return (
       <QuizDetail
         quiz={selected}
         data={data}
         submissions={submissions.filter((item) => item.assignmentId === selected.id)}
+        onChanged={onChanged}
+        onBack={() => setLocation(quizHref())}
+      />
+    );
+  }
+  if (quizId) {
+    return (
+      <QuizDetailFallback
+        quizId={quizId}
+        data={data}
+        submissions={submissions.filter((item) => item.assignmentId === quizId)}
         onChanged={onChanged}
         onBack={() => setLocation(quizHref())}
       />
@@ -100,7 +125,7 @@ export function QuizWorkspace({
       assignments={assignments}
       submissions={submissions}
       onChanged={onChanged}
-      onOpen={(id) => setLocation(quizHref(id))}
+      onOpen={openQuiz}
     />
   );
 }
@@ -116,7 +141,7 @@ function QuizList({
   assignments: AdminAssignment[];
   submissions: AdminSubmission[];
   onChanged: () => void;
-  onOpen: (quizId: string) => void;
+  onOpen: (quiz: AdminAssignment | string) => void;
 }) {
   const create = useCreateAdminAssignment();
   const [showCreate, setShowCreate] = useState(false);
@@ -131,7 +156,7 @@ function QuizList({
           setDraft(emptyDraft(data));
           setMessage("Quiz created. Add questions next.");
           onChanged();
-          onOpen(created.id);
+          onOpen(created);
         },
         onError: (error) => setMessage(errorText(error)),
       },
@@ -191,7 +216,7 @@ function QuizList({
                     {results[0] ? ` · latest ${results[0].studentName} ${results[0].score}%` : ""}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => onOpen(assignment.id)} data-testid={`open-quiz-${assignment.id}`}>
+                <Button size="sm" onClick={() => onOpen(assignment)} data-testid={`open-quiz-${assignment.id}`}>
                   <ClipboardList className="mr-2 h-4 w-4" /> Open quiz
                 </Button>
               </CardContent>
@@ -205,6 +230,71 @@ function QuizList({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function assignmentToAdminQuiz(
+  assignment: AssignmentDetail,
+  data: AdminCurriculum,
+  submissions: AdminSubmission[],
+): AdminAssignment {
+  const program =
+    data.programs.find((item) => item.subject === assignment.subject) ?? data.programs[0];
+  return {
+    id: assignment.id,
+    courseId: program?.id ?? "",
+    sessionId: assignment.sessionId ?? null,
+    programTitle: program?.title ?? "",
+    sessionTitle:
+      data.sessions.find((session) => session.id === assignment.sessionId)?.title ?? null,
+    deliveryPhase: assignment.deliveryPhase ?? "before_session",
+    title: assignment.title,
+    subject: assignment.subject,
+    instructions: assignment.instructions,
+    status: assignment.status,
+    deadline: assignment.deadline ?? null,
+    timeLimitMinutes: assignment.timeLimitMinutes,
+    maxAttempts: assignment.maxAttempts ?? 1,
+    questionCount: assignment.questions.length,
+    submissionCount: submissions.length,
+  };
+}
+
+function QuizDetailFallback({
+  quizId,
+  data,
+  submissions,
+  onChanged,
+  onBack,
+}: {
+  quizId: string;
+  data: AdminCurriculum;
+  submissions: AdminSubmission[];
+  onChanged: () => void;
+  onBack: () => void;
+}) {
+  const { data: assignment, isLoading } = useGetAssignment(quizId);
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground" data-testid={`quiz-opening-${quizId}`}>Opening quiz…</p>;
+  }
+  if (!assignment) {
+    return (
+      <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+        This quiz could not be opened.{" "}
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          Back to quizzes
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <QuizDetail
+      quiz={assignmentToAdminQuiz(assignment, data, submissions)}
+      data={data}
+      submissions={submissions}
+      onChanged={onChanged}
+      onBack={onBack}
+    />
   );
 }
 
@@ -343,36 +433,22 @@ function QuizQuestionEditor({
   const [message, setMessage] = useState("");
   const attachedIds = new Set((data?.questions ?? []).map((item) => item.id));
   const pendingDrafts = generated.filter((item) => !attachedIds.has(item.id));
-  const approved = bank.filter((item) => item.reviewStatus === "approved" && !attachedIds.has(item.id));
-  const attachableId = approved.some((item) => item.id === questionId) ? questionId : (approved[0]?.id || "");
-  const addApproved = (id: string) => {
+  const attachableBank = bank.filter(
+    (item) => item.reviewStatus !== "rejected" && !attachedIds.has(item.id),
+  );
+  const attachableId = attachableBank.some((item) => item.id === questionId)
+    ? questionId
+    : (attachableBank[0]?.id || "");
+  const addToQuiz = (id: string) => {
     attach.mutate(
       { assignmentId: quiz.id, data: { questionId: id } },
       {
         onSuccess: () => {
           setGenerated((items) => items.filter((item) => item.id !== id));
-          setMessage("Question added to this quiz.");
+          setMessage("Question added to this quiz. It is ready for this quiz only.");
           // Parent refreshQuiz invalidates getGetAssignmentQueryKey so the list is not stale.
           onChanged();
         },
-        onError: (error) => setMessage(apiErrorText(error)),
-      },
-    );
-  };
-  const approveAndAdd = (question: QuestionBankItem) => {
-    updateQuestion.mutate(
-      {
-        questionId: question.id,
-        data: {
-          prompt: question.prompt,
-          skill: question.skill,
-          explanation: question.explanation,
-          tags: question.tags,
-          reviewStatus: "approved",
-        },
-      },
-      {
-        onSuccess: () => addApproved(question.id),
         onError: (error) => setMessage(apiErrorText(error)),
       },
     );
@@ -381,7 +457,9 @@ function QuizQuestionEditor({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Questions on this quiz</CardTitle>
-        <CardDescription>Add or generate questions here. Reuse from the bank only when you need it.</CardDescription>
+        <CardDescription>
+          See and edit this quiz’s questions here. Adding a draft marks it ready for this quiz only.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
@@ -392,7 +470,7 @@ function QuizQuestionEditor({
           ))}
         </ol>
         {(data?.questions ?? []).length === 0 && !isLoading ? (
-          <p className="text-sm text-muted-foreground">No questions yet. Generate drafts or add an approved item below.</p>
+          <p className="text-sm text-muted-foreground">No questions yet. Import source text below, create drafts, then add them here.</p>
         ) : null}
         <div className="rounded-xl border bg-muted/20 p-3">
           <GenerateDraftsCard
@@ -411,33 +489,33 @@ function QuizQuestionEditor({
                 <Button
                   size="sm"
                   disabled={updateQuestion.isPending || attach.isPending || attachedIds.has(question.id)}
-                  onClick={() => approveAndAdd(question)}
+                  onClick={() => addToQuiz(question.id)}
                 >
-                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Approve & add
+                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Add to quiz
                 </Button>
               </div>
             ))}
           </div>
         ) : null}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {approved.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No extra approved bank questions to attach.</p>
+          {attachableBank.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No extra bank questions to attach. Generate drafts on this quiz instead.</p>
           ) : (
             <>
               <select
-                aria-label="Approved question to add"
+                aria-label="Bank question to add"
                 className="h-9 max-w-xl rounded-md border bg-background px-2 text-sm"
                 value={attachableId}
                 onChange={(event) => setQuestionId(event.target.value)}
               >
-                {approved.map((item) => (
+                {attachableBank.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.skill} · {item.prompt.slice(0, 80)}
                   </option>
                 ))}
               </select>
-              <Button size="sm" disabled={attach.isPending || !attachableId} onClick={() => addApproved(attachableId)}>
-                Add approved question
+              <Button size="sm" disabled={attach.isPending || !attachableId} onClick={() => addToQuiz(attachableId)}>
+                Add to this quiz
               </Button>
             </>
           )}
@@ -609,7 +687,7 @@ function QuizFields({
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Title</Label>
-            <Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+            <Input aria-label="Title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
           </div>
           <div className="space-y-2">
             <Label>Subject</Label>
@@ -619,6 +697,7 @@ function QuizFields({
         <div className="space-y-2">
           <Label>Instructions / explanation</Label>
           <Textarea
+            aria-label="Instructions / explanation"
             value={draft.instructions}
             onChange={(event) => setDraft({ ...draft, instructions: event.target.value })}
             placeholder="Explain the task and what the learner should demonstrate."

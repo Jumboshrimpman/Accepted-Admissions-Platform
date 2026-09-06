@@ -104,6 +104,8 @@ describe("tutor session review page", () => {
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
       "/tutor/attempts/attempt-1",
     );
+    expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Missed on pre-work/);
+    expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Transitions/);
     expect(screen.getByRole("tab", { name: "Live plan" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Records" })).toBeTruthy();
   });

@@ -262,6 +262,8 @@ describe("administrator overview", () => {
     expect(preview.textContent).toMatch(/Preview client portal/);
     expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/Michelle Makarem/);
     expect(screen.queryByText("Fall plan")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Finance/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^Programs$/i })).toBeNull();
   });
 
   test("keeps client preview when curriculum clients are missing by using overview students", () => {
