@@ -13,6 +13,10 @@ const outcomes: CalendarConnectionOutcome[] = [
   "cancelled",
   "rejected",
   "failed",
+  "misconfigured",
+  "redirect_mismatch",
+  "unavailable",
+  "expired",
   "disconnected",
   "disconnect_failed",
 ];
