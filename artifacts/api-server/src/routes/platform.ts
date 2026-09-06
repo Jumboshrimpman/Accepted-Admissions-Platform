@@ -1,4 +1,4 @@
-import { clerkClient, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
 import {
   and,
   asc,
@@ -243,6 +243,7 @@ import {
 } from "../lib/access-config";
 import {
   ClerkProductionUserError,
+  getProductionClerkUser,
   looksLikeClerkUserId,
   resolveProductionClerkUser,
 } from "../lib/clerk-production-users";
@@ -2126,7 +2127,7 @@ async function clerkIdentity(
     !email ||
     appUser?.email.endsWith("@users.accepted.local") === true;
   if (needsVerifiedIdentity || !displayName) {
-    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    const clerkUser = await getProductionClerkUser(clerkUserId);
     email =
       (requireVerifiedEmail
         ? verifiedPrimaryEmail(clerkUser)

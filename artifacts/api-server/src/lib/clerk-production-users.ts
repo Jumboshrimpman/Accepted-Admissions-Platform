@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/express";
-import { normalizeProvisionedEmail } from "./access-config";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { normalizeProvisionedEmail } from "./access-config.ts";
 
 export type ProductionClerkUser = {
   id: string;
@@ -49,16 +50,24 @@ export type ResolveProductionClerkUserResult = {
 };
 
 export class ClerkProductionUserError extends Error {
+  code:
+    | "CLERK_PRODUCTION_UNAVAILABLE"
+    | "CLERK_PRODUCTION_LOOKUP_FAILED"
+    | "CLERK_PRODUCTION_CREATE_FAILED";
+  httpStatus: number;
+
   constructor(
-    readonly code:
+    code:
       | "CLERK_PRODUCTION_UNAVAILABLE"
       | "CLERK_PRODUCTION_LOOKUP_FAILED"
       | "CLERK_PRODUCTION_CREATE_FAILED",
     message: string,
-    readonly httpStatus: number = 502,
+    httpStatus = 502,
   ) {
     super(message);
     this.name = "ClerkProductionUserError";
+    this.code = code;
+    this.httpStatus = httpStatus;
   }
 }
 
@@ -164,7 +173,10 @@ async function ensureEmailVerified(
           normalizeProvisionedEmail(address.emailAddress) === email,
       ),
   );
+  const seen = new Set<string>();
   for (const address of addresses) {
+    if (seen.has(address.id)) continue;
+    seen.add(address.id);
     if (address.verification?.status === "verified") continue;
     try {
       await client.updateEmailAddress(address.id, { verified: true });
@@ -218,6 +230,13 @@ async function createVerifiedUser(
       502,
     );
   }
+}
+
+export async function getProductionClerkUser(
+  userId: string,
+  client: ProductionClerkUsersClient = getClient(),
+): Promise<ProductionClerkUser> {
+  return client.getUser(userId);
 }
 
 export async function resolveProductionClerkUser(

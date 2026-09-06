@@ -383,7 +383,48 @@ test("administrator and viewer remain env-only and cannot be provisioned from Pe
 
   for (const key of allowlistKeys) delete process.env[key];
   process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = administrator!.clerkUserId;
-  const calls = installMockClerk({ createdId: `user_prod_${suffix}` });
+  const clerkUser = (
+    user: AppUser,
+  ): {
+    id: string;
+    primaryEmailAddress: {
+      id: string;
+      emailAddress: string;
+      verification: { status: "verified" };
+    };
+    emailAddresses: Array<{
+      id: string;
+      emailAddress: string;
+      verification: { status: "verified" };
+    }>;
+  } => ({
+    id: user.clerkUserId,
+    primaryEmailAddress: {
+      id: `idn_${user.id}`,
+      emailAddress: user.email,
+      verification: { status: "verified" },
+    },
+    emailAddresses: [
+      {
+        id: `idn_${user.id}`,
+        emailAddress: user.email,
+        verification: { status: "verified" },
+      },
+    ],
+  });
+  const calls = installMockClerk({
+    createdId: `user_prod_${suffix}`,
+    usersById: {
+      [administrator!.clerkUserId]: clerkUser(administrator!),
+      [unlistedAdmin!.clerkUserId]: clerkUser(unlistedAdmin!),
+      [unlistedViewer!.clerkUserId]: clerkUser(unlistedViewer!),
+    },
+    usersByEmail: {
+      [administrator!.email]: clerkUser(administrator!),
+      [unlistedAdmin!.email]: clerkUser(unlistedAdmin!),
+      [unlistedViewer!.email]: clerkUser(unlistedViewer!),
+    },
+  });
   let adminServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let unlistedAdminServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let unlistedViewerServer: Awaited<ReturnType<typeof startServer>> | undefined;
