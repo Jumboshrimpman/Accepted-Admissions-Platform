@@ -45,7 +45,7 @@ A wrong email was provisioned first, which created a second Production Clerk use
 
 Migration `0034_retire_duplicate_xavier_clerk` and startup reconcile:
 
-- Re-point sessions, tutor assignments, course memberships, calendar rows, and grants from the retired app user to the canonical Xavier when both rows exist.
+- Re-point sessions, tutor assignments, course memberships, calendar rows, and grants from the retired app user to the canonical Xavier when both rows exist. API start runs this reconcile before the #33 SAT capability-test session seed so that session stays on `user_3IxUfoT1xRnDsqhlx5NN1eGfRg6`.
 - Soft-retire the duplicate app user and tutor profile (unlink, deactivate, mark `SUPERSEDED`). Rows are not hard-deleted.
 - Deny the retired Clerk id / emails even if they remain on a Railway allowlist, so the duplicate cannot be re-created on sign-in.
 

@@ -1131,6 +1131,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
 }
 
 async function ensureSeedData(): Promise<string> {
+  await retireDuplicateXavierIdentities();
   const [existing] = await db
     .select({ id: coursesTable.id })
     .from(coursesTable)
