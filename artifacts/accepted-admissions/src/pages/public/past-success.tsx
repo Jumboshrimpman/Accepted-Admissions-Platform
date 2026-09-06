@@ -118,7 +118,7 @@ export function PastSuccessContent({
          <div className="rounded-xl border bg-card p-8">
             <p className="font-metadata text-accent">Published destination details</p>
            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">These names and images come from the approved page content and are shared as examples, not guarantees.</p>
-          {logos.length > 0 ? <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {logos.length > 0 ? <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {logos.map((logo) => (
                <div key={logo.name} className="flex min-h-28 items-center justify-center rounded-lg bg-muted/50 p-4">
                 <img src={resolvePublicMediaUrl(logo.src)} alt={logo.alt || `${logo.name} logo`} width="120" height="96" className="max-h-20 max-w-full object-contain mix-blend-multiply" loading="lazy" onError={(event) => {

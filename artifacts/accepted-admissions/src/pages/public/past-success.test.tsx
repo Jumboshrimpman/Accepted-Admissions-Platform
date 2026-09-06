@@ -74,6 +74,49 @@ describe("Student Stories publication states", () => {
     expect(screen.queryByTestId("status-stories-error")).toBeNull();
   });
 
+  it("renders a denser grid when many approved destination logos are published", async () => {
+    const schoolLogos = [
+      "Harvard University",
+      "Princeton University",
+      "MIT",
+      "Northeastern University",
+      "UC San Diego",
+      "University of Maryland",
+      "Harvard Law School",
+      "Harvard GSAS",
+      "University of Oxford",
+      "Stanford University",
+      "Cornell University",
+      "University of Chicago",
+      "Georgetown University",
+      "Pomona College",
+      "Boston University",
+      "Washington University in St. Louis",
+      "Claremont McKenna College",
+      "University of Virginia",
+      "Pepperdine University",
+    ].map((name) => ({
+      name,
+      src: `/media/schools/${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "")}.png`,
+      alt: `${name} logo`,
+    }));
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      title: "Student Stories",
+      seoTitle: "Student Stories | Accepted Admissions",
+      seoDescription: "Approved public content.",
+      body: { schoolLogos },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const { container } = render(<PastSuccess />);
+
+    expect(await screen.findByAltText("Harvard Law School logo")).toBeTruthy();
+    expect(screen.getByAltText("Harvard GSAS logo")).toBeTruthy();
+    expect(screen.getByAltText("Harvard University logo")).toBeTruthy();
+    expect(container.querySelectorAll("img")).toHaveLength(19);
+    expect(container.querySelector(".md\\:grid-cols-4")).toBeTruthy();
+  });
+
   it("renders safe empty states when optional story fields are absent", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       title: "Student Stories",
