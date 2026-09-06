@@ -68,7 +68,7 @@ Migration `0025_curriculum_library_assets` adds `curriculum_library_assets` and 
 | Michelle books Xavier or Eunice; $130 or 10-credit package | **Done in code** (live slots still need Google consent) |
 | Hide Taito billing; keep Michelle prepaid path | **Done in code** |
 | Keep Xavier payout tracking out | **Done** |
-| Clerk invites + `ACCEPTED_*_CLERK_USER_IDS` | **Owner-only** |
+| Clerk invites + `ACCEPTED_*_CLERK_USER_IDS` | **Owner-only for admin/viewer.** Tutors/students provisioned under People do not need Railway allowlist updates. |
 | `STRIPE_WEBHOOK_SECRET` on the deployment host (not Replit) | **Owner-only** |
 | Google Calendar consent: Xavier `xaver.rmz6@gmail.com`, Eunice `eunice_chon@berkeley.edu` from `/tutor` | **Owner-only** |
 | Policy copy (cancel / refund / privacy / financial aid) | **Owner-only** |
@@ -85,7 +85,7 @@ Do not invent or commit secrets.
 
 ## Owner input still required
 
-1. **Clerk invites** — confirm production/development addresses, invite in the matching Clerk instance, then put Clerk user IDs in `ACCEPTED_*_CLERK_USER_IDS` (see `docs/accepted-admissions-provisioning.md`). Do not enable public sign-up. Needed for Taito, Eunice, Nika, Xavier, Michelle, and Taito’s viewer if used.
+1. **Clerk access** — keep public sign-up disabled. Administrators and viewers still use `ACCEPTED_ADMIN_*` / `ACCEPTED_VIEWER_*`. Tutors and students should be provisioned from `/admin/curriculum?section=people`; that creates or links the Production Clerk user without an invitation email and does not require a Railway allowlist change.
 2. **Stripe webhook signing secret** — set `STRIPE_WEBHOOK_SECRET` on the deployment host and complete a test-mode Checkout / invoice / refund pass before live charges. Michelle cannot receive credits until the webhook marks payment verified.
 3. **Google Calendar consent** — Xavier must sign in at `/tutor` with **`xaver.rmz6@gmail.com`** (not `xsfam6@gmail.com`) and complete Google Calendar OAuth. Eunice (`eunice_chon@berkeley.edu`) also needs `/tutor` Google consent before Michelle can see live availability. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done. Taito’s Meet room is the shared Fall URL; calendar **event** links fill in when Google `htmlLink` is stored on the session. Booking and availability reject any slot that would put two sessions on that shared Meet at the same time.
 4. **Policy copy** — final cancellation, credit-restoration, invoice, refund, privacy-policy, and financial-aid rules. The public form has a short storage notice only; do not treat that as a legal privacy policy.

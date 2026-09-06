@@ -700,7 +700,7 @@ export const getCreateAdminAccessGrantUrl = () => {
 }
 
 /**
- * Creates or reactivates a database access grant for a tutor or student. Administrator and viewer roles cannot be provisioned from this endpoint. Does not send Clerk invitations.
+ * Creates or reactivates a database access grant for a tutor or student. Resolves the Production Clerk user by email (find or create, no invitation). A pasted clerkUserId is used only if it exists in Production for this email; otherwise it is replaced and a warning is returned. Administrator and viewer roles cannot be provisioned from this endpoint.
  * @summary Provision a tutor or student for portal access
  */
 export const createAdminAccessGrant = async (adminAccessGrantInput: AdminAccessGrantInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrant> => {

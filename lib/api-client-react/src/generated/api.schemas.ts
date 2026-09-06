@@ -514,6 +514,11 @@ export interface AdminAccessGrant {
   updatedAt: string;
   /** @nullable */
   revokedAt: string | null;
+  /**
+   * Present when a pasted Clerk user ID was ignored or replaced because it is not a Production user for this email.
+   * @nullable
+   */
+  warning?: string | null;
 }
 
 export interface AdminAccessGrantList {
@@ -530,7 +535,7 @@ export interface AdminAccessGrantInput {
   displayName: string;
   roleCategory: ProvisionableRoleCategory;
   /**
-     * Optional Clerk user ID when already known; otherwise access matches the verified primary email.
+     * Optional Production Clerk user ID. If the ID is not in the Production Clerk instance (or belongs to a different email), it is ignored and replaced by an email lookup or create.
      * @minLength 3
      * @maxLength 128
      * @nullable

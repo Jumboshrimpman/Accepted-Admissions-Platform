@@ -243,6 +243,77 @@ test("returns only a Clerk-verified primary email", () => {
   );
 });
 
+test("honors student and tutor database grants without env allowlists", async () => {
+  const { resolvePortalAccess } =
+    // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+    await import("./access-config.ts");
+
+  assert.deepEqual(
+    resolvePortalAccess("user_prod_student", "samapostgrad@gmail.com", {
+      env: {},
+      databaseGrants: [
+        {
+          email: "samapostgrad@gmail.com",
+          clerkUserId: "user_prod_student",
+          roleCategory: "student",
+          active: true,
+        },
+      ],
+    }),
+    { access: { role: "student", subject: "all" }, conflict: false },
+  );
+});
+
+test("keeps administrator and viewer env-only even when a student grant exists for someone else", async () => {
+  const { resolvePortalAccess } =
+    // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+    await import("./access-config.ts");
+
+  const grants = [
+    {
+      email: "student@example.com",
+      clerkUserId: "user_prod_student",
+      roleCategory: "student" as const,
+      active: true,
+    },
+  ];
+
+  assert.deepEqual(
+    resolvePortalAccess("user_admin_unlisted", "admin@example.com", {
+      env: {},
+      databaseGrants: grants,
+    }),
+    { access: null, conflict: false },
+  );
+  assert.deepEqual(
+    resolvePortalAccess("user_viewer_unlisted", "viewer@example.com", {
+      env: {},
+      databaseGrants: grants,
+    }),
+    { access: null, conflict: false },
+  );
+  assert.deepEqual(
+    resolvePortalAccess("user_admin_env", "admin@example.com", {
+      env: { ACCEPTED_ADMIN_CLERK_USER_IDS: "user_admin_env" },
+      databaseGrants: grants,
+    }),
+    { access: { role: "administrator", subject: "all" }, conflict: false },
+  );
+  assert.deepEqual(
+    resolvePortalAccess("user_viewer_env", "viewer@example.com", {
+      env: { ACCEPTED_VIEWER_EMAILS: "viewer@example.com" },
+      databaseGrants: grants,
+    }),
+    {
+      access: {
+        role: "viewer",
+        subject: "student:taito0525@gmail.com",
+      },
+      conflict: false,
+    },
+  );
+});
+
 test("revokes email access when Clerk's current primary email changes", () => {
   const changedPrimaryEmail = verifiedPrimaryEmail({
     primaryEmailAddress: {
