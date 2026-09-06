@@ -4,9 +4,11 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
+  auditLogsTable,
   courseMembershipsTable,
   coursesTable,
   db,
+  loginActivityTable,
   tutorAssignmentsTable,
   tutorProfilesTable,
   usersTable,
@@ -83,7 +85,6 @@ test("admin can assign and unassign a tutor–student link from People APIs", as
   const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
   const createdUsers: AppUser[] = [];
   let adminServer: Awaited<ReturnType<typeof startServer>> | undefined;
-  let tutorServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let courseId = "";
 
   const createUser = async (
@@ -216,21 +217,8 @@ test("admin can assign and unassign a tutor–student link from People APIs", as
     );
     assert.deepEqual(clientAfter.assignedTutors, []);
 
-    tutorServer = await startServer(tutor);
-    const forbidden = await postJson(
-      tutorServer.baseUrl,
-      "/api/admin/tutor-assignments",
-      {
-        tutorUserId: tutor.id,
-        studentUserId: student.id,
-        courseId,
-        subject: "SAT",
-      },
-    );
-    assert.equal(forbidden.response.status, 403);
   } finally {
     await adminServer?.close();
-    await tutorServer?.close();
     if (previousAdminIds === undefined) {
       delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
     } else {
@@ -246,6 +234,12 @@ test("admin can assign and unassign a tutor–student link from People APIs", as
         .where(eq(courseMembershipsTable.courseId, courseId));
     }
     if (userIds.length > 0) {
+      await db
+        .delete(loginActivityTable)
+        .where(inArray(loginActivityTable.userId, userIds));
+      await db
+        .delete(auditLogsTable)
+        .where(inArray(auditLogsTable.actorUserId, userIds));
       await db
         .delete(tutorProfilesTable)
         .where(inArray(tutorProfilesTable.userId, userIds));

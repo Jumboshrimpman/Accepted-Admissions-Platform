@@ -73,7 +73,18 @@ const mocks = vi.hoisted(() => ({
     }>,
   },
   curriculum: {
-    programs: [],
+    programs: [] as Array<{
+      id: string;
+      title: string;
+      subject: string;
+      term: string;
+      status: "active" | "draft" | "completed" | "archived";
+      goalSummary: string | null;
+      meetUrl: string | null;
+      driveUrl: string | null;
+      sessionCount: number;
+      completedSessionCount: number;
+    }>,
     sessions: [],
     assignments: [],
     blocks: [],
