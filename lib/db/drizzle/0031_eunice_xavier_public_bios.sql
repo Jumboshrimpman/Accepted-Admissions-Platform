@@ -1,4 +1,4 @@
--- Refresh public SAT tutor bios that still have the pre-2026 seed copy.
+-- Refresh public tutor bios that still have the pre-2026 seed copy.
 -- Do not rewrite 0009; this updates already-applied rows in place.
 -- Administrator-edited biographies that no longer match the stale seed text stay unchanged.
 
@@ -15,3 +15,10 @@ SET
   "updated_at" = now()
 WHERE "name" = 'Eunice Chon'
   AND "biography" = 'Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.';
+--> statement-breakpoint
+UPDATE "tutor_profiles"
+SET
+  "biography" = 'Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia''s Irving Medical Center as a Research Intern on Relational Health.',
+  "updated_at" = now()
+WHERE "name" = 'Nika Raiffe'
+  AND "biography" = 'Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.';

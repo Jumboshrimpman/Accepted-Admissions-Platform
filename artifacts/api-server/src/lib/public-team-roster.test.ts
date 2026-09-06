@@ -15,6 +15,8 @@ const {
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
   LEGACY_WIX_SCHOOL_LOGO_URLS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
+  NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
+  NIKA_PUBLIC_BIOGRAPHY,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
@@ -57,6 +59,7 @@ test("serves first-party portraits instead of Wix CDN URLs", () => {
   }
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"], "/media/team/xavier-morales.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Eunice Chon"], "/media/team/eunice-chon.jpg");
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"], "/media/team/nika-raiffe.png");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"], "/media/team/kya-brooks.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"], "/media/team/michael-pecorara.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kyle Englander"], "/media/team/kyle-englander.jpg");
@@ -64,7 +67,7 @@ test("serves first-party portraits instead of Wix CDN URLs", () => {
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Sama Noori"], "/media/team/sama-noori.jpg");
 });
 
-test("publishes the current Xavier and Eunice biographies and retires the stale seed copy", () => {
+test("publishes the current Xavier, Eunice, and Nika biographies and retires the stale seed copy", () => {
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /Jane Street Capital/);
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /2030 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /2029 Harvard Law School/);
@@ -73,8 +76,14 @@ test("publishes the current Xavier and Eunice biographies and retires the stale 
   assert.match(EUNICE_PUBLIC_BIOGRAPHY, /Harvard Medical School\/Massachusetts General Hospital/);
   assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /third-year at Harvard College/);
   assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /Coca-Cola Scholar/);
+  assert.match(NIKA_PUBLIC_BIOGRAPHY, /Goldman Sachs Business Intelligence Group/);
+  assert.match(NIKA_PUBLIC_BIOGRAPHY, /as a Research Intern on Relational Health/);
+  assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /sophomore studying/);
+  assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /Stuyvesant High School/);
+  assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /at a Research Intern/);
   assert.match(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[0], /2029 Harvard Law School/);
   assert.match(EUNICE_LEGACY_PUBLIC_BIOGRAPHIES[0], /third-year at Harvard College/);
+  assert.match(NIKA_LEGACY_PUBLIC_BIOGRAPHIES[0], /sophomore studying/);
   assert.equal(
     MIRRORED_PORTRAIT_RECONCILIATIONS.find((profile) => profile.name === "Xavier Morales")?.biography,
     XAVIER_PUBLIC_BIOGRAPHY,
@@ -85,7 +94,7 @@ test("publishes the current Xavier and Eunice biographies and retires the stale 
   );
 });
 
-test("seed and migration replace only the stale Xavier and Eunice bios", async () => {
+test("seed and migration replace only the stale Xavier, Eunice, and Nika bios", async () => {
   const platformSource = await readFile(
     fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
     "utf8",
@@ -96,13 +105,19 @@ test("seed and migration replace only the stale Xavier and Eunice bios", async (
   );
   assert.match(platformSource, /biography: XAVIER_PUBLIC_BIOGRAPHY/);
   assert.match(platformSource, /biography: EUNICE_PUBLIC_BIOGRAPHY/);
+  assert.match(platformSource, /biography: NIKA_PUBLIC_BIOGRAPHY/);
   assert.doesNotMatch(platformSource, /third-year at Harvard College/);
   assert.doesNotMatch(platformSource, /2029 Harvard Law School/);
+  assert.doesNotMatch(platformSource, /sophomore studying/);
   assert.match(migrationSource, /Jane Street Capital/);
   assert.match(migrationSource, /2030 Harvard Law School/);
   assert.match(migrationSource, /Harvard Medical School\/Massachusetts General Hospital/);
+  assert.match(migrationSource, /Goldman Sachs Business Intelligence Group/);
+  assert.match(migrationSource, /as a Research Intern on Relational Health/);
+  assert.doesNotMatch(migrationSource, /at a Research Intern/);
   assert.match(migrationSource, /third-year at Harvard College/);
   assert.match(migrationSource, /2029 Harvard Law School/);
+  assert.match(migrationSource, /sophomore studying/);
 });
 
 test("locks Kya's public portrait even when the stored value is blank or drifted", () => {

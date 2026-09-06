@@ -106,6 +106,8 @@ import {
   EUNICE_PUBLIC_BIOGRAPHY,
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
+  NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
+  NIKA_PUBLIC_BIOGRAPHY,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
   rewriteLegacyWixMediaUrl,
@@ -1250,8 +1252,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         subjects: ["College admissions"],
         linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
         publicApproved: true,
-        biography:
-          "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+        biography: NIKA_PUBLIC_BIOGRAPHY,
         calendarStatus: "disconnected",
         bookingEligible: true,
       },
@@ -1375,8 +1376,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
       title: "Admissions Tutor",
       photoUrl: NIKA_APPROVED_PHOTO_URL,
       photoAltText: "Nika Raiffe, Admissions Tutor",
-      biography:
-        "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+      biography: NIKA_PUBLIC_BIOGRAPHY,
       subjects: ["College admissions"],
       linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
       publicApproved: true,
@@ -1507,6 +1507,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
   for (const [name, legacyBios, nextBio] of [
     [XAVIER_NAME, XAVIER_LEGACY_PUBLIC_BIOGRAPHIES, XAVIER_PUBLIC_BIOGRAPHY],
     [EUNICE_NAME, EUNICE_LEGACY_PUBLIC_BIOGRAPHIES, EUNICE_PUBLIC_BIOGRAPHY],
+    [NIKA_NAME, NIKA_LEGACY_PUBLIC_BIOGRAPHIES, NIKA_PUBLIC_BIOGRAPHY],
   ] as const) {
     for (const legacyBio of legacyBios) {
       await db

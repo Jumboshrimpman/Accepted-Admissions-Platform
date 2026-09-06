@@ -129,6 +129,7 @@ describe("OurTeam publication gate", () => {
     const approvedPortraits: Record<string, string> = {
       xavier: "/media/team/xavier-morales.jpg",
       eunice: "/media/team/eunice-chon.jpg",
+      nika: "/media/team/nika-raiffe.png",
       kya: "/media/team/kya-brooks.jpg",
       michael: "/media/team/michael-pecorara.jpg",
       kyle: "/media/team/kyle-englander.jpg",
@@ -140,6 +141,8 @@ describe("OurTeam publication gate", () => {
         "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
       eunice:
         "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.",
+      nika:
+        "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.",
       kya: "Kya is a senior at Harvard studying economics and the History of Art and Literature.",
     };
     const tutors = [...approvedRoster].reverse().map(([name, id]) => ({
@@ -188,20 +191,27 @@ describe("OurTeam publication gate", () => {
 
     const xavierCard = screen.getByTestId("card-team-xavier");
     const euniceCard = screen.getByTestId("card-team-eunice");
+    const nikaCard = screen.getByTestId("card-team-nika");
     const kyaCard = screen.getByTestId("card-team-kya");
     const michaelCard = screen.getByTestId("card-team-michael");
     const xavierImage = within(xavierCard).getByAltText("Xavier Morales, Tutor");
     const euniceImage = within(euniceCard).getByAltText("Eunice Chon, Tutor");
+    const nikaImage = within(nikaCard).getByAltText("Nika Raiffe, Tutor");
     const kyaImage = within(kyaCard).getByAltText("Kya Brooks, Admissions Tutor");
     const michaelImage = within(michaelCard).getByAltText("Michael Pecorara, Tutor");
     expect(xavierImage.getAttribute("src")).toContain("/media/team/xavier-morales.jpg");
     expect(euniceImage.getAttribute("src")).toContain("/media/team/eunice-chon.jpg");
+    expect(nikaImage.getAttribute("src")).toContain("/media/team/nika-raiffe.png");
     expect(kyaImage.getAttribute("src")).toContain("/media/team/kya-brooks.jpg");
     expect(michaelImage.getAttribute("src")).toContain("/media/team/michael-pecorara.jpg");
     expect(within(xavierCard).getByText(/Jane Street Capital/)).toBeTruthy();
     expect(within(xavierCard).queryByText(/2029 Harvard Law School/)).toBeNull();
     expect(within(euniceCard).getByText(/Harvard Medical School\/Massachusetts General Hospital/)).toBeTruthy();
     expect(within(euniceCard).queryByText(/third-year at Harvard College/)).toBeNull();
+    expect(within(nikaCard).getByText(/Goldman Sachs Business Intelligence Group/)).toBeTruthy();
+    expect(within(nikaCard).getByText(/as a Research Intern on Relational Health/)).toBeTruthy();
+    expect(within(nikaCard).queryByText(/sophomore studying/)).toBeNull();
+    expect(within(nikaCard).queryByText(/at a Research Intern/)).toBeNull();
     expect(within(kyaCard).getByText(/Kya is a senior at Harvard/)).toBeTruthy();
     expect(
       within(michaelCard)
