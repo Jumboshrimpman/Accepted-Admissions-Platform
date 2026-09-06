@@ -147,7 +147,7 @@ function dashboardForRole(
             status: "published",
             meetingUrl: "https://meet.google.com/sat-room",
             calendarEventUrl: "https://calendar.google.com/calendar/r/day?date=20261002",
-            tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+            tutor: { id: "tutor-user", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
             student: { id: "student", name: "Taito Goto" },
           },
         ]

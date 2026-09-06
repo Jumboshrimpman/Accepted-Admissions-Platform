@@ -14,8 +14,8 @@ test("template draft labels do not claim AI or College Board quality", () => {
   assert.equal(TEMPLATE_DRAFTS_EXPERIMENTAL_LABEL, "Experimental");
   assert.match(TEMPLATE_DRAFTS_DESCRIPTION, /generic starting points/i);
   assert.match(TEMPLATE_DRAFTS_DESCRIPTION, /hard-coded templates/i);
-  assert.match(TEMPLATE_DRAFTS_DESCRIPTION, /approve/i);
-  assert.match(TEMPLATE_DRAFTS_BANK_HINT, /approve/i);
+  assert.match(TEMPLATE_DRAFTS_DESCRIPTION, /ready/i);
+  assert.match(TEMPLATE_DRAFTS_BANK_HINT, /one quiz/i);
 
   const copy = [
     TEMPLATE_DRAFTS_BUTTON_LABEL,
