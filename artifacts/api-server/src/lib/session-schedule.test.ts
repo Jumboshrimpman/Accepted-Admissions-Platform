@@ -34,6 +34,15 @@ test("October 2 is the first Taito SAT session used for the full-length diagnost
   );
   assert.equal(
     isTaitoFirstSatSession({
+      dateTime: new Date("2026-10-02T13:00:00.000Z"),
+      timezone: "Asia/Tokyo",
+      subject: "SAT",
+    }),
+    true,
+    "admin-edited Oct 2 JST time still counts as the first SAT diagnostic session",
+  );
+  assert.equal(
+    isTaitoFirstSatSession({
       dateTime: taitoSessionDateTime("2026-10-09"),
       subject: "SAT",
     }),

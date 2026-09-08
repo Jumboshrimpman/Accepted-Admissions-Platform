@@ -55,6 +55,8 @@ const mocks = vi.hoisted(() => ({
   },
   result: null as null | Record<string, unknown>,
   resultError: false,
+  assignmentError: false,
+  assignmentMissing: false,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -63,18 +65,21 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
   useGetCurrentUser: () => ({ data: { role: "student" } }),
   useGetAssignment: () => ({
-    data: {
-      id: "asg-1",
-      title: mocks.title,
-      subject: "SAT",
-      instructions: "Answer the questions.",
-      deliveryPhase: mocks.deliveryPhase,
-      questionCount: mocks.questions.length,
-      timeLimitMinutes: 60,
-      latestAttemptId: "attempt-1",
-      questions: mocks.questions,
-    },
+    data: mocks.assignmentError || mocks.assignmentMissing
+      ? undefined
+      : {
+          id: "asg-1",
+          title: mocks.title,
+          subject: "SAT",
+          instructions: "Answer the questions.",
+          deliveryPhase: mocks.deliveryPhase,
+          questionCount: mocks.questions.length,
+          timeLimitMinutes: 60,
+          latestAttemptId: "attempt-1",
+          questions: mocks.questions,
+        },
     isLoading: false,
+    isError: mocks.assignmentError,
   }),
   useGetAttempt: () => ({
     data: mocks.attempt,
@@ -115,6 +120,8 @@ afterEach(() => {
   mocks.attempt.responses = [];
   mocks.result = null;
   mocks.resultError = false;
+  mocks.assignmentError = false;
+  mocks.assignmentMissing = false;
 });
 
 describe("student attempt UI", () => {
@@ -257,6 +264,13 @@ describe("student attempt UI", () => {
     expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
     expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
+    mocks.assignmentError = true;
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("assignment-open-error").textContent).toMatch(/failed to load/i);
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   test("empty expired attempt stays incomplete and can be restarted", () => {

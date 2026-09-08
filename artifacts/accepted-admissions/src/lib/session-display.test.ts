@@ -8,9 +8,11 @@ import {
   formatSessionTimeRange,
   isPastSession,
   sessionDateKey,
+  sessionDateTimeLocalValue,
   sessionEffectiveEnd,
   sessionScheduleChangeMessage,
   sessionSubjectLabel,
+  utcIsoFromSessionLocalValue,
 } from "./session-display.ts";
 
 const FALL_DATES = [
@@ -52,6 +54,11 @@ test("formats every approved Fall meeting in its declared timezone", () => {
     assert.equal(sessionDateKey(session), dateKey);
     assert.equal(formatSessionTimeRange(session), "9:00–10:00 PM JST");
     assert.equal(formatSessionDate(session), FALL_DISPLAY_DATES[index]);
+    assert.equal(sessionDateTimeLocalValue(session.dateTime, session.timezone), `${dateKey}T21:00`);
+    assert.equal(
+      utcIsoFromSessionLocalValue(`${dateKey}T21:00`, "Asia/Tokyo"),
+      `${dateKey}T12:00:00.000Z`,
+    );
   }
 });
 

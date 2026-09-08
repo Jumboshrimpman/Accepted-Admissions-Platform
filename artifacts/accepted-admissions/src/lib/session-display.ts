@@ -34,6 +34,53 @@ export function sessionDateKey(session: Pick<DisplaySession, "dateTime" | "timez
   return `${partValue(parts, "year")}-${partValue(parts, "month")}-${partValue(parts, "day")}`;
 }
 
+export function sessionDateTimeLocalValue(
+  dateTime: string | Date,
+  timezone: string,
+): string {
+  const parts = partsFor(dateTime, timezone, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const year = partValue(parts, "year");
+  const month = partValue(parts, "month");
+  const day = partValue(parts, "day");
+  const hour = partValue(parts, "hour").padStart(2, "0");
+  const minute = partValue(parts, "minute").padStart(2, "0");
+  if (!year || !month || !day) return "";
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+export function utcIsoFromSessionLocalValue(localValue: string, timezone: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(localValue);
+  if (!match) return new Date(localValue).toISOString();
+  const [year, month, day] = match[1]!.split("-").map(Number);
+  const [hour, minute] = match[2]!.split(":").map(Number);
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const observed = partsFor(guess, timezone, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const num = (type: string) => Number(partValue(observed, type) || 0);
+  const observedAsUtc = Date.UTC(
+    num("year"),
+    num("month") - 1,
+    num("day"),
+    num("hour"),
+    num("minute"),
+  );
+  const requestedAsUtc = Date.UTC(year, month - 1, day, hour, minute);
+  return new Date(guess.getTime() - (observedAsUtc - requestedAsUtc)).toISOString();
+}
+
 export function formatSessionDate(
   session: Pick<DisplaySession, "dateTime" | "timezone">,
 ): string {

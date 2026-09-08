@@ -19,6 +19,8 @@ import {
   TAITO_STUDENT_DISPLAY_NAME,
   TAITO_STUDENT_EMAIL,
   isFall2026Term,
+  matchesTaitoScheduledDate,
+  normalizedSessionSubject,
   sessionTitle,
   taitoSessionDateTime,
 } from "./session-schedule.ts";
@@ -32,6 +34,41 @@ function subjectFamily(subject: string): string {
     return "ielts";
   }
   return normalized;
+}
+
+function subjectMatchesTaitoSchedule(sessionSubject: string, scheduledSubject: string): boolean {
+  if (scheduledSubject === "SAT") return normalizedSessionSubject(sessionSubject) === "SAT";
+  if (scheduledSubject === "IELTS") {
+    const family = normalizedSessionSubject(sessionSubject);
+    return family === "English" || sessionSubject.trim().toUpperCase() === "IELTS";
+  }
+  return sessionSubject === scheduledSubject;
+}
+
+function pickTaitoScheduledKeeper<
+  T extends {
+    id: string;
+    status: string;
+    bookingStatus: string;
+    hasHomework: boolean;
+    createdAt?: Date;
+  },
+>(candidates: readonly T[]): T | undefined {
+  if (candidates.length === 0) return undefined;
+  return [...candidates].sort((left, right) => {
+    const live = (session: T) =>
+      session.status !== "archived" && session.bookingStatus !== "cancelled";
+    const liveDelta = Number(live(right)) - Number(live(left));
+    if (liveDelta !== 0) return liveDelta;
+    const publishedDelta =
+      Number(right.status === "published") - Number(left.status === "published");
+    if (publishedDelta !== 0) return publishedDelta;
+    const homeworkDelta = Number(right.hasHomework) - Number(left.hasHomework);
+    if (homeworkDelta !== 0) return homeworkDelta;
+    const leftCreated = left.createdAt?.getTime() ?? 0;
+    const rightCreated = right.createdAt?.getTime() ?? 0;
+    return leftCreated - rightCreated;
+  })[0];
 }
 
 export async function reconcileTaitoSessions(courseId: string): Promise<void> {
@@ -79,16 +116,28 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       .where(eq(coursesTable.id, courseId));
   }
   const student = users.find((user) => user.email === TAITO_STUDENT_EMAIL);
-  const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
-  for (const session of courseSessions) {
-    if (isXavierSatCapabilitySession(session)) continue;
-    const dateKey = session.dateTime.toISOString().slice(0, 10);
-    if (!sessionsByDate.has(dateKey)) sessionsByDate.set(dateKey, session);
-  }
+  const claimed = new Set<string>();
 
   for (const scheduled of TAITO_FALL_2026_SESSIONS) {
     const dateTime = taitoSessionDateTime(scheduled.dateKey);
-    const existing = sessionsByDate.get(scheduled.dateKey);
+    const candidates = courseSessions.filter((session) => {
+      if (claimed.has(session.id) || isXavierSatCapabilitySession(session)) {
+        return false;
+      }
+      if (
+        student?.id &&
+        session.clientUserId &&
+        session.clientUserId !== student.id
+      ) {
+        return false;
+      }
+      if (!subjectMatchesTaitoSchedule(session.subject, scheduled.subject)) {
+        return false;
+      }
+      return matchesTaitoScheduledDate(session, scheduled.dateKey);
+    });
+    const existing = pickTaitoScheduledKeeper(candidates);
+    const extras = candidates.filter((session) => session.id !== existing?.id);
     const profile = tutorProfiles.find(
       (candidate) => candidate.email === scheduled.tutorEmail,
     );
@@ -98,41 +147,62 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
     const tutorUserId =
       profile?.userId ?? account?.id ?? existing?.tutorUserId ?? null;
     const clientUserId = student?.id ?? existing?.clientUserId ?? null;
-    const values = {
-      dateTime,
-      timezone: TAITO_SESSION_TIMEZONE,
-      subject: scheduled.subject,
-      title: sessionTitle(
-        TAITO_STUDENT_DISPLAY_NAME,
-        scheduled.subject,
-        scheduled.tutorName,
-      ),
-      status: "published" as const,
-      durationMinutes: 60,
-      hasHomework: scheduled.subject === "SAT",
-      tutorUserId,
-      clientUserId,
-    };
+    const title = sessionTitle(
+      TAITO_STUDENT_DISPLAY_NAME,
+      scheduled.subject,
+      scheduled.tutorName,
+    );
 
     if (existing) {
-      if (
-        existing.providerEventId &&
-        existing.dateTime.getTime() !== dateTime.getTime()
-      ) {
-        throw new Error(
-          `Cannot move Taito session ${existing.id} because it has a provider calendar event.`,
-        );
+      claimed.add(existing.id);
+      const live =
+        existing.status !== "archived" && existing.bookingStatus !== "cancelled";
+      if (live) {
+        await db
+          .update(sessionsTable)
+          .set({
+            subject: scheduled.subject,
+            title,
+            status: existing.status === "draft" ? "published" : existing.status,
+            hasHomework: scheduled.subject === "SAT" ? true : existing.hasHomework,
+            tutorUserId,
+            clientUserId,
+            updatedAt: new Date(),
+          })
+          .where(eq(sessionsTable.id, existing.id));
       }
-      await db
-        .update(sessionsTable)
-        .set({ ...values, updatedAt: new Date() })
-        .where(eq(sessionsTable.id, existing.id));
+      for (const extra of extras) {
+        claimed.add(extra.id);
+        if (extra.status === "archived" && extra.bookingStatus === "cancelled") {
+          continue;
+        }
+        await db
+          .update(sessionsTable)
+          .set({
+            status: "archived",
+            bookingStatus: "cancelled",
+            updatedAt: new Date(),
+          })
+          .where(eq(sessionsTable.id, extra.id));
+      }
     } else {
-      await db.insert(sessionsTable).values({
-        courseId,
-        ...values,
-        bookingStatus: "confirmed",
-      });
+      const [created] = await db
+        .insert(sessionsTable)
+        .values({
+          courseId,
+          dateTime,
+          timezone: TAITO_SESSION_TIMEZONE,
+          subject: scheduled.subject,
+          title,
+          status: "published",
+          durationMinutes: 60,
+          hasHomework: scheduled.subject === "SAT",
+          tutorUserId,
+          clientUserId,
+          bookingStatus: "confirmed",
+        })
+        .returning({ id: sessionsTable.id });
+      if (created) claimed.add(created.id);
     }
   }
 

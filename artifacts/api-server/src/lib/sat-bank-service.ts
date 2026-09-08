@@ -51,6 +51,12 @@ export { shouldReplaceFirstSessionPrework };
 import { groupMissesByWeakness } from "./sat-bank-weakness.ts";
 import { isTaitoFirstSatSession } from "./session-schedule.ts";
 import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
+import {
+  assignmentChoices,
+  assignmentDifficulty,
+  isFullLengthDiagnosticAssignment,
+  pickDiagnosticKeeper,
+} from "./assignment-visibility.ts";
 
 export const SAT_BANK_IMPORT_ROOT = resolveCollegeBoardRoot();
 
@@ -389,10 +395,10 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
       domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
       skill: bank.skill || "Skill not in extract",
       questionType: bank.questionType,
-      difficulty: bank.difficulty || "unspecified",
+      difficulty: assignmentDifficulty(bank.difficulty),
       stimulus: bank.stimulus,
       prompt: bank.prompt || "Figure or table was not recovered from this PDF page. Open the linked source PDF.",
-      choices: bank.choices,
+      choices: assignmentChoices(bank.choices) ?? [],
       correctAnswer: bank.correctAnswer,
       explanation: bank.officialExplanation,
       sourceType: bank.sourceKind === "seed" ? "seed" : "college_board",
@@ -1356,6 +1362,102 @@ export async function resetTaitoFirstSatPrework(input: {
     ...reset,
     reassigned,
   };
+}
+
+export async function dedupeFullLengthDiagnostics(courseId?: string): Promise<{
+  archivedAssignments: number;
+  sessionsTouched: number;
+}> {
+  const assignmentRows =
+    courseId == null
+      ? await db.select().from(assignmentsTable)
+      : await db
+          .select()
+          .from(assignmentsTable)
+          .where(eq(assignmentsTable.courseId, courseId));
+  const beforeSession = assignmentRows.filter(
+    (row) => row.deliveryPhase === "before_session" && row.sessionId,
+  );
+  const questionCounts = new Map<string, number>();
+  const attemptCounts = new Map<string, number>();
+  const plans =
+    beforeSession.length === 0
+      ? []
+      : await db
+          .select({
+            assignmentId: sessionPreworkPlansTable.assignmentId,
+            homeworkKind: sessionPreworkPlansTable.homeworkKind,
+            sessionId: sessionPreworkPlansTable.sessionId,
+          })
+          .from(sessionPreworkPlansTable)
+          .where(
+            inArray(
+              sessionPreworkPlansTable.sessionId,
+              [...new Set(beforeSession.map((row) => row.sessionId!))],
+            ),
+          );
+  const kindByAssignment = new Map(
+    plans.map((plan) => [plan.assignmentId, plan.homeworkKind]),
+  );
+  for (const row of beforeSession) {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assignmentQuestionsTable)
+      .where(eq(assignmentQuestionsTable.assignmentId, row.id));
+    questionCounts.set(row.id, Number(count));
+    const [{ count: attempts }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(attemptsTable)
+      .where(eq(attemptsTable.assignmentId, row.id));
+    attemptCounts.set(row.id, Number(attempts));
+  }
+  const diagnostics = beforeSession.filter((row) =>
+    isFullLengthDiagnosticAssignment({
+      title: row.title,
+      homeworkKind: kindByAssignment.get(row.id) ?? null,
+      questionCount: questionCounts.get(row.id) ?? 0,
+    }),
+  );
+  const bySession = new Map<string, typeof diagnostics>();
+  for (const row of diagnostics) {
+    const list = bySession.get(row.sessionId!) ?? [];
+    list.push(row);
+    bySession.set(row.sessionId!, list);
+  }
+  let archivedAssignments = 0;
+  let sessionsTouched = 0;
+  for (const [sessionId, rows] of bySession) {
+    if (rows.length < 2) continue;
+    const ranked = rows.map((row) => ({
+      ...row,
+      questionCount: questionCounts.get(row.id) ?? 0,
+      attemptCount: attemptCounts.get(row.id) ?? 0,
+    }));
+    const keeper = pickDiagnosticKeeper(ranked);
+    if (!keeper) continue;
+    const extras = ranked.filter((row) => row.id !== keeper.id && row.status !== "archived");
+    if (extras.length === 0) continue;
+    sessionsTouched += 1;
+    for (const extra of extras) {
+      await db
+        .update(assignmentsTable)
+        .set({ status: "archived" })
+        .where(eq(assignmentsTable.id, extra.id));
+      archivedAssignments += 1;
+    }
+    const [plan] = await db
+      .select({ id: sessionPreworkPlansTable.id })
+      .from(sessionPreworkPlansTable)
+      .where(eq(sessionPreworkPlansTable.sessionId, sessionId))
+      .limit(1);
+    if (plan) {
+      await db
+        .update(sessionPreworkPlansTable)
+        .set({ assignmentId: keeper.id, updatedAt: new Date() })
+        .where(eq(sessionPreworkPlansTable.id, plan.id));
+    }
+  }
+  return { archivedAssignments, sessionsTouched };
 }
 
 export async function homeworkKindForAssignment(

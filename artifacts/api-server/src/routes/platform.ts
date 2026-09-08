@@ -85,6 +85,7 @@ import {
   TAITO_STUDENT_EMAIL,
   calendarEventUrlForSession,
   isTaitoFallSession,
+  isTaitoFirstSatSession,
   isFall2026Term,
   meetingUrlForTerm,
   selfServeSatBookingForAccount,
@@ -345,8 +346,14 @@ import {
   persistWeaknessGroups,
   resetSessionPreworkState,
   clearBrokenEmptyPreworkAttempts,
+  dedupeFullLengthDiagnostics,
   shouldReplaceFirstSessionPrework,
 } from "../lib/sat-bank-service";
+import {
+  assignmentQuestionShape,
+  courseIdsForAssignmentList,
+  isAssignmentListedForRole,
+} from "../lib/assignment-visibility";
 import { answersMatch } from "../lib/sat-bank-retry";
 import {
   canFinalizeAttemptResult,
@@ -1054,9 +1061,16 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
     }
   }
 
-  const diagnosticSession = satSessions.get(
-    taitoSessionDateTime("2026-10-02").getTime(),
-  );
+  const diagnosticSession =
+    sessions.find((session) => {
+      if (!isTaitoFirstSatSession(session) || isXavierSatCapabilitySession(session)) {
+        return false;
+      }
+      if (session.status === "archived" || session.bookingStatus === "cancelled") {
+        return false;
+      }
+      return session.title.includes("Taito") || isTaitoFallSession(session);
+    }) ?? undefined;
   if (diagnosticSession) {
     try {
       await ensureOctober2FullDiagnostic(diagnosticSession.id);
@@ -1081,6 +1095,7 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   for (const session of satSessions.values()) {
     await ensureDuringSessionAssignment(session);
   }
+  await dedupeFullLengthDiagnostics(courseId);
 
   for (const question of HARD_BANK_SEED_QUESTIONS) {
     const [existingHard] = await db
@@ -8730,7 +8745,7 @@ async function dashboardDataForUser(user: AppUser) {
     .from(attemptsTable)
     .where(eq(attemptsTable.userId, subjectUserId))
     .orderBy(desc(attemptsTable.startedAt));
-  const assignmentSummaries = await assignmentSummariesForUser(user);
+  const assignmentSummaries = await listAssignmentsForUser(user);
   const assignmentById = new Map(assignmentSummaries.map((assignment) => [assignment.id, assignment]));
   const curriculumSessions = await Promise.all(
     scopedSessions.map(async (session) => {
@@ -9127,7 +9142,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     .from(curriculumBlocksTable)
     .where(eq(curriculumBlocksTable.sessionId, session.id))
     .orderBy(asc(curriculumBlocksTable.position));
-  const assignments = await assignmentSummariesForUser(
+  const assignments = await listAssignmentsForUser(
     req.appUser!,
     session.courseId,
     session.id,
@@ -9210,25 +9225,24 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
   );
 });
 
-async function assignmentSummariesForUser(
+async function listAssignmentsForUser(
   user: AppUser,
   courseId?: string,
   sessionId?: string,
+  assignmentId?: string,
 ) {
   const ids = await visibleCourseIds(user);
   if (courseId && !(await canAccessCourse(user, courseId))) return [];
-  const conditions = [
-    inArray(assignmentsTable.courseId, courseId ? [courseId] : ids),
-  ];
+  const scopedCourseIds = courseIdsForAssignmentList(ids, courseId);
+  if (scopedCourseIds.length === 0) return [];
+  const conditions = [inArray(assignmentsTable.courseId, scopedCourseIds)];
   if (sessionId) conditions.push(eq(assignmentsTable.sessionId, sessionId));
-  const rows =
-    ids.length === 0
-      ? []
-      : await db
-          .select()
-          .from(assignmentsTable)
-          .where(and(...conditions))
-          .orderBy(asc(assignmentsTable.deadline));
+  if (assignmentId) conditions.push(eq(assignmentsTable.id, assignmentId));
+  const rows = await db
+    .select()
+    .from(assignmentsTable)
+    .where(and(...conditions))
+    .orderBy(asc(assignmentsTable.deadline));
   const scopedRows = (
     await Promise.all(
       rows.map(async (assignment) =>
@@ -9243,10 +9257,7 @@ async function assignmentSummariesForUser(
   const subjectUserId = await dataSubjectUserId(user);
   return Promise.all(
     scopedRows.map(async (assignment) => {
-      if (
-        (user.role === "student" || user.role === "viewer") &&
-        (assignment.status === "draft" || assignment.status === "archived")
-      ) {
+      if (!isAssignmentListedForRole(user.role, assignment.status)) {
         return null;
       }
       const [{ count }] = await db
@@ -9325,7 +9336,7 @@ async function adaptiveCurriculumForSession(
   session: typeof sessionsTable.$inferSelect,
   user: AppUser,
 ) {
-  const summaries = await assignmentSummariesForUser(user, session.courseId, session.id);
+  const summaries = await listAssignmentsForUser(user, session.courseId, session.id);
   const homework = selectActivePrework(summaries);
   const subjectUserId = session.clientUserId ?? (await dataSubjectUserId(user));
   const [latestAttempt] = homework
@@ -9576,7 +9587,7 @@ router.get("/assignments", async (req: AuthedRequest, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
-  let assignments = await assignmentSummariesForUser(
+  let assignments = await listAssignmentsForUser(
     req.appUser!,
     query.data.courseId,
   );
@@ -9651,28 +9662,23 @@ router.get(
           .from(responsesTable)
           .where(eq(responsesTable.attemptId, latestAttempt.id))
       : [];
-    const summary = (
-      await assignmentSummariesForUser(req.appUser!, assignment.courseId)
-    ).find(
-      (item): item is NonNullable<typeof item> =>
-        item !== null && item.id === assignment.id,
-    )!;
+    const [summary] = await listAssignmentsForUser(
+      req.appUser!,
+      assignment.courseId,
+      undefined,
+      assignment.id,
+    );
+    if (!summary) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
     res.json(
       GetAssignmentResponse.parse({
         ...summary,
         instructions: assignment.instructions,
-        questions: visibleQuestions.map(({ assignmentQuestion, question }) => ({
-          id: question.id,
-          position: assignmentQuestion.position,
-          subject: question.subject,
-          questionType: question.questionType,
-          prompt: question.prompt,
-          stimulus: question.stimulus,
-          choices: question.choices,
-          skill: question.skill,
-          difficulty: question.difficulty,
-          predictionFirst: false,
-        })),
+        questions: visibleQuestions.map(({ assignmentQuestion, question }) =>
+          assignmentQuestionShape(question, assignmentQuestion),
+        ),
       }),
     );
   },

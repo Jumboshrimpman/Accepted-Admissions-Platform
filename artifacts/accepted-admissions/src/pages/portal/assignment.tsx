@@ -308,7 +308,7 @@ export default function PortalAssignment() {
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
   const viewer = currentUser?.role === "viewer";
-  const { data: assignment, isLoading: loadingAssignment } = useGetAssignment(assignmentId, {
+  const { data: assignment, isLoading: loadingAssignment, isError: assignmentError } = useGetAssignment(assignmentId, {
     query: { enabled: Boolean(assignmentId), queryKey: getGetAssignmentQueryKey(assignmentId) },
   });
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -443,10 +443,24 @@ export default function PortalAssignment() {
     );
   };
 
-  if (loadingAssignment || !assignment) {
+  if (loadingAssignment) {
     return (
       <div className="p-8">
         <Skeleton className="h-64 w-full rounded-2xl" />
+      </div>
+    );
+  }
+  if (assignmentError || !assignment) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 py-10">
+        <Link href="/portal" className="text-sm text-muted-foreground hover:text-primary">
+          ← Back to Dashboard
+        </Link>
+        <h2 className="text-2xl font-bold">Quiz could not be opened</h2>
+        <p className="text-muted-foreground" data-testid="assignment-open-error">
+          This quiz is unavailable or failed to load. Go back and try again — an empty error page
+          is not a saved attempt.
+        </p>
       </div>
     );
   }

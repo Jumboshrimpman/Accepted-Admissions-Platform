@@ -41,24 +41,51 @@ export function taitoSessionDateTime(dateKey: string): Date {
   return zonedDateTimeToUtc(dateKey, TAITO_SESSION_TIME, TAITO_SESSION_TIMEZONE);
 }
 
+export function sessionLocalDateKey(dateTime: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(dateTime);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+/** Oct 2 SAT in JST, including admin-edited clock times on that local date. */
+export function matchesTaitoScheduledDate(
+  session: { dateTime: Date; timezone?: string | null },
+  dateKey: string,
+): boolean {
+  const zone = session.timezone || TAITO_SESSION_TIMEZONE;
+  return (
+    sessionLocalDateKey(session.dateTime, zone) === dateKey ||
+    sessionLocalDateKey(session.dateTime, TAITO_SESSION_TIMEZONE) === dateKey ||
+    session.dateTime.toISOString().slice(0, 10) === dateKey ||
+    session.dateTime.getTime() === taitoSessionDateTime(dateKey).getTime()
+  );
+}
+
 export function isTaitoFirstSatSession(session: {
   dateTime: Date;
   subject: string;
+  timezone?: string | null;
 }): boolean {
   return (
     normalizedSessionSubject(session.subject) === "SAT" &&
-    session.dateTime.getTime() === taitoSessionDateTime(TAITO_FIRST_SAT_DATE_KEY).getTime()
+    matchesTaitoScheduledDate(session, TAITO_FIRST_SAT_DATE_KEY)
   );
 }
 
 export function isTaitoFallSession(session: {
   dateTime: Date;
   subject: string;
+  timezone?: string | null;
 }): boolean {
-  const dateKey = session.dateTime.toISOString().slice(0, 10);
   return TAITO_FALL_2026_SESSIONS.some(
     (scheduled) =>
-      scheduled.dateKey === dateKey && scheduled.subject === session.subject,
+      scheduled.subject === session.subject &&
+      matchesTaitoScheduledDate(session, scheduled.dateKey),
   );
 }
 
