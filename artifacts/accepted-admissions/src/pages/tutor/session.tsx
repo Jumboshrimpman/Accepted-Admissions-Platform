@@ -339,11 +339,8 @@ export default function TutorSession() {
                               </Button>
                             </Link>
                             {(homework.mistakeCount ?? 0) > 0 ? (
-                              <Link
-                                href={tutorWrongAnswersHref(homework.attemptId)}
-                                data-testid={`practice-wrong-answers-${homework.assignmentId}`}
-                              >
-                                <Button size="sm">
+                              <Link href={tutorWrongAnswersHref(homework.attemptId)}>
+                                <Button size="sm" data-testid={`practice-wrong-answers-${homework.assignmentId}`}>
                                   Practice wrong answers only
                                 </Button>
                               </Link>
@@ -467,14 +464,13 @@ export default function TutorSession() {
                             Open homework / result
                           </Link>
                         </Button>
-                        <Button asChild size="sm">
-                          <Link
-                            href={tutorWrongAnswersHref(adaptive.homework.latestAttemptId)}
-                            data-testid="practice-wrong-answers-before-session"
-                          >
-                            Practice wrong answers only
-                          </Link>
-                        </Button>
+                        <span data-testid="practice-wrong-answers-before-session">
+                          <Button asChild size="sm">
+                            <Link href={tutorWrongAnswersHref(adaptive.homework.latestAttemptId)}>
+                              Practice wrong answers only
+                            </Link>
+                          </Button>
+                        </span>
                       </>
                     ) : adaptive?.homework ? (
                       <p className="text-sm text-muted-foreground">No submitted attempt yet.</p>

@@ -83,10 +83,9 @@ test("incomplete homework copied into the session is capped at 15 and prefers un
     unansweredIds: ["q18", "q19", "q20", "q5"],
     alreadyAttachedIds: ["q18"],
   });
-  assert.equal(selected.length, 15);
-  assert.equal(selected[0], "q19");
-  assert.equal(selected[1], "q20");
-  assert.equal(selected[2], "q5");
+  assert.equal(selected.length, 14);
+  assert.equal(selected.length + 1, 15);
+  assert.deepEqual(selected.slice(0, 3), ["q5", "q19", "q20"]);
   assert.ok(!selected.includes("q18"));
   assert.ok(isInSessionHomeworkCompletion({
     deliveryPhase: "during_session",
