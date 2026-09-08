@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canCancelOrRescheduleSession,
   displaySessionTitle,
   disclosedSessions,
   formatSessionDate,
   formatSessionTimeRange,
+  isPastSession,
   sessionDateKey,
+  sessionEffectiveEnd,
+  sessionScheduleChangeMessage,
   sessionSubjectLabel,
 } from "./session-display.ts";
 
@@ -55,6 +59,61 @@ test("discloses three sessions before expansion without reordering", () => {
   const sessions = ["first", "second", "third", "fourth", "fifth"];
   assert.deepEqual(disclosedSessions(sessions, false), sessions.slice(0, 3));
   assert.deepEqual(disclosedSessions(sessions, true), sessions);
+});
+
+test("treats a session as past at its end, or start when it has no end", () => {
+  const now = new Date("2026-09-08T18:00:00.000Z");
+  assert.equal(
+    sessionEffectiveEnd({
+      dateTime: "2026-09-08T17:00:00.000Z",
+      durationMinutes: 60,
+    }).toISOString(),
+    "2026-09-08T18:00:00.000Z",
+  );
+  assert.equal(
+    isPastSession({ dateTime: "2026-09-08T17:00:00.000Z", durationMinutes: 60 }, now),
+    true,
+  );
+  assert.equal(
+    isPastSession({ dateTime: "2026-09-08T17:30:00.000Z", durationMinutes: 60 }, now),
+    false,
+  );
+  assert.equal(
+    isPastSession({ dateTime: "2026-09-08T17:59:59.000Z", durationMinutes: 0 }, now),
+    true,
+  );
+  assert.equal(
+    isPastSession({ dateTime: "2026-09-08T18:00:01.000Z", durationMinutes: null }, now),
+    false,
+  );
+});
+
+test("blocks cancel and reschedule once a session is past or already started", () => {
+  const now = new Date("2026-09-08T18:00:00.000Z");
+  const ended = { dateTime: "2026-09-08T16:30:00.000Z", durationMinutes: 60 };
+  const inProgress = { dateTime: "2026-09-08T17:30:00.000Z", durationMinutes: 60 };
+  const upcoming = { dateTime: "2026-09-08T19:00:00.000Z", durationMinutes: 60 };
+
+  assert.equal(canCancelOrRescheduleSession(ended, now), false);
+  assert.equal(canCancelOrRescheduleSession(inProgress, now), false);
+  assert.equal(canCancelOrRescheduleSession(upcoming, now), true);
+  assert.equal(
+    sessionScheduleChangeMessage("cancel", ended, now),
+    "A past session cannot be cancelled.",
+  );
+  assert.equal(
+    sessionScheduleChangeMessage("reschedule", ended, now),
+    "A past session cannot be rescheduled.",
+  );
+  assert.equal(
+    sessionScheduleChangeMessage("cancel", inProgress, now),
+    "A session that has started cannot be cancelled.",
+  );
+  assert.equal(
+    sessionScheduleChangeMessage("reschedule", inProgress, now),
+    "A session that has started cannot be rescheduled.",
+  );
+  assert.equal(sessionScheduleChangeMessage("cancel", upcoming, now), null);
 });
 
 test("keeps English as the user-facing label for IELTS sessions", () => {

@@ -671,6 +671,30 @@ describe("curriculum bank IA", () => {
     expect(screen.queryByText(/Google Drive/i)).toBeNull();
   });
 
+  test("editing a past session disables cancel and reschedule", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    const pastStart = new Date();
+    pastStart.setHours(pastStart.getHours() - 4);
+    mocks.curriculum.sessions = [
+      {
+        ...mocks.curriculum.sessions[0]!,
+        id: "session-past",
+        title: "Past SAT with Eunice",
+        dateTime: pastStart.toISOString(),
+      },
+    ];
+
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /^All / }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
+
+    expect(screen.getByText(/past session cannot be cancelled/i)).toBeTruthy();
+    const startInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+    expect(startInput.disabled).toBe(true);
+    const cancelledOption = screen.getByRole("option", { name: "Cancelled" }) as HTMLOptionElement;
+    expect(cancelledOption.disabled).toBe(true);
+  });
+
   test("SAT/PSAT bank tab and 30–50 question session assign stay on existing operations pages", () => {
     mocks.location = "/admin/curriculum?section=curriculum&tab=sat-bank";
     render(<AdminCurriculum />);

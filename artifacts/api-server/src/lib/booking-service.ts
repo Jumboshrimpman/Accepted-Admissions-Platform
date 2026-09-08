@@ -34,6 +34,67 @@ export function isEligibleForCreditRestore(
   return sessionDateTime.getTime() - now.getTime() >= BOOKING_CANCEL_RESTORE_NOTICE_MS;
 }
 
+export type SessionScheduleInstant = {
+  dateTime: Date;
+  durationMinutes?: number | null;
+};
+
+export type SessionScheduleChange = "cancel" | "reschedule";
+
+export function sessionEffectiveEnd(session: SessionScheduleInstant): Date {
+  const minutes = Number(session.durationMinutes);
+  if (Number.isFinite(minutes) && minutes > 0) {
+    return new Date(session.dateTime.getTime() + minutes * 60_000);
+  }
+  return session.dateTime;
+}
+
+export function isPastSession(
+  session: SessionScheduleInstant,
+  now: Date = new Date(),
+): boolean {
+  return sessionEffectiveEnd(session).getTime() <= now.getTime();
+}
+
+export function sessionScheduleChangeError(
+  session: SessionScheduleInstant,
+  action: SessionScheduleChange,
+  now: Date = new Date(),
+): { status: number; code: string; message: string } | null {
+  if (isPastSession(session, now)) {
+    return {
+      status: 409,
+      code: "SESSION_IN_THE_PAST",
+      message:
+        action === "cancel"
+          ? "A past session cannot be cancelled."
+          : "A past session cannot be rescheduled.",
+    };
+  }
+  if (session.dateTime.getTime() <= now.getTime()) {
+    return {
+      status: 409,
+      code: "SESSION_STARTED",
+      message:
+        action === "cancel"
+          ? "A session that has started cannot be cancelled."
+          : "A session that has started cannot be rescheduled.",
+    };
+  }
+  return null;
+}
+
+export function assertSessionAllowsScheduleChange(
+  session: SessionScheduleInstant,
+  action: SessionScheduleChange,
+  now: Date = new Date(),
+): void {
+  const error = sessionScheduleChangeError(session, action, now);
+  if (error) {
+    throw new BookingServiceError(error.status, error.code, error.message);
+  }
+}
+
 export function sessionDebitFulfillmentKey(sessionId: string): string {
   return `session-debit:${sessionId}`;
 }
@@ -317,13 +378,7 @@ export async function cancelBookingWithCreditPolicy(
   if (!current || current.bookingStatus === "cancelled") {
     return { session: current ?? args.session, creditRestored: false };
   }
-  if (current.dateTime <= now) {
-    throw new BookingServiceError(
-      409,
-      "SESSION_STARTED",
-      "A session that has started cannot be cancelled.",
-    );
-  }
+  assertSessionAllowsScheduleChange(current, "cancel", now);
   const creditRestored = isEligibleForCreditRestore(current.dateTime, now);
   const [saved] = await tx
     .update(sessionsTable)
