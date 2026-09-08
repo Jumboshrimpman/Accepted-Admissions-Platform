@@ -94,6 +94,15 @@ export function selfServeSatBookingForEmail(
   return email?.trim().toLowerCase() !== TAITO_STUDENT_EMAIL;
 }
 
+/** SAT buy/book is student/client commerce. Tutor and admin chrome never advertise it. */
+export function selfServeSatBookingForAccount(args: {
+  role: string | null | undefined;
+  email: string | null | undefined;
+}): boolean {
+  if (args.role !== "student" && args.role !== "viewer") return false;
+  return selfServeSatBookingForEmail(args.email);
+}
+
 export function isGoogleCalendarEventUrl(
   url: string | null | undefined,
 ): boolean {

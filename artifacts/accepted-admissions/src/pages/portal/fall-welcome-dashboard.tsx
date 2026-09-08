@@ -16,6 +16,7 @@ import {
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard } from "@/pages/portal/booking-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { canPurchaseOrBookSatCredits } from "@/lib/portal-sat";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -94,6 +95,10 @@ export function ClientDashboardView({
   adminPreview?: boolean;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
+  const studentSatCommerce =
+    canPurchaseOrBookSatCredits(dashboard.user.role) && !adminPreview;
+  const showSatCreditCard =
+    dashboard.credits.selfServeSatBooking && (studentSatCommerce || viewer);
   const [location, setLocation] = useLocation();
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
 
@@ -191,7 +196,7 @@ export function ClientDashboardView({
         </div>
       )}
 
-      {dashboard.credits.selfServeSatBooking ? (
+      {showSatCreditCard ? (
         <Card data-testid="client-credit-balance">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -218,7 +223,7 @@ export function ClientDashboardView({
                 <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
               </div>
             </div>
-            {!viewer && (
+            {studentSatCommerce && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild className="rounded-full">
                   <Link href="/portal/sat" data-testid="link-portal-sat-pay">
@@ -239,15 +244,15 @@ export function ClientDashboardView({
             )}
           </CardContent>
         </Card>
-      ) : (
+      ) : dashboard.user.role !== "tutor" ? (
         <Card data-testid="off-platform-billing-note">
           <CardContent className="p-5 text-sm text-muted-foreground">
             Session billing is handled off-platform. Join Google Meet or open the calendar event from each upcoming date below.
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {!viewer && dashboard.credits.selfServeSatBooking && <BookingCard />}
+      {studentSatCommerce && dashboard.credits.selfServeSatBooking && <BookingCard />}
 
       <Card>
         <CardHeader className="pb-3">

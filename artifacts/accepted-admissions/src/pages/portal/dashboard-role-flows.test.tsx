@@ -413,4 +413,41 @@ describe("authenticated role dashboard flows", () => {
     );
     expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
   });
+
+  test("tutor curriculum view does not show SAT purchase or book CTAs even when self-serve is on", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("tutor"),
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+      },
+    };
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.queryByTestId("client-credit-balance")).toBeNull();
+    expect(screen.queryByTestId("link-portal-sat-pay")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase SAT hours/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+  });
+
+  test("tutor dashboard has no SAT buy or book entry points", () => {
+    mocks.dashboard = dashboardForRole("tutor");
+    render(<TutorDashboard />);
+
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase SAT/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Book SAT" })).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.getByRole("link", { name: /Open workspace/i }).getAttribute("href")).toMatch(
+      /^\/tutor\//,
+    );
+  });
 });

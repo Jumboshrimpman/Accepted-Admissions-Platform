@@ -27,6 +27,11 @@ import {
 } from "@workspace/api-client-react";
 import { PortalProfileEditor } from "@/components/portal-profile-editor";
 import { portalAvatarUrl, portalDisplayName } from "@/lib/portal-profile";
+import {
+  PORTAL_SAT_BOOK_LABEL,
+  PORTAL_SAT_HREF,
+  canSeePortalSatNav,
+} from "@/lib/portal-sat";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -91,7 +96,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       default:
         return [
           { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
-          { href: "/portal/sat", label: "Book SAT", icon: WalletCards },
+          ...(canSeePortalSatNav(role)
+            ? [{ href: PORTAL_SAT_HREF, label: PORTAL_SAT_BOOK_LABEL, icon: WalletCards }]
+            : []),
         ];
     }
   };

@@ -133,6 +133,30 @@ describe("SAT offer clarity", () => {
     expect(checkout.mutate).not.toHaveBeenCalled();
   });
 
+  it("keeps tutors out of public SAT checkout", async () => {
+    authState.isSignedIn = true;
+    userState.data = { role: "tutor" };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{
+      id: "offer-1",
+      slug: "single-sat-session",
+      name: "SAT session",
+      description: "Approved session",
+      durationHours: 1,
+      totalPriceCents: 13000,
+      effectiveHourlyRateCents: 13000,
+    }]), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    render(<SatOfferings />);
+
+    const button = await screen.findByTestId("button-sat-checkout-offer-1");
+    expect(button.textContent).toContain("Student checkout unavailable");
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("link", { name: "Open tutor workspace" }).getAttribute("href")).toBe("/tutor");
+    expect(screen.queryByTestId("link-sat-stay-in-portal")).toBeNull();
+    fireEvent.click(button);
+    expect(checkout.mutate).not.toHaveBeenCalled();
+  });
+
   it("starts checkout only after a signed-in student account is confirmed", async () => {
     authState.isSignedIn = true;
     userState.data = { role: "student" };

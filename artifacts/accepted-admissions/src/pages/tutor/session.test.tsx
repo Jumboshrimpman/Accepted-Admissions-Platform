@@ -133,6 +133,9 @@ describe("tutor session review page", () => {
   test("keeps session pages light and opens the submitted attempt for review", () => {
     render(<TutorSession />);
 
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Book SAT" })).toBeNull();
     expect(screen.getByTestId("session-authoring-note").textContent).toMatch(/Curriculum bank/);
     expect(screen.queryByText("Authoring tools")).toBeNull();
     expect(screen.queryByText("Generate original practice drafts")).toBeNull();
