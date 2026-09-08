@@ -23,6 +23,7 @@ import { db, remediationRetriesTable, sessionsTable, type AppUser } from "@works
 import { eq } from "drizzle-orm";
 import { QuestionGenerationError } from "../lib/question-generation";
 import { canViewSession } from "../lib/session-privacy";
+import { restoreTaitoOctober2SatSession } from "../lib/october2-session-restore";
 import {
   assignPreworkFromBank,
   getBankCollection,
@@ -115,6 +116,34 @@ router.get(
     }
     const questions = await listBankQuestions(query.data);
     res.json(ListSatBankQuestionsResponse.parse(questions));
+  },
+);
+
+router.get(
+  "/admin/sat-bank/october2-session",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    try {
+      const result = await restoreTaitoOctober2SatSession({ dryRun: true });
+      res.json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not inspect the October 2 SAT session");
+    }
+  },
+);
+
+router.post(
+  "/admin/sat-bank/restore-october2-session",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    try {
+      const result = await restoreTaitoOctober2SatSession({
+        dryRun: req.body?.dryRun === true,
+      });
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not restore the October 2 SAT session");
+    }
   },
 );
 

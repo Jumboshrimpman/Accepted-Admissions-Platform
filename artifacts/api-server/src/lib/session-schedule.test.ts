@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isOctober2FallSatSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, resolveOctober2SessionPeople, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionBookingCancelFields, sessionNeedsVisibilityRestore, sessionTitle, sessionVisibilityRestoreFields, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -38,6 +38,84 @@ test("October 2 is the first Taito SAT session used for the full-length diagnost
       subject: "SAT",
     }),
     false,
+  );
+  assert.equal(
+    isOctober2FallSatSession({
+      dateTime: taitoSessionDateTime("2026-10-02"),
+      subject: "SAT",
+    }),
+    true,
+  );
+  assert.equal(
+    isOctober2FallSatSession({
+      dateTime: new Date("2026-10-02T16:00:00.000Z"),
+      subject: "SAT Reading",
+    }),
+    true,
+  );
+  assert.equal(
+    isOctober2FallSatSession({
+      dateTime: taitoSessionDateTime("2026-10-02"),
+      subject: "IELTS",
+    }),
+    false,
+  );
+});
+
+test("visibility restore fields clear cancel metadata without touching homework", () => {
+  assert.equal(
+    sessionNeedsVisibilityRestore({ status: "published", bookingStatus: "cancelled" }),
+    true,
+  );
+  assert.equal(
+    sessionNeedsVisibilityRestore({ status: "archived", bookingStatus: "confirmed" }),
+    true,
+  );
+  assert.equal(
+    sessionNeedsVisibilityRestore({ status: "published", bookingStatus: "confirmed" }),
+    false,
+  );
+  assert.deepEqual(sessionVisibilityRestoreFields(), {
+    status: "published",
+    bookingStatus: "confirmed",
+    cancelledAt: null,
+    cancellationReason: null,
+  });
+  const cancelledAt = new Date("2026-09-01T12:00:00.000Z");
+  assert.deepEqual(
+    sessionBookingCancelFields("cancelled", {
+      cancelledAt,
+      cancellationReason: "Cancelled by client",
+    }),
+    { cancelledAt, cancellationReason: "Cancelled by client" },
+  );
+  assert.deepEqual(
+    sessionBookingCancelFields("confirmed", {
+      cancelledAt,
+      cancellationReason: "Cancelled by client",
+    }),
+    { cancelledAt: null, cancellationReason: null },
+  );
+  assert.deepEqual(
+    resolveOctober2SessionPeople({
+      samaUserId: "sama",
+      taitoUserId: "taito",
+      xavierUserId: "xavier",
+      euniceUserId: "eunice",
+      existingClientUserId: "taito",
+      existingTutorUserId: "eunice",
+    }),
+    { clientUserId: "sama", tutorUserId: "eunice" },
+    "Sama must own the meeting for portal visibility; keep Eunice if already assigned",
+  );
+  assert.deepEqual(
+    resolveOctober2SessionPeople({
+      samaUserId: "sama",
+      xavierUserId: "xavier",
+      euniceUserId: "eunice",
+    }),
+    { clientUserId: "sama", tutorUserId: "xavier" },
+    "Xavier is the temporary tutor when the slot has no tutor yet",
   );
 });
 

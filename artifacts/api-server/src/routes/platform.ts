@@ -73,6 +73,7 @@ import {
   isFall2026Term,
   meetingUrlForTerm,
   selfServeSatBookingForAccount,
+  sessionBookingCancelFields,
   sessionTitle,
   taitoSessionDateTime,
 } from "../lib/session-schedule";
@@ -84,6 +85,7 @@ import {
   enqueueMissedReviewItems,
   prepareSessionCurriculum,
 } from "../lib/session-curriculum-prep";
+import { ensureOctober2SatSession } from "../lib/october2-session-restore";
 import {
   canViewSession,
   publicSessionShape,
@@ -1139,6 +1141,7 @@ async function ensureSeedData(): Promise<string> {
     .limit(1);
   if (existing) {
     await reconcileTaitoSessions(existing.id);
+    await ensureOctober2SatSession({ courseId: existing.id });
     await ensureSatAssessmentSeed(existing.id);
     await ensureXavierSatCapabilitySession({ courseId: existing.id });
     return existing.id;
@@ -1295,6 +1298,7 @@ async function ensureSeedData(): Promise<string> {
     })),
   );
 
+  await ensureOctober2SatSession({ courseId: course.id });
   await ensureSatAssessmentSeed(course.id);
   await ensureXavierSatCapabilitySession({ courseId: course.id });
   return course.id;
@@ -8141,10 +8145,14 @@ router.patch(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
+    const cancelFields = sessionBookingCancelFields(next.bookingStatus, existing);
+    const restoring =
+      (existing.bookingStatus === "cancelled" && next.bookingStatus !== "cancelled") ||
+      (existing.status === "archived" && next.status !== "archived");
     const updated = await db.transaction(async (tx) => {
       const [saved] = await tx
         .update(sessionsTable)
-        .set({ ...next, updatedAt: new Date() })
+        .set({ ...next, ...cancelFields, updatedAt: new Date() })
         .where(eq(sessionsTable.id, existing.id))
         .returning();
       if (!saved) {
@@ -8152,10 +8160,19 @@ router.patch(
       }
       await tx.insert(auditLogsTable).values({
         actorUserId: req.appUser!.id,
-        action: saved.status === "archived" ? "session.archived" : "session.updated",
+        action:
+          saved.status === "archived"
+            ? "session.archived"
+            : restoring
+              ? "session.restored"
+              : "session.updated",
         entityType: "session",
         entityId: saved.id,
-        metadata: { courseId: saved.courseId, status: saved.status },
+        metadata: {
+          courseId: saved.courseId,
+          status: saved.status,
+          bookingStatus: saved.bookingStatus,
+        },
       });
       return saved;
     });

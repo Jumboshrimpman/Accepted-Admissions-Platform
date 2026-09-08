@@ -15,15 +15,21 @@ import {
   NIKA_TUTOR_EMAIL,
   SHARED_FALL_MEETING_URL,
   TAITO_FALL_2026_SESSIONS,
+  TAITO_FIRST_SAT_DATE_KEY,
   TAITO_SESSION_TIMEZONE,
   TAITO_STUDENT_DISPLAY_NAME,
   TAITO_STUDENT_EMAIL,
+  resolveOctober2SessionPeople,
   isFall2026Term,
   sessionTitle,
   taitoSessionDateTime,
 } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { isXavierSatCapabilitySession } from "./xavier-sat-capability-session.ts";
+import {
+  SAMA_TEST_CLIENT_EMAIL,
+  XAVIER_TUTOR_EMAIL,
+  isXavierSatCapabilitySession,
+} from "./xavier-sat-capability-session.ts";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -55,19 +61,26 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       })
       .from(tutorProfilesTable)
       .where(
-        inArray(tutorProfilesTable.email, [EUNICE_TUTOR_EMAIL, NIKA_TUTOR_EMAIL]),
+        inArray(tutorProfilesTable.email, [
+          EUNICE_TUTOR_EMAIL,
+          NIKA_TUTOR_EMAIL,
+          XAVIER_TUTOR_EMAIL,
+        ]),
       ),
     db
       .select({
         id: usersTable.id,
         email: usersTable.email,
+        displayName: usersTable.displayName,
       })
       .from(usersTable)
       .where(
         inArray(usersTable.email, [
           TAITO_STUDENT_EMAIL,
+          SAMA_TEST_CLIENT_EMAIL,
           EUNICE_TUTOR_EMAIL,
           NIKA_TUTOR_EMAIL,
+          XAVIER_TUTOR_EMAIL,
         ]),
       ),
   ]);
@@ -79,6 +92,9 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       .where(eq(coursesTable.id, courseId));
   }
   const student = users.find((user) => user.email === TAITO_STUDENT_EMAIL);
+  const sama = users.find((user) => user.email === SAMA_TEST_CLIENT_EMAIL);
+  const xavier = users.find((user) => user.email === XAVIER_TUTOR_EMAIL);
+  const eunice = users.find((user) => user.email === EUNICE_TUTOR_EMAIL);
   const sessionsByDate = new Map<string, (typeof courseSessions)[number]>();
   for (const session of courseSessions) {
     if (isXavierSatCapabilitySession(session)) continue;
@@ -89,29 +105,66 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
   for (const scheduled of TAITO_FALL_2026_SESSIONS) {
     const dateTime = taitoSessionDateTime(scheduled.dateKey);
     const existing = sessionsByDate.get(scheduled.dateKey);
+    const isOctober2Sat =
+      scheduled.dateKey === TAITO_FIRST_SAT_DATE_KEY && scheduled.subject === "SAT";
     const profile = tutorProfiles.find(
       (candidate) => candidate.email === scheduled.tutorEmail,
     );
     const account = users.find(
       (candidate) => candidate.email === scheduled.tutorEmail,
     );
+    const october2People = isOctober2Sat
+      ? resolveOctober2SessionPeople({
+          samaUserId:
+            existing?.clientUserId && sama && existing.clientUserId === sama.id
+              ? sama.id
+              : null,
+          taitoUserId: student?.id,
+          xavierUserId:
+            existing?.tutorUserId && xavier && existing.tutorUserId === xavier.id
+              ? xavier.id
+              : null,
+          euniceUserId:
+            eunice?.id ??
+            tutorProfiles.find((candidate) => candidate.email === EUNICE_TUTOR_EMAIL)
+              ?.userId,
+          existingClientUserId: existing?.clientUserId,
+          existingTutorUserId: existing?.tutorUserId,
+        })
+      : null;
     const tutorUserId =
-      profile?.userId ?? account?.id ?? existing?.tutorUserId ?? null;
-    const clientUserId = student?.id ?? existing?.clientUserId ?? null;
+      october2People?.tutorUserId ??
+      profile?.userId ??
+      account?.id ??
+      existing?.tutorUserId ??
+      null;
+    const clientUserId =
+      october2People?.clientUserId ?? student?.id ?? existing?.clientUserId ?? null;
+    const clientName =
+      clientUserId && sama && clientUserId === sama.id
+        ? sama.displayName
+        : TAITO_STUDENT_DISPLAY_NAME;
+    const tutorName =
+      tutorUserId && xavier && tutorUserId === xavier.id
+        ? "Xavier Morales"
+        : scheduled.tutorName;
     const values = {
       dateTime,
       timezone: TAITO_SESSION_TIMEZONE,
       subject: scheduled.subject,
-      title: sessionTitle(
-        TAITO_STUDENT_DISPLAY_NAME,
-        scheduled.subject,
-        scheduled.tutorName,
-      ),
+      title: sessionTitle(clientName, scheduled.subject, tutorName),
       status: "published" as const,
       durationMinutes: 60,
       hasHomework: scheduled.subject === "SAT",
       tutorUserId,
       clientUserId,
+      ...(isOctober2Sat
+        ? {
+            bookingStatus: "confirmed" as const,
+            cancelledAt: null,
+            cancellationReason: null,
+          }
+        : {}),
     };
 
     if (existing) {

@@ -51,6 +51,72 @@ export function isTaitoFirstSatSession(session: {
   );
 }
 
+/** SAT meetings on Taito's first Fall date (exact 9 PM JST slot or same UTC day). */
+export function isOctober2FallSatSession(session: {
+  dateTime: Date;
+  subject: string;
+}): boolean {
+  if (normalizedSessionSubject(session.subject) !== "SAT") return false;
+  if (isTaitoFirstSatSession(session)) return true;
+  return session.dateTime.toISOString().slice(0, 10) === TAITO_FIRST_SAT_DATE_KEY;
+}
+
+export function sessionNeedsVisibilityRestore(session: {
+  status: string;
+  bookingStatus: string;
+}): boolean {
+  return session.status === "archived" || session.bookingStatus === "cancelled";
+}
+
+export function sessionVisibilityRestoreFields() {
+  return {
+    status: "published" as const,
+    bookingStatus: "confirmed" as const,
+    cancelledAt: null,
+    cancellationReason: null,
+  };
+}
+
+export function sessionBookingCancelFields(
+  bookingStatus: string,
+  existing?: {
+    cancelledAt: Date | null;
+    cancellationReason: string | null;
+  },
+) {
+  if (bookingStatus === "cancelled") {
+    return {
+      cancelledAt: existing?.cancelledAt ?? new Date(),
+      cancellationReason: existing?.cancellationReason ?? null,
+    };
+  }
+  return {
+    cancelledAt: null,
+    cancellationReason: null,
+  };
+}
+
+/** Oct 2 diagnostic meeting: prefer Sama (test client) + Xavier (temp tutor), else Taito + Eunice. */
+export function resolveOctober2SessionPeople(input: {
+  samaUserId?: string | null;
+  taitoUserId?: string | null;
+  xavierUserId?: string | null;
+  euniceUserId?: string | null;
+  existingClientUserId?: string | null;
+  existingTutorUserId?: string | null;
+}): { clientUserId: string | null; tutorUserId: string | null } {
+  const clientUserId =
+    input.samaUserId ?? input.taitoUserId ?? input.existingClientUserId ?? null;
+  const existingTutor = input.existingTutorUserId ?? null;
+  const keepExistingTutor =
+    Boolean(existingTutor) &&
+    (existingTutor === input.xavierUserId || existingTutor === input.euniceUserId);
+  const tutorUserId = keepExistingTutor
+    ? existingTutor
+    : (input.xavierUserId ?? input.euniceUserId ?? existingTutor);
+  return { clientUserId, tutorUserId };
+}
+
 export function isTaitoFallSession(session: {
   dateTime: Date;
   subject: string;
