@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, ChevronRight, CircleAlert, Save } from "lucide-react";
+import { ClearHomeworkButton } from "@/components/clear-homework-button";
 
 function answerText(answer: string | null | undefined, choices: AttemptResult["items"][number]["choices"]) {
   if (!answer) return "Not answered";
@@ -40,7 +41,18 @@ export default function TutorAttempt() {
       </div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><h1 className="text-3xl font-bold">{result.assignmentTitle}</h1><p className="mt-1 text-muted-foreground">{result.studentName} · {result.sessionDateTime ? `Meeting ${format(parseISO(result.sessionDateTime), "MMMM d, yyyy")} · ` : ""}Consolidated result · {result.correctCount} / {result.totalCount} correct</p></div>
-        <Badge variant={result.reviewStatus === "reviewed" ? "default" : "outline"}>{result.reviewStatus ?? "new"}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={result.reviewStatus === "reviewed" ? "default" : "outline"}>{result.reviewStatus ?? "new"}</Badge>
+          {result.sessionId ? (
+            <ClearHomeworkButton
+              sessionId={result.sessionId}
+              testId={`clear-homework-attempt-${attemptId}`}
+              onCleared={() => {
+                queryClient.invalidateQueries({ queryKey: getGetAttemptResultQueryKey(attemptId) });
+              }}
+            />
+          ) : null}
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Score</div><div className="text-3xl font-bold">{Math.round(result.score)}%</div></CardContent></Card>

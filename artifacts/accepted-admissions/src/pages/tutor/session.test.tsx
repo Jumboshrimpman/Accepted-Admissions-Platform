@@ -1,6 +1,8 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
+
+const clearHomework = vi.fn();
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
@@ -8,6 +10,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getListSessionArtifactsQueryKey: (id: string) => ["/api/artifacts", id],
   useGetCurrentUser: () => ({ data: { role: "tutor" } }),
+  customFetch: (...args: unknown[]) => clearHomework(...args),
   useGetSession: () => ({
     data: {
       id: "session-1",
@@ -22,7 +25,13 @@ vi.mock("@workspace/api-client-react", () => ({
       calendarEventUrl: null,
       student: { id: "student-1", name: "Taito Goto" },
       tutorNotes: null,
-      assignments: [],
+      assignments: [
+        {
+          id: "quiz-1",
+          deliveryPhase: "before_session",
+          title: "October pre-session mini-section",
+        },
+      ],
       blocks: [],
       homework: [
         {
@@ -127,6 +136,7 @@ import TutorSession from "./session";
 
 afterEach(() => {
   cleanup();
+  clearHomework.mockReset();
 });
 
 describe("tutor session review page", () => {
@@ -141,11 +151,16 @@ describe("tutor session review page", () => {
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
       "/tutor/attempts/attempt-1",
     );
+    expect(screen.getByTestId("clear-homework-quiz-1").textContent).toMatch(/Clear & redo/);
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Missed on pre-work/);
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Transitions/);
     expect(screen.getByRole("tab", { name: "Live plan" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Records" })).toBeTruthy();
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/not an official SAT score/);
     expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
+    fireEvent.click(screen.getByTestId("clear-homework-quiz-1"));
+    expect(screen.getByText(/same assignment and questions stay attached/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(clearHomework).not.toHaveBeenCalled();
   });
 });

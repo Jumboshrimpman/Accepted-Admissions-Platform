@@ -1235,6 +1235,43 @@ async function beforeSessionAssignments(sessionId: string) {
     );
 }
 
+/**
+ * Delete before_session attempt state (including empty/glitched submits) so the
+ * student can start again. Keeps the same assignment, questions, and pre-work
+ * plan. Does not archive homework or wipe the College Board bank.
+ */
+export async function clearSessionHomeworkAttempts(sessionId: string): Promise<{
+  sessionId: string;
+  assignmentIds: string[];
+  deletedAttempts: number;
+  keptAssignments: number;
+}> {
+  const assignments = (await beforeSessionAssignments(sessionId)).filter(
+    (row) => row.status !== "archived",
+  );
+  const assignmentIds = assignments.map((row) => row.id);
+  const attempts =
+    assignmentIds.length === 0
+      ? []
+      : await db
+          .select({ id: attemptsTable.id })
+          .from(attemptsTable)
+          .where(inArray(attemptsTable.assignmentId, assignmentIds));
+  const deletedAttempts = await deleteAttemptsByIds(attempts.map((row) => row.id));
+  if (assignments.length > 0) {
+    await db
+      .update(sessionsTable)
+      .set({ hasHomework: true, updatedAt: new Date() })
+      .where(eq(sessionsTable.id, sessionId));
+  }
+  return {
+    sessionId,
+    assignmentIds,
+    deletedAttempts,
+    keptAssignments: assignments.length,
+  };
+}
+
 export async function resetSessionPreworkState(sessionId: string): Promise<{
   sessionId: string;
   archivedAssignments: number;

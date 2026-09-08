@@ -22,9 +22,10 @@ import {
 import { db, remediationRetriesTable, sessionsTable, type AppUser } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { QuestionGenerationError } from "../lib/question-generation";
-import { canViewSession } from "../lib/session-privacy";
+import { canClearSessionHomework, canViewSession } from "../lib/session-privacy";
 import {
   assignPreworkFromBank,
+  clearSessionHomeworkAttempts,
   getBankCollection,
   getSessionLesson,
   importCollegeBoardExtracts,
@@ -195,6 +196,38 @@ router.post(
       res.status(201).json(AssignSatBankPreworkResponse.parse(result));
     } catch (error) {
       serviceError(res, error, "Could not assign pre-work from the bank");
+    }
+  },
+);
+
+router.post(
+  "/sessions/:sessionId/clear-prework",
+  ensureRole(["administrator", "tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const sessionId =
+      typeof req.params.sessionId === "string" ? req.params.sessionId.trim() : "";
+    if (!sessionId) {
+      res.status(400).json({ error: "Session id is required" });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId))
+      .limit(1);
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    if (!canClearSessionHomework(req.appUser!, session)) {
+      res.status(403).json({ error: "Insufficient permission" });
+      return;
+    }
+    try {
+      const result = await clearSessionHomeworkAttempts(session.id);
+      res.status(200).json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not clear session homework");
     }
   },
 );

@@ -259,6 +259,15 @@ export async function visibleSessionsForUser(
   );
 }
 
+/** Staff-only: admin, or the tutor assigned to this student’s session. */
+export function canClearSessionHomework(
+  user: Pick<AppUser, "id" | "role">,
+  session: Pick<typeof sessionsTable.$inferSelect, "tutorUserId">,
+): boolean {
+  if (user.role === "administrator") return true;
+  return user.role === "tutor" && session.tutorUserId === user.id;
+}
+
 export async function canViewSession(
   user: AppUser,
   session: typeof sessionsTable.$inferSelect,

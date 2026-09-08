@@ -555,6 +555,7 @@ describe("curriculum bank IA", () => {
     expect(screen.getByRole("link", { name: "Open quiz" }).getAttribute("href")).toBe(
       "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-1",
     );
+    expect(screen.getByTestId("clear-homework-session-1").textContent).toMatch(/Clear & redo/);
     fireEvent.click(screen.getByText("View questions"));
     expect(screen.getByText("Which choice best supports the claim?")).toBeTruthy();
     expect(screen.getByText("What is the function of the third paragraph?")).toBeTruthy();

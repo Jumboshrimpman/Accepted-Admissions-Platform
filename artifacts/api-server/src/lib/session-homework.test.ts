@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { hydrateMistakePrompts, selectActivePrework } from "./session-homework.ts";
+import {
+  canShowClearHomework,
+  hydrateMistakePrompts,
+  selectActivePrework,
+} from "./session-homework.ts";
 
 test("selectActivePrework ignores archived session copies left by replace/remove", () => {
   const archived = {
@@ -21,6 +25,41 @@ test("selectActivePrework ignores archived session copies left by replace/remove
   };
   assert.equal(selectActivePrework([archived, during, live])?.id, "new-clone");
   assert.equal(selectActivePrework([archived, during]), null);
+});
+
+test("canShowClearHomework is only for live before_session attempts, including empty ones", () => {
+  assert.equal(
+    canShowClearHomework({
+      deliveryPhase: "before_session",
+      assignmentStatus: "published",
+      attemptId: "attempt-1",
+    }),
+    true,
+  );
+  assert.equal(
+    canShowClearHomework({
+      deliveryPhase: "during_session",
+      assignmentStatus: "published",
+      attemptId: "attempt-1",
+    }),
+    false,
+  );
+  assert.equal(
+    canShowClearHomework({
+      deliveryPhase: "before_session",
+      assignmentStatus: "archived",
+      attemptId: "attempt-1",
+    }),
+    false,
+  );
+  assert.equal(
+    canShowClearHomework({
+      deliveryPhase: "before_session",
+      assignmentStatus: "published",
+      attemptId: null,
+    }),
+    false,
+  );
 });
 
 test("hydrateMistakePrompts fills empty prompts from the question bank so review focus is not hidden", () => {
