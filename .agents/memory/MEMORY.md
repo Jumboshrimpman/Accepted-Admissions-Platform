@@ -1,5 +1,5 @@
 - [OpenAPI and Zod generator compatibility](openapi-zod-compatibility.md) — avoid Zod 4-only formats and enforce ignored object constraints in handlers.
-- [Stripe financial integrity](stripe-financial-integrity.md) — settle before crediting, enforce DB uniqueness, lock cumulative refunds, and isolate invoice items.
+- [Stripe financial integrity](stripe-financial-integrity.md) — settle before crediting, grant `durationHours` before marking paid, production webhook is `app.acceptedadmissions.org/api/stripe/webhook` (not Replit), lock cumulative refunds, and isolate invoice items.
 - [Migration ledger drift](merged-migration-reconciliation.md) — schema objects can exist before their migration ledger entries; keep reconciliation DDL idempotent.
 - [Clerk identity claims](clerk-identity-claims.md) — development sessions may omit email claims; resolve the verified email server-side before account linking.
 - [OAuth from Replit previews](oauth-preview-navigation.md) — launch provider authorization as a top-level navigation; embedded preview iframes can trigger provider 403 pages.

@@ -5,6 +5,8 @@ description: Non-obvious invariants for safe SAT payment fulfillment, refunds, a
 
 Grant credits only after a Stripe event proves funds are paid; a completed Checkout session can still be unpaid for asynchronous methods. Enforce fulfillment uniqueness in the database rather than with a read-before-insert check.
 
+When a catalog product exists, grant `product.durationHours` in the same transaction **before** marking the payment paid. If the product row is missing, fail the webhook and leave the payment unpaid. Production Stripe must post to `https://app.acceptedadmissions.org/api/stripe/webhook`, never the retired Replit host.
+
 **Why:** Different success events can arrive concurrently, and event-level idempotency alone does not stop both events from fulfilling the same purchase.
 
 **How to apply:** Lock and reread the payment row before state or cumulative-refund calculations, make transitions monotonic, and use a unique nullable fulfillment key for every credit/debit side effect.

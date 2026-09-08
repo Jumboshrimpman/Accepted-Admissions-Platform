@@ -11,6 +11,7 @@ import {
 } from "./middlewares/clerkProxyMiddleware";
 import { processStripeWebhook } from "./lib/payment-service";
 import { constructVerifiedStripeEvent } from "./lib/stripe-client";
+import { PRODUCTION_STRIPE_WEBHOOK_PATH } from "./lib/stripe-webhook-url";
 
 const app: Express = express();
 
@@ -37,7 +38,7 @@ app.use(
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.post(
-  "/api/stripe/webhook",
+  PRODUCTION_STRIPE_WEBHOOK_PATH,
   express.raw({ type: "application/json" }),
   async (req, res): Promise<void> => {
     const signature = req.header("stripe-signature");
@@ -51,7 +52,14 @@ app.post(
         return;
       }
       const event = constructVerifiedStripeEvent(req.body, signature);
-      await processStripeWebhook(event);
+      try {
+        await processStripeWebhook(event);
+      } catch (error) {
+        req.log?.warn({ err: error }, "Stripe webhook processing failed");
+        const message = error instanceof Error ? error.message : "Stripe webhook could not be processed";
+        res.status(500).json({ error: message });
+        return;
+      }
       res.status(200).json({ received: true });
     } catch (error) {
       req.log?.warn({ err: error }, "Stripe webhook rejected or failed");

@@ -68,7 +68,9 @@ Verify: open the OAuth client, confirm the URI appears character-for-character, 
 
 Until `APP_ORIGIN` is the public portal origin, hosted payment redirects and Calendar OAuth return URLs will not land on this frontend.
 
-Also add the same public HTTPS origin in the Clerk Dashboard as an allowed/authorized domain. Stripe webhooks should continue to post **directly to Railway**, not through Vercel.
+Also add the same public HTTPS origin in the Clerk Dashboard as an allowed/authorized domain.
+
+**Stripe webhook (production):** the Stripe Dashboard endpoint must be exactly `https://app.acceptedadmissions.org/api/stripe/webhook`. Vercel rewrites `/api/*` to Railway, so that public URL is the supported delivery path. Do **not** use `accepted-admissions-platform.replit.app/api/stripe/webhook` (retired; 100% delivery errors). See `docs/stripe-webhook.md`.
 
 ## Private test portal
 

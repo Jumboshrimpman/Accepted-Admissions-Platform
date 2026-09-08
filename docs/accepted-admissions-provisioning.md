@@ -117,3 +117,7 @@ Expected error states:
   before changing it.
 - `403` with `VIEW_ONLY`: the authenticated account is a linked viewer and the
   requested method would modify private portal data.
+
+## Stripe webhook
+
+Production Stripe must deliver to `https://app.acceptedadmissions.org/api/stripe/webhook`. Do not use the retired Replit host. People provisioning still does not send Clerk invitations. See `docs/stripe-webhook.md`.
