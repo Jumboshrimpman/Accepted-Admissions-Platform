@@ -6,15 +6,22 @@ import * as googleCalendar from "./google-calendar.ts";
 
 const {
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
+  calendarBusyFailureAction,
+  calendarConnectProbeFailure,
   calendarOAuthReturnHref,
   calendarOAuthStateFailureMessage,
+  classifyGoogleCalendarRequestFailure,
   classifyGoogleProviderError,
   classifyGoogleTokenExchangeFailure,
   createCalendarOAuthState,
   decryptCalendarToken,
   encryptCalendarToken,
   getGoogleCalendarConfig,
+  GOOGLE_CALENDAR_DATA_SCOPES,
   GOOGLE_CALENDAR_SCOPES,
+  GoogleCalendarRequestError,
+  grantedScopesIncludeRequired,
+  isGoogleCalendarAuthFailure,
   googleAccountMatchesPortalEmails,
   googleCalendarAuthorizationUrl,
   googleCalendarCompletionHtml,
@@ -38,9 +45,14 @@ test("requests the configured least-privilege Google Calendar scopes", () => {
   assert.deepEqual(GOOGLE_CALENDAR_SCOPES, [
     "openid",
     "email",
-    "https://www.googleapis.com/auth/calendar.events.freebusy",
-    "https://www.googleapis.com/auth/calendar.events.owned",
+    "https://www.googleapis.com/auth/calendar.freebusy",
+    "https://www.googleapis.com/auth/calendar.events",
   ]);
+  assert.deepEqual(GOOGLE_CALENDAR_DATA_SCOPES, [
+    "https://www.googleapis.com/auth/calendar.freebusy",
+    "https://www.googleapis.com/auth/calendar.events",
+  ]);
+  assert.equal(GOOGLE_CALENDAR_SCOPES.includes("https://www.googleapis.com/auth/calendar.events.freebusy"), false);
 });
 
 test("OAuth state is signed and scoped to the tutor profile, return path, and callback", () => {
@@ -267,6 +279,12 @@ test("getGoogleCalendarConfig uses environment-provided HTTPS redirect", () => {
     "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
   );
   assert.equal(parsed.searchParams.get("login_hint"), "xaver.rmz6@gmail.com");
+  assert.equal(parsed.searchParams.get("include_granted_scopes"), "true");
+  assert.equal(parsed.searchParams.get("prompt"), "consent select_account");
+  assert.equal(
+    parsed.searchParams.get("scope"),
+    "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+  );
   process.env.GOOGLE_CALENDAR_CLIENT_ID = previous.id;
   process.env.GOOGLE_CALENDAR_CLIENT_SECRET = previous.secret;
   process.env.GOOGLE_CALENDAR_REDIRECT_URI = previous.redirect;
@@ -359,4 +377,52 @@ test("classifies cancelled, rejected, and redirect-mismatch Google failures", ()
     ),
     "https://app.acceptedadmissions.org/tutor?calendar=error&reason=redirect_mismatch",
   );
+});
+
+test("granted Google scopes accept userinfo.email aliases and require calendar data scopes", () => {
+  assert.equal(
+    grantedScopesIncludeRequired(
+      "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+    ),
+    true,
+  );
+  assert.equal(
+    grantedScopesIncludeRequired(
+      "openid email https://www.googleapis.com/auth/calendar.events.owned",
+    ),
+    false,
+  );
+  assert.equal(
+    grantedScopesIncludeRequired(
+      "openid email https://www.googleapis.com/auth/calendar.events.freebusy https://www.googleapis.com/auth/calendar.events.owned",
+    ),
+    false,
+  );
+});
+
+test("freeBusy auth and scope errors disconnect; transient errors stay connected", () => {
+  const insufficient = classifyGoogleCalendarRequestFailure(
+    403,
+    JSON.stringify({
+      error: {
+        code: 403,
+        message: "Request had insufficient authentication scopes.",
+        status: "PERMISSION_DENIED",
+        details: [{ reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT" }],
+      },
+    }),
+  );
+  assert.equal(insufficient instanceof GoogleCalendarRequestError, true);
+  assert.equal(isGoogleCalendarAuthFailure(insufficient), true);
+  assert.equal(calendarBusyFailureAction(insufficient), "disconnect");
+  assert.equal(calendarConnectProbeFailure(insufficient).outcome, "rejected");
+
+  const unauthorized = classifyGoogleCalendarRequestFailure(401, "{}");
+  assert.equal(calendarBusyFailureAction(unauthorized), "disconnect");
+
+  const unavailable = classifyGoogleCalendarRequestFailure(503, "{}");
+  assert.equal(isGoogleCalendarAuthFailure(unavailable), false);
+  assert.equal(calendarBusyFailureAction(unavailable), "unavailable");
+  assert.equal(calendarConnectProbeFailure(unavailable).outcome, "unavailable");
+  assert.equal(calendarBusyFailureAction(new Error("network down")), "unavailable");
 });

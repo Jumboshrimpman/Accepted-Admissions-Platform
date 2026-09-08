@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { calendarEventPayload, generateAvailableSlots, overlapsBusyWindow, zonedDateTimeToUtc } from "./booking.ts";
+import {
+  calendarEventPayload,
+  generateAvailableSlots,
+  overlapsBusyWindow,
+  SAT_BOOKING_TIMEZONE,
+  SAT_BOOKING_WEEKLY_HOURS,
+  SAT_BOOKING_WINDOW_END,
+  SAT_BOOKING_WINDOW_START,
+  zonedDateTimeToUtc,
+} from "./booking.ts";
 
 const rule = {
   timezone: "America/New_York",
@@ -60,6 +71,84 @@ test("honors booking notice and blackout dates", () => {
     new Date("2026-08-30T00:00:00.000Z"),
   );
   assert.deepEqual(slots, []);
+});
+
+test("SAT booking hours expose 07:00–20:00 America/New_York weekday starts", () => {
+  assert.equal(SAT_BOOKING_TIMEZONE, "America/New_York");
+  assert.equal(SAT_BOOKING_WINDOW_START, "07:00");
+  assert.equal(SAT_BOOKING_WINDOW_END, "21:00");
+  assert.deepEqual(SAT_BOOKING_WEEKLY_HOURS, {
+    "1": [{ start: "07:00", end: "21:00" }],
+    "2": [{ start: "07:00", end: "21:00" }],
+    "3": [{ start: "07:00", end: "21:00" }],
+    "4": [{ start: "07:00", end: "21:00" }],
+    "5": [{ start: "07:00", end: "21:00" }],
+  });
+  const slots = generateAvailableSlots(
+    {
+      timezone: SAT_BOOKING_TIMEZONE,
+      weeklyHours: SAT_BOOKING_WEEKLY_HOURS,
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    new Date("2026-08-31T00:00:00.000Z"),
+    new Date("2026-09-01T05:00:00.000Z"),
+    60,
+    [],
+    [],
+    new Date("2026-08-30T00:00:00.000Z"),
+  );
+  assert.equal(slots[0], zonedDateTimeToUtc("2026-08-31", "07:00", SAT_BOOKING_TIMEZONE).toISOString());
+  assert.equal(slots.at(-1), zonedDateTimeToUtc("2026-08-31", "20:00", SAT_BOOKING_TIMEZONE).toISOString());
+  assert.equal(slots.includes(zonedDateTimeToUtc("2026-08-31", "06:00", SAT_BOOKING_TIMEZONE).toISOString()), false);
+  assert.equal(slots.includes(zonedDateTimeToUtc("2026-08-31", "21:00", SAT_BOOKING_TIMEZONE).toISOString()), false);
+  assert.equal(
+    slots.includes(zonedDateTimeToUtc("2026-08-31", "11:00", SAT_BOOKING_TIMEZONE).toISOString()),
+    true,
+  );
+});
+
+test("SAT booking hours omit Google-busy mornings and keep later free hours", () => {
+  const busyStart = zonedDateTimeToUtc("2026-08-31", "07:00", SAT_BOOKING_TIMEZONE);
+  const slots = generateAvailableSlots(
+    {
+      timezone: SAT_BOOKING_TIMEZONE,
+      weeklyHours: SAT_BOOKING_WEEKLY_HOURS,
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    new Date("2026-08-31T00:00:00.000Z"),
+    new Date("2026-09-01T05:00:00.000Z"),
+    60,
+    [{ start: busyStart.toISOString(), end: new Date(busyStart.getTime() + 60_000 * 60).toISOString() }],
+    [],
+    new Date("2026-08-30T00:00:00.000Z"),
+  );
+  assert.equal(slots.includes(busyStart.toISOString()), false);
+  assert.equal(slots.includes(zonedDateTimeToUtc("2026-08-31", "08:00", SAT_BOOKING_TIMEZONE).toISOString()), true);
+});
+
+test("SAT booking seed and migration lock the 07:00–21:00 ET window", async () => {
+  const platformSource = await readFile(
+    fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
+    "utf8",
+  );
+  const migrationSource = await readFile(
+    fileURLToPath(new URL("../../../../lib/db/drizzle/0036_sat_booking_hours_7_to_21.sql", import.meta.url)),
+    "utf8",
+  );
+  assert.match(platformSource, /SAT_BOOKING_WEEKLY_HOURS/);
+  assert.match(platformSource, /SAT_BOOKING_TIMEZONE/);
+  assert.doesNotMatch(platformSource, /start: "09:00", end: "17:00"/);
+  assert.doesNotMatch(platformSource, /start: "10:00", end: "18:00"/);
+  assert.match(migrationSource, /07:00/);
+  assert.match(migrationSource, /21:00/);
+  assert.match(migrationSource, /Xavier Morales/);
+  assert.match(migrationSource, /Eunice Chon/);
+  assert.match(migrationSource, /calendar\.freebusy/);
+  assert.match(migrationSource, /calendar_status/);
 });
 
 test("event payload contains only the approved session details", () => {

@@ -95,6 +95,9 @@ describe("calendar connection helpers", () => {
         /https:\/\/app\.acceptedadmissions\.org\/api\/calendar\/oauth\/callback/,
       ),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/Reconnect if booking hours disappeared after a permissions update/),
+    ).toBeTruthy();
   });
 
   test("builds a connect URL that returns to the tutor dashboard", () => {
