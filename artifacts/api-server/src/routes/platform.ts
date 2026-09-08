@@ -71,7 +71,7 @@ import {
   generateAvailableSlots,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
-  SAT_BOOKING_WEEKLY_HOURS,
+  satTutorWeeklyHours,
   type AvailabilityRule,
   type BusyWindow,
 } from "../lib/booking";
@@ -1674,11 +1674,12 @@ async function ensureUpgradeSeedData(): Promise<void> {
       .from(availabilityRulesTable)
       .where(eq(availabilityRulesTable.tutorProfileId, tutor.id))
       .limit(1);
+    const weeklyHours = satTutorWeeklyHours(tutor.name);
     if (!rule) {
       await db.insert(availabilityRulesTable).values({
         tutorProfileId: tutor.id,
         timezone: SAT_BOOKING_TIMEZONE,
-        weeklyHours: SAT_BOOKING_WEEKLY_HOURS,
+        weeklyHours,
         bookingNoticeMinutes: 1440,
         bufferMinutes: 15,
         blackoutDates: [],
@@ -1688,7 +1689,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         .update(availabilityRulesTable)
         .set({
           timezone: SAT_BOOKING_TIMEZONE,
-          weeklyHours: SAT_BOOKING_WEEKLY_HOURS,
+          weeklyHours,
           updatedAt: new Date(),
         })
         .where(eq(availabilityRulesTable.id, rule.id));

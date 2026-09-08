@@ -11,6 +11,8 @@ import {
   SAT_BOOKING_WEEKLY_HOURS,
   SAT_BOOKING_WINDOW_END,
   SAT_BOOKING_WINDOW_START,
+  satTutorWeeklyHours,
+  XAVIER_BOOKING_WEEKLY_HOURS,
   zonedDateTimeToUtc,
 } from "./booking.ts";
 
@@ -84,6 +86,17 @@ test("SAT booking hours expose 07:00–20:00 America/New_York weekday starts", (
     "4": [{ start: "07:00", end: "21:00" }],
     "5": [{ start: "07:00", end: "21:00" }],
   });
+  assert.deepEqual(XAVIER_BOOKING_WEEKLY_HOURS, {
+    "0": [{ start: "07:00", end: "21:00" }],
+    "1": [{ start: "07:00", end: "21:00" }],
+    "2": [{ start: "07:00", end: "21:00" }],
+    "3": [{ start: "07:00", end: "21:00" }],
+    "4": [{ start: "07:00", end: "21:00" }],
+    "5": [{ start: "07:00", end: "21:00" }],
+    "6": [{ start: "07:00", end: "21:00" }],
+  });
+  assert.deepEqual(satTutorWeeklyHours("Xavier Morales"), XAVIER_BOOKING_WEEKLY_HOURS);
+  assert.deepEqual(satTutorWeeklyHours("Eunice Chon"), SAT_BOOKING_WEEKLY_HOURS);
   const slots = generateAvailableSlots(
     {
       timezone: SAT_BOOKING_TIMEZONE,
@@ -106,6 +119,70 @@ test("SAT booking hours expose 07:00–20:00 America/New_York weekday starts", (
   assert.equal(
     slots.includes(zonedDateTimeToUtc("2026-08-31", "11:00", SAT_BOOKING_TIMEZONE).toISOString()),
     true,
+  );
+});
+
+test("Xavier weekend hours are bookable; weekday-only SAT hours are not", () => {
+  const saturdayStart = zonedDateTimeToUtc("2026-09-05", "00:00", SAT_BOOKING_TIMEZONE);
+  const sundayStart = zonedDateTimeToUtc("2026-09-06", "00:00", SAT_BOOKING_TIMEZONE);
+  const xavierSaturday = generateAvailableSlots(
+    {
+      timezone: SAT_BOOKING_TIMEZONE,
+      weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    saturdayStart,
+    sundayStart,
+    60,
+    [],
+    [],
+    new Date("2026-08-30T00:00:00.000Z"),
+  );
+  const euniceSaturday = generateAvailableSlots(
+    {
+      timezone: SAT_BOOKING_TIMEZONE,
+      weeklyHours: SAT_BOOKING_WEEKLY_HOURS,
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    saturdayStart,
+    sundayStart,
+    60,
+    [],
+    [],
+    new Date("2026-08-30T00:00:00.000Z"),
+  );
+  assert.equal(
+    xavierSaturday[0],
+    zonedDateTimeToUtc("2026-09-05", "07:00", SAT_BOOKING_TIMEZONE).toISOString(),
+  );
+  assert.equal(
+    xavierSaturday.at(-1),
+    zonedDateTimeToUtc("2026-09-05", "20:00", SAT_BOOKING_TIMEZONE).toISOString(),
+  );
+  assert.deepEqual(euniceSaturday, []);
+
+  const xavierSunday = generateAvailableSlots(
+    {
+      timezone: SAT_BOOKING_TIMEZONE,
+      weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    sundayStart,
+    zonedDateTimeToUtc("2026-09-07", "00:00", SAT_BOOKING_TIMEZONE),
+    60,
+    [],
+    [],
+    new Date("2026-08-30T00:00:00.000Z"),
+  );
+  assert.equal(
+    xavierSunday[0],
+    zonedDateTimeToUtc("2026-09-06", "07:00", SAT_BOOKING_TIMEZONE).toISOString(),
   );
 });
 
@@ -139,12 +216,14 @@ test("SAT booking seed and migration lock the 07:00–21:00 ET window", async ()
     fileURLToPath(new URL("../../../../lib/db/drizzle/0036_sat_booking_hours_7_to_21.sql", import.meta.url)),
     "utf8",
   );
-  assert.match(platformSource, /SAT_BOOKING_WEEKLY_HOURS/);
+  assert.match(platformSource, /satTutorWeeklyHours/);
   assert.match(platformSource, /SAT_BOOKING_TIMEZONE/);
   assert.doesNotMatch(platformSource, /start: "09:00", end: "17:00"/);
   assert.doesNotMatch(platformSource, /start: "10:00", end: "18:00"/);
   assert.match(migrationSource, /07:00/);
   assert.match(migrationSource, /21:00/);
+  assert.match(migrationSource, /"0": \[{"start": "07:00", "end": "21:00"}\]/);
+  assert.match(migrationSource, /"6": \[{"start": "07:00", "end": "21:00"}\]/);
   assert.match(migrationSource, /Xavier Morales/);
   assert.match(migrationSource, /Eunice Chon/);
   assert.match(migrationSource, /calendar\.freebusy/);
