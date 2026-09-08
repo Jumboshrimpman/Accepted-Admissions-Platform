@@ -20,6 +20,8 @@ import {
   useListSessionArtifacts,
   useUpsertSessionArtifact,
 } from "@workspace/api-client-react";
+import { ClearHomeworkButton } from "@/components/clear-homework-button";
+import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homework";
 import {
   BookOpenCheck,
   ArrowDown,
@@ -327,13 +329,33 @@ export default function TutorSession() {
                           </Badge>
                         </div>
                       )}
-                      {homework.attemptId && (
-                        <Link href={`/tutor/attempts/${homework.attemptId}`}>
-                          <Button size="sm" variant="outline" className="mt-3">
-                            Review right / wrong answers
-                          </Button>
-                        </Link>
-                      )}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {homework.attemptId && (
+                          <Link href={`/tutor/attempts/${homework.attemptId}`}>
+                            <Button size="sm" variant="outline">
+                              Review right / wrong answers
+                            </Button>
+                          </Link>
+                        )}
+                        {canShowClearHomework({
+                          deliveryPhase: isBeforeSessionHomework(session.assignments, homework.assignmentId)
+                            ? "before_session"
+                            : "during_session",
+                          assignmentStatus: homework.status,
+                          attemptId: homework.attemptId,
+                        }) ? (
+                          <ClearHomeworkButton
+                            sessionId={sessionId}
+                            testId={`clear-homework-${homework.assignmentId}`}
+                            onCleared={() => {
+                              queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+                              queryClient.invalidateQueries({
+                                queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+                              });
+                            }}
+                          />
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -424,15 +446,29 @@ export default function TutorSession() {
                       ? `${adaptive.homework.title} · ${adaptive.homework.questionCount} questions`
                       : "No homework assignment is linked to this session yet."}
                   </p>
-                  {adaptive?.homework?.latestAttemptId ? (
-                    <Button asChild size="sm" variant="secondary" className="mt-3">
-                      <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>
-                        Open homework / result
-                      </Link>
-                    </Button>
-                  ) : adaptive?.homework ? (
-                    <p className="mt-3 text-sm text-muted-foreground">No submitted attempt yet.</p>
-                  ) : null}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {adaptive?.homework?.latestAttemptId ? (
+                      <Button asChild size="sm" variant="secondary">
+                        <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>
+                          Open homework / result
+                        </Link>
+                      </Button>
+                    ) : adaptive?.homework ? (
+                      <p className="text-sm text-muted-foreground">No submitted attempt yet.</p>
+                    ) : null}
+                    {adaptive?.homework?.latestAttemptId ? (
+                      <ClearHomeworkButton
+                        sessionId={sessionId}
+                        testId="clear-homework-before-session"
+                        onCleared={() => {
+                          queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+                          queryClient.invalidateQueries({
+                            queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+                          });
+                        }}
+                      />
+                    ) : null}
+                  </div>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Incomplete homework can still be worked through during the session.
                   </p>

@@ -1025,6 +1025,28 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /sessions/{sessionId}/clear-prework:
+    post:
+      operationId: clearSessionHomework
+      tags: [portal]
+      summary: Clear before-session homework attempts so the student can redo
+      description: >
+        Tutor of that session or an administrator can delete the student's
+        before_session attempt state (responses, timer events, result), including
+        empty or glitched submits. The same assignment, questions, and pre-work
+        plan stay attached so the student can start a fresh attempt. Does not
+        wipe the College Board bank or during-session collaborative practice.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Cleared attempt state; assignment kept
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClearSessionHomeworkResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /sessions/{sessionId}/blocks:
     post:
       operationId: createCurriculumBlock
@@ -2883,6 +2905,16 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AttemptAnalysis"
             - type: "null"
+    ClearSessionHomeworkResult:
+      type: object
+      required: [sessionId, assignmentIds, deletedAttempts, keptAssignments]
+      properties:
+        sessionId: { type: string }
+        assignmentIds:
+          type: array
+          items: { type: string }
+        deletedAttempts: { type: number }
+        keptAssignments: { type: number }
     AdaptiveQuestion:
       allOf:
         - $ref: "#/components/schemas/AssignmentQuestion"

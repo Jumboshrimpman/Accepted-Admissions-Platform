@@ -68,6 +68,7 @@ import {
   sessionSubjectLabel,
 } from "@/lib/session-display";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { ClearHomeworkButton } from "@/components/clear-homework-button";
 import {
   adminCurriculumHref,
   readAdminCurriculumSearch,
@@ -883,6 +884,9 @@ function SessionCard({
                       {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && (
                         <span className="text-xs text-muted-foreground">No attempt yet</span>
                       )}
+                      {reviews.some((item) => item.assignmentId === quiz.id) ? (
+                        <ClearHomeworkButton sessionId={session.id} testId={`clear-homework-${session.id}`} onCleared={onChanged} />
+                      ) : null}
                       <Button asChild size="sm" variant="outline">
                         <Link href={`/admin/curriculum?section=curriculum&tab=quizzes&quiz=${quiz.id}`}>Open quiz</Link>
                       </Button>
