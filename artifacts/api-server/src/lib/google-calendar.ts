@@ -3,7 +3,7 @@ import {
   isPlatformInternalHost,
   resolvePublicRequestOrigin,
   type ForwardedOriginInput,
-} from "./public-origin";
+} from "./public-origin.ts";
 
 export { resolvePublicRequestOrigin };
 
