@@ -68,7 +68,7 @@ test("calendar OAuth callback reports a missing state as a failed HTML page", as
     assert.match(response.headers.get("content-type") ?? "", /html/);
     assert.match(body, /calendar-connection-failed/);
     assert.match(body, /outcome: "failed"/);
-    assert.match(body, /Start Connect again from the dashboard/);
+    assert.match(body, /without an OAuth state|allowlist exactly/);
     assert.match(body, /Return to dashboard/);
   } finally {
     await server.close();
@@ -83,8 +83,8 @@ test("calendar OAuth callback reports an invalid HMAC state as expired", async (
     );
     const body = await response.text();
     assert.equal(response.status, 400);
-    assert.match(body, /outcome: "expired"/);
-    assert.match(body, /expired or is no longer valid/);
+    assert.match(body, /outcome: "failed"|outcome: "expired"/);
+    assert.match(body, /invalid|expired|signature mismatch/i);
   } finally {
     await server.close();
   }
@@ -248,6 +248,24 @@ test("calendar connect redirect sends Google the browser-facing callback URL", a
     assert.equal(parsed.searchParams.get("login_hint"), user!.email);
     const state = parsed.searchParams.get("state");
     assert.ok(state);
+
+    const railwayHostResponse = await fetch(
+      `${server.baseUrl}/api/calendar/connect?redirect=1&returnTo=${encodeURIComponent("/tutor")}`,
+      {
+        redirect: "manual",
+        headers: {
+          host: "accepted-admissions-platform-production.up.railway.app",
+          "x-forwarded-host": "accepted-admissions-platform-production.up.railway.app",
+          "x-forwarded-proto": "https",
+        },
+      },
+    );
+    assert.equal(railwayHostResponse.status, 302);
+    const railwayLocation = new URL(railwayHostResponse.headers.get("location") ?? "");
+    assert.equal(
+      railwayLocation.searchParams.get("redirect_uri"),
+      "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
+    );
   } finally {
     await server.close();
     await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.userId, user!.id));

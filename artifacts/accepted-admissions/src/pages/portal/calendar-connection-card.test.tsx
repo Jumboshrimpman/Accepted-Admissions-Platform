@@ -70,7 +70,7 @@ function sendCalendarMessage(data: Record<string, string>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.currentUserQuery.data = { role: "tutor" };
+  mocks.currentUserQuery.data = { role: "tutor", email: "xaver.rmz6@gmail.com" };
   mocks.connectionsQuery.data = [];
   mocks.connectionsQuery.isLoading = false;
   mocks.connectionsQuery.refetch = vi.fn(async () => ({ data: [] }));
@@ -84,6 +84,19 @@ afterEach(() => {
 });
 
 describe("calendar connection helpers", () => {
+  test("disconnected card names the exact Google Console callback URI", () => {
+    mocks.currentUserQuery.data = { role: "tutor", email: "eunice_chon@berkeley.edu" };
+    renderCard();
+    expect(
+      screen.getByText(/eunice_chon@berkeley.edu/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /https:\/\/app\.acceptedadmissions\.org\/api\/calendar\/oauth\/callback/,
+      ),
+    ).toBeTruthy();
+  });
+
   test("builds a connect URL that returns to the tutor dashboard", () => {
     expect(calendarConnectUrl("tutor_dashboard")).toBe(connectUrl);
     expect(calendarConnectUrl("admin_dashboard")).toBe(
@@ -95,7 +108,9 @@ describe("calendar connection helpers", () => {
     expect(messageForCalendarOutcome("cancelled")).toContain("cancelled");
     expect(messageForCalendarOutcome("rejected")).toContain("does not match");
     expect(messageForCalendarOutcome("misconfigured")).toContain("not configured");
-    expect(messageForCalendarOutcome("redirect_mismatch")).toContain("allowlist");
+    expect(messageForCalendarOutcome("redirect_mismatch")).toContain(
+      "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
+    );
     expect(messageForCalendarOutcome("unavailable")).toContain("temporarily unavailable");
     expect(messageForCalendarOutcome("expired")).toContain("expired");
     expect(messageForCalendarOutcome("failed")).toContain("authorization failed");
@@ -112,6 +127,9 @@ describe("calendar connection helpers", () => {
       outcome: "redirect_mismatch",
       message: messageForCalendarOutcome("redirect_mismatch"),
     });
+    expect(messageForCalendarOutcome("redirect_mismatch")).toContain(
+      "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
+    );
   });
 });
 
@@ -213,7 +231,7 @@ describe("calendar connection funnel tracking", () => {
     ],
     [
       "redirect_mismatch",
-      "Google rejected the return URL. An administrator must allowlist the exact Calendar callback URL in Google Cloud Console.",
+      "Google rejected the return URL. In Google Cloud Console, Authorized redirect URIs must include exactly: https://app.acceptedadmissions.org/api/calendar/oauth/callback",
     ],
     ["unavailable", "Google Calendar is temporarily unavailable. Try again in a few minutes."],
     [

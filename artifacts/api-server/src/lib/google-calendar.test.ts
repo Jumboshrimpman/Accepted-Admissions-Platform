@@ -5,7 +5,9 @@ import test from "node:test";
 import * as googleCalendar from "./google-calendar.ts";
 
 const {
+  CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
   calendarOAuthReturnHref,
+  calendarOAuthStateFailureMessage,
   classifyGoogleProviderError,
   classifyGoogleTokenExchangeFailure,
   createCalendarOAuthState,
@@ -16,10 +18,15 @@ const {
   googleAccountMatchesPortalEmails,
   googleCalendarAuthorizationUrl,
   googleCalendarCompletionHtml,
+  inspectCalendarOAuthState,
   isGoogleEmailVerified,
+  isPlatformInternalCalendarHost,
+  normalizeGoogleCalendarEnvValue,
   publicOriginFromForwardedHeaders,
+  readCalendarCallbackQuery,
   readCalendarOAuthState,
   readGoogleIdentityClaims,
+  redirectMismatchMessage,
   resolveGoogleCalendarRedirectUri,
   resolveOAuthRedirectUriForRequest,
   safeCalendarReturnTo,
@@ -158,6 +165,65 @@ test("request-origin callback is preferred over a stale APP_ORIGIN", () => {
   );
 });
 
+test("Railway and Vercel hosts are never sent to Google when a public callback exists", () => {
+  assert.equal(isPlatformInternalCalendarHost("accepted-admissions-platform-production.up.railway.app"), true);
+  assert.equal(
+    resolveOAuthRedirectUriForRequest(
+      "https://accepted-admissions-platform-production.up.railway.app",
+      {
+        NODE_ENV: "production",
+        APP_ORIGIN: "https://app.acceptedadmissions.org",
+        GOOGLE_CALENDAR_REDIRECT_URI: CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
+      },
+    ),
+    CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
+  );
+  assert.equal(
+    resolveOAuthRedirectUriForRequest(
+      "https://accepted-admissions-platform-production.up.railway.app",
+      {
+        NODE_ENV: "production",
+        APP_ORIGIN: "https://stale.vercel.app",
+        GOOGLE_CALENDAR_REDIRECT_URI: "https://stale.vercel.app/api/calendar/oauth/callback",
+      },
+    ),
+    CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
+  );
+});
+
+test("callback query is recovered from the raw URL when req.query is empty", () => {
+  assert.deepEqual(
+    readCalendarCallbackQuery({
+      query: {},
+      originalUrl:
+        "/api/calendar/oauth/callback?code=auth-code&state=signed-state&error=access_denied",
+    }),
+    {
+      state: "signed-state",
+      code: "auth-code",
+      error: "access_denied",
+      errorDescription: undefined,
+      source: "url",
+      keys: ["code", "state", "error"],
+    },
+  );
+  assert.equal(normalizeGoogleCalendarEnvValue('  "client-id"  '), "client-id");
+});
+
+test("invalid OAuth state reasons are named instead of collapsed to a generic failure", () => {
+  const empty = inspectCalendarOAuthState("");
+  const invalid = inspectCalendarOAuthState("not-a-valid-state");
+  assert.equal(empty.ok, false);
+  assert.equal(invalid.ok, false);
+  if (!empty.ok) assert.equal(empty.reason, "malformed");
+  if (!invalid.ok) assert.equal(invalid.reason, "malformed");
+  assert.equal(calendarOAuthStateFailureMessage("hmac").message.includes("signature mismatch"), true);
+  assert.equal(
+    redirectMismatchMessage(),
+    `Google rejected the return URL. In Google Cloud Console → APIs & Services → Credentials → the OAuth 2.0 Client, Authorized redirect URIs must include exactly: ${CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI}`,
+  );
+});
+
 test("getGoogleCalendarConfig uses environment-provided HTTPS redirect", () => {
   const previous = {
     id: process.env.GOOGLE_CALENDAR_CLIENT_ID,
@@ -255,6 +321,14 @@ test("classifies cancelled, rejected, and redirect-mismatch Google failures", ()
   assert.equal(
     classifyGoogleTokenExchangeFailure(400, JSON.stringify({ error: "invalid_grant" })).outcome,
     "expired",
+  );
+  assert.equal(
+    classifyGoogleTokenExchangeFailure(401, JSON.stringify({ error: "invalid_client" })).outcome,
+    "misconfigured",
+  );
+  assert.match(
+    classifyGoogleTokenExchangeFailure(400, JSON.stringify({ error: "unauthorized_client" })).message,
+    /unauthorized_client/,
   );
   assert.equal(
     classifyGoogleTokenExchangeFailure(503, "{}").outcome,

@@ -7,6 +7,9 @@ export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.owned",
 ];
 
+export const CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI =
+  "https://app.acceptedadmissions.org/api/calendar/oauth/callback";
+
 export const CALENDAR_RETURN_TO_PATHS = ["/tutor", "/portal", "/admin"] as const;
 
 export type CalendarOAuthOutcome =
@@ -24,6 +27,25 @@ export type CalendarOAuthState = {
   appUserId: string;
   returnTo: string;
   redirectUri: string;
+};
+
+export type CalendarOAuthStateFailure =
+  | "malformed"
+  | "hmac"
+  | "expired"
+  | "redirect_uri";
+
+export type CalendarOAuthStateInspection =
+  | { ok: true; data: CalendarOAuthState }
+  | { ok: false; reason: CalendarOAuthStateFailure };
+
+export type CalendarCallbackQuery = {
+  state: string;
+  code: string;
+  error?: string;
+  errorDescription?: string;
+  source: "query" | "url" | "forwarded";
+  keys: string[];
 };
 
 export type GoogleCalendarConnectionStatus =
@@ -126,6 +148,87 @@ export function googleAccountMatchesPortalEmails(
   return portalEmails.some((email) => email?.trim().toLowerCase() === needle);
 }
 
+export function firstCalendarQueryValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  return "";
+}
+
+function queryFromSearchParams(
+  params: URLSearchParams,
+  source: CalendarCallbackQuery["source"],
+): CalendarCallbackQuery {
+  return {
+    state: params.get("state") ?? "",
+    code: params.get("code") ?? "",
+    error: params.get("error") ?? undefined,
+    errorDescription: params.get("error_description") ?? undefined,
+    source,
+    keys: [...new Set(params.keys())],
+  };
+}
+
+export function readCalendarCallbackQuery(input: {
+  query?: Record<string, unknown> | null;
+  url?: string | null;
+  originalUrl?: string | null;
+  forwardedUri?: string | null;
+}): CalendarCallbackQuery {
+  const query = input.query ?? {};
+  const fromQuery: CalendarCallbackQuery = {
+    state: firstCalendarQueryValue(query.state),
+    code: firstCalendarQueryValue(query.code),
+    error: firstCalendarQueryValue(query.error) || undefined,
+    errorDescription: firstCalendarQueryValue(query.error_description) || undefined,
+    source: "query",
+    keys: Object.keys(query),
+  };
+  if (fromQuery.state || fromQuery.code || fromQuery.error) return fromQuery;
+
+  for (const [raw, source] of [
+    [input.originalUrl, "url"],
+    [input.url, "url"],
+    [input.forwardedUri, "forwarded"],
+  ] as const) {
+    if (!raw?.includes("?")) continue;
+    const parsed = queryFromSearchParams(
+      new URLSearchParams(raw.slice(raw.indexOf("?") + 1)),
+      source,
+    );
+    if (parsed.state || parsed.code || parsed.error) return parsed;
+  }
+  return fromQuery;
+}
+
+export function redirectMismatchMessage(
+  callbackUri = CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
+): string {
+  return `Google rejected the return URL. In Google Cloud Console → APIs & Services → Credentials → the OAuth 2.0 Client, Authorized redirect URIs must include exactly: ${callbackUri}`;
+}
+
+export function normalizeGoogleCalendarEnvValue(
+  value: string | undefined | null,
+): string {
+  return (value ?? "").trim().replace(/^['"]+|['"]+$/g, "");
+}
+
+function googleIdentityAudMatches(
+  aud: unknown,
+  clientId: string,
+): boolean {
+  if (typeof aud === "string") return aud.trim() === clientId;
+  return Array.isArray(aud) && aud.some((value) => String(value).trim() === clientId);
+}
+
+export function isPlatformInternalCalendarHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  return (
+    host.endsWith(".up.railway.app") ||
+    host.endsWith(".railway.app") ||
+    host.endsWith(".vercel.app")
+  );
+}
+
 export function publicOriginFromForwardedHeaders(input: {
   host?: string | null;
   forwardedHost?: string | null;
@@ -142,11 +245,13 @@ export function publicOriginFromForwardedHeaders(input: {
   }
 }
 
-export function getGoogleCalendarConfig(): GoogleCalendarConfig | null {
-  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+export function getGoogleCalendarConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): GoogleCalendarConfig | null {
+  const clientId = normalizeGoogleCalendarEnvValue(env.GOOGLE_CALENDAR_CLIENT_ID);
+  const clientSecret = normalizeGoogleCalendarEnvValue(env.GOOGLE_CALENDAR_CLIENT_SECRET);
   if (!clientId || !clientSecret) return null;
-  const redirectUri = resolveGoogleCalendarRedirectUri();
+  const redirectUri = resolveGoogleCalendarRedirectUri(env);
   if (!redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
 }
@@ -155,12 +260,12 @@ export function getGoogleCalendarConfig(): GoogleCalendarConfig | null {
 export function resolveGoogleCalendarRedirectUri(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  const explicit = env.GOOGLE_CALENDAR_REDIRECT_URI?.trim();
+  const explicit = normalizeGoogleCalendarEnvValue(env.GOOGLE_CALENDAR_REDIRECT_URI);
   if (explicit) {
     if (!isAcceptableCalendarRedirectUri(explicit, env)) return null;
     return explicit.replace(/\/$/, "");
   }
-  const origin = env.APP_ORIGIN?.trim().replace(/\/$/, "");
+  const origin = normalizeGoogleCalendarEnvValue(env.APP_ORIGIN).replace(/\/$/, "");
   if (!origin) return null;
   const derived = `${origin}/api/calendar/oauth/callback`;
   if (!isAcceptableCalendarRedirectUri(derived, env)) return null;
@@ -168,18 +273,34 @@ export function resolveGoogleCalendarRedirectUri(
 }
 
 /**
- * Prefer the browser-facing origin so Google's redirect matches the tab that
- * started Connect. Falls back to GOOGLE_CALENDAR_REDIRECT_URI / APP_ORIGIN.
+ * Prefer a public browser origin (the tab on app.acceptedadmissions.org).
+ * Never send Railway/Vercel platform hosts to Google — those are not in the
+ * Console allowlist and break token exchange after a successful consent.
  */
 export function resolveOAuthRedirectUriForRequest(
   requestOrigin: string | null,
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
+  const configured = resolveGoogleCalendarRedirectUri(env);
+  let requestUri: string | null = null;
   if (requestOrigin) {
     const derived = `${requestOrigin.replace(/\/$/, "")}/api/calendar/oauth/callback`;
-    if (isAcceptableCalendarRedirectUri(derived, env)) return derived;
+    if (isAcceptableCalendarRedirectUri(derived, env)) requestUri = derived;
   }
-  return resolveGoogleCalendarRedirectUri(env);
+  const publicRequestUri =
+    requestUri && !isPlatformInternalCalendarHost(new URL(requestUri).hostname)
+      ? requestUri
+      : null;
+  const publicConfigured =
+    configured && !isPlatformInternalCalendarHost(new URL(configured).hostname)
+      ? configured
+      : null;
+  if (publicRequestUri) return publicRequestUri;
+  if (publicConfigured) return publicConfigured;
+  if (isAcceptableCalendarRedirectUri(CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI, env)) {
+    return CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI;
+  }
+  return configured ?? requestUri;
 }
 
 export function isAcceptableCalendarRedirectUri(
@@ -267,25 +388,72 @@ function parseCalendarOAuthPayload(payload: string): {
   };
 }
 
-export function readCalendarOAuthState(state: string): CalendarOAuthState | null {
+export function inspectCalendarOAuthState(state: string): CalendarOAuthStateInspection {
   const [encodedPayload, encodedSignature] = state.split(".");
-  if (!encodedPayload || !encodedSignature) return null;
-  const payload = fromBase64Url(encodedPayload).toString("utf8");
+  if (!encodedPayload || !encodedSignature) return { ok: false, reason: "malformed" };
+  let payload: string;
+  try {
+    payload = fromBase64Url(encodedPayload).toString("utf8");
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
   const expected = createHmac("sha256", signingKey()).update(payload).digest();
   const received = fromBase64Url(encodedSignature);
-  if (received.length !== expected.length || !received.equals(expected)) return null;
-  const parsed = parseCalendarOAuthPayload(payload);
-  if (!parsed || !parsed.nonce || Number.isNaN(parsed.exp) || parsed.exp < Date.now()) {
-    return null;
+  if (received.length !== expected.length || !received.equals(expected)) {
+    return { ok: false, reason: "hmac" };
   }
-  if (parsed.redirectUri && !isAcceptableCalendarRedirectUri(parsed.redirectUri)) {
-    return null;
+  const parsed = parseCalendarOAuthPayload(payload);
+  if (!parsed || !parsed.nonce || Number.isNaN(parsed.exp)) {
+    return { ok: false, reason: "malformed" };
+  }
+  if (parsed.exp < Date.now()) return { ok: false, reason: "expired" };
+  const redirectUri =
+    parsed.redirectUri && !isAcceptableCalendarRedirectUri(parsed.redirectUri)
+      ? ""
+      : parsed.redirectUri;
+  return {
+    ok: true,
+    data: {
+      tutorProfileId: parsed.tutorProfileId,
+      appUserId: parsed.appUserId,
+      returnTo: parsed.returnTo,
+      redirectUri,
+    },
+  };
+}
+
+export function readCalendarOAuthState(state: string): CalendarOAuthState | null {
+  const inspected = inspectCalendarOAuthState(state);
+  return inspected.ok ? inspected.data : null;
+}
+
+export function calendarOAuthStateFailureMessage(
+  reason: CalendarOAuthStateFailure,
+): { outcome: CalendarOAuthOutcome; message: string } {
+  if (reason === "expired") {
+    return {
+      outcome: "expired",
+      message:
+        "This authorization link expired or is no longer valid. Start Connect again from the dashboard.",
+    };
+  }
+  if (reason === "hmac") {
+    return {
+      outcome: "expired",
+      message:
+        "Calendar authorization state was rejected (signature mismatch). Start Connect again from the dashboard.",
+    };
+  }
+  if (reason === "redirect_uri") {
+    return {
+      outcome: "redirect_mismatch",
+      message: redirectMismatchMessage(),
+    };
   }
   return {
-    tutorProfileId: parsed.tutorProfileId,
-    appUserId: parsed.appUserId,
-    returnTo: parsed.returnTo,
-    redirectUri: parsed.redirectUri,
+    outcome: "failed",
+    message:
+      "Calendar authorization state was invalid. Start Connect again from the dashboard.",
   };
 }
 
@@ -361,13 +529,12 @@ export function classifyGoogleProviderError(
   if (code.includes("redirect_uri")) {
     return {
       outcome: "redirect_mismatch",
-      message:
-        "Google rejected the return URL. An administrator must allowlist the exact Calendar callback URL in Google Cloud Console.",
+      message: redirectMismatchMessage(),
     };
   }
   return {
     outcome: "failed",
-    message: "Google Calendar authorization failed. Close this window and try again.",
+    message: `Google Calendar authorization failed (${code || "unknown_error"}). Close this window and try again.`,
   };
 }
 
@@ -382,22 +549,26 @@ export function classifyGoogleTokenExchangeFailure(
     parsed = {};
   }
   const haystack = `${parsed.error ?? ""} ${parsed.error_description ?? ""}`.toLowerCase();
+  const errorCode = parsed.error?.trim() || `http_${status}`;
   if (haystack.includes("redirect_uri")) {
-    return new CalendarOAuthError(
-      "redirect_mismatch",
-      "Google rejected the return URL. An administrator must allowlist the exact Calendar callback URL in Google Cloud Console.",
-    );
+    return new CalendarOAuthError("redirect_mismatch", redirectMismatchMessage());
   }
   if (haystack.includes("invalid_grant")) {
     return new CalendarOAuthError(
       "expired",
-      "This authorization code expired or was already used. Start Connect again from the dashboard.",
+      "This authorization code expired or was already used (invalid_grant). Start Connect again from the dashboard.",
+    );
+  }
+  if (haystack.includes("invalid_client")) {
+    return new CalendarOAuthError(
+      "misconfigured",
+      "Google rejected the Calendar OAuth client (invalid_client). An administrator must check GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET.",
     );
   }
   if (status === 401 || status === 403) {
     return new CalendarOAuthError(
       "rejected",
-      "Google rejected authorization for this account.",
+      `Google rejected authorization for this account (${errorCode}).`,
     );
   }
   if (status >= 500) {
@@ -408,7 +579,7 @@ export function classifyGoogleTokenExchangeFailure(
   }
   return new CalendarOAuthError(
     "failed",
-    "Google Calendar authorization failed. Close this window and try again.",
+    `Google Calendar token exchange failed (${errorCode}). Close this window and try again.`,
   );
 }
 
@@ -607,10 +778,16 @@ export async function exchangeGoogleCode(
     email_verified?: unknown;
   };
   const claims = readGoogleIdentityClaims(identity);
-  if (!claims || identity.aud !== config.clientId) {
+  if (!claims) {
     throw new CalendarOAuthError(
       "rejected",
-      "Google rejected authorization for this account.",
+      "Google did not return a verified email for this account. Choose the Google account that matches your portal sign-in email.",
+    );
+  }
+  if (!googleIdentityAudMatches(identity.aud, config.clientId)) {
+    throw new CalendarOAuthError(
+      "rejected",
+      "Google returned an identity for a different OAuth client than this workspace is configured to use.",
     );
   }
   return {
