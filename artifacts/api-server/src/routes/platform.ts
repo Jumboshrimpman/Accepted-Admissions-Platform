@@ -17,6 +17,8 @@ import { randomUUID } from "node:crypto";
 import {
   CalendarOAuthError,
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
+  calendarBusyFailureAction,
+  calendarConnectProbeFailure,
   calendarOAuthStateFailureMessage,
   classifyGoogleProviderError,
   createGoogleEvent,
@@ -68,6 +70,8 @@ import {
   calendarEventPayload,
   generateAvailableSlots,
   overlapsBusyWindow,
+  SAT_BOOKING_TIMEZONE,
+  satTutorWeeklyHours,
   type AvailabilityRule,
   type BusyWindow,
 } from "../lib/booking";
@@ -1670,30 +1674,25 @@ async function ensureUpgradeSeedData(): Promise<void> {
       .from(availabilityRulesTable)
       .where(eq(availabilityRulesTable.tutorProfileId, tutor.id))
       .limit(1);
+    const weeklyHours = satTutorWeeklyHours(tutor.name);
     if (!rule) {
       await db.insert(availabilityRulesTable).values({
         tutorProfileId: tutor.id,
-        timezone: "America/New_York",
-        weeklyHours:
-          tutor.name === "Xavier Morales"
-            ? {
-                "1": [{ start: "09:00", end: "17:00" }],
-                "2": [{ start: "09:00", end: "17:00" }],
-                "3": [{ start: "09:00", end: "17:00" }],
-                "4": [{ start: "09:00", end: "17:00" }],
-                "5": [{ start: "09:00", end: "17:00" }],
-              }
-            : {
-                "1": [{ start: "10:00", end: "18:00" }],
-                "2": [{ start: "10:00", end: "18:00" }],
-                "3": [{ start: "10:00", end: "18:00" }],
-                "4": [{ start: "10:00", end: "18:00" }],
-                "5": [{ start: "10:00", end: "18:00" }],
-              },
+        timezone: SAT_BOOKING_TIMEZONE,
+        weeklyHours,
         bookingNoticeMinutes: 1440,
         bufferMinutes: 15,
         blackoutDates: [],
       });
+    } else {
+      await db
+        .update(availabilityRulesTable)
+        .set({
+          timezone: SAT_BOOKING_TIMEZONE,
+          weeklyHours,
+          updatedAt: new Date(),
+        })
+        .where(eq(availabilityRulesTable.id, rule.id));
     }
   }
 
@@ -3932,12 +3931,19 @@ async function slotsForTutor(
       from,
       to,
     );
-  } catch {
-    await markGoogleCalendarDisconnected(
-      tutorProfileId,
-      access.connection.id,
+  } catch (error) {
+    if (calendarBusyFailureAction(error) === "disconnect") {
+      await markGoogleCalendarDisconnected(
+        tutorProfileId,
+        access.connection.id,
+      );
+      return { tutor, rule, access: null, slots: [] as string[] };
+    }
+    throw new BookingError(
+      503,
+      "CALENDAR_UNAVAILABLE",
+      "Google Calendar is temporarily unavailable. Try again in a few minutes.",
     );
-    return { tutor, rule, access: null, slots: [] as string[] };
   }
   const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
@@ -4231,11 +4237,8 @@ router.get(
           verificationStart,
           new Date(verificationStart.getTime() + 60_000),
         );
-      } catch {
-        throw new CalendarOAuthError(
-          "unavailable",
-          "Google Calendar is temporarily unavailable. Try again in a few minutes.",
-        );
+      } catch (error) {
+        throw calendarConnectProbeFailure(error);
       }
       await persistGoogleCalendarConnection(profile.id, tokens);
       logCallback("info", "connected", {

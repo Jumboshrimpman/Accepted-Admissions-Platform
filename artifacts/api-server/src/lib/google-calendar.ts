@@ -7,12 +7,40 @@ import {
 
 export { resolvePublicRequestOrigin };
 
+/** Identity scopes. Google may echo `email` as userinfo.email. */
+export const GOOGLE_CALENDAR_IDENTITY_SCOPES = ["openid", "email"] as const;
+
+/**
+ * Calendar data scopes. `calendar.events.freebusy` is not a valid Google scope;
+ * freeBusy requires `calendar.freebusy`, and event create/update uses `calendar.events`.
+ */
+export const GOOGLE_CALENDAR_DATA_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.freebusy",
+  "https://www.googleapis.com/auth/calendar.events",
+] as const;
+
 export const GOOGLE_CALENDAR_SCOPES = [
-  "openid",
-  "email",
-  "https://www.googleapis.com/auth/calendar.events.freebusy",
-  "https://www.googleapis.com/auth/calendar.events.owned",
+  ...GOOGLE_CALENDAR_IDENTITY_SCOPES,
+  ...GOOGLE_CALENDAR_DATA_SCOPES,
 ];
+
+const GOOGLE_SCOPE_ALIASES: Record<string, string> = {
+  email: "email",
+  "https://www.googleapis.com/auth/userinfo.email": "email",
+  openid: "openid",
+};
+
+export class GoogleCalendarRequestError extends Error {
+  readonly status: number;
+  readonly reason: string;
+
+  constructor(status: number, reason: string, message: string) {
+    super(message);
+    this.name = "GoogleCalendarRequestError";
+    this.status = status;
+    this.reason = reason;
+  }
+}
 
 export const CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI =
   "https://app.acceptedadmissions.org/api/calendar/oauth/callback";
@@ -76,6 +104,95 @@ export function normalizeGoogleCalendarStatus(
   if (value === "connected") return "connected";
   if (value === "unavailable") return "unavailable";
   return "disconnected";
+}
+
+export function parseGoogleScopeString(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(/[,\s]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+export function normalizeGoogleScope(scope: string): string {
+  return GOOGLE_SCOPE_ALIASES[scope] ?? scope;
+}
+
+export function grantedScopesIncludeRequired(
+  granted: string | undefined,
+  required: readonly string[] = GOOGLE_CALENDAR_DATA_SCOPES,
+): boolean {
+  const grantedSet = new Set(parseGoogleScopeString(granted).map(normalizeGoogleScope));
+  return required.every((scope) => grantedSet.has(normalizeGoogleScope(scope)));
+}
+
+export function classifyGoogleCalendarRequestFailure(
+  status: number,
+  body: string,
+): GoogleCalendarRequestError {
+  let reason = `http_${status}`;
+  let message = `Google Calendar request failed (${status})`;
+  try {
+    const parsed = JSON.parse(body) as {
+      error?:
+        | string
+        | {
+            code?: number;
+            message?: string;
+            status?: string;
+            errors?: Array<{ reason?: string; message?: string }>;
+            details?: Array<{ reason?: string }>;
+          };
+    };
+    if (typeof parsed.error === "string") {
+      reason = parsed.error;
+      message = `Google Calendar request failed (${status}: ${parsed.error})`;
+    } else if (parsed.error && typeof parsed.error === "object") {
+      reason =
+        parsed.error.details?.find((detail) => detail.reason)?.reason ??
+        parsed.error.errors?.find((item) => item.reason)?.reason ??
+        parsed.error.status ??
+        reason;
+      if (parsed.error.message) {
+        message = parsed.error.message;
+      }
+    }
+  } catch {
+    // Keep the status-based fallback when Google returns a non-JSON body.
+  }
+  return new GoogleCalendarRequestError(status, reason, message);
+}
+
+export function isGoogleCalendarAuthFailure(error: unknown): boolean {
+  if (!(error instanceof GoogleCalendarRequestError)) return false;
+  if (error.status === 401 || error.status === 403) return true;
+  const reason = error.reason.toLowerCase();
+  return (
+    reason.includes("insufficient") ||
+    reason === "unauthenticated" ||
+    reason === "permission_denied" ||
+    reason === "unauthorized" ||
+    reason === "invalid_grant" ||
+    reason === "access_token_scope_insufficient"
+  );
+}
+
+export function calendarBusyFailureAction(
+  error: unknown,
+): "disconnect" | "unavailable" {
+  return isGoogleCalendarAuthFailure(error) ? "disconnect" : "unavailable";
+}
+
+export function calendarConnectProbeFailure(error: unknown): CalendarOAuthError {
+  if (isGoogleCalendarAuthFailure(error)) {
+    return new CalendarOAuthError(
+      "rejected",
+      "Google Calendar is missing required free/busy or event permissions. Reconnect and grant the requested access.",
+    );
+  }
+  return new CalendarOAuthError(
+    "unavailable",
+    "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+  );
 }
 
 type GoogleCalendarConfig = {
@@ -486,6 +603,7 @@ export function googleCalendarAuthorizationUrl(
     redirect_uri: redirectUri,
     response_type: "code",
     access_type: "offline",
+    include_granted_scopes: "true",
     prompt: "consent select_account",
     scope: GOOGLE_CALENDAR_SCOPES.join(" "),
     state: createCalendarOAuthState(tutorProfileId, appUserId, {
@@ -734,7 +852,14 @@ export async function exchangeGoogleCode(
     refresh_token?: string;
     expires_in?: number;
     id_token?: string;
+    scope?: string;
   };
+  if (data.scope !== undefined && !grantedScopesIncludeRequired(data.scope)) {
+    throw new CalendarOAuthError(
+      "rejected",
+      "Google Calendar is missing required free/busy or event permissions. Reconnect and grant the requested access.",
+    );
+  }
   if (!data.access_token) {
     throw new CalendarOAuthError(
       "failed",
@@ -823,7 +948,9 @@ export async function googleCalendarRequest<T>(
       authorization: `Bearer ${accessToken}`,
     },
   });
-  if (!response.ok) throw new Error(`Google Calendar request failed (${response.status})`);
+  if (!response.ok) {
+    throw classifyGoogleCalendarRequestFailure(response.status, await response.text());
+  }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

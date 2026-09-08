@@ -7,6 +7,40 @@ export type AvailabilityRule = {
   blackoutDates: string[];
 };
 
+/** SAT self-serve booking uses America/New_York local civil time. */
+export const SAT_BOOKING_TIMEZONE = "America/New_York";
+/** First bookable local start (inclusive). */
+export const SAT_BOOKING_WINDOW_START = "07:00";
+/** Last bookable local end (exclusive of a new start). 60-minute slots run 07:00–20:00. */
+export const SAT_BOOKING_WINDOW_END = "21:00";
+const SAT_BOOKING_WEEKDAYS = ["1", "2", "3", "4", "5"] as const;
+const XAVIER_BOOKING_DAYS = ["0", "1", "2", "3", "4", "5", "6"] as const;
+
+function weeklyHoursForDays(
+  days: readonly string[],
+): Record<string, AvailabilityWindow[]> {
+  return Object.fromEntries(
+    days.map((day) => [
+      day,
+      [{ start: SAT_BOOKING_WINDOW_START, end: SAT_BOOKING_WINDOW_END }],
+    ]),
+  );
+}
+
+/** Eunice and other SAT tutors: Mon–Fri 07:00–21:00 ET. */
+export const SAT_BOOKING_WEEKLY_HOURS = weeklyHoursForDays(SAT_BOOKING_WEEKDAYS);
+
+/** Xavier: every civil day Sun–Sat 07:00–21:00 ET. */
+export const XAVIER_BOOKING_WEEKLY_HOURS = weeklyHoursForDays(XAVIER_BOOKING_DAYS);
+
+export function satTutorWeeklyHours(
+  tutorName: string,
+): Record<string, AvailabilityWindow[]> {
+  return tutorName === "Xavier Morales"
+    ? XAVIER_BOOKING_WEEKLY_HOURS
+    : SAT_BOOKING_WEEKLY_HOURS;
+}
+
 export type BusyWindow = { start: string; end: string };
 
 type LocalParts = { year: number; month: number; day: number; hour: number; minute: number };

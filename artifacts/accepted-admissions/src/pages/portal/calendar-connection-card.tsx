@@ -313,7 +313,7 @@ export function CalendarConnectionCard({
               <div className="text-sm">
               <p className="font-medium">Connect your calendar</p>
               <p className="mt-1 text-muted-foreground">
-                Your calendar stays private while the app checks availability. If Google shows a redirect URI error, the OAuth client must allowlist exactly {GOOGLE_CALENDAR_CALLBACK_URI}.
+                Your calendar stays private while the app checks availability. Reconnect if booking hours disappeared after a permissions update — Google must grant free/busy and event access. If Google shows a redirect URI error, the OAuth client must allowlist exactly {GOOGLE_CALENDAR_CALLBACK_URI}.
               </p>
               </div>
             </div>
