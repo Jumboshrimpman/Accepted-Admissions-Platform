@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   cloneAssignment: vi.fn(),
   createAssignment: vi.fn(),
   updateAssignment: vi.fn(),
+  updateSession: vi.fn(),
   updateQuestion: vi.fn(),
   attachQuestion: vi.fn(),
   sources: [
@@ -211,7 +212,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useUpdateAdminAssignment: () => ({ mutate: mocks.updateAssignment, isPending: false }),
   useUpdateAdminLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminProgram: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateAdminSession: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateAdminSession: () => ({ mutate: mocks.updateSession, isPending: false }),
   useUpdateCurriculumBlock: () => ({ mutate: vi.fn(), isPending: false }),
   useAttachSessionLibraryAsset: () => ({ mutate: vi.fn(), isPending: false }),
   useListQuestionBank: () => ({ data: mocks.questions, isLoading: false }),
@@ -288,6 +289,8 @@ afterEach(() => {
   mocks.createAssignment.mockReset();
   mocks.updateAssignment.mockReset();
   mocks.updateAssignment.mockImplementation((_vars, options) => options?.onSuccess?.({}));
+  mocks.updateSession.mockReset();
+  mocks.updateSession.mockImplementation((_vars, options) => options?.onSuccess?.({}));
   mocks.updateQuestion.mockReset();
   mocks.attachQuestion.mockReset();
   mocks.setLocation.mockReset();
@@ -298,6 +301,9 @@ afterEach(() => {
   mocks.curriculum.assignments[0]!.status = "published";
   mocks.curriculum.submissions = [];
   mocks.curriculum.sessions = mocks.curriculum.sessions.filter((session) => session.id === "session-1");
+  mocks.curriculum.sessions[0]!.dateTime = "2026-10-02T16:00:00.000Z";
+  mocks.curriculum.sessions[0]!.timezone = "America/New_York";
+  mocks.curriculum.sessions[0]!.durationMinutes = 60;
 });
 
 describe("curriculum bank IA", () => {
@@ -637,6 +643,36 @@ describe("curriculum bank IA", () => {
     expect(screen.queryByText("Save program")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Programs$/i })).toBeNull();
     expect(screen.queryByText("Meet link")).toBeNull();
+  });
+
+  test("admin session edit sends timezone-local start time, timezone, and duration", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.sessions[0]!.dateTime = "2026-10-02T12:00:00.000Z";
+    mocks.curriculum.sessions[0]!.timezone = "Asia/Tokyo";
+    mocks.curriculum.sessions[0]!.durationMinutes = 60;
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
+    const start = screen.getByLabelText("Session start time") as HTMLInputElement;
+    expect(start.value).toBe("2026-10-02T21:00");
+    fireEvent.change(screen.getByLabelText("Session timezone"), {
+      target: { value: "Asia/Tokyo" },
+    });
+    fireEvent.change(start, { target: { value: "2026-10-02T21:00" } });
+    fireEvent.change(screen.getByLabelText("Session duration"), {
+      target: { value: "60" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save session/i }));
+    expect(mocks.updateSession).toHaveBeenCalledWith(
+      {
+        sessionId: "session-1",
+        data: expect.objectContaining({
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+        }),
+      },
+      expect.any(Object),
+    );
   });
 
   test("session edit picks Taito, Eunice, and Nika by name or email without portal provisioning", () => {

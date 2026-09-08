@@ -275,13 +275,13 @@ function QuizDetailFallback({
   onChanged: () => void;
   onBack: () => void;
 }) {
-  const { data: assignment, isLoading } = useGetAssignment(quizId);
+  const { data: assignment, isLoading, isError } = useGetAssignment(quizId);
   if (isLoading) {
     return <p className="text-sm text-muted-foreground" data-testid={`quiz-opening-${quizId}`}>Opening quiz…</p>;
   }
-  if (!assignment) {
+  if (isError || !assignment) {
     return (
-      <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+      <div className="rounded-xl border p-6 text-sm text-muted-foreground" data-testid={`quiz-open-error-${quizId}`}>
         This quiz could not be opened.{" "}
         <Button variant="ghost" size="sm" onClick={onBack}>
           Back to quizzes
@@ -423,7 +423,7 @@ function QuizQuestionEditor({
   quiz: AdminAssignment;
   onChanged: () => void;
 }) {
-  const { data, isLoading } = useGetAssignment(quiz.id);
+  const { data, isLoading, isError } = useGetAssignment(quiz.id);
   const { data: bank = [] } = useListQuestionBank(
     { courseId: quiz.courseId },
     { query: { enabled: Boolean(quiz.courseId), queryKey: getListQuestionBankQueryKey({ courseId: quiz.courseId }) } },
@@ -467,6 +467,11 @@ function QuizQuestionEditor({
       <CardContent className="space-y-4">
         {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
         {isLoading ? <p className="text-sm text-muted-foreground">Loading questions…</p> : null}
+        {isError ? (
+          <p className="text-sm text-muted-foreground" data-testid={`quiz-questions-error-${quiz.id}`}>
+            Questions could not be loaded for this quiz.
+          </p>
+        ) : null}
         <ol className="space-y-3" data-testid={`quiz-question-list-${quiz.id}`}>
           {(data?.questions ?? []).map((question, index) => {
             const bankItem = bank.find((item) => item.id === question.id);
