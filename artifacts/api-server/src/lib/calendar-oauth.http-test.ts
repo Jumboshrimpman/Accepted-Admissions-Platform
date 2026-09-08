@@ -11,6 +11,7 @@ import express, {
   type Response,
 } from "express";
 import platformRouter from "../routes/platform";
+import { canonicalRequestHostMiddleware } from "../middlewares/canonicalRequestHost";
 import { hasCalendarOAuthDatabase } from "./calendar-oauth-http-env";
 import {
   createCalendarOAuthState,
@@ -43,6 +44,7 @@ function testAuthMiddleware(user: AppUser | null) {
 
 async function startServer(user: AppUser | null = null) {
   const app = express();
+  app.use(canonicalRequestHostMiddleware());
   app.use(express.json());
   app.use(testAuthMiddleware(user));
   app.use("/api", platformRouter);
