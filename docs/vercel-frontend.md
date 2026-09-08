@@ -62,7 +62,9 @@ For tutor Calendar, also set `GOOGLE_CALENDAR_REDIRECT_URI` on Railway to exactl
 
 `https://app.acceptedadmissions.org/api/calendar/oauth/callback`
 
-and allowlist that same URI on the Google Cloud OAuth client. Do not register only a `*.vercel.app` callback if tutors open the portal on `app.acceptedadmissions.org`.
+and allowlist that **same exact URI** on the Google Cloud OAuth client (APIs & Services → Credentials → the OAuth 2.0 Client → Authorized redirect URIs). No trailing slash. Do not register only a `*.vercel.app` or `*.up.railway.app` callback if tutors open the portal on `app.acceptedadmissions.org`.
+
+Verify: open the OAuth client, confirm the URI appears character-for-character, then have Xavier (`xaver.rmz6@gmail.com`) or Eunice (`eunice_chon@berkeley.edu`) click Connect on `/tutor`. Production API logs should now include `event=calendar.oauth.callback` with a `reason` (`missing_state`, `invalid_state_hmac`, `provider_error`, `missing_code`, `email_mismatch`, `callback_exception`, `connected`, or the Google token error code). The tutor-visible page names that same reason.
 
 Until `APP_ORIGIN` is the public portal origin, hosted payment redirects and Calendar OAuth return URLs will not land on this frontend.
 

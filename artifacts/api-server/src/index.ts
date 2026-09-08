@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { xavierCalendarIdentityAlignment } from "./lib/calendar-profile";
 import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
@@ -31,6 +32,13 @@ app.listen(port, (err) => {
     .then(() => retireDuplicateXavierIdentities())
     .then(() => ensureXavierSatCapabilitySession())
     .then((result) => logger.info(result, "Xavier SAT capability session ready"))
+    .then(() => xavierCalendarIdentityAlignment())
+    .then((alignment) =>
+      logger.info(
+        { event: "calendar.xavier_identity_alignment", ...alignment },
+        "Xavier calendar identity alignment",
+      ),
+    )
     .catch((err) =>
       logger.warn({ err }, "Xavier SAT capability session seed skipped"),
     );

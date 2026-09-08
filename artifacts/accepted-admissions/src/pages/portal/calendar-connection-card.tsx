@@ -20,14 +20,16 @@ import {
   type CalendarConnectionOutcome,
 } from "@/lib/analytics";
 
+export const GOOGLE_CALENDAR_CALLBACK_URI =
+  "https://app.acceptedadmissions.org/api/calendar/oauth/callback";
+
 const CALENDAR_FAILURE_MESSAGES: Record<string, string> = {
   cancelled: "You cancelled Google authorization. No calendar changes were made.",
   rejected:
     "Google rejected authorization, or the chosen account does not match this portal email.",
   misconfigured:
     "Google Calendar is not configured for this workspace. Ask an administrator to check the Calendar environment variables.",
-  redirect_mismatch:
-    "Google rejected the return URL. An administrator must allowlist the exact Calendar callback URL in Google Cloud Console.",
+  redirect_mismatch: `Google rejected the return URL. In Google Cloud Console, Authorized redirect URIs must include exactly: ${GOOGLE_CALENDAR_CALLBACK_URI}`,
   unavailable: "Google Calendar is temporarily unavailable. Try again in a few minutes.",
   expired:
     "This authorization link expired or is no longer valid. Start Connect again from the dashboard.",
@@ -113,6 +115,7 @@ export function CalendarConnectionCard({
   const connected = connection?.status === "connected";
   const refetchConnections = connectionsQuery.refetch;
   const connectUrl = calendarConnectUrl(location);
+  const portalEmail = currentUserQuery.data?.email?.trim();
 
   const trackCalendarOutcome = useCallback(
     (outcome: CalendarConnectionOutcome) => {
@@ -214,7 +217,12 @@ export function CalendarConnectionCard({
           setShowConnectFallback(false);
           setMessage("Google Calendar connected successfully.");
           trackCalendarOutcome("connected");
+          return;
         }
+        setShowConnectFallback(true);
+        setMessage(
+          `Google authorization did not finish connecting. If the Google page showed a redirect URI error, allowlist exactly ${GOOGLE_CALENDAR_CALLBACK_URI}. Otherwise read the authorization window for the exact failure reason.`,
+        );
       });
     };
     window.addEventListener("focus", refreshIfVisible);
@@ -277,7 +285,8 @@ export function CalendarConnectionCard({
               Google Calendar
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-              Connect this account's Google Calendar using the same email as your portal sign-in. Availability checks use free/busy data only, and private event details never leave the server.
+              Connect this account's Google Calendar using the same email as your portal sign-in
+              {portalEmail ? ` (${portalEmail})` : ""}. Availability checks use free/busy data only, and private event details never leave the server.
             </CardDescription>
           </div>
           <Badge variant={connected ? "default" : "secondary"} className="w-fit rounded-full px-3 py-1">
@@ -303,7 +312,9 @@ export function CalendarConnectionCard({
               <Link2Off className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
               <div className="text-sm">
               <p className="font-medium">Connect your calendar</p>
-              <p className="mt-1 text-muted-foreground">Your calendar stays private while the app checks availability.</p>
+              <p className="mt-1 text-muted-foreground">
+                Your calendar stays private while the app checks availability. If Google shows a redirect URI error, the OAuth client must allowlist exactly {GOOGLE_CALENDAR_CALLBACK_URI}.
+              </p>
               </div>
             </div>
             <Button className="rounded-full" onClick={connectCalendar}>
