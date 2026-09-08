@@ -7,6 +7,7 @@ const startMutate = vi.fn();
 
 const mocks = vi.hoisted(() => ({
   deliveryPhase: "before_session" as "before_session" | "during_session",
+  title: "Practice quiz",
   questions: [
     {
       id: "q1",
@@ -64,7 +65,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetAssignment: () => ({
     data: {
       id: "asg-1",
-      title: "Practice quiz",
+      title: mocks.title,
       subject: "SAT",
       instructions: "Answer the questions.",
       deliveryPhase: mocks.deliveryPhase,
@@ -108,6 +109,7 @@ afterEach(() => {
   saveMutate.mockReset();
   startMutate.mockReset();
   mocks.deliveryPhase = "before_session";
+  mocks.title = "Practice quiz";
   mocks.attempt.status = "active";
   mocks.attempt.remainingSeconds = 1200;
   mocks.attempt.responses = [];
@@ -210,8 +212,20 @@ describe("student attempt UI", () => {
     };
     render(<PortalAssignment />);
     expect(screen.getByText("50%")).toBeTruthy();
-    expect(screen.getByText(/Accuracy only — this 60-minute set is not an official SAT score/i)).toBeTruthy();
+    expect(screen.getByText(/Accuracy only — this pre-work set is not an official SAT score/i)).toBeTruthy();
     expect(screen.queryByText(/estimated SAT range/i)).toBeNull();
+  });
+
+  test("missed homework becomes an in-session test of at most 15 questions and allows partial submit", () => {
+    mocks.deliveryPhase = "during_session";
+    mocks.title = "In-session homework completion";
+    mocks.attempt.responses = [{ questionId: "q1", prediction: null, predictionLocked: false, finalAnswer: "a", flagged: false }];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("session-practice-board")).toBeNull();
+    expect(screen.getByTestId("partial-submit-in-session").textContent).toMatch(/at most 15 questions/i);
+    expect(screen.getByTestId("submit-in-session-homework")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("submit-in-session-homework"));
+    expect(submitMutate).toHaveBeenCalled();
   });
 
   test("in-session practice uses collaborative brown presentation instead of quiz chrome", () => {

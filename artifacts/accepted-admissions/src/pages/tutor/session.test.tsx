@@ -89,7 +89,7 @@ vi.mock("@workspace/api-client-react", () => ({
     data: {
       sessionId: "session-1",
       scoreReporting: "none",
-      scoreHonesty: "This 60-minute pre-work reports accuracy only. It is not an official SAT score.",
+      scoreHonesty: "This 30–50 question pre-work reports accuracy only. It is not an official SAT score.",
       weaknessGroups: [
         {
           id: "g1",
@@ -151,6 +151,13 @@ describe("tutor session review page", () => {
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
       "/tutor/attempts/attempt-1",
     );
+    expect(screen.getByTestId("practice-wrong-answers-quiz-1")).toBeTruthy();
+    expect(screen.getByTestId("practice-wrong-answers-before-session")).toBeTruthy();
+    const practiceLinks = screen.getAllByRole("link", { name: /Practice wrong answers only/i });
+    expect(practiceLinks.length).toBeGreaterThanOrEqual(1);
+    for (const link of practiceLinks) {
+      expect(link.getAttribute("href")).toBe("/tutor/attempts/attempt-1?wrongAnswersOnly=1");
+    }
     expect(screen.getByTestId("clear-homework-quiz-1").textContent).toMatch(/Clear & redo/);
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Missed on pre-work/);
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Transitions/);

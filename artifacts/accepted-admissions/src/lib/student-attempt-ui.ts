@@ -44,8 +44,31 @@ export function studentSeesFinishedResult(input: {
   return true;
 }
 
-export function isCollaborativeSessionPractice(deliveryPhase?: string | null): boolean {
-  return deliveryPhase === "during_session";
+export const IN_SESSION_HOMEWORK_COMPLETION_TITLE = "In-session homework completion";
+
+export function isInSessionHomeworkCompletion(input: {
+  deliveryPhase?: string | null;
+  title?: string | null;
+}): boolean {
+  return (
+    input.deliveryPhase === "during_session" &&
+    (input.title ?? "").trim() === IN_SESSION_HOMEWORK_COMPLETION_TITLE
+  );
+}
+
+export function isCollaborativeSessionPractice(
+  deliveryPhase?: string | null,
+  title?: string | null,
+): boolean {
+  if (deliveryPhase !== "during_session") return false;
+  return !isInSessionHomeworkCompletion({ deliveryPhase, title });
+}
+
+export function allowsPartialInSessionSubmit(input: {
+  deliveryPhase?: string | null;
+  title?: string | null;
+}): boolean {
+  return isInSessionHomeworkCompletion(input);
 }
 
 export const EMPTY_SUBMIT_MESSAGE =
@@ -53,3 +76,6 @@ export const EMPTY_SUBMIT_MESSAGE =
 
 export const COLLABORATIVE_PRACTICE_COPY =
   "Work through this problem together. Open any item, discuss it, choose an answer, and record the outcome — teaching practice, not a timed quiz.";
+
+export const IN_SESSION_PARTIAL_SUBMIT_COPY =
+  "This in-session homework set is at most 15 questions. You can submit for results without answering every question.";

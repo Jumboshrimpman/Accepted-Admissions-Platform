@@ -39,11 +39,11 @@ import {
   studentRetryShape,
 } from "./sat-bank-retry.ts";
 import {
-  DEFAULT_PREWORK_TARGET_MINUTES,
   diagnosticTimeLimitMinutes,
   preferSatDiagnosticCollection,
+  routinePreworkTimeLimitMinutes,
   selectFullPracticeCollection,
-  selectQuestionsForTimeBudget,
+  selectQuestionsForCountBudget,
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
 
@@ -460,10 +460,6 @@ export async function assignPreworkFromBank(input: {
     const collections = await listBankCollections();
     collectionId = preferSatDiagnosticCollection(collections)?.id ?? null;
   }
-  const targetMinutes =
-    homeworkKind === "diagnostic"
-      ? (input.targetMinutes ?? null)
-      : (input.targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES);
   let pool = await db
     .select()
     .from(bankQuestionsTable)
@@ -505,8 +501,7 @@ export async function assignPreworkFromBank(input: {
   const selection =
     homeworkKind === "diagnostic"
       ? selectFullPracticeCollection(timed)
-      : selectQuestionsForTimeBudget(timed, {
-          targetMinutes: targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES,
+      : selectQuestionsForCountBudget(timed, {
           preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
         });
   const selected = selection.selected
@@ -515,12 +510,12 @@ export async function assignPreworkFromBank(input: {
   const resolvedMinutes =
     homeworkKind === "diagnostic"
       ? diagnosticTimeLimitMinutes(selection.estimatedSeconds)
-      : (targetMinutes ?? DEFAULT_PREWORK_TARGET_MINUTES);
+      : routinePreworkTimeLimitMinutes(selected.length);
   await archiveSessionPrework(session.id);
   const title =
     homeworkKind === "diagnostic"
       ? `Full-length SAT diagnostic — ${session.title}`
-      : `60-minute SAT pre-work — ${session.title}`;
+      : `SAT pre-work (30–50 questions) — ${session.title}`;
   const [assignment] = await db
     .insert(assignmentsTable)
     .values({
@@ -532,7 +527,7 @@ export async function assignPreworkFromBank(input: {
       instructions:
         homeworkKind === "diagnostic"
           ? "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score."
-          : "About 60 minutes of selected bank questions for this session. Accuracy is recorded; this is not an official SAT score.",
+          : "30–50 official-bank questions for this session (not a full-length SAT). Accuracy is recorded; this is not an official SAT score.",
       status: "published",
       timeLimitMinutes: resolvedMinutes,
       maxAttempts: 1,
@@ -879,7 +874,7 @@ export async function getSessionLesson(sessionId: string) {
     scoreReporting,
     scoreHonesty:
       scoreReporting === "none"
-        ? "This 60-minute pre-work reports accuracy only. It is not an official SAT score."
+        ? "This 30–50 question pre-work reports accuracy only. It is not an official SAT score."
         : "Estimated SAT score range based on College Board scoring-guide methodology for linear paper/digital practice. Not an official College Board adaptive digital score.",
     plan: plan
       ? {

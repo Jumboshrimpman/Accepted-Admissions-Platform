@@ -321,7 +321,11 @@ import {
   questionCanAttachToAssignment,
 } from "../lib/question-single-quiz";
 import { conceptsForTemplateDrafts, validateExtractedSourceText } from "../lib/content-source-text";
-import { hydrateMistakePrompts, selectActivePrework } from "../lib/session-homework";
+import {
+  hydrateMistakePrompts,
+  selectActivePrework,
+  wrongAnswersOnly,
+} from "../lib/session-homework";
 import {
   QuestionGenerationError,
   generateQuestionsWithProvider,
@@ -9826,7 +9830,57 @@ router.get(
       res.status(404).json({ error: "Attempt result not found" });
       return;
     }
+    const query = req.query as { wrongAnswersOnly?: string };
+    const wrongAnswersOnlyRequested =
+      query.wrongAnswersOnly === "true" || query.wrongAnswersOnly === "1";
+    if (wrongAnswersOnlyRequested && Array.isArray(result.items)) {
+      res.json(
+        GetAttemptResultResponse.parse({
+          ...result,
+          items: wrongAnswersOnly(
+            result.items as Array<{ correct: boolean }>,
+          ),
+        }),
+      );
+      return;
+    }
     res.json(GetAttemptResultResponse.parse(result));
+  },
+);
+
+router.get(
+  "/attempts/:attemptId/wrong-answers",
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = GetAttemptResultParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const access = await canAccessAttempt(req.appUser!, params.data.attemptId);
+    if (!access) {
+      res.status(404).json({ error: "Attempt result not found" });
+      return;
+    }
+    const result = await storedAttemptResult(
+      params.data.attemptId,
+      req.appUser!.role === "tutor" || req.appUser!.role === "administrator",
+    );
+    if (!result) {
+      res.status(404).json({ error: "Attempt result not found" });
+      return;
+    }
+    const items = Array.isArray(result.items)
+      ? wrongAnswersOnly(result.items as Array<{ correct: boolean }>)
+      : [];
+    res.json({
+      attemptId: params.data.attemptId,
+      assignmentId: result.assignmentId,
+      assignmentTitle: result.assignmentTitle,
+      sessionId: result.sessionId ?? null,
+      totalCount: typeof result.totalCount === "number" ? result.totalCount : items.length,
+      wrongCount: items.length,
+      items,
+    });
   },
 );
 

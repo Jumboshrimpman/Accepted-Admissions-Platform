@@ -177,7 +177,7 @@ export function SatBankPanel({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {question.sourceKey} · {question.estimatedSeconds}s
                   {question.hasOfficialExplanation ? " · official explanation on file" : " · official explanation pending"}
-                  {question.assignable === false ? " · not used in 60-min pre-work until enriched" : ""}
+                  {question.assignable === false ? " · not used in 30–50 question pre-work until enriched" : ""}
                 </p>
               </div>
             ))}
@@ -192,7 +192,7 @@ export function SatBankPanel({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Assign a ~60 minute set from Sessions.{" "}
+        Assign a 30–50 question set from Sessions.{" "}
         <Link href={adminCurriculumHref({ section: "sessions" })} className="text-primary underline">
           Open sessions
         </Link>
@@ -221,16 +221,16 @@ export function AssignBankPreworkControl({
   return (
     <div className="mt-3 space-y-2" data-testid={`assign-bank-prework-${sessionId}`}>
       <p className="text-sm font-medium">
-        {homeworkKind === "diagnostic" ? "Full-length diagnostic pre-work" : "60-minute bank pre-work"}
+        {homeworkKind === "diagnostic" ? "Full-length diagnostic pre-work" : "30–50 question bank pre-work"}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
-          aria-label="SAT bank collection for 60-minute pre-work"
+          aria-label="SAT bank collection for 30–50 question pre-work"
           className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
           value={collectionId}
           onChange={(event) => setCollectionId(event.target.value)}
         >
-          <option value="">Mixed unused bank (time target)</option>
+          <option value="">Mixed unused bank (30–50 questions)</option>
           {collections.map((collection) => (
             <option key={collection.id} value={collection.id}>
               {collection.title}
@@ -257,7 +257,6 @@ export function AssignBankPreworkControl({
                 data: {
                   collectionId: collectionId || null,
                   homeworkKind,
-                  ...(homeworkKind === "routine" ? { targetMinutes: 60 } : {}),
                 },
               },
               {
@@ -281,7 +280,7 @@ export function AssignBankPreworkControl({
             ? "Assigning…"
             : homeworkKind === "diagnostic"
               ? "Assign full diagnostic"
-              : "Assign 60-min pre-work"}
+              : "Assign 30–50 question pre-work"}
         </Button>
         <Button
           size="sm"

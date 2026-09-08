@@ -1310,6 +1310,11 @@ paths:
       summary: Get the permanently stored result and feedback for an attempt
       parameters:
         - $ref: "#/components/parameters/AttemptId"
+        - name: wrongAnswersOnly
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: When true, items contains only misses from this homework attempt
       responses:
         "200":
           description: Stored graded result
@@ -1317,6 +1322,25 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AttemptResult" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /attempts/{attemptId}/wrong-answers:
+    get:
+      operationId: getAttemptWrongAnswers
+      tags: [assignments]
+      summary: Wrong answers only from a homework attempt
+      description: >
+        Returns only missed items from a submitted homework or diagnostic
+        attempt so tutors can filter and practice those misses.
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      responses:
+        "200":
+          description: Missed items from the attempt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptWrongAnswers" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /attempts/{attemptId}/review:
     patch:
@@ -3182,6 +3206,19 @@ components:
         correct: { type: number }
         total: { type: number }
         accuracy: { type: number }
+    AttemptWrongAnswers:
+      type: object
+      required: [attemptId, assignmentId, assignmentTitle, sessionId, totalCount, wrongCount, items]
+      properties:
+        attemptId: { type: string }
+        assignmentId: { type: string }
+        assignmentTitle: { type: string }
+        sessionId: { type: ["string", "null"] }
+        totalCount: { type: number }
+        wrongCount: { type: number }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AttemptResultItem" }
     AttemptResultItem:
       type: object
       required: [questionId, correct, finalAnswer, correctAnswer, explanation, skill, flagged, prompt]
