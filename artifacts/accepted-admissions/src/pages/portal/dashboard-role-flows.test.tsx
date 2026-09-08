@@ -249,6 +249,7 @@ function dashboardForRole(
       remainingHours: isTutor ? 0 : 4,
       readOnly: role === "viewer",
       selfServeSatBooking: false,
+      twelveSessionPlan: !isTutor,
     },
     progress: {
       totalSessions: isTutor ? 1 : 2,
@@ -315,6 +316,8 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Your tutors")).toBeTruthy();
     expect(screen.getAllByText("Eunice Chon").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Nika Raiffe").length).toBeGreaterThan(0);
+    expect(screen.getByText("One plan. Twelve focused meetings.")).toBeTruthy();
+    expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
 
   test("viewer gets the same scoped review surface in explicit view-only mode", () => {
@@ -402,8 +405,30 @@ describe("authenticated role dashboard flows", () => {
         remainingHours: 0,
         readOnly: false,
         selfServeSatBooking: true,
+        twelveSessionPlan: false,
       },
-    };
+      curriculumSessions: [
+        {
+          id: "session-michelle-sat",
+          courseId: "course-fall",
+          dateTime: "2026-09-15T16:00:00.000Z",
+          timezone: "America/New_York",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Michelle’s SAT Session with Xavier",
+          status: "published",
+          meetingUrl: "https://meet.google.com/michelle-sat",
+          calendarEventUrl: null,
+          tutor: { id: "tutor-xavier", name: "Xavier", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "michelle-user", name: "Michelle Makarem" },
+          readiness: "ready",
+          nextAction: "Open session plan",
+          currentFocus: "Evidence and conventions.",
+          preparation: null,
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
     render(<FallWelcomeDashboard />);
 
     expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
@@ -412,6 +437,12 @@ describe("authenticated role dashboard flows", () => {
       "/portal/sat",
     );
     expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText("One plan. Twelve focused meetings.")).toBeNull();
+    expect(screen.queryByText("Twelve-session roadmap")).toBeNull();
+    expect(screen.queryByText(/twelve focused meetings/i)).toBeNull();
+    expect(screen.getByText("Welcome back, Michelle.")).toBeTruthy();
+    expect(screen.getByText("Session roadmap")).toBeTruthy();
+    expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
   });
 
   test("tutor curriculum view does not show SAT purchase or book CTAs even when self-serve is on", () => {
@@ -423,6 +454,7 @@ describe("authenticated role dashboard flows", () => {
         remainingHours: 0,
         readOnly: false,
         selfServeSatBooking: true,
+        twelveSessionPlan: false,
       },
     };
     render(<FallWelcomeDashboard />);

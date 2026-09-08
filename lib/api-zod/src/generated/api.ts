@@ -643,7 +643,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "usedHours": zod.number(),
   "remainingHours": zod.number(),
   "readOnly": zod.boolean(),
-  "selfServeSatBooking": zod.boolean()
+  "selfServeSatBooking": zod.boolean(),
+  "twelveSessionPlan": zod.boolean()
 }),
   "progress": zod.object({
   "totalSessions": zod.number(),
@@ -1990,7 +1991,8 @@ export const GetDashboardResponse = zod.object({
   "usedHours": zod.number(),
   "remainingHours": zod.number(),
   "readOnly": zod.boolean(),
-  "selfServeSatBooking": zod.boolean()
+  "selfServeSatBooking": zod.boolean(),
+  "twelveSessionPlan": zod.boolean()
 }),
   "progress": zod.object({
   "totalSessions": zod.number(),
@@ -4010,5 +4012,29 @@ export const RecordRetryOutcomeResponse = zod.object({
   "correctAnswer": zod.string().optional(),
   "explanation": zod.string().optional()
 })
+
+/**
+ * @summary List the curriculum bank and sessions the signed-in tutor may author
+ */
+export const GetTutorCurriculumResponse = zod.object({
+  "programs": GetAdminCurriculumResponse.shape.programs,
+  "students": zod.array(zod.object({
+    "id": zod.string(),
+    "name": zod.string(),
+    "courseId": zod.string(),
+    "courseTitle": zod.string(),
+    "subject": zod.string()
+  })),
+  "sessions": GetAdminCurriculumResponse.shape.sessions,
+  "quizzes": GetAdminCurriculumResponse.shape.assignments,
+  "libraryAssets": GetAdminCurriculumResponse.shape.libraryAssets,
+  "satBankCollections": ListSatBankCollectionsResponse
+})
+
+/**
+ * @summary Create a session for a student the tutor is linked to
+ */
+export const CreateTutorSessionBody = CreateAdminSessionBody
+export const CreateTutorSessionResponse = CreateAdminSessionResponse
 
 

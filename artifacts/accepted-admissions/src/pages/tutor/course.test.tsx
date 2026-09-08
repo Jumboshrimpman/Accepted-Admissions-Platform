@@ -48,6 +48,7 @@ describe("tutor course page", () => {
     render(<TutorCourse />);
 
     const hrefs = screen.queryAllByRole("link").map((link) => link.getAttribute("href") ?? "");
+    expect(hrefs).toContain("/tutor/curriculum");
     expect(hrefs).toContain("https://meet.google.com/sat-room");
     expect(screen.queryByText(/Course Drive/i)).toBeNull();
     expect(screen.queryByRole("link", { name: /Course Drive/i })).toBeNull();

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -145,6 +145,11 @@ test("Taito billing stays off-platform while Michelle can self-serve SAT booking
     }),
     true,
   );
+  assert.equal(twelveSessionPlanForEmail("taito0525@gmail.com"), true);
+  assert.equal(twelveSessionPlanForEmail("TAITO0525@gmail.com"), true);
+  assert.equal(twelveSessionPlanForEmail("michaelmakarem@gmail.com"), false);
+  assert.equal(twelveSessionPlanForEmail("samapostgrad@example.invalid"), false);
+  assert.equal(twelveSessionPlanForEmail(null), false);
 });
 
 test("calendar deep-links prefer Google event htmlLinks and never Meet URLs", () => {

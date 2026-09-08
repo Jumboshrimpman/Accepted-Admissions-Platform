@@ -44,6 +44,11 @@ export default function TutorCourse() {
         </div>
         
         <div className="flex gap-3 w-full md:w-auto">
+          <Button asChild variant="outline" className="flex-1 md:flex-none">
+            <Link href="/tutor/curriculum" data-testid="tutor-course-create-session">
+              Create session
+            </Link>
+          </Button>
           {course.meetUrl && (
             <Button asChild className="flex-1 md:flex-none bg-primary text-white rounded-md shadow-sm">
               <a href={course.meetUrl} target="_blank" rel="noopener noreferrer">
