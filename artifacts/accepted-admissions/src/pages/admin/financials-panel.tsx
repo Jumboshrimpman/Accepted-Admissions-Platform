@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  customFetch,
   useCreateAdminProduct,
   getGetAdminFinancialsQueryKey,
   getGetAdminOverviewQueryKey,
@@ -26,6 +27,25 @@ function money(cents: number): string {
 function errorText(error: unknown): string {
   return (error as { data?: { error?: string } } | null)?.data?.error ?? "The financial action failed.";
 }
+
+type PaymentCreditMismatch = {
+  paymentId: string;
+  clientName: string | null;
+  clientEmail: string | null;
+  productName: string | null;
+  productSlug: string | null;
+  expectedHours: number | null;
+  amountCents: number;
+  status: string;
+  paidAt: string | Date | null;
+  reason: "missing_credit" | "product_missing";
+};
+
+type AdminFinancialsExtras = {
+  expectedStripeWebhookUrl?: string;
+  retiredStripeWebhookHosts?: string[];
+  paymentCreditMismatches?: PaymentCreditMismatch[];
+};
 
 export function AdminFinancialsPanel() {
   const queryClient = useQueryClient();
@@ -114,7 +134,10 @@ export function AdminFinancialsPanel() {
       </Card>
     );
   }
-  const data = financials.data;
+  const data = financials.data as typeof financials.data & AdminFinancialsExtras;
+  const mismatches = data.paymentCreditMismatches ?? [];
+  const expectedWebhookUrl =
+    data.expectedStripeWebhookUrl ?? "https://app.acceptedadmissions.org/api/stripe/webhook";
   const selectedClient = clientUserId || data.clients[0]?.id || "";
   const selectedProduct = productId || data.products[0]?.id || "";
   const selectedProductRecord = data.products.find((product) => product.id === selectedProduct);
@@ -154,6 +177,68 @@ export function AdminFinancialsPanel() {
         <CardDescription>Manage SAT pricing, create transparent invoices, reconcile verified payments, and audit credits.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-7">
+        <section className="space-y-3 rounded-2xl border p-4" data-testid="section-payment-credit-health">
+          <div>
+            <h3 className="font-semibold">Stripe webhook & credit health</h3>
+            <p className="text-sm text-muted-foreground">
+              Production Stripe must post to{" "}
+              <code className="rounded bg-muted px-1">{expectedWebhookUrl}</code>
+              . Do not use Replit
+              {data.retiredStripeWebhookHosts?.[0] ? ` (${data.retiredStripeWebhookHosts[0]})` : ""}.
+              Paid catalog purchases grant <code className="rounded bg-muted px-1">product.durationHours</code>{" "}
+              before the payment is marked paid.
+            </p>
+          </div>
+          {mismatches.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="text-payment-credit-health-ok">
+              Recent paid catalog payments match the credit ledger.
+            </p>
+          ) : (
+            <div className="space-y-3" data-testid="list-payment-credit-mismatches">
+              <p className="text-sm text-destructive">
+                {mismatches.length} paid payment{mismatches.length === 1 ? "" : "s"} missing a purchase credit.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[680px] text-left text-sm">
+                  <thead className="border-b text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="p-2">Client</th>
+                      <th className="p-2">Product</th>
+                      <th className="p-2">Expected hours</th>
+                      <th className="p-2">Amount</th>
+                      <th className="p-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mismatches.map((row) => (
+                      <tr key={row.paymentId} className="border-b">
+                        <td className="p-2">{row.clientName ?? row.clientEmail ?? "Unknown client"}</td>
+                        <td className="p-2">{row.productName ?? row.productSlug ?? "Missing product"}</td>
+                        <td className="p-2">{row.expectedHours ?? "—"}</td>
+                        <td className="p-2">{money(row.amountCents)}</td>
+                        <td className="p-2 capitalize">{row.status.replaceAll("_", " ")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Button
+                disabled={busy}
+                data-testid="button-backfill-paid-credits"
+                onClick={() => {
+                  void customFetch("/api/admin/payments/backfill-credits", {
+                    method: "POST",
+                    body: JSON.stringify({}),
+                  })
+                    .then(() => complete("Missing purchase credits were granted from paid payments."))
+                    .catch(fail);
+                }}
+              >
+                Grant missing credits
+              </Button>
+            </div>
+          )}
+        </section>
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
             <h3 className="font-semibold">Authoritative SAT catalog</h3>

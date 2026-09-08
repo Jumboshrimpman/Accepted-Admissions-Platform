@@ -32,6 +32,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useUpdateInvoice: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminProduct: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminProduct: () => ({ mutate: vi.fn(), isPending: false }),
+  customFetch: vi.fn(),
 }));
 
 import { AdminFinancialsPanel } from "./financials-panel";
@@ -62,11 +63,48 @@ describe("administrator financials panel", () => {
       products: [],
       invoices: [],
       credits: [],
+      expectedStripeWebhookUrl: "https://app.acceptedadmissions.org/api/stripe/webhook",
+      paymentCreditMismatches: [],
     };
 
     render(<AdminFinancialsPanel />);
 
     expect(screen.getByTestId("empty-financials-invoices")).toBeTruthy();
+    expect(screen.getByTestId("text-payment-credit-health-ok")).toBeTruthy();
+    expect(screen.getByText("https://app.acceptedadmissions.org/api/stripe/webhook")).toBeTruthy();
     expect(screen.queryByTestId("card-financials-unavailable")).toBeNull();
+  });
+
+  test("lists paid-but-uncredited payments and offers an idempotent backfill", () => {
+    mocks.financials.isError = false;
+    mocks.financials.data = {
+      clients: [],
+      products: [],
+      invoices: [],
+      credits: [],
+      expectedStripeWebhookUrl: "https://app.acceptedadmissions.org/api/stripe/webhook",
+      retiredStripeWebhookHosts: ["accepted-admissions-platform.replit.app"],
+      paymentCreditMismatches: [
+        {
+          paymentId: "pay_mismatch",
+          clientName: "Owner test",
+          clientEmail: "owner@example.invalid",
+          productName: "test",
+          productSlug: "test-sat-hour",
+          expectedHours: 1,
+          amountCents: 100,
+          status: "paid",
+          paidAt: new Date().toISOString(),
+          reason: "missing_credit",
+        },
+      ],
+    };
+
+    render(<AdminFinancialsPanel />);
+
+    expect(screen.getByTestId("list-payment-credit-mismatches")).toBeTruthy();
+    expect(screen.getByText("test")).toBeTruthy();
+    expect(screen.getByTestId("button-backfill-paid-credits")).toBeTruthy();
+    expect(screen.queryByTestId("text-payment-credit-health-ok")).toBeNull();
   });
 });

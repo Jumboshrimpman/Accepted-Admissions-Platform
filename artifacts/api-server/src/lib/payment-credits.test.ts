@@ -6,7 +6,11 @@ import Stripe from "stripe";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { processStripeWebhook } from "./payment-service.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
+import { backfillPaidUncreditedPayments, listPaidUncreditedPayments } from "./payment-fulfillment.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
 import { verifyStripeSignature } from "./stripe-client.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { TEST_SAT_HOUR_DURATION_HOURS, TEST_SAT_HOUR_PRICE_CENTS } from "./sat-catalog.ts";
 
 const SINGLE_PRICE_CENTS = 13_000;
 const PACKAGE_PRICE_CENTS = 130_000;
@@ -387,6 +391,120 @@ test("admin manual grant records an audit trail", async () => {
     await db.db.delete(db.creditLedgerTable).where(eq(db.creditLedgerTable.clientUserId, studentId));
     await db.db.delete(db.usersTable).where(eq(db.usersTable.id, adminId));
     await db.db.delete(db.usersTable).where(eq(db.usersTable.id, studentId));
+  }
+});
+
+test("$1 test SAT hour grants catalog durationHours, not a dollar fraction", async () => {
+  const fixture = await createPurchaseFixture({
+    amountCents: TEST_SAT_HOUR_PRICE_CENTS,
+    durationHours: TEST_SAT_HOUR_DURATION_HOURS,
+    slug: "test-sat-hour",
+  });
+  try {
+    await processStripeWebhook({
+      id: `evt_${fixture.paymentId}`,
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: `cs_test_${fixture.suffix}`,
+          payment_status: "paid",
+          amount_total: TEST_SAT_HOUR_PRICE_CENTS,
+          metadata: { payment_id: fixture.paymentId },
+        },
+      },
+    });
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 1);
+    const [entry] = await fixture.db.db
+      .select()
+      .from(fixture.db.creditLedgerTable)
+      .where(eq(fixture.db.creditLedgerTable.clientUserId, fixture.userId));
+    assert.equal(Number(entry?.hours), TEST_SAT_HOUR_DURATION_HOURS);
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
+test("missing catalog product refuses to mark checkout paid and grants no credit", async () => {
+  const fixture = await createPurchaseFixture({
+    amountCents: TEST_SAT_HOUR_PRICE_CENTS,
+    durationHours: TEST_SAT_HOUR_DURATION_HOURS,
+    slug: "test-sat-hour",
+  });
+  try {
+    await fixture.db.db
+      .update(fixture.db.paymentsTable)
+      .set({ productId: null })
+      .where(eq(fixture.db.paymentsTable.id, fixture.paymentId));
+    await assert.rejects(
+      () =>
+        processStripeWebhook({
+          id: `evt_${fixture.paymentId}`,
+          type: "checkout.session.completed",
+          data: {
+            object: {
+              id: `cs_test_${fixture.suffix}`,
+              payment_status: "paid",
+              amount_total: TEST_SAT_HOUR_PRICE_CENTS,
+              metadata: { payment_id: fixture.paymentId },
+            },
+          },
+        }),
+      /Credits were not granted/,
+    );
+    const [payment] = await fixture.db.db
+      .select()
+      .from(fixture.db.paymentsTable)
+      .where(eq(fixture.db.paymentsTable.id, fixture.paymentId));
+    assert.equal(payment?.status, "pending");
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 0);
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
+test("paid-but-uncredited backfill grants durationHours once", async () => {
+  const fixture = await createPurchaseFixture({
+    amountCents: TEST_SAT_HOUR_PRICE_CENTS,
+    durationHours: TEST_SAT_HOUR_DURATION_HOURS,
+    slug: "test-sat-hour",
+  });
+  try {
+    await fixture.db.db
+      .update(fixture.db.paymentsTable)
+      .set({
+        status: "paid",
+        paidAt: new Date(),
+        verifiedAt: new Date(),
+      })
+      .where(eq(fixture.db.paymentsTable.id, fixture.paymentId));
+    const mismatches = await listPaidUncreditedPayments();
+    assert.ok(mismatches.some((row) => row.paymentId === fixture.paymentId));
+
+    const dryRun = await backfillPaidUncreditedPayments({
+      paymentId: fixture.paymentId,
+      dryRun: true,
+    });
+    assert.equal(dryRun.dryRun, true);
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 0);
+
+    const applied = await backfillPaidUncreditedPayments({
+      paymentId: fixture.paymentId,
+      dryRun: false,
+    });
+    assert.equal(applied.granted.some((row) => row.paymentId === fixture.paymentId && row.inserted), true);
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 1);
+
+    const again = await backfillPaidUncreditedPayments({
+      paymentId: fixture.paymentId,
+      dryRun: false,
+    });
+    assert.equal(again.granted.some((row) => row.inserted), false);
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 1);
+  } finally {
+    await fixture.db.db
+      .delete(fixture.db.auditLogsTable)
+      .where(eq(fixture.db.auditLogsTable.entityId, fixture.paymentId));
+    await cleanupFixture(fixture);
   }
 });
 

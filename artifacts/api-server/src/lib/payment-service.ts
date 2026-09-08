@@ -15,6 +15,10 @@ import {
 import { formData, stripeRequest, type StripeRequestError } from "./stripe-client.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { tutorShareForRefund } from "./payment-allocation.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { grantPaidPurchaseCredits } from "./payment-fulfillment.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { paymentRequiresCatalogProduct } from "./payment-fulfillment-rules.ts";
 
 type StripeRecord = Record<string, unknown>;
 
@@ -641,7 +645,15 @@ export async function processStripeWebhook(event: {
       .where(eq(paymentsTable.id, row.payment.id))
       .limit(1);
     if (!payment) return;
-    const product = row.product;
+    let product = row.product;
+    if (payment.productId) {
+      const [freshProduct] = await tx
+        .select()
+        .from(satProductsTable)
+        .where(eq(satProductsTable.id, payment.productId))
+        .limit(1);
+      product = freshProduct ?? null;
+    }
     const invoiceId = payment.invoiceId;
     const now = new Date();
     const objectId = recordString(object, "id");
@@ -686,6 +698,9 @@ export async function processStripeWebhook(event: {
       const retainedRefundStatus = ["refunded", "partially_refunded"].includes(payment.status)
         ? payment.status
         : "paid";
+      if (paymentRequiresCatalogProduct(payment)) {
+        await grantPaidPurchaseCredits(tx, { payment, product });
+      }
       await tx
         .update(paymentsTable)
         .set({
@@ -712,21 +727,6 @@ export async function processStripeWebhook(event: {
             updatedAt: now,
           })
           .where(eq(invoicesTable.id, invoiceId));
-      }
-      if (product) {
-        await tx
-          .insert(creditLedgerTable)
-          .values({
-            clientUserId: payment.clientUserId!,
-            productId: product.id,
-            entryType: "original",
-            hours: product.durationHours,
-            referenceType: "payment",
-            referenceId: payment.id,
-            fulfillmentKey: `payment:${payment.id}`,
-            note: `${product.name} purchase`,
-          })
-          .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
       }
       const settledPayment = {
         ...payment,

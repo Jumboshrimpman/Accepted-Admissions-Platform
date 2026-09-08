@@ -159,6 +159,14 @@ import {
   voidHostedInvoice,
 } from "../lib/payment-service";
 import {
+  backfillPaidUncreditedPayments,
+  listPaidUncreditedPayments,
+} from "../lib/payment-fulfillment";
+import {
+  PRODUCTION_STRIPE_WEBHOOK_URL,
+  RETIRED_REPLIT_STRIPE_WEBHOOK_HOST,
+} from "../lib/stripe-webhook-url";
+import {
   AttachQuestionToAssignmentBody,
   AttachQuestionToAssignmentParams,
   AttachQuestionToAssignmentResponse,
@@ -6069,7 +6077,34 @@ router.get(
         .leftJoin(tutorProfilesTable, eq(tutorProfilesTable.id, stripeTransfersTable.tutorProfileId))
         .orderBy(desc(stripeTransfersTable.createdAt)),
     ]);
-    res.json({ clients, products, invoices, payments, credits, transfers });
+    const paymentCreditMismatches = await listPaidUncreditedPayments(100);
+    res.json({
+      clients,
+      products,
+      invoices,
+      payments,
+      credits,
+      transfers,
+      expectedStripeWebhookUrl: PRODUCTION_STRIPE_WEBHOOK_URL,
+      retiredStripeWebhookHosts: [RETIRED_REPLIT_STRIPE_WEBHOOK_HOST],
+      paymentCreditMismatches,
+    });
+  },
+);
+
+router.post(
+  "/admin/payments/backfill-credits",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const paymentId =
+      typeof body.paymentId === "string" && body.paymentId.trim() ? body.paymentId.trim() : undefined;
+    const result = await backfillPaidUncreditedPayments({
+      paymentId,
+      dryRun: false,
+      actorUserId: req.appUser!.id,
+    });
+    res.json(result);
   },
 );
 
