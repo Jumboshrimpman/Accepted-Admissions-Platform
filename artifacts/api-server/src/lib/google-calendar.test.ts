@@ -52,7 +52,10 @@ test("requests the configured least-privilege Google Calendar scopes", () => {
     "https://www.googleapis.com/auth/calendar.freebusy",
     "https://www.googleapis.com/auth/calendar.events",
   ]);
-  assert.equal(GOOGLE_CALENDAR_SCOPES.includes("https://www.googleapis.com/auth/calendar.events.freebusy"), false);
+  assert.equal(
+    JSON.stringify(GOOGLE_CALENDAR_SCOPES).includes("calendar.events.freebusy"),
+    false,
+  );
 });
 
 test("OAuth state is signed and scoped to the tutor profile, return path, and callback", () => {
