@@ -99,6 +99,10 @@ describe("calendar connection helpers", () => {
 
   test("builds a connect URL that returns to the tutor dashboard", () => {
     expect(calendarConnectUrl("tutor_dashboard")).toBe(connectUrl);
+    expect(calendarConnectUrl("tutor_dashboard").startsWith("/api/calendar/connect")).toBe(
+      true,
+    );
+    expect(calendarConnectUrl("tutor_dashboard")).not.toContain("railway");
     expect(calendarConnectUrl("admin_dashboard")).toBe(
       "/api/calendar/connect?redirect=1&returnTo=%2Fadmin",
     );

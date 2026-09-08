@@ -163,6 +163,20 @@ test("request-origin callback is preferred over a stale APP_ORIGIN", () => {
     }),
     "https://app.acceptedadmissions.org",
   );
+  assert.equal(
+    publicOriginFromForwardedHeaders(
+      {
+        host: "accepted-admissions-platform-production.up.railway.app",
+        forwardedHost: "accepted-admissions-platform-production.up.railway.app",
+        forwardedProto: "https",
+      },
+      {
+        NODE_ENV: "production",
+        APP_ORIGIN: "https://app.acceptedadmissions.org",
+      },
+    ),
+    "https://app.acceptedadmissions.org",
+  );
 });
 
 test("Railway and Vercel hosts are never sent to Google when a public callback exists", () => {

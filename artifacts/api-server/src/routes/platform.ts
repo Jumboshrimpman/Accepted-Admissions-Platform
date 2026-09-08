@@ -30,7 +30,7 @@ import {
   inspectCalendarOAuthState,
   normalizeGoogleCalendarStatus,
   listGoogleBusyWindows,
-  publicOriginFromForwardedHeaders,
+  resolvePublicRequestOrigin,
   readCalendarCallbackQuery,
   refreshGoogleAccessToken,
   resolveGoogleCalendarRedirectUri,
@@ -5120,7 +5120,7 @@ router.get(
     const returnTo = safeCalendarReturnTo(
       typeof req.query.returnTo === "string" ? req.query.returnTo : undefined,
     );
-    const requestOrigin = publicOriginFromForwardedHeaders({
+    const requestOrigin = resolvePublicRequestOrigin({
       host: req.get("host"),
       forwardedHost: req.get("x-forwarded-host"),
       forwardedProto: req.get("x-forwarded-proto"),

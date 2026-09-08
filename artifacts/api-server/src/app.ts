@@ -4,6 +4,7 @@ import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import { resolveClerkPublishableKey } from "./lib/clerk-publishable-key";
 import { logger } from "./lib/logger";
+import { canonicalRequestHostMiddleware } from "./middlewares/canonicalRequestHost";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
@@ -13,6 +14,8 @@ import { constructVerifiedStripeEvent } from "./lib/stripe-client";
 
 const app: Express = express();
 
+app.set("trust proxy", 1);
+app.use(canonicalRequestHostMiddleware());
 app.use(
   pinoHttp({
     logger,

@@ -1,4 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
+import {
+  isPlatformInternalHost,
+  resolvePublicRequestOrigin,
+  type ForwardedOriginInput,
+} from "./public-origin.ts";
+
+export { resolvePublicRequestOrigin };
 
 export const GOOGLE_CALENDAR_SCOPES = [
   "openid",
@@ -99,11 +106,6 @@ function base64Url(value: Buffer | string): string {
 
 function fromBase64Url(value: string): Buffer {
   return Buffer.from(value, "base64url");
-}
-
-function firstHeaderValue(value?: string | null): string | undefined {
-  const part = value?.split(",")[0]?.trim();
-  return part || undefined;
 }
 
 export function escapeCalendarHtml(value: string): string {
@@ -221,28 +223,14 @@ function googleIdentityAudMatches(
 }
 
 export function isPlatformInternalCalendarHost(hostname: string): boolean {
-  const host = hostname.trim().toLowerCase();
-  return (
-    host.endsWith(".up.railway.app") ||
-    host.endsWith(".railway.app") ||
-    host.endsWith(".vercel.app")
-  );
+  return isPlatformInternalHost(hostname);
 }
 
-export function publicOriginFromForwardedHeaders(input: {
-  host?: string | null;
-  forwardedHost?: string | null;
-  forwardedProto?: string | null;
-  protocol?: string | null;
-}): string | null {
-  const host = firstHeaderValue(input.forwardedHost) || input.host?.trim();
-  if (!host) return null;
-  const proto = firstHeaderValue(input.forwardedProto) || input.protocol || "https";
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return null;
-  }
+export function publicOriginFromForwardedHeaders(
+  input: ForwardedOriginInput,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  return resolvePublicRequestOrigin(input, env);
 }
 
 export function getGoogleCalendarConfig(

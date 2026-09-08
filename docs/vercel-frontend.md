@@ -54,7 +54,7 @@ The portal does not call Railway from the browser. `fetch('/api/...')` is same-o
 
 - **CORS is not required** for these browser calls. `artifacts/api-server` depends on `cors` but does not enable a CORS middleware or origin allowlist. Do not add a CORS allowlist unless you later call Railway **cross-origin** from the browser.
 - **Cookie / Clerk session** stays first-party on the Vercel host. `customFetch` uses default `fetch` credentials (`same-origin`). `@clerk/express` `clerkMiddleware` reads the Clerk session from those forwarded cookies (this app does not store bearer tokens in `localStorage`).
-- Railway already prefers `X-Forwarded-Host` for the Clerk frontend proxy host (`getClerkProxyHost`). Vercel external rewrites set that header to the Vercel hostname, which is what Clerk proxy URL generation needs.
+- Incoming `Host` / `X-Forwarded-Host` values on `*.up.railway.app` (and `*.vercel.app`) are rewritten to the public app origin (`APP_ORIGIN`, production fallback `https://app.acceptedadmissions.org`) before `@clerk/express` `clerkMiddleware`. Clerk handshake `redirect_url` is built from those headers; leaving Railway as `Host` is what produced `form_param_value_invalid` on Connect Calendar. The Clerk Dashboard stays on `acceptedadmissions.org` / `app.acceptedadmissions.org` only.
 
 **You must set `APP_ORIGIN` on Railway** to the public HTTPS origin tutors actually use (production: `https://app.acceptedadmissions.org`). `APP_ORIGIN` is used for Stripe Checkout success/cancel URLs and, when `GOOGLE_CALENDAR_REDIRECT_URI` is unset, the Google Calendar OAuth callback (`${APP_ORIGIN}/api/calendar/oauth/callback`). Those paths then hit Vercel `/api/...` and are rewritten to Railway.
 
