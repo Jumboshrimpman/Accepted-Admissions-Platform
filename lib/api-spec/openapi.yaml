@@ -343,7 +343,7 @@ paths:
     post:
       operationId: cloneAdminAssignmentToSession
       tags: [administration]
-      summary: Clone a reusable quiz onto a session without moving the original
+      summary: Clone a reusable quiz onto a session without moving the original (administrators and session tutors)
       description: >
         Creates a new session-specific assignment and copies question ordering
         and configuration. The source assignment, its session association, and
@@ -481,11 +481,54 @@ paths:
               schema: { $ref: "#/components/schemas/SatBankImportResult" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /tutor/curriculum:
+    get:
+      operationId: getTutorCurriculum
+      tags: [curriculum]
+      summary: List the curriculum bank and sessions the signed-in tutor may author
+      description: >
+        Tutors see only programs they belong to, students they are linked to,
+        and sessions they are assigned on. Shared quizzes, library assets, and
+        SAT/PSAT collections are readable so tutors can attach work without
+        an administrator. Administrators see the full bank. Viewers are denied.
+      responses:
+        "200":
+          description: Tutor-scoped curriculum workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TutorCurriculum" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /tutor/sessions:
+    post:
+      operationId: createTutorSession
+      tags: [curriculum]
+      summary: Create a session for a student the tutor is linked to
+      description: >
+        Tutors may only create sessions where they are the tutor and the client
+        is a linked student for that course and subject. Reuses administrator
+        conflict detection and generated titles. No Clerk invitation is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSessionInput" }
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/sat-bank/collections:
     get:
       operationId: listSatBankCollections
       tags: [administration]
-      summary: List SAT/PSAT source collections in original-test order
+      summary: List SAT/PSAT source collections in original-test order (administrators and tutors)
       responses:
         "200":
           description: Source collections
@@ -592,7 +635,7 @@ paths:
     post:
       operationId: assignSatBankPrework
       tags: [administration]
-      summary: Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session
+      summary: Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session (administrators and session tutors)
       parameters:
         - $ref: "#/components/parameters/SessionId"
       requestBody:
@@ -2646,6 +2689,28 @@ components:
               assignedTutors:
                 type: array
                 items: { $ref: "#/components/schemas/AdminRelationship" }
+    TutorCurriculum:
+      type: object
+      required: [programs, students, sessions, quizzes, libraryAssets, satBankCollections]
+      properties:
+        programs:
+          type: array
+          items: { $ref: "#/components/schemas/AdminProgram" }
+        students:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardStudent" }
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSession" }
+        quizzes:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAssignment" }
+        libraryAssets:
+          type: array
+          items: { $ref: "#/components/schemas/CurriculumLibraryAsset" }
+        satBankCollections:
+          type: array
+          items: { $ref: "#/components/schemas/SatBankCollection" }
     AdminRelationship:
       type: object
       required: [id, assignmentId, name, courseId, courseTitle, subject]
@@ -3382,13 +3447,18 @@ components:
         status: { type: string, enum: [draft, published] }
     DashboardCredits:
       type: object
-      required: [purchasedHours, usedHours, remainingHours, readOnly, selfServeSatBooking]
+      required: [purchasedHours, usedHours, remainingHours, readOnly, selfServeSatBooking, twelveSessionPlan]
       properties:
         purchasedHours: { type: number }
         usedHours: { type: number }
         remainingHours: { type: number }
         readOnly: { type: boolean }
         selfServeSatBooking: { type: boolean }
+        twelveSessionPlan:
+          type: boolean
+          description: >
+            True only for Taito Goto’s client context (including his viewer).
+            Gates Fall 12-session “one plan / twelve focused meetings” copy.
     DashboardProgress:
       type: object
       required: [totalSessions, completedSessions, averageScore, strengths, weaknesses]

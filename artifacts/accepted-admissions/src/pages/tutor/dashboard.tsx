@@ -347,18 +347,25 @@ export default function TutorDashboard() {
             <div className="flex items-start gap-3">
               <BookOpen className="mt-0.5 h-5 w-5 text-primary" />
               <div>
-                <h2 className="font-semibold">Fall curriculum</h2>
+                <h2 className="font-semibold">Curriculum bank</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Session plans, homework, and practice materials.
+                  Create a session, assign quizzes or SAT homework, and open session plans.
                 </p>
               </div>
             </div>
-            <Button asChild className="w-full shrink-0 sm:w-auto">
-              <Link href={`/tutor/courses/${fallCourse.id}`}>
-                Open Fall 2026 curriculum
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button asChild className="w-full sm:w-auto">
+                <Link href="/tutor/curriculum" data-testid="tutor-open-curriculum">
+                  Create session & assign work
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link href={`/tutor/courses/${fallCourse.id}`}>
+                  Open course sessions
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}

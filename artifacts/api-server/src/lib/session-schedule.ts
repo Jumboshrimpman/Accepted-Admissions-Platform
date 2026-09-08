@@ -103,6 +103,13 @@ export function selfServeSatBookingForAccount(args: {
   return selfServeSatBookingForEmail(args.email);
 }
 
+/** Fall “one plan / twelve focused meetings” framing is Taito’s course only. */
+export function twelveSessionPlanForEmail(
+  email: string | null | undefined,
+): boolean {
+  return email?.trim().toLowerCase() === TAITO_STUDENT_EMAIL;
+}
+
 export function isGoogleCalendarEventUrl(
   url: string | null | undefined,
 ): boolean {

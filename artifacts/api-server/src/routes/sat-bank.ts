@@ -80,7 +80,7 @@ router.post(
 
 router.get(
   "/admin/sat-bank/collections",
-  ensureRole(["administrator"]),
+  ensureRole(["administrator", "tutor"]),
   async (_req: AuthedRequest, res): Promise<void> => {
     const collections = await listBankCollections();
     res.json(ListSatBankCollectionsResponse.parse(collections));
@@ -89,7 +89,7 @@ router.get(
 
 router.get(
   "/admin/sat-bank/collections/:collectionId",
-  ensureRole(["administrator"]),
+  ensureRole(["administrator", "tutor"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const params = GetSatBankCollectionParams.safeParse(req.params);
     if (!params.success) {
@@ -107,7 +107,7 @@ router.get(
 
 router.get(
   "/admin/sat-bank/questions",
-  ensureRole(["administrator"]),
+  ensureRole(["administrator", "tutor"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const query = ListSatBankQuestionsQueryParams.safeParse(req.query);
     if (!query.success) {
@@ -176,12 +176,21 @@ router.post(
 
 router.post(
   "/admin/sessions/:sessionId/prework-from-bank",
-  ensureRole(["administrator"]),
+  ensureRole(["administrator", "tutor"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const params = AssignSatBankPreworkParams.safeParse(req.params);
     const body = AssignSatBankPreworkBody.safeParse(req.body ?? {});
     if (!params.success || !body.success) {
       res.status(400).json({ error: "Invalid pre-work assignment" });
+      return;
+    }
+    const [session] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, params.data.sessionId))
+      .limit(1);
+    if (!session || !(await canViewSession(req.appUser!, session))) {
+      res.status(404).json({ error: "Session not found" });
       return;
     }
     try {

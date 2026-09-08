@@ -115,18 +115,26 @@ export function ClientDashboardView({
     return () => window.clearTimeout(timer);
   }, [location, setLocation]);
 
-  const sessions = sessionsForDashboardRole(
+  const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
+  const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
+  const scopedSessions = sessionsForDashboardRole(
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
       : fallbackCurriculumSessions(dashboard),
     dashboard.user,
-  )
-    .filter((session) => FALL_DATES.includes(sessionDateKey(session) as (typeof FALL_DATES)[number]))
-    .sort(
-      (left, right) =>
-        FALL_DATES.indexOf(sessionDateKey(left) as (typeof FALL_DATES)[number]) -
-        FALL_DATES.indexOf(sessionDateKey(right) as (typeof FALL_DATES)[number]),
-    );
+  );
+  const sessions = (
+    twelveSessionPlan
+      ? scopedSessions.filter((session) =>
+          FALL_DATES.includes(sessionDateKey(session) as (typeof FALL_DATES)[number]),
+        )
+      : scopedSessions
+  ).sort((left, right) =>
+    twelveSessionPlan
+      ? FALL_DATES.indexOf(sessionDateKey(left) as (typeof FALL_DATES)[number]) -
+        FALL_DATES.indexOf(sessionDateKey(right) as (typeof FALL_DATES)[number])
+      : new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime(),
+  );
   const nextSession =
     sessions.find((session) => session.readiness !== "complete") ?? sessions.at(-1);
   const analysis = nextSession?.latestResult?.analysis;
@@ -137,23 +145,41 @@ export function ClientDashboardView({
       <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">Fall 2026 curriculum</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
+              {twelveSessionPlan ? "Fall 2026 curriculum" : "Your curriculum"}
+            </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              One plan. Twelve focused meetings.
+              {twelveSessionPlan
+                ? "One plan. Twelve focused meetings."
+                : `Welcome back, ${firstName}.`}
             </h1>
             <p className="mt-3 text-white/75">
-              SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop.
+              {twelveSessionPlan
+                ? "SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop."
+                : "Open a meeting to review preparation, join Google Meet, or continue SAT practice."}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
               <p className="text-white/65">Progress</p>
-              <p className="mt-1 text-lg font-semibold">{completed} of {sessions.length || 12}</p>
+              <p className="mt-1 text-lg font-semibold">
+                {completed} of {twelveSessionPlan ? sessions.length || 12 : sessions.length}
+              </p>
             </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-white/65">English dates</p>
-              <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
-            </div>
+            {twelveSessionPlan ? (
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-white/65">English dates</p>
+                <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-white/65">Upcoming</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {sessions.filter((session) => session.readiness !== "complete").length} meeting
+                  {sessions.filter((session) => session.readiness !== "complete").length === 1 ? "" : "s"}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -321,7 +347,7 @@ export function ClientDashboardView({
           </CardContent>
         </Card>
       ) : (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">The Fall curriculum will appear here when it is available.</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "The Fall curriculum will appear here when it is available." : "Your sessions will appear here when they are scheduled."}</CardContent></Card>
       )}
 
       {nextSession?.latestResult && analysis && (
@@ -352,8 +378,8 @@ export function ClientDashboardView({
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b px-5 py-5 sm:px-6">
-          <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />Twelve-session roadmap</CardTitle>
-          <CardDescription>Open any date to see its before, during, and after learning loop.</CardDescription>
+          <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />{twelveSessionPlan ? "Twelve-session roadmap" : "Session roadmap"}</CardTitle>
+          <CardDescription>{twelveSessionPlan ? "Open any date to see its before, during, and after learning loop." : "Open any meeting to see its before, during, and after learning loop."}</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {sessions.length > 0 ? (
@@ -399,7 +425,7 @@ export function ClientDashboardView({
               ))}
             </ol>
           ) : (
-            <p className="px-6 py-10 text-center text-sm text-muted-foreground">No Fall sessions are visible for this account.</p>
+            <p className="px-6 py-10 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "No Fall sessions are visible for this account." : "No sessions are visible for this account."}</p>
           )}
         </CardContent>
       </Card>

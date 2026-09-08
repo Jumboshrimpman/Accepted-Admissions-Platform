@@ -42,6 +42,7 @@ import PortalAssignment from '@/pages/portal/assignment';
 import TutorDashboard from '@/pages/tutor/dashboard';
 import TutorProfile from '@/pages/tutor/profile';
 import TutorCourse from '@/pages/tutor/course';
+import TutorCurriculum from '@/pages/tutor/curriculum';
 import TutorSession from '@/pages/tutor/session';
 import TutorAttempt from '@/pages/tutor/attempt';
 import AdminDashboard from '@/pages/admin/dashboard';
@@ -258,6 +259,7 @@ function Router() {
               <Switch>
                 <Route path="/tutor" component={TutorDashboard} />
                 <Route path="/tutor/profile" component={TutorProfile} />
+                <Route path="/tutor/curriculum" component={TutorCurriculum} />
                 <Route path="/tutor/courses/:courseId" component={TutorCourse} />
                 <Route path="/tutor/sessions/:sessionId" component={TutorSession} />
                 <Route path="/tutor/attempts/:attemptId" component={TutorAttempt} />

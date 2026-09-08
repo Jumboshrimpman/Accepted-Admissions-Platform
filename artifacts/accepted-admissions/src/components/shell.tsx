@@ -83,8 +83,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       case "tutor":
         return [
           { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/tutor/curriculum", label: "Curriculum", icon: BookOpen },
           { href: "/tutor/profile", label: "Profile", icon: UserRound },
-          { href: "/portal/curriculum", label: "Client curriculum", icon: BookOpen },
         ];
       case "administrator":
         return [
@@ -124,7 +124,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       href !== "/tutor" &&
       location.startsWith(href)) ||
     (href === "/admin" && location === "/admin") ||
-    (href === "/tutor" && (location === "/tutor" || location.startsWith("/tutor/"))) ||
+    (href === "/tutor" && location === "/tutor") ||
     (href === "/portal/curriculum" && location.startsWith("/portal"));
 
   return (
