@@ -72,7 +72,7 @@ import {
   isTaitoFallSession,
   isFall2026Term,
   meetingUrlForTerm,
-  selfServeSatBookingForEmail,
+  selfServeSatBookingForAccount,
   sessionTitle,
   taitoSessionDateTime,
 } from "../lib/session-schedule";
@@ -8626,9 +8626,10 @@ async function dashboardDataForUser(user: AppUser) {
         usedHours: creditSummary.usedHours,
         remainingHours: creditSummary.remainingHours,
         readOnly: user.role === "viewer",
-        selfServeSatBooking: selfServeSatBookingForEmail(
-          billingUser?.email ?? user.email,
-        ),
+        selfServeSatBooking: selfServeSatBookingForAccount({
+          role: user.role,
+          email: billingUser?.email ?? user.email,
+        }),
       },
       progress: {
         totalSessions: scopedSessions.length,

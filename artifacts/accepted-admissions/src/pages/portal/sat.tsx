@@ -14,7 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingCard } from "@/pages/portal/booking-card";
-import { PORTAL_SAT_HREF } from "@/lib/portal-sat";
+import {
+  PORTAL_SAT_HREF,
+  PORTAL_SAT_TUTOR_DENIED_BODY,
+  PORTAL_SAT_TUTOR_DENIED_TITLE,
+  PORTAL_SAT_TUTOR_HREF,
+  canPurchaseOrBookSatCredits,
+} from "@/lib/portal-sat";
 import {
   type PaymentCreditBanner,
   paymentCreditBannerCopy,
@@ -45,7 +51,7 @@ export default function PortalSat() {
   const queryClient = useQueryClient();
   const dashboard = useGetDashboard();
   const checkout = useCreatePaymentCheckout();
-  const { data: currentUser } = useGetCurrentUser({
+  const { data: currentUser, isLoading: userLoading } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
   });
   const [products, setProducts] = useState<Product[]>([]);
@@ -144,11 +150,46 @@ export default function PortalSat() {
     };
   }, [awaitingWebhook, baselineHours, creditPollTimedOut, queryClient]);
 
-  if (dashboard.isLoading) {
+  if (dashboard.isLoading || userLoading) {
     return (
       <div className="mx-auto max-w-5xl space-y-5">
         <Skeleton className="h-32 rounded-3xl" />
         <Skeleton className="h-72 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!canPurchaseOrBookSatCredits(currentUser?.role)) {
+    const tutorDenied = currentUser?.role === "tutor";
+    const workspaceHref = tutorDenied
+      ? PORTAL_SAT_TUTOR_HREF
+      : currentUser?.role === "administrator"
+        ? "/admin"
+        : "/portal";
+    const workspaceLabel = tutorDenied
+      ? "Open tutor workspace"
+      : currentUser?.role === "administrator"
+        ? "Open administrator workspace"
+        : "Open client workspace";
+    return (
+      <div className="mx-auto max-w-xl" data-testid="portal-sat-access-denied">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">
+              {tutorDenied ? PORTAL_SAT_TUTOR_DENIED_TITLE : "SAT book and pay is unavailable"}
+            </CardTitle>
+            <CardDescription>
+              {tutorDenied
+                ? PORTAL_SAT_TUTOR_DENIED_BODY
+                : "Only a student account can purchase SAT hours or book prepaid SAT credits in the portal."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href={workspaceHref}>{workspaceLabel}</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

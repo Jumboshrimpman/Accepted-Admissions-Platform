@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   location: "/portal/sat",
   setLocation: vi.fn(),
   remainingHours: 0,
+  currentUser: {
+    data: { role: "student" as "student" | "tutor" | "administrator" | "viewer" },
+    isLoading: false,
+  },
   dashboard: {
     data: {
       credits: { selfServeSatBooking: true, remainingHours: 0, purchasedHours: 0, usedHours: 0 },
@@ -35,7 +39,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetDashboardQueryKey: () => ["/api/dashboard"],
   getGetBookingAvailabilityQueryKey: () => ["availability"],
   getListBookingSessionsQueryKey: () => ["sessions"],
-  useGetCurrentUser: () => ({ data: { role: "student" }, isLoading: false }),
+  useGetCurrentUser: () => mocks.currentUser,
   useGetDashboard: () => mocks.dashboard,
   useCreatePaymentCheckout: () => ({ mutate: vi.fn(), isPending: false }),
   useListBookingTutors: () => ({ data: [], isLoading: false }),
@@ -65,6 +69,9 @@ afterEach(() => {
   mocks.dashboard.data.credits.remainingHours = 0;
   mocks.location = PORTAL_SAT_HREF;
   mocks.remainingHours = 0;
+  mocks.currentUser.data = { role: "student" };
+  mocks.currentUser.isLoading = false;
+  mocks.dashboard.data.user.role = "student";
   vi.unstubAllGlobals();
 });
 
@@ -106,6 +113,22 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
     expect(screen.queryByText(/Finance/i)).toBeNull();
+  });
+
+  test("hides checkout when a tutor opens /portal/sat directly", () => {
+    mocks.currentUser.data = { role: "tutor" };
+    mocks.dashboard.data.user.role = "tutor";
+    render(<PortalSat />);
+    expect(screen.getByTestId("portal-sat-access-denied")).toBeTruthy();
+    expect(screen.getByText("SAT booking is for students")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open tutor workspace" }).getAttribute("href")).toBe(
+      "/tutor",
+    );
+    expect(screen.queryByTestId("portal-sat-page")).toBeNull();
+    expect(screen.queryByTestId("portal-sat-purchase")).toBeNull();
+    expect(screen.queryByRole("button", { name: /secure checkout/i })).toBeNull();
+    expect(screen.queryByText("Purchase SAT hours")).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
   });
 
   test("hides checkout for off-platform clients such as Taito", () => {
