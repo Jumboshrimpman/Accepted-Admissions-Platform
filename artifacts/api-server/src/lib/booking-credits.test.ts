@@ -8,21 +8,17 @@ import * as bookingService from "./booking-service.ts";
 const {
   acquireBookingLocks,
   assertNoScheduleConflict,
-  assertSessionAllowsScheduleChange,
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
   isEligibleForCreditRestore,
-  isPastSession,
   lockClientCreditsAndRequireHours,
   remainingCreditHours,
   requireStudentBooker,
   rollbackBookingAfterCalendarFailure,
   sessionCalendarFailRestoreFulfillmentKey,
   sessionDebitFulfillmentKey,
-  sessionEffectiveEnd,
   sessionRestoreFulfillmentKey,
-  sessionScheduleChangeError,
 } = bookingService;
 
 type DatabaseModule = typeof import("@workspace/db");
@@ -36,85 +32,6 @@ async function loadDb(): Promise<DatabaseModule> {
 
 after(async () => {
   if (database?.pool) await database.pool.end();
-});
-
-test("past-session cutoff uses end time, or start when there is no end", () => {
-  const now = new Date("2026-09-08T18:00:00.000Z");
-  assert.equal(
-    sessionEffectiveEnd({
-      dateTime: new Date("2026-09-08T17:00:00.000Z"),
-      durationMinutes: 60,
-    }).toISOString(),
-    "2026-09-08T18:00:00.000Z",
-  );
-  assert.equal(
-    isPastSession(
-      { dateTime: new Date("2026-09-08T17:00:00.000Z"), durationMinutes: 60 },
-      now,
-    ),
-    true,
-  );
-  assert.equal(
-    isPastSession(
-      { dateTime: new Date("2026-09-08T17:30:00.000Z"), durationMinutes: 60 },
-      now,
-    ),
-    false,
-  );
-  assert.equal(
-    isPastSession(
-      { dateTime: new Date("2026-09-08T17:59:00.000Z"), durationMinutes: 0 },
-      now,
-    ),
-    true,
-  );
-});
-
-test("cancel and reschedule reject past and in-progress sessions with distinct errors", () => {
-  const now = new Date("2026-09-08T18:00:00.000Z");
-  const ended = {
-    dateTime: new Date("2026-09-08T16:30:00.000Z"),
-    durationMinutes: 60,
-  };
-  const inProgress = {
-    dateTime: new Date("2026-09-08T17:30:00.000Z"),
-    durationMinutes: 60,
-  };
-  const upcoming = {
-    dateTime: new Date("2026-09-08T19:00:00.000Z"),
-    durationMinutes: 60,
-  };
-
-  assert.deepEqual(sessionScheduleChangeError(ended, "cancel", now), {
-    status: 409,
-    code: "SESSION_IN_THE_PAST",
-    message: "A past session cannot be cancelled.",
-  });
-  assert.deepEqual(sessionScheduleChangeError(ended, "reschedule", now), {
-    status: 409,
-    code: "SESSION_IN_THE_PAST",
-    message: "A past session cannot be rescheduled.",
-  });
-  assert.deepEqual(sessionScheduleChangeError(inProgress, "cancel", now), {
-    status: 409,
-    code: "SESSION_STARTED",
-    message: "A session that has started cannot be cancelled.",
-  });
-  assert.deepEqual(sessionScheduleChangeError(inProgress, "reschedule", now), {
-    status: 409,
-    code: "SESSION_STARTED",
-    message: "A session that has started cannot be rescheduled.",
-  });
-  assert.equal(sessionScheduleChangeError(upcoming, "cancel", now), null);
-  assert.equal(sessionScheduleChangeError(upcoming, "reschedule", now), null);
-  assert.doesNotThrow(() =>
-    assertSessionAllowsScheduleChange(upcoming, "reschedule", now),
-  );
-  assert.throws(
-    () => assertSessionAllowsScheduleChange(ended, "reschedule", now),
-    (error: unknown) =>
-      error instanceof BookingServiceError && error.code === "SESSION_IN_THE_PAST",
-  );
 });
 
 test("eligible cancellation restores credit only at or beyond 24 hours", () => {

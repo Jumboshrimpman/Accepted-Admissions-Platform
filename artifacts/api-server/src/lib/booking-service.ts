@@ -12,6 +12,12 @@ import {
 import type { BusyWindow } from "./booking";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SHARED_FALL_MEET_LOCK_KEY, SHARED_MEET_CONFLICT_MESSAGE, sessionClaimsSharedFallMeet, sharedMeetOccupancyWindows } from "./shared-meet-conflict.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
+  sessionScheduleChangeError,
+  type SessionScheduleChange,
+  type SessionScheduleInstant,
+} from "./session-schedule-guard.ts";
 
 export const BOOKING_CANCEL_RESTORE_NOTICE_MS = 24 * 60 * 60 * 1000;
 
@@ -34,55 +40,13 @@ export function isEligibleForCreditRestore(
   return sessionDateTime.getTime() - now.getTime() >= BOOKING_CANCEL_RESTORE_NOTICE_MS;
 }
 
-export type SessionScheduleInstant = {
-  dateTime: Date;
-  durationMinutes?: number | null;
-};
-
-export type SessionScheduleChange = "cancel" | "reschedule";
-
-export function sessionEffectiveEnd(session: SessionScheduleInstant): Date {
-  const minutes = Number(session.durationMinutes);
-  if (Number.isFinite(minutes) && minutes > 0) {
-    return new Date(session.dateTime.getTime() + minutes * 60_000);
-  }
-  return session.dateTime;
-}
-
-export function isPastSession(
-  session: SessionScheduleInstant,
-  now: Date = new Date(),
-): boolean {
-  return sessionEffectiveEnd(session).getTime() <= now.getTime();
-}
-
-export function sessionScheduleChangeError(
-  session: SessionScheduleInstant,
-  action: SessionScheduleChange,
-  now: Date = new Date(),
-): { status: number; code: string; message: string } | null {
-  if (isPastSession(session, now)) {
-    return {
-      status: 409,
-      code: "SESSION_IN_THE_PAST",
-      message:
-        action === "cancel"
-          ? "A past session cannot be cancelled."
-          : "A past session cannot be rescheduled.",
-    };
-  }
-  if (session.dateTime.getTime() <= now.getTime()) {
-    return {
-      status: 409,
-      code: "SESSION_STARTED",
-      message:
-        action === "cancel"
-          ? "A session that has started cannot be cancelled."
-          : "A session that has started cannot be rescheduled.",
-    };
-  }
-  return null;
-}
+export {
+  isPastSession,
+  sessionEffectiveEnd,
+  sessionScheduleChangeError,
+  type SessionScheduleChange,
+  type SessionScheduleInstant,
+} from "./session-schedule-guard.ts";
 
 export function assertSessionAllowsScheduleChange(
   session: SessionScheduleInstant,

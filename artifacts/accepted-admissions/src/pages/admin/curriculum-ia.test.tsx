@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -675,18 +675,18 @@ describe("curriculum bank IA", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     const pastStart = new Date();
     pastStart.setHours(pastStart.getHours() - 4);
-    mocks.curriculum.sessions = [
-      {
-        ...mocks.curriculum.sessions[0]!,
-        id: "session-past",
-        title: "Past SAT with Eunice",
-        dateTime: pastStart.toISOString(),
-      },
-    ];
+    mocks.curriculum.sessions.push({
+      ...mocks.curriculum.sessions[0]!,
+      id: "session-past",
+      title: "Past SAT with Eunice",
+      dateTime: pastStart.toISOString(),
+    });
 
     render(<AdminCurriculum />);
     fireEvent.click(screen.getByRole("button", { name: /^All / }));
-    fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
+    const pastCard = screen.getByRole("heading", { name: "Past SAT with Eunice" }).closest(".space-y-4");
+    expect(pastCard).toBeTruthy();
+    fireEvent.click(within(pastCard as HTMLElement).getByRole("button", { name: /Edit/i }));
 
     expect(screen.getByText(/past session cannot be cancelled/i)).toBeTruthy();
     const startInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;

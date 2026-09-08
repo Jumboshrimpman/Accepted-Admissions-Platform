@@ -133,7 +133,6 @@ test("client, tutor, and admin cannot cancel or reschedule a past session", asyn
 
   const pastId = randomUUID();
   const futureId = randomUUID();
-  const extraIds = [pastId, futureId];
   await db.insert(sessionsTable).values([
     {
       id: pastId,
@@ -251,6 +250,5 @@ test("client, tutor, and admin cannot cancel or reschedule a past session", asyn
     else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previous.student;
     if (previous.viewer === undefined) delete process.env.ACCEPTED_VIEWER_CLERK_USER_IDS;
     else process.env.ACCEPTED_VIEWER_CLERK_USER_IDS = previous.viewer;
-    void extraIds;
   }
 });
