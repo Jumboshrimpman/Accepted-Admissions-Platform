@@ -4,10 +4,12 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
+  assignmentQuestionsTable,
   assignmentsTable,
   auditLogsTable,
   db,
   loginActivityTable,
+  sessionPreworkPlansTable,
   sessionsTable,
   type AppUser,
 } from "@workspace/db";
@@ -232,7 +234,7 @@ test("tutors can author sessions and assign work only for linked students", asyn
     const unlinked = await postJson(satServer.baseUrl, "/api/tutor/sessions", {
       courseId: fixture.courseId,
       clientUserId: fixture.otherStudent.id,
-      dateTime: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(),
+      dateTime: "2027-06-01T15:00:00.000Z",
       timezone: "America/New_York",
       subject: "SAT",
       durationMinutes: 60,
@@ -242,7 +244,7 @@ test("tutors can author sessions and assign work only for linked students", asyn
     const wrongSubject = await postJson(englishServer.baseUrl, "/api/tutor/sessions", {
       courseId: fixture.courseId,
       clientUserId: fixture.student.id,
-      dateTime: new Date(Date.now() + 11 * 60 * 60 * 1000).toISOString(),
+      dateTime: "2027-06-01T16:00:00.000Z",
       timezone: "America/New_York",
       subject: "SAT",
       durationMinutes: 60,
@@ -252,12 +254,12 @@ test("tutors can author sessions and assign work only for linked students", asyn
     const created = await postJson(satServer.baseUrl, "/api/tutor/sessions", {
       courseId: fixture.courseId,
       clientUserId: fixture.student.id,
-      dateTime: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+      dateTime: "2027-06-01T17:00:00.000Z",
       timezone: "America/New_York",
       subject: "SAT",
       durationMinutes: 60,
     });
-    assert.equal(created.response.status, 201);
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
     createdSessionIds.push(created.body.id);
     assert.equal(created.body.tutor.id, fixture.satTutor.id);
     assert.equal(created.body.student.id, fixture.student.id);
@@ -320,9 +322,18 @@ test("tutors can author sessions and assign work only for linked students", asyn
       fixture.viewer.id,
     ];
     if (createdAssignmentIds.length > 0) {
+      await db
+        .delete(sessionPreworkPlansTable)
+        .where(inArray(sessionPreworkPlansTable.assignmentId, createdAssignmentIds));
+      await db
+        .delete(assignmentQuestionsTable)
+        .where(inArray(assignmentQuestionsTable.assignmentId, createdAssignmentIds));
       await db.delete(assignmentsTable).where(inArray(assignmentsTable.id, createdAssignmentIds));
     }
     if (createdSessionIds.length > 0) {
+      await db
+        .delete(sessionPreworkPlansTable)
+        .where(inArray(sessionPreworkPlansTable.sessionId, createdSessionIds));
       await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
     }
     await db.delete(auditLogsTable).where(inArray(auditLogsTable.actorUserId, actorIds));
