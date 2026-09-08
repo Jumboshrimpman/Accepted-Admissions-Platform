@@ -130,6 +130,8 @@ beforeEach(() => {
     slots: [firstSlot, secondSlot],
   };
   mocks.availabilityQuery.isLoading = false;
+  mocks.sessionsQuery.data = [];
+  mocks.sessionsQuery.isLoading = false;
 });
 
 afterEach(() => {
@@ -253,5 +255,52 @@ describe("client availability calendar", () => {
     expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");
     expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
     vi.unstubAllGlobals();
+  });
+
+  test("hides cancel and reschedule for past sessions and keeps them for upcoming ones", () => {
+    const pastStart = new Date();
+    pastStart.setHours(pastStart.getHours() - 3);
+    const futureStart = new Date();
+    futureStart.setDate(futureStart.getDate() + 3);
+    mocks.sessionsQuery.data = [
+      {
+        id: "session-past",
+        title: "Past SAT session",
+        dateTime: pastStart.toISOString(),
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+      {
+        id: "session-future",
+        title: "Upcoming SAT session",
+        dateTime: futureStart.toISOString(),
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+
+    expect(screen.getByText("Past SAT session")).toBeTruthy();
+    expect(screen.getByText("Upcoming SAT session")).toBeTruthy();
+    expect(screen.getByText("Past sessions cannot be cancelled or rescheduled.")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Change time/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Cancel/i })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Cancel/i }));
+    expect(mocks.cancelBooking.mutate).toHaveBeenCalledWith(
+      { sessionId: "session-future", data: { reason: "Cancelled by student" } },
+      expect.any(Object),
+    );
   });
 });

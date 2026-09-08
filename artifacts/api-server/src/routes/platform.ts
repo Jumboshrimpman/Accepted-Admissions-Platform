@@ -55,6 +55,7 @@ import {
 import {
   acquireBookingLocks,
   assertNoScheduleConflict,
+  assertSessionAllowsScheduleChange,
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
@@ -64,6 +65,7 @@ import {
   recordBookingConfirmedAudit,
   requireStudentBooker,
   rollbackBookingAfterCalendarFailure,
+  sessionScheduleChangeError,
 } from "../lib/booking-service";
 import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
 import {
@@ -5492,9 +5494,7 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
       res.json(await bookingSessionShape(session, { creditRestored: false }));
       return;
     }
-    if (session.dateTime <= new Date()) {
-      throw new BookingError(409, "SESSION_STARTED", "A session that has started cannot be cancelled.");
-    }
+    assertSessionAllowsScheduleChange(session, "cancel");
     if (session.providerEventId && session.tutorUserId) {
       const profile = await db
         .select({ id: tutorProfilesTable.id })
@@ -5532,6 +5532,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     if (session.bookingStatus === "cancelled") {
       throw new BookingError(409, "SESSION_CANCELLED", "A cancelled session cannot be rescheduled.");
     }
+    assertSessionAllowsScheduleChange(session, "reschedule");
     const start = asDate((req.body ?? {}).startTime);
     if (start <= new Date()) throw new BookingError(400, "INVALID_TIME", "Choose a future time.");
     const profile = session.tutorUserId
@@ -8408,6 +8409,21 @@ router.patch(
       durationMinutes: body.data.durationMinutes ?? existing.durationMinutes,
       bookingStatus: body.data.bookingStatus ?? existing.bookingStatus,
     };
+    const cancelling =
+      next.bookingStatus === "cancelled" && existing.bookingStatus !== "cancelled";
+    const rescheduling = next.dateTime.getTime() !== existing.dateTime.getTime();
+    const scheduleError = cancelling
+      ? sessionScheduleChangeError(existing, "cancel")
+      : rescheduling
+        ? sessionScheduleChangeError(existing, "reschedule")
+        : null;
+    if (scheduleError) {
+      res.status(scheduleError.status).json({
+        code: scheduleError.code,
+        error: scheduleError.message,
+      });
+      return;
+    }
     const [course] = await db.select({ id: coursesTable.id, term: coursesTable.term }).from(coursesTable).where(eq(coursesTable.id, next.courseId)).limit(1);
     if (!course || !(await validateAdminSessionPeople(next.clientUserId, next.tutorUserId))) {
       res.status(404).json({ error: "Program or assigned person not found" });

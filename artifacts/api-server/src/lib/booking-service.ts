@@ -12,6 +12,12 @@ import {
 import type { BusyWindow } from "./booking";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SHARED_FALL_MEET_LOCK_KEY, SHARED_MEET_CONFLICT_MESSAGE, sessionClaimsSharedFallMeet, sharedMeetOccupancyWindows } from "./shared-meet-conflict.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
+  sessionScheduleChangeError,
+  type SessionScheduleChange,
+  type SessionScheduleInstant,
+} from "./session-schedule-guard.ts";
 
 export const BOOKING_CANCEL_RESTORE_NOTICE_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +38,25 @@ export function isEligibleForCreditRestore(
   now: Date = new Date(),
 ): boolean {
   return sessionDateTime.getTime() - now.getTime() >= BOOKING_CANCEL_RESTORE_NOTICE_MS;
+}
+
+export {
+  isPastSession,
+  sessionEffectiveEnd,
+  sessionScheduleChangeError,
+  type SessionScheduleChange,
+  type SessionScheduleInstant,
+} from "./session-schedule-guard.ts";
+
+export function assertSessionAllowsScheduleChange(
+  session: SessionScheduleInstant,
+  action: SessionScheduleChange,
+  now: Date = new Date(),
+): void {
+  const error = sessionScheduleChangeError(session, action, now);
+  if (error) {
+    throw new BookingServiceError(error.status, error.code, error.message);
+  }
 }
 
 export function sessionDebitFulfillmentKey(sessionId: string): string {
@@ -317,13 +342,7 @@ export async function cancelBookingWithCreditPolicy(
   if (!current || current.bookingStatus === "cancelled") {
     return { session: current ?? args.session, creditRestored: false };
   }
-  if (current.dateTime <= now) {
-    throw new BookingServiceError(
-      409,
-      "SESSION_STARTED",
-      "A session that has started cannot be cancelled.",
-    );
-  }
+  assertSessionAllowsScheduleChange(current, "cancel", now);
   const creditRestored = isEligibleForCreditRestore(current.dateTime, now);
   const [saved] = await tx
     .update(sessionsTable)

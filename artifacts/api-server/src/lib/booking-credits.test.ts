@@ -604,6 +604,66 @@ test("eligible cancellation restores one credit", async () => {
   }
 });
 
+test("started and past sessions cannot be cancelled through the credit policy", async () => {
+  const fixture = await createBookingFixture({ creditHours: 1 });
+  try {
+    const started = new Date(Date.now() - 10 * 60 * 1000);
+    const ended = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const startedSession = await fixture.db.db.transaction(async (tx) => {
+      await lockClientCreditsAndRequireHours(tx, fixture.studentId, 1);
+      return insertConfirmedBookingWithDebit(tx, {
+        courseId: fixture.courseId,
+        clientUserId: fixture.studentId,
+        tutorUserId: fixture.tutorId,
+        start: started,
+        timezone: "America/New_York",
+        subject: "SAT",
+        title: "Started cancel",
+        durationMinutes: 60,
+        tutorName: "Xavier Morales",
+      });
+    });
+    await assert.rejects(
+      () =>
+        fixture.db.db.transaction(async (tx) =>
+          cancelBookingWithCreditPolicy(tx, {
+            session: startedSession,
+            reason: "Too late",
+            actorUserId: fixture.studentId,
+          }),
+        ),
+      (error: unknown) =>
+        error instanceof BookingServiceError && error.code === "SESSION_STARTED",
+    );
+    const endedSession = await fixture.db.db.insert(fixture.db.sessionsTable).values({
+      courseId: fixture.courseId,
+      clientUserId: fixture.studentId,
+      tutorUserId: fixture.tutorId,
+      dateTime: ended,
+      timezone: "America/New_York",
+      subject: "SAT",
+      title: "Ended cancel",
+      status: "published",
+      durationMinutes: 60,
+      bookingStatus: "confirmed",
+    }).returning();
+    await assert.rejects(
+      () =>
+        fixture.db.db.transaction(async (tx) =>
+          cancelBookingWithCreditPolicy(tx, {
+            session: endedSession[0]!,
+            reason: "Already over",
+            actorUserId: fixture.studentId,
+          }),
+        ),
+      (error: unknown) =>
+        error instanceof BookingServiceError && error.code === "SESSION_IN_THE_PAST",
+    );
+  } finally {
+    await cleanupBookingFixture(fixture);
+  }
+});
+
 test("late cancellation does not restore a credit", async () => {
   const fixture = await createBookingFixture({ creditHours: 1 });
   try {

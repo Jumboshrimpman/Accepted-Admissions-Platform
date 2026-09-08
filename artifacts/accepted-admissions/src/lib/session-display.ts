@@ -90,6 +90,50 @@ export function formatSessionDateTime(
   return `${formatSessionDate(session)} · ${formatSessionTimeRange(session)}`;
 }
 
+export function sessionEffectiveEnd(
+  session: Pick<DisplaySession, "dateTime" | "durationMinutes">,
+): Date {
+  const start = asDate(session.dateTime);
+  const minutes = Number(session.durationMinutes);
+  if (Number.isFinite(minutes) && minutes > 0) {
+    return new Date(start.getTime() + minutes * 60_000);
+  }
+  return start;
+}
+
+export function isPastSession(
+  session: Pick<DisplaySession, "dateTime" | "durationMinutes">,
+  now: Date = new Date(),
+): boolean {
+  return sessionEffectiveEnd(session).getTime() <= now.getTime();
+}
+
+export function canCancelOrRescheduleSession(
+  session: Pick<DisplaySession, "dateTime" | "durationMinutes">,
+  now: Date = new Date(),
+): boolean {
+  if (isPastSession(session, now)) return false;
+  return asDate(session.dateTime).getTime() > now.getTime();
+}
+
+export function sessionScheduleChangeMessage(
+  action: "cancel" | "reschedule",
+  session: Pick<DisplaySession, "dateTime" | "durationMinutes">,
+  now: Date = new Date(),
+): string | null {
+  if (isPastSession(session, now)) {
+    return action === "cancel"
+      ? "A past session cannot be cancelled."
+      : "A past session cannot be rescheduled.";
+  }
+  if (asDate(session.dateTime).getTime() <= now.getTime()) {
+    return action === "cancel"
+      ? "A session that has started cannot be cancelled."
+      : "A session that has started cannot be rescheduled.";
+  }
+  return null;
+}
+
 export function sessionSubjectLabel(subject: string): string {
   return subject.trim().toUpperCase() === "IELTS" ? "English" : subject;
 }

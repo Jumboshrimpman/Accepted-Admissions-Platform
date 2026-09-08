@@ -27,6 +27,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import {
+  canCancelOrRescheduleSession,
+  sessionScheduleChangeMessage,
+} from "@/lib/session-display";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -171,6 +175,12 @@ export function BookingCard() {
 
   const beginReschedule = (sessionId: string, tutorId: string | null) => {
     if (!tutorId) return;
+    const session = sessions.find((item) => item.id === sessionId);
+    const blocked = session ? sessionScheduleChangeMessage("reschedule", session) : null;
+    if (blocked) {
+      setMessage(blocked);
+      return;
+    }
     setReschedulingSessionId(sessionId);
     chooseTutor(tutorId);
     setMessage("Choose a new time. Your prepaid hour stays reserved while you reschedule.");
@@ -210,6 +220,12 @@ export function BookingCard() {
   };
 
   const cancel = (sessionId: string) => {
+    const session = sessions.find((item) => item.id === sessionId);
+    const blocked = session ? sessionScheduleChangeMessage("cancel", session) : null;
+    if (blocked) {
+      setMessage(blocked);
+      return;
+    }
     cancelBooking.mutate(
       { sessionId, data: { reason: "Cancelled by student" } },
       {
@@ -498,24 +514,32 @@ export function BookingCard() {
                          meetingLabel="Meet"
                          calendarLabel="Calendar"
                        />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => beginReschedule(session.id, session.tutorProfileId)}
-                        disabled={busy}
-                      >
-                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Change time
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="rounded-full text-destructive hover:text-destructive"
-                        onClick={() => cancel(session.id)}
-                        disabled={busy}
-                      >
-                        <XCircle className="mr-1.5 h-3.5 w-3.5" /> Cancel
-                      </Button>
+                      {canCancelOrRescheduleSession(session) ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full"
+                            onClick={() => beginReschedule(session.id, session.tutorProfileId)}
+                            disabled={busy}
+                          >
+                            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Change time
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-full text-destructive hover:text-destructive"
+                            onClick={() => cancel(session.id)}
+                            disabled={busy}
+                          >
+                            <XCircle className="mr-1.5 h-3.5 w-3.5" /> Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <p className="self-center text-xs text-muted-foreground">
+                          Past sessions cannot be cancelled or rescheduled.
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
