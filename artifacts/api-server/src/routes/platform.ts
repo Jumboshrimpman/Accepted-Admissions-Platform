@@ -118,6 +118,13 @@ import {
 } from "../lib/tutor-assignment-reconciliation";
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
+  ACCEPTED_SAT_CATALOG_SLUGS,
+  SINGLE_SAT_SESSION_PRICE_CENTS,
+  SINGLE_SAT_SESSION_SLUG,
+  TEN_SAT_SESSION_PACKAGE_SLUG,
+  isAcceptedSatCatalogProduct,
+} from "../lib/sat-catalog";
+import {
   isLibraryAssetKind,
   libraryAssetBlockKind,
   libraryAssetToBlockConfig,
@@ -385,32 +392,6 @@ const EUNICE_NAME = "Eunice Chon";
 const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME] as const;
 /** Legacy tutor compensation seed only — not used for student Checkout settlement. */
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
-const SINGLE_SAT_SESSION_SLUG = "single-sat-session";
-const TEN_SAT_SESSION_PACKAGE_SLUG = "ten-sat-session-package";
-const SAT_HOURLY_RATE_CENTS = 13_000;
-const SINGLE_SAT_SESSION_PRICE_CENTS = SAT_HOURLY_RATE_CENTS;
-const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = SAT_HOURLY_RATE_CENTS * 10;
-const ACCEPTED_SAT_CATALOG = [
-  {
-    slug: SINGLE_SAT_SESSION_SLUG,
-    name: "Single SAT Session",
-    description:
-      "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
-    durationHours: 1,
-    totalPriceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
-    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
-  },
-  {
-    slug: TEN_SAT_SESSION_PACKAGE_SLUG,
-    name: "Ten SAT Session Package",
-    description:
-      "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on our SAT tutors’ available calendar.",
-    durationHours: 10,
-    totalPriceCents: TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
-    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
-  },
-] as const;
-const ACCEPTED_SAT_CATALOG_SLUGS = new Set(ACCEPTED_SAT_CATALOG.map((product) => product.slug));
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
 const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
@@ -470,20 +451,6 @@ function creditHoursSummary(
   return { purchasedHours, usedHours, remainingHours };
 }
 
-function isAcceptedSatCatalogProduct(product: {
-  slug: string;
-  active: boolean;
-  durationHours: number;
-  totalPriceCents: number;
-}): boolean {
-  const expected = ACCEPTED_SAT_CATALOG.find((item) => item.slug === product.slug);
-  return Boolean(
-    expected &&
-      product.active &&
-      product.durationHours === expected.durationHours &&
-      product.totalPriceCents === expected.totalPriceCents,
-  );
-}
 
 const SAT_HOMEWORK_SETS = [
   {

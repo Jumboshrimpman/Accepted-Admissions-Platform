@@ -90,6 +90,15 @@ beforeEach(() => {
         ok: true,
         json: async () => [
           {
+            id: "prod-test",
+            slug: "test-sat-hour",
+            name: "test",
+            description: "Temporary $1 test product that grants 1 SAT hour.",
+            durationHours: 1,
+            totalPriceCents: 100,
+            effectiveHourlyRateCents: 100,
+          },
+          {
             id: "prod-1",
             slug: "sat-hour",
             name: "Single SAT session",
@@ -105,11 +114,15 @@ beforeEach(() => {
 });
 
 describe("portal SAT book/pay", () => {
-  test("keeps purchase and booking inside the portal shell", () => {
+  test("keeps purchase and booking inside the portal shell", async () => {
     render(<PortalSat />);
     expect(screen.getByTestId("portal-sat-page")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
     expect(screen.getByTestId("portal-sat-purchase")).toBeTruthy();
+    expect(await screen.findByTestId("portal-sat-offer-prod-test")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("test");
+    expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("$1");
+    expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("1 credit");
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
     expect(screen.queryByText(/Finance/i)).toBeNull();
