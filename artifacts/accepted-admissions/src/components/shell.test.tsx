@@ -106,6 +106,21 @@ describe("Shell", () => {
     expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe("/portal/sat");
   });
 
+  it("hides Book SAT and purchase links from tutor chrome", () => {
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "tutor",
+      displayName: "Xavier Morales",
+      avatarUrl: null,
+    };
+    renderShell();
+    expect(screen.getByRole("link", { name: "Dashboard" }).getAttribute("href")).toBe("/tutor");
+    expect(screen.queryByRole("link", { name: "Book SAT" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase SAT/i })).toBeNull();
+  });
+
   it("shows the signed-in display name instead of Accepted Admissions User", () => {
     currentUser.isLoading = false;
     currentUser.data = {

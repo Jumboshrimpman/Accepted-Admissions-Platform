@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -116,6 +116,35 @@ test("Taito billing stays off-platform while Michelle can self-serve SAT booking
   assert.equal(selfServeSatBookingForEmail("TAITO0525@gmail.com"), false);
   assert.equal(selfServeSatBookingForEmail("michaelmakarem@gmail.com"), true);
   assert.equal(selfServeSatBookingForEmail("xaver.rmz6@gmail.com"), true);
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "student",
+      email: "michaelmakarem@gmail.com",
+    }),
+    true,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "tutor",
+      email: "xaver.rmz6@gmail.com",
+    }),
+    false,
+    "Xavier's tutor account must not advertise student SAT checkout",
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "administrator",
+      email: "sama@example.com",
+    }),
+    false,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "viewer",
+      email: "michaelmakarem@gmail.com",
+    }),
+    true,
+  );
 });
 
 test("calendar deep-links prefer Google event htmlLinks and never Meet URLs", () => {
