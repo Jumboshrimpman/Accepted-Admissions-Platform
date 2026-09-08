@@ -671,7 +671,7 @@ describe("curriculum bank IA", () => {
     expect(screen.queryByText(/Google Drive/i)).toBeNull();
   });
 
-  test("SAT/PSAT bank tab and 60-minute session assign stay on existing operations pages", () => {
+  test("SAT/PSAT bank tab and 30–50 question session assign stay on existing operations pages", () => {
     mocks.location = "/admin/curriculum?section=curriculum&tab=sat-bank";
     render(<AdminCurriculum />);
     expect(screen.getByTestId("sat-bank-panel").textContent).toMatch(/SAT\/PSAT question bank/);
@@ -680,8 +680,8 @@ describe("curriculum bank IA", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     render(<AdminCurriculum />);
     expect(screen.getByTestId("assign-bank-prework-session-1").textContent).toMatch(
-      /60-minute bank pre-work/,
+      /30–50 question bank pre-work/,
     );
-    expect(screen.getByRole("button", { name: /Assign 60-min pre-work/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Assign 30–50 question pre-work/i })).toBeTruthy();
   });
 });

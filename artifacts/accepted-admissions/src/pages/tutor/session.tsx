@@ -22,6 +22,7 @@ import {
 } from "@workspace/api-client-react";
 import { ClearHomeworkButton } from "@/components/clear-homework-button";
 import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homework";
+import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
   BookOpenCheck,
   ArrowDown,
@@ -331,11 +332,23 @@ export default function TutorSession() {
                       )}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {homework.attemptId && (
-                          <Link href={`/tutor/attempts/${homework.attemptId}`}>
-                            <Button size="sm" variant="outline">
-                              Review right / wrong answers
-                            </Button>
-                          </Link>
+                          <>
+                            <Link href={`/tutor/attempts/${homework.attemptId}`}>
+                              <Button size="sm" variant="outline">
+                                Review right / wrong answers
+                              </Button>
+                            </Link>
+                            {(homework.mistakeCount ?? 0) > 0 ? (
+                              <Link
+                                href={tutorWrongAnswersHref(homework.attemptId)}
+                                data-testid={`practice-wrong-answers-${homework.assignmentId}`}
+                              >
+                                <Button size="sm">
+                                  Practice wrong answers only
+                                </Button>
+                              </Link>
+                            ) : null}
+                          </>
                         )}
                         {canShowClearHomework({
                           deliveryPhase: isBeforeSessionHomework(session.assignments, homework.assignmentId)
@@ -448,11 +461,21 @@ export default function TutorSession() {
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {adaptive?.homework?.latestAttemptId ? (
-                      <Button asChild size="sm" variant="secondary">
-                        <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>
-                          Open homework / result
-                        </Link>
-                      </Button>
+                      <>
+                        <Button asChild size="sm" variant="secondary">
+                          <Link href={`/tutor/attempts/${adaptive.homework.latestAttemptId}`}>
+                            Open homework / result
+                          </Link>
+                        </Button>
+                        <Button asChild size="sm">
+                          <Link
+                            href={tutorWrongAnswersHref(adaptive.homework.latestAttemptId)}
+                            data-testid="practice-wrong-answers-before-session"
+                          >
+                            Practice wrong answers only
+                          </Link>
+                        </Button>
+                      </>
                     ) : adaptive?.homework ? (
                       <p className="text-sm text-muted-foreground">No submitted attempt yet.</p>
                     ) : null}

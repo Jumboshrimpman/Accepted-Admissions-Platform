@@ -5,7 +5,10 @@ import {
   diagnosticTimeLimitMinutes,
   isFullLengthDiagnosticSelection,
   preferSatDiagnosticCollection,
+  isRoutinePreworkQuestionCountAllowed,
+  routinePreworkTimeLimitMinutes,
   selectFullPracticeCollection,
+  selectQuestionsForCountBudget,
   selectQuestionsForTimeBudget,
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
@@ -64,10 +67,24 @@ test("diagnostic assign uses the full collection in original order, not a 60-min
   assert.ok(diagnosticTimeLimitMinutes(result.estimatedSeconds) >= 134);
 });
 
-test("routine stays time-boxed at ~60 minutes while diagnostic prefers SAT Practice Tests 4–11", () => {
-  const routine = selectQuestionsForTimeBudget(items, { targetMinutes: 60, toleranceMinutes: 8 });
-  assert.ok(routine.estimatedSeconds <= 60 * 60 + 8 * 60);
-  assert.ok(routine.selected.length < 80);
+test("later routine pre-work is 30–50 questions, not a full-length diagnostic", () => {
+  const many = Array.from({ length: 80 }, (_, index) => ({
+    id: `q-${index + 1}`,
+    section: index % 2 === 0 ? ("rw" as const) : ("math" as const),
+    skill: "Skill",
+    estimatedSeconds: 75,
+    position: index + 1,
+  }));
+  const routine = selectQuestionsForCountBudget(many, { preferOriginalOrder: true });
+  assert.ok(routine.selected.length >= 30);
+  assert.ok(routine.selected.length <= 50);
+  assert.equal(routine.selected.length, 40);
+  assert.equal(isRoutinePreworkQuestionCountAllowed(routine.selected.length), true);
+  assert.equal(isRoutinePreworkQuestionCountAllowed(98), false);
+  assert.ok(routinePreworkTimeLimitMinutes(routine.selected.length) <= 75);
+  const small = selectQuestionsForCountBudget(items, { preferOriginalOrder: true });
+  assert.equal(small.selected.length, items.length);
+  assert.equal(small.withinTolerance, true);
   const preferred = preferSatDiagnosticCollection([
     { examFamily: "psat", practiceTestNumber: 1, slug: "psat-10-practice-test-1", questionCount: 120 },
     { examFamily: "sat", practiceTestNumber: 4, slug: "sat-practice-test-4-digital", questionCount: 120 },

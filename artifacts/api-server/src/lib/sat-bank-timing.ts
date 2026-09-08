@@ -1,5 +1,9 @@
 export const DEFAULT_PREWORK_TARGET_MINUTES = 60;
 export const PREWORK_TOLERANCE_MINUTES = 8;
+/** Later (post–Oct 2 diagnostic) pre-work is a short set, never a full-length form. */
+export const ROUTINE_PREWORK_MIN_QUESTIONS = 30;
+export const ROUTINE_PREWORK_MAX_QUESTIONS = 50;
+export const DEFAULT_ROUTINE_PREWORK_QUESTIONS = 40;
 /** Official digital SAT total time (RW 64 + Math 70). Linear 120-item forms use this as a floor. */
 export const DIGITAL_SAT_STANDARD_MINUTES = 134;
 export const SAT_DIAGNOSTIC_TEST_NUMBERS = [4, 5, 6, 7, 8, 9, 10, 11] as const;
@@ -94,6 +98,78 @@ export function selectQuestionsForTimeBudget<T extends TimedBankItem>(
 export function formatEstimatedMinutes(seconds: number): string {
   const minutes = Math.max(1, Math.round(seconds / 60));
   return `~${minutes} min`;
+}
+
+/**
+ * Select 30–50 routine pre-work items. Never exceeds the max, even when a
+ * collection or explicit id list is larger. Takes every remaining item when
+ * the bank is smaller than the minimum.
+ */
+export function selectQuestionsForCountBudget<T extends TimedBankItem>(
+  items: readonly T[],
+  options: {
+    minCount?: number;
+    maxCount?: number;
+    targetCount?: number;
+    preferOriginalOrder?: boolean;
+  } = {},
+): TimeSelectionResult<T> {
+  const minCount = options.minCount ?? ROUTINE_PREWORK_MIN_QUESTIONS;
+  const maxCount = options.maxCount ?? ROUTINE_PREWORK_MAX_QUESTIONS;
+  const targetCount = Math.min(
+    maxCount,
+    Math.max(1, options.targetCount ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS),
+  );
+  const pool = [...items];
+  if (options.preferOriginalOrder) {
+    pool.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  }
+
+  const selected: T[] = [];
+  if (options.preferOriginalOrder) {
+    for (const item of pool) {
+      if (selected.length >= targetCount) break;
+      selected.push(item);
+    }
+  } else {
+    const rw = pool.filter((item) => item.section === "rw");
+    const math = pool.filter((item) => item.section === "math");
+    let rwIndex = 0;
+    let mathIndex = 0;
+    let preferRw = true;
+    while (selected.length < targetCount) {
+      const next = preferRw
+        ? (rw[rwIndex++] ?? math[mathIndex++])
+        : (math[mathIndex++] ?? rw[rwIndex++]);
+      if (!next) break;
+      selected.push(next);
+      preferRw = !preferRw;
+    }
+  }
+
+  const estimatedSeconds = selected.reduce(
+    (sum, item) => sum + Math.max(0, item.estimatedSeconds),
+    0,
+  );
+  const targetMinutes = routinePreworkTimeLimitMinutes(selected.length);
+  return {
+    selected,
+    estimatedSeconds,
+    targetSeconds: targetMinutes * 60,
+    withinTolerance:
+      selected.length <= maxCount &&
+      (selected.length >= minCount || selected.length === pool.length),
+    leftoverCount: Math.max(0, pool.length - selected.length),
+  };
+}
+
+export function routinePreworkTimeLimitMinutes(questionCount: number): number {
+  if (questionCount <= 0) return 35;
+  return Math.min(75, Math.max(35, Math.round(questionCount * 1.25)));
+}
+
+export function isRoutinePreworkQuestionCountAllowed(questionCount: number): boolean {
+  return questionCount <= ROUTINE_PREWORK_MAX_QUESTIONS;
 }
 
 export function selectFullPracticeCollection<T extends TimedBankItem>(

@@ -11,7 +11,7 @@ vi.mock("@workspace/api-client-react", () => ({
     data: {
       sessionId: "session-1",
       scoreReporting: "none",
-      scoreHonesty: "This 60-minute pre-work reports accuracy only. It is not an official SAT score.",
+      scoreHonesty: "This 30–50 question pre-work reports accuracy only. It is not an official SAT score.",
       accuracyPercent: 50,
       weaknessGroups: [
         {

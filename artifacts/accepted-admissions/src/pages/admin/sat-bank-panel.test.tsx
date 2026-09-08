@@ -102,7 +102,7 @@ describe("SAT/PSAT bank panel", () => {
     expect(importMutate).toHaveBeenCalled();
   });
 
-  test("assigns 60-minute session pre-work as routine accuracy work, not an official SAT score", () => {
+  test("assigns 30–50 question session pre-work as routine accuracy work, not an official SAT score", () => {
     render(
       <AssignBankPreworkControl
         sessionId="session-1"
@@ -111,10 +111,10 @@ describe("SAT/PSAT bank panel", () => {
       />,
     );
     expect(screen.getByTestId("assign-bank-prework-session-1").textContent).toMatch(
-      /60-minute bank pre-work/,
+      /30–50 question bank pre-work/,
     );
     expect(screen.getByLabelText("Homework type").textContent).toMatch(/Routine \(no SAT score\)/);
-    expect(screen.getByRole("button", { name: /Assign 60-min pre-work/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Assign 30–50 question pre-work/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Homework type"), { target: { value: "diagnostic" } });
     expect(screen.getByRole("button", { name: /Assign full diagnostic/ })).toBeTruthy();
     expect(screen.getByTestId("assign-bank-prework-session-1").textContent).toMatch(

@@ -36,9 +36,11 @@ import {
 import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
+  IN_SESSION_PARTIAL_SUBMIT_COPY,
   answeredQuestionCount,
   canSubmitStudentAttempt,
   isCollaborativeSessionPractice,
+  isInSessionHomeworkCompletion,
   shouldAutoSubmitOnExpiry,
   studentSeesFinishedResult,
   studentSeesPredictionStep,
@@ -94,7 +96,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                 </p>
               ) : result.homeworkKind === "routine" ? (
                 <p className="mt-2 text-sm text-white/70">
-                  Accuracy only — this 60-minute set is not an official SAT score.
+                  Accuracy only — this pre-work set is not an official SAT score.
                 </p>
               ) : null}
             </div>
@@ -335,7 +337,14 @@ export default function PortalAssignment() {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const expirySubmitted = useRef(false);
-  const collaborative = isCollaborativeSessionPractice(assignment?.deliveryPhase);
+  const inSessionHomework = isInSessionHomeworkCompletion({
+    deliveryPhase: assignment?.deliveryPhase,
+    title: assignment?.title,
+  });
+  const collaborative = isCollaborativeSessionPractice(
+    assignment?.deliveryPhase,
+    assignment?.title,
+  );
 
   useEffect(() => {
     if (!attemptId && assignment?.latestAttemptId) setAttemptId(assignment.latestAttemptId);
@@ -478,8 +487,9 @@ export default function PortalAssignment() {
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Your timer is tracked on the server. You can pause, and your responses autosave as you work.
-                Submit is blocked until at least one question is answered.
+                {inSessionHomework
+                  ? IN_SESSION_PARTIAL_SUBMIT_COPY
+                  : "Your timer is tracked on the server. You can pause, and your responses autosave as you work. Submit is blocked until at least one question is answered."}
               </p>
             )}
           </CardContent>
@@ -751,13 +761,18 @@ export default function PortalAssignment() {
           />
         )}
       </div>
+      {inSessionHomework ? (
+        <p className="text-sm text-muted-foreground" data-testid="partial-submit-in-session">
+          {IN_SESSION_PARTIAL_SUBMIT_COPY}
+        </p>
+      ) : null}
       {submitError || (!submitGuard.ok && submitGuard.reason === "empty") ? (
         <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900" data-testid="empty-submit-error">
           {submitError || EMPTY_SUBMIT_MESSAGE}
         </p>
       ) : null}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background p-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
           <Button
             variant="outline"
             size="lg"
@@ -767,6 +782,18 @@ export default function PortalAssignment() {
           >
             <ChevronLeft className="mr-1 h-5 w-5" /> Previous
           </Button>
+          {inSessionHomework ? (
+            <Button
+              size="lg"
+              className="rounded-full bg-accent text-white hover:bg-accent/90"
+              onClick={submit}
+              disabled={!submitGuard.ok}
+              data-testid="submit-in-session-homework"
+            >
+              {submitAttempt.isPending ? "Submitting…" : viewer ? "Viewer mode" : "Submit for results"}{" "}
+              <CheckCircle className="ml-2 h-5 w-5" />
+            </Button>
+          ) : null}
           {currentQuestionIndex < assignment.questions.length - 1 ? (
             <Button
               size="lg"
@@ -777,7 +804,7 @@ export default function PortalAssignment() {
             >
               Next <ChevronRight className="ml-1 h-5 w-5" />
             </Button>
-          ) : (
+          ) : inSessionHomework ? null : (
             <Button
               size="lg"
               className="rounded-full bg-accent text-white hover:bg-accent/90"

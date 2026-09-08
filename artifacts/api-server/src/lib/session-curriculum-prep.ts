@@ -8,6 +8,7 @@ import {
   curriculumBlocksTable,
   db,
   questionsTable,
+  responsesTable,
   reviewQueueTable,
   sessionsTable,
 } from "@workspace/db";
@@ -15,6 +16,10 @@ import {
   describeSessionPrepMode,
   type SessionPrepMode,
 } from "./assessment-analysis";
+import {
+  IN_SESSION_HOMEWORK_COMPLETION_TITLE,
+  selectInSessionHomeworkQuestionIds,
+} from "./session-homework";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -165,19 +170,45 @@ async function copyHomeworkIntoDuringSession(
     .from(assignmentQuestionsTable)
     .where(eq(assignmentQuestionsTable.assignmentId, duringId));
   const already = new Set(existing.map((row) => row.questionId));
+  const answeredRows = await db
+    .select({
+      questionId: responsesTable.questionId,
+      finalAnswer: responsesTable.finalAnswer,
+    })
+    .from(responsesTable)
+    .innerJoin(attemptsTable, eq(attemptsTable.id, responsesTable.attemptId))
+    .where(eq(attemptsTable.assignmentId, homeworkId));
+  const answered = new Set(
+    answeredRows
+      .filter((row) => Boolean(row.finalAnswer?.trim()))
+      .map((row) => row.questionId),
+  );
+  const unansweredIds = source
+    .map((row) => row.questionId)
+    .filter((id) => !answered.has(id));
+  const selectedIds = selectInSessionHomeworkQuestionIds(
+    source.map((row) => row.questionId),
+    {
+      unansweredIds,
+      alreadyAttachedIds: [...already],
+    },
+  );
+  const sourceById = new Map(source.map((row) => [row.questionId, row]));
   let position = existing.length;
   let attached = 0;
-  for (const row of source) {
-    if (already.has(row.questionId)) continue;
+  for (const questionId of selectedIds) {
+    if (already.has(questionId)) continue;
+    const row = sourceById.get(questionId);
     await db
       .insert(assignmentQuestionsTable)
       .values({
         assignmentId: duringId,
-        questionId: row.questionId,
+        questionId,
         position,
-        predictionFirst: row.predictionFirst,
+        predictionFirst: row?.predictionFirst ?? false,
       })
       .onConflictDoNothing();
+    already.add(questionId);
     position += 1;
     attached += 1;
   }
@@ -187,8 +218,9 @@ async function copyHomeworkIntoDuringSession(
       .set({
         status: "published",
         instructions:
-          "Homework was not finished before the meeting. Complete this prep together, then review every explanation.",
-        title: "In-session homework completion",
+          "Homework was not finished before the meeting. Work up to 15 of these items together. You can submit for results without answering every question.",
+        title: IN_SESSION_HOMEWORK_COMPLETION_TITLE,
+        timeLimitMinutes: 30,
       })
       .where(eq(assignmentsTable.id, duringId));
   }
