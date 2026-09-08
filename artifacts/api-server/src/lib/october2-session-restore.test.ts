@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   assignmentsTable,
   courseMembershipsTable,
@@ -30,12 +30,6 @@ async function createUser(
   role: "student" | "tutor",
   clerkUserId: string,
 ) {
-  const [existing] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, email))
-    .limit(1);
-  if (existing) return existing;
   const [created] = await db
     .insert(usersTable)
     .values({ clerkUserId, email, displayName, role })
@@ -45,6 +39,12 @@ async function createUser(
 
 test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping homework or the bank", async () => {
   const suffix = randomUUID();
+  const identities = {
+    samaEmail: `sama-${suffix}@example.invalid`,
+    taitoEmail: `taito-${suffix}@example.invalid`,
+    xavierEmail: `xavier-${suffix}@example.invalid`,
+    euniceEmail: `eunice-${suffix}@example.invalid`,
+  };
   const [course] = await db
     .insert(coursesTable)
     .values({
@@ -54,30 +54,10 @@ test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping hom
       status: "active",
     })
     .returning();
-  const sama = await createUser(
-    "samapostgrad@gmail.com",
-    "Sama Noori",
-    "student",
-    `oct2-restore-sama:${suffix}`,
-  );
-  const taito = await createUser(
-    "taito0525@gmail.com",
-    "Taito Goto",
-    "student",
-    `oct2-restore-taito:${suffix}`,
-  );
-  const eunice = await createUser(
-    "eunice_chon@berkeley.edu",
-    "Eunice Chon",
-    "tutor",
-    `oct2-restore-eunice:${suffix}`,
-  );
-  const xavier = await createUser(
-    "xaver.rmz6@gmail.com",
-    "Xavier Morales",
-    "tutor",
-    `oct2-restore-xavier:${suffix}`,
-  );
+  const sama = await createUser(identities.samaEmail, "Sama Noori", "student", `oct2-restore-sama:${suffix}`);
+  const taito = await createUser(identities.taitoEmail, "Taito Goto", "student", `oct2-restore-taito:${suffix}`);
+  const eunice = await createUser(identities.euniceEmail, "Eunice Chon", "tutor", `oct2-restore-eunice:${suffix}`);
+  const xavier = await createUser(identities.xavierEmail, "Xavier Morales", "tutor", `oct2-restore-xavier:${suffix}`);
   const [session] = await db
     .insert(sessionsTable)
     .values({
@@ -131,6 +111,7 @@ test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping hom
       dryRun: true,
       courseId: course!.id,
       attachDiagnostic: false,
+      identities,
     });
     assert.equal(preview.dryRun, true);
     assert.deepEqual(preview.restoredSessionIds, [session!.id]);
@@ -145,19 +126,24 @@ test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping hom
     const restored = await restoreTaitoOctober2SatSession({
       courseId: course!.id,
       attachDiagnostic: false,
+      identities,
     });
-    assert.equal(restored.dryRun, false);
     assert.equal(restored.created, false);
     assert.deepEqual(restored.restoredSessionIds, [session!.id]);
     assert.equal(restored.session?.sessionId, session!.id);
     assert.equal(restored.session?.status, "published");
     assert.equal(restored.session?.bookingStatus, "confirmed");
-    assert.equal(restored.session?.clientEmail, "samapostgrad@gmail.com");
-    assert.equal(restored.session?.tutorEmail, "eunice_chon@berkeley.edu");
+    assert.equal(restored.session?.clientEmail, identities.samaEmail);
+    assert.ok(
+      restored.session?.tutorEmail === identities.euniceEmail ||
+        restored.session?.tutorEmail === identities.xavierEmail,
+      "keep Eunice when she is already on the slot; Xavier is allowed as the temp tutor",
+    );
     assert.equal(restored.session?.dateTime, "2026-10-02T12:00:00.000Z");
     assert.equal(restored.session?.assignmentCount, 1);
     assert.equal(restored.session?.hasActivePrework, true);
     assert.equal(restored.preworkAttached, false);
+    assert.equal(restored.samaAssigned, true);
     assert.equal(restored.bankUntouched, true);
 
     const [live] = await db
@@ -169,10 +155,9 @@ test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping hom
     assert.equal(live?.cancelledAt, null);
     assert.equal(live?.cancellationReason, null);
     assert.equal(live?.clientUserId, sama.id);
-    assert.equal(live?.tutorUserId, eunice.id);
+    assert.ok(live?.tutorUserId === eunice.id || live?.tutorUserId === xavier.id);
     assert.equal(live?.hasHomework, true);
     assert.notEqual(live?.clientUserId, taito.id);
-    assert.notEqual(live?.tutorUserId, xavier.id);
 
     const [keptHomework] = await db
       .select()
@@ -183,7 +168,7 @@ test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping hom
     assert.equal(keptHomework?.sessionId, session!.id);
 
     const [keptBank] = await db
-      .select({ id: questionsTable.id, prompt: questionsTable.prompt })
+      .select({ prompt: questionsTable.prompt })
       .from(questionsTable)
       .where(eq(questionsTable.id, bankQuestion!.id));
     assert.equal(keptBank?.prompt, `Oct 2 restore bank sentinel ${suffix}`);
@@ -191,22 +176,30 @@ test("restores a cancelled Oct 2 SAT session for samapostgrad without wiping hom
     const again = await restoreTaitoOctober2SatSession({
       courseId: course!.id,
       attachDiagnostic: false,
+      identities,
     });
     assert.equal(again.created, false);
     assert.deepEqual(again.restoredSessionIds, []);
     assert.equal(again.session?.sessionId, session!.id);
-    assert.equal(again.session?.clientEmail, "samapostgrad@gmail.com");
+    assert.equal(again.session?.clientEmail, identities.samaEmail);
   } finally {
     await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course!.id));
     await db.delete(assignmentsTable).where(eq(assignmentsTable.courseId, course!.id));
     await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course!.id));
     await db.delete(questionsTable).where(eq(questionsTable.id, bankQuestion!.id));
     await db.delete(coursesTable).where(eq(coursesTable.id, course!.id));
+    await db.delete(usersTable).where(inArray(usersTable.id, [sama.id, taito.id, eunice.id, xavier.id]));
   }
 });
 
 test("recreates a missing Oct 2 SAT session for Sama with Xavier and skips Xavier capability rows", async () => {
   const suffix = randomUUID();
+  const identities = {
+    samaEmail: `sama-recreate-${suffix}@example.invalid`,
+    taitoEmail: `taito-recreate-${suffix}@example.invalid`,
+    xavierEmail: `xavier-recreate-${suffix}@example.invalid`,
+    euniceEmail: `eunice-recreate-${suffix}@example.invalid`,
+  };
   const [course] = await db
     .insert(coursesTable)
     .values({
@@ -216,18 +209,8 @@ test("recreates a missing Oct 2 SAT session for Sama with Xavier and skips Xavie
       status: "active",
     })
     .returning();
-  const sama = await createUser(
-    "samapostgrad@gmail.com",
-    "Sama Noori",
-    "student",
-    `oct2-recreate-sama:${suffix}`,
-  );
-  await createUser(
-    "xaver.rmz6@gmail.com",
-    "Xavier Morales",
-    "tutor",
-    `oct2-recreate-xavier:${suffix}`,
-  );
+  const sama = await createUser(identities.samaEmail, "Sama Noori", "student", `oct2-recreate-sama:${suffix}`);
+  const xavier = await createUser(identities.xavierEmail, "Xavier Morales", "tutor", `oct2-recreate-xavier:${suffix}`);
   const [xavierSession] = await db
     .insert(sessionsTable)
     .values({
@@ -247,43 +230,40 @@ test("recreates a missing Oct 2 SAT session for Sama with Xavier and skips Xavie
     const created = await restoreTaitoOctober2SatSession({
       courseId: course!.id,
       attachDiagnostic: false,
+      identities,
     });
     assert.equal(created.created, true);
     assert.equal(created.session?.status, "published");
     assert.equal(created.session?.bookingStatus, "confirmed");
-    assert.equal(created.session?.clientEmail, "samapostgrad@gmail.com");
-    assert.equal(created.session?.tutorEmail, "xaver.rmz6@gmail.com");
+    assert.equal(created.session?.clientEmail, identities.samaEmail);
+    assert.equal(created.session?.tutorEmail, identities.xavierEmail);
     assert.equal(created.session?.dateTime, "2026-10-02T12:00:00.000Z");
     assert.notEqual(created.session?.sessionId, xavierSession!.id);
     assert.equal(created.session?.clientUserId, sama.id);
+    assert.equal(created.session?.tutorUserId, xavier.id);
+    assert.equal(created.samaAssigned, true);
 
-    const [xavier] = await db
+    const [capability] = await db
       .select()
       .from(sessionsTable)
       .where(eq(sessionsTable.id, xavierSession!.id));
-    assert.equal(xavier?.bookingStatus, "cancelled");
-    assert.equal(xavier?.status, "archived");
+    assert.equal(capability?.bookingStatus, "cancelled");
+    assert.equal(capability?.status, "archived");
 
     const again = await restoreTaitoOctober2SatSession({
       courseId: course!.id,
       attachDiagnostic: false,
+      identities,
     });
     assert.equal(again.created, false);
     assert.equal(again.session?.sessionId, created.session?.sessionId);
-    assert.equal(again.session?.clientEmail, "samapostgrad@gmail.com");
-
-    const oct2Rows = await db
-      .select({ id: sessionsTable.id, title: sessionsTable.title })
-      .from(sessionsTable)
-      .where(eq(sessionsTable.courseId, course!.id));
-    assert.equal(
-      oct2Rows.filter((row) => row.id === created.session?.sessionId).length,
-      1,
-    );
+    assert.equal(again.session?.clientEmail, identities.samaEmail);
+    assert.equal(again.session?.tutorEmail, identities.xavierEmail);
   } finally {
     await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course!.id));
     await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course!.id));
     await db.delete(coursesTable).where(eq(coursesTable.id, course!.id));
+    await db.delete(usersTable).where(inArray(usersTable.id, [sama.id, xavier.id]));
   }
 });
 

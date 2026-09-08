@@ -66,6 +66,12 @@ export type RestoreOctober2SatSessionOptions = {
   dryRun?: boolean;
   courseId?: string;
   attachDiagnostic?: boolean;
+  identities?: {
+    samaEmail?: string;
+    taitoEmail?: string;
+    xavierEmail?: string;
+    euniceEmail?: string;
+  };
 };
 
 async function findFall2026Course(courseId?: string) {
@@ -153,7 +159,20 @@ async function snapshotsFor(
   );
 }
 
-async function ensureOctober2Memberships(courseId: string): Promise<void> {
+function october2Emails(identities?: RestoreOctober2SatSessionOptions["identities"]) {
+  return {
+    samaEmail: identities?.samaEmail ?? SAMA_TEST_CLIENT_EMAIL,
+    taitoEmail: identities?.taitoEmail ?? TAITO_STUDENT_EMAIL,
+    xavierEmail: identities?.xavierEmail ?? XAVIER_TUTOR_EMAIL,
+    euniceEmail: identities?.euniceEmail ?? EUNICE_TUTOR_EMAIL,
+  };
+}
+
+async function ensureOctober2Memberships(
+  courseId: string,
+  identities?: RestoreOctober2SatSessionOptions["identities"],
+): Promise<void> {
+  const emails = october2Emails(identities);
   const people = await db
     .select({
       id: usersTable.id,
@@ -161,12 +180,12 @@ async function ensureOctober2Memberships(courseId: string): Promise<void> {
       role: usersTable.role,
     })
     .from(usersTable)
-    .where(inArray(usersTable.email, [SAMA_TEST_CLIENT_EMAIL, XAVIER_TUTOR_EMAIL]));
+    .where(inArray(usersTable.email, [emails.samaEmail, emails.xavierEmail]));
   for (const person of people) {
     const membershipRole =
-      person.email === XAVIER_TUTOR_EMAIL && person.role === "tutor"
+      person.email === emails.xavierEmail && person.role === "tutor"
         ? "tutor"
-        : person.email === SAMA_TEST_CLIENT_EMAIL && person.role === "student"
+        : person.email === emails.samaEmail && person.role === "student"
           ? "student"
           : null;
     if (!membershipRole) continue;
@@ -188,13 +207,20 @@ async function ensureOctober2Memberships(courseId: string): Promise<void> {
   }
 }
 
-async function assignOctober2TestPeople(sessionId: string): Promise<void> {
+async function assignOctober2TestPeople(
+  sessionId: string,
+  options: {
+    preferXavier?: boolean;
+    identities?: RestoreOctober2SatSessionOptions["identities"];
+  } = {},
+): Promise<void> {
   const [session] = await db
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.id, sessionId))
     .limit(1);
   if (!session) return;
+  const emails = october2Emails(options.identities);
   const extras = await db
     .select({
       id: usersTable.id,
@@ -205,21 +231,21 @@ async function assignOctober2TestPeople(sessionId: string): Promise<void> {
     .from(usersTable)
     .where(
       inArray(usersTable.email, [
-        SAMA_TEST_CLIENT_EMAIL,
-        TAITO_STUDENT_EMAIL,
-        XAVIER_TUTOR_EMAIL,
-        EUNICE_TUTOR_EMAIL,
+        emails.samaEmail,
+        emails.taitoEmail,
+        emails.xavierEmail,
+        emails.euniceEmail,
       ]),
     );
   const sama = extras.find(
-    (user) => user.email === SAMA_TEST_CLIENT_EMAIL && user.role === "student",
+    (user) => user.email === emails.samaEmail && user.role === "student",
   );
-  const taito = extras.find((user) => user.email === TAITO_STUDENT_EMAIL);
+  const taito = extras.find((user) => user.email === emails.taitoEmail);
   const xavier = extras.find(
-    (user) => user.email === XAVIER_TUTOR_EMAIL && user.role === "tutor",
+    (user) => user.email === emails.xavierEmail && user.role === "tutor",
   );
   const eunice = extras.find(
-    (user) => user.email === EUNICE_TUTOR_EMAIL && user.role === "tutor",
+    (user) => user.email === emails.euniceEmail && user.role === "tutor",
   );
   const next = resolveOctober2SessionPeople({
     samaUserId: sama?.id,
@@ -227,7 +253,7 @@ async function assignOctober2TestPeople(sessionId: string): Promise<void> {
     xavierUserId: xavier?.id,
     euniceUserId: eunice?.id,
     existingClientUserId: session.clientUserId,
-    existingTutorUserId: session.tutorUserId,
+    existingTutorUserId: options.preferXavier ? null : session.tutorUserId,
   });
   const clientName = sama?.displayName ?? taito?.displayName ?? "Sama";
   const tutorName =
@@ -301,7 +327,7 @@ export async function restoreTaitoOctober2SatSession(
             (session) =>
               session.id === row.sessionId && isTaitoFirstSatSession(session),
           ),
-        ) ?? snapshots[0])?.clientEmail === SAMA_TEST_CLIENT_EMAIL,
+        ) ?? snapshots[0])?.clientEmail === october2Emails(options.identities).samaEmail,
       session:
         snapshots.find((row) =>
           before.some(
@@ -327,7 +353,7 @@ export async function restoreTaitoOctober2SatSession(
   }
 
   const hadCanonical = before.some(isTaitoFirstSatSession);
-  await ensureOctober2Memberships(course.id);
+  await ensureOctober2Memberships(course.id, options.identities);
   await reconcileTaitoSessions(course.id);
 
   const afterSessions = (
@@ -339,7 +365,10 @@ export async function restoreTaitoOctober2SatSession(
   const canonicalRow =
     afterSessions.find(isTaitoFirstSatSession) ?? afterSessions[0] ?? null;
   if (canonicalRow) {
-    await assignOctober2TestPeople(canonicalRow.id);
+    await assignOctober2TestPeople(canonicalRow.id, {
+      preferXavier: !hadCanonical,
+      identities: options.identities,
+    });
   }
 
   let preworkAttached = false;
@@ -367,7 +396,7 @@ export async function restoreTaitoOctober2SatSession(
       .filter((session) => !sessionNeedsVisibilityRestore(session))
       .map((session) => session.id),
     preworkAttached,
-    samaAssigned: snapshots[0]?.clientEmail === SAMA_TEST_CLIENT_EMAIL,
+    samaAssigned: snapshots[0]?.clientEmail === october2Emails(options.identities).samaEmail,
     session: snapshots[0] ?? null,
     bankUntouched: true,
     attemptsUntouched: true,
