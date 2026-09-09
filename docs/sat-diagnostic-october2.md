@@ -35,9 +35,11 @@ The reusable bank still stores SPR and incomplete extracts. They are just not co
 
 ## Production runbook
 
-Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge this PR from the runbook; deploy first, then run.
+**Required after merge.** Landing this PR does not change Taito’s live Oct 2 assignment. After Code Checker / review merge the PR and the API deploy completes, ops **must** run the rebuild below. In-place rematerialize is not enough.
 
-### 1. Deploy this branch (media + API)
+Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
+
+### 1. Deploy the merged API (and media if crops changed)
 
 Figures stay under `/media/sat-bank/...` (PR #50). If new question-region crops landed, deploy those static files with the API.
 
