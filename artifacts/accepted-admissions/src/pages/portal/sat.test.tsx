@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { PORTAL_SAT_PURCHASE_HREF } from "@/lib/portal-sat";
 import {
@@ -83,10 +83,13 @@ vi.mock("@tanstack/react-query", () => ({
 
 import PortalSat from "./sat";
 
+const defaultUpcomingSessions = mocks.dashboard.data.upcomingSessions;
+
 afterEach(() => {
   cleanup();
   mocks.dashboard.data.credits.selfServeSatBooking = true;
   mocks.dashboard.data.credits.remainingHours = 0;
+  mocks.dashboard.data.upcomingSessions = defaultUpcomingSessions;
   mocks.location = PORTAL_SAT_PURCHASE_HREF;
   mocks.remainingHours = 0;
   mocks.currentUser.data = { role: "student" };
@@ -167,6 +170,40 @@ describe("portal SAT book/pay", () => {
     expect(screen.queryByRole("button", { name: /secure checkout/i })).toBeNull();
     expect(screen.queryByText("Purchase SAT hours")).toBeNull();
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+  });
+
+  test("dedupes duplicate SAT meetings and collapses past the next three", () => {
+    const dates = ["2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23", "2026-10-30"];
+    mocks.dashboard.data.upcomingSessions = dates.flatMap((dateKey) => [
+      {
+        id: `tokyo-${dateKey}`,
+        subject: "SAT",
+        title: `Taito SAT ${dateKey}`,
+        dateTime: `${dateKey}T12:00:00.000Z`,
+        timezone: "Asia/Tokyo",
+        durationMinutes: 60,
+        tutor: { id: "eunice", name: "Eunice Chon" },
+      },
+      {
+        id: `eastern-${dateKey}`,
+        subject: "SAT",
+        title: `Taito SAT ${dateKey} ET`,
+        dateTime: `${dateKey}T16:00:00.000Z`,
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        tutor: { id: "eunice", name: "Eunice Chon" },
+      },
+    ]);
+    render(<PortalSat />);
+    expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-02")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-09")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-16")).toBeTruthy();
+    expect(screen.queryByTestId("portal-sat-upcoming-eastern-2026-10-02")).toBeNull();
+    expect(screen.queryByTestId("portal-sat-upcoming-tokyo-2026-10-23")).toBeNull();
+    fireEvent.click(screen.getByTestId("session-list-show-more"));
+    expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-23")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-30")).toBeTruthy();
+    expect(screen.queryByTestId("portal-sat-upcoming-eastern-2026-10-30")).toBeNull();
   });
 
   test("hides checkout for off-platform clients such as Taito", () => {

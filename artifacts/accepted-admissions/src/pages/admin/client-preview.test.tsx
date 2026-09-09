@@ -123,5 +123,75 @@ describe("administrator client preview", () => {
     expect(screen.queryByText("Taito’s SAT Session with Xavier")).toBeNull();
     expect(screen.getByText("No prepaid sessions reserved yet.")).toBeTruthy();
     expect(screen.queryByText(/\$65/)).toBeNull();
+    expect(screen.queryByText("No verified purchase yet")).toBeNull();
+    expect(screen.queryByText(/booking remains unavailable/i)).toBeNull();
+  });
+
+  test("does not show the unpaid purchase banner for an off-platform client", () => {
+    mocks.preview = {
+      user: {
+        id: "student-1",
+        displayName: "Taito Goto",
+        email: "taito0525@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      welcomeMessage: "Your Fall program is ready.",
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: false,
+        twelveSessionPlan: true,
+      },
+      progress: {
+        totalSessions: 12,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring credit.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: {
+        calendarStatus: "disconnected",
+        availability: null,
+        sessions: [],
+      },
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.queryByText("No verified purchase yet")).toBeNull();
+    expect(
+      screen.queryByText("The student has not completed a verified purchase, so booking remains unavailable."),
+    ).toBeNull();
+    expect(screen.queryByText("Booking unavailable until payment is verified")).toBeNull();
+    expect(screen.queryByText(/must complete an SAT purchase/i)).toBeNull();
   });
 });

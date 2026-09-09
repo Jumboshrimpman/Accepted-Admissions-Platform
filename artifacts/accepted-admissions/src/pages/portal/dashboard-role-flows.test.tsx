@@ -320,6 +320,90 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
 
+  test("Taito’s twelve-session roadmap dedupes meetings and collapses past the next three", () => {
+    const fallDates = [
+      "2026-10-02",
+      "2026-10-09",
+      "2026-10-16",
+      "2026-10-23",
+      "2026-10-30",
+      "2026-11-06",
+      "2026-11-13",
+      "2026-11-20",
+      "2026-11-27",
+      "2026-12-04",
+      "2026-12-11",
+      "2026-12-18",
+    ] as const;
+    const englishDates = new Set(["2026-10-23", "2026-11-13", "2026-12-04"]);
+    const curriculumSessions = fallDates.flatMap((dateKey) => {
+      const subject = englishDates.has(dateKey) ? "IELTS" : "SAT";
+      const tutor =
+        subject === "IELTS"
+          ? { id: "nika", name: "Nika Raiffe", specialty: "English Tutor", avatarUrl: null }
+          : { id: "eunice", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null };
+      const title =
+        subject === "IELTS"
+          ? "Taito’s English Session with Nika"
+          : "Taito’s SAT Session with Eunice";
+      const shared = {
+        courseId: "course-fall",
+        durationMinutes: 60,
+        subject,
+        title,
+        status: "published" as const,
+        meetingUrl: "https://meet.google.com/rih-iayt-okb",
+        calendarEventUrl: null,
+        tutor,
+        student: { id: "student-user", name: "Taito Goto" },
+        readiness: "ready" as const,
+        nextAction: "Open session plan",
+        currentFocus: subject === "IELTS" ? "English communication." : "SAT reasoning.",
+        preparation: null,
+        latestResult: null,
+      };
+      return [
+        {
+          ...shared,
+          id: `tokyo-${dateKey}`,
+          dateTime: `${dateKey}T12:00:00.000Z`,
+          timezone: "Asia/Tokyo",
+        },
+        {
+          ...shared,
+          id: `eastern-${dateKey}`,
+          dateTime: `${dateKey}T16:00:00.000Z`,
+          timezone: "America/New_York",
+        },
+      ];
+    });
+
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      curriculumSessions,
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.getByText("0 of 12")).toBeTruthy();
+    expect(screen.getByText("Friday, October 9, 2026")).toBeTruthy();
+    expect(screen.getByText("Friday, October 16, 2026")).toBeTruthy();
+    expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
+    expect(screen.getAllByText(/October 2, 2026/)).toHaveLength(2);
+    expect(screen.getByTestId("session-list-show-more")).toHaveTextContent("Show more");
+
+    fireEvent.click(screen.getByTestId("session-list-show-more"));
+    expect(screen.getByText("Friday, October 23, 2026")).toBeTruthy();
+    expect(screen.getByText("Friday, December 18, 2026")).toBeTruthy();
+    expect(screen.getAllByText(/October 2, 2026/)).toHaveLength(2);
+    expect(screen.getAllByText(/October 23, 2026/)).toHaveLength(1);
+    expect(screen.getAllByText("Taito’s SAT Session with Eunice")).toHaveLength(10);
+    expect(screen.getByTestId("session-list-show-more")).toHaveTextContent("Show less");
+
+    fireEvent.click(screen.getByTestId("session-list-show-more"));
+    expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
+    expect(screen.getByTestId("session-list-show-more")).toHaveTextContent("Show more");
+  });
+
   test("viewer gets the same scoped review surface in explicit view-only mode", () => {
     mocks.dashboard = dashboardForRole("viewer");
     render(<FallWelcomeDashboard />);

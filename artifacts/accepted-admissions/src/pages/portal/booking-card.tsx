@@ -28,10 +28,13 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { isLiveListedSession } from "@/lib/quiz-content";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
   canCancelOrRescheduleSession,
+  collapsedListedSessions,
   formatSessionDateTime,
   sessionScheduleChangeMessage,
+  uniqueListedSessions,
 } from "@/lib/session-display";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -87,11 +90,15 @@ export function BookingCard() {
   const [remainingHours, setRemainingHours] = useState<number | null>(null);
   const [creditError, setCreditError] = useState("");
   const [message, setMessage] = useState("");
+  const [showAllBooked, setShowAllBooked] = useState(false);
 
   const tutorsQuery = useListBookingTutors();
   const sessionsQuery = useListBookingSessions();
   const tutors = tutorsQuery.data ?? [];
-  const sessions = (sessionsQuery.data ?? []).filter(isLiveListedSession);
+  const sessions = uniqueListedSessions(
+    (sessionsQuery.data ?? []).filter(isLiveListedSession),
+  );
+  const bookedSessionList = collapsedListedSessions(sessions, showAllBooked);
   const activeSession = sessions.find((session) => session.id === reschedulingSessionId);
   const selectedTutor =
     tutors.find((tutor) => tutor.id === selectedTutorId) ??
@@ -501,7 +508,7 @@ export function BookingCard() {
             <p className="mt-3 text-sm text-muted-foreground">No prepaid sessions reserved yet.</p>
           ) : (
             <div className="mt-3 space-y-3">
-              {sessions
+              {bookedSessionList.visible
                 .map((session) => (
                   <div key={session.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -550,6 +557,11 @@ export function BookingCard() {
                     </div>
                   </div>
                 ))}
+              <SessionListDisclosure
+                canToggle={bookedSessionList.canToggle}
+                expanded={showAllBooked}
+                onToggle={() => setShowAllBooked((value) => !value)}
+              />
             </div>
           )}
           {sessionsQuery.data?.some((session) => !isLiveListedSession(session)) && (
@@ -596,15 +608,17 @@ export function ClientPreviewBookingCard({
     }
   }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
 
-  const previewSessions = previewBooking.sessions.filter(isLiveListedSession);
+  const previewSessions = uniqueListedSessions(
+    previewBooking.sessions.filter(isLiveListedSession),
+  );
   const hasBookedSession = previewSessions.length > 0;
-  const bookingState = !hasVerifiedPayment
-    ? "unpaid"
-    : hasBookedSession
-      ? "booked"
-      : remainingHours > 0
-        ? "ready"
-        : "no_credit";
+  const bookingState = hasBookedSession
+    ? "booked"
+    : remainingHours > 0
+      ? "ready"
+      : hasVerifiedPayment
+        ? "no_credit"
+        : null;
 
   return (
     <Card className="border-primary/15 shadow-lg shadow-primary/5">
@@ -625,26 +639,24 @@ export function ClientPreviewBookingCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        {bookingState ? (
         <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
           <p className="font-semibold">
-            {bookingState === "unpaid"
-              ? "Booking unavailable until payment is verified"
-              : bookingState === "booked"
-                ? "A prepaid session is booked"
-                : bookingState === "no_credit"
-                  ? "No prepaid hour is currently available"
-                  : "Payment verified — ready to book"}
+            {bookingState === "booked"
+              ? "A prepaid session is booked"
+              : bookingState === "no_credit"
+                ? "No prepaid hour is currently available"
+                : "Payment verified — ready to book"}
           </p>
           <p className="mt-1 text-amber-800">
-            {bookingState === "unpaid"
-              ? "The student must complete an SAT purchase before a prepaid hour can be reserved."
-              : bookingState === "booked"
-                ? "Booked, rescheduled, and cancelled sessions are listed below with their current status."
-                : bookingState === "no_credit"
-                  ? "The current payment and credit records do not leave an hour available for a new booking."
-                  : "The student can choose one available 60-minute time in the client portal."}
+            {bookingState === "booked"
+              ? "Booked, rescheduled, and cancelled sessions are listed below with their current status."
+              : bookingState === "no_credit"
+                ? "The current payment and credit records do not leave an hour available for a new booking."
+                : "The student can choose one available 60-minute time in the client portal."}
           </p>
         </div>
+        ) : null}
 
         {previewBooking.calendarStatus === "unavailable" ? (
           <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">

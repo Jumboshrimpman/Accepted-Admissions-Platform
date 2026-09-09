@@ -107,13 +107,11 @@ export function FinancialCard({
             <Link href="/portal/sat">Purchase SAT session credits</Link>
           </Button>
         )}
-        {adminPreview && (
+        {adminPreview && hasVerifiedPayment && (
           <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-            <p className="font-medium">{hasVerifiedPayment ? "Payment verified" : "No verified purchase yet"}</p>
+            <p className="font-medium">Payment verified</p>
             <p className="mt-1 text-amber-800">
-              {hasVerifiedPayment
-                ? "This account has a payment record and its current prepaid balance is shown below."
-                : "The student has not completed a verified purchase, so booking remains unavailable."}
+              This account has a payment record and its current prepaid balance is shown below.
             </p>
           </div>
         )}

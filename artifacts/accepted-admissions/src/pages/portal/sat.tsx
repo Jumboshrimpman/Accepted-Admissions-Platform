@@ -27,7 +27,12 @@ import {
   paymentCreditBannerState,
 } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
-import { formatSessionDateTime } from "@/lib/session-display";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
+import {
+  collapsedListedSessions,
+  formatSessionDateTime,
+  uniqueListedSessions,
+} from "@/lib/session-display";
 
 type Product = {
   id: string;
@@ -66,6 +71,7 @@ export default function PortalSat() {
   const [baselineHours, setBaselineHours] = useState<number | null>(null);
   const [ledgerHours, setLedgerHours] = useState<number | null>(null);
   const [creditPollTimedOut, setCreditPollTimedOut] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
 
   useEffect(() => {
     const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
@@ -212,11 +218,14 @@ export default function PortalSat() {
   const paymentBanner = paymentBannerState
     ? paymentCreditBannerCopy(paymentBannerState, remainingHours)
     : null;
-  const upcomingSat = (dashboard.data?.upcomingSessions ?? []).filter((session) => {
-    if (!isLiveListedSession(session)) return false;
-    const subject = session.subject?.toLowerCase() ?? "";
-    return subject.startsWith("sat") || /sat/i.test(session.title);
-  });
+  const upcomingSat = uniqueListedSessions(
+    (dashboard.data?.upcomingSessions ?? []).filter((session) => {
+      if (!isLiveListedSession(session)) return false;
+      const subject = session.subject?.toLowerCase() ?? "";
+      return subject.startsWith("sat") || /sat/i.test(session.title);
+    }),
+  );
+  const upcomingSatList = collapsedListedSessions(upcomingSat, showAllUpcoming);
 
   const startCheckout = (productId: string) => {
     setCheckoutMessage("");
@@ -287,15 +296,22 @@ export default function PortalSat() {
           {upcomingSat.length === 0 ? (
             <p className="text-sm text-muted-foreground">No upcoming SAT sessions are on this account yet.</p>
           ) : (
-            upcomingSat.map((session) => (
-              <div key={session.id} className="rounded-xl border p-3 text-sm" data-testid={`portal-sat-upcoming-${session.id}`}>
-                <p className="font-medium">{session.title}</p>
-                <p className="mt-1 text-muted-foreground">
-                  {formatSessionDateTime(session)}
-                  {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
-                </p>
-              </div>
-            ))
+            <>
+              {upcomingSatList.visible.map((session) => (
+                <div key={session.id} className="rounded-xl border p-3 text-sm" data-testid={`portal-sat-upcoming-${session.id}`}>
+                  <p className="font-medium">{session.title}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {formatSessionDateTime(session)}
+                    {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
+                  </p>
+                </div>
+              ))}
+              <SessionListDisclosure
+                canToggle={upcomingSatList.canToggle}
+                expanded={showAllUpcoming}
+                onToggle={() => setShowAllUpcoming((value) => !value)}
+              />
+            </>
           )}
         </CardContent>
       </Card>

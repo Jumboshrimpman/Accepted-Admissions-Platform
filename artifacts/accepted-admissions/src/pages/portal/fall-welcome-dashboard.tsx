@@ -6,12 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
+  collapsedListedSessions,
   displaySessionTitle,
   formatSessionDate,
   formatSessionTimeRange,
   sessionDateKey,
   sessionSubjectLabel,
+  uniqueListedSessions,
 } from "@/lib/session-display";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard } from "@/pages/portal/booking-card";
@@ -130,26 +133,32 @@ export function ClientDashboardView({
 
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const scopedSessions = sessionsForDashboardRole(
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
       : fallbackCurriculumSessions(dashboard),
     dashboard.user,
   );
-  const sessions = (
-    twelveSessionPlan
-      ? scopedSessions.filter((session) =>
-          FALL_DATES.includes(sessionDateKey(session) as (typeof FALL_DATES)[number]),
-        )
-      : scopedSessions
-  ).sort((left, right) =>
-    twelveSessionPlan
-      ? FALL_DATES.indexOf(sessionDateKey(left) as (typeof FALL_DATES)[number]) -
-        FALL_DATES.indexOf(sessionDateKey(right) as (typeof FALL_DATES)[number])
-      : new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime(),
+  const sessions = uniqueListedSessions(
+    (
+      twelveSessionPlan
+        ? scopedSessions.filter((session) =>
+            FALL_DATES.includes(sessionDateKey(session) as (typeof FALL_DATES)[number]),
+          )
+        : scopedSessions
+    ).sort((left, right) =>
+      twelveSessionPlan
+        ? FALL_DATES.indexOf(sessionDateKey(left) as (typeof FALL_DATES)[number]) -
+          FALL_DATES.indexOf(sessionDateKey(right) as (typeof FALL_DATES)[number])
+        : new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime(),
+    ),
   );
+  const sessionList = collapsedListedSessions(sessions, showAllSessions);
   const nextSession =
-    sessions.find((session) => session.readiness !== "complete") ?? sessions.at(-1);
+    sessionList.upcoming[0] ??
+    sessions.find((session) => session.readiness !== "complete") ??
+    sessions.at(-1);
   const analysis = nextSession?.latestResult?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
   const completed = sessions.filter((session) => session.readiness === "complete").length;
@@ -393,12 +402,18 @@ export function ClientDashboardView({
       <Card className="overflow-hidden">
         <CardHeader className="border-b px-5 py-5 sm:px-6">
           <CardTitle className="flex items-center gap-2 text-xl"><CalendarDays className="h-5 w-5 text-primary" />{twelveSessionPlan ? "Twelve-session roadmap" : "Session roadmap"}</CardTitle>
-          <CardDescription>{twelveSessionPlan ? "Open any date to see its before, during, and after learning loop." : "Open any meeting to see its before, during, and after learning loop."}</CardDescription>
+          <CardDescription>
+            {twelveSessionPlan
+              ? "The next three upcoming dates are shown first. Open any date to see its before, during, and after learning loop."
+              : "The next three upcoming meetings are shown first. Open any meeting to see its before, during, and after learning loop."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {sessions.length > 0 ? (
             <ol className="divide-y">
-              {sessions.map((session, index) => (
+              {sessionList.visible.map((session) => {
+                const index = sessions.findIndex((candidate) => candidate.id === session.id);
+                return (
                 <li key={session.id} className={session.id === nextSession?.id ? "bg-primary/[0.035]" : ""}>
                   <div className="grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
@@ -436,11 +451,21 @@ export function ClientDashboardView({
                     )}
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ol>
           ) : (
             <p className="px-6 py-10 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "No Fall sessions are visible for this account." : "No sessions are visible for this account."}</p>
           )}
+          {sessionList.canToggle ? (
+            <div className="border-t px-5 py-4 sm:px-6">
+              <SessionListDisclosure
+                canToggle={sessionList.canToggle}
+                expanded={showAllSessions}
+                onToggle={() => setShowAllSessions((value) => !value)}
+              />
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

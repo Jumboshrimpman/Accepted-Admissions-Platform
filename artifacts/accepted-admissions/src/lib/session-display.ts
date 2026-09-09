@@ -287,6 +287,114 @@ export function disclosedSessions<T>(
   return expanded ? sessions : sessions.slice(0, initialCount);
 }
 
+export const DEFAULT_VISIBLE_UPCOMING_COUNT = 3;
+
+export type ListedSession = {
+  id: string;
+  dateTime: string | Date;
+  timezone?: string;
+  durationMinutes?: number | null;
+  subject?: string | null;
+  meetingUrl?: string | null;
+  status?: string | null;
+  readiness?: string | null;
+  tutor?: { id?: string | null; name?: string | null } | null;
+  tutorName?: string | null;
+  preparation?: unknown;
+  latestResult?: unknown;
+};
+
+function listedSessionTimezone(session: Pick<ListedSession, "timezone">): string {
+  return session.timezone?.trim() || "UTC";
+}
+
+function listedSessionSubject(session: Pick<ListedSession, "subject">): string {
+  return (session.subject ?? "").trim().toUpperCase();
+}
+
+function listedSessionTutorKey(session: Pick<ListedSession, "tutor" | "tutorName">): string {
+  return (
+    session.tutor?.id?.trim() ||
+    session.tutor?.name?.trim().toLowerCase() ||
+    session.tutorName?.trim().toLowerCase() ||
+    ""
+  );
+}
+
+export function listedSessionMeetingKey(
+  session: Pick<ListedSession, "id" | "dateTime" | "timezone" | "subject" | "tutor" | "tutorName">,
+): string {
+  const dateKey = sessionDateKey({
+    dateTime: session.dateTime,
+    timezone: listedSessionTimezone(session),
+  });
+  return `${dateKey}|${listedSessionSubject(session)}|${listedSessionTutorKey(session)}`;
+}
+
+function listedSessionScore(session: ListedSession): number {
+  let score = 0;
+  if (session.preparation) score += 8;
+  if (session.latestResult) score += 4;
+  if (session.meetingUrl) score += 2;
+  if (listedSessionTimezone(session).toLowerCase() === "asia/tokyo") score += 1;
+  return score;
+}
+
+/** One row per session id, then one row per meeting (same local date + subject + tutor). */
+export function uniqueListedSessions<T extends ListedSession>(sessions: readonly T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const session of sessions) {
+    if (!byId.has(session.id)) byId.set(session.id, session);
+  }
+
+  const byMeeting = new Map<string, T>();
+  for (const session of byId.values()) {
+    const key = listedSessionMeetingKey(session);
+    const existing = byMeeting.get(key);
+    if (!existing || listedSessionScore(session) > listedSessionScore(existing)) {
+      byMeeting.set(key, session);
+    }
+  }
+  return [...byMeeting.values()];
+}
+
+export function isUpcomingListedSession(
+  session: Pick<ListedSession, "dateTime" | "durationMinutes" | "status" | "readiness">,
+  now: Date = new Date(),
+): boolean {
+  if (session.readiness === "complete") return false;
+  if ((session.status ?? "").trim().toLowerCase() === "completed") return false;
+  return !isPastSession(session, now);
+}
+
+export function collapsedListedSessions<T extends ListedSession>(
+  sessions: readonly T[],
+  expanded: boolean,
+  now: Date = new Date(),
+  initialCount = DEFAULT_VISIBLE_UPCOMING_COUNT,
+): {
+  upcoming: T[];
+  past: T[];
+  visible: T[];
+  hiddenCount: number;
+  canToggle: boolean;
+} {
+  const upcoming: T[] = [];
+  const past: T[] = [];
+  for (const session of sessions) {
+    if (isUpcomingListedSession(session, now)) upcoming.push(session);
+    else past.push(session);
+  }
+  const overflow = [...upcoming.slice(initialCount), ...past];
+  return {
+    upcoming,
+    past,
+    visible: expanded ? [...upcoming, ...past] : upcoming.slice(0, initialCount),
+    hiddenCount: overflow.length,
+    canToggle: overflow.length > 0,
+  };
+}
+
 export function sessionStudentLabel(
   session: Pick<DisplaySession, "dateTime" | "timezone" | "subject" | "student">,
 ): string {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useGetCourse, getGetCourseQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,15 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, Video, ChevronRight, CheckCircle2, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { isLiveListedSession } from "@/lib/quiz-content";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
+  collapsedListedSessions,
   displaySessionTitle,
   formatSessionDateTime,
+  uniqueListedSessions,
 } from "@/lib/session-display";
 import { SessionJoinActions } from "@/components/session-join-actions";
 
 export default function PortalCourse() {
   const params = useParams();
   const courseId = params.courseId as string;
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const { data: course, isLoading, error } = useGetCourse(courseId, { query: { enabled: !!courseId, queryKey: getGetCourseQueryKey(courseId) } });
 
   if (isLoading) {
@@ -35,6 +40,9 @@ export default function PortalCourse() {
       </div>
     );
   }
+
+  const sessions = uniqueListedSessions(course.sessions.filter(isLiveListedSession));
+  const sessionList = collapsedListedSessions(sessions, showAllSessions);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -79,7 +87,8 @@ export default function PortalCourse() {
         </h2>
         
         <div className="grid gap-4">
-          {course.sessions.filter(isLiveListedSession).map((session, index) => {
+          {sessionList.visible.map((session) => {
+            const index = sessions.findIndex((candidate) => candidate.id === session.id);
             const isCompleted = session.status === 'completed';
             const isUpcoming = !isCompleted && new Date(session.dateTime) > new Date();
             
@@ -142,6 +151,11 @@ export default function PortalCourse() {
               </Link>
             )
           })}
+          <SessionListDisclosure
+            canToggle={sessionList.canToggle}
+            expanded={showAllSessions}
+            onToggle={() => setShowAllSessions((value) => !value)}
+          />
         </div>
       </div>
     </div>
