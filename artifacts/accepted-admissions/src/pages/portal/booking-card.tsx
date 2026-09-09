@@ -579,10 +579,14 @@ export function ClientPreviewBookingCard({
   previewBooking,
   remainingHours,
   hasVerifiedPayment,
+  offPlatformBilling = false,
+  hasAssignedProgramSessions = false,
 }: {
   previewBooking: AdminClientPreviewBooking;
   remainingHours: number;
   hasVerifiedPayment: boolean;
+  offPlatformBilling?: boolean;
+  hasAssignedProgramSessions?: boolean;
 }) {
   const [selectedDateKey, setSelectedDateKey] = useState("");
   const availability = previewBooking.availability;
@@ -612,13 +616,20 @@ export function ClientPreviewBookingCard({
     previewBooking.sessions.filter(isLiveListedSession),
   );
   const hasBookedSession = previewSessions.length > 0;
-  const bookingState = hasBookedSession
-    ? "booked"
-    : remainingHours > 0
-      ? "ready"
-      : hasVerifiedPayment
-        ? "no_credit"
-        : null;
+  const hidePurchaseAndCalendarWarnings =
+    offPlatformBilling || hasBookedSession || hasAssignedProgramSessions;
+  const bookingState =
+    hidePurchaseAndCalendarWarnings
+      ? hasBookedSession
+        ? "booked"
+        : null
+      : hasBookedSession
+        ? "booked"
+        : remainingHours > 0
+          ? "ready"
+          : hasVerifiedPayment
+            ? "no_credit"
+            : null;
 
   return (
     <Card className="border-primary/15 shadow-lg shadow-primary/5">
@@ -658,7 +669,11 @@ export function ClientPreviewBookingCard({
         </div>
         ) : null}
 
-        {previewBooking.calendarStatus === "unavailable" ? (
+        {hidePurchaseAndCalendarWarnings ? (
+          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+            Meetings for this program are already scheduled. Join Google Meet from the curriculum dates below.
+          </p>
+        ) : previewBooking.calendarStatus === "unavailable" ? (
           <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
             <p>No booking calendar is available right now.</p>
             <Button disabled variant="outline" className="mt-4 rounded-full">

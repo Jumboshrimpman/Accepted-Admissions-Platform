@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
+import { portalTutorsFromDashboard } from "@/lib/portal-tutors";
 import {
   collapsedListedSessions,
   displaySessionTitle,
   formatSessionDate,
   formatSessionTimeRange,
+  isSessionWorkComplete,
   sessionDateKey,
   sessionSubjectLabel,
   uniqueListedSessions,
@@ -161,7 +163,13 @@ export function ClientDashboardView({
     sessions.at(-1);
   const analysis = nextSession?.latestResult?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
-  const completed = sessions.filter((session) => session.readiness === "complete").length;
+  const completed = sessions.filter(isSessionWorkComplete).length;
+  const tutors = portalTutorsFromDashboard({
+    credits: dashboard.credits,
+    courses: dashboard.courses,
+    curriculumSessions: sessions,
+    upcomingSessions: dashboard.upcomingSessions,
+  });
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14">
@@ -312,13 +320,8 @@ export function ClientDashboardView({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {(() => {
-            const tutors = dashboard.courses
-              .flatMap((course) => course.tutors ?? [])
-              .filter((tutor): tutor is NonNullable<typeof tutor> => tutor != null)
-              .filter((tutor, index, all) => all.findIndex((candidate) => candidate.id === tutor.id) === index);
-            return tutors.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+            {tutors.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2" data-testid="client-tutor-roster">
                 {tutors.map((tutor) => (
                   <div key={tutor.id} className="rounded-xl border p-4">
                     <p className="font-semibold">{tutor.name}</p>
@@ -330,8 +333,7 @@ export function ClientDashboardView({
               <p className="py-3 text-sm text-muted-foreground">
                 Your tutor relationships will appear here once the matching tutor account is provisioned.
               </p>
-            );
-          })()}
+            )}
         </CardContent>
       </Card>
 

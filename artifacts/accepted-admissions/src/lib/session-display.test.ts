@@ -8,6 +8,7 @@ import {
   disclosedSessions,
   listedSessionMeetingKey,
   uniqueListedSessions,
+  isSessionWorkComplete,
   formatAdminBrowserLocalHint,
   formatSessionDate,
   formatSessionDateTime,
@@ -313,6 +314,25 @@ test("blocks cancel and reschedule once a session is past or already started", (
     "A session that has started cannot be rescheduled.",
   );
   assert.equal(sessionScheduleChangeMessage("cancel", upcoming, now), null);
+});
+
+test("treats submitted quiz work as completed progress even when readiness is still ready", () => {
+  assert.equal(isSessionWorkComplete({ readiness: "ready", status: "published" }), false);
+  assert.equal(isSessionWorkComplete({ readiness: "complete" }), true);
+  assert.equal(isSessionWorkComplete({ status: "completed" }), true);
+  assert.equal(isSessionWorkComplete({ latestResult: { analysis: {} } }), true);
+  assert.equal(
+    isSessionWorkComplete({ preparation: { latestAttemptStatus: "submitted" } }),
+    true,
+  );
+  assert.equal(
+    isSessionWorkComplete({ preparation: { latestAttemptStatus: "expired" } }),
+    true,
+  );
+  assert.equal(
+    isSessionWorkComplete({ preparation: { latestAttemptStatus: "active" } }),
+    false,
+  );
 });
 
 test("keeps English as the user-facing label for IELTS sessions", () => {

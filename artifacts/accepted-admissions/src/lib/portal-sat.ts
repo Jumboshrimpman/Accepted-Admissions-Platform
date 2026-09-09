@@ -21,6 +21,15 @@ export function canSeePortalSatNav(role: string | null | undefined): boolean {
   return role === "student";
 }
 
+/** Taito and other program clients pay outside Stripe and already have scheduled meetings. */
+export function isOffPlatformProgramClient(credits?: {
+  selfServeSatBooking?: boolean | null;
+  twelveSessionPlan?: boolean | null;
+} | null): boolean {
+  if (!credits) return false;
+  return credits.selfServeSatBooking === false || credits.twelveSessionPlan === true;
+}
+
 export function portalPathname(location: string): string {
   return location.split(/[?#]/)[0] || "/";
 }

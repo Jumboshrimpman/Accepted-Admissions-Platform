@@ -459,7 +459,7 @@ describe("curriculum bank IA", () => {
     expect(screen.getByText("Create a quiz in the Quizzes workspace (no session) first.")).toBeTruthy();
   });
 
-  test("Quizzes list is bank-only; session clones stay reachable from Open quiz", () => {
+  test("Quizzes list includes reusable bank quizzes and session copies", () => {
     mocks.curriculum.assignments.push({
       ...mocks.curriculum.assignments[0]!,
       id: "quiz-clone",
@@ -470,9 +470,9 @@ describe("curriculum bank IA", () => {
     render(<AdminCurriculum />);
 
     expect(screen.getByTestId("quiz-card-quiz-1")).toBeTruthy();
-    expect(screen.queryByTestId("quiz-card-quiz-clone")).toBeNull();
-    expect(screen.queryByText("Assigned copy")).toBeNull();
-    expect(screen.getByText(/Session copies live on Sessions/i)).toBeTruthy();
+    expect(screen.getByTestId("quiz-card-quiz-clone")).toBeTruthy();
+    expect(screen.getByText("Assigned copy")).toBeTruthy();
+    expect(screen.getByText(/repository copies, and session-assigned pre-work/i)).toBeTruthy();
 
     cleanup();
     mocks.location = "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-clone";

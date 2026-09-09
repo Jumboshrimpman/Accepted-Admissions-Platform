@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
-import { ExternalLink, ReceiptText, WalletCards } from "lucide-react";
+import { ChevronDown, ExternalLink, ReceiptText, WalletCards } from "lucide-react";
 import { Link } from "wouter";
 import { getGetFinancialsQueryKey, useGetFinancials, type AdminClientPreviewOffer, type FinancialSummary } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
@@ -22,11 +23,14 @@ export function FinancialCard({
   previewData,
   previewOffer,
   adminPreview = false,
+  offPlatformBilling = false,
 }: {
   previewData?: FinancialSummary;
   previewOffer?: AdminClientPreviewOffer;
   adminPreview?: boolean;
+  offPlatformBilling?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(!offPlatformBilling);
   const query = useGetFinancials({
     query: {
       enabled: !previewData,
@@ -53,6 +57,35 @@ export function FinancialCard({
   const hasVerifiedPayment = payments.some(
     (payment) => payment.verifiedAt || payment.status === "paid" || payment.status === "partially_paid",
   );
+  if (offPlatformBilling && !expanded) {
+    return (
+      <Card className="border-primary/15 shadow-lg shadow-primary/5" data-testid="financial-card-collapsed">
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <WalletCards className="h-5 w-5 text-primary" />
+                {adminPreview ? "SAT session payment and receipts" : "Your SAT session payment"}
+              </CardTitle>
+              <CardDescription className="mt-2">
+                Session billing is handled off-platform. Stripe receipts stay collapsed unless you need them.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => setExpanded(true)}
+              data-testid="financial-card-show-more"
+            >
+              Show payment details
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+    );
+  }
   return (
     <Card className="border-primary/15 shadow-lg shadow-primary/5">
       <CardHeader>
@@ -66,9 +99,22 @@ export function FinancialCard({
               Stripe payment pages handle card details. This portal shows only verified account records.
             </CardDescription>
           </div>
-          <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            {remainingHours} hour{remainingHours === 1 ? "" : "s"} remaining
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
+              {remainingHours} hour{remainingHours === 1 ? "" : "s"} remaining
+            </Badge>
+            {offPlatformBilling ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setExpanded(false)}
+                data-testid="financial-card-hide"
+              >
+                Hide payment details
+              </Button>
+            ) : null}
+          </div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3" data-testid="credit-balance-summary">
           <div className="rounded-xl border bg-muted/30 p-3">

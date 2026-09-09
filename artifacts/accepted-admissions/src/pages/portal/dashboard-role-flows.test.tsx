@@ -314,8 +314,11 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Complete")).toBeTruthy();
     expect(screen.getByText("Past due")).toBeTruthy();
     expect(screen.getByText("Your tutors")).toBeTruthy();
-    expect(screen.getAllByText("Eunice Chon").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Nika Raiffe").length).toBeGreaterThan(0);
+    const roster = screen.getByTestId("client-tutor-roster");
+    expect(roster.textContent).toContain("Eunice Chon");
+    expect(roster.textContent).toContain("SAT");
+    expect(roster.textContent).toContain("Nika Raiffe");
+    expect(roster.textContent).toContain("English");
     expect(screen.getByText("One plan. Twelve focused meetings.")).toBeTruthy();
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
@@ -403,6 +406,73 @@ describe("authenticated role dashboard flows", () => {
     fireEvent.click(screen.getByTestId("session-list-show-more"));
     expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
     expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
+  });
+
+  test("Your tutors still lists Eunice (SAT) and Nika (English) when course tutors are empty", () => {
+    const base = dashboardForRole("student");
+    mocks.dashboard = {
+      ...base,
+      courses: base.courses.map((course) => ({ ...course, tutors: [] })),
+      upcomingSessions: [],
+      curriculumSessions: [],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    const roster = screen.getByTestId("client-tutor-roster");
+    expect(roster.textContent).toContain("Eunice Chon");
+    expect(roster.textContent).toContain("SAT");
+    expect(roster.textContent).toContain("Nika Raiffe");
+    expect(roster.textContent).toContain("English");
+  });
+
+  test("Progress counts a session after quiz submit even when readiness is still ready", () => {
+    const base = dashboardForRole("student");
+    mocks.dashboard = {
+      ...base,
+      curriculumSessions: [
+        {
+          id: "session-sat",
+          courseId: "course-fall",
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Taito’s SAT Session with Eunice",
+          status: "published",
+          meetingUrl: "https://meet.google.com/sat-room",
+          calendarEventUrl: null,
+          tutor: { id: "eunice", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Taito Goto" },
+          readiness: "ready",
+          nextAction: "Review answers",
+          currentFocus: "SAT reasoning.",
+          preparation: { id: "prep-1", title: "October diagnostic", latestAttemptStatus: "submitted" },
+          latestResult: { analysis: { strengths: ["Command of Evidence"] } },
+        },
+        {
+          id: "session-ielts",
+          courseId: "course-fall",
+          dateTime: "2026-10-23T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          subject: "IELTS",
+          title: "Taito’s English Session with Nika",
+          status: "published",
+          meetingUrl: "https://meet.google.com/ielts-room",
+          calendarEventUrl: null,
+          tutor: { id: "nika", name: "Nika Raiffe", specialty: "English Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Taito Goto" },
+          readiness: "ready",
+          nextAction: "Take quiz",
+          currentFocus: "English communication.",
+          preparation: null,
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.getByText("1 of 2")).toBeTruthy();
   });
 
   test("viewer gets the same scoped review surface in explicit view-only mode", () => {

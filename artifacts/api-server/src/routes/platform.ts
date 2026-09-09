@@ -2905,7 +2905,15 @@ async function courseShape(courseId: string, user?: AppUser) {
       .length,
     tutors: tutorMemberships
       .filter(({ user: tutor }) => tutor.role === "tutor")
-      .map(({ user: tutor }) => tutorShape(tutor)!),
+      .map(({ user: tutor, subject }) => {
+        const shape = tutorShape(tutor)!;
+        const family = subjectFamily(subject ?? "");
+        return {
+          ...shape,
+          specialty:
+            family === "ielts" ? "English" : family === "sat" ? "SAT" : shape.specialty,
+        };
+      }),
   };
 }
 
@@ -9207,9 +9215,12 @@ async function dashboardDataForUser(user: AppUser) {
       };
     }),
   );
-  const completedSessions = scopedSessions.filter(
-    (session) => session.status === "completed",
-  ).length;
+  const completedSessions = curriculumSessions.filter((session) => {
+    if (session.readiness === "complete" || session.status === "completed") return true;
+    if (session.latestResult) return true;
+    const attempt = session.preparation?.latestAttemptStatus;
+    return attempt === "submitted" || attempt === "expired";
+  }).length;
   const scoredAttempts = attempts.filter((attempt) => attempt.score !== null);
   const analysisValues = attempts
     .map((attempt) => attempt.analysis ?? (attempt.result as Record<string, unknown> | null)?.analysis)

@@ -5,6 +5,7 @@ import {
   PORTAL_SAT_PURCHASE_HREF,
   canPurchaseOrBookSatCredits,
   canSeePortalSatNav,
+  isOffPlatformProgramClient,
   isPortalHomePath,
   portalPathname,
 } from "./portal-sat.ts";
@@ -22,6 +23,13 @@ test("Book SAT nav is student-only", () => {
   assert.equal(canSeePortalSatNav("tutor"), false);
   assert.equal(canSeePortalSatNav("administrator"), false);
   assert.equal(canSeePortalSatNav("viewer"), false);
+});
+
+test("off-platform program clients skip Stripe booking and purchase gates", () => {
+  assert.equal(isOffPlatformProgramClient(null), false);
+  assert.equal(isOffPlatformProgramClient({ selfServeSatBooking: true, twelveSessionPlan: false }), false);
+  assert.equal(isOffPlatformProgramClient({ selfServeSatBooking: false, twelveSessionPlan: false }), true);
+  assert.equal(isOffPlatformProgramClient({ selfServeSatBooking: true, twelveSessionPlan: true }), true);
 });
 
 test("Book SAT points at the homepage booking section", () => {

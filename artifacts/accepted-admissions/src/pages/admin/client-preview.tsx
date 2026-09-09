@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDashboardView } from "@/pages/portal/fall-welcome-dashboard";
 import { ClientPreviewBookingCard } from "@/pages/portal/booking-card";
+import { isOffPlatformProgramClient } from "@/lib/portal-sat";
 import { FinancialCard } from "@/pages/portal/financial-card";
 
 export default function AdminClientPreview() {
@@ -71,6 +72,7 @@ export default function AdminClientPreview() {
            previewData={preview.data.previewFinancials}
            previewOffer={preview.data.previewOffer}
            adminPreview
+           offPlatformBilling={isOffPlatformProgramClient(preview.data.credits)}
          />
          <ClientPreviewBookingCard
            previewBooking={preview.data.previewBooking}
@@ -78,6 +80,11 @@ export default function AdminClientPreview() {
            hasVerifiedPayment={preview.data.previewFinancials.payments.some(
              (payment) => Boolean(payment.verifiedAt) || payment.status === "paid" || payment.status === "partially_paid",
            )}
+           offPlatformBilling={isOffPlatformProgramClient(preview.data.credits)}
+           hasAssignedProgramSessions={
+             (preview.data.curriculumSessions?.length ?? 0) > 0 ||
+             (preview.data.upcomingSessions?.length ?? 0) > 0
+           }
          />
        </div>
       <div className="min-w-0 overflow-x-hidden rounded-3xl border-2 border-dashed border-primary/25 bg-muted/20 p-2 sm:p-4">

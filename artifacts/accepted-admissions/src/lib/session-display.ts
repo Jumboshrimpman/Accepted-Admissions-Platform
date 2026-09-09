@@ -305,7 +305,7 @@ export type ListedSession = {
   tutor?: { id?: string | null; name?: string | null } | null;
   tutorName?: string | null;
   tutorProfileId?: string | null;
-  preparation?: { id?: string; title?: string } | null;
+  preparation?: { id?: string; title?: string; latestAttemptStatus?: string | null } | null;
   latestResult?: { analysis?: unknown } | null;
   currentFocus?: string | null;
   nextAction?: string | null;
@@ -374,6 +374,16 @@ export function isUpcomingListedSession(
   if (session.readiness === "complete") return false;
   if ((session.status ?? "").trim().toLowerCase() === "completed") return false;
   return !isPastSession(session, now);
+}
+
+export function isSessionWorkComplete(
+  session: Pick<ListedSession, "readiness" | "status" | "latestResult" | "preparation">,
+): boolean {
+  if (session.readiness === "complete") return true;
+  if ((session.status ?? "").trim().toLowerCase() === "completed") return true;
+  if (session.latestResult) return true;
+  const attempt = session.preparation?.latestAttemptStatus?.trim().toLowerCase();
+  return attempt === "submitted" || attempt === "expired";
 }
 
 export function collapsedListedSessions<T extends ListedSession>(

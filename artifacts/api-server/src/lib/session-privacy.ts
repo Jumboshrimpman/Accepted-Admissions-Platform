@@ -26,6 +26,8 @@ import {
 } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { isXavierSatCapabilitySession } from "./xavier-sat-capability-session.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { reconcileTutorAssignments } from "./tutor-assignment-reconciliation.ts";
 
 function subjectFamily(subject: string): string {
   const normalized = subject.trim().toLowerCase();
@@ -217,6 +219,7 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       users.find((user) => user.email === NIKA_TUTOR_EMAIL)?.id ??
       null,
   });
+  await reconcileTutorAssignments(courseId);
 }
 
 /** Data-only assignment for current course sessions. Does not create users. */
