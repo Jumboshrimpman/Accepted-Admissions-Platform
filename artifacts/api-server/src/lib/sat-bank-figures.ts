@@ -1,7 +1,22 @@
 import { assignmentChoices, assignmentDifficulty } from "./assignment-visibility.ts";
+import {
+  figurePrimaryStudentPrompt,
+  isLetterAnswer,
+  letterMcqChoices,
+  selectStimulusFigures,
+  shouldUseFigurePrimary,
+  stripSatBankFigureComments,
+} from "./sat-bank-figure-primary.ts";
 import { quizSubject, skillLabelForBank } from "./sat-bank-skill.ts";
 
-export type BankFigure = { url?: string; path?: string; alt?: string };
+export type BankFigure = {
+  url?: string;
+  path?: string;
+  alt?: string;
+  role?: string;
+  kind?: string;
+  primary?: boolean;
+};
 
 export type LinkedRefreshCounts = {
   updated: number;
@@ -22,6 +37,9 @@ export function asBankFigures(value: unknown): BankFigure[] {
         url: typeof row.url === "string" ? row.url : undefined,
         path: typeof row.path === "string" ? row.path : undefined,
         alt: typeof row.alt === "string" ? row.alt : undefined,
+        role: typeof row.role === "string" ? row.role : undefined,
+        kind: typeof row.kind === "string" ? row.kind : undefined,
+        primary: row.primary === true,
       },
     ];
   });
@@ -85,7 +103,24 @@ export function materializedQuestionContent(bank: {
   correctAnswer: string;
   officialExplanation?: string | null;
   subject?: string | null;
+  extractGaps?: Record<string, unknown> | null;
+  tags?: string[] | null;
 }) {
+  const figures = asBankFigures(bank.figures);
+  const figurePrimary = shouldUseFigurePrimary({
+    prompt: bank.prompt,
+    stimulus: bank.stimulus,
+    choices: assignmentChoices(bank.choices) ?? [],
+    figures,
+    questionType: bank.questionType,
+    correctAnswer: bank.correctAnswer,
+    extractGaps: bank.extractGaps,
+    tags: bank.tags,
+  });
+  const stimulusFigures = figurePrimary ? selectStimulusFigures(figures) : figures;
+  const stimulus = stripSatBankFigureComments(
+    enrichStimulusWithFigures(bank.stimulus, stimulusFigures) ?? "",
+  );
   return {
     subject: quizSubject(bank.section),
     domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
@@ -95,13 +130,18 @@ export function materializedQuestionContent(bank: {
       domain: bank.domain,
       subject: bank.subject,
     }),
-    questionType: bank.questionType,
+    questionType:
+      figurePrimary && isLetterAnswer(bank.correctAnswer) ? "mcq" : bank.questionType,
     difficulty: assignmentDifficulty(bank.difficulty),
-    stimulus: enrichStimulusWithFigures(bank.stimulus, bank.figures),
-    prompt:
-      bank.prompt?.trim() ||
-      "Figure or table was not recovered from this PDF page. Open the linked source PDF.",
-    choices: assignmentChoices(bank.choices) ?? [],
+    stimulus: stimulus || null,
+    prompt: figurePrimary
+      ? figurePrimaryStudentPrompt(bank.prompt)
+      : bank.prompt?.trim() ||
+        "Figure or table was not recovered from this PDF page. Open the linked source PDF.",
+    choices:
+      figurePrimary && isLetterAnswer(bank.correctAnswer)
+        ? letterMcqChoices(assignmentChoices(bank.choices))
+        : assignmentChoices(bank.choices) ?? [],
     correctAnswer: bank.correctAnswer,
     explanation: bank.officialExplanation ?? "",
     reviewStatus: "approved" as const,

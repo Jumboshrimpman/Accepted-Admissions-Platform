@@ -51,19 +51,26 @@ import {
   studentSeesFinishedResult,
   studentSeesPredictionStep,
 } from "@/lib/student-attempt-ui";
+import {
+  displayAnswerLabel,
+  figurePrimaryChoices,
+  isFigurePrimaryQuestion,
+} from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
 
 function QuizRichText({
   text,
   className,
   imageClassName,
+  hideGarbledText,
 }: {
   text: string | null | undefined;
   className?: string;
   imageClassName?: string;
+  hideGarbledText?: boolean;
 }) {
   if (!text) return null;
-  const parts = splitQuizRichText(text);
+  const parts = splitQuizRichText(text, { hideGarbledText });
   if (parts.length === 0) return null;
   return (
     <div className={className} data-testid="quiz-rich-text">
@@ -94,8 +101,7 @@ function answerText(
   answer: string | null | undefined,
   choices: Array<{ id: string; label: string; text: string }> | undefined,
 ) {
-  if (!answer) return "Not answered";
-  return choices?.find((choice) => choice.id === answer)?.text ?? answer.toUpperCase();
+  return displayAnswerLabel(answer, choices);
 }
 
 function ResultView({ result }: { result: AttemptResult }) {
@@ -232,9 +238,19 @@ function ResultView({ result }: { result: AttemptResult }) {
                         <div>
                           <Badge variant="outline">{item.skill}</Badge>
                           {item.stimulus ? (
-                            <QuizRichText text={item.stimulus} className="mt-2 text-sm text-muted-foreground" />
+                            <QuizRichText
+                              text={item.stimulus}
+                              className="mt-2 text-sm text-muted-foreground"
+                              hideGarbledText={item.presentation === "figure_primary"}
+                            />
                           ) : null}
-                          <QuizRichText text={item.prompt} className="mt-2 font-medium" />
+                          {item.presentation === "figure_primary" && !item.prompt ? null : (
+                            <QuizRichText
+                              text={item.prompt}
+                              className="mt-2 font-medium"
+                              hideGarbledText={item.presentation === "figure_primary"}
+                            />
+                          )}
                         </div>
                       </div>
                       {item.correct ? (
@@ -342,13 +358,48 @@ function AnswerChoices({
   tone?: "default" | "ink";
 }) {
   const ink = tone === "ink";
-  if (question.choices && question.choices.length > 0) {
+  const figurePrimary = isFigurePrimaryQuestion(question);
+  const choices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
+  if (figurePrimary) {
+    return (
+      <div className="space-y-3" data-testid="figure-primary-choices">
+        <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
+          {ink ? "Choose together" : "Select A, B, C, or D"}
+        </h3>
+        <div className="grid grid-cols-4 gap-3">
+          {choices.map((choice) => {
+            const isSelected = selected === choice.id;
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => onSelect(choice.id)}
+                className={`flex h-14 items-center justify-center rounded-xl border-2 text-lg font-semibold transition-all ${
+                  ink
+                    ? isSelected
+                      ? "border-white bg-white/15 text-white shadow-sm"
+                      : "border-white/25 text-white hover:border-white/60 hover:bg-white/10"
+                    : isSelected
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border hover:border-primary/40 hover:bg-muted/50"
+                } ${disabled ? "cursor-default" : ""}`}
+              >
+                {choice.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  if (choices && choices.length > 0) {
     return (
       <div className="space-y-3" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
           {ink ? "Choose together" : "Select your answer"}
         </h3>
-        {question.choices.map((choice) => {
+        {choices.map((choice) => {
           const isSelected = selected === choice.id;
           return (
             <button
@@ -819,9 +870,16 @@ export default function PortalAssignment() {
               text={question.stimulus}
               className="mt-5 text-white/90"
               imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
+              hideGarbledText={isFigurePrimaryQuestion(question)}
             />
           ) : null}
-          <QuizRichText text={question.prompt} className="mt-5 text-xl font-medium leading-relaxed" />
+          {isFigurePrimaryQuestion(question) && !question.prompt ? null : (
+            <QuizRichText
+              text={question.prompt}
+              className="mt-5 text-xl font-medium leading-relaxed"
+              hideGarbledText={isFigurePrimaryQuestion(question)}
+            />
+          )}
           <div className="mt-6">
             {showPrediction ? (
               <p data-testid="prediction-step">Prediction first</p>
@@ -948,18 +1006,34 @@ export default function PortalAssignment() {
           )}
         </div>
       </div>
-      <div className="grid gap-8 pt-4 md:grid-cols-2">
+      <div
+        className={
+          isFigurePrimaryQuestion(question)
+            ? "space-y-6 pt-4"
+            : "grid gap-8 pt-4 md:grid-cols-2"
+        }
+        data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : undefined}
+      >
         <div className="space-y-6">
           {question.stimulus && (
             <Card className="border-0 bg-muted/30 shadow-none">
               <CardContent className="p-6">
-                <QuizRichText text={question.stimulus} />
+                <QuizRichText
+                  text={question.stimulus}
+                  hideGarbledText={isFigurePrimaryQuestion(question)}
+                />
               </CardContent>
             </Card>
           )}
-          <QuizRichText text={question.prompt} className="text-lg font-medium leading-relaxed" />
+          {isFigurePrimaryQuestion(question) && !question.prompt ? null : (
+            <QuizRichText
+              text={question.prompt}
+              className="text-lg font-medium leading-relaxed"
+              hideGarbledText={isFigurePrimaryQuestion(question)}
+            />
+          )}
         </div>
-        <div />
+        {isFigurePrimaryQuestion(question) ? null : <div />}
       </div>
       <div className="-mt-4">
         {showPrediction ? (

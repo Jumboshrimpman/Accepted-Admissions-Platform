@@ -25,4 +25,5 @@ export interface AttemptResultItem {
   /** @nullable */
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
+  presentation?: 'text' | 'figure_primary';
 }

@@ -24,3 +24,11 @@ test("allows same-origin /media figure paths", () => {
   const parts = splitQuizRichText("![Chart](/media/sat-bank/pack/a.png)");
   assert.deepEqual(parts, [{ type: "image", alt: "Chart", src: "/media/sat-bank/pack/a.png" }]);
 });
+
+test("never surfaces sat-bank-figures HTML comments and can hide garbled OCR", () => {
+  const parts = splitQuizRichText(
+    `<!-- sat-bank-figures -->\n![Graph](${src})\n<!-- /sat-bank-figures -->\nX 0-=8~ - <:...4--=2_`,
+    { hideGarbledText: true },
+  );
+  assert.deepEqual(parts, [{ type: "image", alt: "Graph", src }]);
+});

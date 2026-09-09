@@ -7,6 +7,7 @@
  */
 import type { AssignmentQuestionChoicesItem } from './assignmentQuestionChoicesItem';
 import type { AssignmentQuestionDifficulty } from './assignmentQuestionDifficulty';
+import type { AssignmentQuestionPresentation } from './assignmentQuestionPresentation';
 
 export interface AssignmentQuestion {
   id: string;
@@ -20,4 +21,7 @@ export interface AssignmentQuestion {
   skill: string;
   difficulty: AssignmentQuestionDifficulty;
   predictionFirst: boolean;
+  correctAnswer?: string;
+  explanation?: string;
+  presentation?: AssignmentQuestionPresentation;
 }

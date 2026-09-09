@@ -81,6 +81,7 @@ export * from './assignmentDetail';
 export * from './assignmentQuestion';
 export * from './assignmentQuestionChoicesItem';
 export * from './assignmentQuestionDifficulty';
+export * from './assignmentQuestionPresentation';
 export * from './assignmentQuestionUpdate';
 export * from './assignmentSummary';
 export * from './assignmentSummaryDeliveryPhase';

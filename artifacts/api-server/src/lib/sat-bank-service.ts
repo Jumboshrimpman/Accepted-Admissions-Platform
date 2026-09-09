@@ -412,6 +412,7 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
     choices: bank.choices,
     correctAnswer: bank.correctAnswer,
     officialExplanation: bank.officialExplanation,
+    extractGaps: (bank.extractGaps ?? {}) as Record<string, unknown>,
   });
   if (bank.linkedQuestionId) {
     const [linked] = await db
@@ -813,6 +814,7 @@ export function bankQuestionShape(
       extractGaps: (row.extractGaps ?? {}) as {
         missingPrompt?: boolean;
         missingChoices?: boolean;
+        figurePrimary?: boolean;
       },
     }),
     hasOfficialExplanation: Boolean(row.officialExplanation.trim()),

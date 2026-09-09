@@ -103,6 +103,54 @@ test("assignment questions hide extract skill placeholders behind the section la
   );
 });
 
+test("figure-primary quiz items hide garbled stems and expose A–D letter choices", () => {
+  const shaped = assignmentQuestionShape(
+    {
+      id: "q-fig-1",
+      subject: "SAT Math",
+      questionType: "spr",
+      prompt: "<!-- sat-bank-figures -->\nV = i,.r3 V =3£wh",
+      stimulus:
+        "![Question region](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png)",
+      choices: [],
+      skill: "SAT Math",
+      difficulty: "medium",
+      correctAnswer: "C",
+    },
+    { position: 0, predictionFirst: false },
+  );
+  assert.equal(shaped.presentation, "figure_primary");
+  assert.equal(shaped.questionType, "mcq");
+  assert.equal(shaped.prompt, "");
+  assert.equal(shaped.choices?.length, 4);
+  assert.deepEqual(
+    shaped.choices?.map((choice) => choice.label),
+    ["A", "B", "C", "D"],
+  );
+  assert.ok(shaped.choices?.every((choice) => choice.text === ""));
+  assert.equal("correctAnswer" in shaped, false);
+  const keyed = assignmentQuestionShape(
+    {
+      id: "q-fig-1",
+      subject: "SAT Math",
+      questionType: "spr",
+      prompt: "<!-- sat-bank-figures -->\nV = i,.r3 V =3£wh",
+      stimulus:
+        "![Question region](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png)",
+      choices: [],
+      skill: "SAT Math",
+      difficulty: "medium",
+      correctAnswer: "C",
+      explanation: "Choice C is correct.",
+    },
+    { position: 0, predictionFirst: false },
+    { includeKeys: true },
+  );
+  assert.equal(keyed.presentation, "figure_primary");
+  assert.equal(keyed.correctAnswer, "C");
+  assert.equal(keyed.explanation, "Choice C is correct.");
+});
+
 test("dedupe keeps the published full-length diagnostic with work, not an empty extra", () => {
   assert.equal(
     isFullLengthDiagnosticAssignment({

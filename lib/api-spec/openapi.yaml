@@ -3223,6 +3223,7 @@ components:
         predictionFirst: { type: boolean }
         correctAnswer: { type: string }
         explanation: { type: string }
+        presentation: { type: string, enum: [text, figure_primary] }
     AssignmentQuestionUpdate:
       type: object
       properties:
@@ -3359,6 +3360,7 @@ components:
               id: { type: string }
               label: { type: string }
               text: { type: string }
+        presentation: { type: string, enum: [text, figure_primary] }
     AttemptAnalysis:
       type: object
       required: [source, label, strengths, weaknesses, mistakePatterns, nextFocus, feedback]

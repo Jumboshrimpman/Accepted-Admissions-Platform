@@ -106,6 +106,28 @@ test("linked refresh classifies update vs insert vs skip and tallies counts", ()
   assert.deepEqual(counts, { updated: 2, skipped: 2, errors: 1 });
 });
 
+test("figure-primary materialize uses the composite crop and letter choices", () => {
+  const content = materializedQuestionContent({
+    section: "math",
+    questionType: "spr",
+    stimulus: "<!-- sat-bank-figures -->",
+    figures: [
+      { url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p01-draw1.png", alt: "Sphere" },
+      { url: figureUrl, alt: "Question region including A–D", role: "question_region" },
+    ],
+    prompt: "V = i,.r3 V =3£wh V=½nr2h",
+    choices: [],
+    correctAnswer: "B",
+    officialExplanation: "Choice B is correct because the cone volume formula applies.",
+    extractGaps: { figurePrimary: true },
+  });
+  assert.equal(content.questionType, "mcq");
+  assert.equal(content.prompt, "");
+  assert.equal(content.stimulus, `![Question region including A–D](${figureUrl})`);
+  assert.deepEqual(content.choices.map((choice) => choice.label), ["A", "B", "C", "D"]);
+  assert.equal(content.explanation, "Choice B is correct because the cone volume formula applies.");
+});
+
 test("figure markdown line uses alt text when present", () => {
   assert.equal(
     figureMarkdownLine({ url: figureUrl, alt: "Question figure region page 10" }),

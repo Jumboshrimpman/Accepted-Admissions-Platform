@@ -1930,6 +1930,7 @@ export interface AssignmentQuestion {
   predictionFirst: boolean;
   correctAnswer?: string;
   explanation?: string;
+  presentation?: 'text' | 'figure_primary';
 }
 
 export type AdaptiveQuestion = AssignmentQuestion & {
@@ -2145,6 +2146,7 @@ export interface AttemptResultItem {
   /** @nullable */
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
+  presentation?: 'text' | 'figure_primary';
 }
 
 export type AttemptResultReviewStatus = typeof AttemptResultReviewStatus[keyof typeof AttemptResultReviewStatus];
