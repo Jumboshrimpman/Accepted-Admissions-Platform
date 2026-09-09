@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   displaySkill,
+  formatAnswer,
+  mergeRetryFeedback,
   missPickerLabel,
+  retryDetailsExpanded,
   retryOutcomeHeading,
   retryRecordedMessage,
   retrySourceLabel,
@@ -49,4 +52,55 @@ test("retry copy uses Correct/Incorrect instead of bank jargon", () => {
     }),
     "Incorrect. The correct answer is B. However. However signals contrast.",
   );
+});
+
+const choices = [
+  { id: "a", label: "A", text: "Meanwhile" },
+  { id: "b", label: "B", text: "However" },
+  { id: "c", label: "C", text: "For example" },
+];
+
+test("formatAnswer matches id, label, letter, and choice text", () => {
+  assert.equal(formatAnswer("c", choices), "C. For example");
+  assert.equal(formatAnswer("C", choices), "C. For example");
+  assert.equal(formatAnswer("C.", choices), "C. For example");
+  assert.equal(formatAnswer("For example", choices), "C. For example");
+  assert.equal(formatAnswer("C. For example", choices), "C. For example");
+  assert.equal(formatAnswer("9; 9.0"), "9; 9.0");
+  assert.equal(formatAnswer(""), "");
+  assert.equal(formatAnswer(null), "");
+});
+
+test("mergeRetryFeedback keeps a just-graded key when the lesson refetch omits it", () => {
+  const pending = {
+    outcome: "pending" as const,
+    correct: null,
+    studentAnswer: null,
+    correctAnswer: null,
+    explanation: null,
+  };
+  const merged = mergeRetryFeedback(pending, {
+    outcome: "still_struggling",
+    correct: false,
+    studentAnswer: "a",
+    correctAnswer: "C",
+    explanation: "However signals contrast.",
+  });
+  assert.equal(merged.outcome, "still_struggling");
+  assert.equal(merged.correctAnswer, "C");
+  assert.equal(merged.explanation, "However signals contrast.");
+  assert.equal(
+    mergeRetryFeedback(
+      { ...merged, correctAnswer: "", explanation: null },
+      { correctAnswer: "C", explanation: "kept" },
+    ).correctAnswer,
+    "C",
+  );
+});
+
+test("graded retries stay collapsed until expanded", () => {
+  assert.equal(retryDetailsExpanded({ outcome: "pending" }), true);
+  assert.equal(retryDetailsExpanded({ outcome: "still_struggling" }), false);
+  assert.equal(retryDetailsExpanded({ outcome: "mastered", expanded: true }), true);
+  assert.equal(retryDetailsExpanded({ outcome: "still_struggling", expanded: false }), false);
 });

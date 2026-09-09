@@ -35,8 +35,10 @@ import {
 import { generateQuestionsWithProvider } from "./question-generation.ts";
 import {
   decideRetrySource,
+  firstPresentText,
   lessonRetryReveal,
   retryOutcomeFromAnswer,
+  retryOutcomePayload,
   studentRetryShape,
 } from "./sat-bank-retry.ts";
 import {
@@ -53,6 +55,7 @@ import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-wea
 import { isTaitoFirstSatSession } from "./session-schedule.ts";
 import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 import {
+  assignmentChoices,
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
@@ -953,6 +956,18 @@ export async function getSessionLesson(sessionId: string) {
       ? []
       : await db.select().from(questionsTable).where(inArray(questionsTable.id, retryQuestionIds));
   const retryQuestionById = new Map(retryQuestions.map((row) => [row.id, row]));
+  const retryBankIds = [
+    ...new Set(
+      retries
+        .map((row) => row.retryBankQuestionId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const retryBanks =
+    retryBankIds.length === 0
+      ? []
+      : await db.select().from(bankQuestionsTable).where(inArray(bankQuestionsTable.id, retryBankIds));
+  const retryBankById = new Map(retryBanks.map((row) => [row.id, row]));
   const scoreReporting =
     plan?.homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
   return {
@@ -1001,12 +1016,17 @@ export async function getSessionLesson(sessionId: string) {
       const question = row.retryQuestionId
         ? retryQuestionById.get(row.retryQuestionId)
         : undefined;
+      const bank = row.retryBankQuestionId
+        ? retryBankById.get(row.retryBankQuestionId)
+        : undefined;
+      const choices =
+        assignmentChoices(question?.choices) ?? assignmentChoices(bank?.choices) ?? [];
       const safe = question
         ? studentRetryShape({
             id: question.id,
             prompt: question.prompt,
             stimulus: question.stimulus,
-            choices: asChoices(question.choices),
+            choices,
             skill: skillLabelForBank({
               skill: question.skill,
               domain: question.domain,
@@ -1017,12 +1037,28 @@ export async function getSessionLesson(sessionId: string) {
             correctAnswer: question.correctAnswer,
             officialExplanation: question.explanation,
           })
-        : null;
+        : bank
+          ? studentRetryShape({
+              id: bank.id,
+              prompt: bank.prompt,
+              stimulus: bank.stimulus,
+              choices,
+              skill: skillLabelForBank({
+                skill: bank.skill,
+                domain: bank.domain,
+                section: bank.section,
+              }),
+              domain: bank.domain,
+              difficulty: bank.difficulty,
+              correctAnswer: bank.correctAnswer,
+              officialExplanation: bank.officialExplanation,
+            })
+          : null;
       const reveal = lessonRetryReveal({
         outcome: row.outcome,
         studentAnswer: row.studentAnswer,
-        correctAnswer: question?.correctAnswer,
-        explanation: question?.explanation,
+        correctAnswer: firstPresentText(question?.correctAnswer, bank?.correctAnswer),
+        explanation: firstPresentText(question?.explanation, bank?.officialExplanation),
       });
       return {
         id: row.id,
@@ -1292,9 +1328,18 @@ export async function recordRetryOutcome(input: {
   if (!question) {
     throw Object.assign(new Error("Retry question not found"), { status: 404 });
   }
+  const [bank] = retry.retryBankQuestionId
+    ? await db
+        .select()
+        .from(bankQuestionsTable)
+        .where(eq(bankQuestionsTable.id, retry.retryBankQuestionId))
+        .limit(1)
+    : [];
+  const correctAnswer =
+    firstPresentText(question.correctAnswer, bank?.correctAnswer) ?? question.correctAnswer;
   const graded = retryOutcomeFromAnswer({
     studentAnswer: input.studentAnswer,
-    correctAnswer: question.correctAnswer,
+    correctAnswer,
   });
   const [updated] = await db
     .update(remediationRetriesTable)
@@ -1306,13 +1351,13 @@ export async function recordRetryOutcome(input: {
     })
     .where(eq(remediationRetriesTable.id, retry.id))
     .returning();
-  return {
+  return retryOutcomePayload({
     retryId: updated!.id,
     correct: graded.correct,
     outcome: graded.outcome,
-    correctAnswer: question.correctAnswer,
-    explanation: question.explanation,
-  };
+    question,
+    bank,
+  });
 }
 
 async function deleteAttemptsByIds(attemptIds: string[]): Promise<number> {

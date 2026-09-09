@@ -64,3 +64,99 @@ export function retryRecordedMessage(input: {
   if (answer) return `Incorrect. The correct answer is ${answer}.`;
   return "Incorrect.";
 }
+
+export type AnswerChoice = { id: string; label: string; text: string };
+
+function normalizeAnswerToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^[(\[]/, "")
+    .replace(/[.)\]]+$/, "")
+    .trim();
+}
+
+/** Resolve A/B/C, a/b/c, choice id, or full choice text to the matching option. */
+export function matchAnswerChoice(
+  answer: string | null | undefined,
+  choices?: Array<AnswerChoice> | null,
+): AnswerChoice | undefined {
+  const raw = answer?.trim() ?? "";
+  if (!raw || !choices?.length) return undefined;
+  const needle = raw.toLowerCase();
+  const token = normalizeAnswerToken(raw);
+  return choices.find((choice) => {
+    const id = choice.id.trim().toLowerCase();
+    const label = choice.label.trim().toLowerCase();
+    const text = choice.text.trim().toLowerCase();
+    return (
+      id === needle ||
+      label === needle ||
+      text === needle ||
+      id === token ||
+      label === token ||
+      `${label}. ${text}` === needle ||
+      `${id}. ${text}` === needle ||
+      `${label}.${text}` === needle.replace(/\s+/g, "")
+    );
+  });
+}
+
+/** Format a stored answer (id, label, letter, or text) for display. */
+export function formatAnswer(
+  answer: string | null | undefined,
+  choices?: Array<AnswerChoice> | null,
+): string {
+  const raw = answer?.trim() ?? "";
+  const match = matchAnswerChoice(raw, choices);
+  if (match) {
+    const label = match.label.trim();
+    const text = match.text.trim();
+    if (label && text) return `${label}. ${text}`;
+    return text || label || raw;
+  }
+  return raw;
+}
+
+export function firstPresentText(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
+export type RetryFeedbackFields = {
+  outcome?: string | null;
+  correct?: boolean | null;
+  studentAnswer?: string | null;
+  correctAnswer?: string | null;
+  explanation?: string | null;
+};
+
+/** Keep a just-graded result on the card when the refetch still omits reveal fields. */
+export function mergeRetryFeedback<T extends RetryFeedbackFields>(
+  retry: T,
+  override?: RetryFeedbackFields | null,
+): T {
+  if (!override) return retry;
+  const pending = !retry.outcome || retry.outcome === "pending";
+  return {
+    ...retry,
+    outcome: pending ? override.outcome ?? retry.outcome : retry.outcome,
+    correct: pending ? override.correct ?? retry.correct : retry.correct,
+    studentAnswer: firstPresentText(retry.studentAnswer, override.studentAnswer),
+    correctAnswer: firstPresentText(retry.correctAnswer, override.correctAnswer),
+    explanation: firstPresentText(retry.explanation, override.explanation),
+  };
+}
+
+/** Pending retries stay open; graded ones collapse unless the tutor expands them. */
+export function retryDetailsExpanded(input: {
+  outcome?: string | null;
+  expanded?: boolean | null;
+}): boolean {
+  if (!input.outcome || input.outcome === "pending") return true;
+  return input.expanded === true;
+}

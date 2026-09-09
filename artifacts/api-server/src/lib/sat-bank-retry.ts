@@ -139,6 +139,15 @@ export function studentRetryShape<T extends { correctAnswer?: string; officialEx
   return safe;
 }
 
+export function firstPresentText(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
 /** Reveal the key and explanation only after the similar problem is graded. */
 export function lessonRetryReveal(input: {
   outcome: string;
@@ -154,8 +163,31 @@ export function lessonRetryReveal(input: {
     return { studentAnswer: null, correctAnswer: null, explanation: null };
   }
   return {
-    studentAnswer: input.studentAnswer?.trim() ? input.studentAnswer : null,
-    correctAnswer: input.correctAnswer?.trim() ? input.correctAnswer : null,
-    explanation: input.explanation?.trim() ? input.explanation : null,
+    studentAnswer: firstPresentText(input.studentAnswer),
+    correctAnswer: firstPresentText(input.correctAnswer),
+    explanation: firstPresentText(input.explanation),
+  };
+}
+
+export function retryOutcomePayload(input: {
+  retryId: string;
+  correct: boolean;
+  outcome: "mastered" | "still_struggling";
+  question?: { correctAnswer?: string | null; explanation?: string | null } | null;
+  bank?: { correctAnswer?: string | null; officialExplanation?: string | null } | null;
+}): {
+  retryId: string;
+  correct: boolean;
+  outcome: "mastered" | "still_struggling";
+  correctAnswer: string;
+  explanation: string;
+} {
+  return {
+    retryId: input.retryId,
+    correct: input.correct,
+    outcome: input.outcome,
+    correctAnswer: firstPresentText(input.question?.correctAnswer, input.bank?.correctAnswer) ?? "",
+    explanation:
+      firstPresentText(input.question?.explanation, input.bank?.officialExplanation) ?? "",
   };
 }

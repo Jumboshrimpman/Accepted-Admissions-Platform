@@ -11,6 +11,8 @@ export interface RetryOutcome {
   retryId: string;
   correct: boolean;
   outcome: RetryOutcomeOutcome;
-  correctAnswer?: string;
-  explanation?: string;
+  /** @nullable */
+  correctAnswer?: string | null;
+  /** @nullable */
+  explanation?: string | null;
 }
