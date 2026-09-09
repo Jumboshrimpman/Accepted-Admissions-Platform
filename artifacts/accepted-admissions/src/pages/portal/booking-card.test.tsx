@@ -331,4 +331,39 @@ describe("client availability calendar", () => {
       expect.any(Object),
     );
   });
+
+  test("hides a cancelled Sep 7 Xavier session from Your booked sessions", () => {
+    mocks.sessionsQuery.data = [
+      {
+        id: "e66d31e8-b953-4a0c-a067-f30f142b4461",
+        title: "SAT capability test — Xavier",
+        dateTime: "2026-09-07T20:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "cancelled",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+      {
+        id: "session-live",
+        title: "Upcoming SAT session",
+        dateTime: "2026-10-09T16:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+
+    expect(screen.getByText("Your booked sessions")).toBeTruthy();
+    expect(screen.getByText("Upcoming SAT session")).toBeTruthy();
+    expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
+  });
 });

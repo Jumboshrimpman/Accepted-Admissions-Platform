@@ -114,6 +114,7 @@ import {
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,
+  liveClientBookingSessions,
   publicSessionShape,
   reconcileTaitoSessions,
   visibleSessionsForUser,
@@ -2866,9 +2867,16 @@ async function courseShape(courseId: string, user?: AppUser) {
     .select()
     .from(sessionsTable)
     .where(eq(sessionsTable.courseId, course.id));
-  const sessionsForUser = user
-    ? await visibleSessionsForUser(user, course.id)
-    : courseSessions;
+  const sessionsForUser = (
+    user
+      ? await visibleSessionsForUser(user, course.id)
+      : courseSessions
+  ).filter(
+    (session) =>
+      !user ||
+      !hidesCancelledSessions(user.role) ||
+      isStudentCurriculumSession(session),
+  );
   const tutorMemberships =
     user?.role === "student" || user?.role === "viewer" || user?.role === "tutor"
       ? await courseForTutorAssignments(
@@ -5689,6 +5697,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       subject: sessionsTable.subject,
       title: sessionsTable.title,
       durationMinutes: sessionsTable.durationMinutes,
+      status: sessionsTable.status,
       bookingStatus: sessionsTable.bookingStatus,
       providerEventUrl: sessionsTable.providerEventUrl,
       cancellationReason: sessionsTable.cancellationReason,
@@ -5698,7 +5707,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
     .where(eq(sessionsTable.clientUserId, subjectUserId))
     .orderBy(asc(sessionsTable.dateTime));
   res.json(
-    sessions.map((session) => ({
+    liveClientBookingSessions(sessions).map((session) => ({
       id: session.id,
       courseId: session.courseId,
       tutorProfileId: session.tutorProfileId,
@@ -9411,7 +9420,8 @@ router.get(
         .select()
         .from(sessionsTable)
         .where(eq(sessionsTable.clientUserId, client.id))
-        .orderBy(asc(sessionsTable.dateTime)),
+        .orderBy(asc(sessionsTable.dateTime))
+        .then((rows) => liveClientBookingSessions(rows)),
       financialSummary(client.id),
     ]);
     let previewBooking: {

@@ -41,8 +41,13 @@ export function isUnfinishedHomeworkClientCopy(value: string | null | undefined)
   );
 }
 
-export function isLiveListedSession(session: { bookingStatus?: string | null }): boolean {
-  return session.bookingStatus !== "cancelled";
+export function isLiveListedSession(session: {
+  bookingStatus?: string | null;
+  status?: string | null;
+}): boolean {
+  const booking = session.bookingStatus?.trim().toLowerCase() ?? "";
+  if (booking === "cancelled" || booking === "canceled") return false;
+  return (session.status ?? "").trim().toLowerCase() !== "archived";
 }
 
 function looksPreformatted(text: string): boolean {

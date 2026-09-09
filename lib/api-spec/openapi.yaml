@@ -2910,7 +2910,7 @@ components:
           items: { $ref: "#/components/schemas/Tutor" }
     Session:
       type: object
-      required: [id, courseId, dateTime, timezone, subject, title, status, durationMinutes]
+      required: [id, courseId, dateTime, timezone, subject, title, status, durationMinutes, bookingStatus]
       properties:
         id: { type: string }
         courseId: { type: string }

@@ -384,6 +384,7 @@ export {
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,
+  liveClientBookingSessions,
 } from "./session-listing.ts";
 
 export function publicSessionShape(

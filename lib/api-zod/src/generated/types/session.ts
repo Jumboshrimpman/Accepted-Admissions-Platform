@@ -26,5 +26,5 @@ export interface Session {
   student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;
-  bookingStatus?: string;
+  bookingStatus: string;
 }

@@ -129,6 +129,36 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
   }
 });
 
+test("cancelled meetings drop off student and tutor dashboard lists", async () => {
+  const fixture = await createDashboardRoleFixture();
+  try {
+    await db
+      .update(sessionsTable)
+      .set({ bookingStatus: "cancelled" })
+      .where(eq(sessionsTable.id, fixture.sessionIds.studentSat));
+    const [studentSessions, satTutorSessions, adminSessions] = await Promise.all([
+      dashboardSessionsForUser(fixture.student),
+      dashboardSessionsForUser(fixture.satTutor),
+      dashboardSessionsForUser(fixture.administrator),
+    ]);
+    assert.deepEqual(
+      studentSessions.map((session) => session.id),
+      [fixture.sessionIds.studentEnglish],
+    );
+    assert.deepEqual(
+      satTutorSessions.map((session) => session.id),
+      [],
+    );
+    assert.equal(
+      adminSessions.some((session) => session.id === fixture.sessionIds.studentSat),
+      true,
+      "admin history may still include cancelled meetings",
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("client preview lookup is administrator-only and limited to student accounts", async () => {
   const fixture = await createDashboardRoleFixture();
   try {

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { isLiveListedSession } from "@/lib/quiz-content";
 import {
   canCancelOrRescheduleSession,
   formatSessionDateTime,
@@ -90,7 +91,7 @@ export function BookingCard() {
   const tutorsQuery = useListBookingTutors();
   const sessionsQuery = useListBookingSessions();
   const tutors = tutorsQuery.data ?? [];
-  const sessions = sessionsQuery.data ?? [];
+  const sessions = (sessionsQuery.data ?? []).filter(isLiveListedSession);
   const activeSession = sessions.find((session) => session.id === reschedulingSessionId);
   const selectedTutor =
     tutors.find((tutor) => tutor.id === selectedTutorId) ??
@@ -496,12 +497,11 @@ export function BookingCard() {
           <h3 className="font-semibold">Your booked sessions</h3>
           {sessionsQuery.isLoading ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading sessions…</p>
-          ) : sessions.filter((session) => session.bookingStatus !== "cancelled").length === 0 ? (
+          ) : sessions.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">No prepaid sessions reserved yet.</p>
           ) : (
             <div className="mt-3 space-y-3">
               {sessions
-                .filter((session) => session.bookingStatus !== "cancelled")
                 .map((session) => (
                   <div key={session.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -552,7 +552,7 @@ export function BookingCard() {
                 ))}
             </div>
           )}
-          {sessions.some((session) => session.bookingStatus === "cancelled") && (
+          {sessionsQuery.data?.some((session) => !isLiveListedSession(session)) && (
             <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Cancellations at least 24 hours ahead restore the prepaid credit.
             </p>
@@ -596,9 +596,8 @@ export function ClientPreviewBookingCard({
     }
   }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
 
-  const hasBookedSession = previewBooking.sessions.some(
-    (session) => session.bookingStatus !== "cancelled",
-  );
+  const previewSessions = previewBooking.sessions.filter(isLiveListedSession);
+  const hasBookedSession = previewSessions.length > 0;
   const bookingState = !hasVerifiedPayment
     ? "unpaid"
     : hasBookedSession
@@ -733,11 +732,11 @@ export function ClientPreviewBookingCard({
 
         <div className="border-t pt-5">
           <h3 className="font-semibold">Booked sessions</h3>
-          {previewBooking.sessions.length === 0 ? (
+          {previewSessions.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">No prepaid sessions reserved yet.</p>
           ) : (
             <div className="mt-3 space-y-3">
-              {previewBooking.sessions.map((session) => (
+              {previewSessions.map((session) => (
                 <div key={session.id} className="rounded-xl border p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>

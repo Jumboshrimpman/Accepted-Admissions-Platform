@@ -79,6 +79,8 @@ test("hides unfinished-homework banners and cancelled session cards", () => {
     true,
   );
   assert.equal(isLiveListedSession({ bookingStatus: "cancelled" }), false);
+  assert.equal(isLiveListedSession({ bookingStatus: "Canceled" }), false);
+  assert.equal(isLiveListedSession({ status: "archived" }), false);
   assert.equal(isLiveListedSession({ bookingStatus: "confirmed" }), true);
   assert.equal(isLiveListedSession({}), true);
 });

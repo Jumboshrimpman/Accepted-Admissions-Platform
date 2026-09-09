@@ -119,7 +119,9 @@ describe("administrator client preview", () => {
     expect(screen.getByRole("button", { name: "Checkout disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/Google Calendar is disconnected/)).toBeTruthy();
-    expect(screen.getByText("Cancelled")).toBeTruthy();
+    expect(screen.queryByText("Cancelled")).toBeNull();
+    expect(screen.queryByText("Taito’s SAT Session with Xavier")).toBeNull();
+    expect(screen.getByText("No prepaid sessions reserved yet.")).toBeTruthy();
     expect(screen.queryByText(/\$65/)).toBeNull();
   });
 });

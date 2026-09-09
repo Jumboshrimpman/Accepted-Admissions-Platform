@@ -6,19 +6,42 @@ import {
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,
+  liveClientBookingSessions,
 } from "./session-listing.ts";
 
 test("cancelled bookings are excluded from student and tutor lists", () => {
   assert.equal(isCancelledBooking({ bookingStatus: "cancelled" }), true);
+  assert.equal(isCancelledBooking({ bookingStatus: "Canceled" }), true);
   assert.equal(isCancelledBooking({ bookingStatus: "confirmed" }), false);
   assert.equal(isCancelledBooking({ bookingStatus: "rescheduled" }), false);
   assert.equal(isStudentCurriculumSession({ bookingStatus: "cancelled", status: "published" }), false);
+  assert.equal(isStudentCurriculumSession({ bookingStatus: "confirmed", status: "archived" }), false);
   assert.equal(isStudentCurriculumSession({ bookingStatus: "confirmed", status: "completed" }), true);
   assert.equal(isStudentCurriculumSession({ bookingStatus: "confirmed", status: "published" }), true);
   assert.equal(hidesCancelledSessions("student"), true);
   assert.equal(hidesCancelledSessions("tutor"), true);
   assert.equal(hidesCancelledSessions("viewer"), true);
   assert.equal(hidesCancelledSessions("administrator"), false);
+});
+
+test("client booked-session lists drop the cancelled Sep 7 Xavier meeting", () => {
+  const live = {
+    id: "live",
+    title: "Michelle’s SAT Session with Xavier",
+    bookingStatus: "confirmed",
+    status: "published",
+  };
+  const cancelledXavier = {
+    id: "e66d31e8-b953-4a0c-a067-f30f142b4461",
+    title: "SAT capability test — Xavier",
+    dateTime: "2026-09-07T20:00:00.000Z",
+    bookingStatus: "cancelled",
+    status: "published",
+  };
+  assert.deepEqual(
+    liveClientBookingSessions([live, cancelledXavier]).map((session) => session.id),
+    ["live"],
+  );
 });
 
 test("student curriculum hides homework still attached to cancelled samapostgrad sessions", () => {

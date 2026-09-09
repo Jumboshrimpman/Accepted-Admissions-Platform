@@ -40,12 +40,12 @@ const mocks = vi.hoisted(() => ({
         {
           id: "sat-cancelled",
           subject: "SAT",
-          title: "Cancelled SAT Session",
-          dateTime: "2026-10-09T12:00:00.000Z",
-          timezone: "Asia/Tokyo",
+          title: "SAT capability test — Xavier",
+          dateTime: "2026-09-07T20:00:00.000Z",
+          timezone: "America/New_York",
           durationMinutes: 60,
           bookingStatus: "cancelled",
-          tutor: { name: "Eunice Chon" },
+          tutor: { name: "Xavier Morales" },
         },
       ],
     },
@@ -149,6 +149,7 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-upcoming-sat-tokyo").textContent).toMatch(/9:00–10:00 PM JST/);
     expect(screen.queryByTestId("portal-sat-upcoming-sat-cancelled")).toBeNull();
     expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
+    expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
     expect(screen.queryByText(/Finance/i)).toBeNull();
   });
 

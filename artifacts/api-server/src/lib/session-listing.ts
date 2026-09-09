@@ -2,13 +2,22 @@
 export function isCancelledBooking(
   session: { bookingStatus?: string | null },
 ): boolean {
-  return session.bookingStatus === "cancelled";
+  const status = session.bookingStatus?.trim().toLowerCase() ?? "";
+  return status === "cancelled" || status === "canceled";
 }
 
 export function isStudentCurriculumSession(
   session: { bookingStatus?: string | null; status?: string | null },
 ): boolean {
-  return !isCancelledBooking(session);
+  if (isCancelledBooking(session)) return false;
+  return (session.status ?? "").trim().toLowerCase() !== "archived";
+}
+
+/** Client booking lists ("Your booked sessions") never return cancelled or archived rows. */
+export function liveClientBookingSessions<T extends { bookingStatus?: string | null; status?: string | null }>(
+  sessions: readonly T[],
+): T[] {
+  return sessions.filter((session) => isStudentCurriculumSession(session));
 }
 
 /** Student, parent, and tutor lists hide cancelled bookings. Admin history may keep them. */

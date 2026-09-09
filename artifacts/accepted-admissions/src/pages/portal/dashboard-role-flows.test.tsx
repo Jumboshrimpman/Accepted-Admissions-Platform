@@ -555,11 +555,11 @@ describe("authenticated role dashboard flows", () => {
         {
           id: "e66d31e8-b953-4a0c-a067-f30f142b4461",
           courseId: "course-fall",
-          dateTime: "2026-09-08T16:00:00.000Z",
+          dateTime: "2026-09-07T20:00:00.000Z",
           timezone: "America/New_York",
           durationMinutes: 60,
           subject: "SAT",
-          title: "Cancelled SAT Session",
+          title: "SAT capability test — Xavier",
           status: "published",
           bookingStatus: "cancelled",
           meetingUrl: null,
@@ -578,6 +578,8 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Session roadmap")).toBeTruthy();
     expect(screen.getByText("Live SAT Session")).toBeTruthy();
     expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
+    expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
+    expect(screen.queryByText(/Sep 7/)).toBeNull();
   });
 
   test("tutor curriculum view does not show SAT purchase or book CTAs even when self-serve is on", () => {
