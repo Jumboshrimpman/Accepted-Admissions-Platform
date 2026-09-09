@@ -303,7 +303,7 @@ describe("authenticated role dashboard flows", () => {
     render(<FallWelcomeDashboard />);
 
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
-    expect(screen.getByText("English")).toBeTruthy();
+    expect(screen.getAllByText("English").length).toBeGreaterThan(0);
     expect(screen.getAllByText("9:00–10:00 PM JST").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Join meeting/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByRole("link", { name: /Open calendar/i }).length).toBeGreaterThanOrEqual(2);
