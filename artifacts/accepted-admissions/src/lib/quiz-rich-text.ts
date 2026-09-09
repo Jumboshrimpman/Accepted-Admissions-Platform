@@ -17,8 +17,8 @@ export function splitQuizRichText(text: string | null | undefined): QuizRichPart
   let match: RegExpExecArray | null;
   while ((match = matcher.exec(text))) {
     if (match.index > lastIndex) {
-      const value = text.slice(lastIndex, match.index);
-      if (value.trim()) parts.push({ type: "text", value });
+      const value = text.slice(lastIndex, match.index).trim();
+      if (value) parts.push({ type: "text", value });
     }
     const alt = match[1]?.trim() || "Figure";
     const src = match[2] ?? "";
@@ -30,8 +30,8 @@ export function splitQuizRichText(text: string | null | undefined): QuizRichPart
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) {
-    const value = text.slice(lastIndex);
-    if (value.trim()) parts.push({ type: "text", value });
+    const value = text.slice(lastIndex).trim();
+    if (value) parts.push({ type: "text", value });
   }
   return parts;
 }
