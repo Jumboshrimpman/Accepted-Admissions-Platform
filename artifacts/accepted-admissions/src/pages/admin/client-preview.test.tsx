@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -115,13 +115,159 @@ describe("administrator client preview", () => {
     expect(screen.getByText("Administrator client preview")).toBeTruthy();
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
     expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
+    expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
+    expect(screen.queryByText("Single SAT Session")).toBeNull();
+    expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Booking disabled in preview" })).toBeNull();
+    expect(
+      screen.getByText(/Meetings for this program are already scheduled/i),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByTestId("financial-card-show-more"));
     expect(screen.getByText("Single SAT Session")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Checkout disabled in preview" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/Google Calendar is disconnected/)).toBeTruthy();
     expect(screen.queryByText("Cancelled")).toBeNull();
     expect(screen.queryByText("Taito’s SAT Session with Xavier")).toBeNull();
     expect(screen.getByText("No prepaid sessions reserved yet.")).toBeTruthy();
     expect(screen.queryByText(/\$65/)).toBeNull();
+    expect(screen.queryByText("No verified purchase yet")).toBeNull();
+    expect(screen.queryByText(/booking remains unavailable/i)).toBeNull();
+  });
+
+  test("does not show the unpaid purchase banner for an off-platform client", () => {
+    mocks.preview = {
+      user: {
+        id: "student-1",
+        displayName: "Taito Goto",
+        email: "taito0525@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      welcomeMessage: "Your Fall program is ready.",
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: false,
+        twelveSessionPlan: true,
+      },
+      progress: {
+        totalSessions: 12,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring credit.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: {
+        calendarStatus: "disconnected",
+        availability: null,
+        sessions: [],
+      },
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.queryByText("No verified purchase yet")).toBeNull();
+    expect(
+      screen.queryByText("The student has not completed a verified purchase, so booking remains unavailable."),
+    ).toBeNull();
+    expect(screen.queryByText("Booking unavailable until payment is verified")).toBeNull();
+    expect(screen.queryByText(/must complete an SAT purchase/i)).toBeNull();
+    expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
+    expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
+    expect(
+      screen.getByText(/Meetings for this program are already scheduled/i),
+    ).toBeTruthy();
+  });
+
+  test("self-serve clients still see calendar-disconnect copy when no sessions exist", () => {
+    mocks.preview = {
+      user: {
+        id: "student-2",
+        displayName: "Michelle Chen",
+        email: "michelle@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      welcomeMessage: "Welcome back.",
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      progress: {
+        totalSessions: 0,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring credit.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: {
+        calendarStatus: "disconnected",
+        availability: null,
+        sessions: [],
+      },
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.getByText(/Google Calendar is disconnected/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByTestId("financial-card-collapsed")).toBeNull();
   });
 });

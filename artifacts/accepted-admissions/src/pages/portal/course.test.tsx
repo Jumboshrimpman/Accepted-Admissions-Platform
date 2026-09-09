@@ -86,7 +86,7 @@ describe("student course page", () => {
 
   test("does not render cancelled sessions as clickable cards", () => {
     render(<PortalCourse />);
-    expect(screen.getByText("Taito SAT with Eunice")).toBeTruthy();
+    expect(screen.getByText("Taito’s SAT Session with Eunice")).toBeTruthy();
     expect(screen.queryByText("Cancelled SAT with Eunice")).toBeNull();
     const hrefs = screen.queryAllByRole("link").map((link) => link.getAttribute("href") ?? "");
     expect(hrefs.some((href) => href.includes("session-cancelled"))).toBe(false);
@@ -97,5 +97,11 @@ describe("student course page", () => {
     expect(screen.getByText("Taito’s SAT Session with Eunice")).toBeTruthy();
     expect(screen.getByText(/9:00–10:00 PM JST/)).toBeTruthy();
     expect(screen.queryByText(/8:00\s*AM/)).toBeNull();
+  });
+
+  test("dedupes the same Oct 2 meeting and does not list the Eastern twin", () => {
+    render(<PortalCourse />);
+    expect(screen.getAllByText("Taito’s SAT Session with Eunice")).toHaveLength(1);
+    expect(screen.queryByText("Taito SAT with Eunice")).toBeNull();
   });
 });

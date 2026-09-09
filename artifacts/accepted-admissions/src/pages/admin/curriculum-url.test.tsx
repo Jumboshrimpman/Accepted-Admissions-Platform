@@ -230,7 +230,7 @@ describe("admin curriculum URL sync", () => {
 
   test("deep-links each curriculum tab from the query string", () => {
     const tabs: Array<{ path: string; panel: string; copy: RegExp }> = [
-      { path: "/admin/curriculum?section=curriculum&tab=quizzes", panel: "admin-tab-quizzes", copy: /Reusable bank quizzes only/ },
+      { path: "/admin/curriculum?section=curriculum&tab=quizzes", panel: "admin-tab-quizzes", copy: /repository copies, and session-assigned pre-work/ },
       { path: "/admin/curriculum?section=curriculum&tab=questions", panel: "admin-tab-questions", copy: /Question bank/ },
       { path: "/admin/curriculum?section=curriculum&tab=library", panel: "admin-tab-library", copy: /Curriculum library/ },
       { path: "/admin/curriculum?section=curriculum&tab=sat-bank", panel: "admin-tab-sat-bank", copy: /SAT\/PSAT question bank/ },

@@ -4,7 +4,11 @@ import {
   applyTaitoStudentSchedule,
   canCancelOrRescheduleSession,
   displaySessionTitle,
+  collapsedListedSessions,
   disclosedSessions,
+  listedSessionMeetingKey,
+  uniqueListedSessions,
+  isSessionWorkComplete,
   formatAdminBrowserLocalHint,
   formatSessionDate,
   formatSessionDateTime,
@@ -170,6 +174,93 @@ test("discloses three sessions before expansion without reordering", () => {
   assert.deepEqual(disclosedSessions(sessions, true), sessions);
 });
 
+test("uniqueListedSessions drops duplicate ids and same-day tutor meetings", () => {
+  const tokyo = {
+    id: "tokyo-oct2",
+    dateTime: "2026-10-02T12:00:00.000Z",
+    timezone: "Asia/Tokyo",
+    subject: "SAT",
+    meetingUrl: "https://meet.google.com/rih-iayt-okb",
+    tutor: { id: "eunice", name: "Eunice Chon" },
+  };
+  const easternTwin = {
+    id: "eastern-oct2",
+    dateTime: "2026-10-02T16:00:00.000Z",
+    timezone: "America/New_York",
+    subject: "SAT",
+    meetingUrl: "https://meet.google.com/rih-iayt-okb",
+    tutor: { id: "eunice", name: "Eunice Chon" },
+  };
+  const sameIdCopy = { ...tokyo, meetingUrl: null };
+  const english = {
+    id: "nika-oct23",
+    dateTime: "2026-10-23T12:00:00.000Z",
+    timezone: "Asia/Tokyo",
+    subject: "IELTS",
+    tutor: { id: "nika", name: "Nika Raiffe" },
+  };
+
+  const unique = uniqueListedSessions([tokyo, sameIdCopy, easternTwin, english]);
+  assert.equal(unique.length, 2);
+  assert.equal(unique[0]?.id, "tokyo-oct2");
+  assert.equal(unique[1]?.id, "nika-oct23");
+  assert.equal(
+    listedSessionMeetingKey(tokyo),
+    listedSessionMeetingKey(easternTwin),
+  );
+});
+
+test("collapsedListedSessions shows three upcoming and hides the rest until expanded", () => {
+  const now = new Date("2026-09-20T12:00:00.000Z");
+  const sessions = [
+    {
+      id: "past",
+      dateTime: "2026-09-01T16:00:00.000Z",
+      timezone: "America/New_York",
+      durationMinutes: 60,
+      subject: "SAT",
+      status: "completed",
+    },
+    {
+      id: "one",
+      dateTime: "2026-10-02T12:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      durationMinutes: 60,
+      subject: "SAT",
+    },
+    {
+      id: "two",
+      dateTime: "2026-10-09T12:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      durationMinutes: 60,
+      subject: "SAT",
+    },
+    {
+      id: "three",
+      dateTime: "2026-10-16T12:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      durationMinutes: 60,
+      subject: "SAT",
+    },
+    {
+      id: "four",
+      dateTime: "2026-10-23T12:00:00.000Z",
+      timezone: "Asia/Tokyo",
+      durationMinutes: 60,
+      subject: "IELTS",
+    },
+  ];
+  const collapsed = collapsedListedSessions(sessions, false, now);
+  assert.deepEqual(collapsed.visible.map((session) => session.id), ["one", "two", "three"]);
+  assert.equal(collapsed.hiddenCount, 2);
+  assert.equal(collapsed.canToggle, true);
+  const expanded = collapsedListedSessions(sessions, true, now);
+  assert.deepEqual(
+    expanded.visible.map((session) => session.id),
+    ["one", "two", "three", "four", "past"],
+  );
+});
+
 test("treats a session as past at its end, or start when it has no end", () => {
   const now = new Date("2026-09-08T18:00:00.000Z");
   assert.equal(
@@ -223,6 +314,25 @@ test("blocks cancel and reschedule once a session is past or already started", (
     "A session that has started cannot be rescheduled.",
   );
   assert.equal(sessionScheduleChangeMessage("cancel", upcoming, now), null);
+});
+
+test("treats submitted quiz work as completed progress even when readiness is still ready", () => {
+  assert.equal(isSessionWorkComplete({ readiness: "ready", status: "published" }), false);
+  assert.equal(isSessionWorkComplete({ readiness: "complete" }), true);
+  assert.equal(isSessionWorkComplete({ status: "completed" }), true);
+  assert.equal(isSessionWorkComplete({ latestResult: { analysis: {} } }), true);
+  assert.equal(
+    isSessionWorkComplete({ preparation: { latestAttemptStatus: "submitted" } }),
+    true,
+  );
+  assert.equal(
+    isSessionWorkComplete({ preparation: { latestAttemptStatus: "expired" } }),
+    true,
+  );
+  assert.equal(
+    isSessionWorkComplete({ preparation: { latestAttemptStatus: "active" } }),
+    false,
+  );
 });
 
 test("keeps English as the user-facing label for IELTS sessions", () => {

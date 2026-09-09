@@ -23,6 +23,7 @@ import { ArrowLeft, CheckCircle2, ClipboardList, Edit3, Plus } from "lucide-reac
 import { GenerateQuestionsCard } from "@/components/generate-questions-card";
 import { GenerateDraftsCard, apiErrorText } from "@/components/question-bank-authoring";
 import { isReusableBankQuiz } from "@/lib/assignable-bank-quizzes";
+import { editableQuizItems } from "@/lib/quiz-repository";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,7 +165,7 @@ function QuizList({
       },
     );
   };
-  const bankQuizzes = assignments.filter((item) => item.sessionId == null);
+  const bankQuizzes = editableQuizItems(assignments);
   return (
     <div className="space-y-4">
       {message ? <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p> : null}
@@ -172,7 +173,7 @@ function QuizList({
         <div>
           <h2 className="text-xl font-semibold">Quizzes</h2>
           <p className="text-sm text-muted-foreground">
-            Reusable bank quizzes only. Open one to add questions and assign it. Session copies live on Sessions (Open quiz).
+            Reusable bank quizzes, repository copies, and session-assigned pre-work. Open one to add questions or edit it.
           </p>
         </div>
         <Button

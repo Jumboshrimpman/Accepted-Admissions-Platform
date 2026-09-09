@@ -319,8 +319,10 @@ describe("client availability calendar", () => {
 
     render(<BookingCard />);
 
-    expect(screen.getByText("Past SAT session")).toBeTruthy();
     expect(screen.getByText("Upcoming SAT session")).toBeTruthy();
+    expect(screen.queryByText("Past SAT session")).toBeNull();
+    fireEvent.click(screen.getByTestId("session-list-show-more"));
+    expect(screen.getByText("Past SAT session")).toBeTruthy();
     expect(screen.getByText("Past sessions cannot be cancelled or rescheduled.")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Change time/i })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /Cancel/i })).toHaveLength(1);
@@ -330,6 +332,51 @@ describe("client availability calendar", () => {
       { sessionId: "session-future", data: { reason: "Cancelled by student" } },
       expect.any(Object),
     );
+  });
+
+  test("dedupes the same meeting and shows three upcoming booked sessions by default", () => {
+    const dates = ["2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23"];
+    mocks.sessionsQuery.data = dates.flatMap((dateKey) => [
+      {
+        id: `tokyo-${dateKey}`,
+        title: `Taito SAT ${dateKey}`,
+        dateTime: `${dateKey}T12:00:00.000Z`,
+        timezone: "Asia/Tokyo",
+        durationMinutes: 60,
+        subject: "SAT",
+        bookingStatus: "confirmed",
+        tutorName: "Eunice Chon",
+        tutor: { id: "eunice", name: "Eunice Chon" },
+        tutorProfileId: "tutor-eunice",
+        meetingUrl: "https://meet.google.com/rih-iayt-okb",
+        calendarEventUrl: null,
+      },
+      {
+        id: `eastern-${dateKey}`,
+        title: `Taito SAT ${dateKey} ET`,
+        dateTime: `${dateKey}T16:00:00.000Z`,
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        subject: "SAT",
+        bookingStatus: "confirmed",
+        tutorName: "Eunice Chon",
+        tutor: { id: "eunice", name: "Eunice Chon" },
+        tutorProfileId: "tutor-eunice",
+        meetingUrl: "https://meet.google.com/rih-iayt-okb",
+        calendarEventUrl: null,
+      },
+    ]);
+
+    render(<BookingCard />);
+
+    expect(screen.getByText("Taito SAT 2026-10-02")).toBeTruthy();
+    expect(screen.getByText("Taito SAT 2026-10-09")).toBeTruthy();
+    expect(screen.getByText("Taito SAT 2026-10-16")).toBeTruthy();
+    expect(screen.queryByText("Taito SAT 2026-10-23")).toBeNull();
+    expect(screen.queryByText("Taito SAT 2026-10-02 ET")).toBeNull();
+    fireEvent.click(screen.getByTestId("session-list-show-more"));
+    expect(screen.getByText("Taito SAT 2026-10-23")).toBeTruthy();
+    expect(screen.queryByText("Taito SAT 2026-10-23 ET")).toBeNull();
   });
 
   test("hides a cancelled Sep 7 Xavier session from Your booked sessions", () => {
