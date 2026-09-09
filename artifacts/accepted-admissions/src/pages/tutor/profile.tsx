@@ -94,7 +94,7 @@ export default function TutorProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6" data-testid="tutor-profile-page">
       <section className="rounded-3xl bg-brand-ink px-6 py-8 text-white sm:px-10">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/65">
           Your profile

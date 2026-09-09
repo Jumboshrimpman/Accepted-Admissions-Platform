@@ -118,6 +118,9 @@ describe("Shell", () => {
     expect(screen.getByRole("link", { name: "Curriculum" }).getAttribute("href")).toBe(
       "/tutor/curriculum",
     );
+    expect(screen.getByRole("link", { name: "Profile" }).getAttribute("href")).toBe(
+      "/tutor/profile",
+    );
     expect(screen.queryByRole("link", { name: "Book SAT" })).toBeNull();
     expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
