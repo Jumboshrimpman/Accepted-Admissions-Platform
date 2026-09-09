@@ -651,9 +651,15 @@ describe("curriculum bank IA", () => {
     mocks.curriculum.sessions[0]!.timezone = "Asia/Tokyo";
     mocks.curriculum.sessions[0]!.durationMinutes = 60;
     render(<AdminCurriculum />);
+    expect(screen.getByText(/Friday, October 2, 2026 · 9:00–10:00 PM JST/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
+    expect(screen.getByText("Start time (JST)")).toBeTruthy();
     const start = screen.getByLabelText("Session start time") as HTMLInputElement;
     expect(start.value).toBe("2026-10-02T21:00");
+    expect(screen.getByTestId("session-start-time-hint").textContent).toBe(
+      "Friday, October 2, 2026 · 9:00–10:00 PM JST",
+    );
+    expect(screen.getByTestId("session-start-time-local-hint").textContent).toMatch(/^Your local:/);
     fireEvent.change(screen.getByLabelText("Session timezone"), {
       target: { value: "Asia/Tokyo" },
     });
@@ -669,6 +675,42 @@ describe("curriculum bank IA", () => {
           dateTime: "2026-10-02T12:00:00.000Z",
           timezone: "Asia/Tokyo",
           durationMinutes: 60,
+        }),
+      },
+      expect.any(Object),
+    );
+  });
+
+  test("new session for Taito defaults to 21:00 JST in Asia/Tokyo", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /New session/i }));
+    expect(screen.getByLabelText("Session timezone")).toHaveProperty("value", "Asia/Tokyo");
+    const start = screen.getByLabelText("Session start time") as HTMLInputElement;
+    expect(start.value.endsWith("T21:00")).toBe(true);
+    expect(screen.getByText("Start time (JST)")).toBeTruthy();
+    expect(screen.getByTestId("session-start-time-hint").textContent).toMatch(/9:00–10:00 PM JST/);
+    expect(screen.getByTestId("session-start-time-local-hint").textContent).toMatch(/^Your local:/);
+    expect((screen.getByLabelText("Session duration") as HTMLInputElement).value).toBe("60");
+  });
+
+  test("editing Taito with leftover Eastern timezone switches the label to JST without rewriting UTC", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.sessions[0]!.dateTime = "2026-10-02T12:00:00.000Z";
+    mocks.curriculum.sessions[0]!.timezone = "America/New_York";
+    mocks.curriculum.sessions[0]!.durationMinutes = 60;
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /Edit/i }));
+    expect((screen.getByLabelText("Session timezone") as HTMLInputElement).value).toBe("Asia/Tokyo");
+    expect((screen.getByLabelText("Session start time") as HTMLInputElement).value).toBe("2026-10-02T21:00");
+    expect(screen.getByText("Start time (JST)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Save session/i }));
+    expect(mocks.updateSession).toHaveBeenCalledWith(
+      {
+        sessionId: "session-1",
+        data: expect.objectContaining({
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
         }),
       },
       expect.any(Object),
