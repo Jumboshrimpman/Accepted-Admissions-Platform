@@ -113,6 +113,8 @@ vi.mock("wouter", () => ({
 
 import PortalAssignment from "./assignment";
 
+const defaultQuestions = structuredClone(mocks.questions);
+
 afterEach(() => {
   cleanup();
   submitMutate.mockReset();
@@ -120,8 +122,7 @@ afterEach(() => {
   startMutate.mockReset();
   mocks.deliveryPhase = "before_session";
   mocks.title = "Practice quiz";
-  mocks.questions[0]!.stimulus = null;
-  mocks.questions[0]!.prompt = "Which transition is best?";
+  mocks.questions = structuredClone(defaultQuestions);
   mocks.attempt.status = "active";
   mocks.attempt.remainingSeconds = 1200;
   mocks.attempt.responses = [];
@@ -452,6 +453,32 @@ describe("student attempt UI", () => {
     expect((screen.getByAltText("Enrollment graph") as HTMLImageElement).src).toBe(
       "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png",
     );
+  });
+
+  test("never renders a student-produced-response text box and recovers letter choices", () => {
+    mocks.questions = [
+      {
+        id: "q-spr",
+        position: 0,
+        subject: "SAT Math",
+        questionType: "spr",
+        prompt:
+          "<!-- sat-bank-figures -->\n![Sphere](https://cdn.example/sphere.png)\n<!-- /sat-bank-figures -->\nA customer spent $ 27 to purchase oranges at $ 3\nper\npound.",
+        stimulus: null,
+        choices: [],
+        skill: "Problem-Solving",
+        difficulty: "medium",
+        predictionFirst: false,
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("spr-answer")).toBeNull();
+    expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
+    expect(screen.queryByText(/sat-bank-figures/i)).toBeNull();
+    expect(screen.getByAltText("Sphere").getAttribute("src")).toBe("https://cdn.example/sphere.png");
+    expect(screen.getByTestId("quiz-content").textContent).toMatch(/\$ 3 per pound/);
+    expect(screen.getByTestId("quiz-content").textContent).not.toMatch(/3\nper\n/);
   });
 
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {

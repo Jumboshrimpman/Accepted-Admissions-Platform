@@ -70,6 +70,7 @@ test("role fixtures keep dashboard sessions, assignments, and meeting data scope
       name: fixture.student.displayName,
     });
     assert.deepEqual(Object.keys(studentSessionResponse).sort(), [
+      "bookingStatus",
       "calendarEventUrl",
       "courseId",
       "dateTime",

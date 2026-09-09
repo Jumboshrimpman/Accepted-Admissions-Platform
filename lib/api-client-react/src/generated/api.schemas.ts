@@ -1411,6 +1411,7 @@ export interface Session {
   student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;
+  bookingStatus?: string;
 }
 
 export type CurriculumSessionReadiness = typeof CurriculumSessionReadiness[keyof typeof CurriculumSessionReadiness];

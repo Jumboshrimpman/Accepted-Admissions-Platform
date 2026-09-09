@@ -11,6 +11,7 @@ import { BookOpenCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { QuizContent } from "@/components/quiz-content";
 import {
   displaySkill,
   formatAnswer,
@@ -74,7 +75,7 @@ export function SessionLessonDashboard({
     );
   }
 
-  const selectedMiss = data.misses.find((item) => item.questionId === openMiss) ?? data.misses[0];
+  const selectedMiss = data.misses.find((item) => item.questionId === openMiss) ?? null;
   const retries = data.retries.map((retry) => mergeRetryFeedback(retry, retryOverrides[retry.id]));
   const activeRetry = retries.find((item) => item.outcome === "pending" && item.retryQuestionId);
 
@@ -157,9 +158,9 @@ export function SessionLessonDashboard({
                 <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
                   Review this wrong answer together
                 </p>
-                <p className="mt-2 font-medium">{selectedMiss.prompt}</p>
+                <QuizContent text={selectedMiss.prompt} className="mt-2 font-medium" />
                 {selectedMiss.stimulus ? (
-                  <p className="mt-2 text-sm text-white/75">{selectedMiss.stimulus}</p>
+                  <QuizContent text={selectedMiss.stimulus} className="mt-2 text-sm text-white/75" />
                 ) : null}
                 {selectedMiss.choices && selectedMiss.choices.length > 0 ? (
                   <ul className="mt-3 space-y-1 text-sm text-white/90" data-testid="opened-miss-choices">
@@ -180,10 +181,13 @@ export function SessionLessonDashboard({
                 </p>
                 <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
                   <p className="font-medium">Official explanation</p>
-                  <p className="mt-1 text-white/75">
-                    {selectedMiss.officialExplanation ||
-                      "Official explanation is not in the extract yet. Do not invent College Board wording."}
-                  </p>
+                  <QuizContent
+                    text={
+                      selectedMiss.officialExplanation ||
+                      "Official explanation is not in the extract yet. Do not invent College Board wording."
+                    }
+                    className="mt-1 text-white/75"
+                  />
                 </div>
                 {selectedMiss.aiTutorGuidance ? (
                   <div className="mt-3 rounded-lg border border-white/20 p-3 text-sm">

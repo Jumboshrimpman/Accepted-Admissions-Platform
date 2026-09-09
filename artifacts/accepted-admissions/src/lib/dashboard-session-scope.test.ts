@@ -46,3 +46,20 @@ test("viewers see assigned student sessions without matching the viewer id", () 
     ["sat", "eng", "other"],
   );
 });
+
+test("student and tutor lists hide cancelled bookings; admin history may keep them", () => {
+  const cancelled = { id: "cancelled", tutor: { id: "eunice" }, student: { id: "taito" }, bookingStatus: "cancelled" };
+  const live = { ...sat, bookingStatus: "confirmed" };
+  assert.deepEqual(
+    sessionsForDashboardRole([live, cancelled], { id: "taito", role: "student" }).map((item) => item.id),
+    ["sat"],
+  );
+  assert.deepEqual(
+    sessionsForDashboardRole([live, cancelled], { id: "eunice", role: "tutor" }).map((item) => item.id),
+    ["sat"],
+  );
+  assert.deepEqual(
+    sessionsForDashboardRole([live, cancelled], { id: "admin", role: "administrator" }).map((item) => item.id),
+    ["sat", "cancelled"],
+  );
+});

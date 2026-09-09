@@ -520,6 +520,58 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
   });
 
+  test("client session roadmap hides cancelled meetings", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      curriculumSessions: [
+        {
+          id: "session-live",
+          courseId: "course-fall",
+          dateTime: "2026-09-15T16:00:00.000Z",
+          timezone: "America/New_York",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Live SAT Session",
+          status: "published",
+          bookingStatus: "confirmed",
+          meetingUrl: null,
+          calendarEventUrl: null,
+          tutor: { id: "tutor-xavier", name: "Xavier", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Student" },
+          readiness: "ready",
+          nextAction: "Open session plan",
+          currentFocus: "Evidence",
+          preparation: null,
+          latestResult: null,
+        },
+        {
+          id: "e66d31e8-b953-4a0c-a067-f30f142b4461",
+          courseId: "course-fall",
+          dateTime: "2026-09-08T16:00:00.000Z",
+          timezone: "America/New_York",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Cancelled SAT Session",
+          status: "published",
+          bookingStatus: "cancelled",
+          meetingUrl: null,
+          calendarEventUrl: null,
+          tutor: { id: "tutor-xavier", name: "Xavier", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Student" },
+          readiness: "ready",
+          nextAction: "Open session plan",
+          currentFocus: "Evidence",
+          preparation: null,
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    expect(screen.getByText("Session roadmap")).toBeTruthy();
+    expect(screen.getByText("Live SAT Session")).toBeTruthy();
+    expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
+  });
+
   test("tutor curriculum view does not show SAT purchase or book CTAs even when self-serve is on", () => {
     mocks.dashboard = {
       ...dashboardForRole("tutor"),

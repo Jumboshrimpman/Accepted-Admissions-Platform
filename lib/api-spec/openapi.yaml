@@ -2932,6 +2932,7 @@ components:
             - type: "null"
         hasHomework: { type: boolean }
         hasReport: { type: boolean }
+        bookingStatus: { type: string }
     CurriculumSession:
       allOf:
         - $ref: "#/components/schemas/Session"

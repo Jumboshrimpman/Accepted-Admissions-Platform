@@ -140,6 +140,10 @@ export function isTutorQuizMcq(questionType: string | null | undefined): boolean
   return type !== "spr" && type !== "student_produced_response" && type !== "free_response";
 }
 
+export function isLetterMultipleChoiceAnswer(value: string | null | undefined): boolean {
+  return /^[a-d]$/i.test(value?.trim() ?? "");
+}
+
 export function isAssignableBankItem(input: {
   prompt: string;
   questionType: string;
@@ -152,6 +156,18 @@ export function isAssignableBankItem(input: {
   if (!input.prompt.trim() || input.extractGaps?.missingPrompt) return false;
   if (input.questionType === "spr") return true;
   return input.choices.length >= 2 && !input.extractGaps?.missingChoices;
+}
+
+/** New student quizzes are multiple-choice only. Keep true SPR out of composition. */
+export function isMultipleChoiceQuizItem(input: {
+  questionType?: string | null;
+  choices?: Array<{ id?: string; label?: string; text?: string }> | null;
+  correctAnswer?: string | null;
+}): boolean {
+  const choices = input.choices ?? [];
+  if (choices.length >= 2) return true;
+  if (isLetterMultipleChoiceAnswer(input.correctAnswer)) return true;
+  return false;
 }
 
 function parseAssets(record: Record<string, unknown>): Array<{

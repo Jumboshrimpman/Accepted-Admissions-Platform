@@ -25,6 +25,20 @@ const course = {
       calendarEventUrl: null,
       tutor: { id: "tutor-1", name: "Eunice Chon" },
     },
+    {
+      id: "session-cancelled",
+      title: "Cancelled SAT with Eunice",
+      subject: "SAT",
+      status: "published",
+      dateTime: "2026-10-09T16:00:00.000Z",
+      timezone: "America/New_York",
+      durationMinutes: 60,
+      bookingStatus: "cancelled",
+      hasHomework: true,
+      meetingUrl: null,
+      calendarEventUrl: null,
+      tutor: { id: "tutor-1", name: "Eunice Chon" },
+    },
   ],
 };
 
@@ -54,5 +68,13 @@ describe("student course page", () => {
     expect(screen.queryByText(/Course Drive/i)).toBeNull();
     expect(screen.queryByRole("link", { name: /Course Drive/i })).toBeNull();
     expect(hrefs.some((href) => /drive\.google\.com/i.test(href))).toBe(false);
+  });
+
+  test("does not render cancelled sessions as clickable cards", () => {
+    render(<PortalCourse />);
+    expect(screen.getByText("Taito SAT with Eunice")).toBeTruthy();
+    expect(screen.queryByText("Cancelled SAT with Eunice")).toBeNull();
+    const hrefs = screen.queryAllByRole("link").map((link) => link.getAttribute("href") ?? "");
+    expect(hrefs.some((href) => href.includes("session-cancelled"))).toBe(false);
   });
 });

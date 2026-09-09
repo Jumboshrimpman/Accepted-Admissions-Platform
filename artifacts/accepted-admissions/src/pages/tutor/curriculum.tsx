@@ -32,6 +32,7 @@ import {
   bankQuizOptionLabel,
   sessionPreworkQuizzes,
 } from "@/lib/assignable-bank-quizzes";
+import { isLiveListedSession } from "@/lib/quiz-content";
 import {
   displaySessionTitle,
   formatSessionDateTime,
@@ -105,7 +106,7 @@ export default function TutorCurriculum() {
   const data = curriculum.data;
   const students = data?.students ?? [];
   const programs = data?.programs ?? [];
-  const sessions = data?.sessions ?? [];
+  const sessions = (data?.sessions ?? []).filter(isLiveListedSession);
   const quizzes = data?.quizzes ?? [];
   const libraryAssets = data?.libraryAssets ?? [];
   const collections = data?.satBankCollections ?? [];

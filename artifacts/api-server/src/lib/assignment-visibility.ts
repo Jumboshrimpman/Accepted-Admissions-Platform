@@ -29,6 +29,49 @@ export function assignmentDifficulty(
   return "foundational";
 }
 
+const LETTER_CHOICE_IDS = ["a", "b", "c", "d"] as const;
+
+export function isLetterMultipleChoiceAnswer(value: string | null | undefined): boolean {
+  return /^[a-d]$/i.test(value?.trim() ?? "");
+}
+
+export function letterMultipleChoiceChoices(): Array<{ id: string; label: string; text: string }> {
+  return LETTER_CHOICE_IDS.map((id) => ({
+    id,
+    label: id.toUpperCase(),
+    text: id.toUpperCase(),
+  }));
+}
+
+/** Prod SAT/PSAT import wraps figure markdown in these comments; they must never reach students. */
+export function stripBankFigureComments(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .replace(/<!--\s*\/?\s*sat-bank-figures\s*-->/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function isUnfinishedHomeworkClientCopy(value: string | null | undefined): boolean {
+  const text = value?.trim() ?? "";
+  if (!text) return false;
+  return (
+    /homework was not finished/i.test(text) ||
+    /unfinished prep/i.test(text) ||
+    /live plan now carries the unfinished/i.test(text)
+  );
+}
+
+export function studentSafeAssignmentInstructions(
+  value: string | null | undefined,
+): string {
+  if (!isUnfinishedHomeworkClientCopy(value)) return value?.trim() || "";
+  return "Work up to 15 of these items together. You can submit for results without answering every question.";
+}
+
 export function assignmentChoices(
   value: unknown,
 ): Array<{ id: string; label: string; text: string }> | undefined {
@@ -53,34 +96,54 @@ export function assignmentQuestionShape(
     prompt?: string | null;
     stimulus?: string | null;
     choices?: unknown;
+    correctAnswer?: string | null;
+    explanation?: string | null;
     skill?: string | null;
     domain?: string | null;
     difficulty?: string | null;
-    correctAnswer?: string | null;
-    explanation?: string | null;
     tags?: string[] | null;
     extractGaps?: Record<string, unknown> | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
   options?: { includeKeys?: boolean },
 ) {
+  const existingChoices = assignmentChoices(question.choices);
+  const recoveredChoices =
+    existingChoices && existingChoices.length > 0
+      ? existingChoices
+      : isLetterMultipleChoiceAnswer(question.correctAnswer)
+        ? letterMultipleChoiceChoices()
+        : undefined;
   const facing = studentFacingFigurePrimaryFields({
     prompt: question.prompt,
     stimulus: question.stimulus,
-    choices: assignmentChoices(question.choices) ?? [],
+    choices: existingChoices ?? [],
     questionType: question.questionType,
     correctAnswer: question.correctAnswer,
     tags: question.tags,
     extractGaps: question.extractGaps,
   });
+  const figurePrimary = facing.presentation === "figure_primary";
+  const rawType = question.questionType?.trim() || "multiple_choice";
+  const questionType = figurePrimary
+    ? facing.questionType || "mcq"
+    : recoveredChoices && recoveredChoices.length > 0
+      ? "multiple_choice"
+      : facing.questionType || rawType;
   const shaped = {
     id: question.id,
     position: assignmentQuestion.position,
     subject: question.subject?.trim() || "SAT",
-    questionType: facing.questionType || question.questionType?.trim() || "multiple_choice",
-    prompt: facing.prompt,
-    stimulus: facing.stimulus,
-    choices: facing.choices ?? assignmentChoices(question.choices),
+    questionType,
+    prompt: figurePrimary
+      ? facing.prompt
+      : stripBankFigureComments(facing.prompt) || "Question prompt is unavailable.",
+    stimulus: figurePrimary
+      ? facing.stimulus
+      : facing.stimulus
+        ? stripBankFigureComments(facing.stimulus)
+        : null,
+    choices: facing.choices ?? recoveredChoices,
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,

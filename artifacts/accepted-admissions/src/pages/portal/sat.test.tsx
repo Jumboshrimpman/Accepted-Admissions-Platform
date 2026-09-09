@@ -25,7 +25,27 @@ const mocks = vi.hoisted(() => ({
           title: "Michelle’s SAT Session with Xavier",
           dateTime: "2026-10-02T16:00:00.000Z",
           timezone: "America/New_York",
+          durationMinutes: 60,
           tutor: { name: "Xavier Morales" },
+        },
+        {
+          id: "sat-tokyo",
+          subject: "SAT",
+          title: "Taito SAT with Eunice",
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          tutor: { name: "Eunice Chon" },
+        },
+        {
+          id: "sat-cancelled",
+          subject: "SAT",
+          title: "Cancelled SAT Session",
+          dateTime: "2026-10-09T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          bookingStatus: "cancelled",
+          tutor: { name: "Eunice Chon" },
         },
       ],
     },
@@ -125,6 +145,10 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("1 credit");
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
+    expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toMatch(/12:00–1:00 PM America\/New_York/);
+    expect(screen.getByTestId("portal-sat-upcoming-sat-tokyo").textContent).toMatch(/9:00–10:00 PM JST/);
+    expect(screen.queryByTestId("portal-sat-upcoming-sat-cancelled")).toBeNull();
+    expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
     expect(screen.queryByText(/Finance/i)).toBeNull();
   });
 

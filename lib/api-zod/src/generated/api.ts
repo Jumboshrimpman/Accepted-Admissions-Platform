@@ -555,7 +555,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
-  "hasReport": zod.boolean().optional()
+  "hasReport": zod.boolean().optional(),
+  "bookingStatus": zod.string().optional()
 })),
   "curriculumSessions": zod.array(zod.object({
   "id": zod.string(),
@@ -579,7 +580,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
-  "hasReport": zod.boolean().optional()
+  "hasReport": zod.boolean().optional(),
+  "bookingStatus": zod.string().optional()
 }).and(zod.object({
   "readiness": zod.enum(['not_started', 'in_progress', 'ready', 'complete', 'unavailable']),
   "nextAction": zod.string(),
@@ -1944,7 +1946,8 @@ export const GetDashboardResponse = zod.object({
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
-  "hasReport": zod.boolean().optional()
+  "hasReport": zod.boolean().optional(),
+  "bookingStatus": zod.string().optional()
 })),
   "curriculumSessions": zod.array(zod.object({
   "id": zod.string(),
@@ -1968,7 +1971,8 @@ export const GetDashboardResponse = zod.object({
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
-  "hasReport": zod.boolean().optional()
+  "hasReport": zod.boolean().optional(),
+  "bookingStatus": zod.string().optional()
 }).and(zod.object({
   "readiness": zod.enum(['not_started', 'in_progress', 'ready', 'complete', 'unavailable']),
   "nextAction": zod.string(),
@@ -2355,7 +2359,8 @@ export const GetCourseResponse = zod.object({
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
-  "hasReport": zod.boolean().optional()
+  "hasReport": zod.boolean().optional(),
+  "bookingStatus": zod.string().optional()
 }))
 }))
 
@@ -2389,7 +2394,8 @@ export const GetSessionResponse = zod.object({
   "name": zod.string()
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
-  "hasReport": zod.boolean().optional()
+  "hasReport": zod.boolean().optional(),
+  "bookingStatus": zod.string().optional()
 }).and(zod.object({
   "blocks": zod.array(zod.object({
   "id": zod.string(),

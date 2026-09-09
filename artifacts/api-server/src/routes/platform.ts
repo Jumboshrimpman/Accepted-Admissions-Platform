@@ -110,6 +110,9 @@ import {
 } from "../lib/session-curriculum-prep";
 import {
   canViewSession,
+  hidesCancelledSessions,
+  isCancelledBooking,
+  isStudentCurriculumSession,
   publicSessionShape,
   reconcileTaitoSessions,
   visibleSessionsForUser,
@@ -391,6 +394,8 @@ import {
   assignmentQuestionShape,
   courseIdsForAssignmentList,
   isAssignmentListedForRole,
+  isUnfinishedHomeworkClientCopy,
+  studentSafeAssignmentInstructions,
 } from "../lib/assignment-visibility";
 import {
   skillBreakdownFromItems,
@@ -3999,6 +4004,84 @@ async function calendarAccessForUser(tutorUserId: string) {
   return calendarAccess(profile.id);
 }
 
+async function attendeeEmailForUser(userId: string | null | undefined): Promise<string> {
+  if (!userId) return "";
+  const [row] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return row?.email ?? "";
+}
+
+async function syncGoogleCalendarForSessionChange(args: {
+  existing: typeof sessionsTable.$inferSelect;
+  next: {
+    dateTime: Date;
+    timezone: string;
+    durationMinutes: number;
+    title: string;
+    bookingStatus: string;
+    tutorUserId: string | null;
+    clientUserId: string | null;
+  };
+}): Promise<{ providerEventId: string | null; providerEventUrl: string | null }> {
+  const cancelling =
+    args.next.bookingStatus === "cancelled" && args.existing.bookingStatus !== "cancelled";
+  const eventChanged =
+    args.next.dateTime.getTime() !== args.existing.dateTime.getTime() ||
+    args.next.durationMinutes !== args.existing.durationMinutes ||
+    args.next.timezone !== args.existing.timezone ||
+    args.next.title !== args.existing.title ||
+    args.next.tutorUserId !== args.existing.tutorUserId ||
+    args.next.clientUserId !== args.existing.clientUserId;
+  if (!args.existing.providerEventId || !args.existing.tutorUserId) {
+    return {
+      providerEventId: cancelling ? null : args.existing.providerEventId,
+      providerEventUrl: cancelling ? null : args.existing.providerEventUrl,
+    };
+  }
+  const access = await calendarAccessForUser(args.existing.tutorUserId);
+  if (!access) {
+    throw new BookingError(
+      409,
+      "CALENDAR_DISCONNECTED",
+      "The tutor's calendar is disconnected.",
+    );
+  }
+  if (cancelling) {
+    await deleteGoogleEvent(
+      access.accessToken,
+      access.connection.calendarId!,
+      args.existing.providerEventId,
+    );
+    return { providerEventId: null, providerEventUrl: null };
+  }
+  if (!eventChanged) {
+    return {
+      providerEventId: args.existing.providerEventId,
+      providerEventUrl: args.existing.providerEventUrl,
+    };
+  }
+  const event = await updateGoogleEvent(
+    access.accessToken,
+    access.connection.calendarId!,
+    args.existing.providerEventId,
+    calendarEventPayload(
+      args.next.title,
+      args.next.dateTime,
+      args.next.durationMinutes,
+      args.next.timezone,
+      await attendeeEmailForUser(args.next.clientUserId),
+      SHARED_FALL_MEETING_URL,
+    ),
+  );
+  return {
+    providerEventId: event.id ?? args.existing.providerEventId,
+    providerEventUrl: event.htmlLink ?? args.existing.providerEventUrl,
+  };
+}
+
 async function bookingTutor(tutorProfileId: string, allowExistingSessionTutor = false) {
   const [tutor] = await db
     .select()
@@ -5005,9 +5088,11 @@ router.get(
           (await canAccessSession(user, session)) ? session : null,
         ),
       )
-    ).filter((session): session is (typeof sessionRows)[number]["session"] =>
-      Boolean(session),
-    );
+    )
+      .filter((session): session is (typeof sessionRows)[number]["session"] =>
+        Boolean(session),
+      )
+      .filter((session) => !hidesCancelledSessions(user.role) || isStudentCurriculumSession(session));
     const visibleSessionIds = new Set(visibleSessions.map((session) => session.id));
     const quizzes = (
       await Promise.all(
@@ -8756,10 +8841,23 @@ router.patch(
       res.status(409).json({ code: "SCHEDULE_CONFLICT", error: "This session conflicts with existing scheduling data.", conflicts: conflictWith });
       return;
     }
+    let calendarFields: { providerEventId: string | null; providerEventUrl: string | null } = {
+      providerEventId: existing.providerEventId,
+      providerEventUrl: existing.providerEventUrl,
+    };
+    try {
+      calendarFields = await syncGoogleCalendarForSessionChange({ existing, next });
+    } catch (error) {
+      if (error instanceof BookingError) {
+        sendBookingError(error, res);
+        return;
+      }
+      throw error;
+    }
     const updated = await db.transaction(async (tx) => {
       const [saved] = await tx
         .update(sessionsTable)
-        .set({ ...next, updatedAt: new Date() })
+        .set({ ...next, ...calendarFields, updatedAt: new Date() })
         .where(eq(sessionsTable.id, existing.id))
         .returning();
       if (!saved) {
@@ -8875,6 +8973,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
     .from(sessionsTable)
     .where(eq(sessionsTable.courseId, params.data.courseId))
     .orderBy(asc(sessionsTable.dateTime));
+  const hideCancelled = hidesCancelledSessions(req.appUser!.role);
   const resolvedSessions = (
     await Promise.all(
       courseSessions.map(async (session) =>
@@ -8883,7 +8982,8 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
           : null,
       ),
     )
-  ).filter((session): session is (typeof courseSessions)[number] => Boolean(session));
+  ).filter((session): session is (typeof courseSessions)[number] => Boolean(session))
+    .filter((session) => !hideCancelled || isStudentCurriculumSession(session));
   res.json(
     GetCourseResponse.parse({
       ...base,
@@ -9411,6 +9511,10 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     res.status(404).json({ error: "Session not found" });
     return;
   }
+  if (hidesCancelledSessions(req.appUser!.role) && isCancelledBooking(session)) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
   const subjectUserId = await dataSubjectUserId(req.appUser!);
   const [course] = await db
     .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
@@ -9494,10 +9598,17 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : undefined,
       blocks:
         req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
-          ? blocks.filter(
-              (block) =>
-                block.status === "published" && block.visibility !== "tutor",
-            )
+          ? blocks.filter((block) => {
+              if (block.status !== "published" || block.visibility === "tutor") {
+                return false;
+              }
+              const text = [
+                typeof block.config?.text === "string" ? block.config.text : "",
+                typeof block.config?.html === "string" ? block.config.html : "",
+                typeof block.config?.title === "string" ? block.config.title : "",
+              ].join(" ");
+              return !isUnfinishedHomeworkClientCopy(text);
+            })
           : blocks,
       assignments,
       studentNotes: null,
@@ -9540,10 +9651,39 @@ async function listAssignmentsForUser(
   ).filter(
     (assignment): assignment is (typeof rows)[number] => Boolean(assignment),
   );
+  const hideCancelled = hidesCancelledSessions(user.role);
+  const studentFacing = user.role === "student" || user.role === "viewer";
+  const sessionIds = [
+    ...new Set(
+      scopedRows
+        .map((assignment) => assignment.sessionId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const cancelledSessionIds = new Set<string>();
+  if (hideCancelled && sessionIds.length > 0) {
+    const linkedSessions = await db
+      .select({
+        id: sessionsTable.id,
+        bookingStatus: sessionsTable.bookingStatus,
+      })
+      .from(sessionsTable)
+      .where(inArray(sessionsTable.id, sessionIds));
+    for (const session of linkedSessions) {
+      if (isCancelledBooking(session)) cancelledSessionIds.add(session.id);
+    }
+  }
   const subjectUserId = await dataSubjectUserId(user);
   return Promise.all(
     scopedRows.map(async (assignment) => {
       if (!isAssignmentListedForRole(user.role, assignment.status)) {
+        return null;
+      }
+      if (
+        hideCancelled &&
+        assignment.sessionId &&
+        cancelledSessionIds.has(assignment.sessionId)
+      ) {
         return null;
       }
       const [{ count }] = await db
@@ -9783,7 +9923,15 @@ async function adaptiveCurriculumForSession(
     tutorNotes: isStaff ? notes?.content ?? null : null,
     publishedBlocks: isStaff
       ? blocks
-      : blocks.filter((block) => block.visibility !== "tutor"),
+      : blocks.filter((block) => {
+          if (block.visibility === "tutor") return false;
+          const text = [
+            typeof block.config?.text === "string" ? block.config.text : "",
+            typeof block.config?.html === "string" ? block.config.html : "",
+            typeof block.config?.title === "string" ? block.config.title : "",
+          ].join(" ");
+          return !isUnfinishedHomeworkClientCopy(text);
+        }),
     sessionPrep,
   };
 }
@@ -9911,6 +10059,19 @@ router.get(
       res.status(404).json({ error: "Assignment not found" });
       return;
     }
+    const studentFacing =
+      req.appUser!.role === "student" || req.appUser!.role === "viewer";
+    if (hidesCancelledSessions(req.appUser!.role) && assignment.sessionId) {
+      const [linkedSession] = await db
+        .select({ bookingStatus: sessionsTable.bookingStatus })
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, assignment.sessionId))
+        .limit(1);
+      if (linkedSession && isCancelledBooking(linkedSession)) {
+        res.status(404).json({ error: "Assignment not found" });
+        return;
+      }
+    }
     const joined = await db
       .select({
         assignmentQuestion: assignmentQuestionsTable,
@@ -9961,7 +10122,9 @@ router.get(
     res.json(
       GetAssignmentResponse.parse({
         ...summary,
-        instructions: assignment.instructions,
+        instructions: studentFacing
+          ? studentSafeAssignmentInstructions(assignment.instructions)
+          : assignment.instructions,
         questions: visibleQuestions.map(({ assignmentQuestion, question }) =>
           assignmentQuestionShape(question, assignmentQuestion, {
             includeKeys:

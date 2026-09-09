@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, Video, ChevronRight, CheckCircle2, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { isLiveListedSession } from "@/lib/quiz-content";
 import {
   displaySessionTitle,
   formatSessionDateTime,
@@ -78,7 +79,7 @@ export default function PortalCourse() {
         </h2>
         
         <div className="grid gap-4">
-          {course.sessions.map((session, index) => {
+          {course.sessions.filter(isLiveListedSession).map((session, index) => {
             const isCompleted = session.status === 'completed';
             const isUpcoming = !isCompleted && new Date(session.dateTime) > new Date();
             

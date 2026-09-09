@@ -29,6 +29,7 @@ import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import {
   canCancelOrRescheduleSession,
+  formatSessionDateTime,
   sessionScheduleChangeMessage,
 } from "@/lib/session-display";
 
@@ -506,7 +507,7 @@ export function BookingCard() {
                     <div>
                       <p className="font-medium">{session.title}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {format(parseISO(session.dateTime), "EEE, MMM d · h:mm a")} · {session.timezone}
+                        {formatSessionDateTime(session)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {session.bookingStatus === "rescheduled" ? "Rescheduled" : "Confirmed"}
@@ -742,7 +743,7 @@ export function ClientPreviewBookingCard({
                     <div>
                       <p className="font-medium">{session.title}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {format(parseISO(session.dateTime), "EEE, MMM d · h:mm a")} · {session.timezone}
+                        {formatSessionDateTime(session)}
                       </p>
                     </div>
                     <Badge variant={session.bookingStatus === "cancelled" ? "outline" : "secondary"}>

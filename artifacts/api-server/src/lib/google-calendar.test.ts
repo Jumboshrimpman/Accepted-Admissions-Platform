@@ -11,6 +11,7 @@ const {
   calendarOAuthReturnHref,
   calendarOAuthStateFailureMessage,
   classifyGoogleCalendarRequestFailure,
+  googleCalendarEventWritePath,
   classifyGoogleProviderError,
   classifyGoogleTokenExchangeFailure,
   createCalendarOAuthState,
@@ -40,6 +41,17 @@ const {
 } = googleCalendar;
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
+
+test("event writes notify attendees the same way create does", () => {
+  assert.match(
+    googleCalendarEventWritePath("primary"),
+    /\/calendars\/primary\/events\?sendUpdates=all$/,
+  );
+  assert.match(
+    googleCalendarEventWritePath("primary", "evt-1"),
+    /\/calendars\/primary\/events\/evt-1\?sendUpdates=all$/,
+  );
+});
 
 test("requests the configured least-privilege Google Calendar scopes", () => {
   assert.deepEqual(GOOGLE_CALENDAR_SCOPES, [
@@ -428,4 +440,19 @@ test("freeBusy auth and scope errors disconnect; transient errors stay connected
   assert.equal(calendarBusyFailureAction(unavailable), "unavailable");
   assert.equal(calendarConnectProbeFailure(unavailable).outcome, "unavailable");
   assert.equal(calendarBusyFailureAction(new Error("network down")), "unavailable");
+});
+
+test("missing Google Calendar events are treated as already cancelled", () => {
+  assert.equal(
+    googleCalendar.isGoogleCalendarNotFound(
+      new googleCalendar.GoogleCalendarRequestError(404, "notFound", "Not Found"),
+    ),
+    true,
+  );
+  assert.equal(
+    googleCalendar.isGoogleCalendarNotFound(
+      new googleCalendar.GoogleCalendarRequestError(410, "gone", "Gone"),
+    ),
+    false,
+  );
 });

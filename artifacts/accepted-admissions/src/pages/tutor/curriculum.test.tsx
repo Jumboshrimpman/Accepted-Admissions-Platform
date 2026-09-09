@@ -127,6 +127,30 @@ afterEach(() => {
 });
 
 describe("tutor curriculum workspace", () => {
+  test("hides cancelled sessions from Your sessions and assign dropdowns", () => {
+    mocks.curriculum = {
+      ...curriculum,
+      sessions: [
+        ...curriculum.sessions,
+        {
+          ...curriculum.sessions[0]!,
+          id: "session-cancelled",
+          title: "Cancelled SAT Session",
+          bookingStatus: "cancelled",
+        },
+      ],
+    };
+    render(<TutorCurriculumPage />);
+    expect(screen.getByTestId("tutor-session-card-session-1")).toBeTruthy();
+    expect(screen.queryByTestId("tutor-session-card-session-cancelled")).toBeNull();
+    expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
+    const assignOptions = Array.from(
+      (screen.getByTestId("tutor-assign-quiz-session") as HTMLSelectElement).options,
+    ).map((option) => option.value);
+    expect(assignOptions).toContain("session-1");
+    expect(assignOptions).not.toContain("session-cancelled");
+  });
+
   test("lets a tutor create a session and assign bank work for a linked student", () => {
     render(<TutorCurriculumPage />);
 

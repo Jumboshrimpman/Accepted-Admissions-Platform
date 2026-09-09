@@ -1,5 +1,6 @@
 import type { CurriculumBlock } from "@workspace/api-client-react";
 import { BookOpen, ExternalLink, Target } from "lucide-react";
+import { isUnfinishedHomeworkClientCopy } from "@/lib/quiz-content";
 
 function textValue(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -22,11 +23,11 @@ export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
             {libraryKind.replaceAll("_", " ")}
           </span>
         </div>
-        {description && description !== title ? (
+        {description && description !== title && !isUnfinishedHomeworkClientCopy(description) ? (
           <p className="text-sm text-muted-foreground">{description}</p>
         ) : null}
-        {html ? (
-          <div className="whitespace-pre-wrap text-sm text-muted-foreground">{html}</div>
+        {html && !isUnfinishedHomeworkClientCopy(html) ? (
+          <div className="text-sm text-muted-foreground">{html}</div>
         ) : null}
         {url ? (
           <a
@@ -44,17 +45,21 @@ export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
   }
   if (kind === "heading") return <h3 className="text-lg font-semibold">{textValue(config.text)}</h3>;
   if (kind === "rich_text") {
+    const body = textValue(config.html || config.text);
+    if (isUnfinishedHomeworkClientCopy(body)) return null;
     return (
-      <div className="prose prose-slate max-w-none whitespace-pre-wrap text-muted-foreground">
-        {textValue(config.html || config.text)}
+      <div className="prose prose-slate max-w-none text-muted-foreground">
+        {body}
       </div>
     );
   }
   if (kind === "callout") {
+    const body = textValue(config.text);
+    if (isUnfinishedHomeworkClientCopy(body)) return null;
     return (
       <div className="rounded-xl border border-accent/20 bg-accent/10 p-4">
         <BookOpen className="mr-2 inline h-4 w-4 text-accent" />
-        {textValue(config.text)}
+        {body}
       </div>
     );
   }
@@ -88,7 +93,9 @@ export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
     return (
       <div className="space-y-1">
         {title ? <p className="font-medium">{title}</p> : null}
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        {description && !isUnfinishedHomeworkClientCopy(description) ? (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        ) : null}
       </div>
     );
   }

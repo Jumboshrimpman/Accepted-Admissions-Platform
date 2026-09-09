@@ -974,6 +974,19 @@ export async function listGoogleBusyWindows(
   return data.calendars?.[calendarId]?.busy ?? [];
 }
 
+export function googleCalendarEventWritePath(
+  calendarId: string,
+  eventId?: string,
+): string {
+  const base = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+  const path = eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
+  return `${path}?sendUpdates=all`;
+}
+
+export function isGoogleCalendarNotFound(error: unknown): boolean {
+  return error instanceof GoogleCalendarRequestError && error.status === 404;
+}
+
 export async function createGoogleEvent(
   accessToken: string,
   calendarId: string,
@@ -981,7 +994,7 @@ export async function createGoogleEvent(
 ): Promise<GoogleCalendarEvent> {
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`,
+    googleCalendarEventWritePath(calendarId),
     { method: "POST", body: JSON.stringify(event) },
   );
 }
@@ -991,11 +1004,16 @@ export async function deleteGoogleEvent(
   calendarId: string,
   eventId: string,
 ): Promise<void> {
-  await googleCalendarRequest<void>(
-    accessToken,
-    `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-    { method: "DELETE" },
-  );
+  try {
+    await googleCalendarRequest<void>(
+      accessToken,
+      googleCalendarEventWritePath(calendarId, eventId),
+      { method: "DELETE" },
+    );
+  } catch (error) {
+    if (isGoogleCalendarNotFound(error)) return;
+    throw error;
+  }
 }
 
 export async function updateGoogleEvent(
@@ -1006,7 +1024,7 @@ export async function updateGoogleEvent(
 ): Promise<GoogleCalendarEvent> {
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    googleCalendarEventWritePath(calendarId, eventId),
     { method: "PATCH", body: JSON.stringify(event) },
   );
 }
