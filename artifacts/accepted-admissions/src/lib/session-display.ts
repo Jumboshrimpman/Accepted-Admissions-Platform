@@ -113,6 +113,93 @@ export function sessionTimezoneLabel(timezone: string): string {
   return timezone === "Asia/Tokyo" ? "JST" : timezone;
 }
 
+export function sessionStartTimeFieldLabel(timezone: string): string {
+  const trimmed = timezone.trim();
+  return trimmed ? `Start time (${sessionTimezoneLabel(trimmed)})` : "Start time (session timezone)";
+}
+
+export function formatAdminBrowserLocalHint(
+  dateTime: string | Date,
+  timeZone: string = Intl.DateTimeFormat().resolvedOptions().timeZone,
+): string {
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(asDate(dateTime));
+  return `Your local: ${formatted}`;
+}
+
+/** Taito Goto / taito0525@gmail.com sessions are always 9–10pm JST. */
+export const TAITO_SESSION_TIMEZONE = "Asia/Tokyo";
+export const TAITO_SESSION_EMAIL = "taito0525@gmail.com";
+export const TAITO_DEFAULT_START_LOCAL = "21:00";
+
+/**
+ * Match Taito from the admin clients list by email or by name
+ * (`Taito Goto` / `Taito`). Case-insensitive.
+ */
+export function isTaitoSessionPerson(
+  person: { name?: string | null; email?: string | null } | null | undefined,
+): boolean {
+  if (!person) return false;
+  const email = person.email?.trim().toLowerCase() ?? "";
+  if (email === TAITO_SESSION_EMAIL) return true;
+  const name = person.name?.trim().toLowerCase() ?? "";
+  return name === "taito goto" || name === "taito";
+}
+
+/**
+ * Leftover empty / America/New_York defaults are treated as wrong for Taito.
+ * Any other explicit IANA zone (including Asia/Tokyo) is left alone on edit.
+ */
+export function shouldApplyTaitoTimezone(timezone: string | null | undefined): boolean {
+  const trimmed = timezone?.trim() ?? "";
+  return trimmed.length === 0 || trimmed === "America/New_York";
+}
+
+/** Same calendar date (from the reference zone), 21:00 JST — duration 60 → 9–10pm. */
+export function taitoCreateSessionSchedule(
+  referenceDateTime: string | Date = new Date(),
+  referenceTimezone: string = TAITO_SESSION_TIMEZONE,
+): { timezone: string; dateTime: string } {
+  const dateKey = sessionDateKey({
+    dateTime: referenceDateTime,
+    timezone: referenceTimezone.trim() || TAITO_SESSION_TIMEZONE,
+  });
+  return {
+    timezone: TAITO_SESSION_TIMEZONE,
+    dateTime: utcIsoFromSessionLocalValue(
+      `${dateKey}T${TAITO_DEFAULT_START_LOCAL}`,
+      TAITO_SESSION_TIMEZONE,
+    ),
+  };
+}
+
+/**
+ * Create/new: prefer Asia/Tokyo + 21:00 JST on the draft's current calendar date
+ * (so an Eastern afternoon is not rolled into the next JST day).
+ * Edit: only replace empty or leftover America/New_York; do not rewrite the
+ * stored UTC instant or an intentional timezone.
+ */
+export function applyTaitoStudentSchedule<
+  T extends { dateTime: string; timezone: string },
+>(draft: T, student: { name?: string | null; email?: string | null } | null | undefined, mode: "create" | "edit"): T {
+  if (!isTaitoSessionPerson(student)) return draft;
+  if (mode === "create") {
+    return { ...draft, ...taitoCreateSessionSchedule(draft.dateTime, draft.timezone) };
+  }
+  if (shouldApplyTaitoTimezone(draft.timezone)) {
+    return { ...draft, timezone: TAITO_SESSION_TIMEZONE };
+  }
+  return draft;
+}
+
 export function formatSessionTimeRange(
   session: Pick<DisplaySession, "dateTime" | "timezone" | "durationMinutes">,
 ): string {
