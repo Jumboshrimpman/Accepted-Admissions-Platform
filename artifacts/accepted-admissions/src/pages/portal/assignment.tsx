@@ -14,6 +14,7 @@ import {
   useStartAttempt,
   useSubmitAttempt,
   type AssignmentQuestion,
+  type AttemptResponse,
   type AttemptResult,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,10 +38,15 @@ import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
   IN_SESSION_PARTIAL_SUBMIT_COPY,
+  IN_SESSION_PER_QUESTION_FEEDBACK_COPY,
+  IN_SESSION_PRACTICE_CHECK_COPY,
   answeredQuestionCount,
+  allowsInSessionPerQuestionFeedback,
   canSubmitStudentAttempt,
+  isAnsweredValue,
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
+  isQuestionFeedbackRevealed,
   shouldAutoSubmitOnExpiry,
   studentSeesFinishedResult,
   studentSeesPredictionStep,
@@ -265,6 +271,63 @@ function ResultView({ result }: { result: AttemptResult }) {
   );
 }
 
+function InSessionQuestionFeedback({
+  correct,
+  studentAnswer,
+  correctAnswer,
+  explanation,
+  choices,
+  tone = "default",
+}: {
+  correct?: boolean | null;
+  studentAnswer?: string | null;
+  correctAnswer?: string | null;
+  explanation?: string | null;
+  choices?: Array<{ id: string; label: string; text: string }>;
+  tone?: "default" | "ink";
+}) {
+  const ink = tone === "ink";
+  return (
+    <div
+      className={`mt-4 space-y-3 rounded-xl p-4 ${
+        ink
+          ? correct
+            ? "bg-emerald-500/20 text-white"
+            : "bg-amber-400/20 text-white"
+          : correct
+            ? "border border-emerald-200 bg-emerald-50/80"
+            : "border border-amber-200 bg-amber-50/80"
+      }`}
+      data-testid="question-feedback"
+    >
+      <div className="flex items-center gap-2 font-semibold">
+        {correct ? (
+          <CheckCircle className={`h-5 w-5 ${ink ? "text-emerald-200" : "text-emerald-600"}`} />
+        ) : (
+          <CircleAlert className={`h-5 w-5 ${ink ? "text-amber-200" : "text-amber-600"}`} />
+        )}
+        {correct ? "Correct" : "Incorrect"}
+      </div>
+      <div className={`grid gap-2 text-sm ${ink ? "text-white/90" : ""} sm:grid-cols-2`}>
+        <div className={ink ? "rounded-lg bg-white/10 p-3" : "rounded-lg bg-background/70 p-3"}>
+          <span className={ink ? "text-white/70" : "text-muted-foreground"}>Your answer:</span>{" "}
+          {answerText(studentAnswer, choices)}
+        </div>
+        <div className={ink ? "rounded-lg bg-white/10 p-3" : "rounded-lg bg-background/70 p-3"}>
+          <span className={ink ? "text-white/70" : "text-muted-foreground"}>Correct answer:</span>{" "}
+          {answerText(correctAnswer, choices)}
+        </div>
+      </div>
+      {explanation ? (
+        <p className={`text-sm ${ink ? "text-white/85" : "text-muted-foreground"}`}>
+          <span className={ink ? "font-medium text-white" : "font-medium text-foreground"}>Why:</span>{" "}
+          {explanation}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AnswerChoices({
   question,
   selected,
@@ -368,10 +431,23 @@ export default function PortalAssignment() {
   const saveResponse = useSaveAttemptResponse();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [localResponses, setLocalResponses] = useState<
-    Record<string, { prediction?: string; finalAnswer?: string; locked?: boolean; flagged?: boolean }>
+    Record<
+      string,
+      {
+        prediction?: string;
+        finalAnswer?: string;
+        locked?: boolean;
+        flagged?: boolean;
+        revealed?: boolean;
+        correct?: boolean | null;
+        correctAnswer?: string | null;
+        explanation?: string | null;
+      }
+    >
   >({});
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const expirySubmitted = useRef(false);
   const inSessionHomework = isInSessionHomeworkCompletion({
     deliveryPhase: assignment?.deliveryPhase,
@@ -381,6 +457,9 @@ export default function PortalAssignment() {
     assignment?.deliveryPhase,
     assignment?.title,
   );
+  const perQuestionFeedback = allowsInSessionPerQuestionFeedback({
+    deliveryPhase: assignment?.deliveryPhase,
+  });
 
   useEffect(() => {
     if (!attemptId && assignment?.latestAttemptId) setAttemptId(assignment.latestAttemptId);
@@ -391,18 +470,34 @@ export default function PortalAssignment() {
     setRemainingSeconds(attempt.remainingSeconds);
     const responseMap: Record<
       string,
-      { prediction?: string; finalAnswer?: string; locked?: boolean; flagged?: boolean }
+      {
+        prediction?: string;
+        finalAnswer?: string;
+        locked?: boolean;
+        flagged?: boolean;
+        revealed?: boolean;
+        correct?: boolean | null;
+        correctAnswer?: string | null;
+        explanation?: string | null;
+      }
     > = {};
     for (const response of attempt.responses) {
+      const revealed =
+        allowsInSessionPerQuestionFeedback({ deliveryPhase: assignment?.deliveryPhase }) &&
+        isQuestionFeedbackRevealed(response);
       responseMap[response.questionId] = {
         prediction: response.prediction ?? "",
         finalAnswer: response.finalAnswer ?? "",
         locked: response.predictionLocked,
         flagged: response.flagged,
+        revealed,
+        correct: revealed ? response.correct : null,
+        correctAnswer: revealed ? response.correctAnswer : null,
+        explanation: revealed ? response.explanation : null,
       };
     }
     setLocalResponses(responseMap);
-  }, [attempt]);
+  }, [assignment?.deliveryPhase, attempt]);
 
   useEffect(() => {
     if (collaborative || attempt?.status !== "active") return;
@@ -454,14 +549,35 @@ export default function PortalAssignment() {
     }
   }, [answeredCount, attempt?.status, collaborative, remainingSeconds, submit]);
 
+  const applySavedFeedback = (questionId: string, saved: AttemptResponse) => {
+    const revealed = isQuestionFeedbackRevealed(saved);
+    setLocalResponses((responses) => ({
+      ...responses,
+      [questionId]: {
+        ...responses[questionId],
+        finalAnswer: saved.finalAnswer ?? responses[questionId]?.finalAnswer,
+        flagged: saved.flagged,
+        revealed,
+        correct: revealed ? saved.correct : null,
+        correctAnswer: revealed ? saved.correctAnswer : null,
+        explanation: revealed ? saved.explanation : null,
+      },
+    }));
+  };
+
   const updateResponse = (
     questionId: string,
     updates: { prediction?: string; finalAnswer?: string; locked?: boolean; flagged?: boolean },
+    options?: { checkAnswer?: boolean },
   ) => {
     const current = localResponses[questionId] ?? {};
+    if (isQuestionFeedbackRevealed(current) && updates.finalAnswer !== undefined) {
+      return;
+    }
     const next = { ...current, ...updates };
     setLocalResponses((responses) => ({ ...responses, [questionId]: next }));
     setSubmitError(null);
+    setCheckError(null);
     if (!attemptId || viewer) return;
     saveResponse.mutate(
       {
@@ -473,10 +589,28 @@ export default function PortalAssignment() {
           finalAnswer: next.finalAnswer ?? null,
           flagged: next.flagged,
           timeSpentSeconds: 0,
+          checkAnswer: options?.checkAnswer,
         },
       },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetAttemptQueryKey(attemptId) }) },
+      {
+        onSuccess: (saved) => {
+          applySavedFeedback(questionId, saved);
+          queryClient.invalidateQueries({ queryKey: getGetAttemptQueryKey(attemptId) });
+        },
+        onError: (error) => {
+          const message = (error as { data?: { error?: string } } | null)?.data?.error;
+          if (options?.checkAnswer) {
+            setCheckError(message || "Could not check this answer.");
+          }
+        },
+      },
     );
+  };
+
+  const checkCurrentAnswer = (questionId: string) => {
+    const current = localResponses[questionId] ?? {};
+    if (!isAnsweredValue(current.finalAnswer) || isQuestionFeedbackRevealed(current)) return;
+    updateResponse(questionId, { finalAnswer: current.finalAnswer }, { checkAnswer: true });
   };
 
   if (loadingAssignment) {
@@ -532,13 +666,12 @@ export default function PortalAssignment() {
             <p className="whitespace-pre-wrap text-muted-foreground">{assignment.instructions}</p>
             {collaborative ? (
               <p className="text-sm text-muted-foreground">
-                There is no prediction step and no empty auto-submit. Record answers as you work them with
-                your tutor.
+                {IN_SESSION_PRACTICE_CHECK_COPY} There is no prediction step and no empty auto-submit.
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 {inSessionHomework
-                  ? IN_SESSION_PARTIAL_SUBMIT_COPY
+                  ? `${IN_SESSION_PARTIAL_SUBMIT_COPY} ${IN_SESSION_PER_QUESTION_FEEDBACK_COPY}`
                   : "Your timer is tracked on the server. You can pause, and your responses autosave as you work. Submit is blocked until at least one question is answered."}
               </p>
             )}
@@ -645,17 +778,18 @@ export default function PortalAssignment() {
   const response = localResponses[question.id] ?? {};
   const showPrediction = studentSeesPredictionStep(question.predictionFirst);
   const recordedHere = Boolean(response.finalAnswer?.trim());
+  const revealedHere = isQuestionFeedbackRevealed(response);
 
   if (collaborative) {
     return (
       <div className="mx-auto max-w-3xl space-y-5 pb-16">
         <p className="text-sm text-muted-foreground">
-          Open any problem, discuss it with your tutor, and record the answer you agree on. This is
-          not a timed quiz.
+          {IN_SESSION_PRACTICE_CHECK_COPY} This is not a timed quiz.
         </p>
         <div className="flex flex-wrap gap-2" data-testid="practice-problem-picker">
           {assignment.questions.map((item, index) => {
             const recorded = Boolean(localResponses[item.id]?.finalAnswer?.trim());
+            const checked = isQuestionFeedbackRevealed(localResponses[item.id]);
             return (
               <Button
                 key={item.id}
@@ -664,7 +798,7 @@ export default function PortalAssignment() {
                 onClick={() => setCurrentQuestionIndex(index)}
               >
                 {index + 1}
-                {recorded ? " · recorded" : ""}
+                {checked ? " · checked" : recorded ? " · recorded" : ""}
               </Button>
             );
           })}
@@ -695,18 +829,42 @@ export default function PortalAssignment() {
               <AnswerChoices
                 question={question}
                 selected={response.finalAnswer}
-                disabled={viewer}
+                disabled={viewer || revealedHere}
                 tone="ink"
                 onSelect={(value) => updateResponse(question.id, { finalAnswer: value })}
               />
             )}
           </div>
-          {recordedHere ? (
-            <p className="mt-4 text-sm text-white/75">Recorded. Keep discussing or open another problem.</p>
+          {perQuestionFeedback && !revealedHere ? (
+            <Button
+              className="mt-4 rounded-full bg-white text-foreground hover:bg-white/90"
+              data-testid="check-answer"
+              disabled={viewer || !recordedHere || saveResponse.isPending}
+              onClick={() => checkCurrentAnswer(question.id)}
+            >
+              {saveResponse.isPending ? "Checking…" : "Check answer"}
+            </Button>
+          ) : null}
+          {perQuestionFeedback && revealedHere ? (
+            <InSessionQuestionFeedback
+              correct={response.correct}
+              studentAnswer={response.finalAnswer}
+              correctAnswer={response.correctAnswer}
+              explanation={response.explanation}
+              choices={question.choices}
+              tone="ink"
+            />
+          ) : recordedHere ? (
+            <p className="mt-4 text-sm text-white/75">Recorded. Check the answer, or open another problem.</p>
           ) : (
-            <p className="mt-4 text-sm text-white/70">Choose an answer together to record this problem.</p>
+            <p className="mt-4 text-sm text-white/70">Choose an answer together, then check it.</p>
           )}
         </section>
+        {checkError ? (
+          <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900" data-testid="check-answer-error">
+            {checkError}
+          </p>
+        ) : null}
         {submitError || (!submitGuard.ok && submitGuard.reason === "empty") ? (
           <p
             role="alert"
@@ -810,14 +968,38 @@ export default function PortalAssignment() {
           <AnswerChoices
             question={question}
             selected={response.finalAnswer}
-            disabled={viewer}
+            disabled={viewer || revealedHere}
             onSelect={(value) => updateResponse(question.id, { finalAnswer: value })}
           />
         )}
       </div>
+      {perQuestionFeedback && !revealedHere ? (
+        <Button
+          className="rounded-full"
+          data-testid="check-answer"
+          disabled={viewer || !recordedHere || saveResponse.isPending}
+          onClick={() => checkCurrentAnswer(question.id)}
+        >
+          {saveResponse.isPending ? "Checking…" : "Check answer"}
+        </Button>
+      ) : null}
+      {perQuestionFeedback && revealedHere ? (
+        <InSessionQuestionFeedback
+          correct={response.correct}
+          studentAnswer={response.finalAnswer}
+          correctAnswer={response.correctAnswer}
+          explanation={response.explanation}
+          choices={question.choices}
+        />
+      ) : null}
       {inSessionHomework ? (
         <p className="text-sm text-muted-foreground" data-testid="partial-submit-in-session">
-          {IN_SESSION_PARTIAL_SUBMIT_COPY}
+          {IN_SESSION_PARTIAL_SUBMIT_COPY} {IN_SESSION_PER_QUESTION_FEEDBACK_COPY}
+        </p>
+      ) : null}
+      {checkError ? (
+        <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900" data-testid="check-answer-error">
+          {checkError}
         </p>
       ) : null}
       {submitError || (!submitGuard.ok && submitGuard.reason === "empty") ? (

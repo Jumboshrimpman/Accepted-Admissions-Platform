@@ -51,6 +51,10 @@ const mocks = vi.hoisted(() => ({
       predictionLocked: boolean;
       finalAnswer: string | null;
       flagged: boolean;
+      revealed?: boolean;
+      correct?: boolean | null;
+      correctAnswer?: string | null;
+      explanation?: string | null;
     }>,
   },
   result: null as null | Record<string, unknown>,
@@ -233,6 +237,83 @@ describe("student attempt UI", () => {
     expect(screen.queryByTestId("session-practice-board")).toBeNull();
     expect(screen.getByTestId("partial-submit-in-session").textContent).toMatch(/at most 15 questions/i);
     expect(screen.getByTestId("submit-in-session-homework")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("submit-in-session-homework"));
+    expect(submitMutate).toHaveBeenCalled();
+  });
+
+  test("pre-work keeps answers hidden until final submit", () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    expect(saveMutate).toHaveBeenCalled();
+    expect(saveMutate.mock.calls[0][0].data.checkAnswer).toBeFalsy();
+    expect(screen.queryByTestId("check-answer")).toBeNull();
+    expect(screen.queryByTestId("question-feedback")).toBeNull();
+    expect(screen.queryByText("Correct")).toBeNull();
+    expect(screen.queryByText("Incorrect")).toBeNull();
+    expect(screen.queryByText(/official explanation/i)).toBeNull();
+    expect(screen.queryByText(/However signals contrast/i)).toBeNull();
+  });
+
+  test("in-session practice checks one question and shows feedback without submitting the quiz", () => {
+    mocks.deliveryPhase = "during_session";
+    saveMutate.mockImplementation((vars, opts) => {
+      if (vars.data.checkAnswer) {
+        opts?.onSuccess?.({
+          questionId: vars.data.questionId,
+          prediction: null,
+          predictionLocked: false,
+          finalAnswer: vars.data.finalAnswer,
+          flagged: false,
+          revealed: true,
+          correct: vars.data.finalAnswer === "a",
+          correctAnswer: "a",
+          explanation: "However signals contrast.",
+        });
+      }
+    });
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("session-practice-board")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    fireEvent.click(screen.getByTestId("check-answer"));
+    expect(saveMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          questionId: "q1",
+          finalAnswer: "a",
+          checkAnswer: true,
+        }),
+      }),
+      expect.any(Object),
+    );
+    expect(screen.getByTestId("question-feedback").textContent).toMatch(/Correct/);
+    expect(screen.getByTestId("question-feedback").textContent).toMatch(/However signals contrast/);
+    expect(submitMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /2/ }));
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
+    expect(screen.queryByTestId("question-feedback")).toBeNull();
+    expect(screen.getByTestId("check-answer")).toHaveProperty("disabled", true);
+  });
+
+  test("in-session homework restores checked feedback after refresh and still allows submit", () => {
+    mocks.deliveryPhase = "during_session";
+    mocks.title = "In-session homework completion";
+    mocks.attempt.responses = [
+      {
+        questionId: "q1",
+        prediction: null,
+        predictionLocked: false,
+        finalAnswer: "b",
+        flagged: false,
+        revealed: true,
+        correct: false,
+        correctAnswer: "a",
+        explanation: "However signals contrast.",
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("question-feedback").textContent).toMatch(/Incorrect/);
+    expect(screen.getByTestId("question-feedback").textContent).toMatch(/However signals contrast/);
+    expect(screen.queryByTestId("check-answer")).toBeNull();
     fireEvent.click(screen.getByTestId("submit-in-session-homework"));
     expect(submitMutate).toHaveBeenCalled();
   });

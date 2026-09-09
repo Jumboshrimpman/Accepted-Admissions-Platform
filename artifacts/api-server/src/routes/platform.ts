@@ -342,6 +342,14 @@ import {
   wrongAnswersOnly,
 } from "../lib/session-homework";
 import {
+  attemptResponseFeedbackShape,
+  checkAnswerRejectedReason,
+  gradeInSessionAnswer,
+  isResponseRevealed,
+  lockedFinalAnswerAfterReveal,
+  studentVisibleQuestionFeedback,
+} from "../lib/in-session-question-feedback";
+import {
   QuestionGenerationError,
   generateQuestionsWithProvider,
   questionGenerationStatus,
@@ -2924,7 +2932,11 @@ async function timerSummary(attemptId: string) {
 
 async function attemptShape(attemptId: string) {
   const [record] = await db
-    .select({ attempt: attemptsTable, timeLimitMinutes: assignmentsTable.timeLimitMinutes })
+    .select({
+      attempt: attemptsTable,
+      timeLimitMinutes: assignmentsTable.timeLimitMinutes,
+      deliveryPhase: assignmentsTable.deliveryPhase,
+    })
     .from(attemptsTable)
     .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
     .where(eq(attemptsTable.id, attemptId))
@@ -2936,6 +2948,21 @@ async function attemptShape(attemptId: string) {
     .select()
     .from(responsesTable)
     .where(eq(responsesTable.attemptId, attempt.id));
+  const revealedIds = saved
+    .filter((response) => isResponseRevealed(response.correct))
+    .map((response) => response.questionId);
+  const revealedQuestions =
+    revealedIds.length > 0
+      ? await db
+          .select({
+            id: questionsTable.id,
+            correctAnswer: questionsTable.correctAnswer,
+            explanation: questionsTable.explanation,
+          })
+          .from(questionsTable)
+          .where(inArray(questionsTable.id, revealedIds))
+      : [];
+  const questionById = new Map(revealedQuestions.map((question) => [question.id, question]));
   return {
     id: attempt.id,
     assignmentId: attempt.assignmentId,
@@ -2950,14 +2977,25 @@ async function attemptShape(attemptId: string) {
       attempt.status === "submitted" || attempt.status === "expired"
         ? await storedAttemptResult(attempt.id)
         : null,
-    responses: saved.map((response) => ({
-      questionId: response.questionId,
-      prediction: response.prediction,
-      predictionLocked: response.predictionLocked,
-      finalAnswer: response.finalAnswer,
-      flagged: response.flagged,
-      savedAt: response.savedAt,
-    })),
+    responses: saved.map((response) => {
+      const question = questionById.get(response.questionId);
+      return attemptResponseFeedbackShape({
+        questionId: response.questionId,
+        prediction: response.prediction,
+        predictionLocked: response.predictionLocked,
+        finalAnswer: response.finalAnswer,
+        flagged: response.flagged,
+        savedAt: response.savedAt,
+        feedback: studentVisibleQuestionFeedback({
+          deliveryPhase: record.deliveryPhase,
+          revealed: isResponseRevealed(response.correct),
+          storedCorrect: response.correct,
+          studentAnswer: response.finalAnswer,
+          correctAnswer: question?.correctAnswer,
+          explanation: question?.explanation,
+        }),
+      });
+    }),
   };
 }
 
@@ -9991,10 +10029,15 @@ router.put(
       res.status(400).json({ error: body.error.message });
       return;
     }
-    const [attempt] = await db
-      .select()
+    const [record] = await db
+      .select({
+        attempt: attemptsTable,
+        deliveryPhase: assignmentsTable.deliveryPhase,
+      })
       .from(attemptsTable)
+      .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
       .where(eq(attemptsTable.id, params.data.attemptId));
+    const attempt = record?.attempt;
     if (!attempt || attempt.userId !== req.appUser!.id) {
       res.status(404).json({ error: "Attempt not found" });
       return;
@@ -10004,8 +10047,13 @@ router.put(
       return;
     }
     const [belongsToAssignment] = await db
-      .select({ id: assignmentQuestionsTable.id })
+      .select({
+        id: assignmentQuestionsTable.id,
+        correctAnswer: questionsTable.correctAnswer,
+        explanation: questionsTable.explanation,
+      })
       .from(assignmentQuestionsTable)
+      .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
       .where(
         and(
           eq(assignmentQuestionsTable.assignmentId, attempt.assignmentId),
@@ -10037,16 +10085,41 @@ router.put(
       res.status(409).json({ error: "Prediction is locked" });
       return;
     }
+    const alreadyRevealed = isResponseRevealed(existing?.correct);
+    const nextFinalAnswer = lockedFinalAnswerAfterReveal({
+      alreadyRevealed,
+      existingAnswer: existing?.finalAnswer,
+      incomingAnswer: body.data.finalAnswer ?? null,
+    });
+    const checkRejected = checkAnswerRejectedReason({
+      deliveryPhase: record.deliveryPhase,
+      checkAnswer: body.data.checkAnswer,
+      finalAnswer: nextFinalAnswer,
+    });
+    if (checkRejected) {
+      res.status(409).json({ error: checkRejected });
+      return;
+    }
+    const shouldReveal = Boolean(body.data.checkAnswer) || alreadyRevealed;
+    const gradedCorrect = shouldReveal
+      ? alreadyRevealed
+        ? existing!.correct
+        : gradeInSessionAnswer({
+            studentAnswer: nextFinalAnswer,
+            correctAnswer: belongsToAssignment.correctAnswer,
+          })
+      : existing?.correct ?? null;
     const values = {
       attemptId: attempt.id,
       questionId: body.data.questionId,
       prediction: body.data.prediction ?? existing?.prediction ?? null,
       predictionLocked:
         existing?.predictionLocked || body.data.lockPrediction === true,
-      finalAnswer: body.data.finalAnswer ?? existing?.finalAnswer ?? null,
+      finalAnswer: nextFinalAnswer,
       flagged: body.data.flagged ?? existing?.flagged ?? false,
       timeSpentSeconds:
         body.data.timeSpentSeconds ?? existing?.timeSpentSeconds ?? 0,
+      correct: gradedCorrect,
       savedAt: new Date(),
     };
     const [saved] = await db
@@ -10058,14 +10131,24 @@ router.put(
       })
       .returning();
     res.json(
-      SaveAttemptResponseResponse.parse({
-        questionId: saved.questionId,
-        prediction: saved.prediction,
-        predictionLocked: saved.predictionLocked,
-        finalAnswer: saved.finalAnswer,
-        flagged: saved.flagged,
-        savedAt: saved.savedAt,
-      }),
+      SaveAttemptResponseResponse.parse(
+        attemptResponseFeedbackShape({
+          questionId: saved.questionId,
+          prediction: saved.prediction,
+          predictionLocked: saved.predictionLocked,
+          finalAnswer: saved.finalAnswer,
+          flagged: saved.flagged,
+          savedAt: saved.savedAt,
+          feedback: studentVisibleQuestionFeedback({
+            deliveryPhase: record.deliveryPhase,
+            revealed: isResponseRevealed(saved.correct),
+            storedCorrect: saved.correct,
+            studentAnswer: saved.finalAnswer,
+            correctAnswer: belongsToAssignment.correctAnswer,
+            explanation: belongsToAssignment.explanation,
+          }),
+        }),
+      ),
     );
   },
 );

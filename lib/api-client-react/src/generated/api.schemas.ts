@@ -2011,6 +2011,13 @@ export interface AttemptResponse {
   finalAnswer: string | null;
   flagged: boolean;
   savedAt?: string;
+  revealed?: boolean;
+  /** @nullable */
+  correct?: boolean | null;
+  /** @nullable */
+  correctAnswer?: string | null;
+  /** @nullable */
+  explanation?: string | null;
 }
 
 export interface AttemptResponseInput {
@@ -2029,6 +2036,11 @@ export interface AttemptResponseInput {
   flagged?: boolean;
   /** @minimum 0 */
   timeSpentSeconds?: number;
+  /**
+   * Grade this item immediately. Only allowed for during_session practice.
+   * Timed pre-work and diagnostics stay hidden until final submit.
+   */
+  checkAnswer?: boolean;
 }
 
 export type TimerEventType = typeof TimerEventType[keyof typeof TimerEventType];

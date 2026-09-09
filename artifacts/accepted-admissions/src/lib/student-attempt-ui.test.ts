@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   answeredQuestionCount,
   canSubmitStudentAttempt,
+  allowsInSessionPerQuestionFeedback,
   allowsPartialInSessionSubmit,
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
+  isQuestionFeedbackRevealed,
   shouldAutoSubmitOnExpiry,
   studentCanSeeAnswerChoices,
   studentSeesFinishedResult,
@@ -48,6 +50,10 @@ test("in-session practice is collaborative, not a prediction quiz", () => {
     }),
     true,
   );
+  assert.equal(allowsInSessionPerQuestionFeedback({ deliveryPhase: "during_session" }), true);
+  assert.equal(allowsInSessionPerQuestionFeedback({ deliveryPhase: "before_session" }), false);
+  assert.equal(isQuestionFeedbackRevealed({ revealed: true, correct: false }), true);
+  assert.equal(isQuestionFeedbackRevealed({ revealed: false, correct: null }), false);
 });
 
 test("timer expiry with zero answers does not show a finished result", () => {

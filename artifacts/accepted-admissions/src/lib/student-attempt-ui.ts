@@ -13,6 +13,13 @@ export function isAnsweredValue(value: string | null | undefined): boolean {
   return Boolean(value && value.trim().length > 0);
 }
 
+export function isQuestionFeedbackRevealed(response: {
+  revealed?: boolean;
+  correct?: boolean | null;
+} | undefined): boolean {
+  return Boolean(response?.revealed) && response?.correct !== undefined && response?.correct !== null;
+}
+
 export function answeredQuestionCount(
   responses: Record<string, { finalAnswer?: string | null } | undefined>,
 ): number {
@@ -71,6 +78,13 @@ export function allowsPartialInSessionSubmit(input: {
   return isInSessionHomeworkCompletion(input);
 }
 
+/** Immediate Check answer is only for live session work, never timed pre-work/diagnostics. */
+export function allowsInSessionPerQuestionFeedback(input: {
+  deliveryPhase?: string | null;
+}): boolean {
+  return input.deliveryPhase === "during_session";
+}
+
 export const EMPTY_SUBMIT_MESSAGE =
   "Submit is blocked until at least one question has an answer. An empty attempt is not saved as completed.";
 
@@ -79,3 +93,9 @@ export const COLLABORATIVE_PRACTICE_COPY =
 
 export const IN_SESSION_PARTIAL_SUBMIT_COPY =
   "This in-session homework set is at most 15 questions. You can submit for results without answering every question.";
+
+export const IN_SESSION_PER_QUESTION_FEEDBACK_COPY =
+  "Check each question as you go for correct/incorrect and the official explanation. Submit the quiz when you are finished so the session attempt is recorded.";
+
+export const IN_SESSION_PRACTICE_CHECK_COPY =
+  "Check an answer to see whether it is correct and read the official explanation. Finish practice when the session work is done so the attempt is recorded.";
