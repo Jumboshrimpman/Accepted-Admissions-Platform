@@ -179,9 +179,10 @@ describe("tutor curriculum workspace", () => {
       ],
     };
     render(<TutorCurriculumPage />);
-    expect(screen.getByText("Taito’s SAT Session with Eunice")).toBeTruthy();
-    expect(screen.getByText(/9:00–10:00 PM JST/)).toBeTruthy();
-    expect(screen.queryByText(/8:00\s*AM/)).toBeNull();
+    const card = screen.getByTestId("tutor-session-card-1cc3dea5-9532-4dc2-9cea-3d1e5d65d119");
+    expect(card.textContent).toContain("Taito’s SAT Session with Eunice");
+    expect(card.textContent).toMatch(/9:00–10:00 PM JST/);
+    expect(card.textContent).not.toMatch(/8:00\s*AM/);
   });
 
   test("lets a tutor create a session and assign bank work for a linked student", () => {
