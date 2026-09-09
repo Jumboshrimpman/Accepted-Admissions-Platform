@@ -1,5 +1,3 @@
-import { isLiveListedSession } from "./quiz-content";
-
 export function sessionsForDashboardRole<T>(
   sessions: T[],
   viewer: { id: string; role: string },
@@ -10,7 +8,7 @@ export function sessionsForDashboardRole<T>(
       student?: { id?: string } | null;
       bookingStatus?: string | null;
     };
-    if (viewer.role !== "administrator" && !isLiveListedSession(row)) {
+    if (viewer.role !== "administrator" && row.bookingStatus === "cancelled") {
       return false;
     }
     if (viewer.role === "tutor") {

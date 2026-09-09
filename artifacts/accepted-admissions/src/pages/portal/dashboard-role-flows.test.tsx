@@ -523,6 +523,14 @@ describe("authenticated role dashboard flows", () => {
   test("client session roadmap hides cancelled meetings", () => {
     mocks.dashboard = {
       ...dashboardForRole("student"),
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
       curriculumSessions: [
         {
           id: "session-live",

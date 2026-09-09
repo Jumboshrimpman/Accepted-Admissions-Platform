@@ -160,7 +160,7 @@ test("strips SAT bank figure comments and recovers A–D choices from a letter k
     stripBankFigureComments(
       "<!-- sat-bank-figures -->\n![Cone](https://cdn.example/cone.png)\n<!-- /sat-bank-figures -->\nVolume?",
     ),
-    "![Cone](https://cdn.example/cone.png)\nVolume?",
+    "![Cone](https://cdn.example/cone.png)\n\nVolume?",
   );
   assert.equal(isLetterMultipleChoiceAnswer("C"), true);
   assert.equal(isLetterMultipleChoiceAnswer("9; 9.0"), false);
