@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   clientAdaptiveGuidance,
   clientCurrentFocus,
+  displaySessionFocus,
   hasExtractPlaceholder,
   toClientAdaptiveGuidance,
   usableGuidanceTheme,
@@ -42,6 +43,12 @@ test("uses section coaching when Bluebook skill and domain are missing", () => {
   assert.match(copy.missedSkill, /Math is the leak/);
   assert.match(copy.nextPractice, /Practice Math next/);
   assert.equal(clientCurrentFocus({ nextFocus: ["SAT Math"] }, "fallback"), "Practice Math next.");
+  assert.equal(
+    displaySessionFocus("Skill not in extract", {
+      missClusters: [{ label: "Algebra", kind: "domain", missCount: 8 }],
+    }, "fallback"),
+    "Practice Algebra next.",
+  );
 });
 
 test("falls back to qualitative drill coaching without dumping placeholders", () => {

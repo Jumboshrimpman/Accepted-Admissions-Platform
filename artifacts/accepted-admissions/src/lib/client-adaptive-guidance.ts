@@ -220,6 +220,27 @@ export function clientAdaptiveGuidance(
   return { strength, missedSkill, nextPractice };
 }
 
+export function displaySessionFocus(
+  currentFocus: string | null | undefined,
+  analysis: ClientGuidanceAnalysis | null | undefined,
+  fallback: string,
+): string {
+  if (analysis) {
+    const fromAnalysis = clientCurrentFocus(analysis, "");
+    if (fromAnalysis) return fromAnalysis;
+  }
+  if (
+    currentFocus?.trim() &&
+    !hasExtractPlaceholder(currentFocus) &&
+    usableGuidanceTheme(currentFocus)
+  ) {
+    return currentFocus.trim();
+  }
+  const section = sectionThemeFromLabel(currentFocus);
+  if (section) return `Practice ${section} next.`;
+  return fallback;
+}
+
 export function clientCurrentFocus(
   analysis: ClientGuidanceAnalysis | null | undefined,
   fallback: string,

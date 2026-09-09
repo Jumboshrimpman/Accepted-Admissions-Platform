@@ -16,7 +16,7 @@ import {
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard } from "@/pages/portal/booking-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
-import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
+import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
 import { PORTAL_BOOKING_SECTION_ID, canPurchaseOrBookSatCredits } from "@/lib/portal-sat";
 
 const FALL_DATES = [
@@ -339,7 +339,7 @@ export function ClientDashboardView({
             </div>
             <div className="rounded-xl bg-muted/40 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
-              <p className="mt-2 text-sm font-medium">{nextSession.currentFocus ?? "Open the session to review the focus."}</p>
+              <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 {nextSession.preparation ? `${nextSession.preparation.title} · ${readinessLabel(nextSession)}` : "No required preparation."}
               </p>
@@ -409,7 +409,7 @@ export function ClientDashboardView({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={sessionSubjectLabel(session.subject) === "English" ? "secondary" : "outline"}>{sessionSubjectLabel(session.subject)}</Badge>
-                        <span className="truncate text-sm font-medium">{session.currentFocus}</span>
+                        <span className="truncate text-sm font-medium">{displaySessionFocus(session.currentFocus, session.latestResult?.analysis, "Open the session to review the focus.")}</span>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {session.preparation ? `Before: ${session.preparation.title}` : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
