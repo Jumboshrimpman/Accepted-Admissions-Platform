@@ -1295,7 +1295,9 @@ export const ListSatBankQuestionsQueryParams = zod.object({
   "examFamily": zod.enum(['sat', 'psat']).optional(),
   "collectionId": zod.coerce.string().optional(),
   "section": zod.enum(['rw', 'math']).optional(),
-  "skill": zod.coerce.string().optional()
+  "skill": zod.coerce.string().optional(),
+  "questionType": zod.enum(['mcq', 'spr']).optional(),
+  "includeKeys": zod.enum(['true', 'false']).optional()
 })
 
 export const ListSatBankQuestionsResponseItem = zod.object({
@@ -1326,7 +1328,14 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "extractGaps": zod.record(zod.string(), zod.unknown()).optional(),
   "assignable": zod.boolean().optional(),
   "hasOfficialExplanation": zod.boolean(),
-  "linkedQuestionId": zod.string().nullish()
+  "linkedQuestionId": zod.string().nullish(),
+  "correctAnswer": zod.string().optional(),
+  "officialExplanation": zod.string().optional(),
+  "figures": zod.array(zod.object({
+    "url": zod.string().nullish(),
+    "path": zod.string().nullish(),
+    "alt": zod.string().nullish()
+  })).optional()
 })
 export const ListSatBankQuestionsResponse = zod.array(ListSatBankQuestionsResponseItem)
 
@@ -2860,7 +2869,9 @@ export const GetAssignmentResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
 }))
 }))
 
@@ -4028,7 +4039,15 @@ export const updateAssignmentQuestionBodyPositionMin = 0;
 
 export const UpdateAssignmentQuestionBody = zod.object({
   "position": zod.number().min(updateAssignmentQuestionBodyPositionMin).optional(),
-  "predictionFirst": zod.boolean().optional()
+  "predictionFirst": zod.boolean().optional(),
+  "prompt": zod.string().optional(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
 })
 
 export const UpdateAssignmentQuestionResponse = zod.object({
@@ -4045,7 +4064,9 @@ export const UpdateAssignmentQuestionResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
 })
 
 
@@ -4268,5 +4289,41 @@ export const GetTutorCurriculumResponse = zod.object({
  */
 export const CreateTutorSessionBody = CreateAdminSessionBody
 export const CreateTutorSessionResponse = CreateAdminSessionResponse
+
+/**
+ * @summary Create a reusable quiz from official SAT/PSAT bank questions
+ */
+export const createTutorReusableQuizBodyTitleMin = 2;
+export const createTutorReusableQuizBodyTitleMax = 200;
+export const createTutorReusableQuizBodySubjectMin = 1;
+export const createTutorReusableQuizBodySubjectMax = 100;
+export const createTutorReusableQuizBodyBankQuestionIdsMin = 1;
+export const createTutorReusableQuizBodyBankQuestionIdsMax = 80;
+
+export const CreateTutorReusableQuizBody = zod.object({
+  "courseId": zod.string().min(1),
+  "title": zod.string().min(createTutorReusableQuizBodyTitleMin).max(createTutorReusableQuizBodyTitleMax),
+  "subject": zod.string().min(createTutorReusableQuizBodySubjectMin).max(createTutorReusableQuizBodySubjectMax).optional(),
+  "bankQuestionIds": zod.array(zod.string()).min(createTutorReusableQuizBodyBankQuestionIdsMin).max(createTutorReusableQuizBodyBankQuestionIdsMax)
+})
+
+export const CreateTutorReusableQuizResponse = CreateAdminAssignmentResponse
+
+export const CreateTutorSessionQuestionParams = zod.object({
+  "assignmentId": zod.coerce.string()
+})
+
+export const CreateTutorSessionQuestionBody = zod.object({
+  "prompt": zod.string().optional(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
+})
+
+export const CreateTutorSessionQuestionResponse = UpdateAssignmentQuestionResponse
 
 

@@ -8,9 +8,25 @@
 import type { ListSatBankQuestionsExamFamily } from './listSatBankQuestionsExamFamily';
 import type { ListSatBankQuestionsSection } from './listSatBankQuestionsSection';
 
+export type ListSatBankQuestionsQuestionType = typeof ListSatBankQuestionsQuestionType[keyof typeof ListSatBankQuestionsQuestionType];
+
+export const ListSatBankQuestionsQuestionType = {
+  mcq: 'mcq',
+  spr: 'spr',
+} as const;
+
+export type ListSatBankQuestionsIncludeKeys = typeof ListSatBankQuestionsIncludeKeys[keyof typeof ListSatBankQuestionsIncludeKeys];
+
+export const ListSatBankQuestionsIncludeKeys = {
+  true: 'true',
+  false: 'false',
+} as const;
+
 export type ListSatBankQuestionsParams = {
 examFamily?: ListSatBankQuestionsExamFamily;
 collectionId?: string;
 section?: ListSatBankQuestionsSection;
 skill?: string;
+questionType?: ListSatBankQuestionsQuestionType;
+includeKeys?: ListSatBankQuestionsIncludeKeys;
 };

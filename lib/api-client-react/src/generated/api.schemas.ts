@@ -1928,6 +1928,8 @@ export interface AssignmentQuestion {
   skill: string;
   difficulty: AssignmentQuestionDifficulty;
   predictionFirst: boolean;
+  correctAnswer?: string;
+  explanation?: string;
 }
 
 export type AdaptiveQuestion = AssignmentQuestion & {
@@ -2020,6 +2022,17 @@ export interface AssignmentQuestionUpdate {
   /** @minimum 0 */
   position?: number;
   predictionFirst?: boolean;
+  prompt?: string;
+  choices?: AssignmentQuestionChoicesItem[];
+  correctAnswer?: string;
+  explanation?: string;
+}
+
+export interface TutorSessionQuestionInput {
+  prompt?: string;
+  choices?: AssignmentQuestionChoicesItem[];
+  correctAnswer?: string;
+  explanation?: string;
 }
 
 export type AssignmentDetail = AssignmentSummary & {
@@ -2644,7 +2657,26 @@ export interface SatBankQuestion {
   hasOfficialExplanation: boolean;
   /** @nullable */
   linkedQuestionId?: string | null;
+  correctAnswer?: string;
+  officialExplanation?: string;
+  figures?: SatBankQuestionFiguresItem[];
 }
+
+export type SatBankQuestionFiguresItem = {
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  path?: string | null;
+  /** @nullable */
+  alt?: string | null;
+};
+
+export type TutorReusableQuizInput = {
+  courseId: string;
+  title: string;
+  subject?: string;
+  bankQuestionIds: string[];
+};
 
 export interface SatBankCollection {
   id: string;
@@ -2959,7 +2991,23 @@ examFamily?: ListSatBankQuestionsExamFamily;
 collectionId?: string;
 section?: ListSatBankQuestionsSection;
 skill?: string;
+questionType?: ListSatBankQuestionsQuestionType;
+includeKeys?: ListSatBankQuestionsIncludeKeys;
 };
+
+export type ListSatBankQuestionsQuestionType = typeof ListSatBankQuestionsQuestionType[keyof typeof ListSatBankQuestionsQuestionType];
+
+export const ListSatBankQuestionsQuestionType = {
+  mcq: 'mcq',
+  spr: 'spr',
+} as const;
+
+export type ListSatBankQuestionsIncludeKeys = typeof ListSatBankQuestionsIncludeKeys[keyof typeof ListSatBankQuestionsIncludeKeys];
+
+export const ListSatBankQuestionsIncludeKeys = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type ListSatBankQuestionsExamFamily = typeof ListSatBankQuestionsExamFamily[keyof typeof ListSatBankQuestionsExamFamily];
 

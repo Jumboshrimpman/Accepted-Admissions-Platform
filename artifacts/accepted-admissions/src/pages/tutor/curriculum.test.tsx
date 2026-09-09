@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   curriculum: null as TutorCurriculum | null,
   createSession: { isPending: false, mutate: vi.fn() },
   cloneAssignment: { isPending: false, mutate: vi.fn() },
+  updateAssignment: { isPending: false, mutate: vi.fn() },
   assignBank: { isPending: false, mutate: vi.fn() },
   attachLibrary: { isPending: false, mutate: vi.fn() },
 }));
@@ -25,6 +26,7 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   customFetch: vi.fn(),
   useCloneAdminAssignmentToSession: () => mocks.cloneAssignment,
+  useUpdateAdminAssignment: () => mocks.updateAssignment,
   useAssignSatBankPrework: () => mocks.assignBank,
   useAttachSessionLibraryAsset: () => mocks.attachLibrary,
 }));
@@ -129,6 +131,9 @@ describe("tutor curriculum workspace", () => {
     render(<TutorCurriculumPage />);
 
     expect(screen.getByTestId("tutor-curriculum-page")).toBeTruthy();
+    expect(screen.getByTestId("tutor-create-quiz-open")).toBeTruthy();
+    expect(screen.getByTestId("tutor-quiz-repository")).toBeTruthy();
+    expect(screen.getByTestId("tutor-quiz-repo-item-quiz-bank")).toBeTruthy();
     expect(screen.getByTestId("tutor-linked-students").textContent).toContain("Michelle Makarem");
     expect(screen.getByText("SAT Practice Test 11 · 98 questions")).toBeTruthy();
 

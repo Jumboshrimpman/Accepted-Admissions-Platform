@@ -126,6 +126,11 @@ function pdfPath(filename: string): string {
   return `content/college-board/pdfs/${name}`;
 }
 
+export function isTutorQuizMcq(questionType: string | null | undefined): boolean {
+  const type = questionType?.trim().toLowerCase() ?? "";
+  return type !== "spr" && type !== "student_produced_response" && type !== "free_response";
+}
+
 export function isAssignableBankItem(input: {
   prompt: string;
   questionType: string;
