@@ -292,16 +292,25 @@ export const DEFAULT_VISIBLE_UPCOMING_COUNT = 3;
 export type ListedSession = {
   id: string;
   dateTime: string | Date;
-  timezone?: string;
+  timezone: string;
   durationMinutes?: number | null;
   subject?: string | null;
+  title?: string | null;
   meetingUrl?: string | null;
+  calendarEventUrl?: string | null;
   status?: string | null;
+  bookingStatus?: string | null;
   readiness?: string | null;
+  courseId?: string;
   tutor?: { id?: string | null; name?: string | null } | null;
   tutorName?: string | null;
-  preparation?: unknown;
-  latestResult?: unknown;
+  tutorProfileId?: string | null;
+  preparation?: { id?: string; title?: string } | null;
+  latestResult?: { analysis?: unknown } | null;
+  currentFocus?: string | null;
+  nextAction?: string | null;
+  hasReport?: boolean | null;
+  hasHomework?: boolean | null;
 };
 
 function listedSessionTimezone(session: Pick<ListedSession, "timezone">): string {

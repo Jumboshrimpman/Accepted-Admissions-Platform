@@ -389,19 +389,20 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Friday, October 16, 2026")).toBeTruthy();
     expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
     expect(screen.getAllByText(/October 2, 2026/)).toHaveLength(2);
-    expect(screen.getByTestId("session-list-show-more")).toHaveTextContent("Show more");
+    expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
 
     fireEvent.click(screen.getByTestId("session-list-show-more"));
     expect(screen.getByText("Friday, October 23, 2026")).toBeTruthy();
     expect(screen.getByText("Friday, December 18, 2026")).toBeTruthy();
     expect(screen.getAllByText(/October 2, 2026/)).toHaveLength(2);
     expect(screen.getAllByText(/October 23, 2026/)).toHaveLength(1);
-    expect(screen.getAllByText("Taito’s SAT Session with Eunice")).toHaveLength(10);
-    expect(screen.getByTestId("session-list-show-more")).toHaveTextContent("Show less");
+    expect(screen.getAllByText("SAT reasoning.")).toHaveLength(10);
+    expect(screen.getAllByText("English communication.")).toHaveLength(3);
+    expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show less");
 
     fireEvent.click(screen.getByTestId("session-list-show-more"));
     expect(screen.queryByText("Friday, October 23, 2026")).toBeNull();
-    expect(screen.getByTestId("session-list-show-more")).toHaveTextContent("Show more");
+    expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
   });
 
   test("viewer gets the same scoped review surface in explicit view-only mode", () => {
