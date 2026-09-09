@@ -15,7 +15,11 @@ import {
   type ExamFamily,
   type ExamSection,
 } from "./sat-bank-source-key.ts";
-import { applyFigurePrimaryToRecord, isLetterAnswer } from "./sat-bank-figure-primary.ts";
+import {
+  applyFigurePrimaryToRecord,
+  isLetterAnswer,
+  normalizeLetterAnswer,
+} from "./sat-bank-figure-primary.ts";
 
 export type BankChoice = { id: string; label: string; text: string };
 
@@ -343,7 +347,7 @@ export function parseCollegeBoardRecord(
     prompt,
     stimulus: normalizeExtractText(asString(row.stimulus) || asString(row.passage)) || null,
     choices,
-    correctAnswer: choiceMatch?.id ?? correctAnswerRaw,
+    correctAnswer: normalizeLetterAnswer(choiceMatch?.id ?? correctAnswerRaw),
     officialExplanation,
     figures: Array.isArray(row.figures)
       ? row.figures.flatMap((figure) => {

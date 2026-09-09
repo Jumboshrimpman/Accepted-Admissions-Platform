@@ -67,7 +67,9 @@ If both snippet drawings and a question-region crop are present, the portal uses
 
 ## Reimport (including Taito Oct 2 diagnostic)
 
-The Oct 2 Taito full-length diagnostic is already linked to SAT bank rows. After new crops land in JSONL + `/media/sat-bank/`:
+Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Rebuild composition from usable MCQ rows: `docs/sat-diagnostic-october2.md`.
+
+The Oct 2 Taito full-length diagnostic is linked to SAT bank rows. After new crops land in JSONL + `/media/sat-bank/`:
 
 1. Deploy the media files (same Vite/Vercel public path as PR #50).
 2. Admin → Curriculum → SAT/PSAT bank → **Import staged extracts**.

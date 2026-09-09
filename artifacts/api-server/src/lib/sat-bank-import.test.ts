@@ -151,6 +151,7 @@ test("keeps figure-heavy and SPR rows instead of inventing official wording", ()
   assert.equal(figure.extractGaps.figuresIncomplete, true);
   assert.equal(figure.extractGaps.figurePrimary, true);
   assert.equal(figure.questionType, "mcq");
+  assert.equal(figure.correctAnswer, "c");
   assert.equal(figure.assignable, true);
   assert.deepEqual(figure.choices.map((choice) => choice.label), ["A", "B", "C", "D"]);
   assert.ok(figure.officialExplanation.includes("Choice C"));

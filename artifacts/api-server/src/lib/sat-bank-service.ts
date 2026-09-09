@@ -34,6 +34,14 @@ import {
   type CollectionStub,
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
+import {
+  isStudentUsableDiagnosticItem,
+  selectUsableDiagnosticItems,
+  summarizeDiagnosticComposition,
+  type DiagnosticComposition,
+} from "./sat-bank-diagnostic-quality.ts";
+import { shouldUseFigurePrimary } from "./sat-bank-figure-primary.ts";
+import { isSessionLocalQuestionFork } from "./session-question-copy.ts";
 import { generateQuestionsWithProvider } from "./question-generation.ts";
 import {
   decideRetrySource,
@@ -47,7 +55,6 @@ import {
   diagnosticTimeLimitMinutes,
   preferSatDiagnosticCollection,
   routinePreworkTimeLimitMinutes,
-  selectFullPracticeCollection,
   selectQuestionsForCountBudget,
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
@@ -106,6 +113,42 @@ function asChoices(value: unknown): Array<{ id: string; label: string; text: str
     }
     return [{ id: row.id, label: row.label, text: row.text }];
   });
+}
+
+function bankRowForDiagnostic(row: {
+  id: string;
+  sourceKey: string;
+  collectionId: string;
+  examFamily: string;
+  section: string;
+  module: number;
+  questionNumber: number;
+  position: number;
+  prompt: string;
+  stimulus: string | null;
+  choices: unknown;
+  figures: unknown;
+  questionType: string;
+  correctAnswer: string;
+  extractGaps: unknown;
+}) {
+  return {
+    id: row.id,
+    sourceKey: row.sourceKey,
+    collectionId: row.collectionId,
+    examFamily: row.examFamily,
+    section: row.section,
+    module: asFiniteNumber(row.module),
+    questionNumber: asFiniteNumber(row.questionNumber),
+    position: asFiniteNumber(row.position),
+    prompt: row.prompt,
+    stimulus: row.stimulus,
+    choices: asChoices(row.choices),
+    figures: asBankFigures(row.figures),
+    questionType: row.questionType,
+    correctAnswer: row.correctAnswer,
+    extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
+  };
 }
 
 async function walkExtractFiles(root: string): Promise<string[]> {
@@ -415,16 +458,38 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
     officialExplanation: bank.officialExplanation,
     extractGaps: (bank.extractGaps ?? {}) as Record<string, unknown>,
   });
+  const figurePrimary = shouldUseFigurePrimary({
+    prompt: bank.prompt,
+    stimulus: bank.stimulus,
+    choices: asChoices(bank.choices),
+    figures: asBankFigures(bank.figures),
+    questionType: bank.questionType,
+    correctAnswer: bank.correctAnswer,
+    extractGaps: (bank.extractGaps ?? {}) as Record<string, unknown>,
+  });
+  const bankTags = [
+    bank.sourceKey,
+    bank.examFamily,
+    `module-${bank.module}`,
+    ...(figurePrimary ? ["figure_primary"] : []),
+  ];
   if (bank.linkedQuestionId) {
     const [linked] = await db
-      .select({ id: questionsTable.id })
+      .select({
+        id: questionsTable.id,
+        generationMethod: questionsTable.generationMethod,
+        tags: questionsTable.tags,
+      })
       .from(questionsTable)
       .where(eq(questionsTable.id, bank.linkedQuestionId))
       .limit(1);
     if (linked) {
+      if (isSessionLocalQuestionFork(linked)) {
+        return { questionId: linked.id, action: "update" };
+      }
       await db
         .update(questionsTable)
-        .set(content)
+        .set({ ...content, tags: bankTags })
         .where(eq(questionsTable.id, linked.id));
       return { questionId: linked.id, action: "update" };
     }
@@ -434,7 +499,7 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
     .values({
       ...content,
       sourceType: bank.sourceKind === "seed" ? "seed" : "college_board",
-      tags: [bank.sourceKey, bank.examFamily, `module-${bank.module}`],
+      tags: bankTags,
       generationMethod:
         bank.sourceKind === "seed" ? "seed-fixture" : "college-board-extract",
     })
@@ -451,6 +516,109 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
 }
 
 /** Rematerialize every bank row that already points at a live `questions` row. */
+export type AssignmentLinkedRefreshCounts = LinkedRefreshCounts & {
+  skippedForks: number;
+  skippedUnlinked: number;
+};
+
+export async function rematerializeAssignmentLinkedQuestions(
+  assignmentId: string,
+): Promise<AssignmentLinkedRefreshCounts> {
+  const links = await db
+    .select({ questionId: assignmentQuestionsTable.questionId })
+    .from(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  const questionIds = [...new Set(links.map((link) => link.questionId))];
+  if (questionIds.length === 0) {
+    return { ...emptyLinkedRefreshCounts(), skippedForks: 0, skippedUnlinked: 0 };
+  }
+  const questions = await db
+    .select({
+      id: questionsTable.id,
+      generationMethod: questionsTable.generationMethod,
+      tags: questionsTable.tags,
+    })
+    .from(questionsTable)
+    .where(inArray(questionsTable.id, questionIds));
+  const banks = await db
+    .select({
+      id: bankQuestionsTable.id,
+      linkedQuestionId: bankQuestionsTable.linkedQuestionId,
+    })
+    .from(bankQuestionsTable)
+    .where(inArray(bankQuestionsTable.linkedQuestionId, questionIds));
+  const bankByQuestionId = new Map(
+    banks
+      .filter((row) => row.linkedQuestionId)
+      .map((row) => [row.linkedQuestionId!, row]),
+  );
+  let updated = 0;
+  let skipped = 0;
+  let errors = 0;
+  let skippedForks = 0;
+  let skippedUnlinked = 0;
+  for (const question of questions) {
+    if (isSessionLocalQuestionFork(question)) {
+      skippedForks += 1;
+      skipped += 1;
+      continue;
+    }
+    const bank = bankByQuestionId.get(question.id);
+    if (!bank) {
+      skippedUnlinked += 1;
+      skipped += 1;
+      continue;
+    }
+    try {
+      await materializeBankQuestionInternal(bank.id);
+      updated += 1;
+    } catch {
+      errors += 1;
+    }
+  }
+  return { updated, skipped, errors, skippedForks, skippedUnlinked };
+}
+
+export async function diagnosticCompositionForAssignment(
+  assignmentId: string,
+): Promise<DiagnosticComposition> {
+  const links = await db
+    .select({
+      questionId: assignmentQuestionsTable.questionId,
+      position: assignmentQuestionsTable.position,
+    })
+    .from(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  const questionIds = links.map((link) => link.questionId);
+  const questions =
+    questionIds.length === 0
+      ? []
+      : await db.select().from(questionsTable).where(inArray(questionsTable.id, questionIds));
+  const banks =
+    questionIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(bankQuestionsTable)
+          .where(inArray(bankQuestionsTable.linkedQuestionId, questionIds));
+  const bankByQuestion = new Map(banks.map((row) => [row.linkedQuestionId, row]));
+  const selected = questions.map((question) => {
+    const bank = bankByQuestion.get(question.id);
+    if (bank) return bankRowForDiagnostic(bank);
+    return {
+      id: question.id,
+      prompt: question.prompt,
+      stimulus: question.stimulus,
+      choices: asChoices(question.choices),
+      figures: [],
+      questionType: question.questionType,
+      correctAnswer: question.correctAnswer,
+      section: /math/i.test(`${question.subject} ${question.domain}`) ? "math" : "rw",
+    };
+  });
+  return summarizeDiagnosticComposition(selected);
+}
+
 export async function refreshLinkedQuestionsFromBank(): Promise<LinkedRefreshCounts> {
   const rows = await db
     .select({
@@ -534,21 +702,26 @@ export async function assignPreworkFromBank(input: {
   }
   await ensureOfficialExtractsImported().catch(() => undefined);
   const homeworkKind = input.homeworkKind ?? "routine";
+  const explicitCollection = Boolean(input.collectionId);
+  const explicitIds = Boolean(input.bankQuestionIds?.length);
+  const collections = await listBankCollections();
   let collectionId = input.collectionId ?? null;
-  if (homeworkKind === "diagnostic" && !collectionId && !input.bankQuestionIds?.length) {
-    const collections = await listBankCollections();
+  if (homeworkKind === "diagnostic" && !collectionId && !explicitIds) {
     collectionId = preferSatDiagnosticCollection(collections)?.id ?? null;
   }
   let pool = await db
     .select()
     .from(bankQuestionsTable)
     .orderBy(asc(bankQuestionsTable.position), asc(bankQuestionsTable.questionNumber));
-  if (collectionId) {
-    pool = pool.filter((row) => row.collectionId === collectionId);
-  }
-  if (input.bankQuestionIds && input.bankQuestionIds.length > 0) {
+  if (explicitIds) {
     const allowed = new Set(input.bankQuestionIds);
     pool = pool.filter((row) => allowed.has(row.id));
+  } else if (homeworkKind === "diagnostic" && !explicitCollection) {
+    pool = pool.filter(
+      (row) => row.examFamily === "sat" && row.sourceKind === "official_extract",
+    );
+  } else if (collectionId) {
+    pool = pool.filter((row) => row.collectionId === collectionId);
   }
   pool = pool.filter((row) =>
     isAssignableBankItem({
@@ -559,6 +732,7 @@ export async function assignPreworkFromBank(input: {
       extractGaps: (row.extractGaps ?? {}) as {
         missingPrompt?: boolean;
         missingChoices?: boolean;
+        figurePrimary?: boolean;
       },
     }),
   );
@@ -576,6 +750,7 @@ export async function assignPreworkFromBank(input: {
       correctAnswer: row.correctAnswer,
     }),
   );
+  pool = pool.filter((row) => isStudentUsableDiagnosticItem(bankRowForDiagnostic(row)));
   if (pool.length === 0) {
     throw Object.assign(
       new Error(
@@ -584,25 +759,34 @@ export async function assignPreworkFromBank(input: {
       { status: 409 },
     );
   }
-  const timed = pool.map((row) => ({
-    id: row.id,
-    section: row.section as "rw" | "math",
-    skill: row.skill,
-    estimatedSeconds: row.estimatedSeconds,
-    position: row.position,
-  }));
-  const selection =
+  const selected =
     homeworkKind === "diagnostic"
-      ? selectFullPracticeCollection(timed)
-      : selectQuestionsForCountBudget(timed, {
-          preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
-        });
-  const selected = selection.selected
-    .map((item) => pool.find((row) => row.id === item.id)!)
-    .filter(Boolean);
+      ? selectUsableDiagnosticItems(
+          pool.map((row) => ({ ...row, ...bankRowForDiagnostic(row) })),
+          {
+            preferredCollectionId: collectionId,
+            allowCrossCollectionFill: !explicitCollection && !explicitIds,
+          },
+        )
+      : selectQuestionsForCountBudget(
+          pool.map((row) => ({
+            id: row.id,
+            section: row.section as "rw" | "math",
+            skill: row.skill,
+            estimatedSeconds: row.estimatedSeconds,
+            position: row.position,
+          })),
+          {
+            preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
+          },
+        ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
+  const estimatedSeconds = selected.reduce(
+    (sum, row) => sum + Math.max(0, row.estimatedSeconds),
+    0,
+  );
   const resolvedMinutes =
     homeworkKind === "diagnostic"
-      ? diagnosticTimeLimitMinutes(selection.estimatedSeconds)
+      ? diagnosticTimeLimitMinutes(estimatedSeconds)
       : routinePreworkTimeLimitMinutes(selected.length);
   if (!input.skipArchiveExisting) {
     await archiveSessionPrework(session.id);
@@ -646,7 +830,7 @@ export async function assignPreworkFromBank(input: {
     assignmentId: assignment!.id,
     homeworkKind,
     targetMinutes: resolvedMinutes,
-    estimatedSeconds: selection.estimatedSeconds,
+    estimatedSeconds,
     status: "assigned",
     createdByUserId: input.actorUserId ?? null,
     updatedAt: new Date(),
@@ -674,9 +858,12 @@ export async function assignPreworkFromBank(input: {
     assignmentId: assignment!.id,
     homeworkKind,
     targetMinutes: resolvedMinutes,
-    estimatedSeconds: selection.estimatedSeconds,
+    estimatedSeconds,
     questionCount: selected.length,
-    withinTolerance: selection.withinTolerance,
+    withinTolerance:
+      homeworkKind === "diagnostic"
+        ? selected.length >= 80
+        : selected.length <= 50 && (selected.length >= 30 || selected.length === pool.length),
     extractIncomplete: selected.some((row) => !row.officialExplanation.trim()),
   };
 }
@@ -1538,15 +1725,37 @@ export async function findTaitoFirstSatSession(): Promise<typeof sessionsTable.$
 export async function resetTaitoFirstSatPrework(input: {
   actorUserId?: string;
   reassignDiagnostic?: boolean;
+  refreshLinkedOnly?: boolean;
 }): Promise<{
   sessionId: string;
   archivedAssignments: number;
   deletedAttempts: number;
+  rematerialized: AssignmentLinkedRefreshCounts | null;
   reassigned: Awaited<ReturnType<typeof assignPreworkFromBank>> | null;
+  composition: DiagnosticComposition | null;
 }> {
   const session = await findTaitoFirstSatSession();
   if (!session) {
     throw Object.assign(new Error("October 2 Taito SAT session was not found."), { status: 404 });
+  }
+  const existingAssignments = (await beforeSessionAssignments(session.id)).filter(
+    (row) => row.status !== "archived",
+  );
+  const existingAssignmentId = existingAssignments[0]?.id ?? null;
+  const rematerialized = existingAssignmentId
+    ? await rematerializeAssignmentLinkedQuestions(existingAssignmentId)
+    : null;
+  if (input.refreshLinkedOnly) {
+    return {
+      sessionId: session.id,
+      archivedAssignments: 0,
+      deletedAttempts: 0,
+      rematerialized,
+      reassigned: null,
+      composition: existingAssignmentId
+        ? await diagnosticCompositionForAssignment(existingAssignmentId)
+        : null,
+    };
   }
   const reset = await resetSessionPreworkState(session.id);
   const reassigned =
@@ -1559,7 +1768,11 @@ export async function resetTaitoFirstSatPrework(input: {
         });
   return {
     ...reset,
+    rematerialized,
     reassigned,
+    composition: reassigned
+      ? await diagnosticCompositionForAssignment(reassigned.assignmentId)
+      : null,
   };
 }
 

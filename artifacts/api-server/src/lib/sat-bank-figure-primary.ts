@@ -63,6 +63,12 @@ export function isLetterAnswer(answer: string | null | undefined): boolean {
   return /^[a-d]$/i.test(primaryAnswerToken(answer));
 }
 
+export function normalizeLetterAnswer(answer: string | null | undefined): string {
+  const raw = answer ?? "";
+  if (!isLetterAnswer(raw)) return raw;
+  return primaryAnswerToken(raw).toLowerCase();
+}
+
 export function hasMarkdownOrMediaImage(text: string | null | undefined): boolean {
   return /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/.test(text ?? "");
 }

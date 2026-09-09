@@ -3,6 +3,7 @@ import {
   figurePrimaryStudentPrompt,
   isLetterAnswer,
   letterMcqChoices,
+  normalizeLetterAnswer,
   selectStimulusFigures,
   shouldUseFigurePrimary,
   stripSatBankFigureComments,
@@ -142,7 +143,7 @@ export function materializedQuestionContent(bank: {
       figurePrimary && isLetterAnswer(bank.correctAnswer)
         ? letterMcqChoices(assignmentChoices(bank.choices))
         : assignmentChoices(bank.choices) ?? [],
-    correctAnswer: bank.correctAnswer,
+    correctAnswer: normalizeLetterAnswer(bank.correctAnswer),
     explanation: bank.officialExplanation ?? "",
     reviewStatus: "approved" as const,
   };

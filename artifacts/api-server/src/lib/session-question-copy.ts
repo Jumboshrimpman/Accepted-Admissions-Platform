@@ -25,6 +25,14 @@ export type QuestionSnapshotSource = {
 
 export type SessionMcqChoice = { id: string; label: string; text: string };
 
+export function isSessionLocalQuestionFork(question: {
+  generationMethod?: string | null;
+  tags?: string[] | null;
+}): boolean {
+  if (question.generationMethod === SESSION_QUESTION_COPY_METHOD) return true;
+  return (question.tags ?? []).includes("session-copy");
+}
+
 export function shouldForkSessionQuestion(input: {
   bankLinked: boolean;
   otherAssignmentCount: number;

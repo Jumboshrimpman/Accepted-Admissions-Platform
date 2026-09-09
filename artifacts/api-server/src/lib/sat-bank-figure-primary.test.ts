@@ -7,6 +7,7 @@ import {
   hasUsableChoiceText,
   isLetterAnswer,
   letterMcqChoices,
+  normalizeLetterAnswer,
   looksGarbledExtractText,
   selectStimulusFigures,
   shouldUseFigurePrimary,
@@ -71,6 +72,12 @@ test("converts SPR items whose official key is a letter and figures exist", () =
     ["A", "B", "C", "D"],
   );
   assert.ok(record.choices.every((choice) => choice.text === ""));
+});
+
+test("letter keys normalize to a lowercase a–d id for grading", () => {
+  assert.equal(normalizeLetterAnswer("B"), "b");
+  assert.equal(normalizeLetterAnswer("c"), "c");
+  assert.equal(normalizeLetterAnswer("9; 9.0"), "9; 9.0");
 });
 
 test("keeps genuine numeric SPR items as SPR", () => {
