@@ -45,6 +45,39 @@ import {
   studentSeesFinishedResult,
   studentSeesPredictionStep,
 } from "@/lib/student-attempt-ui";
+import { splitQuizRichText } from "@/lib/quiz-rich-text";
+
+function QuizRichText({
+  text,
+  className,
+  imageClassName,
+}: {
+  text: string | null | undefined;
+  className?: string;
+  imageClassName?: string;
+}) {
+  if (!text) return null;
+  const parts = splitQuizRichText(text);
+  if (parts.length === 0) return null;
+  return (
+    <div className={className} data-testid="quiz-rich-text">
+      {parts.map((part, index) =>
+        part.type === "image" ? (
+          <img
+            key={`${part.src}-${index}`}
+            src={part.src}
+            alt={part.alt}
+            className={imageClassName ?? "my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"}
+          />
+        ) : (
+          <p key={`text-${index}`} className="whitespace-pre-wrap">
+            {part.value}
+          </p>
+        ),
+      )}
+    </div>
+  );
+}
 
 function formatTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -192,7 +225,10 @@ function ResultView({ result }: { result: AttemptResult }) {
                         </div>
                         <div>
                           <Badge variant="outline">{item.skill}</Badge>
-                          <p className="mt-2 font-medium">{item.prompt}</p>
+                          {item.stimulus ? (
+                            <QuizRichText text={item.stimulus} className="mt-2 text-sm text-muted-foreground" />
+                          ) : null}
+                          <QuizRichText text={item.prompt} className="mt-2 font-medium" />
                         </div>
                       </div>
                       {item.correct ? (
@@ -645,9 +681,13 @@ export default function PortalAssignment() {
             <Badge className="mt-4 border-0 bg-white/20 text-white">{question.skill}</Badge>
           ) : null}
           {question.stimulus ? (
-            <p className="mt-5 whitespace-pre-wrap text-white/90">{question.stimulus}</p>
+            <QuizRichText
+              text={question.stimulus}
+              className="mt-5 text-white/90"
+              imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
+            />
           ) : null}
-          <p className="mt-5 text-xl font-medium leading-relaxed">{question.prompt}</p>
+          <QuizRichText text={question.prompt} className="mt-5 text-xl font-medium leading-relaxed" />
           <div className="mt-6">
             {showPrediction ? (
               <p data-testid="prediction-step">Prediction first</p>
@@ -755,11 +795,11 @@ export default function PortalAssignment() {
           {question.stimulus && (
             <Card className="border-0 bg-muted/30 shadow-none">
               <CardContent className="p-6">
-                <p className="whitespace-pre-wrap">{question.stimulus}</p>
+                <QuizRichText text={question.stimulus} />
               </CardContent>
             </Card>
           )}
-          <div className="text-lg font-medium leading-relaxed">{question.prompt}</div>
+          <QuizRichText text={question.prompt} className="text-lg font-medium leading-relaxed" />
         </div>
         <div />
       </div>

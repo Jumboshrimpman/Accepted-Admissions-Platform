@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -53,12 +53,19 @@ import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-wea
 import { isTaitoFirstSatSession } from "./session-schedule.ts";
 import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 import {
-  assignmentChoices,
-  assignmentDifficulty,
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
-import { quizSubject, skillLabelForBank } from "./sat-bank-skill.ts";
+import { skillLabelForBank } from "./sat-bank-skill.ts";
+import {
+  classifyLinkedRefresh,
+  emptyLinkedRefreshCounts,
+  materializedQuestionContent,
+  recordLinkedRefresh,
+  type LinkedRefreshCounts,
+} from "./sat-bank-figures.ts";
+
+export type { LinkedRefreshCounts };
 
 export const SAT_BANK_IMPORT_ROOT = resolveCollegeBoardRoot();
 
@@ -287,6 +294,8 @@ export async function importCollegeBoardExtracts(input: {
   rootDir?: string;
   payloadText?: string;
   payloadSource?: string;
+  /** Rematerialize already-linked quiz rows from current bank content. Default true. */
+  refreshLinked?: boolean;
 }): Promise<{
   rootDir: string;
   filesScanned: number;
@@ -295,6 +304,7 @@ export async function importCollegeBoardExtracts(input: {
   skipped: number;
   duplicatesInFile: number;
   collectionsEnsured: number;
+  linkedRefresh: LinkedRefreshCounts | null;
 }> {
   const collectionsEnsured = await ensureStagedCollections();
   const parsed = input.payloadText
@@ -333,6 +343,8 @@ export async function importCollegeBoardExtracts(input: {
     unique.set(record.sourceKey, record);
   }
   const { inserted, updated } = await upsertBankRecords([...unique.values()]);
+  const linkedRefresh =
+    input.refreshLinked === false ? null : await refreshLinkedQuestionsFromBank();
   return {
     rootDir,
     filesScanned,
@@ -341,6 +353,7 @@ export async function importCollegeBoardExtracts(input: {
     skipped: parsed.skipped.length,
     duplicatesInFile: parsed.duplicatesInFile.length + (parsed.records.length - unique.size),
     collectionsEnsured,
+    linkedRefresh,
   };
 }
 
@@ -371,59 +384,48 @@ export async function ensureOfficialExtractsImported(): Promise<{
   }
 }
 
-export async function materializeBankQuestion(bankQuestionId: string): Promise<string> {
+async function materializeBankQuestionInternal(bankQuestionId: string): Promise<{
+  questionId: string;
+  action: "update" | "insert";
+}> {
   const [bank] = await db
     .select()
     .from(bankQuestionsTable)
     .where(eq(bankQuestionsTable.id, bankQuestionId))
     .limit(1);
   if (!bank) throw new Error("Bank question not found");
+  const content = materializedQuestionContent({
+    section: bank.section,
+    domain: bank.domain,
+    skill: bank.skill,
+    questionType: bank.questionType,
+    difficulty: bank.difficulty,
+    stimulus: bank.stimulus,
+    figures: bank.figures,
+    prompt: bank.prompt,
+    choices: bank.choices,
+    correctAnswer: bank.correctAnswer,
+    officialExplanation: bank.officialExplanation,
+  });
   if (bank.linkedQuestionId) {
     const [linked] = await db
-      .select({
-        id: questionsTable.id,
-        skill: questionsTable.skill,
-        domain: questionsTable.domain,
-        subject: questionsTable.subject,
-      })
+      .select({ id: questionsTable.id })
       .from(questionsTable)
       .where(eq(questionsTable.id, bank.linkedQuestionId))
       .limit(1);
     if (linked) {
-      const nextSkill = skillLabelForBank({
-        skill: bank.skill || linked.skill,
-        section: bank.section,
-        domain: bank.domain || linked.domain,
-        subject: linked.subject,
-      });
-      if (nextSkill !== linked.skill) {
-        await db
-          .update(questionsTable)
-          .set({ skill: nextSkill })
-          .where(eq(questionsTable.id, linked.id));
-      }
-      return linked.id;
+      await db
+        .update(questionsTable)
+        .set(content)
+        .where(eq(questionsTable.id, linked.id));
+      return { questionId: linked.id, action: "update" };
     }
   }
   const [created] = await db
     .insert(questionsTable)
     .values({
-      subject: quizSubject(bank.section),
-      domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
-      skill: skillLabelForBank({
-        skill: bank.skill,
-        section: bank.section,
-        domain: bank.domain,
-      }),
-      questionType: bank.questionType,
-      difficulty: assignmentDifficulty(bank.difficulty),
-      stimulus: bank.stimulus,
-      prompt: bank.prompt || "Figure or table was not recovered from this PDF page. Open the linked source PDF.",
-      choices: assignmentChoices(bank.choices) ?? [],
-      correctAnswer: bank.correctAnswer,
-      explanation: bank.officialExplanation,
+      ...content,
       sourceType: bank.sourceKind === "seed" ? "seed" : "college_board",
-      reviewStatus: "approved",
       tags: [bank.sourceKey, bank.examFamily, `module-${bank.module}`],
       generationMethod:
         bank.sourceKind === "seed" ? "seed-fixture" : "college-board-extract",
@@ -433,7 +435,47 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
     .update(bankQuestionsTable)
     .set({ linkedQuestionId: created!.id, updatedAt: new Date() })
     .where(eq(bankQuestionsTable.id, bank.id));
-  return created!.id;
+  return { questionId: created!.id, action: "insert" };
+}
+
+export async function materializeBankQuestion(bankQuestionId: string): Promise<string> {
+  return (await materializeBankQuestionInternal(bankQuestionId)).questionId;
+}
+
+/** Rematerialize every bank row that already points at a live `questions` row. */
+export async function refreshLinkedQuestionsFromBank(): Promise<LinkedRefreshCounts> {
+  const rows = await db
+    .select({
+      id: bankQuestionsTable.id,
+      linkedQuestionId: bankQuestionsTable.linkedQuestionId,
+    })
+    .from(bankQuestionsTable)
+    .where(isNotNull(bankQuestionsTable.linkedQuestionId));
+  let counts = emptyLinkedRefreshCounts();
+  for (const row of rows) {
+    const [linked] = row.linkedQuestionId
+      ? await db
+          .select({ id: questionsTable.id })
+          .from(questionsTable)
+          .where(eq(questionsTable.id, row.linkedQuestionId))
+          .limit(1)
+      : [];
+    const planned = classifyLinkedRefresh({
+      hasLinkedId: Boolean(row.linkedQuestionId),
+      linkedExists: Boolean(linked),
+    });
+    if (planned === "skip") {
+      counts = recordLinkedRefresh(counts, "skip");
+      continue;
+    }
+    try {
+      const result = await materializeBankQuestionInternal(row.id);
+      counts = recordLinkedRefresh(counts, result.action);
+    } catch {
+      counts = recordLinkedRefresh(counts, "error");
+    }
+  }
+  return counts;
 }
 
 async function archiveSessionPrework(sessionId: string) {

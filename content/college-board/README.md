@@ -34,3 +34,5 @@ Dedup key includes exam variant so PSAT 8/9 PT1 and PSAT 10 PT1 do not collide:
 4. These **PSAT packs use the same 120-item linear layout** as the SAT PDFs (33+33+27+27), not shorter adaptive Bluebook lengths.
 
 Admin import: **Import staged extracts**. The importer is idempotent on the stable id.
+
+Figures live under the Vite/Vercel public path `/media/sat-bank/<pack>/<file>.png`. JSONL `figures[].url` must be an absolute `https://` URL (for example `https://app.acceptedadmissions.org/media/sat-bank/...`) so materialized quiz rows and the student UI can render graphs after import.
