@@ -2748,6 +2748,12 @@ export interface SessionLessonRetry {
   /** @nullable */
   skill?: string | null;
   choices?: SessionLessonRetryChoicesItem[];
+  /** @nullable */
+  studentAnswer?: string | null;
+  /** @nullable */
+  correctAnswer?: string | null;
+  /** @nullable */
+  explanation?: string | null;
 }
 
 export type SessionLessonScoreReporting = typeof SessionLessonScoreReporting[keyof typeof SessionLessonScoreReporting];

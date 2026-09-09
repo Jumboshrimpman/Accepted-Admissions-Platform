@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { groupMissesByWeakness } from "./sat-bank-weakness.ts";
+import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-weakness.ts";
 
 test("groups misses by skill and ranks the heaviest weakness first", () => {
   const groups = groupMissesByWeakness([
@@ -43,4 +43,38 @@ test("maps extract skill placeholders to the section label before grouping", () 
   ]);
   assert.equal(groups[0]?.skill, "Reading and Writing");
   assert.equal(groups[1]?.skill, "SAT Math");
+});
+
+test("infers SAT Math vs Reading and Writing from bank section when domain is empty", () => {
+  const groups = groupMissesByWeakness([
+    {
+      questionId: "q-math",
+      skill: "Skill not in extract",
+      section: "math",
+      correct: false,
+    },
+    {
+      questionId: "q-rw",
+      skill: "Skill not in extract",
+      section: "rw",
+      correct: false,
+    },
+  ]);
+  assert.equal(groups[0]?.skill, "Reading and Writing");
+  assert.equal(groups[1]?.skill, "SAT Math");
+  assert.equal(
+    groups.every((group) => !/skill not in extract/i.test(group.skill)),
+    true,
+  );
+});
+
+test("rebuilds persisted groups that still store the extract placeholder", () => {
+  assert.equal(
+    weaknessGroupsNeedRebuild([{ skill: "Skill not in extract" }]),
+    true,
+  );
+  assert.equal(weaknessGroupsNeedRebuild([{ skill: "Skill not in PDF" }]), true);
+  assert.equal(weaknessGroupsNeedRebuild([{ skill: "SAT Math" }]), false);
+  assert.equal(weaknessGroupsNeedRebuild([{ skill: "Transitions" }]), false);
+  assert.equal(weaknessGroupsNeedRebuild([]), false);
 });

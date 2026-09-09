@@ -11,6 +11,13 @@ import { BookOpenCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  displaySkill,
+  missPickerLabel,
+  retryOutcomeHeading,
+  retryRecordedMessage,
+  retrySourceLabel,
+} from "./session-lesson-display";
 
 function errorText(error: unknown): string {
   const data = (error as { data?: { error?: string; blockedReason?: string } } | null)?.data;
@@ -77,7 +84,8 @@ export function SessionLessonDashboard({
           {audience === "student" ? "Practice together from pre-work" : "Session lesson from pre-work"}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Open a miss, discuss it, try a similar problem, and record the outcome together.
+          Open a wrong answer, review the official explanation, try a similar problem, and see if the
+          new answer is correct.
         </p>
         <p className="text-sm text-muted-foreground">{data.scoreHonesty}</p>
       </CardHeader>
@@ -115,7 +123,7 @@ export function SessionLessonDashboard({
               <div key={group.id} className="rounded-xl border bg-background p-3" data-testid={`weakness-group-${group.priority}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge>Priority {group.priority}</Badge>
-                  <span className="font-medium">{group.skill}</span>
+                  <span className="font-medium">{displaySkill(group.skill, group.domain)}</span>
                   <span className="text-sm text-muted-foreground">{group.missCount} miss{group.missCount === 1 ? "" : "es"}</span>
                 </div>
               </div>
@@ -125,24 +133,27 @@ export function SessionLessonDashboard({
 
         {data.misses.length > 0 ? (
           <div className="space-y-3">
-            <p className="font-medium">Open a miss with teaching context</p>
+            <p className="font-medium">Open a wrong answer to review with correct explanation</p>
             <div className="flex flex-wrap gap-2">
-              {data.misses.map((miss) => (
+              {data.misses.map((miss, index) => (
                 <Button
                   key={miss.questionId}
                   size="sm"
                   variant={selectedMiss?.questionId === miss.questionId ? "default" : "outline"}
+                  data-testid={`miss-picker-${miss.questionId}`}
                   onClick={() => setOpenMiss(miss.questionId)}
                 >
-                  {miss.skill}
+                  {missPickerLabel(miss, index)}
                 </Button>
               ))}
             </div>
             {selectedMiss ? (
               <div className="rounded-3xl bg-brand-ink p-5 text-white shadow-lg" data-testid="opened-miss">
-                <Badge className="border-0 bg-white/20 text-white">{selectedMiss.skill}</Badge>
+                <Badge className="border-0 bg-white/20 text-white">
+                  {displaySkill(selectedMiss.skill, selectedMiss.domain)}
+                </Badge>
                 <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-                  Work this miss together
+                  Review this wrong answer together
                 </p>
                 <p className="mt-2 font-medium">{selectedMiss.prompt}</p>
                 {selectedMiss.stimulus ? (
@@ -196,12 +207,12 @@ export function SessionLessonDashboard({
                             if (retry.source === "blocked") {
                               setMessage(
                                 retry.blockedReason ||
-                                  "Retry blocked. OPENAI_API_KEY is required only after the bank is exhausted.",
+                                  "A similar problem is not available. OPENAI_API_KEY is required only after the bank is exhausted.",
                               );
                             } else {
                               setMessage(
                                 retry.source === "bank"
-                                  ? "Similar problem ready. Discuss it, choose together, then record the outcome."
+                                  ? "Similar problem ready. Discuss it, choose together, then check the answer."
                                   : "Analogous original item drafted. Official wording was not copied.",
                               );
                             }
@@ -213,7 +224,7 @@ export function SessionLessonDashboard({
                     }
                   >
                     <Sparkles className="mr-2 h-4 w-4" />
-                    {requestRetry.isPending ? "Finding similar…" : "Open a similar problem"}
+                    {requestRetry.isPending ? "Finding similar…" : "Try a similar problem"}
                   </Button>
                 ) : null}
               </div>
@@ -224,74 +235,113 @@ export function SessionLessonDashboard({
         {data.retries.length > 0 ? (
           <div className="space-y-3">
             <p className="font-medium">Similar problems</p>
-            {data.retries.map((retry) => (
-              <div
-                key={retry.id}
-                className={
-                  retry.outcome === "pending" && retry.retryQuestionId
-                    ? "rounded-3xl bg-brand-ink p-5 text-white shadow-lg"
-                    : "rounded-lg border p-3 text-sm"
-                }
-                data-testid={`retry-${retry.id}`}
-              >
-                <Badge
-                  variant="outline"
+            {data.retries.map((retry) => {
+              const heading = retryOutcomeHeading(retry);
+              const graded = retry.outcome !== "pending";
+              return (
+                <div
+                  key={retry.id}
                   className={
                     retry.outcome === "pending" && retry.retryQuestionId
-                      ? "border-white/30 text-white"
-                      : undefined
+                      ? "rounded-3xl bg-brand-ink p-5 text-white shadow-lg"
+                      : "rounded-lg border p-3 text-sm"
                   }
+                  data-testid={`retry-${retry.id}`}
                 >
-                  {retry.source}
-                </Badge>{" "}
-                <span>{retry.outcome.replaceAll("_", " ")}</span>
-                {retry.prompt ? (
-                  <p className="mt-2" data-testid={`retry-prompt-${retry.id}`}>
-                    {retry.prompt}
-                  </p>
-                ) : null}
-                {retry.choices && retry.choices.length > 0 ? (
-                  retry.outcome === "pending" && retry.retryQuestionId ? (
-                    <div className="mt-3 space-y-2">
-                      {retry.choices.map((choice) => (
-                        <button
-                          key={choice.id}
-                          type="button"
-                          className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left ${
-                            retryAnswer === choice.id
-                              ? "border-white bg-white/15"
-                              : "border-white/25 hover:bg-white/10"
-                          }`}
-                          onClick={() => setRetryAnswer(choice.id)}
-                        >
-                          <span className="font-medium">{choice.label}.</span> {choice.text}
-                        </button>
-                      ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={
+                        retry.outcome === "pending" && retry.retryQuestionId
+                          ? "border-white/30 text-white"
+                          : undefined
+                      }
+                    >
+                      {retrySourceLabel(retry.source)}
+                    </Badge>
+                    {heading ? (
+                      <Badge
+                        data-testid={`retry-outcome-${retry.id}`}
+                        className={
+                          heading === "Correct"
+                            ? "border-0 bg-emerald-600 text-white"
+                            : "border-0 bg-rose-600 text-white"
+                        }
+                      >
+                        {heading}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {retry.prompt ? (
+                    <p className="mt-2" data-testid={`retry-prompt-${retry.id}`}>
+                      {retry.prompt}
+                    </p>
+                  ) : null}
+                  {retry.choices && retry.choices.length > 0 ? (
+                    retry.outcome === "pending" && retry.retryQuestionId ? (
+                      <div className="mt-3 space-y-2">
+                        {retry.choices.map((choice) => (
+                          <button
+                            key={choice.id}
+                            type="button"
+                            data-testid={`retry-choice-${retry.id}-${choice.id}`}
+                            className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left ${
+                              retryAnswer === choice.id || retryAnswer === choice.label
+                                ? "border-white bg-white/15"
+                                : "border-white/25 hover:bg-white/10"
+                            }`}
+                            onClick={() => setRetryAnswer(choice.id)}
+                          >
+                            <span className="font-medium">{choice.label}.</span> {choice.text}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <ul className="mt-2 space-y-1 text-muted-foreground">
+                        {retry.choices.map((choice) => (
+                          <li key={choice.id}>
+                            {choice.label}. {choice.text}
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : null}
+                  {graded ? (
+                    <div className="mt-3 space-y-1" data-testid={`retry-feedback-${retry.id}`}>
+                      {retry.studentAnswer ? (
+                        <p>
+                          <span className="font-medium">Your answer:</span>{" "}
+                          {formatAnswer(retry.studentAnswer, retry.choices)}
+                        </p>
+                      ) : null}
+                      {heading === "Incorrect" && retry.correctAnswer ? (
+                        <p>
+                          <span className="font-medium">Correct answer:</span>{" "}
+                          {formatAnswer(retry.correctAnswer, retry.choices)}
+                        </p>
+                      ) : null}
+                      {heading === "Incorrect" && retry.explanation ? (
+                        <p className="text-muted-foreground">{retry.explanation}</p>
+                      ) : null}
                     </div>
-                  ) : (
-                    <ul className="mt-2 space-y-1 text-muted-foreground">
-                      {retry.choices.map((choice) => (
-                        <li key={choice.id}>
-                          {choice.label}. {choice.text}
-                        </li>
-                      ))}
-                    </ul>
-                  )
-                ) : null}
-                {retry.blockedReason ? (
-                  <p className="mt-1 text-muted-foreground">{retry.blockedReason}</p>
-                ) : null}
-              </div>
-            ))}
+                  ) : null}
+                  {retry.blockedReason ? (
+                    <p className="mt-1 text-muted-foreground">{retry.blockedReason}</p>
+                  ) : null}
+                </div>
+              );
+            })}
             {activeRetry && canRecord ? (
               <div className="flex flex-wrap gap-2">
-                <input
-                  aria-label="Retry answer"
-                  className="h-9 rounded-md border bg-background px-2 text-sm"
-                  value={retryAnswer}
-                  onChange={(event) => setRetryAnswer(event.target.value)}
-                  placeholder="Student answer (a–d)"
-                />
+                {!(activeRetry.choices && activeRetry.choices.length > 0) ? (
+                  <input
+                    aria-label="Retry answer"
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                    value={retryAnswer}
+                    onChange={(event) => setRetryAnswer(event.target.value)}
+                    placeholder="Student answer"
+                  />
+                ) : null}
                 <Button
                   size="sm"
                   disabled={recordOutcome.isPending || !retryAnswer.trim()}
@@ -302,9 +352,14 @@ export function SessionLessonDashboard({
                       {
                         onSuccess: (result) => {
                           setMessage(
-                            result.outcome === "mastered"
-                              ? "Recorded as mastered."
-                              : "Recorded as still struggling.",
+                            retryRecordedMessage({
+                              correct: result.correct,
+                              formattedCorrectAnswer: formatAnswer(
+                                result.correctAnswer,
+                                activeRetry.choices,
+                              ),
+                              explanation: result.explanation,
+                            }),
                           );
                           setRetryAnswer("");
                           refresh();
@@ -314,7 +369,7 @@ export function SessionLessonDashboard({
                     )
                   }
                 >
-                  Record outcome
+                  Check answer
                 </Button>
               </div>
             ) : null}

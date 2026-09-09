@@ -30,4 +30,10 @@ export interface SessionLessonRetry {
   /** @nullable */
   skill?: string | null;
   choices?: SessionLessonRetryChoicesItem[];
+  /** @nullable */
+  studentAnswer?: string | null;
+  /** @nullable */
+  correctAnswer?: string | null;
+  /** @nullable */
+  explanation?: string | null;
 }

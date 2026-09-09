@@ -138,3 +138,24 @@ export function studentRetryShape<T extends { correctAnswer?: string; officialEx
   } = question;
   return safe;
 }
+
+/** Reveal the key and explanation only after the similar problem is graded. */
+export function lessonRetryReveal(input: {
+  outcome: string;
+  studentAnswer?: string | null;
+  correctAnswer?: string | null;
+  explanation?: string | null;
+}): {
+  studentAnswer: string | null;
+  correctAnswer: string | null;
+  explanation: string | null;
+} {
+  if (input.outcome === "pending") {
+    return { studentAnswer: null, correctAnswer: null, explanation: null };
+  }
+  return {
+    studentAnswer: input.studentAnswer?.trim() ? input.studentAnswer : null,
+    correctAnswer: input.correctAnswer?.trim() ? input.correctAnswer : null,
+    explanation: input.explanation?.trim() ? input.explanation : null,
+  };
+}

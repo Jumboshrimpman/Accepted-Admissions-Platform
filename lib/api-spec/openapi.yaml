@@ -3716,6 +3716,9 @@ components:
               id: { type: string }
               label: { type: string }
               text: { type: string }
+        studentAnswer: { type: ["string", "null"] }
+        correctAnswer: { type: ["string", "null"] }
+        explanation: { type: ["string", "null"] }
     SessionLesson:
       type: object
       required: [sessionId, scoreReporting, scoreHonesty, weaknessGroups, misses, retries]

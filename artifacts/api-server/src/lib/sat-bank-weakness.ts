@@ -1,10 +1,12 @@
-import { skillLabelForBank } from "./sat-bank-skill.ts";
+import { isMissingExtractSkill, skillLabelForBank } from "./sat-bank-skill.ts";
 
 export type WeaknessMiss = {
   questionId: string;
   bankQuestionId?: string | null;
   skill: string;
   domain?: string | null;
+  section?: string | null;
+  subject?: string | null;
   correct: boolean;
   prompt?: string | null;
 };
@@ -34,7 +36,12 @@ export function groupMissesByWeakness(items: readonly WeaknessMiss[]): WeaknessG
   >();
   for (const item of items) {
     if (item.correct) continue;
-    const skill = skillLabelForBank({ skill: item.skill, domain: item.domain });
+    const skill = skillLabelForBank({
+      skill: item.skill,
+      domain: item.domain,
+      section: item.section,
+      subject: item.subject,
+    });
     const current = buckets.get(skill) ?? {
       skill,
       domain: item.domain?.trim() || "",
@@ -61,4 +68,18 @@ export function groupMissesByWeakness(items: readonly WeaknessMiss[]): WeaknessG
       questionIds: group.questionIds,
       bankQuestionIds: group.bankQuestionIds,
     }));
+}
+
+/**
+ * Persisted groups created before skill remapping stored the extract
+ * placeholder. Rebuild those rows; empty groups are handled separately.
+ */
+export function weaknessGroupsNeedRebuild(
+  groups: ReadonlyArray<{ skill?: string | null }>,
+): boolean {
+  return groups.some((group) => {
+    const value = group.skill?.trim() ?? "";
+    if (!value) return false;
+    return isMissingExtractSkill(value);
+  });
 }

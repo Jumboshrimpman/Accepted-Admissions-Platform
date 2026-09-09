@@ -35,6 +35,7 @@ import {
 import { generateQuestionsWithProvider } from "./question-generation.ts";
 import {
   decideRetrySource,
+  lessonRetryReveal,
   retryOutcomeFromAnswer,
   studentRetryShape,
 } from "./sat-bank-retry.ts";
@@ -48,7 +49,7 @@ import {
 } from "./sat-bank-timing.ts";
 
 export { shouldReplaceFirstSessionPrework };
-import { groupMissesByWeakness } from "./sat-bank-weakness.ts";
+import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-weakness.ts";
 import { isTaitoFirstSatSession } from "./session-schedule.ts";
 import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 import {
@@ -615,12 +616,13 @@ export async function assignPreworkFromBank(input: {
 export async function persistWeaknessGroups(input: {
   sessionId: string;
   attemptId: string;
-  items: Array<{
-    questionId: string;
-    skill: string;
-    domain?: string | null;
-    correct: boolean;
-  }>;
+    items: Array<{
+      questionId: string;
+      skill: string;
+      domain?: string | null;
+      subject?: string | null;
+      correct: boolean;
+    }>;
 }): Promise<number> {
   const questionIds = input.items.map((item) => item.questionId);
   const bankRows =
@@ -630,19 +632,26 @@ export async function persistWeaknessGroups(input: {
           .select({
             id: bankQuestionsTable.id,
             linkedQuestionId: bankQuestionsTable.linkedQuestionId,
+            section: bankQuestionsTable.section,
+            domain: bankQuestionsTable.domain,
           })
           .from(bankQuestionsTable)
           .where(inArray(bankQuestionsTable.linkedQuestionId, questionIds));
   const bankByQuestion = new Map(
     bankRows
       .filter((row) => row.linkedQuestionId)
-      .map((row) => [row.linkedQuestionId!, row.id]),
+      .map((row) => [row.linkedQuestionId!, row]),
   );
   const groups = groupMissesByWeakness(
-    input.items.map((item) => ({
-      ...item,
-      bankQuestionId: bankByQuestion.get(item.questionId) ?? null,
-    })),
+    input.items.map((item) => {
+      const bank = bankByQuestion.get(item.questionId);
+      return {
+        ...item,
+        bankQuestionId: bank?.id ?? null,
+        section: bank?.section,
+        domain: item.domain || bank?.domain,
+      };
+    }),
   );
   await db
     .delete(homeworkWeaknessGroupsTable)
@@ -838,18 +847,15 @@ export async function getSessionLesson(sessionId: string) {
       explanation?: string;
     }>;
   } | null;
-  if (attempt && groups.length === 0 && result?.items) {
+  if (
+    attempt &&
+    result?.items &&
+    (groups.length === 0 || weaknessGroupsNeedRebuild(groups))
+  ) {
     await persistWeaknessGroups({
       sessionId,
       attemptId: attempt.id,
-      items: result.items.map((item) => ({
-        ...item,
-        skill: skillLabelForBank({
-          skill: item.skill,
-          domain: item.domain,
-          subject: item.subject,
-        }),
-      })),
+      items: result.items,
     });
     groups = await db
       .select()
@@ -929,15 +935,25 @@ export async function getSessionLesson(sessionId: string) {
     attemptId: attempt?.id ?? null,
     attemptStatus: attempt?.status ?? null,
     accuracyPercent: asFiniteNumberOrNull(attempt?.score),
-    weaknessGroups: groups.map((group) => ({
-      id: group.id,
-      skill: skillLabelForBank({ skill: group.skill, domain: group.domain }),
-      domain: group.domain,
-      missCount: asFiniteNumber(group.missCount),
-      priority: asFiniteNumber(group.priority),
-      questionIds: asStringArray(group.questionIds),
-      bankQuestionIds: asStringArray(group.bankQuestionIds),
-    })),
+    weaknessGroups: groups.map((group) => {
+      const questionIds = asStringArray(group.questionIds);
+      const context = (result?.items ?? []).find((item) =>
+        questionIds.includes(item.questionId),
+      );
+      return {
+        id: group.id,
+        skill: skillLabelForBank({
+          skill: group.skill,
+          domain: group.domain || context?.domain,
+          subject: context?.subject,
+        }),
+        domain: group.domain,
+        missCount: asFiniteNumber(group.missCount),
+        priority: asFiniteNumber(group.priority),
+        questionIds,
+        bankQuestionIds: asStringArray(group.bankQuestionIds),
+      };
+    }),
     misses,
     retries: retries.map((row) => {
       const question = row.retryQuestionId
@@ -960,6 +976,12 @@ export async function getSessionLesson(sessionId: string) {
             officialExplanation: question.explanation,
           })
         : null;
+      const reveal = lessonRetryReveal({
+        outcome: row.outcome,
+        studentAnswer: row.studentAnswer,
+        correctAnswer: question?.correctAnswer,
+        explanation: question?.explanation,
+      });
       return {
         id: row.id,
         sourceQuestionId: row.sourceQuestionId,
@@ -973,6 +995,9 @@ export async function getSessionLesson(sessionId: string) {
         stimulus: safe?.stimulus ?? null,
         skill: safe?.skill ?? null,
         choices: safe?.choices ?? [],
+        studentAnswer: reveal.studentAnswer,
+        correctAnswer: reveal.correctAnswer,
+        explanation: reveal.explanation,
       };
     }),
   };

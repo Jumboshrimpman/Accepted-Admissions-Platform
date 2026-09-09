@@ -3951,7 +3951,10 @@ export const GetSessionLessonResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "studentAnswer": zod.string().nullish(),
+  "correctAnswer": zod.string().nullish(),
+  "explanation": zod.string().nullish()
 }))
 })
 
