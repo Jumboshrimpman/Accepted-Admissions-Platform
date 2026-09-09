@@ -95,6 +95,9 @@ import {
 } from "../lib/session-schedule";
 import {
   buildAttemptAnalysis,
+  clientCurrentFocusLine,
+  hasExtractPlaceholder,
+  toClientAdaptiveGuidance,
   tutorAlertFields,
   type AttemptAnalysis,
 } from "../lib/assessment-analysis";
@@ -9043,20 +9046,16 @@ async function dashboardDataForUser(user: AppUser) {
                 null,
             }
           : null;
-      const analysis = latestResult?.analysis as
-        | { nextFocus?: unknown[]; weaknesses?: unknown[] }
-        | null
-        | undefined;
-      const currentFocus =
-        (analysis?.nextFocus ?? []).find(
-          (item): item is string => typeof item === "string",
-        ) ??
-        (analysis?.weaknesses ?? []).find(
-          (item): item is string => typeof item === "string",
-        ) ??
-        (session.subject.toUpperCase() === "IELTS"
+      const rawAnalysis = latestResult?.analysis as AttemptAnalysis | null | undefined;
+      const analysis = rawAnalysis ? toClientAdaptiveGuidance(rawAnalysis) : null;
+      if (latestResult && analysis) {
+        latestResult.analysis = analysis;
+      }
+      const fallbackFocus =
+        session.subject.toUpperCase() === "IELTS"
           ? "Build confident English communication across the next skill."
-          : "Strengthen evidence-based reasoning and precise conventions.");
+          : "Strengthen evidence-based reasoning and precise conventions.";
+      const currentFocus = clientCurrentFocusLine(analysis, fallbackFocus);
       const attemptStatus = preparation?.latestAttemptStatus;
       const readiness =
         session.status === "completed"
@@ -9103,8 +9102,15 @@ async function dashboardDataForUser(user: AppUser) {
     .filter((analysis): analysis is Record<string, unknown> => Boolean(analysis));
   const uniqueStrings = (values: unknown) =>
     [...new Set(Array.isArray(values) ? values.filter((value): value is string => typeof value === "string") : [])];
-  const strengths = uniqueStrings(analysisValues.flatMap((analysis) => analysis.strengths)).slice(0, 3);
-  const weaknesses = uniqueStrings(analysisValues.flatMap((analysis) => analysis.weaknesses)).slice(0, 3);
+  const clientAnalyses = analysisValues.map((analysis) =>
+    toClientAdaptiveGuidance(analysis as AttemptAnalysis),
+  );
+  const strengths = uniqueStrings(clientAnalyses.flatMap((analysis) => analysis.strengths)).slice(0, 3);
+  const weaknesses = uniqueStrings(
+    clientAnalyses
+      .flatMap((analysis) => analysis.weaknesses)
+      .filter((value) => typeof value === "string" && !hasExtractPlaceholder(value)),
+  ).slice(0, 3);
   const tutorAssignments =
     user.role === "tutor"
       ? await db
@@ -9441,7 +9447,13 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       const resultItems = Array.isArray(storedResult?.items) ? storedResult.items : [];
       const analysis = resultItems.length
         ? withDisplaySkills(storedResult!, assignment.title).analysis
-        : ((attempt?.analysis ?? storedResult?.analysis) as AttemptAnalysis | null | undefined);
+        : (() => {
+            const stored = (attempt?.analysis ?? storedResult?.analysis) as
+              | AttemptAnalysis
+              | null
+              | undefined;
+            return stored ? toClientAdaptiveGuidance(stored) : null;
+          })();
       return {
         assignmentId: assignment.id,
         title: assignment.title,

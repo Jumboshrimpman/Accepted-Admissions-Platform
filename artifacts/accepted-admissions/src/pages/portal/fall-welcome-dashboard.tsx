@@ -16,7 +16,8 @@ import {
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard } from "@/pages/portal/booking-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
-import { canPurchaseOrBookSatCredits } from "@/lib/portal-sat";
+import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
+import { PORTAL_BOOKING_SECTION_ID, canPurchaseOrBookSatCredits } from "@/lib/portal-sat";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -101,6 +102,18 @@ export function ClientDashboardView({
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== `#${PORTAL_BOOKING_SECTION_ID}`) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(PORTAL_BOOKING_SECTION_ID)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
     const params = new URLSearchParams(query);
     if (params.get("payment") !== "success") return;
@@ -138,6 +151,7 @@ export function ClientDashboardView({
   const nextSession =
     sessions.find((session) => session.readiness !== "complete") ?? sessions.at(-1);
   const analysis = nextSession?.latestResult?.analysis;
+  const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
   const completed = sessions.filter((session) => session.readiness === "complete").length;
 
   return (
@@ -360,9 +374,9 @@ export function ClientDashboardView({
             <CardDescription>Based only on the latest finalized {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{analysis.strengths[0] ?? "Keep building your baseline."}</p></div>
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-2 text-sm">{analysis.weaknesses[0] ?? "No repeated missed skill yet."}</p></div>
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-2 text-sm">{analysis.nextFocus[0] ?? "Continue with the published session plan."}</p></div>
+            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{guidance?.strength ?? "Keep building your baseline."}</p></div>
+            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-missed-skill"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-2 text-sm">{guidance?.missedSkill ?? "No repeated missed skill yet."}</p></div>
+            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-next-practice"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-2 text-sm">{guidance?.nextPractice ?? "Continue with the published session plan."}</p></div>
           </CardContent>
         </Card>
       )}

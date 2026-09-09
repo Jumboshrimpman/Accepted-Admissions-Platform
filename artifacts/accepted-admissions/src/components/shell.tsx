@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
 import { ProvisioningReference } from "@/components/provisioning-reference";
@@ -28,13 +28,16 @@ import {
 import { PortalProfileEditor } from "@/components/portal-profile-editor";
 import { portalAvatarUrl, portalDisplayName } from "@/lib/portal-profile";
 import {
+  PORTAL_BOOKING_SECTION_ID,
   PORTAL_SAT_BOOK_LABEL,
   PORTAL_SAT_HREF,
+  PORTAL_SAT_PURCHASE_HREF,
   canSeePortalSatNav,
+  goToPortalBooking,
 } from "@/lib/portal-sat";
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -104,6 +107,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   };
 
   const links = getLinks();
+  const openBookSat = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    setMenuOpen(false);
+    goToPortalBooking({ location, setLocation });
+  };
   const displayName = portalDisplayName(
     apiUser.displayName,
     user?.fullName || user?.firstName,
@@ -117,15 +128,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
       viewer: "Viewer",
     }[role] ?? role);
   const avatarUrl = portalAvatarUrl(apiUser.avatarUrl, user?.imageUrl);
-  const linkActive = (href: string) =>
-    location === href ||
-    (href !== "/portal" &&
-      href !== "/admin" &&
-      href !== "/tutor" &&
-      location.startsWith(href)) ||
-    (href === "/admin" && location === "/admin") ||
-    (href === "/tutor" && location === "/tutor") ||
-    (href === "/portal/curriculum" && location.startsWith("/portal"));
+  const bookingHashActive =
+    typeof window !== "undefined" && window.location.hash === `#${PORTAL_BOOKING_SECTION_ID}`;
+  const linkActive = (href: string) => {
+    if (href === PORTAL_SAT_HREF) {
+      return location === PORTAL_SAT_PURCHASE_HREF || bookingHashActive;
+    }
+    return (
+      location === href ||
+      (href !== "/portal" &&
+        href !== "/admin" &&
+        href !== "/tutor" &&
+        !href.includes("#") &&
+        location.startsWith(href)) ||
+      (href === "/admin" && location === "/admin") ||
+      (href === "/tutor" && location === "/tutor") ||
+      (href === "/portal/curriculum" && location.startsWith("/portal") && location !== PORTAL_SAT_PURCHASE_HREF)
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -147,6 +167,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={link.href === PORTAL_SAT_HREF ? openBookSat : undefined}
                   className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     linkActive(link.href)
                       ? "bg-primary text-primary-foreground"
@@ -242,7 +263,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={() => setMenuOpen(false)}
+                  onClick={link.href === PORTAL_SAT_HREF ? openBookSat : () => setMenuOpen(false)}
                   className={`flex items-center gap-2 rounded-md px-3 py-3 text-sm font-medium ${
                     linkActive(link.href)
                       ? "bg-primary text-primary-foreground"

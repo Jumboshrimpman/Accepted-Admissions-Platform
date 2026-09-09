@@ -405,6 +405,65 @@ describe("authenticated role dashboard flows", () => {
     );
   });
 
+  test("adaptive guidance never shows Skill not in extract to clients", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      credits: {
+        purchasedHours: 4,
+        usedHours: 0,
+        remainingHours: 4,
+        readOnly: false,
+        selfServeSatBooking: false,
+        twelveSessionPlan: false,
+      },
+      curriculumSessions: [
+        {
+          id: "session-sat",
+          courseId: "course-fall",
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Taito’s SAT Session with Eunice",
+          status: "published",
+          meetingUrl: "https://meet.google.com/sat-room",
+          calendarEventUrl: null,
+          tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Taito Goto" },
+          readiness: "ready",
+          nextAction: "Review answers",
+          currentFocus: "Skill not in extract",
+          preparation: null,
+          latestResult: {
+            status: "submitted",
+            score: 31,
+            attemptId: "attempt-1",
+            analysis: {
+              source: "deterministic",
+              label: "Adaptive skill analysis",
+              provider: null,
+              strengths: ["Skill not in extract (80% accuracy)"],
+              weaknesses: ["Skill not in extract (31% accuracy)"],
+              mistakePatterns: ["Skill not in extract: 11 misses"],
+              nextFocus: ["Skill not in extract"],
+              feedback: "Skill not in extract needs more practice.",
+              missClusters: [{ label: "Algebra", kind: "domain", missCount: 8 }],
+              sectionBreakdown: [
+                { section: "math", label: "Math", accuracy: 31, total: 16, missCount: 11 },
+              ],
+            },
+          },
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.getByText("Adaptive guidance")).toBeTruthy();
+    expect(screen.queryByText(/Skill not in extract/i)).toBeNull();
+    expect(screen.getByTestId("adaptive-missed-skill").textContent).toMatch(/Algebra/);
+    expect(screen.getByTestId("adaptive-next-practice").textContent).toMatch(/Practice Algebra next/);
+  });
+
   test("Michelle can self-serve SAT booking for Xavier or Eunice", () => {
     mocks.dashboard = {
       ...dashboardForRole("student"),

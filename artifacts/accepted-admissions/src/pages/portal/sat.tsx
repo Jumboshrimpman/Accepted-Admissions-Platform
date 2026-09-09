@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingCard } from "@/pages/portal/booking-card";
 import {
-  PORTAL_SAT_HREF,
+  PORTAL_SAT_PURCHASE_HREF,
   PORTAL_SAT_TUTOR_DENIED_BODY,
   PORTAL_SAT_TUTOR_DENIED_TITLE,
   PORTAL_SAT_TUTOR_HREF,
@@ -77,7 +77,7 @@ export default function PortalSat() {
     if (!payment) return;
     params.delete("payment");
     const nextQuery = params.toString();
-    setLocation(nextQuery ? `${PORTAL_SAT_HREF}?${nextQuery}` : PORTAL_SAT_HREF, { replace: true });
+    setLocation(nextQuery ? `${PORTAL_SAT_PURCHASE_HREF}?${nextQuery}` : PORTAL_SAT_PURCHASE_HREF, { replace: true });
   }, [location, setLocation]);
 
   useEffect(() => {
