@@ -23,6 +23,7 @@ import {
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
+import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
   return <CurriculumBlockView block={block} />;
@@ -61,6 +62,7 @@ export default function PortalSession() {
   const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
   const reports = artifacts.filter((item) => item.kind === "report");
   const analysis = session.homework?.find((item) => item.analysis)?.analysis;
+  const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-16">
@@ -101,9 +103,9 @@ export default function PortalSession() {
           )) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No preparation is required for this meeting.</p>}
           {analysis && (
             <div className="grid gap-3 rounded-xl bg-muted/35 p-4 sm:grid-cols-3">
-              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-1 text-sm">{analysis.strengths[0] ?? "Building a baseline"}</p></div>
-              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-1 text-sm">{analysis.weaknesses[0] ?? "No repeated miss"}</p></div>
-              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-1 text-sm">{analysis.nextFocus[0] ?? "Continue the session plan"}</p></div>
+              <div><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-1 text-sm">{guidance?.strength ?? "Building a baseline"}</p></div>
+              <div data-testid="adaptive-missed-skill"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-1 text-sm">{guidance?.missedSkill ?? "No repeated miss"}</p></div>
+              <div data-testid="adaptive-next-practice"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-1 text-sm">{guidance?.nextPractice ?? "Continue the session plan"}</p></div>
               <Badge variant="outline" className="w-fit sm:col-span-3">{analysis.label} · {analysis.source === "provider" ? analysis.provider ?? "AI provider" : "Deterministic fallback"}</Badge>
             </div>
           )}

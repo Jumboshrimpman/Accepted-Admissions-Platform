@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { buildAttemptAnalysis, describeSessionPrepMode, projectSatScores, projectSatSectionScore, tutorAlertFields } from "./assessment-analysis.ts";
+import { buildAttemptAnalysis, describeSessionPrepMode, hasExtractPlaceholder, projectSatScores, projectSatSectionScore, qualitativeClientCopy, toClientAdaptiveGuidance, tutorAlertFields } from "./assessment-analysis.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { FULL_SAT_DIAGNOSTIC_QUESTIONS } from "./sat-assessment-content.ts";
 
@@ -55,7 +55,8 @@ test("diagnostic analysis includes estimated score coaching for tutors and stude
   assert.match(analysis.feedback, /Estimated SAT score range/);
   assert.match(analysis.feedback, /not an official College Board adaptive/i);
   assert.match(analysis.sessionOpener ?? "", /Transitions/i);
-  assert.deepEqual(analysis.nextFocus, ["Transitions"]);
+  assert.match(analysis.nextFocus[0] ?? "", /Practice Transitions next/);
+  assert.equal(hasExtractPlaceholder(JSON.stringify(analysis)), false);
 });
 
 test("full diagnostic seed covers RW and Math with explanations", () => {
@@ -146,10 +147,8 @@ test("clusters coarse section skills by domain and writes a concrete tutor brief
   );
 
   assert.doesNotMatch(analysis.feedback, /start with the focus areas below/i);
-  assert.deepEqual(
-    analysis.nextFocus,
-    ["Algebra", "Geometry and Trigonometry", "Information and Ideas"],
-  );
+  assert.match(analysis.nextFocus[0] ?? "", /Practice Algebra next/);
+  assert.match(analysis.weaknesses[0] ?? "", /Algebra is where most misses landed/);
   assert.equal(analysis.missClusters?.[0]?.label, "Algebra");
   assert.equal(analysis.missClusters?.[0]?.missCount, 12);
   assert.equal(analysis.missClusters?.[0]?.kind, "domain");
@@ -180,4 +179,49 @@ test("tutor alert fields drop filler and coarse focus labels", () => {
   });
   assert.equal(fields.analysisPreview, null);
   assert.deepEqual(fields.nextFocus, []);
+});
+
+test("never emits Skill not in extract on student adaptive guidance", () => {
+  const analysis = buildAttemptAnalysis(
+    [{ skill: "Skill not in extract", correct: 5, total: 16, accuracy: 31.25 }],
+    [
+      ...Array.from({ length: 11 }, (_, index) => ({
+        correct: false,
+        skill: "Skill not in extract",
+        subject: "SAT Math",
+        domain: "Algebra",
+        prompt: `Solve for x in item ${index + 1}.`,
+      })),
+      ...Array.from({ length: 5 }, () => ({
+        correct: true,
+        skill: "Skill not in extract",
+        subject: "SAT Math",
+        domain: "Algebra",
+        prompt: "Evaluate the linear expression.",
+      })),
+    ],
+    31,
+  );
+  assert.equal(hasExtractPlaceholder(JSON.stringify(analysis)), false);
+  assert.match(analysis.weaknesses[0] ?? "", /Algebra/);
+  assert.match(analysis.nextFocus[0] ?? "", /Practice Algebra next/);
+  assert.doesNotMatch(analysis.nextFocus[0] ?? "", /^SAT Math$/);
+  assert.doesNotMatch(analysis.weaknesses[0] ?? "", /Skill not in extract/i);
+
+  const stored = toClientAdaptiveGuidance({
+    strengths: ["Skill not in extract (80% accuracy)"],
+    weaknesses: ["Skill not in extract (31% accuracy)"],
+    nextFocus: ["Skill not in extract"],
+    missClusters: [{ label: "Algebra", kind: "domain" as const, missCount: 8 }],
+  });
+  assert.equal(hasExtractPlaceholder(JSON.stringify(stored)), false);
+  assert.match(stored.nextFocus[0] ?? "", /Algebra/);
+
+  const sectionOnly = qualitativeClientCopy({
+    weaknesses: ["Skill not in extract (31% accuracy)"],
+    nextFocus: ["SAT Math"],
+    sectionBreakdown: [{ section: "math", label: "Math", accuracy: 31, missCount: 11 }],
+  });
+  assert.match(sectionOnly.missedSkill, /Math is the leak/);
+  assert.match(sectionOnly.nextPractice, /Practice Math next/);
 });

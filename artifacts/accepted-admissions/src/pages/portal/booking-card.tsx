@@ -409,8 +409,11 @@ export function BookingCard() {
                 ) : availableSlots.length === 0 ? (
                    <p className="mt-4 text-sm text-muted-foreground">{selectedTutor.name} has no open times in this window. Please check again soon.</p>
                 ) : (
-                  <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
-                    <div className="rounded-xl border bg-background p-2 sm:p-3">
+                  <div className="mt-4 grid items-start gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
+                    <div
+                      className="min-w-0 overflow-visible rounded-xl border bg-background p-3"
+                      data-testid="booking-calendar"
+                    >
                       <AvailabilityCalendar
                         mode="single"
                         selected={selectedDate}
@@ -426,9 +429,12 @@ export function BookingCard() {
                           date > rangeEnd ||
                           !availableDateKeys.has(format(date, "yyyy-MM-dd"))
                         }
-                        className="mx-auto w-full"
+                        className="mx-auto h-auto w-full min-w-0 overflow-visible"
                       />
-                      <p className="px-2 pb-2 text-center text-xs text-muted-foreground">
+                      <p
+                        className="relative z-0 mt-3 px-1 pb-1 text-center text-xs leading-5 text-muted-foreground"
+                        data-testid="booking-calendar-hint"
+                      >
                         Dates with open times are available to select.
                       </p>
                     </div>
@@ -672,8 +678,11 @@ export function ClientPreviewBookingCard({
               </div>
               <Badge variant="outline">Calendar connected</Badge>
             </div>
-            <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
-              <div className="rounded-xl border bg-background p-2 sm:p-3">
+            <div className="mt-4 grid items-start gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
+              <div
+                className="min-w-0 overflow-visible rounded-xl border bg-background p-3"
+                data-testid="booking-calendar"
+              >
                 <AvailabilityCalendar
                   mode="single"
                   selected={selectedDate}
@@ -686,9 +695,12 @@ export function ClientPreviewBookingCard({
                     date > rangeEnd ||
                     !availableDateKeys.has(format(date, "yyyy-MM-dd"))
                   }
-                  className="mx-auto w-full"
+                  className="mx-auto h-auto w-full min-w-0 overflow-visible"
                 />
-                <p className="px-2 pb-2 text-center text-xs text-muted-foreground">
+                <p
+                  className="relative z-0 mt-3 px-1 pb-1 text-center text-xs leading-5 text-muted-foreground"
+                  data-testid="booking-calendar-hint"
+                >
                   Dates with open times are available to select.
                 </p>
               </div>

@@ -103,7 +103,9 @@ describe("Shell", () => {
         <Shell>Portal content</Shell>
       </ErrorBoundary>,
     );
-    expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe("/portal/sat");
+    expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe(
+      "/portal#booking-schedule",
+    );
   });
 
   it("hides Book SAT and purchase links from tutor chrome", () => {

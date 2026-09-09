@@ -165,6 +165,10 @@ describe("client availability calendar", () => {
 
     fireEvent.click(screen.getByText(tutorTime(secondSlot)));
     expect(screen.getByRole("button", { name: "Reserve this hour" })).toBeTruthy();
+    const hint = screen.getByTestId("booking-calendar-hint");
+    expect(hint.textContent).toMatch(/Dates with open times are available to select/);
+    expect(hint.className).toMatch(/mt-3/);
+    expect(screen.getByTestId("booking-calendar").className).toMatch(/overflow-visible/);
   });
 
   test("does not show a calendar when the provider is disconnected", () => {

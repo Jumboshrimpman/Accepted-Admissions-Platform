@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { PORTAL_SAT_HREF } from "@/lib/portal-sat";
+import { PORTAL_SAT_PURCHASE_HREF } from "@/lib/portal-sat";
 import {
   PAYMENT_CONFIRMING_TITLE,
   PAYMENT_GRANTED_TITLE,
@@ -67,7 +67,7 @@ afterEach(() => {
   cleanup();
   mocks.dashboard.data.credits.selfServeSatBooking = true;
   mocks.dashboard.data.credits.remainingHours = 0;
-  mocks.location = PORTAL_SAT_HREF;
+  mocks.location = PORTAL_SAT_PURCHASE_HREF;
   mocks.remainingHours = 0;
   mocks.currentUser.data = { role: "student" };
   mocks.currentUser.isLoading = false;
@@ -153,7 +153,7 @@ describe("portal SAT book/pay", () => {
   });
 
   test("checkout return does not claim credits are ready while the ledger is still 0", async () => {
-    mocks.location = `${PORTAL_SAT_HREF}?payment=success`;
+    mocks.location = `${PORTAL_SAT_PURCHASE_HREF}?payment=success`;
     mocks.dashboard.data.credits.remainingHours = 0;
     mocks.remainingHours = 0;
     render(<PortalSat />);
@@ -166,7 +166,7 @@ describe("portal SAT book/pay", () => {
   });
 
   test("says Stripe confirmed only after the credit ledger increases", async () => {
-    mocks.location = `${PORTAL_SAT_HREF}?payment=success`;
+    mocks.location = `${PORTAL_SAT_PURCHASE_HREF}?payment=success`;
     mocks.dashboard.data.credits.remainingHours = 0;
     mocks.remainingHours = 1;
     render(<PortalSat />);
