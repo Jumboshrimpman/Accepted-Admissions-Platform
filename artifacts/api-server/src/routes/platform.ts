@@ -362,6 +362,11 @@ import {
   courseIdsForAssignmentList,
   isAssignmentListedForRole,
 } from "../lib/assignment-visibility";
+import {
+  attemptResultHasPlaceholderSkill,
+  skillBreakdownFromItems,
+  skillLabelForBank,
+} from "../lib/sat-bank-skill";
 import { answersMatch } from "../lib/sat-bank-retry";
 import {
   canFinalizeAttemptResult,
@@ -3064,6 +3069,8 @@ type AttemptResultPayload = {
     prompt: string;
     stimulus: string | null;
     choices: Array<{ id: string; label: string; text: string }>;
+    domain?: string | null;
+    subject?: string | null;
   }>;
   analysis: AttemptAnalysisPayload;
   studentFeedback: string;
@@ -3104,7 +3111,7 @@ async function storedAttemptResult(
     .limit(1);
   if (!attempt?.result) return null;
   return {
-    ...(attempt.result as Record<string, unknown>),
+    ...withDisplaySkills(attempt.result as AttemptResultPayload, attempt.assignmentTitle),
     assignmentId: attempt.assignmentId,
     assignmentTitle: attempt.assignmentTitle,
     studentUserId: attempt.studentUserId,
@@ -3117,6 +3124,36 @@ async function storedAttemptResult(
           reviewStatus: attempt.reviewStatus,
         }
       : {}),
+  };
+}
+
+function withDisplaySkills(
+  result: AttemptResultPayload,
+  assignmentTitle?: string | null,
+): AttemptResultPayload {
+  if (!attemptResultHasPlaceholderSkill(result)) return result;
+  const items = result.items.map((item) => ({
+    ...item,
+    skill: skillLabelForBank({
+      skill: item.skill,
+      domain: item.domain,
+      subject: item.subject,
+    }),
+  }));
+  const breakdown = skillBreakdownFromItems(items);
+  const analysis = deterministicAnalysis(
+    breakdown,
+    items,
+    result.score,
+    assignmentTitle ?? result.assignmentTitle,
+    result.homeworkKind ?? null,
+  );
+  return {
+    ...result,
+    items,
+    breakdown,
+    analysis,
+    studentFeedback: analysis.feedback,
   };
 }
 
@@ -3171,7 +3208,7 @@ async function finalizeAttemptResult(
   if (!attempt) return null;
   if (attempt.attempt.result) {
     return {
-      ...(attempt.attempt.result as AttemptResultPayload),
+      ...withDisplaySkills(attempt.attempt.result as AttemptResultPayload, attempt.assignment.title),
       assignmentId: attempt.assignment.id,
       assignmentTitle: attempt.assignment.title,
       studentUserId: attempt.student.id,
@@ -3221,18 +3258,6 @@ async function finalizeAttemptResult(
   const totalCount = joined.length;
   const score = totalCount === 0 ? 0 : (correctCount / totalCount) * 100;
   const timing = await timerSummary(attempt.attempt.id);
-  const bySkill = new Map<string, { correct: number; total: number }>();
-  for (const item of joined) {
-    const current = bySkill.get(item.question.skill) ?? { correct: 0, total: 0 };
-    current.total += 1;
-    if (answersMatch(item.response?.finalAnswer, item.question.correctAnswer)) current.correct += 1;
-    bySkill.set(item.question.skill, current);
-  }
-  const breakdown = [...bySkill.entries()].map(([skill, value]) => ({
-    skill,
-    ...value,
-    accuracy: value.total === 0 ? 0 : (value.correct / value.total) * 100,
-  }));
   const items = joined.map(({ response, question }) => ({
     questionId: question.id,
     correct: answersMatch(response?.finalAnswer, question.correctAnswer),
@@ -3240,7 +3265,11 @@ async function finalizeAttemptResult(
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,
     explanation: question.explanation,
-    skill: question.skill,
+    skill: skillLabelForBank({
+      skill: question.skill,
+      domain: question.domain,
+      subject: question.subject,
+    }),
     questionType: question.questionType,
     difficulty: question.difficulty,
     timeSpentSeconds: response?.timeSpentSeconds ?? 0,
@@ -3251,6 +3280,7 @@ async function finalizeAttemptResult(
     domain: question.domain,
     subject: question.subject,
   }));
+  const breakdown = skillBreakdownFromItems(items);
   const homeworkKind = await homeworkKindForAssignment(attempt.assignment.id);
   const analysis = deterministicAnalysis(
     breakdown,
@@ -3363,7 +3393,11 @@ function adaptiveQuestionShape(
     prompt: question.prompt,
     stimulus: question.stimulus,
     choices: question.choices,
-    skill: question.skill,
+    skill: skillLabelForBank({
+      skill: question.skill,
+      domain: question.domain,
+      subject: question.subject,
+    }),
     difficulty: question.difficulty,
     predictionFirst: false,
     correctAnswer: question.correctAnswer,

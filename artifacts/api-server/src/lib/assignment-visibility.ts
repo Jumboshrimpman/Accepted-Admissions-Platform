@@ -1,3 +1,5 @@
+import { skillLabelForBank } from "./sat-bank-skill.ts";
+
 export function isAssignmentListedForRole(
   role: string | null | undefined,
   status: string | null | undefined,
@@ -51,6 +53,7 @@ export function assignmentQuestionShape(
     stimulus?: string | null;
     choices?: unknown;
     skill?: string | null;
+    domain?: string | null;
     difficulty?: string | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
@@ -63,7 +66,11 @@ export function assignmentQuestionShape(
     prompt: question.prompt?.trim() || "Question prompt is unavailable.",
     stimulus: question.stimulus ?? null,
     choices: assignmentChoices(question.choices),
-    skill: question.skill?.trim() || "General",
+    skill: skillLabelForBank({
+      skill: question.skill,
+      domain: question.domain,
+      subject: question.subject,
+    }),
     difficulty: assignmentDifficulty(question.difficulty),
     predictionFirst: Boolean(assignmentQuestion.predictionFirst),
   };

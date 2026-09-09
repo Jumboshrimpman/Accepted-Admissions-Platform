@@ -161,7 +161,10 @@ export function SatBankPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">Q{index + 1}</Badge>
                   <Badge variant="outline">{question.section === "rw" ? "R&W" : "Math"}</Badge>
-                  <Badge variant="outline">{question.skill || "Skill not in PDF"}</Badge>
+                  <Badge variant="outline">
+                    {question.skill ||
+                      `${question.section === "math" ? "SAT Math" : "Reading and Writing"} · not in PDF`}
+                  </Badge>
                   {question.questionType === "spr" ? <Badge variant="outline">SPR</Badge> : null}
                   {question.assignable === false ? (
                     <Badge variant="outline">Figure/choices incomplete</Badge>
