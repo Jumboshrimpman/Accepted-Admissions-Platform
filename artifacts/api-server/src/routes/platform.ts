@@ -186,6 +186,8 @@ import {
   CreateAdminSessionBody,
   CreateAdminSessionResponse,
   CreateTutorSessionResponse,
+  CreateTutorReusableQuizBody,
+  CreateTutorReusableQuizResponse,
   GetTutorCurriculumResponse,
   GetAdminClientDashboardParams,
   GetAdminClientDashboardResponse,
@@ -365,6 +367,7 @@ import {
   dedupeFullLengthDiagnostics,
   shouldReplaceFirstSessionPrework,
 } from "../lib/sat-bank-service";
+import { createReusableQuizFromBank } from "../lib/tutor-reusable-quiz";
 import {
   assignmentQuestionShape,
   courseIdsForAssignmentList,
@@ -5186,6 +5189,40 @@ router.post(
     res
       .status(201)
       .json(CreateTutorSessionResponse.parse(await adminSessionShape(created!)));
+  },
+);
+
+router.post(
+  "/tutor/quizzes",
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = CreateTutorReusableQuizBody.safeParse(req.body);
+    if (!body.success) {
+      adminMutationError(res, "A quiz title and at least one multiple-choice bank question are required.");
+      return;
+    }
+    const user = req.appUser!;
+    const subject = body.data.subject?.trim() || undefined;
+    if (!(await canAccessCourse(user, body.data.courseId, subject))) {
+      res.status(404).json({ error: "Program not found" });
+      return;
+    }
+    try {
+      const created = await createReusableQuizFromBank({
+        courseId: body.data.courseId,
+        title: body.data.title,
+        subject,
+        bankQuestionIds: body.data.bankQuestionIds,
+        actorUserId: user.id,
+      });
+      res.status(201).json(CreateTutorReusableQuizResponse.parse(await adminAssignmentShape(created)));
+    } catch (error) {
+      const status = typeof (error as { status?: number }).status === "number"
+        ? (error as { status: number }).status
+        : 500;
+      const message = error instanceof Error ? error.message : "Could not create the quiz.";
+      res.status(status >= 400 && status < 600 ? status : 500).json({ error: message });
+    }
   },
 );
 

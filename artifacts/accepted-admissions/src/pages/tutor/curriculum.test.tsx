@@ -129,6 +129,7 @@ describe("tutor curriculum workspace", () => {
     render(<TutorCurriculumPage />);
 
     expect(screen.getByTestId("tutor-curriculum-page")).toBeTruthy();
+    expect(screen.getByTestId("tutor-create-quiz-open")).toBeTruthy();
     expect(screen.getByTestId("tutor-linked-students").textContent).toContain("Michelle Makarem");
     expect(screen.getByText("SAT Practice Test 11 · 98 questions")).toBeTruthy();
 

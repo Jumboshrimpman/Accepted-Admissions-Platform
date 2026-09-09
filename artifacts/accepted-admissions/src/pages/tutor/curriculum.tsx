@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TutorQuizBuilder } from "@/components/tutor-quiz-builder";
 import {
   assignableBankQuizzes,
   bankQuizOptionLabel,
@@ -98,6 +99,7 @@ export default function TutorCurriculum() {
   const [bankSessionId, setBankSessionId] = useState("");
   const [libraryAssetId, setLibraryAssetId] = useState("");
   const [librarySessionId, setLibrarySessionId] = useState("");
+  const [showQuizBuilder, setShowQuizBuilder] = useState(false);
 
   const data = curriculum.data;
   const students = data?.students ?? [];
@@ -438,7 +440,35 @@ export default function TutorCurriculum() {
             >
               Assign quiz
             </Button>
+            <div className="md:col-span-3">
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="tutor-create-quiz-open"
+                onClick={() => setShowQuizBuilder(true)}
+              >
+                Create quiz from bank
+              </Button>
+            </div>
           </div>
+          {showQuizBuilder ? (
+            <TutorQuizBuilder
+              open
+              onOpenChange={setShowQuizBuilder}
+              programs={programs}
+              collections={collections}
+              defaultCourseId={
+                sessions.find((session) => session.id === assignSessionId)?.courseId ||
+                programs[0]?.id
+              }
+              onCreated={(quiz) => {
+                setAssignQuizId(quiz.id);
+                setMessage(`Saved “${quiz.title}” as a reusable quiz.`);
+                refresh();
+              }}
+              onError={(text) => setMessage(text)}
+            />
+          ) : null}
 
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" data-testid="tutor-assign-bank">
             <div className="space-y-2">

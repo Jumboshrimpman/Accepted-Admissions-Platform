@@ -1263,7 +1263,9 @@ export const ListSatBankQuestionsQueryParams = zod.object({
   "examFamily": zod.enum(['sat', 'psat']).optional(),
   "collectionId": zod.coerce.string().optional(),
   "section": zod.enum(['rw', 'math']).optional(),
-  "skill": zod.coerce.string().optional()
+  "skill": zod.coerce.string().optional(),
+  "questionType": zod.enum(['mcq', 'spr']).optional(),
+  "includeKeys": zod.enum(['true', 'false']).optional()
 })
 
 export const ListSatBankQuestionsResponseItem = zod.object({
@@ -1294,7 +1296,14 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "extractGaps": zod.record(zod.string(), zod.unknown()).optional(),
   "assignable": zod.boolean().optional(),
   "hasOfficialExplanation": zod.boolean(),
-  "linkedQuestionId": zod.string().nullish()
+  "linkedQuestionId": zod.string().nullish(),
+  "correctAnswer": zod.string().optional(),
+  "officialExplanation": zod.string().optional(),
+  "figures": zod.array(zod.object({
+    "url": zod.string().nullish(),
+    "path": zod.string().nullish(),
+    "alt": zod.string().nullish()
+  })).optional()
 })
 export const ListSatBankQuestionsResponse = zod.array(ListSatBankQuestionsResponseItem)
 
@@ -4060,5 +4069,24 @@ export const GetTutorCurriculumResponse = zod.object({
  */
 export const CreateTutorSessionBody = CreateAdminSessionBody
 export const CreateTutorSessionResponse = CreateAdminSessionResponse
+
+/**
+ * @summary Create a reusable quiz from official SAT/PSAT bank questions
+ */
+export const createTutorReusableQuizBodyTitleMin = 2;
+export const createTutorReusableQuizBodyTitleMax = 200;
+export const createTutorReusableQuizBodySubjectMin = 1;
+export const createTutorReusableQuizBodySubjectMax = 100;
+export const createTutorReusableQuizBodyBankQuestionIdsMin = 1;
+export const createTutorReusableQuizBodyBankQuestionIdsMax = 80;
+
+export const CreateTutorReusableQuizBody = zod.object({
+  "courseId": zod.string().min(1),
+  "title": zod.string().min(createTutorReusableQuizBodyTitleMin).max(createTutorReusableQuizBodyTitleMax),
+  "subject": zod.string().min(createTutorReusableQuizBodySubjectMin).max(createTutorReusableQuizBodySubjectMax).optional(),
+  "bankQuestionIds": zod.array(zod.string()).min(createTutorReusableQuizBodyBankQuestionIdsMin).max(createTutorReusableQuizBodyBankQuestionIdsMax)
+})
+
+export const CreateTutorReusableQuizResponse = CreateAdminAssignmentResponse
 
 

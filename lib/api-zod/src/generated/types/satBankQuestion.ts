@@ -42,4 +42,16 @@ export interface SatBankQuestion {
   hasOfficialExplanation: boolean;
   /** @nullable */
   linkedQuestionId?: string | null;
+  correctAnswer?: string;
+  officialExplanation?: string;
+  figures?: SatBankQuestionFiguresItem[];
 }
+
+export type SatBankQuestionFiguresItem = {
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  path?: string | null;
+  /** @nullable */
+  alt?: string | null;
+};

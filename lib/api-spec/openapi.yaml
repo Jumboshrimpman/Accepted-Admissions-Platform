@@ -550,6 +550,34 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /tutor/quizzes:
+    post:
+      operationId: createTutorReusableQuiz
+      tags: [curriculum]
+      summary: Create a reusable quiz from official SAT/PSAT bank questions
+      description: >
+        Tutors and administrators assemble a named reusable quiz from
+        multiple-choice official bank questions. The quiz is stored as a
+        session-less assignment so it can be assigned like other reusable
+        quizzes. Student-produced response items are rejected. Students
+        cannot create quizzes or browse keyed bank items. No Clerk invite
+        is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TutorReusableQuizInput" }
+      responses:
+        "201":
+          description: Created reusable quiz
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAssignment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /admin/sat-bank/collections:
     get:
       operationId: listSatBankCollections
@@ -589,6 +617,11 @@ paths:
       operationId: listSatBankQuestions
       tags: [administration]
       summary: Browse canonical SAT/PSAT bank questions
+      description: >
+        Administrators and tutors only. Pass includeKeys=true to include the
+        correct answer, official explanation, and compact figures for quiz
+        assembly. Students are denied. Prefer questionType=mcq when building
+        tutor quizzes; SPR items are not assignable in that flow.
       parameters:
         - name: examFamily
           in: query
@@ -602,6 +635,12 @@ paths:
         - name: skill
           in: query
           schema: { type: string }
+        - name: questionType
+          in: query
+          schema: { type: string, enum: [mcq, spr] }
+        - name: includeKeys
+          in: query
+          schema: { type: string, enum: ["true", "false"] }
       responses:
         "200":
           description: Bank questions
@@ -3652,6 +3691,28 @@ components:
         assignable: { type: boolean }
         hasOfficialExplanation: { type: boolean }
         linkedQuestionId: { type: ["string", "null"] }
+        correctAnswer: { type: string }
+        officialExplanation: { type: string }
+        figures:
+          type: array
+          items:
+            type: object
+            properties:
+              url: { type: ["string", "null"] }
+              path: { type: ["string", "null"] }
+              alt: { type: ["string", "null"] }
+    TutorReusableQuizInput:
+      type: object
+      required: [courseId, title, bankQuestionIds]
+      properties:
+        courseId: { type: string }
+        title: { type: string, minLength: 2, maxLength: 200 }
+        subject: { type: string, minLength: 1, maxLength: 100 }
+        bankQuestionIds:
+          type: array
+          items: { type: string }
+          minItems: 1
+          maxItems: 80
     SatBankCollection:
       type: object
       required: [id, examFamily, title, slug, extractStatus, questionCount, officialExplanationCount, assets]

@@ -25,6 +25,7 @@ import {
   STAGED_COLLECTION_STUBS,
   collectionStubsFromManifest,
   isAssignableBankItem,
+  isTutorQuizMcq,
   listOfficialExtractFiles,
   parseCollegeBoardManifest,
   parseCollegeBoardPayload,
@@ -61,10 +62,12 @@ import {
 } from "./assignment-visibility.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import {
+  asBankFigures,
   classifyLinkedRefresh,
   emptyLinkedRefreshCounts,
   materializedQuestionContent,
   recordLinkedRefresh,
+  resolveBankFigureUrl,
   type LinkedRefreshCounts,
 } from "./sat-bank-figures.ts";
 
@@ -769,8 +772,11 @@ export async function getBankCollection(collectionId: string) {
   };
 }
 
-export function bankQuestionShape(row: typeof bankQuestionsTable.$inferSelect) {
-  return {
+export function bankQuestionShape(
+  row: typeof bankQuestionsTable.$inferSelect,
+  options: { includeKeys?: boolean } = {},
+) {
+  const base = {
     id: row.id,
     sourceKey: row.sourceKey,
     collectionId: row.collectionId,
@@ -805,6 +811,17 @@ export function bankQuestionShape(row: typeof bankQuestionsTable.$inferSelect) {
     hasOfficialExplanation: Boolean(row.officialExplanation.trim()),
     linkedQuestionId: row.linkedQuestionId,
   };
+  if (!options.includeKeys) return base;
+  return {
+    ...base,
+    correctAnswer: row.correctAnswer,
+    officialExplanation: row.officialExplanation,
+    figures: asBankFigures(row.figures).map((figure) => ({
+      url: resolveBankFigureUrl(figure),
+      path: figure.path ?? null,
+      alt: figure.alt ?? null,
+    })),
+  };
 }
 
 export async function listBankQuestions(filters: {
@@ -812,6 +829,8 @@ export async function listBankQuestions(filters: {
   collectionId?: string;
   section?: string;
   skill?: string;
+  questionType?: string;
+  includeKeys?: boolean;
 }) {
   let rows = await db
     .select()
@@ -834,7 +853,12 @@ export async function listBankQuestions(filters: {
     const skill = filters.skill.toLowerCase();
     rows = rows.filter((row) => row.skill.toLowerCase().includes(skill));
   }
-  return rows.map((row) => bankQuestionShape(row));
+  if (filters.questionType === "mcq") {
+    rows = rows.filter((row) => isTutorQuizMcq(row.questionType));
+  } else if (filters.questionType === "spr") {
+    rows = rows.filter((row) => !isTutorQuizMcq(row.questionType));
+  }
+  return rows.map((row) => bankQuestionShape(row, { includeKeys: filters.includeKeys }));
 }
 
 async function bankForLinkedQuestion(questionId: string) {

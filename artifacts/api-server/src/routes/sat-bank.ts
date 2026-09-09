@@ -131,7 +131,10 @@ router.get(
       res.status(400).json({ error: query.error.message });
       return;
     }
-    const questions = await listBankQuestions(query.data);
+    const questions = await listBankQuestions({
+      ...query.data,
+      includeKeys: query.data.includeKeys === "true",
+    });
     res.json(ListSatBankQuestionsResponse.parse(questions));
   },
 );
