@@ -3840,5 +3840,5 @@ components:
         retryId: { type: string }
         correct: { type: boolean }
         outcome: { type: string, enum: [mastered, still_struggling] }
-        correctAnswer: { type: string }
-        explanation: { type: string }
+        correctAnswer: { type: ["string", "null"] }
+        explanation: { type: ["string", "null"] }

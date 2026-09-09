@@ -13,10 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   displaySkill,
+  formatAnswer,
+  mergeRetryFeedback,
   missPickerLabel,
+  promptSnippet,
+  retryDetailsExpanded,
   retryOutcomeHeading,
   retryRecordedMessage,
   retrySourceLabel,
+  type RetryFeedbackFields,
 } from "./session-lesson-display";
 
 function errorText(error: unknown): string {
@@ -24,17 +29,11 @@ function errorText(error: unknown): string {
   return data?.blockedReason || data?.error || "The lesson request could not be completed.";
 }
 
-function formatAnswer(
+function displayedAnswer(
   answer: string | null | undefined,
   choices?: Array<{ id: string; label: string; text: string }>,
-) {
-  if (!answer) return "Not answered";
-  const match = choices?.find(
-    (choice) =>
-      choice.id.toLowerCase() === answer.toLowerCase() ||
-      choice.label.toLowerCase() === answer.toLowerCase(),
-  );
-  return match ? `${match.label}. ${match.text}` : answer;
+): string {
+  return formatAnswer(answer, choices) || "Not answered";
 }
 
 export function SessionLessonDashboard({
@@ -58,6 +57,8 @@ export function SessionLessonDashboard({
   const [openMiss, setOpenMiss] = useState<string | null>(null);
   const [retryAnswer, setRetryAnswer] = useState("");
   const [message, setMessage] = useState("");
+  const [retryOverrides, setRetryOverrides] = useState<Record<string, RetryFeedbackFields>>({});
+  const [expandedRetries, setExpandedRetries] = useState<Record<string, boolean>>({});
   const data = lesson.data;
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: getGetSessionLessonQueryKey(sessionId) });
@@ -74,7 +75,8 @@ export function SessionLessonDashboard({
   }
 
   const selectedMiss = data.misses.find((item) => item.questionId === openMiss) ?? data.misses[0];
-  const activeRetry = data.retries.find((item) => item.outcome === "pending" && item.retryQuestionId);
+  const retries = data.retries.map((retry) => mergeRetryFeedback(retry, retryOverrides[retry.id]));
+  const activeRetry = retries.find((item) => item.outcome === "pending" && item.retryQuestionId);
 
   return (
     <Card className="border-primary/20" data-testid="session-lesson-dashboard">
@@ -170,11 +172,11 @@ export function SessionLessonDashboard({
                 ) : null}
                 <p className="mt-3 text-sm">
                   <span className="font-medium">Student answer:</span>{" "}
-                  {formatAnswer(selectedMiss.studentAnswer, selectedMiss.choices)}
+                  {displayedAnswer(selectedMiss.studentAnswer, selectedMiss.choices)}
                 </p>
                 <p className="mt-2 text-sm" data-testid="opened-miss-correct-answer">
                   <span className="font-medium">Correct answer:</span>{" "}
-                  {formatAnswer(selectedMiss.correctAnswer, selectedMiss.choices)}
+                  {displayedAnswer(selectedMiss.correctAnswer, selectedMiss.choices)}
                 </p>
                 <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
                   <p className="font-medium">Official explanation</p>
@@ -232,30 +234,33 @@ export function SessionLessonDashboard({
           </div>
         ) : null}
 
-        {data.retries.length > 0 ? (
+        {retries.length > 0 ? (
           <div className="space-y-3">
             <p className="font-medium">Similar problems</p>
-            {data.retries.map((retry) => {
+            {retries.map((retry) => {
               const heading = retryOutcomeHeading(retry);
               const graded = retry.outcome !== "pending";
+              const expanded = retryDetailsExpanded({
+                outcome: retry.outcome,
+                expanded: expandedRetries[retry.id],
+              });
+              const active = retry.outcome === "pending" && Boolean(retry.retryQuestionId);
+              const formattedCorrect = formatAnswer(retry.correctAnswer, retry.choices);
               return (
                 <div
                   key={retry.id}
                   className={
-                    retry.outcome === "pending" && retry.retryQuestionId
+                    active
                       ? "rounded-3xl bg-brand-ink p-5 text-white shadow-lg"
                       : "rounded-lg border p-3 text-sm"
                   }
                   data-testid={`retry-${retry.id}`}
+                  data-expanded={expanded ? "true" : "false"}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant="outline"
-                      className={
-                        retry.outcome === "pending" && retry.retryQuestionId
-                          ? "border-white/30 text-white"
-                          : undefined
-                      }
+                      className={active ? "border-white/30 text-white" : undefined}
                     >
                       {retrySourceLabel(retry.source)}
                     </Badge>
@@ -271,62 +276,95 @@ export function SessionLessonDashboard({
                         {heading}
                       </Badge>
                     ) : null}
+                    {graded ? (
+                      <>
+                        <span
+                          className="min-w-0 flex-1 text-sm text-muted-foreground"
+                          data-testid={`retry-summary-${retry.id}`}
+                        >
+                          {promptSnippet(retry.prompt, 48) || "Similar problem"}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          data-testid={`retry-toggle-${retry.id}`}
+                          onClick={() =>
+                            setExpandedRetries((current) => ({
+                              ...current,
+                              [retry.id]: !expanded,
+                            }))
+                          }
+                        >
+                          {expanded ? "Hide" : "Show details"}
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
-                  {retry.prompt ? (
-                    <p className="mt-2" data-testid={`retry-prompt-${retry.id}`}>
-                      {retry.prompt}
-                    </p>
-                  ) : null}
-                  {retry.choices && retry.choices.length > 0 ? (
-                    retry.outcome === "pending" && retry.retryQuestionId ? (
-                      <div className="mt-3 space-y-2">
-                        {retry.choices.map((choice) => (
-                          <button
-                            key={choice.id}
-                            type="button"
-                            data-testid={`retry-choice-${retry.id}-${choice.id}`}
-                            className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left ${
-                              retryAnswer === choice.id || retryAnswer === choice.label
-                                ? "border-white bg-white/15"
-                                : "border-white/25 hover:bg-white/10"
-                            }`}
-                            onClick={() => setRetryAnswer(choice.id)}
-                          >
-                            <span className="font-medium">{choice.label}.</span> {choice.text}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <ul className="mt-2 space-y-1 text-muted-foreground">
-                        {retry.choices.map((choice) => (
-                          <li key={choice.id}>
-                            {choice.label}. {choice.text}
-                          </li>
-                        ))}
-                      </ul>
-                    )
-                  ) : null}
-                  {graded ? (
-                    <div className="mt-3 space-y-1" data-testid={`retry-feedback-${retry.id}`}>
-                      {retry.studentAnswer ? (
-                        <p>
-                          <span className="font-medium">Your answer:</span>{" "}
-                          {formatAnswer(retry.studentAnswer, retry.choices)}
+                  {expanded ? (
+                    <>
+                      {retry.prompt ? (
+                        <p className="mt-2" data-testid={`retry-prompt-${retry.id}`}>
+                          {retry.prompt}
                         </p>
                       ) : null}
-                      {heading === "Incorrect" && retry.correctAnswer ? (
-                        <p>
-                          <span className="font-medium">Correct answer:</span>{" "}
-                          {formatAnswer(retry.correctAnswer, retry.choices)}
-                        </p>
+                      {retry.choices && retry.choices.length > 0 ? (
+                        active ? (
+                          <div className="mt-3 space-y-2">
+                            {retry.choices.map((choice) => (
+                              <button
+                                key={choice.id}
+                                type="button"
+                                data-testid={`retry-choice-${retry.id}-${choice.id}`}
+                                className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left ${
+                                  retryAnswer === choice.id || retryAnswer === choice.label
+                                    ? "border-white bg-white/15"
+                                    : "border-white/25 hover:bg-white/10"
+                                }`}
+                                onClick={() => setRetryAnswer(choice.id)}
+                              >
+                                <span className="font-medium">{choice.label}.</span> {choice.text}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <ul className="mt-2 space-y-1 text-muted-foreground">
+                            {retry.choices.map((choice) => (
+                              <li key={choice.id}>
+                                {choice.label}. {choice.text}
+                              </li>
+                            ))}
+                          </ul>
+                        )
                       ) : null}
-                      {heading === "Incorrect" && retry.explanation ? (
-                        <p className="text-muted-foreground">{retry.explanation}</p>
+                      {graded ? (
+                        <div className="mt-3 space-y-1" data-testid={`retry-feedback-${retry.id}`}>
+                          <p>
+                            <span className="font-medium">Your answer:</span>{" "}
+                            {displayedAnswer(retry.studentAnswer, retry.choices)}
+                          </p>
+                          {heading === "Incorrect" ? (
+                            <>
+                              <p data-testid={`retry-correct-answer-${retry.id}`}>
+                                <span className="font-medium">Correct answer:</span>{" "}
+                                {formattedCorrect || "Not available"}
+                              </p>
+                              {retry.explanation?.trim() ? (
+                                <p
+                                  className="text-muted-foreground"
+                                  data-testid={`retry-explanation-${retry.id}`}
+                                >
+                                  {retry.explanation}
+                                </p>
+                              ) : null}
+                            </>
+                          ) : null}
+                        </div>
                       ) : null}
-                    </div>
-                  ) : null}
-                  {retry.blockedReason ? (
-                    <p className="mt-1 text-muted-foreground">{retry.blockedReason}</p>
+                      {retry.blockedReason ? (
+                        <p className="mt-1 text-muted-foreground">{retry.blockedReason}</p>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               );
@@ -351,6 +389,21 @@ export function SessionLessonDashboard({
                       { retryId: activeRetry.id, data: { studentAnswer: retryAnswer.trim() } },
                       {
                         onSuccess: (result) => {
+                          const submitted = retryAnswer.trim();
+                          setRetryOverrides((current) => ({
+                            ...current,
+                            [activeRetry.id]: {
+                              outcome: result.outcome,
+                              correct: result.correct,
+                              studentAnswer: submitted,
+                              correctAnswer: result.correctAnswer ?? null,
+                              explanation: result.explanation ?? null,
+                            },
+                          }));
+                          setExpandedRetries((current) => ({
+                            ...current,
+                            [activeRetry.id]: true,
+                          }));
                           setMessage(
                             retryRecordedMessage({
                               correct: result.correct,

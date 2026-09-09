@@ -3,8 +3,10 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   decideRetrySource,
+  firstPresentText,
   lessonRetryReveal,
   retryOutcomeFromAnswer,
+  retryOutcomePayload,
   studentRetryShape,
 } from "./sat-bank-retry.ts";
 
@@ -131,6 +133,32 @@ test("hides the similar-problem key until the retry is graded", () => {
       studentAnswer: "a",
       correctAnswer: "b",
       explanation: "However signals contrast.",
+    },
+  );
+  assert.deepEqual(
+    lessonRetryReveal({
+      outcome: "still_struggling",
+      studentAnswer: "a",
+      correctAnswer: "",
+      explanation: "   ",
+    }),
+    { studentAnswer: "a", correctAnswer: null, explanation: null },
+  );
+  assert.equal(firstPresentText("", null, "C"), "C");
+  assert.deepEqual(
+    retryOutcomePayload({
+      retryId: "retry-1",
+      correct: false,
+      outcome: "still_struggling",
+      question: { correctAnswer: "", explanation: null },
+      bank: { correctAnswer: "C", officialExplanation: "For example introduces an illustration." },
+    }),
+    {
+      retryId: "retry-1",
+      correct: false,
+      outcome: "still_struggling",
+      correctAnswer: "C",
+      explanation: "For example introduces an illustration.",
     },
   );
 });

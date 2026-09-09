@@ -176,9 +176,40 @@ describe("session lesson dashboard", () => {
     expect(screen.getByRole("status").textContent).toMatch(/B\. However/);
     expect(screen.getByRole("status").textContent).not.toMatch(/still struggling/i);
     expect(screen.getByRole("status").textContent).not.toMatch(/\bbank\b/);
+    expect(screen.getByTestId("retry-outcome-retry-1").textContent).toMatch(/Incorrect/);
+    expect(screen.getByTestId("retry-feedback-retry-1").textContent).toMatch(/Your answer:\s*A\. Meanwhile/);
+    expect(screen.getByTestId("retry-correct-answer-retry-1").textContent).toMatch(/B\. However/);
+    expect(screen.getByTestId("retry-explanation-retry-1").textContent).toMatch(/However signals contrast/);
+    expect(screen.getByTestId("retry-retry-1").getAttribute("data-expanded")).toBe("true");
   });
 
-  test("graded retries show Correct or Incorrect instead of bank / still struggling", () => {
+  test("Incorrect feedback still shows the answer when the key is a letter C", () => {
+    lessonData.retries = [
+      {
+        id: "retry-c",
+        source: "bank",
+        outcome: "still_struggling",
+        retryQuestionId: "retry-q-c",
+        correct: false,
+        prompt: "Which choice most logically completes the text?",
+        choices: [
+          { id: "a", label: "A", text: "Meanwhile" },
+          { id: "c", label: "C", text: "For example" },
+        ],
+        studentAnswer: "a",
+        correctAnswer: "C",
+        explanation: "For example introduces an illustration.",
+      },
+    ];
+    render(<SessionLessonDashboard sessionId="session-1" />);
+    fireEvent.click(screen.getByTestId("retry-toggle-retry-c"));
+    expect(screen.getByTestId("retry-correct-answer-retry-c").textContent).toMatch(/C\. For example/);
+    expect(screen.getByTestId("retry-explanation-retry-c").textContent).toMatch(
+      /For example introduces an illustration/,
+    );
+  });
+
+  test("graded retries collapse by default and can show details", () => {
     lessonData.retries = [
       {
         id: "retry-2",
@@ -195,14 +226,39 @@ describe("session lesson dashboard", () => {
         correctAnswer: "b",
         explanation: "However signals contrast.",
       },
+      {
+        id: "retry-3",
+        source: "bank",
+        outcome: "mastered",
+        retryQuestionId: "retry-q-3",
+        correct: true,
+        prompt: "Which choice is correct?",
+        studentAnswer: "b",
+        correctAnswer: "b",
+      },
     ];
     render(<SessionLessonDashboard sessionId="session-1" />);
     expect(screen.getByTestId("retry-outcome-retry-2").textContent).toMatch(/Incorrect/);
+    expect(screen.getByTestId("retry-outcome-retry-3").textContent).toMatch(/Correct/);
+    expect(screen.getByTestId("retry-summary-retry-2").textContent).toMatch(/Which transition best/);
+    expect(screen.getByTestId("retry-retry-2").getAttribute("data-expanded")).toBe("false");
+    expect(screen.queryByTestId("retry-feedback-retry-2")).toBeNull();
+    expect(screen.queryByTestId("retry-prompt-retry-2")).toBeNull();
+    fireEvent.click(screen.getByTestId("retry-toggle-retry-2"));
+    expect(screen.getByTestId("retry-retry-2").getAttribute("data-expanded")).toBe("true");
+    expect(screen.getByTestId("retry-toggle-retry-2").textContent).toMatch(/Hide/);
     expect(screen.getByTestId("retry-feedback-retry-2").textContent).toMatch(/Your answer:\s*A\. Meanwhile/);
-    expect(screen.getByTestId("retry-feedback-retry-2").textContent).toMatch(/Correct answer:\s*B\. However/);
+    expect(screen.getByTestId("retry-correct-answer-retry-2").textContent).toMatch(/B\. However/);
     expect(screen.getByTestId("retry-feedback-retry-2").textContent).toMatch(/However signals contrast/);
     expect(screen.getByTestId("retry-retry-2").textContent).toMatch(/Similar practice question/);
     expect(screen.getByTestId("retry-retry-2").textContent).not.toMatch(/still struggling/i);
     expect(screen.getByTestId("retry-retry-2").textContent).not.toMatch(/\bbank\b/);
+    fireEvent.click(screen.getByTestId("retry-toggle-retry-2"));
+    expect(screen.getByTestId("retry-retry-2").getAttribute("data-expanded")).toBe("false");
+    expect(screen.queryByTestId("retry-feedback-retry-2")).toBeNull();
+    expect(screen.getByTestId("retry-retry-3").getAttribute("data-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("retry-toggle-retry-3"));
+    expect(screen.getByTestId("retry-feedback-retry-3").textContent).toMatch(/Your answer/);
+    expect(screen.queryByTestId("retry-correct-answer-retry-3")).toBeNull();
   });
 });

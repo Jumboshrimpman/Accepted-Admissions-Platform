@@ -4012,8 +4012,8 @@ export const RecordRetryOutcomeResponse = zod.object({
   "retryId": zod.string(),
   "correct": zod.boolean(),
   "outcome": zod.enum(['mastered', 'still_struggling']),
-  "correctAnswer": zod.string().optional(),
-  "explanation": zod.string().optional()
+  "correctAnswer": zod.string().nullish(),
+  "explanation": zod.string().nullish()
 })
 
 /**
