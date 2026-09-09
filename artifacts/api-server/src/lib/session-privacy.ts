@@ -376,7 +376,16 @@ type PublicSessionSource = Pick<
   | "status"
   | "hasHomework"
   | "hasReport"
+  | "bookingStatus"
 >;
+
+export {
+  assignmentTiedToCancelledSession,
+  hidesCancelledSessions,
+  isCancelledBooking,
+  isStudentCurriculumSession,
+  liveClientBookingSessions,
+} from "./session-listing.ts";
 
 export function publicSessionShape(
   session: PublicSessionSource,
@@ -393,5 +402,6 @@ export function publicSessionShape(
     status: session.status,
     hasHomework: session.hasHomework,
     hasReport: session.hasReport,
+    bookingStatus: session.bookingStatus,
   };
 }

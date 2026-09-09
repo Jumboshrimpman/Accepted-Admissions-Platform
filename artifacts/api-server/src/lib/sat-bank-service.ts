@@ -25,6 +25,7 @@ import {
   STAGED_COLLECTION_STUBS,
   collectionStubsFromManifest,
   isAssignableBankItem,
+  isMultipleChoiceQuizItem,
   isTutorQuizMcq,
   listOfficialExtractFiles,
   parseCollegeBoardManifest,
@@ -564,6 +565,17 @@ export async function assignPreworkFromBank(input: {
   if (input.mcqOnly) {
     pool = pool.filter((row) => isTutorQuizMcq(row.questionType));
   }
+  // Owner policy: student quizzes are multiple-choice only. True SPR
+  // (numeric / free-response keys) stay in the bank but are not composed
+  // into new diagnostics or routine pre-work. Letter keys A–D are kept and
+  // recovered as A–D choices at assignment time.
+  pool = pool.filter((row) =>
+    isMultipleChoiceQuizItem({
+      questionType: row.questionType,
+      choices: Array.isArray(row.choices) ? row.choices : [],
+      correctAnswer: row.correctAnswer,
+    }),
+  );
   if (pool.length === 0) {
     throw Object.assign(
       new Error(

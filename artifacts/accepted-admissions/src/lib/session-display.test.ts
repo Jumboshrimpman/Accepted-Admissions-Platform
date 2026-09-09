@@ -51,6 +51,20 @@ const FALL_DISPLAY_DATES = [
   "Friday, December 18, 2026",
 ];
 
+test("Oct 2 Taito/Eunice UTC noon is 9:00 PM JST, not 8:00 AM Tokyo", () => {
+  const session = {
+    id: "1cc3dea5-9532-4dc2-9cea-3d1e5d65d119",
+    dateTime: "2026-10-02T12:00:00.000Z",
+    timezone: "Asia/Tokyo",
+    durationMinutes: 60,
+  };
+  assert.equal(formatSessionTimeRange(session), "9:00–10:00 PM JST");
+  assert.equal(formatSessionDate(session), "Friday, October 2, 2026");
+  assert.equal(sessionDateTimeLocalValue(session.dateTime, session.timezone), "2026-10-02T21:00");
+  assert.match(formatSessionDateTime(session), /9:00–10:00 PM JST/);
+  assert.doesNotMatch(formatSessionDateTime(session), /8:00\s*AM/);
+});
+
 test("formats every approved Fall meeting in its declared timezone", () => {
   for (const [index, dateKey] of FALL_DATES.entries()) {
     const session = {

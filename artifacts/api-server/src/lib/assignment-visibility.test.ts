@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  FIGURE_PRIMARY_PRESENTATION,
   assignmentDifficulty,
   assignmentQuestionShape,
   courseIdsForAssignmentList,
   isAssignmentListedForRole,
   isFullLengthDiagnosticAssignment,
+  isLetterMultipleChoiceAnswer,
+  isUnfinishedHomeworkClientCopy,
   pickDiagnosticKeeper,
+  studentSafeAssignmentInstructions,
+  stripBankFigureComments,
 } from "./assignment-visibility.ts";
 
 test("assignment list queries an explicit course even when the user has no memberships", () => {
@@ -149,6 +154,76 @@ test("figure-primary quiz items hide garbled stems and expose A–D letter choic
   assert.equal(keyed.presentation, "figure_primary");
   assert.equal(keyed.correctAnswer, "C");
   assert.equal(keyed.explanation, "Choice C is correct.");
+});
+
+test("strips SAT bank figure comments and recovers A–D choices from a letter key", () => {
+  assert.equal(
+    stripBankFigureComments(
+      "<!-- sat-bank-figures -->\n![Cone](https://cdn.example/cone.png)\n<!-- /sat-bank-figures -->\nVolume?",
+    ),
+    "![Cone](https://cdn.example/cone.png)\n\nVolume?",
+  );
+  assert.equal(isLetterMultipleChoiceAnswer("C"), true);
+  assert.equal(isLetterMultipleChoiceAnswer("9; 9.0"), false);
+  const recovered = assignmentQuestionShape(
+    {
+      id: "q-figure-c",
+      subject: "SAT Math",
+      questionType: "spr",
+      prompt: "<!-- sat-bank-figures -->![Graph](/figures/line.png)<!-- /sat-bank-figures -->",
+      stimulus: "<!-- sat-bank-figures -->keep the image<!-- /sat-bank-figures -->",
+      choices: [],
+      correctAnswer: "C",
+    },
+    { position: 0 },
+  );
+  assert.equal(["multiple_choice", "mcq"].includes(recovered.questionType), true);
+  assert.equal(recovered.choices?.length, 4);
+  assert.deepEqual(
+    recovered.choices?.map((choice) => choice.label),
+    ["A", "B", "C", "D"],
+  );
+  assert.equal(recovered.prompt.includes("sat-bank-figures"), false);
+  assert.equal(FIGURE_PRIMARY_PRESENTATION, "figure_primary");
+  assert.equal(
+    stripBankFigureComments(
+      '<!-- figure-primary src="https://cdn.example/full.png" -->\nVolume?',
+    ).includes("figure-primary"),
+    false,
+  );
+  assert.equal(
+    recovered.presentation === "figure_primary" ||
+      recovered.prompt.includes("![Graph](/figures/line.png)"),
+    true,
+  );
+  const spr = assignmentQuestionShape(
+    {
+      id: "q-spr",
+      questionType: "spr",
+      prompt: "How many pounds?",
+      choices: [],
+      correctAnswer: "9; 9.0",
+    },
+    { position: 1 },
+  );
+  assert.equal(spr.choices, undefined);
+  assert.equal(spr.questionType, "spr");
+});
+
+test("unfinished-homework copy is rewritten for students and kept detectable", () => {
+  assert.equal(
+    isUnfinishedHomeworkClientCopy(
+      "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+    ),
+    true,
+  );
+  assert.equal(
+    studentSafeAssignmentInstructions(
+      "Homework was not finished before the meeting. Work up to 15 of these items together.",
+    ),
+    "Work up to 15 of these items together. You can submit for results without answering every question.",
+  );
+  assert.equal(studentSafeAssignmentInstructions("Answer the questions."), "Answer the questions.");
 });
 
 test("dedupe keeps the published full-length diagnostic with work, not an empty extra", () => {

@@ -2910,7 +2910,7 @@ components:
           items: { $ref: "#/components/schemas/Tutor" }
     Session:
       type: object
-      required: [id, courseId, dateTime, timezone, subject, title, status, durationMinutes]
+      required: [id, courseId, dateTime, timezone, subject, title, status, durationMinutes, bookingStatus]
       properties:
         id: { type: string }
         courseId: { type: string }
@@ -2932,6 +2932,7 @@ components:
             - type: "null"
         hasHomework: { type: boolean }
         hasReport: { type: boolean }
+        bookingStatus: { type: string }
     CurriculumSession:
       allOf:
         - $ref: "#/components/schemas/Session"

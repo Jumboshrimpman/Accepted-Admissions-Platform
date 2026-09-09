@@ -5,6 +5,7 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   STAGED_COLLECTION_STUBS,
+  isMultipleChoiceQuizItem,
   isOfficialExtractFile,
   listOfficialExtractFiles,
   parseCollegeBoardManifest,
@@ -67,6 +68,36 @@ test("parses JSONL extracts into canonical records with stable source keys", () 
   assert.equal(
     record.assets[0]?.resourceUrl,
     "content/college-board/pdfs/sat-practice-test-11-digital.pdf",
+  );
+});
+
+test("quiz composition excludes true SPR unless the key is A–D", () => {
+  assert.equal(
+    isMultipleChoiceQuizItem({
+      questionType: "spr",
+      choices: [],
+      correctAnswer: "9; 9.0",
+    }),
+    false,
+  );
+  assert.equal(
+    isMultipleChoiceQuizItem({
+      questionType: "spr",
+      choices: [],
+      correctAnswer: "C",
+    }),
+    true,
+  );
+  assert.equal(
+    isMultipleChoiceQuizItem({
+      questionType: "mcq",
+      choices: [
+        { id: "a", label: "A", text: "However" },
+        { id: "b", label: "B", text: "Therefore" },
+      ],
+      correctAnswer: "a",
+    }),
+    true,
   );
 });
 

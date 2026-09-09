@@ -88,10 +88,12 @@ describe("session lesson dashboard", () => {
     render(<SessionLessonDashboard sessionId="session-1" />);
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/not an official SAT score/);
     expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
-    expect(screen.getByTestId("opened-miss").className).toMatch(/bg-brand-ink/);
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(
       /Open a wrong answer to review with correct explanation/,
     );
+    expect(screen.queryByTestId("opened-miss")).toBeNull();
+    fireEvent.click(screen.getByTestId("miss-picker-q1"));
+    expect(screen.getByTestId("opened-miss").className).toMatch(/bg-brand-ink/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/Review this wrong answer together/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/Official explanation/);
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/However signals contrast/);
@@ -156,6 +158,8 @@ describe("session lesson dashboard", () => {
       screen.getByTestId("miss-picker-q2").textContent,
     );
     expect(screen.queryByText("Skill not in extract")).toBeNull();
+    expect(screen.queryByTestId("opened-miss")).toBeNull();
+    fireEvent.click(screen.getByTestId("miss-picker-q1"));
     expect(screen.getByTestId("opened-miss").textContent).toMatch(/SAT Math/);
   });
 

@@ -9,7 +9,7 @@ import {
   type AppUser,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { publicSessionShape, visibleSessionsForUser } from "./session-privacy.ts";
+import { isStudentCurriculumSession, publicSessionShape, visibleSessionsForUser } from "./session-privacy.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { isTaitoFallSession, sessionTitle, TAITO_STUDENT_DISPLAY_NAME, calendarEventUrlForSession } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -80,6 +80,8 @@ export async function dashboardSessionsForUser(user: AppUser) {
         )
           .flat()
           .filter((session) => {
+            if (user.role === "administrator") return true;
+            if (!isStudentCurriculumSession(session)) return false;
             if (user.role === "student" || user.role === "viewer") {
               return session.clientUserId === subjectUserId;
             }

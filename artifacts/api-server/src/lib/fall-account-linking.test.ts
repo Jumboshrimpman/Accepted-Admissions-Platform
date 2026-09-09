@@ -276,6 +276,7 @@ test("reconciles existing Fall sessions in place and keeps access subject-scoped
     ].map((session) => publicSessionShape({ ...session, ...privateCalendarFields }));
     for (const response of responseRows) {
       assert.deepEqual(Object.keys(response).sort(), [
+        "bookingStatus",
         "courseId",
         "dateTime",
         "durationMinutes",

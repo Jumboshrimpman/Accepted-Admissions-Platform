@@ -32,9 +32,12 @@ import {
   bankQuizOptionLabel,
   sessionPreworkQuizzes,
 } from "@/lib/assignable-bank-quizzes";
+import { isLiveListedSession } from "@/lib/quiz-content";
 import {
   displaySessionTitle,
   formatSessionDateTime,
+  sessionDateTimeLocalValue,
+  utcIsoFromSessionLocalValue,
 } from "@/lib/session-display";
 
 export type TutorCurriculum = {
@@ -47,13 +50,6 @@ export type TutorCurriculum = {
 };
 
 export const TUTOR_CURRICULUM_QUERY_KEY = ["/api/tutor/curriculum"];
-
-function dateInput(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 function errorText(error: unknown): string {
   const data = (error as { data?: { error?: string } } | null)?.data;
@@ -105,8 +101,11 @@ export default function TutorCurriculum() {
   const data = curriculum.data;
   const students = data?.students ?? [];
   const programs = data?.programs ?? [];
-  const sessions = data?.sessions ?? [];
-  const quizzes = data?.quizzes ?? [];
+  const sessions = (data?.sessions ?? []).filter(isLiveListedSession);
+  const liveSessionIds = new Set(sessions.map((session) => session.id));
+  const quizzes = (data?.quizzes ?? []).filter(
+    (quiz) => !quiz.sessionId || liveSessionIds.has(quiz.sessionId),
+  );
   const libraryAssets = data?.libraryAssets ?? [];
   const collections = data?.satBankCollections ?? [];
 
@@ -257,11 +256,11 @@ export default function TutorCurriculum() {
                       id="tutor-session-start"
                       data-testid="tutor-session-start"
                       type="datetime-local"
-                      value={dateInput(draft.dateTime)}
+                      value={sessionDateTimeLocalValue(draft.dateTime, draft.timezone)}
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          dateTime: new Date(event.target.value).toISOString(),
+                          dateTime: utcIsoFromSessionLocalValue(event.target.value, current.timezone),
                         }))
                       }
                     />
@@ -283,6 +282,21 @@ export default function TutorCurriculum() {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tutor-session-timezone">Timezone</Label>
+                  <Input
+                    id="tutor-session-timezone"
+                    data-testid="tutor-session-timezone"
+                    value={draft.timezone}
+                    placeholder="America/New_York"
+                    onChange={(event) =>
+                      setDraft((current) => ({ ...current, timezone: event.target.value }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Start time is interpreted in this timezone, not the browser clock.
+                  </p>
+                </div>
                 <Button
                   data-testid="tutor-create-session-submit"
                   disabled={createSession.isPending || !draft.clientUserId || !draft.courseId}
@@ -291,7 +305,7 @@ export default function TutorCurriculum() {
                       {
                         courseId: draft.courseId,
                         clientUserId: draft.clientUserId,
-                        dateTime: new Date(draft.dateTime).toISOString(),
+                        dateTime: draft.dateTime,
                         timezone: draft.timezone,
                         subject: draft.subject,
                         durationMinutes: draft.durationMinutes,

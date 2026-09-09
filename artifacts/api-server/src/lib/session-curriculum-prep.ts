@@ -131,7 +131,7 @@ async function ensurePrepBlock(
       .update(curriculumBlocksTable)
       .set({
         status: "published",
-        visibility: "both",
+        visibility: "tutor",
         config,
         updatedAt: new Date(),
       })
@@ -146,7 +146,7 @@ async function ensurePrepBlock(
     sessionId,
     kind: "adaptive_prep",
     position: Number(count ?? 0),
-    visibility: "both",
+    visibility: "tutor",
     status: "published",
     config,
   });
@@ -218,7 +218,7 @@ async function copyHomeworkIntoDuringSession(
       .set({
         status: "published",
         instructions:
-          "Homework was not finished before the meeting. Work up to 15 of these items together. You can submit for results without answering every question.",
+          "Work up to 15 of these items together. You can submit for results without answering every question.",
         title: IN_SESSION_HOMEWORK_COMPLETION_TITLE,
         timeLimitMinutes: 30,
       })

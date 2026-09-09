@@ -22,7 +22,12 @@ import {
 import { db, remediationRetriesTable, sessionsTable, type AppUser } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { QuestionGenerationError } from "../lib/question-generation";
-import { canClearSessionHomework, canViewSession } from "../lib/session-privacy";
+import {
+  canClearSessionHomework,
+  canViewSession,
+  hidesCancelledSessions,
+  isCancelledBooking,
+} from "../lib/session-privacy";
 import {
   assignPreworkFromBank,
   clearSessionHomeworkAttempts,
@@ -276,6 +281,10 @@ router.get(
       .where(eq(sessionsTable.id, params.data.sessionId))
       .limit(1);
     if (!session || !(await canViewSession(req.appUser!, session))) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    if (hidesCancelledSessions(req.appUser!.role) && isCancelledBooking(session)) {
       res.status(404).json({ error: "Session not found" });
       return;
     }

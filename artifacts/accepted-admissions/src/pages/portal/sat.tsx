@@ -26,6 +26,8 @@ import {
   paymentCreditBannerCopy,
   paymentCreditBannerState,
 } from "@/lib/portal-sat-payment";
+import { isLiveListedSession } from "@/lib/quiz-content";
+import { formatSessionDateTime } from "@/lib/session-display";
 
 type Product = {
   id: string;
@@ -211,6 +213,7 @@ export default function PortalSat() {
     ? paymentCreditBannerCopy(paymentBannerState, remainingHours)
     : null;
   const upcomingSat = (dashboard.data?.upcomingSessions ?? []).filter((session) => {
+    if (!isLiveListedSession(session)) return false;
     const subject = session.subject?.toLowerCase() ?? "";
     return subject.startsWith("sat") || /sat/i.test(session.title);
   });
@@ -288,7 +291,7 @@ export default function PortalSat() {
               <div key={session.id} className="rounded-xl border p-3 text-sm" data-testid={`portal-sat-upcoming-${session.id}`}>
                 <p className="font-medium">{session.title}</p>
                 <p className="mt-1 text-muted-foreground">
-                  {new Date(session.dateTime).toLocaleString()} · {session.timezone}
+                  {formatSessionDateTime(session)}
                   {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
                 </p>
               </div>

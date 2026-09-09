@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
+import { QuizContent } from "@/components/quiz-content";
 import {
   Brain,
   CheckCircle,
@@ -34,6 +34,7 @@ import {
   Play,
   Timer,
 } from "lucide-react";
+import { isUnfinishedHomeworkClientCopy } from "@/lib/quiz-content";
 import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
@@ -269,9 +270,10 @@ function ResultView({ result }: { result: AttemptResult }) {
                         {answerText(item.correctAnswer, item.choices)}
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">Why:</span> {item.explanation}
-                    </p>
+                    <div className="text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">Why:</span>{" "}
+                      <QuizContent text={item.explanation} className="mt-1 inline-block" />
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -438,17 +440,17 @@ function AnswerChoices({
     );
   }
   return (
-    <div className="space-y-3" data-testid="spr-answer">
-      <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
-        {ink ? "Write the answer together" : "Enter your answer"}
+    <div
+      className={`space-y-3 rounded-xl border border-dashed p-4 ${ink ? "border-white/30 text-white/80" : "text-muted-foreground"}`}
+      data-testid="quiz-answer-unavailable"
+    >
+      <h3 className={`text-lg font-semibold ${ink ? "text-white" : "text-foreground"}`}>
+        Multiple-choice options unavailable
       </h3>
-      <Textarea
-        value={selected ?? ""}
-        disabled={disabled}
-        onChange={(event) => onSelect(event.target.value)}
-        placeholder="Type the student-produced response"
-        className={`min-h-24 ${ink ? "border-white/30 bg-white/10 text-white placeholder:text-white/50" : ""}`}
-      />
+      <p className="text-sm">
+        This question is missing usable A–D choices, so it cannot be answered here. Ask your tutor
+        to replace it with a multiple-choice item.
+      </p>
     </div>
   );
 }
@@ -714,7 +716,9 @@ export default function PortalAssignment() {
             </CardHeader>
           )}
           <CardContent className="space-y-4 p-6">
-            <p className="whitespace-pre-wrap text-muted-foreground">{assignment.instructions}</p>
+            {isUnfinishedHomeworkClientCopy(assignment.instructions) ? null : (
+              <p className="text-muted-foreground">{assignment.instructions}</p>
+            )}
             {collaborative ? (
               <p className="text-sm text-muted-foreground">
                 {IN_SESSION_PRACTICE_CHECK_COPY} There is no prediction step and no empty auto-submit.

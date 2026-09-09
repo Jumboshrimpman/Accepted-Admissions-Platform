@@ -261,6 +261,30 @@ describe("client availability calendar", () => {
     vi.unstubAllGlobals();
   });
 
+  test("lists the Oct 2 Tokyo meeting as 9:00 PM JST instead of 8:00 AM Tokyo", () => {
+    mocks.sessionsQuery.data = [
+      {
+        id: "1cc3dea5-9532-4dc2-9cea-3d1e5d65d119",
+        title: "Taito’s SAT Session with Eunice",
+        dateTime: "2026-10-02T12:00:00.000Z",
+        timezone: "Asia/Tokyo",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Eunice Chon",
+        tutorProfileId: "tutor-eunice",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+
+    expect(screen.getByText("Taito’s SAT Session with Eunice")).toBeTruthy();
+    expect(screen.getByText(/9:00–10:00 PM JST/)).toBeTruthy();
+    expect(screen.queryByText(/8:00\s*AM/)).toBeNull();
+    expect(screen.queryByText(/8:00 AM.*Tokyo|Tokyo.*8:00 AM/i)).toBeNull();
+  });
+
   test("hides cancel and reschedule for past sessions and keeps them for upcoming ones", () => {
     const pastStart = new Date();
     pastStart.setHours(pastStart.getHours() - 3);
@@ -306,5 +330,40 @@ describe("client availability calendar", () => {
       { sessionId: "session-future", data: { reason: "Cancelled by student" } },
       expect.any(Object),
     );
+  });
+
+  test("hides a cancelled Sep 7 Xavier session from Your booked sessions", () => {
+    mocks.sessionsQuery.data = [
+      {
+        id: "e66d31e8-b953-4a0c-a067-f30f142b4461",
+        title: "SAT capability test — Xavier",
+        dateTime: "2026-09-07T20:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "cancelled",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+      {
+        id: "session-live",
+        title: "Upcoming SAT session",
+        dateTime: "2026-10-09T16:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+
+    expect(screen.getByText("Your booked sessions")).toBeTruthy();
+    expect(screen.getByText("Upcoming SAT session")).toBeTruthy();
+    expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
   });
 });

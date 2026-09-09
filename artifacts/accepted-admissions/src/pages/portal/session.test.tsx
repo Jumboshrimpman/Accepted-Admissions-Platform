@@ -88,7 +88,10 @@ describe("student session quiz path", () => {
     const takeQuiz = screen.getByRole("link", { name: /Start pre-work/i });
     expect(takeQuiz.getAttribute("href")).toBe("/portal/assignments/quiz-1");
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/Practice together from pre-work/);
-    expect(screen.getByTestId("opened-miss").className).toMatch(/bg-brand-ink/);
+    expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(
+      /Open a wrong answer to review with correct explanation/,
+    );
+    expect(screen.queryByTestId("opened-miss")).toBeNull();
     expect(screen.getByText(/Open a miss or similar problem and work it with your tutor/)).toBeTruthy();
   });
 });
