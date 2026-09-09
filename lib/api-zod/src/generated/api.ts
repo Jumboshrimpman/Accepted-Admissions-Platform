@@ -2812,7 +2812,7 @@ export const StartAttemptResponse = zod.object({
   "correct": zod.boolean().nullish(),
   "correctAnswer": zod.string().nullish(),
   "explanation": zod.string().nullish()
-}})),
+})),
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
@@ -2913,7 +2913,7 @@ export const GetAttemptResponse = zod.object({
   "correct": zod.boolean().nullish(),
   "correctAnswer": zod.string().nullish(),
   "explanation": zod.string().nullish()
-}})),
+})),
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
@@ -3182,7 +3182,7 @@ export const SaveAttemptResponseResponse = zod.object({
   "correct": zod.boolean().nullish(),
   "correctAnswer": zod.string().nullish(),
   "explanation": zod.string().nullish()
-}})
+})
 
 
 /**
@@ -3212,7 +3212,7 @@ export const PauseAttemptResponse = zod.object({
   "correct": zod.boolean().nullish(),
   "correctAnswer": zod.string().nullish(),
   "explanation": zod.string().nullish()
-}})),
+})),
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
@@ -3313,7 +3313,7 @@ export const ResumeAttemptResponse = zod.object({
   "correct": zod.boolean().nullish(),
   "correctAnswer": zod.string().nullish(),
   "explanation": zod.string().nullish()
-}})),
+})),
   "timerEvents": zod.array(zod.object({
   "type": zod.enum(['started', 'paused', 'resumed', 'submitted']),
   "at": zod.coerce.date()
