@@ -1,4 +1,4 @@
-import { isLiveListedSession } from "@/lib/quiz-content";
+import { isLiveListedSession } from "./quiz-content.ts";
 
 export function sessionsForDashboardRole<T>(
   sessions: T[],
