@@ -114,7 +114,7 @@ function SignedOut({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function Router() {
+export function Router() {
   return (
     <RoutedErrorBoundary>
       <Switch>
@@ -252,7 +252,35 @@ function Router() {
           </SignedOut>
         </Route>
 
-        <Route path="/tutor*">
+        <Route path="/tutor/profile">
+          <SignedIn>
+            <RoleBoundary roles={["tutor", "administrator"]}>
+              <Shell>
+                <TutorProfile />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/tutor/curriculum">
+          <SignedIn>
+            <RoleBoundary roles={["tutor", "administrator"]}>
+              <Shell>
+                <TutorCurriculum />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
+        {/* `/tutor*` is regexparam "r*", not a path prefix — it only matches /tutor.
+            `/tutor/*?` matches /tutor and /tutor/… so nested Switch children can run. */}
+        <Route path="/tutor/*?">
           <SignedIn>
             <RoleBoundary roles={["tutor", "administrator"]}>
               <Shell>
