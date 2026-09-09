@@ -261,6 +261,30 @@ describe("client availability calendar", () => {
     vi.unstubAllGlobals();
   });
 
+  test("lists the Oct 2 Tokyo meeting as 9:00 PM JST instead of 8:00 AM Tokyo", () => {
+    mocks.sessionsQuery.data = [
+      {
+        id: "1cc3dea5-9532-4dc2-9cea-3d1e5d65d119",
+        title: "Taito’s SAT Session with Eunice",
+        dateTime: "2026-10-02T12:00:00.000Z",
+        timezone: "Asia/Tokyo",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Eunice Chon",
+        tutorProfileId: "tutor-eunice",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+
+    expect(screen.getByText("Taito’s SAT Session with Eunice")).toBeTruthy();
+    expect(screen.getByText(/9:00–10:00 PM JST/)).toBeTruthy();
+    expect(screen.queryByText(/8:00\s*AM/)).toBeNull();
+    expect(screen.queryByText(/8:00 AM.*Tokyo|Tokyo.*8:00 AM/i)).toBeNull();
+  });
+
   test("hides cancel and reschedule for past sessions and keeps them for upcoming ones", () => {
     const pastStart = new Date();
     pastStart.setHours(pastStart.getHours() - 3);

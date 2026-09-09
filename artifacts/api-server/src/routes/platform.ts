@@ -109,6 +109,7 @@ import {
   prepareSessionCurriculum,
 } from "../lib/session-curriculum-prep";
 import {
+  assignmentTiedToCancelledSession,
   canViewSession,
   hidesCancelledSessions,
   isCancelledBooking,
@@ -9679,11 +9680,7 @@ async function listAssignmentsForUser(
       if (!isAssignmentListedForRole(user.role, assignment.status)) {
         return null;
       }
-      if (
-        hideCancelled &&
-        assignment.sessionId &&
-        cancelledSessionIds.has(assignment.sessionId)
-      ) {
+      if (hideCancelled && assignmentTiedToCancelledSession(assignment, cancelledSessionIds)) {
         return null;
       }
       const [{ count }] = await db

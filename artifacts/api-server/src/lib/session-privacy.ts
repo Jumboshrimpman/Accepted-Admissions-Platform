@@ -380,6 +380,7 @@ type PublicSessionSource = Pick<
 >;
 
 export {
+  assignmentTiedToCancelledSession,
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,

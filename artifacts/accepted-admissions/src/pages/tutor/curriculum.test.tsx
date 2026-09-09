@@ -1,3 +1,5 @@
+process.env.TZ = "America/New_York";
+
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -139,6 +141,15 @@ describe("tutor curriculum workspace", () => {
           bookingStatus: "cancelled",
         },
       ],
+      quizzes: [
+        ...curriculum.quizzes,
+        {
+          ...curriculum.quizzes[0]!,
+          id: "quiz-cancelled",
+          sessionId: "session-cancelled",
+          title: "Cancelled-session homework",
+        },
+      ],
     };
     render(<TutorCurriculumPage />);
     expect(screen.getByTestId("tutor-session-card-session-1")).toBeTruthy();
@@ -149,6 +160,28 @@ describe("tutor curriculum workspace", () => {
     ).map((option) => option.value);
     expect(assignOptions).toContain("session-1");
     expect(assignOptions).not.toContain("session-cancelled");
+    expect(screen.queryByText("Cancelled-session homework")).toBeNull();
+  });
+
+  test("lists the Oct 2 Tokyo meeting as 9:00 PM JST instead of 8:00 AM", () => {
+    mocks.curriculum = {
+      ...curriculum,
+      sessions: [
+        {
+          ...curriculum.sessions[0]!,
+          id: "1cc3dea5-9532-4dc2-9cea-3d1e5d65d119",
+          title: "Taito’s SAT Session with Eunice",
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          student: { id: "student-1", name: "Taito Goto" },
+          tutor: { id: "tutor-1", name: "Eunice Chon" },
+        },
+      ],
+    };
+    render(<TutorCurriculumPage />);
+    expect(screen.getByText("Taito’s SAT Session with Eunice")).toBeTruthy();
+    expect(screen.getByText(/9:00–10:00 PM JST/)).toBeTruthy();
+    expect(screen.queryByText(/8:00\s*AM/)).toBeNull();
   });
 
   test("lets a tutor create a session and assign bank work for a linked student", () => {
@@ -165,6 +198,12 @@ describe("tutor curriculum workspace", () => {
     fireEvent.change(screen.getByTestId("tutor-session-student"), {
       target: { value: "student-1" },
     });
+    fireEvent.change(screen.getByTestId("tutor-session-timezone"), {
+      target: { value: "Asia/Tokyo" },
+    });
+    fireEvent.change(screen.getByTestId("tutor-session-start"), {
+      target: { value: "2026-10-02T21:00" },
+    });
     fireEvent.click(screen.getByTestId("tutor-create-session-submit"));
     expect(mocks.createSession.mutate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -172,6 +211,8 @@ describe("tutor curriculum workspace", () => {
         clientUserId: "student-1",
         subject: "SAT",
         durationMinutes: 60,
+        timezone: "Asia/Tokyo",
+        dateTime: "2026-10-02T12:00:00.000Z",
       }),
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
