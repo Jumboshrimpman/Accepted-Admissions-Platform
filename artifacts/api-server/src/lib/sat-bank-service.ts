@@ -510,6 +510,8 @@ export async function assignPreworkFromBank(input: {
   bankQuestionIds?: string[];
   homeworkKind?: "diagnostic" | "routine";
   targetMinutes?: number;
+  skipArchiveExisting?: boolean;
+  mcqOnly?: boolean;
 }): Promise<{
   planId: string;
   assignmentId: string;
@@ -558,6 +560,9 @@ export async function assignPreworkFromBank(input: {
       },
     }),
   );
+  if (input.mcqOnly) {
+    pool = pool.filter((row) => isTutorQuizMcq(row.questionType));
+  }
   if (pool.length === 0) {
     throw Object.assign(
       new Error(
@@ -586,7 +591,9 @@ export async function assignPreworkFromBank(input: {
     homeworkKind === "diagnostic"
       ? diagnosticTimeLimitMinutes(selection.estimatedSeconds)
       : routinePreworkTimeLimitMinutes(selected.length);
-  await archiveSessionPrework(session.id);
+  if (!input.skipArchiveExisting) {
+    await archiveSessionPrework(session.id);
+  }
   const title =
     homeworkKind === "diagnostic"
       ? `Full-length SAT diagnostic — ${session.title}`

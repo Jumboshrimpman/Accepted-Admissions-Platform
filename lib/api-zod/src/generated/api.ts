@@ -2789,7 +2789,9 @@ export const GetAssignmentResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
 }))
 }))
 
@@ -3829,7 +3831,15 @@ export const updateAssignmentQuestionBodyPositionMin = 0;
 
 export const UpdateAssignmentQuestionBody = zod.object({
   "position": zod.number().min(updateAssignmentQuestionBodyPositionMin).optional(),
-  "predictionFirst": zod.boolean().optional()
+  "predictionFirst": zod.boolean().optional(),
+  "prompt": zod.string().optional(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
 })
 
 export const UpdateAssignmentQuestionResponse = zod.object({
@@ -3846,7 +3856,9 @@ export const UpdateAssignmentQuestionResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
 })
 
 
@@ -4088,5 +4100,22 @@ export const CreateTutorReusableQuizBody = zod.object({
 })
 
 export const CreateTutorReusableQuizResponse = CreateAdminAssignmentResponse
+
+export const CreateTutorSessionQuestionParams = zod.object({
+  "assignmentId": zod.coerce.string()
+})
+
+export const CreateTutorSessionQuestionBody = zod.object({
+  "prompt": zod.string().optional(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
+})
+
+export const CreateTutorSessionQuestionResponse = UpdateAssignmentQuestionResponse
 
 

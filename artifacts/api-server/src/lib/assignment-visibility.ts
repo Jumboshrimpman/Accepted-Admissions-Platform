@@ -55,10 +55,13 @@ export function assignmentQuestionShape(
     skill?: string | null;
     domain?: string | null;
     difficulty?: string | null;
+    correctAnswer?: string | null;
+    explanation?: string | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
+  options?: { includeKeys?: boolean },
 ) {
-  return {
+  const shaped = {
     id: question.id,
     position: assignmentQuestion.position,
     subject: question.subject?.trim() || "SAT",
@@ -73,6 +76,12 @@ export function assignmentQuestionShape(
     }),
     difficulty: assignmentDifficulty(question.difficulty),
     predictionFirst: Boolean(assignmentQuestion.predictionFirst),
+  };
+  if (!options?.includeKeys) return shaped;
+  return {
+    ...shaped,
+    correctAnswer: question.correctAnswer?.trim() || "",
+    explanation: question.explanation?.trim() || "",
   };
 }
 

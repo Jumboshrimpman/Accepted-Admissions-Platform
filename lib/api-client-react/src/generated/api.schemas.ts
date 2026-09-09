@@ -1903,6 +1903,8 @@ export interface AssignmentQuestion {
   skill: string;
   difficulty: AssignmentQuestionDifficulty;
   predictionFirst: boolean;
+  correctAnswer?: string;
+  explanation?: string;
 }
 
 export type AdaptiveQuestion = AssignmentQuestion & {
@@ -1995,6 +1997,17 @@ export interface AssignmentQuestionUpdate {
   /** @minimum 0 */
   position?: number;
   predictionFirst?: boolean;
+  prompt?: string;
+  choices?: AssignmentQuestionChoicesItem[];
+  correctAnswer?: string;
+  explanation?: string;
+}
+
+export interface TutorSessionQuestionInput {
+  prompt?: string;
+  choices?: AssignmentQuestionChoicesItem[];
+  correctAnswer?: string;
+  explanation?: string;
 }
 
 export type AssignmentDetail = AssignmentSummary & {

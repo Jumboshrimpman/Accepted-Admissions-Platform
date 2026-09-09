@@ -578,6 +578,32 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /tutor/assignments/{assignmentId}/questions:
+    post:
+      operationId: createTutorSessionQuestion
+      tags: [curriculum]
+      summary: Add a session-local multiple-choice question
+      description: >
+        Tutors and administrators add a blank MCQ to a session-attached quiz
+        copy. The new row is not linked to bank_questions. Students are denied.
+        Shared session-less bank quizzes cannot be edited here.
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TutorSessionQuestionInput" }
+      responses:
+        "201":
+          description: Created session-local question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssignmentQuestion" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /admin/sat-bank/collections:
     get:
       operationId: listSatBankCollections
@@ -3195,11 +3221,25 @@ components:
         skill: { type: string }
         difficulty: { type: string, enum: [foundational, medium, hard] }
         predictionFirst: { type: boolean }
+        correctAnswer: { type: string }
+        explanation: { type: string }
     AssignmentQuestionUpdate:
       type: object
       properties:
         position: { type: number, minimum: 0 }
         predictionFirst: { type: boolean }
+        prompt: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        correctAnswer: { type: string }
+        explanation: { type: string }
     AssignmentDetail:
       allOf:
         - $ref: "#/components/schemas/AssignmentSummary"
@@ -3701,6 +3741,21 @@ components:
               url: { type: ["string", "null"] }
               path: { type: ["string", "null"] }
               alt: { type: ["string", "null"] }
+    TutorSessionQuestionInput:
+      type: object
+      properties:
+        prompt: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [id, label, text]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              text: { type: string }
+        correctAnswer: { type: string }
+        explanation: { type: string }
     TutorReusableQuizInput:
       type: object
       required: [courseId, title, bankQuestionIds]

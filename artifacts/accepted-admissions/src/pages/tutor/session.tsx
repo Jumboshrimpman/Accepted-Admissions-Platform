@@ -11,8 +11,6 @@ import {
   useGetAssignment,
   useRefreshAdaptiveCurriculum,
   useUpdateAdaptiveRecommendation,
-  useUpdateAssignmentQuestion,
-  useRemoveQuestionFromAssignment,
   useAttachQuestionToAssignment,
   useCreateCurriculumBlock,
   useUpdateCurriculumBlock,
@@ -25,8 +23,6 @@ import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homew
 import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
   BookOpenCheck,
-  ArrowDown,
-  ArrowUp,
   CheckCircle2,
   ChevronRight,
   FileText,
@@ -35,9 +31,7 @@ import {
   RefreshCw,
   Save,
   Sparkles,
-  ListChecks,
   UserRound,
-  XCircle,
 } from "lucide-react";
 import { MissedOnPreworkList } from "@/components/missed-prework-list";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
@@ -57,6 +51,7 @@ import {
 } from "@/lib/session-display";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
+import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
 
 export default function TutorSession() {
   const params = useParams();
@@ -78,6 +73,10 @@ export default function TutorSession() {
     session?.assignments.find(
       (assignment) => assignment.deliveryPhase === "during_session",
     )?.id ?? "";
+  const beforeAssignmentId =
+    session?.assignments.find(
+      (assignment) => assignment.deliveryPhase === "before_session",
+    )?.id ?? "";
   const { data: duringAssignment } = useGetAssignment(duringAssignmentId, {
     query: {
       enabled: Boolean(duringAssignmentId),
@@ -96,8 +95,6 @@ export default function TutorSession() {
   const refreshAdaptive = useRefreshAdaptiveCurriculum();
   const updateRecommendation = useUpdateAdaptiveRecommendation();
   const attachQuestion = useAttachQuestionToAssignment();
-  const updateAssignmentQuestion = useUpdateAssignmentQuestion();
-  const removeAssignmentQuestion = useRemoveQuestionFromAssignment();
 
   const [addingBlock, setAddingBlock] = useState(false);
   const [newBlockText, setNewBlockText] = useState("");
@@ -143,6 +140,11 @@ export default function TutorSession() {
     if (duringAssignmentId) {
       queryClient.invalidateQueries({
         queryKey: getGetAssignmentQueryKey(duringAssignmentId),
+      });
+    }
+    if (beforeAssignmentId) {
+      queryClient.invalidateQueries({
+        queryKey: getGetAssignmentQueryKey(beforeAssignmentId),
       });
     }
   };
@@ -399,7 +401,7 @@ export default function TutorSession() {
       </Card>
 
       <p className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground" data-testid="session-authoring-note">
-        Quiz authoring lives in the admin Curriculum bank. This page reviews the student’s attempt and the live meeting plan.
+        Edit assigned quiz questions on this session’s copy only. Shared bank items and other sessions stay unchanged.
       </p>
 
       <Tabs defaultValue="curriculum" className="space-y-6">
@@ -491,6 +493,15 @@ export default function TutorSession() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     Incomplete homework can still be worked through during the session.
                   </p>
+                  {beforeAssignmentId ? (
+                    <div className="mt-4">
+                      <TutorSessionQuizEditor
+                        assignmentId={beforeAssignmentId}
+                        heading="Homework questions for this session"
+                        onChanged={refreshAdaptiveData}
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="rounded-xl border bg-background p-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -648,101 +659,18 @@ export default function TutorSession() {
                 </div>
               )}
 
-              {duringAssignment && duringAssignment.questions.length > 0 && (
-                <div className="space-y-3 rounded-xl border bg-background p-4">
-                  <div className="flex items-center gap-2">
-                    <ListChecks className="h-4 w-4 text-primary" />
-                    <p className="font-semibold">{duringAssignment.status === "published" ? "Published in-session sequence" : "Draft in-session sequence"}</p>
-                  </div>
-                  {duringAssignment.questions.map((question, index) => (
-                    <div key={question.id} className="flex items-center gap-2 rounded-lg border p-3">
-                      <span className="w-6 text-sm font-semibold text-muted-foreground">
-                        {index + 1}
-                      </span>
-                      <p className="flex-1 truncate text-sm">{question.prompt}</p>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={index === 0 || updateAssignmentQuestion.isPending}
-                        onClick={() => {
-                          const previous = duringAssignment.questions[index - 1];
-                          updateAssignmentQuestion.mutate(
-                            {
-                              assignmentId: duringAssignment.id,
-                              questionId: question.id,
-                              data: { position: previous.position },
-                            },
-                            {
-                              onSuccess: () =>
-                                updateAssignmentQuestion.mutate(
-                                  {
-                                    assignmentId: duringAssignment.id,
-                                    questionId: previous.id,
-                                    data: { position: question.position },
-                                  },
-                                  { onSuccess: refreshAdaptiveData },
-                                ),
-                            },
-                          );
-                        }}
-                        aria-label="Move question up"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        disabled={
-                          index === duringAssignment.questions.length - 1 ||
-                          updateAssignmentQuestion.isPending
-                        }
-                        onClick={() => {
-                          const next = duringAssignment.questions[index + 1];
-                          updateAssignmentQuestion.mutate(
-                            {
-                              assignmentId: duringAssignment.id,
-                              questionId: question.id,
-                              data: { position: next.position },
-                            },
-                            {
-                              onSuccess: () =>
-                                updateAssignmentQuestion.mutate(
-                                  {
-                                    assignmentId: duringAssignment.id,
-                                    questionId: next.id,
-                                    data: { position: question.position },
-                                  },
-                                  { onSuccess: refreshAdaptiveData },
-                                ),
-                            },
-                          );
-                        }}
-                        aria-label="Move question down"
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive"
-                        disabled={removeAssignmentQuestion.isPending}
-                        onClick={() =>
-                          removeAssignmentQuestion.mutate(
-                            {
-                              assignmentId: duringAssignment.id,
-                              questionId: question.id,
-                            },
-                            { onSuccess: refreshAdaptiveData },
-                          )
-                        }
-                        aria-label="Remove question"
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {duringAssignmentId ? (
+                <TutorSessionQuizEditor
+                  assignmentId={duringAssignmentId}
+                  heading={
+                    duringAssignment?.status === "published"
+                      ? "Published in-session sequence"
+                      : "In-session practice questions"
+                  }
+                  emptyLabel="Add or accept recommended questions to build the live sequence."
+                  onChanged={refreshAdaptiveData}
+                />
+              ) : null}
 
               <div className="rounded-xl border bg-background p-4">
                 <div className="mb-2 flex items-center justify-between gap-2">

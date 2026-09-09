@@ -10,6 +10,10 @@ export type PickerBankQuestion = {
   section: string;
   questionType: string;
   assignable?: boolean;
+  questionNumber?: number;
+  module?: number;
+  correctAnswer?: string;
+  officialExplanation?: string;
   choices?: Array<{ id: string; label: string; text: string }>;
   figures?: Array<{ url?: string | null; path?: string | null; alt?: string | null }>;
 };
@@ -36,10 +40,10 @@ export function bankQuestionSearchHaystack(question: PickerBankQuestion): string
     .toLowerCase();
 }
 
-export function filterBankQuestionsForPicker(
-  questions: PickerBankQuestion[],
+export function filterBankQuestionsForPicker<T extends PickerBankQuestion>(
+  questions: T[],
   query: string,
-): PickerBankQuestion[] {
+): T[] {
   const needle = query.trim().toLowerCase();
   return questions.filter((question) => {
     if (!isPickerMcq(question) || question.assignable === false) return false;

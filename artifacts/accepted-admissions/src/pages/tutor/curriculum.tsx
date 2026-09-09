@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TutorQuizBuilder } from "@/components/tutor-quiz-builder";
+import { TutorQuizRepository } from "@/components/tutor-quiz-repository";
 import {
   assignableBankQuizzes,
   bankQuizOptionLabel,
@@ -451,6 +452,13 @@ export default function TutorCurriculum() {
               </Button>
             </div>
           </div>
+          <TutorQuizRepository
+            quizzes={quizzes}
+            sessions={sessions}
+            onChanged={refresh}
+            onMessage={setMessage}
+          />
+
           {showQuizBuilder ? (
             <TutorQuizBuilder
               open
