@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, ChevronRight, CircleAlert, Save } from "lucide-react";
 import { ClearHomeworkButton } from "@/components/clear-homework-button";
+import { TutorAnalysisBrief } from "@/components/tutor-analysis-brief";
 import {
   filterWrongAnswersOnly,
   wantsWrongAnswersOnly,
@@ -91,6 +92,19 @@ export default function TutorAttempt() {
         <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Mistakes</div><div className="text-3xl font-bold">{result.items.filter((item) => !item.correct).length}</div></CardContent></Card>
         <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Analysis</div><div className="mt-1 font-semibold">{result.analysis.label}</div></CardContent></Card>
       </div>
+      <Card className="border-primary/20">
+        <CardHeader><CardTitle>Session brief</CardTitle></CardHeader>
+        <CardContent>
+          <TutorAnalysisBrief
+            analysisPreview={result.analysis.feedback}
+            sessionOpener={result.analysis.sessionOpener}
+            skipRehash={result.analysis.skipRehash}
+            sectionBreakdown={result.analysis.sectionBreakdown}
+            missClusters={result.analysis.missClusters}
+            nextFocus={result.analysis.nextFocus}
+          />
+        </CardContent>
+      </Card>
       <div className="grid gap-6 md:grid-cols-2">
         <Card><CardHeader><CardTitle>Strengths</CardTitle></CardHeader><CardContent><ul className="space-y-2 text-sm">{result.analysis.strengths.map((item) => <li key={item}>✓ {item}</li>)}</ul></CardContent></Card>
         <Card><CardHeader><CardTitle>Recommended next focus</CardTitle></CardHeader><CardContent><ul className="space-y-2 text-sm">{result.analysis.nextFocus.map((item) => <li key={item}>→ {item}</li>)}</ul></CardContent></Card>

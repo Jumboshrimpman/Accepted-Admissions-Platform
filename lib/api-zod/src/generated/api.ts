@@ -612,7 +612,23 @@ export const GetAdminClientDashboardResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),zod.null()])
 }),zod.null()])
 }))),
@@ -675,7 +691,23 @@ export const GetAdminClientDashboardResponse = zod.object({
   "mistakeCount": zod.number().optional(),
   "tutorNotes": zod.string().nullish(),
   "analysisPreview": zod.string().nullish(),
-  "nextFocus": zod.array(zod.string()).optional()
+  "nextFocus": zod.array(zod.string()).optional(),
+  "sessionOpener": zod.string().nullish(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 })),
   "openReviewCount": zod.number()
 }).and(zod.object({
@@ -1960,7 +1992,23 @@ export const GetDashboardResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),zod.null()])
 }),zod.null()])
 }))),
@@ -2023,7 +2071,23 @@ export const GetDashboardResponse = zod.object({
   "mistakeCount": zod.number().optional(),
   "tutorNotes": zod.string().nullish(),
   "analysisPreview": zod.string().nullish(),
-  "nextFocus": zod.array(zod.string()).optional()
+  "nextFocus": zod.array(zod.string()).optional(),
+  "sessionOpener": zod.string().nullish(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 })),
   "openReviewCount": zod.number()
 })
@@ -2364,7 +2428,23 @@ export const GetSessionResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),zod.null()])
 })).optional()
 }))
@@ -2866,7 +2946,23 @@ export const StartAttemptResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -2967,7 +3063,23 @@ export const GetAttemptResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -3043,7 +3155,23 @@ export const GetAttemptResultResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -3127,7 +3255,23 @@ export const UpdateAttemptReviewResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -3266,7 +3410,23 @@ export const PauseAttemptResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -3367,7 +3527,23 @@ export const ResumeAttemptResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -3447,7 +3623,23 @@ export const SubmitAttemptResponse = zod.object({
   "weaknesses": zod.array(zod.string()),
   "mistakePatterns": zod.array(zod.string()),
   "nextFocus": zod.array(zod.string()),
-  "feedback": zod.string()
+  "feedback": zod.string(),
+  "sessionOpener": zod.string().optional(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 }),
   "studentFeedback": zod.string(),
   "tutorNotes": zod.string().nullish(),
@@ -3502,7 +3694,23 @@ export const ListReviewSubmissionsResponseItem = zod.object({
   "mistakeCount": zod.number().optional(),
   "tutorNotes": zod.string().nullish(),
   "analysisPreview": zod.string().nullish(),
-  "nextFocus": zod.array(zod.string()).optional()
+  "nextFocus": zod.array(zod.string()).optional(),
+  "sessionOpener": zod.string().nullish(),
+  "skipRehash": zod.array(zod.string()).optional(),
+  "sectionBreakdown": zod.array(zod.object({
+  "section": zod.enum(['rw', 'math', 'other']).optional(),
+  "label": zod.string(),
+  "accuracy": zod.number(),
+  "correct": zod.number().optional(),
+  "total": zod.number(),
+  "missCount": zod.number()
+})).optional(),
+  "missClusters": zod.array(zod.object({
+  "label": zod.string(),
+  "kind": zod.enum(['skill', 'domain', 'section', 'prompt']).optional(),
+  "missCount": zod.number(),
+  "examples": zod.array(zod.string()).optional()
+})).optional()
 })
 export const ListReviewSubmissionsResponse = zod.array(ListReviewSubmissionsResponseItem)
 

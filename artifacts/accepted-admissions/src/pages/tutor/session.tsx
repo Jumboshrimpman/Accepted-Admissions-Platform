@@ -21,6 +21,7 @@ import {
   useUpsertSessionArtifact,
 } from "@workspace/api-client-react";
 import { ClearHomeworkButton } from "@/components/clear-homework-button";
+import { TutorAnalysisBrief } from "@/components/tutor-analysis-brief";
 import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homework";
 import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
@@ -322,10 +323,22 @@ export default function TutorSession() {
                         <span>Mistakes: {homework.mistakeCount}</span>
                       </div>
                       {homework.analysis && (
-                        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-                          <p><span className="font-medium text-emerald-700">Strength:</span> {homework.analysis.strengths[0] ?? "No strength summary yet."}</p>
-                          <p><span className="font-medium text-amber-700">Recommended focus:</span> {homework.analysis.nextFocus[0] ?? homework.analysis.weaknesses[0] ?? "Keep practicing."}</p>
-                          <Badge variant="outline" className="w-fit sm:col-span-2">
+                        <div className="mt-3 space-y-2 text-xs">
+                          <TutorAnalysisBrief
+                            analysisPreview={homework.analysis.feedback}
+                            sessionOpener={homework.analysis.sessionOpener}
+                            skipRehash={homework.analysis.skipRehash}
+                            sectionBreakdown={homework.analysis.sectionBreakdown}
+                            missClusters={homework.analysis.missClusters}
+                            nextFocus={homework.analysis.nextFocus}
+                          />
+                          {!homework.analysis.sessionOpener && !homework.analysis.missClusters?.length ? (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <p><span className="font-medium text-emerald-700">Strength:</span> {homework.analysis.strengths[0] ?? "No strength summary yet."}</p>
+                              <p><span className="font-medium text-amber-700">Recommended focus:</span> {homework.analysis.nextFocus[0] ?? homework.analysis.weaknesses[0] ?? "Keep practicing."}</p>
+                            </div>
+                          ) : null}
+                          <Badge variant="outline" className="w-fit">
                             {homework.analysis.label} · shared with student
                           </Badge>
                         </div>

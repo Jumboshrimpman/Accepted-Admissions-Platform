@@ -1503,6 +1503,26 @@ export interface AttemptAnalysis {
   mistakePatterns: string[];
   nextFocus: string[];
   feedback: string;
+  sessionOpener?: string;
+  skipRehash?: string[];
+  sectionBreakdown?: AttemptAnalysisSectionBreakdown[];
+  missClusters?: AttemptAnalysisMissCluster[];
+}
+
+export interface AttemptAnalysisSectionBreakdown {
+  section?: 'rw' | 'math' | 'other';
+  label: string;
+  accuracy: number;
+  correct?: number;
+  total: number;
+  missCount: number;
+}
+
+export interface AttemptAnalysisMissCluster {
+  label: string;
+  kind?: 'skill' | 'domain' | 'section' | 'prompt';
+  missCount: number;
+  examples?: string[];
 }
 
 export type CurriculumSessionLatestResult = {
@@ -1585,6 +1605,11 @@ export interface ReviewSubmission {
   /** @nullable */
   analysisPreview?: string | null;
   nextFocus?: string[];
+  /** @nullable */
+  sessionOpener?: string | null;
+  skipRehash?: string[];
+  sectionBreakdown?: AttemptAnalysisSectionBreakdown[];
+  missClusters?: AttemptAnalysisMissCluster[];
 }
 
 export type DashboardRecentScoresItem = {
