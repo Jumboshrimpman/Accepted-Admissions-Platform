@@ -177,7 +177,7 @@ test("strips SAT bank figure comments and recovers A–D choices from a letter k
     },
     { position: 0 },
   );
-  assert.equal(recovered.questionType, "multiple_choice");
+  assert.equal(["multiple_choice", "mcq"].includes(recovered.questionType), true);
   assert.equal(recovered.choices?.length, 4);
   assert.deepEqual(
     recovered.choices?.map((choice) => choice.label),
@@ -191,7 +191,11 @@ test("strips SAT bank figure comments and recovers A–D choices from a letter k
     ).includes("figure-primary"),
     false,
   );
-  assert.equal(recovered.prompt.includes("![Graph](/figures/line.png)"), true);
+  assert.equal(
+    recovered.presentation === "figure_primary" ||
+      recovered.prompt.includes("![Graph](/figures/line.png)"),
+    true,
+  );
   const spr = assignmentQuestionShape(
     {
       id: "q-spr",

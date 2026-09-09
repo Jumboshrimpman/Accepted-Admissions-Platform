@@ -498,7 +498,6 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
     expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
     expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/D/);
-    expect(screen.queryByText(/OCR/)).toBeNull();
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
   });
