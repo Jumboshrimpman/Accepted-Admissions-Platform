@@ -128,6 +128,8 @@ test("GET /assignments/:id opens a full-length diagnostic for admin and student 
     assert.equal(student.response.status, 200, JSON.stringify(student.body));
     assert.equal(student.body.id, diagnostic!.id);
     assert.equal(student.body.questions.length, 1);
+    assert.equal("correctAnswer" in (student.body.questions[0] ?? {}), false);
+    assert.equal("explanation" in (student.body.questions[0] ?? {}), false);
   } finally {
     await studentServer?.close();
     await adminServer?.close();

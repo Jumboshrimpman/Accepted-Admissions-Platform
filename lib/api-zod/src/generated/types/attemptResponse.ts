@@ -15,4 +15,11 @@ export interface AttemptResponse {
   finalAnswer: string | null;
   flagged: boolean;
   savedAt?: Date;
+  revealed?: boolean;
+  /** @nullable */
+  correct?: boolean | null;
+  /** @nullable */
+  correctAnswer?: string | null;
+  /** @nullable */
+  explanation?: string | null;
 }

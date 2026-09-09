@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canShowClearHomework,
   hydrateMistakePrompts,
+  allowsInSessionPerQuestionFeedback,
   isInSessionHomeworkCompletion,
   selectActivePrework,
   selectInSessionHomeworkQuestionIds,
@@ -98,6 +99,8 @@ test("incomplete homework copied into the session is capped at 15 and prefers un
     }),
     false,
   );
+  assert.equal(allowsInSessionPerQuestionFeedback({ deliveryPhase: "during_session" }), true);
+  assert.equal(allowsInSessionPerQuestionFeedback({ deliveryPhase: "before_session" }), false);
 });
 
 test("hydrateMistakePrompts fills empty prompts from the question bank so review focus is not hidden", () => {

@@ -1394,7 +1394,7 @@ paths:
     put:
       operationId: saveAttemptResponse
       tags: [assignments]
-      summary: Autosave a response or Prediction First prediction
+      summary: Autosave a response, or check one in-session practice item
       parameters:
         - $ref: "#/components/parameters/AttemptId"
       requestBody:
@@ -3181,6 +3181,10 @@ components:
         finalAnswer: { type: ["string", "null"] }
         flagged: { type: boolean }
         savedAt: { type: string, format: date-time }
+        revealed: { type: boolean }
+        correct: { type: ["boolean", "null"] }
+        correctAnswer: { type: ["string", "null"] }
+        explanation: { type: ["string", "null"] }
     AttemptResponseInput:
       type: object
       required: [questionId]
@@ -3191,6 +3195,11 @@ components:
         finalAnswer: { type: ["string", "null"], maxLength: 2000 }
         flagged: { type: boolean }
         timeSpentSeconds: { type: number, minimum: 0 }
+        checkAnswer:
+          type: boolean
+          description: >
+            Grade this item immediately. Only allowed for during_session practice.
+            Timed pre-work and diagnostics stay hidden until final submit.
     TimerEvent:
       type: object
       required: [type, at]

@@ -24,6 +24,13 @@ export function isInSessionHomeworkCompletion(input: {
   );
 }
 
+/** Immediate Check answer is only for live session work, never timed pre-work/diagnostics. */
+export function allowsInSessionPerQuestionFeedback(input: {
+  deliveryPhase?: string | null;
+}): boolean {
+  return input.deliveryPhase === "during_session";
+}
+
 /** Prefer unanswered homework items, then the rest of the set, never more than 15. */
 export function selectInSessionHomeworkQuestionIds(
   sourceQuestionIds: readonly string[],

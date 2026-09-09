@@ -49,6 +49,8 @@ test("full-length SAT bank questions coerce onto the assignment API schema", () 
   assert.equal(shaped.choices?.[1]?.text, "therefore");
   assert.equal(typeof shaped.choices?.[1]?.id, "string");
   assert.equal(typeof shaped.choices?.[1]?.label, "string");
+  assert.equal("correctAnswer" in shaped, false);
+  assert.equal("explanation" in shaped, false);
 });
 
 test("assignment questions hide extract skill placeholders behind the section label", () => {
