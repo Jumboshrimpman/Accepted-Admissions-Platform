@@ -28,4 +28,25 @@ export interface ReviewSubmission {
   /** @nullable */
   analysisPreview?: string | null;
   nextFocus?: string[];
+  /** @nullable */
+  sessionOpener?: string | null;
+  skipRehash?: string[];
+  sectionBreakdown?: ReviewSubmissionSectionBreakdown[];
+  missClusters?: ReviewSubmissionMissCluster[];
+}
+
+export interface ReviewSubmissionSectionBreakdown {
+  section?: "rw" | "math" | "other";
+  label: string;
+  accuracy: number;
+  correct?: number;
+  total: number;
+  missCount: number;
+}
+
+export interface ReviewSubmissionMissCluster {
+  label: string;
+  kind?: "skill" | "domain" | "section" | "prompt";
+  missCount: number;
+  examples?: string[];
 }

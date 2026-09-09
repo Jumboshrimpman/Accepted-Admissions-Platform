@@ -364,6 +364,17 @@ describe("authenticated role dashboard flows", () => {
           reviewStatus: "new",
           mistakeCount: 2,
           tutorNotes: null,
+          analysisPreview:
+            "Open with the 3 Transitions misses first — start at “Which transition best connects”.",
+          nextFocus: ["SAT Math", "Math", "Reading and Writing", "Transitions"],
+          sessionOpener:
+            "Open with the 3 Transitions misses first — start at “Which transition best connects”.",
+          skipRehash: ["Evidence (100% · 4/4)"],
+          sectionBreakdown: [
+            { section: "rw", label: "Reading and Writing", accuracy: 80, total: 10, missCount: 2 },
+            { section: "math", label: "Math", accuracy: 90, total: 10, missCount: 1 },
+          ],
+          missClusters: [{ label: "Transitions", missCount: 3, examples: ["Which transition best connects"] }],
         },
       ],
     } as Dashboard;
@@ -381,7 +392,12 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("New submission alerts")).toBeTruthy();
     expect(screen.getByText("1 to review")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: /Review submission/i })).toHaveLength(1);
-    expect(screen.getByText("Flagged skills: Boundaries")).toBeTruthy();
+    expect(screen.queryByText(/Flagged skills/i)).toBeNull();
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).toMatch(/Transitions/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).toMatch(/Reading and Writing 80%/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).not.toMatch(
+      /Focus:\s*SAT Math · Math · Reading and Writing/,
+    );
     fireEvent.click(screen.getByRole("button", { name: /Clear flags/i }));
     expect(mocks.updateReview.mutate).toHaveBeenCalledWith(
       { itemId: "queue-1", data: { status: "reviewed", tutorNote: "Reviewed and approved." } },

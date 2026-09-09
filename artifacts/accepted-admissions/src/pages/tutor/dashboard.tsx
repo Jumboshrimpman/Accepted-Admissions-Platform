@@ -36,6 +36,13 @@ import {
   formatSessionDate,
   formatSessionTimeRange,
 } from "@/lib/session-display";
+import { TutorAnalysisBrief } from "@/components/tutor-analysis-brief";
+import {
+  queueReasonPreview,
+  usefulFocusLabels,
+  type AlertMissCluster,
+  type AlertSectionBreakdown,
+} from "@/lib/submission-alert-display";
 
 export default function TutorDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
@@ -85,6 +92,10 @@ export default function TutorDashboard() {
     reviewStatus: string;
     analysisPreview: string | null;
     nextFocus: string[];
+    sessionOpener: string | null;
+    skipRehash: string[];
+    sectionBreakdown: AlertSectionBreakdown[];
+    missClusters: AlertMissCluster[];
     queueItems: typeof openQueue;
   };
 
@@ -103,7 +114,11 @@ export default function TutorDashboard() {
       sessionId: submission.sessionId,
       reviewStatus: submission.reviewStatus,
       analysisPreview: submission.analysisPreview ?? null,
-      nextFocus: submission.nextFocus ?? [],
+      nextFocus: usefulFocusLabels(submission.nextFocus ?? []),
+      sessionOpener: submission.sessionOpener ?? null,
+      skipRehash: submission.skipRehash ?? [],
+      sectionBreakdown: submission.sectionBreakdown ?? [],
+      missClusters: submission.missClusters ?? [],
       queueItems: [],
     });
   });
@@ -126,8 +141,12 @@ export default function TutorDashboard() {
       sessionDateTime: null,
       sessionId: null,
       reviewStatus: "in_review",
-      analysisPreview: item.reason,
-      nextFocus: [item.skill],
+      analysisPreview: queueReasonPreview(item.reason),
+      nextFocus: usefulFocusLabels([item.skill]),
+      sessionOpener: null,
+      skipRehash: [],
+      sectionBreakdown: [],
+      missClusters: [],
       queueItems: [item],
     });
   });
@@ -266,7 +285,8 @@ export default function TutorDashboard() {
               {attentionItems.map((item) => (
                 <div
                   key={item.attemptId}
-                  className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-start sm:justify-between"
+                  data-testid={`submission-alert-${item.attemptId}`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -287,24 +307,17 @@ export default function TutorDashboard() {
                       {item.score === null ? "" : ` · ${Math.round(item.score)}%`}
                       {` · ${item.mistakeCount} mistake${item.mistakeCount === 1 ? "" : "s"}`}
                     </p>
-                    {item.analysisPreview && (
-                      <p className="mt-2 line-clamp-2 text-sm text-foreground/80">
-                        {item.analysisPreview}
-                      </p>
-                    )}
-                    {item.nextFocus.length > 0 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Focus: {item.nextFocus.slice(0, 3).join(" · ")}
-                      </p>
-                    )}
-                    {item.queueItems.length > 0 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Flagged skills:{" "}
-                        {item.queueItems.map((queueItem) => queueItem.skill).join(", ")}
-                      </p>
-                    )}
+                    <TutorAnalysisBrief
+                      compact
+                      analysisPreview={item.analysisPreview}
+                      sessionOpener={item.sessionOpener}
+                      skipRehash={item.skipRehash}
+                      sectionBreakdown={item.sectionBreakdown}
+                      missClusters={item.missClusters}
+                      nextFocus={item.nextFocus}
+                    />
                   </div>
-                  <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto">
+                  <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-stretch">
                     <Button asChild className="flex-1 sm:flex-none">
                       <Link href={`/tutor/attempts/${item.attemptId}`}>
                         Review submission

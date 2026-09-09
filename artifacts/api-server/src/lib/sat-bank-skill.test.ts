@@ -4,11 +4,13 @@ import test from "node:test";
 import {
   adminBankSkillLabel,
   attemptResultHasPlaceholderSkill,
+  isCoarseSectionLabel,
   isMissingExtractSkill,
   quizSubject,
   sectionSkillLabel,
   skillBreakdownFromItems,
   skillLabelForBank,
+  usefulFocusLabels,
 } from "./sat-bank-skill.ts";
 
 test("quizSubject matches the SAT course labels used on materialize", () => {
@@ -96,4 +98,22 @@ test("admin bank badge stays honest that the skill is not from the PDF", () => {
   assert.equal(adminBankSkillLabel(null, "rw"), "Reading and Writing · not in PDF");
   assert.equal(adminBankSkillLabel("Skill not in extract", "math"), "SAT Math · not in PDF");
   assert.equal(adminBankSkillLabel("Transitions", "rw"), "Transitions");
+});
+
+test("prefers a real domain when the stored skill is only a section name", () => {
+  assert.equal(
+    skillLabelForBank({
+      skill: "Math",
+      domain: "Algebra",
+      subject: "SAT Math",
+    }),
+    "Algebra",
+  );
+  assert.equal(isCoarseSectionLabel("SAT Math"), true);
+  assert.equal(isCoarseSectionLabel("Reading and Writing"), true);
+  assert.equal(isCoarseSectionLabel("Transitions"), false);
+  assert.deepEqual(
+    usefulFocusLabels(["SAT Math", "Math", "Reading and Writing", "Algebra", "Algebra"]),
+    ["Algebra"],
+  );
 });

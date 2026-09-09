@@ -22,6 +22,55 @@ export function isMissingExtractSkill(skill: string | null | undefined): boolean
   );
 }
 
+const COARSE_SECTION_KEYS = new Set([
+  "math",
+  "sat math",
+  "reading",
+  "writing",
+  "reading and writing",
+  "sat reading and writing",
+  "sat reading writing",
+  "general",
+  "english",
+  "rw",
+  "r and w",
+]);
+
+/** Normalize SAT Math / Math and RW aliases to a single comparison key. */
+export function normalizeFocusKey(label: string | null | undefined): string {
+  return (label ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Coarse section names are not skills. "Math", "SAT Math", and
+ * "Reading and Writing" should never be dumped as a flagged-skill list.
+ */
+export function isCoarseSectionLabel(label: string | null | undefined): boolean {
+  if (isMissingExtractSkill(label)) return true;
+  return COARSE_SECTION_KEYS.has(normalizeFocusKey(label));
+}
+
+/** Distinct, tutor-useful focus labels — never Math + SAT Math + RW noise. */
+export function usefulFocusLabels(labels: readonly string[], limit = 3): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of labels) {
+    const label = raw.replace(/\s*\(\d+% accuracy\)\s*$/i, "").trim();
+    if (!label || isCoarseSectionLabel(label)) continue;
+    const key = normalizeFocusKey(label);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function inferSection(input: {
   section?: string | null;
   domain?: string | null;
@@ -46,9 +95,10 @@ export function skillLabelForBank(input: {
   domain?: string | null;
   subject?: string | null;
 }): string {
-  if (!isMissingExtractSkill(input.skill)) return input.skill!.trim();
+  const skill = input.skill?.trim() ?? "";
+  if (skill && !isCoarseSectionLabel(skill)) return skill;
   const domain = input.domain?.trim() ?? "";
-  if (domain && !isMissingExtractSkill(domain)) return domain;
+  if (domain && !isCoarseSectionLabel(domain)) return domain;
   const section = inferSection(input);
   return section ? sectionSkillLabel(section) : "General";
 }

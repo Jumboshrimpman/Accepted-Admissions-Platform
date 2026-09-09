@@ -93,7 +93,11 @@ import {
   taitoSessionDateTime,
   twelveSessionPlanForEmail,
 } from "../lib/session-schedule";
-import { buildAttemptAnalysis } from "../lib/assessment-analysis";
+import {
+  buildAttemptAnalysis,
+  tutorAlertFields,
+  type AttemptAnalysis,
+} from "../lib/assessment-analysis";
 import {
   HARD_BANK_SEED_QUESTIONS,
 } from "../lib/sat-assessment-content";
@@ -371,7 +375,6 @@ import {
   isAssignmentListedForRole,
 } from "../lib/assignment-visibility";
 import {
-  attemptResultHasPlaceholderSkill,
   skillBreakdownFromItems,
   skillLabelForBank,
 } from "../lib/sat-bank-skill";
@@ -3060,16 +3063,7 @@ async function enforceTimeLimit(attemptId: string) {
   return record.attempt;
 }
 
-type AttemptAnalysisPayload = {
-  source: "deterministic" | "provider";
-  label: string;
-  provider: string | null;
-  strengths: string[];
-  weaknesses: string[];
-  mistakePatterns: string[];
-  nextFocus: string[];
-  feedback: string;
-};
+type AttemptAnalysisPayload = AttemptAnalysis;
 
 type AttemptResultPayload = {
   attemptId: string;
@@ -3169,7 +3163,6 @@ function withDisplaySkills(
   result: AttemptResultPayload,
   assignmentTitle?: string | null,
 ): AttemptResultPayload {
-  if (!attemptResultHasPlaceholderSkill(result)) return result;
   const items = result.items.map((item) => ({
     ...item,
     skill: skillLabelForBank({
@@ -3186,12 +3179,16 @@ function withDisplaySkills(
     assignmentTitle ?? result.assignmentTitle,
     result.homeworkKind ?? null,
   );
+  const storedFeedback = result.studentFeedback ?? "";
   return {
     ...result,
     items,
     breakdown,
     analysis,
-    studentFeedback: analysis.feedback,
+    studentFeedback:
+      !storedFeedback.trim() || /start with the focus areas below/i.test(storedFeedback)
+        ? analysis.feedback
+        : storedFeedback,
   };
 }
 
@@ -3215,6 +3212,7 @@ function deterministicAnalysis(
       finalAnswer: item.finalAnswer,
       domain: item.domain ?? null,
       subject: item.subject ?? attemptSubjectFromAssignment(assignmentTitle),
+      prompt: item.prompt ?? null,
     })),
     score,
     { assignmentTitle, homeworkKind },
@@ -8772,49 +8770,38 @@ async function reviewSubmissionsForUser(user: AppUser) {
   ).filter((row): row is (typeof rows)[number] => Boolean(row));
   return visibleRows
     .filter((row) => Boolean(row.attempt.submittedAt))
-    .map(({ attempt, assignment, student, session }) => ({
-      attemptId: attempt.id,
-      assignmentId: assignment.id,
-      assignmentTitle: assignment.title,
-      studentUserId: student.id,
-      studentName: student.displayName,
-      sessionId: session?.id ?? null,
-      sessionDateTime: session?.dateTime ?? null,
-      status: attempt.status,
-      score: attempt.score ?? 0,
-      submittedAt: attempt.submittedAt!,
-      reviewStatus: attempt.reviewStatus,
-      mistakeCount: Array.isArray(
-        (attempt.result as Record<string, unknown> | null)?.items,
-      )
-        ? (
-            attempt.result as {
-              items: Array<{ correct: boolean }>;
-            }
-          ).items.filter((item) => !item.correct).length
-        : 0,
-      tutorNotes: attempt.tutorNotes,
-      analysisPreview:
-        typeof (attempt.analysis as { feedback?: unknown } | null)?.feedback ===
-        "string"
-          ? (attempt.analysis as { feedback: string }).feedback
-          : typeof (attempt.result as { analysis?: { feedback?: unknown } } | null)
-                ?.analysis?.feedback === "string"
-            ? (attempt.result as { analysis: { feedback: string } }).analysis
-                .feedback
-            : null,
-      nextFocus: Array.isArray(
-        (attempt.analysis as { nextFocus?: unknown } | null)?.nextFocus,
-      )
-        ? ((attempt.analysis as { nextFocus: string[] }).nextFocus ?? [])
-        : Array.isArray(
-              (attempt.result as { analysis?: { nextFocus?: unknown } } | null)
-                ?.analysis?.nextFocus,
-            )
-          ? ((attempt.result as { analysis: { nextFocus: string[] } }).analysis
-              .nextFocus ?? [])
-          : [],
-    }));
+    .map(({ attempt, assignment, student, session }) => {
+      const storedResult = attempt.result as AttemptResultPayload | null;
+      const analysis = storedResult?.items?.length
+        ? withDisplaySkills(storedResult, assignment.title).analysis
+        : ((attempt.analysis as AttemptAnalysis | null) ??
+          storedResult?.analysis ??
+          null);
+      const alert = tutorAlertFields(analysis);
+      return {
+        attemptId: attempt.id,
+        assignmentId: assignment.id,
+        assignmentTitle: assignment.title,
+        studentUserId: student.id,
+        studentName: student.displayName,
+        sessionId: session?.id ?? null,
+        sessionDateTime: session?.dateTime ?? null,
+        status: attempt.status,
+        score: attempt.score ?? 0,
+        submittedAt: attempt.submittedAt!,
+        reviewStatus: attempt.reviewStatus,
+        mistakeCount: Array.isArray(storedResult?.items)
+          ? storedResult.items.filter((item) => !item.correct).length
+          : 0,
+        tutorNotes: attempt.tutorNotes,
+        analysisPreview: alert.analysisPreview,
+        nextFocus: alert.nextFocus,
+        sessionOpener: alert.sessionOpener,
+        skipRehash: alert.skipRehash,
+        sectionBreakdown: alert.sectionBreakdown,
+        missClusters: alert.missClusters,
+      };
+    });
 }
 
 async function dashboardDataForUser(user: AppUser) {
@@ -9274,11 +9261,11 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
         )
         .orderBy(desc(attemptsTable.startedAt))
         .limit(1);
-      const result = attempt?.result as Record<string, unknown> | null | undefined;
-      const resultItems = Array.isArray(result?.items)
-        ? (result.items as Array<{ correct?: boolean }>)
-        : [];
-      const analysis = (attempt?.analysis ?? result?.analysis) as Record<string, unknown> | null | undefined;
+      const storedResult = attempt?.result as AttemptResultPayload | null | undefined;
+      const resultItems = Array.isArray(storedResult?.items) ? storedResult.items : [];
+      const analysis = resultItems.length
+        ? withDisplaySkills(storedResult!, assignment.title).analysis
+        : ((attempt?.analysis ?? storedResult?.analysis) as AttemptAnalysis | null | undefined);
       return {
         assignmentId: assignment.id,
         title: assignment.title,

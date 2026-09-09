@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { buildAttemptAnalysis, describeSessionPrepMode, projectSatScores, projectSatSectionScore } from "./assessment-analysis.ts";
+import { buildAttemptAnalysis, describeSessionPrepMode, projectSatScores, projectSatSectionScore, tutorAlertFields } from "./assessment-analysis.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { FULL_SAT_DIAGNOSTIC_QUESTIONS } from "./sat-assessment-content.ts";
 
@@ -54,7 +54,7 @@ test("diagnostic analysis includes estimated score coaching for tutors and stude
   assert.match(analysis.label, /estimated SAT score range/i);
   assert.match(analysis.feedback, /Estimated SAT score range/);
   assert.match(analysis.feedback, /not an official College Board adaptive/i);
-  assert.match(analysis.feedback, /Tutor focus/);
+  assert.match(analysis.sessionOpener ?? "", /Transitions/i);
   assert.deepEqual(analysis.nextFocus, ["Transitions"]);
 });
 
@@ -97,4 +97,87 @@ test("session prep modes explain the live curriculum behavior", () => {
   );
   assert.match(describeSessionPrepMode("mistake_focus"), /similar/i);
   assert.match(describeSessionPrepMode("hard_bank"), /hard-question bank/i);
+});
+
+test("clusters coarse section skills by domain and writes a concrete tutor brief", () => {
+  const analysis = buildAttemptAnalysis(
+    [
+      { skill: "SAT Math", correct: 1, total: 20, accuracy: 5 },
+      { skill: "Math", correct: 0, total: 10, accuracy: 0 },
+      { skill: "Reading and Writing", correct: 4, total: 20, accuracy: 20 },
+      { skill: "Transitions", correct: 3, total: 3, accuracy: 100 },
+    ],
+    [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        correct: false,
+        skill: "SAT Math",
+        subject: "SAT Math",
+        domain: "Algebra",
+        prompt: `Solve the linear system in item ${index + 1}.`,
+        finalAnswer: "a",
+      })),
+      ...Array.from({ length: 8 }, (_, index) => ({
+        correct: false,
+        skill: "Math",
+        subject: "SAT Math",
+        domain: "Geometry and Trigonometry",
+        prompt: `Find the circle measure ${index + 1}.`,
+        finalAnswer: "b",
+      })),
+      {
+        correct: false,
+        skill: "Reading and Writing",
+        subject: "SAT Reading & Writing",
+        domain: "Information and Ideas",
+        prompt: "Which claim is best supported by the passage?",
+        finalAnswer: "c",
+      },
+      {
+        correct: true,
+        skill: "Transitions",
+        subject: "SAT Reading & Writing",
+        domain: "Expression of Ideas",
+        prompt: "Choose the best transition.",
+        finalAnswer: "a",
+      },
+    ],
+    8,
+    { assignmentTitle: "Full-length SAT diagnostic" },
+  );
+
+  assert.doesNotMatch(analysis.feedback, /start with the focus areas below/i);
+  assert.deepEqual(
+    analysis.nextFocus,
+    ["Algebra", "Geometry and Trigonometry", "Information and Ideas"],
+  );
+  assert.equal(analysis.missClusters?.[0]?.label, "Algebra");
+  assert.equal(analysis.missClusters?.[0]?.missCount, 12);
+  assert.equal(analysis.missClusters?.[0]?.kind, "domain");
+  assert.match(analysis.sessionOpener ?? "", /Algebra/i);
+  assert.match(analysis.sessionOpener ?? "", /linear system/i);
+  assert.ok(analysis.skipRehash?.some((item) => /Transitions/i.test(item)));
+  const math = analysis.sectionBreakdown?.find((row) => row.section === "math");
+  const rw = analysis.sectionBreakdown?.find((row) => row.section === "rw");
+  assert.ok((math?.missCount ?? 0) >= 20);
+  assert.ok((rw?.missCount ?? 0) >= 1);
+  assert.equal(
+    analysis.feedback.includes("Reading and Writing, Math, SAT Math"),
+    false,
+  );
+});
+
+test("tutor alert fields drop filler and coarse focus labels", () => {
+  const fields = tutorAlertFields({
+    source: "deterministic",
+    label: "Adaptive skill analysis",
+    provider: null,
+    strengths: ["SAT Math (8% accuracy)"],
+    weaknesses: ["Reading and Writing (8% accuracy)"],
+    mistakePatterns: ["SAT Math: 40 misses", "Math: 30 misses", "Reading and Writing: 28 misses"],
+    nextFocus: ["SAT Math", "Math", "Reading and Writing"],
+    feedback:
+      "Start with the focus areas below and explain each missed answer before moving to another timed set. The session should rebuild those skills together.",
+  });
+  assert.equal(fields.analysisPreview, null);
+  assert.deepEqual(fields.nextFocus, []);
 });

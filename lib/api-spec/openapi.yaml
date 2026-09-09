@@ -3300,6 +3300,36 @@ components:
           type: array
           items: { type: string }
         feedback: { type: string }
+        sessionOpener: { type: string }
+        skipRehash:
+          type: array
+          items: { type: string }
+        sectionBreakdown:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisSectionBreakdown" }
+        missClusters:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisMissCluster" }
+    AnalysisSectionBreakdown:
+      type: object
+      required: [label, accuracy, total, missCount]
+      properties:
+        section: { type: string, enum: [rw, math, other] }
+        label: { type: string }
+        accuracy: { type: number }
+        correct: { type: number }
+        total: { type: number }
+        missCount: { type: number }
+    AnalysisMissCluster:
+      type: object
+      required: [label, missCount]
+      properties:
+        label: { type: string }
+        kind: { type: string, enum: [skill, domain, section, prompt] }
+        missCount: { type: number }
+        examples:
+          type: array
+          items: { type: string }
     AttemptResult:
       type: object
       required: [attemptId, assignmentId, assignmentTitle, studentUserId, studentName, sessionId, sessionDateTime, status, score, correctCount, totalCount, activeSeconds, pausedSeconds, breakdown, items, analysis, studentFeedback]
@@ -3362,6 +3392,16 @@ components:
         nextFocus:
           type: array
           items: { type: string }
+        sessionOpener: { type: ["string", "null"] }
+        skipRehash:
+          type: array
+          items: { type: string }
+        sectionBreakdown:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisSectionBreakdown" }
+        missClusters:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisMissCluster" }
     AttemptReviewUpdate:
       type: object
       properties:
