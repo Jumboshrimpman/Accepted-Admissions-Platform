@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { decideRetrySource, retryOutcomeFromAnswer, studentRetryShape } from "./sat-bank-retry.ts";
+import {
+  decideRetrySource,
+  lessonRetryReveal,
+  retryOutcomeFromAnswer,
+  studentRetryShape,
+} from "./sat-bank-retry.ts";
 
 const source = {
   id: "miss-1",
@@ -103,6 +108,31 @@ test("prefers a closer difficulty when several unused same-skill items remain", 
   if (decision.kind === "bank") {
     assert.equal(decision.candidate.sourceKey, "sat:10:rw:2:4");
   }
+});
+
+test("hides the similar-problem key until the retry is graded", () => {
+  assert.deepEqual(
+    lessonRetryReveal({
+      outcome: "pending",
+      studentAnswer: "a",
+      correctAnswer: "b",
+      explanation: "hidden",
+    }),
+    { studentAnswer: null, correctAnswer: null, explanation: null },
+  );
+  assert.deepEqual(
+    lessonRetryReveal({
+      outcome: "still_struggling",
+      studentAnswer: "a",
+      correctAnswer: "b",
+      explanation: "However signals contrast.",
+    }),
+    {
+      studentAnswer: "a",
+      correctAnswer: "b",
+      explanation: "However signals contrast.",
+    },
+  );
 });
 
 test("accepts semicolon-separated SPR forms without requiring A–D", () => {
