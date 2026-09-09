@@ -51,6 +51,35 @@ test("full-length SAT bank questions coerce onto the assignment API schema", () 
   assert.equal(typeof shaped.choices?.[1]?.label, "string");
 });
 
+test("assignment questions hide extract skill placeholders behind the section label", () => {
+  const shaped = assignmentQuestionShape(
+    {
+      id: "q-cb-1",
+      subject: "SAT Math",
+      domain: "SAT Math",
+      questionType: "multiple_choice",
+      prompt: "What is the value of x?",
+      skill: "Skill not in extract",
+      difficulty: "medium",
+    },
+    { position: 0 },
+  );
+  assert.equal(shaped.skill, "SAT Math");
+  assert.equal(
+    assignmentQuestionShape(
+      {
+        id: "q-cb-2",
+        subject: "SAT Reading & Writing",
+        domain: "Reading and Writing",
+        prompt: "Which choice completes the text?",
+        skill: "",
+      },
+      { position: 1 },
+    ).skill,
+    "Reading and Writing",
+  );
+});
+
 test("dedupe keeps the published full-length diagnostic with work, not an empty extra", () => {
   assert.equal(
     isFullLengthDiagnosticAssignment({

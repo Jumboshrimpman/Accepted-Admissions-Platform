@@ -25,3 +25,22 @@ test("returns no groups when every item is correct", () => {
     [],
   );
 });
+
+test("maps extract skill placeholders to the section label before grouping", () => {
+  const groups = groupMissesByWeakness([
+    {
+      questionId: "q1",
+      skill: "Skill not in extract",
+      domain: "SAT Math",
+      correct: false,
+    },
+    {
+      questionId: "q2",
+      skill: "Skill not in PDF",
+      domain: "Reading and Writing",
+      correct: false,
+    },
+  ]);
+  assert.equal(groups[0]?.skill, "Reading and Writing");
+  assert.equal(groups[1]?.skill, "SAT Math");
+});

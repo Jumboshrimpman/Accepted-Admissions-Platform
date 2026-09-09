@@ -96,6 +96,10 @@ describe("SAT/PSAT bank panel", () => {
     expect(screen.getByTestId("sat-bank-question-sat-pt11-rw-m1-q1").textContent).toMatch(
       /Which choice most logically completes the text/,
     );
+    expect(screen.getByTestId("sat-bank-question-sat-pt11-rw-m1-q1").textContent).toMatch(
+      /Reading and Writing · not in PDF/,
+    );
+    expect(screen.queryByText(/Skill not in extract/)).toBeNull();
     expect(screen.getByText(/official explanation on file/i)).toBeTruthy();
     expect(screen.queryByText(/Seed fixture/)).toBeNull();
     fireEvent.click(screen.getByTestId("import-sat-bank"));

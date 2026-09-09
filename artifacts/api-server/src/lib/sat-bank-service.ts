@@ -57,12 +57,9 @@ import {
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
+import { quizSubject, skillLabelForBank } from "./sat-bank-skill.ts";
 
 export const SAT_BANK_IMPORT_ROOT = resolveCollegeBoardRoot();
-
-function quizSubject(section: string): string {
-  return section === "math" ? "SAT Math" : "SAT Reading & Writing";
-}
 
 function asFiniteNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -382,18 +379,41 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
   if (!bank) throw new Error("Bank question not found");
   if (bank.linkedQuestionId) {
     const [linked] = await db
-      .select({ id: questionsTable.id })
+      .select({
+        id: questionsTable.id,
+        skill: questionsTable.skill,
+        domain: questionsTable.domain,
+        subject: questionsTable.subject,
+      })
       .from(questionsTable)
       .where(eq(questionsTable.id, bank.linkedQuestionId))
       .limit(1);
-    if (linked) return linked.id;
+    if (linked) {
+      const nextSkill = skillLabelForBank({
+        skill: bank.skill || linked.skill,
+        section: bank.section,
+        domain: bank.domain || linked.domain,
+        subject: linked.subject,
+      });
+      if (nextSkill !== linked.skill) {
+        await db
+          .update(questionsTable)
+          .set({ skill: nextSkill })
+          .where(eq(questionsTable.id, linked.id));
+      }
+      return linked.id;
+    }
   }
   const [created] = await db
     .insert(questionsTable)
     .values({
       subject: quizSubject(bank.section),
       domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
-      skill: bank.skill || "Skill not in extract",
+      skill: skillLabelForBank({
+        skill: bank.skill,
+        section: bank.section,
+        domain: bank.domain,
+      }),
       questionType: bank.questionType,
       difficulty: assignmentDifficulty(bank.difficulty),
       stimulus: bank.stimulus,
@@ -810,6 +830,7 @@ export async function getSessionLesson(sessionId: string) {
       questionId: string;
       skill: string;
       domain?: string;
+      subject?: string;
       correct: boolean;
       prompt?: string;
       finalAnswer?: string | null;
@@ -821,7 +842,14 @@ export async function getSessionLesson(sessionId: string) {
     await persistWeaknessGroups({
       sessionId,
       attemptId: attempt.id,
-      items: result.items,
+      items: result.items.map((item) => ({
+        ...item,
+        skill: skillLabelForBank({
+          skill: item.skill,
+          domain: item.domain,
+          subject: item.subject,
+        }),
+      })),
     });
     groups = await db
       .select()
@@ -844,7 +872,12 @@ export async function getSessionLesson(sessionId: string) {
     misses.push({
       questionId: item.questionId,
       bankQuestionId: bank?.id ?? null,
-      skill: item.skill,
+      skill: skillLabelForBank({
+        skill: item.skill,
+        section: bank?.section,
+        domain: item.domain ?? bank?.domain,
+        subject: item.subject,
+      }),
       domain: item.domain ?? bank?.domain ?? "",
       prompt: item.prompt ?? bank?.prompt ?? "",
       stimulus: bank?.stimulus ?? null,
@@ -898,7 +931,7 @@ export async function getSessionLesson(sessionId: string) {
     accuracyPercent: asFiniteNumberOrNull(attempt?.score),
     weaknessGroups: groups.map((group) => ({
       id: group.id,
-      skill: group.skill,
+      skill: skillLabelForBank({ skill: group.skill, domain: group.domain }),
       domain: group.domain,
       missCount: asFiniteNumber(group.missCount),
       priority: asFiniteNumber(group.priority),
@@ -916,7 +949,11 @@ export async function getSessionLesson(sessionId: string) {
             prompt: question.prompt,
             stimulus: question.stimulus,
             choices: asChoices(question.choices),
-            skill: question.skill,
+            skill: skillLabelForBank({
+              skill: question.skill,
+              domain: question.domain,
+              subject: question.subject,
+            }),
             domain: question.domain,
             difficulty: question.difficulty,
             correctAnswer: question.correctAnswer,
@@ -1077,7 +1114,12 @@ export async function requestSimilarRetry(input: {
         prompt: question!.prompt,
         stimulus: question!.stimulus,
         choices: question!.choices,
-        skill: question!.skill,
+        skill: skillLabelForBank({
+          skill: question!.skill,
+          domain: question!.domain,
+          subject: question!.subject,
+          section: decision.candidate.section,
+        }),
         domain: question!.domain,
         difficulty: question!.difficulty,
         correctAnswer: question!.correctAnswer,

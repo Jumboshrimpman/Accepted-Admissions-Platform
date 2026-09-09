@@ -1,3 +1,5 @@
+import { skillLabelForBank } from "./sat-bank-skill.ts";
+
 export type WeaknessMiss = {
   questionId: string;
   bankQuestionId?: string | null;
@@ -32,7 +34,7 @@ export function groupMissesByWeakness(items: readonly WeaknessMiss[]): WeaknessG
   >();
   for (const item of items) {
     if (item.correct) continue;
-    const skill = item.skill.trim() || "Unspecified skill";
+    const skill = skillLabelForBank({ skill: item.skill, domain: item.domain });
     const current = buckets.get(skill) ?? {
       skill,
       domain: item.domain?.trim() || "",
