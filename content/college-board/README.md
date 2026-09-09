@@ -29,10 +29,12 @@ Dedup key includes exam variant so PSAT 8/9 PT1 and PSAT 10 PT1 do not collide:
 ## Honest gaps (do not invent)
 
 1. **skill / topic / difficulty** are null. These paper/digital-accommodation PDFs do not print Bluebook skill tags.
-2. **Figures/tables** were not extracted as structured assets. Some prompts and MCQ choices are null on figure-heavy pages. Those rows stay in the bank with official answers/explanations and are **not** selected for 60-minute pre-work until enriched.
-3. **SPR** items have `choices: null` and `correctAnswer` may list multiple accepted forms, semicolon-separated (`9; 9.0`).
+2. **Figures/tables** were not extracted as structured assets. Some prompts and MCQ choices are null on figure-heavy pages. Prefer **figure-primary** mode (full question crop including A–D) over chasing LaTeX/OCR. See `docs/sat-bank-figure-primary.md`.
+3. **SPR** items have `choices: null` and `correctAnswer` may list multiple accepted forms, semicolon-separated (`9; 9.0`). If an item was labeled SPR but the official key is A–D, import converts it to figure-primary MCQ.
 4. These **PSAT packs use the same 120-item linear layout** as the SAT PDFs (33+33+27+27), not shorter adaptive Bluebook lengths.
 
-Admin import: **Import staged extracts**. The importer is idempotent on the stable id.
+Admin import: **Import staged extracts**. The importer is idempotent on the stable id and rematerializes linked quiz rows by default.
 
 Figures live under the Vite/Vercel public path `/media/sat-bank/<pack>/<file>.png`. JSONL `figures[].url` must be an absolute `https://` URL (for example `https://app.acceptedadmissions.org/media/sat-bank/...`) so materialized quiz rows and the student UI can render graphs after import.
+
+For hard math items, crop the **entire question block including choices A–D** and mark the figure `role: "question_region"` (or `extractGaps.figurePrimary: true`). The student then sees that image plus A–D buttons only. Official `correctAnswer` and `officialExplanation` stay on the row for check/submit.

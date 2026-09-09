@@ -1,3 +1,5 @@
+import { looksGarbledQuizText, stripSatBankFigureComments } from "./quiz-figure-primary.ts";
+
 export type QuizRichPart =
   | { type: "text"; value: string }
   | { type: "image"; alt: string; src: string };
@@ -9,7 +11,12 @@ export function isSafeQuizImageSrc(src: string): boolean {
 }
 
 /** Split quiz stimulus/prompt into text and markdown images. Unsafe URLs stay as text. */
-export function splitQuizRichText(text: string | null | undefined): QuizRichPart[] {
+export function splitQuizRichText(
+  text: string | null | undefined,
+  options?: { hideGarbledText?: boolean },
+): QuizRichPart[] {
+  if (!text) return [];
+  text = stripSatBankFigureComments(text);
   if (!text) return [];
   const parts: QuizRichPart[] = [];
   let lastIndex = 0;
@@ -18,7 +25,9 @@ export function splitQuizRichText(text: string | null | undefined): QuizRichPart
   while ((match = matcher.exec(text))) {
     if (match.index > lastIndex) {
       const value = text.slice(lastIndex, match.index).trim();
-      if (value) parts.push({ type: "text", value });
+      if (value && !(options?.hideGarbledText && looksGarbledQuizText(value))) {
+        parts.push({ type: "text", value });
+      }
     }
     const alt = match[1]?.trim() || "Figure";
     const src = match[2] ?? "";
@@ -31,7 +40,9 @@ export function splitQuizRichText(text: string | null | undefined): QuizRichPart
   }
   if (lastIndex < text.length) {
     const value = text.slice(lastIndex).trim();
-    if (value) parts.push({ type: "text", value });
+    if (value && !(options?.hideGarbledText && looksGarbledQuizText(value))) {
+      parts.push({ type: "text", value });
+    }
   }
   return parts;
 }

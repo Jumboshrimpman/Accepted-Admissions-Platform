@@ -1,3 +1,4 @@
+import { studentFacingFigurePrimaryFields } from "./sat-bank-figure-primary.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 
 export function isAssignmentListedForRole(
@@ -57,18 +58,29 @@ export function assignmentQuestionShape(
     difficulty?: string | null;
     correctAnswer?: string | null;
     explanation?: string | null;
+    tags?: string[] | null;
+    extractGaps?: Record<string, unknown> | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
   options?: { includeKeys?: boolean },
 ) {
+  const facing = studentFacingFigurePrimaryFields({
+    prompt: question.prompt,
+    stimulus: question.stimulus,
+    choices: assignmentChoices(question.choices) ?? [],
+    questionType: question.questionType,
+    correctAnswer: question.correctAnswer,
+    tags: question.tags,
+    extractGaps: question.extractGaps,
+  });
   const shaped = {
     id: question.id,
     position: assignmentQuestion.position,
     subject: question.subject?.trim() || "SAT",
-    questionType: question.questionType?.trim() || "multiple_choice",
-    prompt: question.prompt?.trim() || "Question prompt is unavailable.",
-    stimulus: question.stimulus ?? null,
-    choices: assignmentChoices(question.choices),
+    questionType: facing.questionType || question.questionType?.trim() || "multiple_choice",
+    prompt: facing.prompt,
+    stimulus: facing.stimulus,
+    choices: facing.choices ?? assignmentChoices(question.choices),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -76,6 +88,7 @@ export function assignmentQuestionShape(
     }),
     difficulty: assignmentDifficulty(question.difficulty),
     predictionFirst: Boolean(assignmentQuestion.predictionFirst),
+    presentation: facing.presentation,
   };
   if (!options?.includeKeys) return shaped;
   return {

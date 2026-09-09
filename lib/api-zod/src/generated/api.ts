@@ -2871,7 +2871,8 @@ export const GetAssignmentResponse = zod.object({
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
   "predictionFirst": zod.boolean(),
   "correctAnswer": zod.string().optional(),
-  "explanation": zod.string().optional()
+  "explanation": zod.string().optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 }))
 }))
 
@@ -2947,7 +2948,8 @@ export const StartAttemptResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3064,7 +3066,8 @@ export const GetAttemptResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3156,7 +3159,8 @@ export const GetAttemptResultResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3256,7 +3260,8 @@ export const UpdateAttemptReviewResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3411,7 +3416,8 @@ export const PauseAttemptResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3528,7 +3534,8 @@ export const ResumeAttemptResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -3624,7 +3631,8 @@ export const SubmitAttemptResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "text": zod.string()
-})).optional()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })),
   "analysis": zod.object({
   "source": zod.enum(['deterministic', 'provider']),
@@ -4066,7 +4074,8 @@ export const UpdateAssignmentQuestionResponse = zod.object({
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
   "predictionFirst": zod.boolean(),
   "correctAnswer": zod.string().optional(),
-  "explanation": zod.string().optional()
+  "explanation": zod.string().optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 })
 
 

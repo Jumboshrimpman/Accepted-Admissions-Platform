@@ -3309,7 +3309,9 @@ async function finalizeAttemptResult(
   const totalCount = joined.length;
   const score = totalCount === 0 ? 0 : (correctCount / totalCount) * 100;
   const timing = await timerSummary(attempt.attempt.id);
-  const items = joined.map(({ response, question }) => ({
+  const items = joined.map(({ response, question }) => {
+    const facing = assignmentQuestionShape(question, { position: 0 });
+    return {
     questionId: question.id,
     correct: answersMatch(response?.finalAnswer, question.correctAnswer),
     prediction: response?.prediction ?? null,
@@ -3321,16 +3323,18 @@ async function finalizeAttemptResult(
       domain: question.domain,
       subject: question.subject,
     }),
-    questionType: question.questionType,
+    questionType: facing.questionType || question.questionType,
     difficulty: question.difficulty,
     timeSpentSeconds: response?.timeSpentSeconds ?? 0,
     flagged: response?.flagged ?? false,
-    prompt: question.prompt,
-    stimulus: question.stimulus,
-    choices: question.choices,
+    prompt: facing.prompt,
+    stimulus: facing.stimulus,
+    choices: facing.choices ?? question.choices,
+    presentation: facing.presentation,
     domain: question.domain,
     subject: question.subject,
-  }));
+    };
+  });
   const breakdown = skillBreakdownFromItems(items);
   const homeworkKind = await homeworkKindForAssignment(attempt.assignment.id);
   const analysis = deterministicAnalysis(

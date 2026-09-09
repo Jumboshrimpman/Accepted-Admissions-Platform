@@ -116,9 +116,12 @@ test("keeps figure-heavy and SPR rows instead of inventing official wording", ()
   assert.deepEqual(spr.scoring.acceptedForms, ["9", "9.0"]);
   const figure = parsed.records[1]!;
   assert.equal(figure.prompt, "");
-  assert.equal(figure.assignable, false);
   assert.equal(figure.extractGaps.missingPrompt, true);
   assert.equal(figure.extractGaps.figuresIncomplete, true);
+  assert.equal(figure.extractGaps.figurePrimary, true);
+  assert.equal(figure.questionType, "mcq");
+  assert.equal(figure.assignable, true);
+  assert.deepEqual(figure.choices.map((choice) => choice.label), ["A", "B", "C", "D"]);
   assert.ok(figure.officialExplanation.includes("Choice C"));
 });
 
@@ -199,6 +202,7 @@ test("official on-disk extracts parse to 1800 unique graded questions", async ()
   assert.equal(new Set(records.map((row) => row.sourceKey)).size, 1800);
   assert.ok(records.some((row) => row.questionType === "spr" && row.choices.length === 0));
   assert.ok(records.some((row) => row.extractGaps.missingPrompt));
+  assert.ok(records.some((row) => row.extractGaps.figurePrimary && row.choices.length === 4));
   const withFigure = records.find((row) => row.figures.some((figure) => figure.url));
   assert.ok(withFigure?.figures[0]?.url?.startsWith("https://"));
 });

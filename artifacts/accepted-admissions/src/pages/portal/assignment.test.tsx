@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
       skill: "Transitions",
       difficulty: "medium" as const,
       predictionFirst: true,
+      presentation: undefined as "figure_primary" | "text" | undefined,
     },
     {
       id: "q2",
@@ -128,6 +129,14 @@ afterEach(() => {
   mocks.resultError = false;
   mocks.assignmentError = false;
   mocks.assignmentMissing = false;
+  mocks.questions[0]!.stimulus = null;
+  mocks.questions[0]!.prompt = "Which transition is best?";
+  mocks.questions[0]!.questionType = "multiple_choice";
+  mocks.questions[0]!.presentation = undefined;
+  mocks.questions[0]!.choices = [
+    { id: "a", label: "A", text: "However" },
+    { id: "b", label: "B", text: "Therefore" },
+  ];
 });
 
 describe("student attempt UI", () => {
@@ -347,6 +356,33 @@ describe("student attempt UI", () => {
     expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
     expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  test("figure-primary items show the composite image and A–D only, never SPR or leaked comments", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "figure_primary",
+      questionType: "mcq",
+      prompt: "<!-- sat-bank-figures -->\nV = i,.r3 V =3£wh",
+      stimulus:
+        "![Question region](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png)\n<!-- /sat-bank-figures -->",
+      choices: [],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
+    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
+    expect(screen.getByRole("button", { name: "A" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "D" })).toBeTruthy();
+    expect(screen.queryByTestId("spr-answer")).toBeNull();
+    expect(screen.queryByPlaceholderText(/student-produced response/i)).toBeNull();
+    expect(screen.queryByText(/sat-bank-figures/)).toBeNull();
+    expect(screen.queryByText(/V = i/)).toBeNull();
+    const image = screen.getByAltText("Question region") as HTMLImageElement;
+    expect(image.src).toBe(
+      "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "C" }));
+    expect(saveMutate).toHaveBeenCalled();
   });
 
   test("renders markdown figure images from stimulus in the live quiz", () => {

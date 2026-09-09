@@ -15,6 +15,7 @@ import {
   type ExamFamily,
   type ExamSection,
 } from "./sat-bank-source-key.ts";
+import { applyFigurePrimaryToRecord, isLetterAnswer } from "./sat-bank-figure-primary.ts";
 
 export type BankChoice = { id: string; label: string; text: string };
 
@@ -24,6 +25,7 @@ export type ExtractGaps = {
   missingChoices: boolean;
   figuresIncomplete: boolean;
   spr: boolean;
+  figurePrimary: boolean;
   notes: string[];
 };
 
@@ -45,7 +47,14 @@ export type ParsedBankRecord = {
   choices: BankChoice[];
   correctAnswer: string;
   officialExplanation: string;
-  figures: Array<{ url?: string; path?: string; alt?: string }>;
+  figures: Array<{
+    url?: string;
+    path?: string;
+    alt?: string;
+    role?: string;
+    kind?: string;
+    primary?: boolean;
+  }>;
   scoring: Record<string, unknown>;
   skill: string | null;
   domain: string | null;
@@ -97,8 +106,8 @@ function parseChoices(raw: unknown): BankChoice[] | null {
       const row = asObject(choice);
       if (!row) return null;
       const text = asString(row.text) || asString(row.choice) || asString(row.value);
-      if (!text) return null;
       const label = asString(row.label) || asString(row.id).toUpperCase();
+      if (!text && !/^[A-D]$/i.test(label)) return null;
       const id =
         asString(row.id).toLowerCase() ||
         label.toLowerCase() ||
@@ -136,9 +145,10 @@ export function isAssignableBankItem(input: {
   questionType: string;
   choices: BankChoice[];
   correctAnswer: string;
-  extractGaps?: ExtractGaps;
+  extractGaps?: Partial<ExtractGaps>;
 }): boolean {
   if (!input.correctAnswer.trim()) return false;
+  if (input.extractGaps?.figurePrimary && isLetterAnswer(input.correctAnswer)) return true;
   if (!input.prompt.trim() || input.extractGaps?.missingPrompt) return false;
   if (input.questionType === "spr") return true;
   return input.choices.length >= 2 && !input.extractGaps?.missingChoices;
@@ -253,6 +263,10 @@ export function parseCollegeBoardRecord(
     missingChoices,
     figuresIncomplete: missingPrompt || missingChoices || notes.some((note) => /figure/i.test(note)),
     spr,
+    figurePrimary:
+      asString(row.presentation) === "figure_primary" ||
+      notes.some((note) => /figure[_\s-]?primary/i.test(note)) ||
+      Boolean(asObject(row.extractGaps)?.figurePrimary),
     notes,
   };
   const identity = {
@@ -324,6 +338,9 @@ export function parseCollegeBoardRecord(
               url: asString(item.url) || undefined,
               path: asString(item.path) || undefined,
               alt: asString(item.alt) || undefined,
+              role: asString(item.role) || asString(item.kind) || undefined,
+              kind: asString(item.kind) || undefined,
+              primary: item.primary === true,
             },
           ];
         })
@@ -354,7 +371,7 @@ export function parseCollegeBoardRecord(
       extractGaps,
     }),
   };
-  return { record };
+  return { record: applyFigurePrimaryToRecord(record) };
 }
 
 export function parseCollegeBoardPayload(text: string, source = "payload"): ImportParseResult {

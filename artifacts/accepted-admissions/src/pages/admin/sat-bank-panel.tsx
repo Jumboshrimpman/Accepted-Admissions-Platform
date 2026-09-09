@@ -62,8 +62,9 @@ export function SatBankPanel({
           <CardDescription>
             Canonical College Board source questions (SAT digital 4–11 + PSAT packs). Official
             explanations stay separate from AI notes. Import JSON/JSONL from{" "}
-            <code>content/college-board/</code>. Skill/difficulty are null in these PDFs; figure-heavy
-            items may have an empty stem. Do not recreate official wording.
+            <code>content/college-board/</code>. Skill/difficulty are null in these PDFs. Figure-heavy
+            or garbled math items use figure-primary mode (full question crop + A–D). Do not recreate
+            official wording.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -166,6 +167,9 @@ export function SatBankPanel({
                       `${question.section === "math" ? "SAT Math" : "Reading and Writing"} · not in PDF`}
                   </Badge>
                   {question.questionType === "spr" ? <Badge variant="outline">SPR</Badge> : null}
+                  {question.extractGaps?.figurePrimary === true ? (
+                    <Badge variant="outline">Figure-primary A–D</Badge>
+                  ) : null}
                   {question.assignable === false ? (
                     <Badge variant="outline">Figure/choices incomplete</Badge>
                   ) : null}
