@@ -123,6 +123,7 @@ test("figure-primary materialize uses the composite crop and letter choices", ()
   });
   assert.equal(content.questionType, "mcq");
   assert.equal(content.prompt, "");
+  assert.equal(content.correctAnswer, "b");
   assert.equal(content.stimulus, `![Question region including A–D](${figureUrl})`);
   assert.deepEqual(content.choices.map((choice) => choice.label), ["A", "B", "C", "D"]);
   assert.equal(content.explanation, "Choice B is correct because the cone volume formula applies.");

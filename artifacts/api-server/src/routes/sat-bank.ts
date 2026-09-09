@@ -38,6 +38,7 @@ import {
   listBankQuestions,
   recordRetryOutcome,
   refreshLinkedQuestionsFromBank,
+  rematerializeAssignmentLinkedQuestions,
   requestSimilarRetry,
   resetSessionPreworkState,
   resetTaitoFirstSatPrework,
@@ -100,6 +101,25 @@ router.post(
   },
 );
 
+router.post(
+  "/admin/sat-bank/assignments/:assignmentId/refresh-linked",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const assignmentId =
+      typeof req.params.assignmentId === "string" ? req.params.assignmentId.trim() : "";
+    if (!assignmentId) {
+      res.status(400).json({ error: "Assignment id is required" });
+      return;
+    }
+    try {
+      const result = await rematerializeAssignmentLinkedQuestions(assignmentId);
+      res.json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not rematerialize linked assignment questions");
+    }
+  },
+);
+
 router.get(
   "/admin/sat-bank/collections",
   ensureRole(["administrator", "tutor"]),
@@ -152,6 +172,7 @@ router.post(
       const result = await resetTaitoFirstSatPrework({
         actorUserId: req.appUser?.id,
         reassignDiagnostic: req.body?.reassignDiagnostic !== false,
+        refreshLinkedOnly: req.body?.refreshLinkedOnly === true,
       });
       res.status(201).json(result);
     } catch (error) {

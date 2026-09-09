@@ -4,10 +4,23 @@ import {
   SESSION_QUESTION_COPY_METHOD,
   SESSION_QUESTION_MCQ_ONLY_MESSAGE,
   blankSessionMcqValues,
+  isSessionLocalQuestionFork,
   sessionQuestionSnapshotValues,
   shouldForkSessionQuestion,
   validateSessionMcqEdit,
 } from "./session-question-copy.ts";
+
+test("session-local forks are tagged copies and must not be rematerialized from the bank", () => {
+  assert.equal(
+    isSessionLocalQuestionFork({ generationMethod: SESSION_QUESTION_COPY_METHOD, tags: [] }),
+    true,
+  );
+  assert.equal(isSessionLocalQuestionFork({ generationMethod: "college-board-extract", tags: ["session-copy"] }), true);
+  assert.equal(
+    isSessionLocalQuestionFork({ generationMethod: "college-board-extract", tags: ["sat-pt4-rw-m1-q1"] }),
+    false,
+  );
+});
 
 test("shared or bank-linked questions must be forked before a session edit", () => {
   assert.equal(shouldForkSessionQuestion({ bankLinked: true, otherAssignmentCount: 0 }), true);
