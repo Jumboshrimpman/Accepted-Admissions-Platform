@@ -115,6 +115,8 @@ afterEach(() => {
   startMutate.mockReset();
   mocks.deliveryPhase = "before_session";
   mocks.title = "Practice quiz";
+  mocks.questions[0]!.stimulus = null;
+  mocks.questions[0]!.prompt = "Which transition is best?";
   mocks.attempt.status = "active";
   mocks.attempt.remainingSeconds = 1200;
   mocks.attempt.responses = [];
@@ -264,6 +266,75 @@ describe("student attempt UI", () => {
     expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
     expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  test("renders markdown figure images from stimulus in the live quiz", () => {
+    mocks.questions[0]!.stimulus =
+      "![Enrollment graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png)\n\nThe graph shows enrollment.";
+    render(<PortalAssignment />);
+    const image = screen.getByAltText("Enrollment graph") as HTMLImageElement;
+    expect(image.src).toBe(
+      "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png",
+    );
+    expect(image.className).toMatch(/max-w-full/);
+    expect(screen.getByText("The graph shows enrollment.")).toBeTruthy();
+  });
+
+  test("question review renders stimulus figures when the result payload includes them", () => {
+    mocks.attempt.status = "submitted";
+    mocks.result = {
+      attemptId: "attempt-1",
+      assignmentId: "asg-1",
+      assignmentTitle: "Practice quiz",
+      studentUserId: "stu",
+      studentName: "Taito",
+      sessionId: "session-1",
+      sessionDateTime: null,
+      status: "submitted",
+      score: 0,
+      correctCount: 0,
+      totalCount: 1,
+      activeSeconds: 30,
+      pausedSeconds: 0,
+      breakdown: [],
+      items: [
+        {
+          questionId: "q1",
+          correct: false,
+          finalAnswer: "a",
+          correctAnswer: "b",
+          explanation: "The graph rises.",
+          skill: "Transitions",
+          flagged: false,
+          prompt: "Which transition is best?",
+          stimulus:
+            "![Enrollment graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png)",
+          choices: [
+            { id: "a", label: "A", text: "However" },
+            { id: "b", label: "B", text: "Therefore" },
+          ],
+        },
+      ],
+      analysis: {
+        source: "deterministic",
+        label: "Adaptive skill analysis",
+        provider: null,
+        strengths: [],
+        weaknesses: ["Transitions"],
+        mistakePatterns: [],
+        nextFocus: ["Transitions"],
+        feedback: "Review the graph.",
+      },
+      studentFeedback: "Review the graph.",
+      homeworkKind: "routine",
+      scoreReporting: "none",
+      estimatedSatScore: null,
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByText("Question review")).toBeTruthy();
+    expect((screen.getByAltText("Enrollment graph") as HTMLImageElement).src).toBe(
+      "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png",
+    );
   });
 
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {

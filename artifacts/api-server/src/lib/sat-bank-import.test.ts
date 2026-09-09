@@ -199,4 +199,6 @@ test("official on-disk extracts parse to 1800 unique graded questions", async ()
   assert.equal(new Set(records.map((row) => row.sourceKey)).size, 1800);
   assert.ok(records.some((row) => row.questionType === "spr" && row.choices.length === 0));
   assert.ok(records.some((row) => row.extractGaps.missingPrompt));
+  const withFigure = records.find((row) => row.figures.some((figure) => figure.url));
+  assert.ok(withFigure?.figures[0]?.url?.startsWith("https://"));
 });

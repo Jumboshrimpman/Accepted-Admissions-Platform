@@ -32,6 +32,7 @@ import {
   listBankCollections,
   listBankQuestions,
   recordRetryOutcome,
+  refreshLinkedQuestionsFromBank,
   requestSimilarRetry,
   resetSessionPreworkState,
   resetTaitoFirstSatPrework,
@@ -74,7 +75,23 @@ router.post(
       rootDir: body.data.rootDir,
       payloadText: body.data.payloadText,
     });
-    res.json(ImportSatBankResponse.parse(result));
+    res.json({
+      ...ImportSatBankResponse.parse(result),
+      linkedRefresh: result.linkedRefresh,
+    });
+  },
+);
+
+router.post(
+  "/admin/sat-bank/refresh-linked",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    try {
+      const result = await refreshLinkedQuestionsFromBank();
+      res.json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not refresh linked SAT bank questions");
+    }
   },
 );
 

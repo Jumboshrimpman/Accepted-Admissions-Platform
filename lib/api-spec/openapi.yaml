@@ -467,7 +467,9 @@ paths:
       description: >
         Idempotent by source key (exam + test/form + module + question number).
         Does not invent official College Board wording. Official explanations
-        stay separate from AI annotations.
+        stay separate from AI annotations. After upsert, rematerializes
+        already-linked quiz rows so figure URLs in bank.figures appear on live
+        student quizzes.
       requestBody:
         required: false
         content:
@@ -479,6 +481,30 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SatBankImportResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/sat-bank/refresh-linked:
+    post:
+      operationId: refreshSatBankLinkedQuestions
+      tags: [administration]
+      summary: Rematerialize linked quiz questions from the current SAT/PSAT bank
+      description: >
+        Updates each questions row pointed to by bank_questions.linkedQuestionId
+        with current prompt, figure-enriched stimulus, choices, answers, and
+        official explanation. Administrator only. Import already runs this
+        automatically.
+      responses:
+        "200":
+          description: Refresh counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated, skipped, errors]
+                properties:
+                  updated: { type: number }
+                  skipped: { type: number }
+                  errors: { type: number }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /tutor/curriculum:
