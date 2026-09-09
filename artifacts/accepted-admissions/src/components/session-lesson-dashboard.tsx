@@ -11,7 +11,7 @@ import { BookOpenCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { QuizContent } from "@/components/quiz-content";
+import { QuizContent, QuizStem } from "@/components/quiz-content";
 import {
   displaySkill,
   formatAnswer,
@@ -158,10 +158,11 @@ export function SessionLessonDashboard({
                 <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
                   Review this wrong answer together
                 </p>
-                <QuizContent text={selectedMiss.prompt} className="mt-2 font-medium" />
-                {selectedMiss.stimulus ? (
-                  <QuizContent text={selectedMiss.stimulus} className="mt-2 text-sm text-white/75" />
-                ) : null}
+                <QuizStem
+                  question={selectedMiss}
+                  className="mt-2 font-medium"
+                  stimulusClassName="mt-2 text-sm text-white/75"
+                />
                 {selectedMiss.choices && selectedMiss.choices.length > 0 ? (
                   <ul className="mt-3 space-y-1 text-sm text-white/90" data-testid="opened-miss-choices">
                     {selectedMiss.choices.map((choice) => (

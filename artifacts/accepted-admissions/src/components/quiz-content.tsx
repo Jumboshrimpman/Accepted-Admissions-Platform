@@ -1,4 +1,58 @@
-import { parseQuizContent } from "@/lib/quiz-content";
+import {
+  parseQuizContent,
+  readFigurePrimaryPresentation,
+  type FigurePrimaryQuestionFields,
+} from "@/lib/quiz-content";
+
+const DEFAULT_IMAGE_CLASS =
+  "mx-auto my-3 max-h-80 max-w-full rounded-xl bg-white object-contain p-2 shadow-sm";
+
+export function QuizFigurePrimary({
+  src,
+  className,
+  imageClassName,
+}: {
+  src: string;
+  className?: string;
+  imageClassName?: string;
+}) {
+  return (
+    <div className={className} data-testid="quiz-figure-primary">
+      <img
+        src={src}
+        alt="Question and choices"
+        className={imageClassName ?? DEFAULT_IMAGE_CLASS}
+      />
+    </div>
+  );
+}
+
+export function QuizStem({
+  question,
+  className,
+  stimulusClassName,
+  imageClassName,
+}: {
+  question: FigurePrimaryQuestionFields;
+  className?: string;
+  stimulusClassName?: string;
+  imageClassName?: string;
+}) {
+  const figurePrimary = readFigurePrimaryPresentation(question);
+  if (figurePrimary.enabled && figurePrimary.src) {
+    return (
+      <QuizFigurePrimary src={figurePrimary.src} className={className} imageClassName={imageClassName} />
+    );
+  }
+  return (
+    <>
+      {question.stimulus ? (
+        <QuizContent text={question.stimulus} className={stimulusClassName} imageClassName={imageClassName} />
+      ) : null}
+      <QuizContent text={question.prompt} className={className} imageClassName={imageClassName} />
+    </>
+  );
+}
 
 export function QuizContent({
   text,
@@ -21,10 +75,7 @@ export function QuizContent({
             key={`${segment.src}-${index}`}
             src={segment.src}
             alt={segment.alt || "Question figure"}
-            className={
-              imageClassName ??
-              "mx-auto my-3 max-h-80 max-w-full rounded-xl bg-white object-contain p-2 shadow-sm"
-            }
+            className={imageClassName ?? DEFAULT_IMAGE_CLASS}
           />
         ) : segment.value.includes("\n") ? (
           <pre

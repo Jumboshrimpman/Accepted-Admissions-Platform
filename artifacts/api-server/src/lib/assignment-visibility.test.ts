@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  FIGURE_PRIMARY_PRESENTATION,
   assignmentDifficulty,
   assignmentQuestionShape,
   courseIdsForAssignmentList,
@@ -183,6 +184,13 @@ test("strips SAT bank figure comments and recovers A–D choices from a letter k
     ["A", "B", "C", "D"],
   );
   assert.equal(recovered.prompt.includes("sat-bank-figures"), false);
+  assert.equal(FIGURE_PRIMARY_PRESENTATION, "figure_primary");
+  assert.equal(
+    stripBankFigureComments(
+      '<!-- figure-primary src="https://cdn.example/full.png" -->\nVolume?',
+    ).includes("figure-primary"),
+    false,
+  );
   assert.equal(recovered.prompt.includes("![Graph](/figures/line.png)"), true);
   const spr = assignmentQuestionShape(
     {

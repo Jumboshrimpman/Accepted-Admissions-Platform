@@ -462,8 +462,7 @@ describe("student attempt UI", () => {
         position: 0,
         subject: "SAT Math",
         questionType: "spr",
-        prompt:
-          "<!-- sat-bank-figures -->\n![Sphere](https://cdn.example/sphere.png)\n<!-- /sat-bank-figures -->\nA customer spent $ 27 to purchase oranges at $ 3\nper\npound.",
+        prompt: "A customer spent $27 to purchase oranges at $3 per pound. How many pounds?",
         stimulus: null,
         choices: [],
         skill: "Problem-Solving",
@@ -476,9 +475,32 @@ describe("student attempt UI", () => {
     expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
     expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
     expect(screen.queryByText(/sat-bank-figures/i)).toBeNull();
-    expect(screen.getByAltText("Sphere").getAttribute("src")).toBe("https://cdn.example/sphere.png");
-    expect(screen.getByTestId("quiz-content").textContent).toMatch(/\$ 3 per pound/);
-    expect(screen.getByTestId("quiz-content").textContent).not.toMatch(/3\nper\n/);
+    expect(screen.getByTestId("quiz-rich-text").textContent).toMatch(/oranges/);
+  });
+
+  test("figure-primary comment shows one screenshot and A–D letters, not an SPR box", () => {
+    mocks.questions = [
+      {
+        id: "q-figure-primary",
+        position: 0,
+        subject: "SAT Math",
+        questionType: "spr",
+        prompt:
+          '<!-- figure-primary src="https://app.acceptedadmissions.org/media/sat-bank/q12.png" -->\nOCR {x^2} parse failure',
+        stimulus: null,
+        choices: [],
+        skill: "Problem-Solving",
+        difficulty: "medium",
+        predictionFirst: false,
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
+    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
+    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/D/);
+    expect(screen.queryByText(/OCR/)).toBeNull();
+    expect(screen.queryByTestId("spr-answer")).toBeNull();
+    expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
   });
 
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {

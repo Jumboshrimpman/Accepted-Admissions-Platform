@@ -3,6 +3,24 @@ import { isSafeQuizImageSrc } from "./quiz-rich-text.ts";
 const FIGURE_COMMENT = /<!--\s*\/?\s*sat-bank-figures\s*-->/gi;
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+/** Contract for the figure-primary PR: one screenshot of question+choices, student picks A–D. */
+export const FIGURE_PRIMARY_PRESENTATION = "figure_primary";
+const FIGURE_PRIMARY_COMMENT =
+  /<!--\s*figure-primary(?:\s+src=(?:"([^"]+)"|'([^']+)'))?\s*-->/i;
+const LETTER_CHOICE_IDS = ["a", "b", "c", "d"] as const;
+
+export type FigurePrimaryQuestionFields = {
+  presentation?: string | null;
+  figurePrimary?: boolean | null;
+  figurePrimarySrc?: string | null;
+  prompt?: string | null;
+  stimulus?: string | null;
+};
+
+export type FigurePrimaryPresentation = {
+  enabled: boolean;
+  src: string | null;
+};
 
 export type QuizContentSegment =
   | { type: "text"; value: string }
@@ -74,4 +92,35 @@ export function quizChoicesOrNone<T extends { id: string; label: string; text: s
   choices: T[] | null | undefined,
 ): T[] | undefined {
   return choices && choices.length > 0 ? choices : undefined;
+}
+
+export function letterOnlyChoices(): Array<{ id: string; label: string; text: string }> {
+  return LETTER_CHOICE_IDS.map((id) => ({
+    id,
+    label: id.toUpperCase(),
+    text: id.toUpperCase(),
+  }));
+}
+
+/**
+ * Hook for figure-primary mode. Off unless another PR sets the flag, a
+ * `figurePrimarySrc`, or `<!-- figure-primary src="…" -->`. Does not infer
+ * from graphs or OCR failures.
+ */
+export function readFigurePrimaryPresentation(
+  question: FigurePrimaryQuestionFields,
+): FigurePrimaryPresentation {
+  const haystack = `${question.stimulus ?? ""}\n${question.prompt ?? ""}`;
+  const comment = FIGURE_PRIMARY_COMMENT.exec(haystack);
+  const commentSrc = comment?.[1]?.trim() || comment?.[2]?.trim() || "";
+  const explicitSrc = question.figurePrimarySrc?.trim() || "";
+  const enabled =
+    question.figurePrimary === true ||
+    question.presentation === FIGURE_PRIMARY_PRESENTATION ||
+    Boolean(explicitSrc) ||
+    Boolean(comment);
+  if (!enabled) return { enabled: false, src: null };
+  const srcCandidate = explicitSrc || commentSrc;
+  const src = srcCandidate && isSafeQuizImageSrc(srcCandidate) ? srcCandidate : null;
+  return { enabled: true, src };
 }

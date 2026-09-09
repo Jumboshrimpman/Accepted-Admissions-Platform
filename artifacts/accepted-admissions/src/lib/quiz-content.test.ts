@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  FIGURE_PRIMARY_PRESENTATION,
   isLiveListedSession,
   isUnfinishedHomeworkClientCopy,
+  letterOnlyChoices,
   normalizeQuizProse,
   parseQuizContent,
+  readFigurePrimaryPresentation,
   stripQuizHtmlComments,
 } from "./quiz-content.ts";
 
@@ -29,6 +32,42 @@ test("collapses OCR line breaks so prose reads as one sentence", () => {
   assert.equal(
     normalizeQuizProse("A customer spent $ 27 to purchase oranges at $ 3\nper\npound. How many pounds of oranges did the\ncustomer purchase?"),
     "A customer spent $ 27 to purchase oranges at $ 3 per pound. How many pounds of oranges did the customer purchase?",
+  );
+});
+
+test("figure-primary hook stays off unless another PR sets the flag or comment", () => {
+  assert.equal(FIGURE_PRIMARY_PRESENTATION, "figure_primary");
+  assert.deepEqual(
+    readFigurePrimaryPresentation({
+      prompt: "<!-- sat-bank-figures -->\n![Graph](https://cdn.example/graph.png)\nWhat is the slope?",
+    }),
+    { enabled: false, src: null },
+  );
+  assert.deepEqual(
+    readFigurePrimaryPresentation({
+      prompt: `<!-- figure-primary src="https://app.example/media/q12.png" -->\nOCR junk`,
+    }),
+    { enabled: true, src: "https://app.example/media/q12.png" },
+  );
+  assert.deepEqual(
+    readFigurePrimaryPresentation({
+      figurePrimary: true,
+      figurePrimarySrc: "https://app.example/media/full.png",
+      prompt: "garbled symbols",
+    }),
+    { enabled: true, src: "https://app.example/media/full.png" },
+  );
+  assert.equal(readFigurePrimaryPresentation({ presentation: FIGURE_PRIMARY_PRESENTATION }).enabled, true);
+  assert.equal(
+    readFigurePrimaryPresentation({
+      figurePrimary: true,
+      figurePrimarySrc: "javascript:alert(1)",
+    }).src,
+    null,
+  );
+  assert.deepEqual(
+    letterOnlyChoices().map((choice) => choice.label),
+    ["A", "B", "C", "D"],
   );
 });
 

@@ -43,6 +43,9 @@ export function letterMultipleChoiceChoices(): Array<{ id: string; label: string
   }));
 }
 
+/** Shared with the student renderer. Other PRs can set this or `<!-- figure-primary src="…" -->`. */
+export const FIGURE_PRIMARY_PRESENTATION = "figure_primary";
+
 /** Prod SAT/PSAT import wraps figure markdown in these comments; they must never reach students. */
 export function stripBankFigureComments(value: string | null | undefined): string {
   if (!value) return "";
