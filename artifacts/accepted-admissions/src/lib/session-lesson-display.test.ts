@@ -23,8 +23,8 @@ test("miss picker labels stay unique when every miss has the same skill", () => 
     { skill: "SAT Math", prompt: "" },
   ];
   const labels = misses.map((miss, index) => missPickerLabel(miss, index));
-  assert.equal(labels[0], "Q1 · If 2x + 3 = 11, what is the value of…");
-  assert.equal(labels[1], "Q2 · Which choice most logically comple…");
+  assert.equal(labels[0], "Q1 · If 2x + 3 = 11, what is the value…");
+  assert.equal(labels[1], "Q2 · Which choice most logically…");
   assert.equal(labels[2], "Q3");
   assert.equal(new Set(labels).size, 3);
   assert.equal(

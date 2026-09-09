@@ -21,7 +21,9 @@ export function promptSnippet(prompt?: string | null, max = 36): string {
   const text = (prompt ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "";
   if (text.length <= max) return text;
-  return `${text.slice(0, max).trimEnd()}…`;
+  const sliced = text.slice(0, max);
+  const broken = sliced.replace(/\s+\S*$/, "").trimEnd();
+  return `${(broken || sliced).trimEnd()}…`;
 }
 
 /** Unique, scannable miss-picker label — never skill-only. */
