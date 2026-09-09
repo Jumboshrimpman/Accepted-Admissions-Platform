@@ -28,7 +28,7 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn(
-        'bg-background group/calendar h-auto overflow-visible p-3 [--cell-size:1.75rem] sm:[--cell-size:2rem] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent',
+        'bg-background group/calendar h-auto overflow-visible p-3 [--cell-size:1.75rem] sm:[--cell-size:2rem] [--rdp-day-height:var(--cell-size)] [--rdp-day-width:var(--cell-size)] [--rdp-day_button-height:var(--cell-size)] [--rdp-day_button-width:var(--cell-size)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent',
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className,
@@ -86,8 +86,8 @@ function Calendar({
             : '[&>svg]:text-muted-foreground flex h-8 items-center gap-1 rounded-md pl-2 pr-1 text-sm [&>svg]:size-3.5',
           defaultClassNames.caption_label,
         ),
-        table: 'w-full border-collapse',
-        month_grid: cn('w-full border-collapse', defaultClassNames.month_grid),
+        table: 'block w-full border-collapse',
+        month_grid: cn('block w-full', defaultClassNames.month_grid),
         weeks: cn(
           'relative flex h-auto w-full flex-col overflow-visible',
           defaultClassNames.weeks,
