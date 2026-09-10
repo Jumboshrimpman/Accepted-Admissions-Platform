@@ -13,6 +13,8 @@ Figure-primary never unlocks letter-only A–D. Empty choice text, OCR garbage (
 
 Math must render with the exponents, radicals, and fractions the student needs, or the item must be an intact full-question crop that includes complete A–D. Missing carets (`ax2`, `2x2`, `(1.034)x`), stripped radicals (`2 2`, `6 2`, `8 2 + 80`), spaced products (`b h`, `45 k`), stacked-fraction dumps (`⎜ ⎟ | \ /`), and `(, x y)` corruption are rejected. A partial figure-region crop is never paired with that broken OCR or with letter-only buttons.
 
+A figure that the stem never cites (page-neighbor crop on a word problem) is dropped. Stems with clear OCR corruption (`PQ QR` missing `=`, `value = of`, `Xu123456`, axis-tick dumps, leaked next-question choices) are rejected. Bare A–D never ships.
+
 Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, and math OCR that is missing exponents or is a failed fraction/layout dump.
 
 This path rebuilds the diagnostic from **student-usable MCQ only**.
@@ -29,7 +31,7 @@ No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No s
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
 2. Keep an item only if the official key is A–D **and** it has a readable stem **and** complete non-garbage A–D text (plus a figure or recovered table if the stem cites a graph/table).
-3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, irreparable OCR, and math items whose OCR lost exponents/radicals/fractions (unless a full-question crop includes complete A–D).
+3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, irreparable OCR, math items whose OCR lost exponents/radicals/fractions (unless a full-question crop includes complete A–D), corrupt stems (`value = of`, axis ticks), leaked/merged A–D lists, and figures that do not match the stem.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
 6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.

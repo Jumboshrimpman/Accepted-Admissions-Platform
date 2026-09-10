@@ -8,10 +8,13 @@ import {
   isStudentReadableChoiceText,
   letterMcqChoices,
   looksBrokenMathOcr,
+  looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledQuizText,
+  shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
   shouldShowQuizChoices,
+  stemCitesVisual,
   stripSatBankFigureComments,
 } from "./quiz-figure-primary.ts";
 
@@ -82,6 +85,41 @@ test("rejects fraction dumps, missing exponents, and hides OCR next to a crop", 
   assert.equal(shouldHideQuizOcrStem(triangle), true);
   assert.equal(shouldShowQuizChoices(triangle), false);
   assert.deepEqual(figurePrimaryChoices(triangle), []);
+});
+
+test("hides page-neighbor figures on word problems and rejects corrupt stems", () => {
+  assert.equal(looksCorruptStemOcr("In the triangle shown, PQ QR. What is the value = of x?"), true);
+  assert.equal(stemCitesVisual("Rectangle P has an area of 72 square inches."), false);
+  const wordProblem = {
+    presentation: "text" as const,
+    prompt:
+      "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter is 18 centimeters, what is the third side?",
+    stimulus:
+      "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/pack/p34-draw2.png)",
+    choices: [
+      { id: "a", label: "A", text: "2" },
+      { id: "b", label: "B", text: "8" },
+      { id: "c", label: "C", text: "10" },
+      { id: "d", label: "D", text: "24" },
+    ],
+    questionType: "mcq",
+  };
+  assert.equal(shouldHideMismatchedQuizFigures(wordProblem), true);
+  assert.equal(shouldShowQuizChoices(wordProblem), true);
+  const brokenTriangle = {
+    ...wordProblem,
+    prompt: "In the triangle shown, PQ QR. What is the value = of x?",
+    stimulus:
+      "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/pack/p34-draw1.png)",
+    choices: [
+      { id: "a", label: "A", text: "156" },
+      { id: "b", label: "B", text: "66" },
+      { id: "c", label: "C", text: "48" },
+      { id: "d", label: "D", text: "24" },
+    ],
+  };
+  assert.equal(shouldHideQuizOcrStem(brokenTriangle), true);
+  assert.equal(shouldShowQuizChoices(brokenTriangle), false);
 });
 
 test("answer review shows the letter when choice text is empty", () => {

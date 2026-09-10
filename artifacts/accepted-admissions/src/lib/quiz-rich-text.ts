@@ -105,7 +105,7 @@ function pushTextAndTables(parts: QuizRichPart[], value: string, hideGarbledText
 /** Split quiz stimulus/prompt into text and markdown images. Unsafe URLs stay as text. */
 export function splitQuizRichText(
   text: string | null | undefined,
-  options?: { hideGarbledText?: boolean },
+  options?: { hideGarbledText?: boolean; hideImages?: boolean },
 ): QuizRichPart[] {
   if (!text) return [];
   text = stripSatBankFigureComments(text);
@@ -120,9 +120,9 @@ export function splitQuizRichText(
     }
     const alt = match[1]?.trim() || "Figure";
     const src = match[2] ?? "";
-    if (src && isSafeQuizImageSrc(src)) {
+    if (!options?.hideImages && src && isSafeQuizImageSrc(src)) {
       parts.push({ type: "image", alt, src });
-    } else if (match[0].trim()) {
+    } else if (!options?.hideImages && match[0].trim()) {
       parts.push({ type: "text", value: match[0] });
     }
     lastIndex = match.index + match[0].length;

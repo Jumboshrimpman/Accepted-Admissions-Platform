@@ -62,6 +62,7 @@ import {
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
   isStudentReadableChoiceText,
+  shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
   shouldShowQuizChoices,
 } from "@/lib/quiz-figure-primary";
@@ -72,14 +73,16 @@ function QuizRichText({
   className,
   imageClassName,
   hideGarbledText,
+  hideImages,
 }: {
   text: string | null | undefined;
   className?: string;
   imageClassName?: string;
   hideGarbledText?: boolean;
+  hideImages?: boolean;
 }) {
   if (!text) return null;
-  const parts = splitQuizRichText(text, { hideGarbledText });
+  const parts = splitQuizRichText(text, { hideGarbledText, hideImages });
   if (parts.length === 0) return null;
   return (
     <div
@@ -286,6 +289,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                               text={item.stimulus}
                               className="mt-2 text-sm text-muted-foreground"
                               hideGarbledText={item.presentation === "figure_primary"}
+                              hideImages={shouldHideMismatchedQuizFigures(item)}
                             />
                           ) : null}
                           {item.presentation === "figure_primary" && !item.prompt ? null : (
@@ -969,6 +973,7 @@ export default function PortalAssignment() {
               className="mt-5 text-white/90"
               imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
               hideGarbledText={shouldHideQuizOcrStem(question)}
+              hideImages={shouldHideMismatchedQuizFigures(question)}
             />
           ) : null}
           {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
@@ -1121,6 +1126,7 @@ export default function PortalAssignment() {
                 <QuizRichText
                   text={question.stimulus}
                   hideGarbledText={shouldHideQuizOcrStem(question)}
+                  hideImages={shouldHideMismatchedQuizFigures(question)}
                 />
               </CardContent>
             </Card>

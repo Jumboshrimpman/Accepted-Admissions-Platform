@@ -58,6 +58,18 @@ const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
 const STACKED_FRACTION_ORPHAN = /\b14x\s*=\s*2\s*w\b|\n7y\s*(?:\n|$)/;
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
 const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-z]\s+[A-Za-z]|\d{1,3}\s+[A-Za-z])$/;
+const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;
+const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*What is the value/i;
+const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
+const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b/;
+const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
+const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
+const LEAKED_NEXT_QUESTION =
+  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer/i;
+const STEM_CITES_VISUAL =
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|note:\s*figure not drawn|the graph models|y-intercept of the graph)\b/i;
+const LABELED_GEOMETRY =
+  /\btriangles?\s+[A-Z]{3}\b/i;
 function isAsciiGraphLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
@@ -66,7 +78,7 @@ function isAsciiGraphLine(line: string): boolean {
   return trimmed.length >= 8 && symbols / trimmed.length > 0.4;
 }
 const LEADING_OCR_JUNK_LINE =
-  /^(?:[._~=\-:]{2,}|\.{3,}.*|[A-Z]\s*[~_]{2,}.*|[PQRSTU]\s*$|[PQRSTU]\s+[._~=\-]{2,})$/;
+  /^(?:[._~=\-:]{2,}|\.{3,}.*|[A-Z]\s*[~_]{2,}.*|[PQRSTU]\s*$|[PQRSTU]\s+[._~=\-]{2,}|X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}|246810)$/i;
 const GEOMETRY_STEM = /\b(?:triangle|triangles|angle|similar|congruent|right triangle)\b/i;
 const TABLE_STEM = /\b(?:the table|table shows|linear function|values of [xf]|f\s*\(\s*x\s*\))\b/i;
 const GRAPH_STEM = /\b(?:scatterplot|scatter plot|the graph|the chart)\b/i;
@@ -304,7 +316,52 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;
   if (ORPHAN_FX_AFTER_W.test(raw)) return true;
+  if (looksCorruptStemOcr(raw)) return true;
   return false;
+}
+
+/** Axis-tick dumps, missing PQ=QR, “value = of”, smashed November-2012 clauses. */
+export function looksCorruptStemOcr(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (STRAY_VALUE_EQUALS_OF.test(raw)) return true;
+  if (MISSING_SEGMENT_RELATION.test(raw)) return true;
+  if (AXIS_TICK_OCR.test(raw)) return true;
+  if (SMASHED_AXIS_TICKS.test(raw)) return true;
+  if (BROKEN_WHERE_MODEL.test(raw)) return true;
+  if (BROKEN_END_OF_DOMAIN.test(raw)) return true;
+  return false;
+}
+
+export function looksLeakedNextQuestionChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  return value.length > 40 && LEAKED_NEXT_QUESTION.test(value);
+}
+
+/** Stem actually cites a graph/table/shown figure — not a word-problem “triangle”. */
+export function stemCitesVisual(text: string | null | undefined): boolean {
+  const value = stripSatBankFigureComments(text);
+  if (!value) return false;
+  if (referencesVisualStimulus(value)) return true;
+  if (STEM_CITES_VISUAL.test(value)) return true;
+  if (LABELED_GEOMETRY.test(value) && /\b(?:similar|congruent|shown|angle)\b/i.test(value)) {
+    return true;
+  }
+  if (TABLE_STEM.test(value) && /\b(?:table shows|the table)\b/i.test(value)) return true;
+  return false;
+}
+
+export function hasMergedOrLeakedChoices(
+  choices: Array<{ id?: string; label?: string; text?: string | null }> | null | undefined,
+): boolean {
+  const labels: string[] = [];
+  for (const choice of choices ?? []) {
+    const label = (choice.label ?? choice.id ?? "").toString().trim().toUpperCase();
+    if (/^[A-D]$/.test(label)) labels.push(label);
+    if (looksLeakedNextQuestionChoice(choice.text)) return true;
+  }
+  if (labels.length > 4) return true;
+  return labels.length !== new Set(labels).size && labels.length > 4;
 }
 
 export function prepareStudentExtractText(text: string | null | undefined): string {
@@ -376,6 +433,9 @@ function figuresMatchStem(
     return false;
   }
   if (GRAPH_STEM.test(stem) && /triangle|angle|similar/i.test(hay)) return false;
+  if (stemCitesVisual(stem) && /rectangle|perimeter of the triangle|third side/i.test(stem)) {
+    if (/scatter|graph|chart|plot|temperature|altitude/i.test(hay)) return false;
+  }
   return true;
 }
 
@@ -392,17 +452,20 @@ export function selectStimulusFigures(
   });
   const stem = `${context?.prompt ?? ""}\n${context?.stimulus ?? ""}`;
   const recoveredTable = hasRecoveredDataTable(stem);
+  const fullCrops = usable.filter((figure) => isFullQuestionCrop(figure));
+  if (fullCrops.length > 0) return fullCrops.slice(0, 1);
+  if (!stemCitesVisual(stem) && !recoveredTable) return [];
   const matching = usable.filter((figure) => figuresMatchStem(figure, stem, recoveredTable));
   const withoutOrphans = matching.filter((figure) => !isOrphanFigureFragment(figure, matching));
   const pool = withoutOrphans.length > 0 ? withoutOrphans : matching;
   const composite = pool.filter((figure) => isCompositeFigure(figure) || isFullQuestionCrop(figure));
   if (composite.length > 0) return composite.slice(0, 1);
-  if (GEOMETRY_STEM.test(stem) || GRAPH_STEM.test(stem)) {
+  if (stemCitesVisual(stem) || GRAPH_STEM.test(stem)) {
     const preferred = pool.filter((figure) => /[-_]draw\d+/i.test(figureHay(figure)));
     if (preferred.length > 0) return preferred.slice(0, 1);
     return pool.slice(0, 1);
   }
-  return pool;
+  return pool.slice(0, 1);
 }
 
 export function hasRenderableFigures(input: {
@@ -477,6 +540,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksFailedMathLayoutDump(raw) || looksFailedMathLayoutDump(value)) return false;
   if (looksSpacedProductChoice(value)) return false;
   if (looksStrippedRadicalChoice(value)) return false;
+  if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(value)) return false;
   if (looksBrokenMathOcr(value) && value.length <= 96) return false;
   if (looksTruncatedChoiceText(value)) return false;
   if (looksSmashedOrTruncatedExtract(value)) return false;
@@ -494,6 +558,7 @@ export function hasUsableChoiceText(
 export function hasCompleteLetterChoiceText(
   choices: Array<{ id?: string; label?: string; text?: string | null }> | null | undefined,
 ): boolean {
+  if (hasMergedOrLeakedChoices(choices)) return false;
   const labels = new Set<string>();
   for (const choice of choices ?? []) {
     if (!isStudentReadableChoiceText(choice.text)) continue;

@@ -24,6 +24,17 @@ const STACKED_FRACTION_ORPHAN = /\b14x\s*=\s*2\s*w\b|\n7y\s*(?:\n|$)/;
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
 const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-z]\s+[A-Za-z]|\d{1,3}\s+[A-Za-z])$/;
 const QUIZ_IMAGE = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/;
+const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;
+const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*What is the value/i;
+const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
+const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b/;
+const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
+const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
+const LEAKED_NEXT_QUESTION =
+  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer/i;
+const STEM_CITES_VISUAL =
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
+const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
   return (text ?? "")
@@ -64,7 +75,35 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;
   if (ORPHAN_FX_AFTER_W.test(raw)) return true;
+  if (looksCorruptStemOcr(raw)) return true;
   return false;
+}
+
+export function looksCorruptStemOcr(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (STRAY_VALUE_EQUALS_OF.test(raw)) return true;
+  if (MISSING_SEGMENT_RELATION.test(raw)) return true;
+  if (AXIS_TICK_OCR.test(raw)) return true;
+  if (SMASHED_AXIS_TICKS.test(raw)) return true;
+  if (BROKEN_WHERE_MODEL.test(raw)) return true;
+  if (BROKEN_END_OF_DOMAIN.test(raw)) return true;
+  return false;
+}
+
+export function looksLeakedNextQuestionChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  return value.length > 40 && LEAKED_NEXT_QUESTION.test(value);
+}
+
+export function stemCitesVisual(text: string | null | undefined): boolean {
+  const value = stripSatBankFigureComments(text);
+  if (!value) return false;
+  if (STEM_CITES_VISUAL.test(value)) return true;
+  if (LABELED_GEOMETRY.test(value) && /\b(?:similar|congruent|shown|angle)\b/i.test(value)) {
+    return true;
+  }
+  return /\b(?:the table|table shows)\b/i.test(value);
 }
 
 export function looksGarbledQuizText(text: string | null | undefined): boolean {
@@ -108,6 +147,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksFailedMathLayoutDump(raw) || looksFailedMathLayoutDump(cleaned)) return false;
   if (looksSpacedProductChoice(cleaned)) return false;
   if (looksStrippedRadicalChoice(cleaned)) return false;
+  if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(cleaned)) return false;
   if (looksBrokenMathOcr(cleaned) && cleaned.length <= 96) return false;
   return true;
 }
@@ -127,17 +167,36 @@ export function shouldHideQuizOcrStem(
 ): boolean {
   const broken =
     looksBrokenMathOcr(question.prompt) ||
+    looksCorruptStemOcr(question.prompt) ||
     looksGarbledQuizText(question.prompt) ||
     looksGarbledQuizText(question.stimulus);
   if (!broken) return false;
   return hasQuizFigure(question) || isFigurePrimaryQuestion(question);
 }
 
+/** Page-neighbor crop on a clean word problem that never cites a figure. */
+export function shouldHideMismatchedQuizFigures(
+  question: Pick<AssignmentQuestion, "presentation" | "prompt" | "stimulus" | "choices" | "questionType"> & {
+    figurePrimary?: boolean | null;
+    figurePrimarySrc?: string | null;
+  },
+): boolean {
+  if (!hasQuizFigure(question)) return false;
+  if (isFigurePrimaryQuestion(question)) return false;
+  const stem = `${question.prompt ?? ""}\n${(question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ")}`;
+  if (looksCorruptStemOcr(stem) || looksBrokenMathOcr(question.prompt) || looksGarbledQuizText(question.prompt)) {
+    return false;
+  }
+  return !stemCitesVisual(stem);
+}
+
 export function shouldShowQuizChoices(
   question: Pick<AssignmentQuestion, "prompt" | "choices">,
 ): boolean {
-  if (looksBrokenMathOcr(question.prompt)) return false;
-  const dump = (question.choices ?? []).some((choice) => looksFailedMathLayoutDump(choice.text));
+  if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
+  const dump = (question.choices ?? []).some(
+    (choice) => looksFailedMathLayoutDump(choice.text) || looksLeakedNextQuestionChoice(choice.text),
+  );
   if (dump) return false;
   return hasUsableChoiceText(question.choices);
 }

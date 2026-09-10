@@ -21,8 +21,12 @@ import {
   looksTruncatedChoiceText,
   normalizeLetterAnswer,
   looksBrokenMathOcr,
+  looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledExtractText,
+  looksLeakedNextQuestionChoice,
+  hasMergedOrLeakedChoices,
+  stemCitesVisual,
   looksSpacedProductChoice,
   looksStrippedRadicalChoice,
   prepareStudentExtractText,
@@ -347,6 +351,74 @@ test("rejects math OCR that lost exponents, radicals, or dumped fractions", () =
       alt: "Question figure region page 38",
     }),
     false,
+  );
+});
+
+test("rejects corrupt stems, leaked A–D, and page-neighbor figures on word problems", () => {
+  assert.equal(
+    looksCorruptStemOcr("In the triangle shown, PQ QR. What is the value =\nof x?"),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("In the triangle shown, PQ = QR. What is the value of x?"), false);
+  assert.equal(
+    looksCorruptStemOcr("X -10 -8 -6 -4 -2 V\n246810\nWhat is the y-intercept of the graph shown?"),
+    true,
+  );
+  assert.equal(
+    looksCorruptStemOcr(
+      "X u 1 2 3 4 5 6\nThe graph models the number of active projects after the end of\n0 ≤x ≤6. According to the November 2012, where\nmodel, what is the predicted number?",
+    ),
+    true,
+  );
+  assert.equal(
+    looksLeakedNextQuestionChoice(
+      "(0, 8) - --------~ 4 Which expression is equivalent to 2x^2 + x − 9?",
+    ),
+    true,
+  );
+  assert.equal(
+    hasMergedOrLeakedChoices([
+      { id: "a", label: "A", text: "(−8, 0)" },
+      { id: "b", label: "B", text: "(−6, 0)" },
+      { id: "c", label: "C", text: "(0, 6)" },
+      { id: "d", label: "D", text: "(0, 8) Which expression is equivalent to (2x^2+x-9)?" },
+      { id: "a2", label: "A", text: "2x^2 + 6x − 8" },
+    ]),
+    true,
+  );
+  assert.equal(stemCitesVisual("In the triangle shown, PQ = QR. What is the value of x?"), true);
+  assert.equal(
+    stemCitesVisual(
+      "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter is 18, what is the third side?",
+    ),
+    false,
+  );
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: figureUrl, alt: "Diagram from page 34" }],
+      {
+        prompt:
+          "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter of the triangle is 18 centimeters, what is the length of the third side?",
+      },
+    ).length,
+    0,
+  );
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: figureUrl, alt: "Diagram from page 34" }],
+      {
+        prompt:
+          "Rectangle P has an area of 72 square inches. If a rectangle with an area of 20 square inches is removed from rectangle P, what is the area of the resulting figure?",
+      },
+    ).length,
+    0,
+  );
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: figureUrl, alt: "Diagram from page 34" }],
+      { prompt: "In the triangle shown, PQ = QR. What is the value of x?" },
+    ).length,
+    1,
   );
 });
 

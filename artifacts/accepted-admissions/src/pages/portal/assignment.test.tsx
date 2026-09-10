@@ -524,6 +524,43 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/⎜/)).toBeNull();
   });
 
+  test("word-problem stems do not show a mismatched page-neighbor figure", () => {
+    mocks.questions[0]!.prompt =
+      "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter of the triangle is 18 centimeters, what is the length, in centimeters, of the third side of this triangle?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-9-digital/p34-draw2.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "2" },
+      { id: "b", label: "B", text: "8" },
+      { id: "c", label: "C", text: "10" },
+      { id: "d", label: "D", text: "24" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByAltText("Diagram from page 34")).toBeNull();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/18 centimeters/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/24/);
+  });
+
+  test("corrupt triangle stem with a figure hides OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt: "In the triangle shown, PQ QR. What is the value = of x?",
+      stimulus:
+        "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-11-digital/p34-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "156" },
+        { id: "b", label: "B", text: "66" },
+        { id: "c", label: "C", text: "48" },
+        { id: "d", label: "D", text: "24" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByAltText("Diagram from page 34")).toBeTruthy();
+    expect(screen.queryByText(/PQ QR/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
   test("smashed x f(x) lines render as a data table, not one smashed prose line", () => {
     mocks.questions[0]!.prompt =
       "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?";
@@ -579,7 +616,7 @@ describe("student attempt UI", () => {
           explanation: "The graph rises.",
           skill: "Transitions",
           flagged: false,
-          prompt: "Which transition is best?",
+          prompt: "Which choice most effectively uses data from the graph to complete the text?",
           stimulus:
             "![Enrollment graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png)",
           choices: [

@@ -75,12 +75,15 @@ test("linked-question rematerialize payload refreshes figures and official field
     difficulty: "hard",
     stimulus: null,
     figures: [{ url: figureUrl, alt: "Figure from page 10" }],
-    prompt: "How many organic farms?",
+    prompt: "Which choice most effectively uses data from the graph to complete the text?",
     choices: [],
     correctAnswer: "12",
     officialExplanation: "Count the labeled bar.",
   });
-  assert.equal(refreshed.prompt, "How many organic farms?");
+  assert.equal(
+    refreshed.prompt,
+    "Which choice most effectively uses data from the graph to complete the text?",
+  );
   assert.equal(refreshed.stimulus, `![Figure from page 10](${figureUrl})`);
   assert.equal(refreshed.correctAnswer, "12");
   assert.equal(refreshed.explanation, "Count the labeled bar.");
@@ -152,6 +155,27 @@ test("recovers a linear-function table and drops mismatched triangle crops", () 
   assert.equal(content.stimulus?.includes("p35-img1"), false);
   assert.equal(content.stimulus?.includes("p35-draw1"), false);
   assert.equal(content.choices[0]?.text.includes("3x"), true);
+});
+
+test("does not attach a page-neighbor figure to a word problem that never cites one", () => {
+  const content = materializedQuestionContent({
+    section: "math",
+    questionType: "mcq",
+    stimulus: null,
+    figures: [{ url: figureUrl, alt: "Diagram from page 34" }],
+    prompt:
+      "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter of the triangle is 18 centimeters, what is the length of the third side?",
+    choices: [
+      { id: "a", label: "A", text: "2" },
+      { id: "b", label: "B", text: "8" },
+      { id: "c", label: "C", text: "10" },
+      { id: "d", label: "D", text: "24" },
+    ],
+    correctAnswer: "B",
+    officialExplanation: "Choice B is correct.",
+  });
+  assert.equal(content.stimulus, null);
+  assert.match(content.prompt, /18 centimeters/);
 });
 
 test("figure markdown line uses alt text when present", () => {

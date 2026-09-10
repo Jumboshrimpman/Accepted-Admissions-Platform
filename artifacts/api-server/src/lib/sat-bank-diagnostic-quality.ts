@@ -1,6 +1,7 @@
 import {
   hasCompleteLetterChoiceText,
   hasFullQuestionCrop,
+  hasMergedOrLeakedChoices,
   hasReadableStudentStem,
   hasRecoveredDataTable,
   hasRenderableFigures,
@@ -8,7 +9,7 @@ import {
   looksGarbledExtractText,
   looksSmashedOrTruncatedExtract,
   normalizeLetterAnswer,
-  referencesVisualStimulus,
+  stemCitesVisual,
   stripChartHeaderFragments,
   stripSatBankFigureComments,
   type BankFigureLike,
@@ -81,7 +82,7 @@ function isGarbledItem(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus"
 
 function stemReferencesMissingVisual(input: DiagnosticQualityInput): boolean {
   const haystack = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`;
-  if (!referencesVisualStimulus(haystack)) return false;
+  if (!stemCitesVisual(haystack)) return false;
   if (hasRecoveredDataTable(haystack) && /table/i.test(haystack)) return false;
   return !hasRenderableFigures(input);
 }
@@ -112,6 +113,7 @@ export function isStudentUsableDiagnosticItem(input: DiagnosticQualityInput): bo
   if (!isLetterAnswer(input.correctAnswer)) return false;
   if (isTrueSprQuizItem(input)) return false;
   if (!hasCompleteLetterChoiceText(input.choices)) return false;
+  if (hasMergedOrLeakedChoices(input.choices)) return false;
   if (!hasReadableStudentStem(input)) return false;
   if (isCleanTextMcqItem(input)) return true;
   if (isGarbledItem(input)) return false;

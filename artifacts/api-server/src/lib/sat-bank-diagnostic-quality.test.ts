@@ -296,6 +296,87 @@ test("rejects PT4 math items whose OCR lost exponents, radicals, or dumped fract
   );
 });
 
+test("rejects corrupt stems and mismatched page-neighbor figures; keeps clean word problems", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt11-math-m1-q1",
+      prompt: "In the triangle shown, PQ QR. What is the value =\nof x?",
+      choices: letterChoices(["156", "66", "48", "24"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+      figures: [{ url: figureUrl, alt: "Diagram from page 34" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt8-math-m1-q1",
+      prompt: "X -10 -8 -6 -4 -2 V\n246810\nWhat is the y-intercept of the graph shown?",
+      choices: [
+        { id: "a", label: "A", text: "(−8, 0)" },
+        { id: "b", label: "B", text: "(−6, 0)" },
+        { id: "c", label: "C", text: "(0, 6)" },
+        {
+          id: "d",
+          label: "D",
+          text: "(0, 8) - --------~ 4 Which expression is equivalent to (2x^2+x-9)+(x^2+6x+1)?",
+        },
+        { id: "a2", label: "A", text: "2x^2 + 6x − 8" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [
+        { url: `${figureUrl}-draw1`, alt: "Diagram from page 34" },
+        { url: `${figureUrl}-draw2`, alt: "Diagram from page 34" },
+      ],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt6-math-m1-q1",
+      prompt:
+        "X u 1 2 3 4 5 6\nThe graph models the number of active projects a company was working on x months after the end of\n0 ≤x ≤6. According to the November 2012, where\nmodel, what is the predicted number of active projects the company was working on at the end of November 2012?",
+      choices: letterChoices(["0", "5", "8", "9"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [{ url: figureUrl, alt: "Diagram from page 39" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt9-math-m1-q1",
+      prompt:
+        "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter of the triangle is 18 centimeters, what is the length, in centimeters, of the third side of this triangle?",
+      choices: letterChoices(["2", "8", "10", "24"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [{ url: `${figureUrl}-eqs`, alt: "Diagram from page 34" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt7-math-m1-q2",
+      prompt:
+        "Rectangle P has an area of 72 square inches. If a rectangle with an area of 20 square inches is removed from rectangle P, what is the area, in square inches, of the resulting figure?",
+      choices: letterChoices(["92", "84", "80", "52"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+      figures: [{ url: `${figureUrl}-scatter`, alt: "Diagram from page 34" }],
+    }),
+    true,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",
@@ -333,6 +414,9 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m1-q23",
     "sat-pt4-math-m1-q24",
     "sat-pt4-math-m1-q26",
+    "sat-pt11-math-m1-q1",
+    "sat-pt8-math-m1-q1",
+    "sat-pt6-math-m1-q1",
   ];
   for (const key of brokenMathKeys) {
     assert.ok(
@@ -379,6 +463,9 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m1-q23",
     "sat-pt4-math-m1-q24",
     "sat-pt4-math-m1-q26",
+    "sat-pt11-math-m1-q1",
+    "sat-pt8-math-m1-q1",
+    "sat-pt6-math-m1-q1",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }

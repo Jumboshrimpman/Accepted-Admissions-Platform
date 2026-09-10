@@ -55,6 +55,15 @@ test("parses smashed x f(x) lines as a table instead of one prose sentence", () 
   assert.equal(extractPlainTextTable("not a table at all").table, null);
 });
 
+test("can omit mismatched figure images while keeping the stem", () => {
+  const parts = splitQuizRichText(
+    `![Diagram from page 34](${src})\n\nThe lengths of two sides of a triangle are 4 centimeters.`,
+    { hideImages: true },
+  );
+  assert.equal(parts.some((part) => part.type === "image"), false);
+  assert.ok(parts.some((part) => part.type === "text" && /4 centimeters/.test(part.value)));
+});
+
 test("never surfaces sat-bank-figures HTML comments and can hide garbled OCR", () => {
   const parts = splitQuizRichText(
     `<!-- sat-bank-figures -->\n![Graph](${src})\n<!-- /sat-bank-figures -->\nX 0-=8~ - <:...4--=2_`,
