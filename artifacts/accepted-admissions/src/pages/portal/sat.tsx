@@ -103,7 +103,9 @@ export default function PortalSat() {
             return (
               typeof candidate.id === "string" &&
               typeof candidate.slug === "string" &&
+              candidate.slug !== "test-sat-hour" &&
               typeof candidate.name === "string" &&
+              candidate.name.toLowerCase() !== "test" &&
               typeof candidate.description === "string" &&
               typeof candidate.durationHours === "number" &&
               typeof candidate.totalPriceCents === "number"

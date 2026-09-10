@@ -2,7 +2,7 @@
 
 ## Current SAT catalog (source of truth: code + migrations 0023/0024)
 
-Public checkout sells two prepaid credit products. Funds settle to Accepted Admissions (`tutorShareCents = 0`).
+Signed-in self-serve checkout sells two prepaid credit products. Funds settle to Accepted Admissions (`tutorShareCents = 0`). Public pages do not list SAT prices.
 
 - Single SAT session — **$130** for 1 hour (1 credit)
 - Ten SAT session package — **$1,300** for 10 hours ($130/hour)
@@ -23,7 +23,7 @@ The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live W
 ### Michelle Makarem (client) — prepaid book/pay in scope
 
 - Primary SAT tutor **Xavier Morales**; can also book **Eunice Chon**. Nika is not on the SAT booking roster.
-- Path: buy **$130 / 1 credit** or **$1,300 / 10 credits** on `/sat` (Stripe Checkout) → spend one credit per hour on the portal booking card against the selected tutor’s live Google Calendar.
+- Path: buy **$130 / 1 credit** or **$1,300 / 10 credits** on `/portal/sat` after sign-in (Stripe Checkout) → spend one credit per hour on the portal booking card against the selected tutor’s live Google Calendar.
 - Curriculum is optional. Shared SAT practice tests / mini-sections can be attached to a booked session from the admin library (same building-block model as Taito).
 
 Xavier payout tracking stays **out** (schema leftovers only; no tutor payout UI).
@@ -58,7 +58,7 @@ Migration `0025_curriculum_library_assets` adds `curriculum_library_assets` and 
 - Typecheck, landing copy, payout-mock leftovers, unjournaled SQL, public-site Wix cutover polish (see prior commit).
 - **A)** Meet + calendar deep-links on student dashboard (next meeting **and** each roadmap row), tutor dashboard, session pages, course lists, booking card, and admin session cards.
 - **B)** Curriculum library + attach-to-session (extends session `curriculum_blocks`, does not rewrite adaptive curriculum).
-- **C)** Michelle booking: Xavier **or** Eunice; $130 single-hour or $1,300 / 10-credit package; zero-credit state points at `/sat`. Taito’s self-serve SAT checkout/booking is hidden.
+- **C)** Michelle booking: Xavier **or** Eunice; $130 single-hour or $1,300 / 10-credit package; zero-credit state points at `/portal/sat`. Taito’s self-serve SAT checkout/booking is hidden. Public `/sat` is marketing only.
 - **D)** Xavier payout tracking still not exposed.
 
 ## Done vs owner-only

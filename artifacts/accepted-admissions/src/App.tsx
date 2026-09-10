@@ -157,7 +157,7 @@ export function Router() {
             </Shell>
           </SignedIn>
           <SignedOut>
-            <Redirect to="/login" />
+            <Redirect to="/login?returnTo=%2Fportal%2Fsat" />
           </SignedOut>
         </Route>
 

@@ -56,7 +56,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
       "Harvard students and recent graduates provide focused one-on-one SAT tutoring, with thoughtful guidance for families whose needs go beyond a single session.",
     satPathTitle: "Need SAT tutoring now?",
     satPathBlurb:
-      "Purchase one hour or a ten-hour package at $130 per credit, then book open times with our SAT tutors.",
+      "Sign in to your client portal to view SAT tutoring pricing and book sessions with our SAT tutors.",
     guidancePathTitle: "Need a broader conversation?",
     guidancePathBlurb:
       "Admissions guidance, IELTS support, or another request starts with a private inquiry—not checkout.",
@@ -72,15 +72,15 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
 export const DEFAULT_SAT_CONTENT: SatContent = {
   title: "Prepaid SAT session credits.",
   seoTitle: "SAT tutoring | Accepted Admissions",
-  seoDescription: "Explore prepaid SAT session credits, see approved prices, and continue to secure checkout.",
+  seoDescription: "SAT tutoring with Accepted Admissions. Sign in to view pricing and purchase prepaid session credits in your client portal.",
   body: {
     heroLead:
-      "Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked with our SAT tutors.",
+      "One-on-one SAT tutoring with the Accepted Admissions team. Sign in to your client portal to view current pricing and purchase prepaid session credits.",
     offersIntro:
-      "Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on our SAT tutors’ available calendar.",
+      "SAT booking and payment stay inside the signed-in client portal. Request broader guidance if you need a different service.",
     sections: [
-      "Review the current single-hour and ten-hour SAT tutoring credits available online.",
-      "Sign in to purchase, then use verified prepaid credits to schedule with our SAT tutors in the client portal.",
+      "Sign in to view SAT tutoring pricing and purchase prepaid session credits.",
+      "After a verified Stripe payment, use credits to schedule with our SAT tutors in the client portal.",
     ],
   },
 };

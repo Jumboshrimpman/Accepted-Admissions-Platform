@@ -20,7 +20,9 @@ describe("Landing visitor paths", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("A clear next step");
     expect(screen.getByTestId("link-home-sat").getAttribute("href")).toBe("/sat");
     expect(screen.getByTestId("link-home-guidance").getAttribute("href")).toBe("/client-request");
-    expect(screen.getByText(/purchase one hour or a ten-hour package at \$130 per credit/i)).toBeTruthy();
+    expect(screen.getByText(/sign in to your client portal to view SAT tutoring pricing/i)).toBeTruthy();
+    expect(screen.queryByText(/\$130/)).toBeNull();
+    expect(screen.queryByText(/\$1,300/)).toBeNull();
     expect(screen.getByText(/harvard students and recent graduates/i)).toBeTruthy();
     expect(screen.getAllByText(/meet the team to learn about our tutors/i)).not.toHaveLength(0);
     expect(screen.getByText(/our SAT tutors/i)).toBeTruthy();

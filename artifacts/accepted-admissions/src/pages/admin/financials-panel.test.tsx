@@ -56,6 +56,45 @@ describe("administrator financials panel", () => {
     expect(screen.getByTestId("link-financials-back-admin").getAttribute("href")).toBe("/admin");
   });
 
+  test("hides the retired test SAT product from catalog purchase options", () => {
+    mocks.financials.isError = false;
+    mocks.financials.data = {
+      clients: [],
+      products: [
+        {
+          id: "prod-test",
+          slug: "test-sat-hour",
+          name: "test",
+          description: "Temporary $1 test product",
+          durationHours: 1,
+          totalPriceCents: 100,
+          effectiveHourlyRateCents: 100,
+          active: true,
+        },
+        {
+          id: "prod-1",
+          slug: "single-sat-session",
+          name: "Single SAT Session",
+          description: "One prepaid hour",
+          durationHours: 1,
+          totalPriceCents: 13000,
+          effectiveHourlyRateCents: 13000,
+          active: true,
+        },
+      ],
+      invoices: [],
+      credits: [],
+      expectedStripeWebhookUrl: "https://app.acceptedadmissions.org/api/stripe/webhook",
+      paymentCreditMismatches: [],
+    };
+
+    render(<AdminFinancialsPanel />);
+
+    expect(screen.getByText("Single SAT Session")).toBeTruthy();
+    expect(screen.queryByText("test-sat-hour")).toBeNull();
+    expect(screen.queryByText("$1.00")).toBeNull();
+  });
+
   test("shows an empty invoice state when finance data loads with zero invoices", () => {
     mocks.financials.isError = false;
     mocks.financials.data = {
@@ -89,8 +128,8 @@ describe("administrator financials panel", () => {
           paymentId: "pay_mismatch",
           clientName: "Owner test",
           clientEmail: "owner@example.invalid",
-          productName: "test",
-          productSlug: "test-sat-hour",
+          productName: "Single SAT Session",
+          productSlug: "single-sat-session",
           expectedHours: 1,
           amountCents: 100,
           status: "paid",
@@ -103,7 +142,7 @@ describe("administrator financials panel", () => {
     render(<AdminFinancialsPanel />);
 
     expect(screen.getByTestId("list-payment-credit-mismatches")).toBeTruthy();
-    expect(screen.getByText("test")).toBeTruthy();
+    expect(screen.getByText("Single SAT Session")).toBeTruthy();
     expect(screen.getByTestId("button-backfill-paid-credits")).toBeTruthy();
     expect(screen.queryByTestId("text-payment-credit-health-ok")).toBeNull();
   });
