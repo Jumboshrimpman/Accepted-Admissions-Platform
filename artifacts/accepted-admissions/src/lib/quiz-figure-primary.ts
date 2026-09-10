@@ -21,6 +21,9 @@ const STRIPPED_RADICAL_CHOICE = /^(?:8\s+2\s*\+\s*80|\d+\s*\+\s*\d+\s+2)$/;
 const BROKEN_COORDINATE = /\(\s*,\s*x\s*y\s*\)/;
 const SMASHED_HX_LINE = /(?:^|\n)\s*h\s+x\s*(?:\n|$)/;
 const EMPTY_PAREN_FOR_GIVEN = /\(\s*\)\s+for the given/i;
+const EMPTY_FX_PARENS = /f\s*\(\s*x\s*\)\s*\(\s*\)/;
+const LEADING_EQ_THEN_FX = /^=\s*(?:\([^)]+\)\s*)+f\s*\(\s*x\s*\)/m;
+const SMASHED_VERTEX_LATEX = /2 \+ The function\s+\(\s*\)|The function\s+\(\s*\)\s*\(\s*[−-]?7\)/i;
 const SCRAMBLED_FUNCTION_DEFINED = /\bWhat The function\b/;
 const SMASHED_TABLE_CHOICE = /^x\s+\d+\s+\d+\s+\d+.*h\s*\(\s*x\s*\)/i;
 const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
@@ -44,7 +47,7 @@ const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x\s*$/m;
 const MISSING_OPERATOR_CHOICE =
   /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =
-  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|the dot plot|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
 const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
@@ -87,6 +90,9 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (BROKEN_COORDINATE.test(raw)) return true;
   if (SMASHED_HX_LINE.test(raw)) return true;
   if (EMPTY_PAREN_FOR_GIVEN.test(raw)) return true;
+  if (EMPTY_FX_PARENS.test(raw)) return true;
+  if (LEADING_EQ_THEN_FX.test(raw)) return true;
+  if (SMASHED_VERTEX_LATEX.test(raw)) return true;
   if (SCRAMBLED_FUNCTION_DEFINED.test(raw)) return true;
   if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;

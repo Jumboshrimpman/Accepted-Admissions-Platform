@@ -711,6 +711,74 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
   });
 
+  test("21px juxtaposition equation stays readable with slash-fraction choices", () => {
+    mocks.questions[0]!.prompt =
+      "−3x + 21px = 84\nIn the given equation, p is a constant. The equation has no solution. What is the value of p ?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "0" },
+      { id: "b", label: "B", text: "1/7" },
+      { id: "c", label: "C", text: "4/3" },
+      { id: "d", label: "D", text: "4" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/21px/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/1\/7/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("scrambled f(x) definition is not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "= (x − 10)(x + 13) f(x)\nThe function f is defined by the given equation. For what value of x does f(x)( ) reach its minimum?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "−130" },
+      { id: "b", label: "B", text: "−13 23" },
+      { id: "c", label: "C", text: "− 2 3" },
+      { id: "d", label: "D", text: "− 2" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("smashed metal-ball vertex crop hides OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt:
+        "f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal\n9\nball’s height above the ground f(x)( ), in inches,",
+      stimulus:
+        "![Question figure region page 46](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p46-q19-left.png)",
+      choices: [
+        { id: "a", label: "A", text: "The metal ball’s minimum height was 3 inches above the ground." },
+        { id: "b", label: "B", text: "The metal ball’s minimum height was 7 inches above the ground." },
+        { id: "c", label: "C", text: "The metal ball’s height was 3 inches above the ground when it started moving." },
+        { id: "d", label: "D", text: "The metal ball’s height was 7 inches above the ground when it started moving. 20" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/2 \+ The function/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("dot plot with empty A–D never becomes letter-only buttons", () => {
+    mocks.questions[0]!.prompt =
+      "The dot plot represents the 15 values in data set A. Data set B is created by adding 56 to each of the values in data set A. Which of the following correctly compares the medians and the ranges of data sets A and B?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 47](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p47-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "" },
+      { id: "b", label: "B", text: "" },
+      { id: "c", label: "C", text: "" },
+      { id: "d", label: "D", text: "" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByAltText("Diagram from page 47")).toBeTruthy();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
   test("library word problem hides an orphan figure fragment and does not invent letter-only A–D", () => {
     mocks.questions[0]!.prompt =
       "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. Based on these data, how many people voted against the proposal?";

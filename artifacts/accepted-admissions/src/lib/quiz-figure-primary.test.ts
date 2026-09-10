@@ -199,6 +199,37 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
   assert.equal(isStudentReadableChoiceText(library.choices[3]!.text), false);
 });
 
+test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-plot choice text", () => {
+  assert.equal(
+    looksBrokenMathOcr("−3x + 21px = 84\nIn the given equation, p is a constant. What is the value of p ?"),
+    false,
+  );
+  assert.equal(
+    looksBrokenMathOcr("= (x − 10)(x + 13) f(x)\nFor what value of x does f(x)( ) reach its minimum?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal ball’s height"),
+    true,
+  );
+  assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
+  const metalBall = {
+    presentation: "text" as const,
+    prompt: "f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal ball’s height f(x)( )",
+    stimulus:
+      "![Question figure region page 46](https://app.acceptedadmissions.org/media/sat-bank/pack/p46-q19-left.png)",
+    choices: [
+      { id: "a", label: "A", text: "The metal ball’s minimum height was 3 inches above the ground." },
+      { id: "b", label: "B", text: "The metal ball’s minimum height was 7 inches above the ground." },
+      { id: "c", label: "C", text: "The metal ball’s height was 3 inches above the ground when it started moving." },
+      { id: "d", label: "D", text: "The metal ball’s height was 7 inches above the ground when it started moving." },
+    ],
+    questionType: "mcq",
+  };
+  assert.equal(shouldHideQuizOcrStem(metalBall), true);
+  assert.equal(shouldShowQuizChoices(metalBall), false);
+});
+
 test("answer review shows the letter when choice text is empty", () => {
   assert.equal(
     displayAnswerLabel("c", [

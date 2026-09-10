@@ -516,6 +516,44 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
   );
 });
 
+test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposition and dot-plot items", () => {
+  assert.equal(
+    looksBrokenMathOcr("−3x + 21px = 84\nIn the given equation, p is a constant. The equation has no solution. What is the value of p ?"),
+    false,
+  );
+  assert.equal(
+    looksBrokenMathOcr("= (x − 10)(x + 13) f(x)\nThe function f is defined by the given equation. For what value of x does f(x)( ) reach its minimum?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal\n9\nball’s height above the ground f(x)( ), in inches,",
+    ),
+    true,
+  );
+  assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: figureUrl, alt: "Diagram from page 47" }],
+      {
+        prompt:
+          "The dot plot represents the 15 values in data set A. Data set B is created by adding 56 to each of the values in data set A. Which of the following correctly compares the medians and the ranges of data sets A and B?",
+      },
+    ).length,
+    1,
+  );
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: `${figureUrl}-p45-draw1.png`, alt: "Diagram from page 45" }],
+      {
+        prompt:
+          "A proposal for a new library was included on an election ballot. How many people voted against the proposal?",
+      },
+    ).length,
+    0,
+  );
+});
+
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {
   const fields = studentFacingFigurePrimaryFields({
     prompt: "<!-- sat-bank-figures -->\nV = i,.r3",

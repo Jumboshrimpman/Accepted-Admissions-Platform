@@ -546,6 +546,72 @@ test("rejects mangled coordinates, incomplete table crops, scrambled stems, and 
   );
 });
 
+test("rejects scrambled f(x) and smashed vertex crops; keeps 21px no-solution and dot-plot comparisons", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q17",
+      prompt:
+        "−3x + 21px = 84\nIn the given equation, p is a constant. The equation has no solution. What is the value of p ?",
+      choices: letterChoices(["0", "1/7", "4/3", "4"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q18",
+      prompt:
+        "= (x − 10)(x + 13) f(x)\nThe function f is defined by the given equation. For what value of x does f(x)( ) reach its minimum?",
+      choices: letterChoices(["−130", "−13 23", "− 2 3", "− 2"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q19",
+      prompt:
+        "f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal\n9\nball’s height above the ground f(x)( ), in inches,\nx seconds after it started moving on a track, where\n0 ≤ x ≤ 10. Which of the following is the best\ninterpretation of the vertex of the graph of\ny = (f(x)) in the x y-plane?",
+      choices: letterChoices([
+        "The metal ball’s minimum height was 3 inches above the ground.",
+        "The metal ball’s minimum height was 7 inches above the ground.",
+        "The metal ball’s height was 3 inches above the ground when it started moving.",
+        "The metal ball’s height was 7 inches above the ground when it started moving. 20",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [{ url: `${figureUrl}-p46-q19-left.png`, alt: "Question figure region page 46" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q24",
+      prompt:
+        "Data Set A\n22 23 24 25 26\nThe dot plot represents the 15 values in data set A. Data set B is created by adding 56 to each of the values in data set A. Which of the following correctly compares the medians and the ranges of data sets A and B?",
+      choices: letterChoices([
+        "The median of data set B is equal to the median of data set A, and the range of data set B is equal to the range of data set A.",
+        "The median of data set B is equal to the median of data set A, and the range of data set B is greater than the range of data set A.",
+        "The median of data set B is greater than the median of data set A, and the range of data set B is equal to the range of data set A.",
+        "The median of data set B is greater than the median of data set A, and the range of data set B is greater than the range of data set A.",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [{ url: figureUrl, alt: "Diagram from page 47" }],
+    }),
+    true,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",
@@ -595,6 +661,8 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q8",
     "sat-pt4-math-m2-q9",
     "sat-pt4-math-m2-q15",
+    "sat-pt4-math-m2-q18",
+    "sat-pt4-math-m2-q19",
   ];
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q2"),
@@ -610,6 +678,16 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q12"),
     false,
     "slash-fraction quadratic item must stay usable",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q17"),
+    false,
+    "21px juxtaposition no-solution item must stay usable",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q24"),
+    false,
+    "dot-plot median/range comparison must stay usable when A–D text exists",
   );
   for (const key of brokenMathKeys) {
     assert.ok(
@@ -668,6 +746,8 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q8",
     "sat-pt4-math-m2-q9",
     "sat-pt4-math-m2-q15",
+    "sat-pt4-math-m2-q18",
+    "sat-pt4-math-m2-q19",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }
