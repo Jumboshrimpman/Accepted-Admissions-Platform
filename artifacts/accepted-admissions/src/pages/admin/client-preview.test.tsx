@@ -389,7 +389,7 @@ describe("administrator client preview", () => {
     expect(within(roster).getAllByText("Nika Raiffe")).toHaveLength(1);
   });
 
-  test("self-serve clients still see the prepaid-booked banner when a session is reserved", () => {
+  test("self-serve clients see prepaid booking without the booked banner when a session is reserved", () => {
     mocks.preview = {
       user: {
         id: "student-2",
@@ -475,11 +475,140 @@ describe("administrator client preview", () => {
     render(<AdminClientPreview />);
 
     expect(screen.getByText("Prepaid booking experience")).toBeTruthy();
-    expect(screen.getByText("A prepaid session is booked")).toBeTruthy();
+    expect(screen.queryByText("A prepaid session is booked")).toBeNull();
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
     expect(screen.queryByTestId("portal-curriculum-section")?.textContent ?? "").not.toContain(
       "SAT session payment and receipts",
     );
+  });
+
+  test("self-serve prepaid booked sessions show the next upcoming and hide the rest", () => {
+    mocks.preview = {
+      user: {
+        id: "student-2",
+        displayName: "Michelle Chen",
+        email: "michelle@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      welcomeMessage: "Welcome back.",
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 3,
+        usedHours: 3,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      progress: {
+        totalSessions: 3,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring credit.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 3,
+        usedHours: 3,
+        remainingHours: 0,
+        invoices: [],
+        payments: [
+          {
+            id: "payment-1",
+            amountCents: 39000,
+            refundedAmountCents: 0,
+            status: "paid",
+            method: "stripe",
+            receiptUrl: "https://example.invalid/receipt",
+            verifiedAt: "2026-09-01T12:00:00.000Z",
+            createdAt: "2026-09-01T12:00:00.000Z",
+          },
+        ],
+        credits: [],
+      },
+      previewBooking: {
+        calendarStatus: "connected",
+        availability: null,
+        sessions: [
+          {
+            id: "session-later",
+            courseId: "course-1",
+            tutorProfileId: "tutor-1",
+            tutorName: "Xavier Morales",
+            dateTime: "2026-10-23T16:00:00.000Z",
+            timezone: "America/New_York",
+            subject: "SAT",
+            title: "Michelle later SAT session",
+            durationMinutes: 60,
+            bookingStatus: "confirmed",
+            meetingUrl: "https://meet.google.com/later",
+          },
+          {
+            id: "session-next",
+            courseId: "course-1",
+            tutorProfileId: "tutor-1",
+            tutorName: "Xavier Morales",
+            dateTime: "2026-10-09T16:00:00.000Z",
+            timezone: "America/New_York",
+            subject: "SAT",
+            title: "Michelle next SAT session",
+            durationMinutes: 60,
+            bookingStatus: "confirmed",
+            meetingUrl: "https://meet.google.com/next",
+          },
+          {
+            id: "session-mid",
+            courseId: "course-1",
+            tutorProfileId: "tutor-1",
+            tutorName: "Eunice Chon",
+            dateTime: "2026-10-16T16:00:00.000Z",
+            timezone: "America/New_York",
+            subject: "SAT",
+            title: "Michelle mid SAT session",
+            durationMinutes: 60,
+            bookingStatus: "confirmed",
+            meetingUrl: "https://meet.google.com/mid",
+          },
+        ],
+      },
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.getByText("Prepaid booking experience")).toBeTruthy();
+    expect(screen.queryByText("A prepaid session is booked")).toBeNull();
+    expect(screen.getByText("Michelle next SAT session")).toBeTruthy();
+    expect(screen.queryByText("Michelle mid SAT session")).toBeNull();
+    expect(screen.queryByText("Michelle later SAT session")).toBeNull();
+    expect(screen.getByTestId("prepaid-booked-sessions-show-more").textContent).toContain("Show more");
+
+    fireEvent.click(screen.getByTestId("prepaid-booked-sessions-show-more"));
+    expect(screen.getByText("Michelle mid SAT session")).toBeTruthy();
+    expect(screen.getByText("Michelle later SAT session")).toBeTruthy();
+    expect(screen.getByTestId("prepaid-booked-sessions-show-more").textContent).toContain("Show less");
+
+    fireEvent.click(screen.getByTestId("prepaid-booked-sessions-show-more"));
+    expect(screen.queryByText("Michelle mid SAT session")).toBeNull();
+    expect(screen.queryByText("Michelle later SAT session")).toBeNull();
+    expect(screen.getByTestId("prepaid-booked-sessions-show-more").textContent).toContain("Show more");
   });
 
   test("self-serve clients still see calendar-disconnect copy when no sessions exist", () => {
