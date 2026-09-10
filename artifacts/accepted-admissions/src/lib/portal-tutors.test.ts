@@ -18,6 +18,43 @@ test("twelve-session clients always list Eunice for SAT and Nika for English", (
   );
 });
 
+test("dedupes Eunice and Nika when course and session tutor ids differ", () => {
+  const tutors = portalTutorsFromDashboard({
+    credits: { twelveSessionPlan: true },
+    courses: [
+      {
+        tutors: [
+          { id: "eunice", name: "Eunice Chon", specialty: "SAT Tutor" },
+          { id: "nika", name: "Nika Raiffe", specialty: "English Tutor" },
+        ],
+      },
+    ],
+    curriculumSessions: [
+      {
+        subject: "SAT",
+        tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor" },
+      },
+      {
+        subject: "IELTS",
+        tutor: { id: "tutor-2", name: "Nika Raiffe", specialty: "IELTS Tutor" },
+      },
+    ],
+    upcomingSessions: [
+      {
+        subject: "SAT",
+        tutor: { id: "eunice-user", name: "Eunice Chon" },
+      },
+    ],
+  });
+  assert.deepEqual(
+    tutors.map((tutor) => [tutor.name, tutor.specialty]),
+    [
+      ["Eunice Chon", "SAT"],
+      ["Nika Raiffe", "English"],
+    ],
+  );
+});
+
 test("merges course and session tutors and maps IELTS to English", () => {
   const tutors = portalTutorsFromDashboard({
     credits: { twelveSessionPlan: false },

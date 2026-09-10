@@ -16,6 +16,10 @@ function tutorKey(id: string | null | undefined, name: string): string {
   return (id?.trim() || name.trim().toLowerCase() || "tutor").replace(/\s+/g, "-");
 }
 
+function normalizeTutorName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function addTutor(
   byKey: Map<string, PortalTutor>,
   tutor: { id?: string | null; name?: string | null; specialty?: string | null } | null | undefined,
@@ -27,14 +31,26 @@ function addTutor(
     subjectSpecialty(subject) ??
     subjectSpecialty(tutor.specialty) ??
     (tutor.specialty?.trim() && tutor.specialty !== "Assigned tutor" ? tutor.specialty.trim() : "Tutor");
-  const key = tutorKey(tutor.id, name);
-  const existing = byKey.get(key);
-  if (!existing) {
-    byKey.set(key, { id: tutor.id?.trim() || key, name, specialty });
+  const id = tutor.id?.trim() || "";
+  const nameKey = normalizeTutorName(name);
+  let existing: PortalTutor | undefined;
+  let existingKey: string | undefined;
+  for (const [key, value] of byKey) {
+    if ((id && value.id === id) || normalizeTutorName(value.name) === nameKey) {
+      existing = value;
+      existingKey = key;
+      break;
+    }
+  }
+  if (!existing || !existingKey) {
+    byKey.set(nameKey, { id: id || tutorKey(null, name), name, specialty });
     return;
   }
   if (existing.specialty === "Tutor" && specialty !== "Tutor") {
     existing.specialty = specialty;
+  }
+  if (id && existing.id !== id && existing.id === tutorKey(null, existing.name)) {
+    existing.id = id;
   }
 }
 
@@ -71,14 +87,18 @@ export function portalTutorsFromDashboard(dashboard: {
   }
   if (dashboard.credits?.twelveSessionPlan) {
     for (const tutor of TAITO_PROGRAM_TUTORS) {
-      const match = [...byKey.values()].find((candidate) =>
-        candidate.name.toLowerCase().includes(tutor.name.split(/\s+/)[0]!.toLowerCase()),
-      );
+      const nameKey = normalizeTutorName(tutor.name);
+      const firstName = tutor.name.split(/\s+/)[0]!.toLowerCase();
+      const match =
+        byKey.get(nameKey) ??
+        [...byKey.values()].find((candidate) =>
+          candidate.name.toLowerCase().includes(firstName),
+        );
       if (match) {
         match.specialty = tutor.specialty;
         continue;
       }
-      byKey.set(tutor.id, tutor);
+      byKey.set(nameKey, tutor);
     }
   }
   return [...byKey.values()].sort((left, right) => left.name.localeCompare(right.name));

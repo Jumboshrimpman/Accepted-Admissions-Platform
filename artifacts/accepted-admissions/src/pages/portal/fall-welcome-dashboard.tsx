@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useGetDashboard, type CurriculumSession, type Dashboard } from "@workspace/api-client-react";
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -96,9 +96,11 @@ export default function FallWelcomeDashboard() {
 export function ClientDashboardView({
   dashboard,
   adminPreview = false,
+  afterCurriculum,
 }: {
   dashboard: Dashboard;
   adminPreview?: boolean;
+  afterCurriculum?: ReactNode;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
   const studentSatCommerce =
@@ -173,7 +175,8 @@ export function ClientDashboardView({
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14">
-      <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
+      <section className="space-y-5" data-testid="portal-curriculum-section">
+        <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
@@ -213,6 +216,9 @@ export function ClientDashboardView({
             )}
           </div>
         </div>
+        </section>
+
+        {afterCurriculum}
       </section>
 
       {viewer && (

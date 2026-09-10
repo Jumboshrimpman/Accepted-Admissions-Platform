@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Dashboard } from "@workspace/api-client-react";
 
@@ -337,9 +337,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Past due")).toBeTruthy();
     expect(screen.getByText("Your tutors")).toBeTruthy();
     const roster = screen.getByTestId("client-tutor-roster");
-    expect(roster.textContent).toContain("Eunice Chon");
+    expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);
     expect(roster.textContent).toContain("SAT");
-    expect(roster.textContent).toContain("Nika Raiffe");
+    expect(within(roster).getAllByText("Nika Raiffe")).toHaveLength(1);
     expect(roster.textContent).toContain("English");
     expect(screen.getByText("One plan. Twelve focused meetings.")).toBeTruthy();
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
@@ -441,9 +441,9 @@ describe("authenticated role dashboard flows", () => {
     render(<FallWelcomeDashboard />);
 
     const roster = screen.getByTestId("client-tutor-roster");
-    expect(roster.textContent).toContain("Eunice Chon");
+    expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);
     expect(roster.textContent).toContain("SAT");
-    expect(roster.textContent).toContain("Nika Raiffe");
+    expect(within(roster).getAllByText("Nika Raiffe")).toHaveLength(1);
     expect(roster.textContent).toContain("English");
   });
 
