@@ -49,6 +49,9 @@ const MISSING_OPERATOR_CHOICE =
 const STEM_CITES_VISUAL =
   /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|the dot plot|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
 const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
+const MODULE_BOILERPLATE =
+  /^(?:DIRECTIONS|STOP)\b|\bGO ON TO THE NEXT(?:\s+PAGE)?\b|\bTHIS IS THE END OF\b|\bIf you finish before time is called\b|\bUnauthorized copying or reuse\b|\bModule\s+[12](?:\s+(?:Reading|Writing|Math))?\b/;
+const CONTINGENCY_WORD = /\b(?:yes|no|total|male|female|men|women|agree|disagree)\b/i;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
   return (text ?? "")
@@ -138,6 +141,42 @@ export function looksSmashedTableChoice(text: string | null | undefined): boolea
   return SMASHED_TABLE_CHOICE.test(cleanOcrChoiceText(text));
 }
 
+export function looksCharacterSpacedGarbage(text: string | null | undefined): boolean {
+  const words = (text ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 6) return false;
+  let run = 0;
+  let maxRun = 0;
+  let singles = 0;
+  for (const word of words) {
+    if (/^[A-Za-z]$/.test(word)) {
+      run += 1;
+      singles += 1;
+      maxRun = Math.max(maxRun, run);
+    } else {
+      run = 0;
+    }
+  }
+  if (maxRun >= 6) return true;
+  return words.length >= 10 && singles / words.length >= 0.55;
+}
+
+export function looksModuleBoilerplateChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  if (!value) return false;
+  return MODULE_BOILERPLATE.test(value);
+}
+
+export function looksExplodedOcrTable(text: string | null | undefined): boolean {
+  const value = stripSatBankFigureComments(text);
+  if (!value.trim()) return false;
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  const compact = value.replace(/\s+/g, " ");
+  const numbers = compact.match(/\b\d+(?:\.\d+)?\b/g) ?? [];
+  if (CONTINGENCY_WORD.test(compact) && numbers.length >= 6 && lines.length <= 2) return true;
+  const pipes = (compact.match(/\|/g) ?? []).length;
+  return pipes >= 8 && lines.length <= 2 && numbers.length >= 4;
+}
+
 /** `x > 0 y > 0` → one inequality per line so a student can read the system. */
 export function formatStudentChoiceText(text: string | null | undefined): string {
   const cleaned = cleanOcrChoiceText(text);
@@ -168,6 +207,8 @@ export function looksGarbledQuizText(text: string | null | undefined): boolean {
   const value = stripSatBankFigureComments(text);
   if (!value) return false;
   if (looksBrokenMathOcr(value)) return true;
+  if (looksCharacterSpacedGarbage(value)) return true;
+  if (looksExplodedOcrTable(value)) return true;
   if (ASCII_GRAPH.test(value)) return true;
   if (/[£]/.test(value) && /[=+\-]/.test(value)) return true;
   const letters = (value.match(/[A-Za-z]/g) ?? []).length;
@@ -207,6 +248,8 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(cleaned)) return false;
   if (looksMissingOperatorChoice(raw) || looksMissingOperatorChoice(cleaned)) return false;
   if (looksSmashedTableChoice(raw) || looksSmashedTableChoice(cleaned)) return false;
+  if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(cleaned)) return false;
+  if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(cleaned)) return false;
   if (looksBrokenMathOcr(cleaned) && cleaned.length <= 96) return false;
   return true;
 }
@@ -273,7 +316,9 @@ export function shouldShowQuizChoices(
     (choice) =>
       looksFailedMathLayoutDump(choice.text) ||
       looksLeakedNextQuestionChoice(choice.text) ||
-      looksMissingOperatorChoice(choice.text),
+      looksMissingOperatorChoice(choice.text) ||
+      looksModuleBoilerplateChoice(choice.text) ||
+      looksCharacterSpacedGarbage(choice.text),
   );
   if (dump) return false;
   return hasUsableChoiceText(question.choices);

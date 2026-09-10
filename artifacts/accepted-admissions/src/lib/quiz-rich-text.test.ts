@@ -53,6 +53,7 @@ test("parses smashed x f(x) lines as a table instead of one prose sentence", () 
   }
   assert.ok(parts.some((part) => part.type === "text" && /linear function/.test(part.value)));
   assert.equal(extractPlainTextTable("not a table at all").table, null);
+  assert.equal(extractPlainTextTable("Which choice\nbest describes\nthis graph\nfor students").table, null);
 });
 
 test("can omit mismatched figure images while keeping the stem", () => {

@@ -104,12 +104,13 @@ export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
 }
 
 /**
- * Student-usable diagnostic item: letter-key MCQ with a readable stem and
- * complete non-garbage A–D text. A cited graph/table must be present as a
- * figure or a recovered data table. Full-question crops no longer unlock
- * letter-only shells.
+ * Shared student-usable gate for every quiz (diagnostic, routine pre-work,
+ * tutor-built bank quizzes, and lesson retries): letter-key MCQ with a
+ * readable stem and complete non-garbage A–D text. A cited graph/table must
+ * be present as a figure or a recovered data table. Full-question crops no
+ * longer unlock letter-only shells.
  */
-export function isStudentUsableDiagnosticItem(input: DiagnosticQualityInput): boolean {
+export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
   if (isTrueSprQuizItem(input)) return false;
   if (!hasCompleteLetterChoiceText(input.choices)) return false;
@@ -126,6 +127,9 @@ export function isStudentUsableDiagnosticItem(input: DiagnosticQualityInput): bo
   if (stemReferencesMissingVisual(input)) return false;
   return hasRenderableFigures(input) || hasRecoveredDataTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`);
 }
+
+/** @deprecated Use isStudentUsableQuizItem — same shared gate for all quizzes. */
+export const isStudentUsableDiagnosticItem = isStudentUsableQuizItem;
 
 export function diagnosticPromptFingerprint(input: DiagnosticQualityInput): string {
   const text = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`
@@ -183,7 +187,7 @@ export function selectUsableDiagnosticItems<T extends DiagnosticQualityInput>(
     allowCrossCollectionFill?: boolean;
   } = {},
 ): T[] {
-  const usable = items.filter((item) => isStudentUsableDiagnosticItem(item));
+  const usable = items.filter((item) => isStudentUsableQuizItem(item));
   const seenFingerprints = new Set<string>();
   const unique: T[] = [];
   for (const item of [...usable].sort(sortDiagnosticItems)) {
@@ -288,7 +292,7 @@ export function summarizeDiagnosticComposition(
     mathCount > 0 &&
     sprCount === 0 &&
     duplicatePrompts === 0 &&
-    selected.every((item) => isStudentUsableDiagnosticItem(item));
+    selected.every((item) => isStudentUsableQuizItem(item));
 
   return {
     questionCount: selected.length,

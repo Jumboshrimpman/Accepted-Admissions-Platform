@@ -35,7 +35,7 @@ import {
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
 import {
-  isStudentUsableDiagnosticItem,
+  isStudentUsableQuizItem,
   selectUsableDiagnosticItems,
   summarizeDiagnosticComposition,
   type DiagnosticComposition,
@@ -751,7 +751,7 @@ export async function assignPreworkFromBank(input: {
       correctAnswer: row.correctAnswer,
     }),
   );
-  pool = pool.filter((row) => isStudentUsableDiagnosticItem(bankRowForDiagnostic(row)));
+  pool = pool.filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   if (pool.length === 0) {
     throw Object.assign(
       new Error(
@@ -1006,17 +1006,18 @@ export function bankQuestionShape(
     estimatedSeconds: asFiniteNumber(row.estimatedSeconds),
     sourceKind: row.sourceKind,
     extractGaps: row.extractGaps ?? {},
-    assignable: isAssignableBankItem({
-      prompt: row.prompt,
-      questionType: row.questionType,
-      choices: asChoices(row.choices),
-      correctAnswer: row.correctAnswer,
-      extractGaps: (row.extractGaps ?? {}) as {
-        missingPrompt?: boolean;
-        missingChoices?: boolean;
-        figurePrimary?: boolean;
-      },
-    }),
+    assignable:
+      isAssignableBankItem({
+        prompt: row.prompt,
+        questionType: row.questionType,
+        choices: asChoices(row.choices),
+        correctAnswer: row.correctAnswer,
+        extractGaps: (row.extractGaps ?? {}) as {
+          missingPrompt?: boolean;
+          missingChoices?: boolean;
+          figurePrimary?: boolean;
+        },
+      }) && isStudentUsableQuizItem(bankRowForDiagnostic(row)),
     hasOfficialExplanation: Boolean(row.officialExplanation.trim()),
     linkedQuestionId: row.linkedQuestionId,
   };
@@ -1367,12 +1368,14 @@ export async function requestSimilarRetry(input: {
   if (!sourceQuestion) {
     throw Object.assign(new Error("Missed question not found"), { status: 404 });
   }
-  const unusedBank = sourceBank
-    ? await db
-        .select()
-        .from(bankQuestionsTable)
-        .where(ne(bankQuestionsTable.id, sourceBank.id))
-    : await db.select().from(bankQuestionsTable);
+  const unusedBank = (
+    sourceBank
+      ? await db
+          .select()
+          .from(bankQuestionsTable)
+          .where(ne(bankQuestionsTable.id, sourceBank.id))
+      : await db.select().from(bankQuestionsTable)
+  ).filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   const used = session?.clientUserId
     ? await usedSourceKeysForStudent(session.clientUserId)
     : new Set<string>();

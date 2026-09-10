@@ -15,6 +15,9 @@ import {
   looksPipeBackslashOcr,
   formatStudentChoiceText,
   looksSmashedTableChoice,
+  looksCharacterSpacedGarbage,
+  looksExplodedOcrTable,
+  looksModuleBoilerplateChoice,
   shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
   shouldShowQuizChoices,
@@ -228,6 +231,26 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
   };
   assert.equal(shouldHideQuizOcrStem(metalBall), true);
   assert.equal(shouldShowQuizChoices(metalBall), false);
+});
+
+test("hides character-spaced OCR, module boilerplate D, and exploded tables", () => {
+  assert.equal(looksCharacterSpacedGarbage("T h e g r a p h s h o w s enrollment"), true);
+  assert.equal(looksModuleBoilerplateChoice("Module 2 Math"), true);
+  assert.equal(looksExplodedOcrTable("Yes No Total Men 12 8 20 Women 15 5 20"), true);
+  assert.equal(isStudentReadableChoiceText("STOP GO ON TO THE NEXT PAGE"), false);
+  assert.equal(
+    shouldShowQuizChoices({
+      prompt: "Which choice completes the text with the most logical transition?",
+      choices: [
+        { id: "a", label: "A", text: "However" },
+        { id: "b", label: "B", text: "Therefore" },
+        { id: "c", label: "C", text: "Meanwhile" },
+        { id: "d", label: "D", text: "Module 2 Reading and Writing" },
+      ],
+    }),
+    false,
+  );
+  assert.equal(looksGarbledQuizText("T h e f u n c t i o n is defined by"), true);
 });
 
 test("answer review shows the letter when choice text is empty", () => {

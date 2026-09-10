@@ -1,9 +1,12 @@
 import { isAssignableBankItem, isTutorQuizMcq } from "./sat-bank-import.ts";
 import { assignmentChoices } from "./assignment-visibility.ts";
+import { isStudentUsableQuizItem } from "./sat-bank-diagnostic-quality.ts";
 
 export const TUTOR_QUIZ_MAX_QUESTIONS = 80;
 export const TUTOR_QUIZ_SPR_NOTE =
   "Student-produced response (SPR) items cannot be added to tutor-built quizzes.";
+export const TUTOR_QUIZ_UNUSABLE_NOTE =
+  "Every selected question must be a complete student-usable multiple-choice item with a readable stem and A–D text.";
 
 export { isTutorQuizMcq };
 
@@ -11,9 +14,11 @@ export type TutorQuizBankCandidate = {
   id: string;
   questionType: string;
   prompt: string;
+  stimulus?: string | null;
   choices: unknown;
   correctAnswer: string;
-  extractGaps?: { missingPrompt?: boolean; missingChoices?: boolean } | null;
+  figures?: unknown;
+  extractGaps?: { missingPrompt?: boolean; missingChoices?: boolean; figurePrimary?: boolean } | null;
   estimatedSeconds?: number | null;
 };
 
@@ -43,18 +48,28 @@ export function selectBankQuestionsForTutorQuiz<T extends TutorQuizBankCandidate
     if (!isTutorQuizMcq(row.questionType)) {
       return { selected: [], error: TUTOR_QUIZ_SPR_NOTE };
     }
+    const choices = assignmentChoices(row.choices) ?? [];
     if (
       !isAssignableBankItem({
         prompt: row.prompt,
         questionType: row.questionType,
-        choices: assignmentChoices(row.choices) ?? [],
+        choices,
         correctAnswer: row.correctAnswer,
+        extractGaps: row.extractGaps ?? undefined,
+      }) ||
+      !isStudentUsableQuizItem({
+        id: row.id,
+        prompt: row.prompt,
+        stimulus: row.stimulus,
+        choices,
+        correctAnswer: row.correctAnswer,
+        questionType: row.questionType,
         extractGaps: row.extractGaps ?? undefined,
       })
     ) {
       return {
         selected: [],
-        error: "Every selected question must be a complete multiple-choice item.",
+        error: TUTOR_QUIZ_UNUSABLE_NOTE,
       };
     }
     selected.push(row);

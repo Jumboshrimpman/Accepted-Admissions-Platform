@@ -15,9 +15,9 @@ Math must render with the exponents, radicals, and fractions the student needs, 
 
 A figure that the stem never cites (page-neighbor crop on a word problem, unlabeled equation list, inequality dump) is dropped. Stems with clear OCR corruption (`PQ QR` missing `=`, `value = of`, `Xu123456`, axis-tick dumps, `^ h` / `y f(x)` / `point,0 5`, pipe/backslash graph residue, leaked next-question choices) are rejected. Bare A–D never ships. Unlabeled choice lists plus letter buttons never ship.
 
-Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, math OCR that is missing exponents or operators or is a failed fraction/layout dump, unlabeled A–D lists, pipe/backslash graph residue, mangled `( , x y )` stems, incomplete table crops, leaked geometry leftover in a numeric choice, scrambled `= (…) f(x)` / empty `f(x)( )`, and exploded vertex-fraction OCR.
+Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, math OCR that is missing exponents or operators or is a failed fraction/layout dump, unlabeled A–D lists, pipe/backslash graph residue, mangled `( , x y )` stems, incomplete table crops, leaked geometry leftover in a numeric choice, scrambled `= (…) f(x)` / empty `f(x)( )`, exploded vertex-fraction OCR, character-spaced garbage (`T h e g r a p h`), junk choice D module boilerplate (`Module 2`, `GO ON TO THE NEXT PAGE`), and exploded contingency / OCR-as-table dumps.
 
-This path rebuilds the diagnostic from **student-usable MCQ only**.
+The same student-usable gate (`isStudentUsableQuizItem`) is shared platform code. Routine SAT pre-work, tutor-built bank quizzes, and lesson retries inherit it — not Oct 2 only. Prefer fewer perfect items over a full form of broken OCR.
 
 ## Student UX after rebuild
 
@@ -119,4 +119,4 @@ Then as Taito or a client preview: open the Oct 2 diagnostic → a graph item mu
 
 ## Parallel work
 
-This branch only changes diagnostic **content quality, quiz layout, and assignment composition**. No Clerk invites. Do not merge from this runbook.
+This branch changes **shared quiz quality gates, quiz layout, and assignment composition** (diagnostic + routine + tutor-built). No Clerk invites. Leave merge to Code Checker / Chief of Staff.

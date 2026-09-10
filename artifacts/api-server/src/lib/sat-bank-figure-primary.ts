@@ -98,6 +98,12 @@ const TABLE_STEM = /\b(?:the table|table shows|linear function|values of [xf]|f\
 const GRAPH_STEM = /\b(?:scatterplot|scatter plot|the graph|the chart)\b/i;
 const STEM_QUESTION =
   /\?|\b(?:which|what|how|find|complete the text|most nearly|according to|equation defines)\b/i;
+const MODULE_BOILERPLATE =
+  /^(?:DIRECTIONS|STOP)\b|\bGO ON TO THE NEXT(?:\s+PAGE)?\b|\bTHIS IS THE END OF\b|\bIf you finish before time is called\b|\bUnauthorized copying or reuse\b|\bModule\s+[12](?:\s+(?:Reading|Writing|Math))?\b/;
+const SENTENCE_TABLE_HEADER =
+  /^(?:which|what|how|the|for|this|that|best|most|complete)$/i;
+const MATH_TABLE_HEADER = /^(?:x|y|f\(x\)|g\(x\)|h\(x\)|n|%|year|age|state|number|percent)$/i;
+const CONTINGENCY_WORD = /\b(?:yes|no|total|male|female|men|women|agree|disagree)\b/i;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
   return (text ?? "")
@@ -254,14 +260,29 @@ export function extractPlainTextTable(text: string | null | undefined): {
   }
   if (!best) return { table: null, remainder: stripSatBankFigureComments(text) };
   const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line));
+  const headers = block[0] ?? [];
+  const rows = block.slice(1);
+  if (!isPlausibleDataTable(headers, rows)) {
+    return { table: null, remainder: stripSatBankFigureComments(text) };
+  }
   const remainder = [...lines.slice(0, best.start), ...lines.slice(best.end)]
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return {
-    table: { headers: block[0] ?? [], rows: block.slice(1) },
+    table: { headers, rows },
     remainder,
   };
+}
+
+function isPlausibleDataTable(headers: string[], rows: string[][]): boolean {
+  if (headers.length < 2 || rows.length < 2) return false;
+  const cells = [...headers, ...rows.flat()];
+  const numeric = cells.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length;
+  const mathHeader = headers.some((header) => MATH_TABLE_HEADER.test(header));
+  if (numeric === 0 && !mathHeader) return false;
+  if (headers.some((header) => SENTENCE_TABLE_HEADER.test(header))) return false;
+  return true;
 }
 
 export function hasRecoveredDataTable(text: string | null | undefined): boolean {
@@ -381,6 +402,45 @@ export function looksSmashedTableChoice(text: string | null | undefined): boolea
   return SMASHED_TABLE_CHOICE.test(cleanOcrChoiceText(text));
 }
 
+/** `T h e g r a p h s h o w s` — OCR split every letter. */
+export function looksCharacterSpacedGarbage(text: string | null | undefined): boolean {
+  const words = (text ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 6) return false;
+  let run = 0;
+  let maxRun = 0;
+  let singles = 0;
+  for (const word of words) {
+    if (/^[A-Za-z]$/.test(word)) {
+      run += 1;
+      singles += 1;
+      maxRun = Math.max(maxRun, run);
+    } else {
+      run = 0;
+    }
+  }
+  if (maxRun >= 6) return true;
+  return words.length >= 10 && singles / words.length >= 0.55;
+}
+
+/** Choice D (or any choice) that leaked SAT module boilerplate. */
+export function looksModuleBoilerplateChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  if (!value) return false;
+  return MODULE_BOILERPLATE.test(value);
+}
+
+/** Contingency / frequency table dumped onto one or two OCR lines. */
+export function looksExplodedOcrTable(text: string | null | undefined): boolean {
+  const value = stripSatBankFigureComments(text);
+  if (!value.trim()) return false;
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  const compact = value.replace(/\s+/g, " ");
+  const numbers = compact.match(/\b\d+(?:\.\d+)?\b/g) ?? [];
+  if (CONTINGENCY_WORD.test(compact) && numbers.length >= 6 && lines.length <= 2) return true;
+  const pipes = (compact.match(/\|/g) ?? []).length;
+  return pipes >= 8 && lines.length <= 2 && numbers.length >= 4;
+}
+
 /** `x > 0 y > 0` → one inequality per line so a student can read the system. */
 export function formatStudentChoiceText(text: string | null | undefined): string {
   const cleaned = cleanOcrChoiceText(text);
@@ -445,7 +505,10 @@ export function hasReadableStudentStem(input: {
   if (prose.length < 20) return false;
   if (/^note:\s*figures not drawn to scale\.?$/i.test(prose)) return false;
   if (looksBrokenStemPlaceholders(prose)) return false;
-  if (looksBrokenMathOcr(prose) || looksBrokenMathOcr(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`)) {
+  const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  if (looksCharacterSpacedGarbage(prose) || looksCharacterSpacedGarbage(haystack)) return false;
+  if (looksExplodedOcrTable(prose) || looksExplodedOcrTable(haystack)) return false;
+  if (looksBrokenMathOcr(prose) || looksBrokenMathOcr(haystack)) {
     return false;
   }
   if (looksGarbledExtractText(prose)) return false;
@@ -576,6 +639,8 @@ export function looksGarbledExtractText(text: string | null | undefined): boolea
   if (!value) return Boolean(raw);
   if (looksBrokenStemPlaceholders(text) && looksBrokenStemPlaceholders(value)) return true;
   if (looksBrokenMathOcr(value) || looksBrokenMathOcr(raw)) return true;
+  if (looksCharacterSpacedGarbage(value) || looksCharacterSpacedGarbage(raw)) return true;
+  if (looksExplodedOcrTable(value) || looksExplodedOcrTable(raw)) return true;
   if (ASCII_GRAPH.test(value)) return true;
   if (/[£]/.test(value) && /[=+\-]/.test(value)) return true;
   const letters = (value.match(/[A-Za-z]/g) ?? []).length;
@@ -601,6 +666,8 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(value)) return false;
   if (looksMissingOperatorChoice(raw) || looksMissingOperatorChoice(value)) return false;
   if (looksSmashedTableChoice(raw) || looksSmashedTableChoice(value)) return false;
+  if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(value)) return false;
+  if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(value)) return false;
   if (looksBrokenMathOcr(value) && value.length <= 96) return false;
   if (looksTruncatedChoiceText(value)) return false;
   if (looksSmashedOrTruncatedExtract(value)) return false;

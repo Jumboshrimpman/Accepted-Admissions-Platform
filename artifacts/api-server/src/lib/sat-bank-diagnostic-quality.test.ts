@@ -13,6 +13,7 @@ import {
 import {
   isCleanTextMcqItem,
   isStudentUsableDiagnosticItem,
+  isStudentUsableQuizItem,
   isTrueSprQuizItem,
   isUsableFullLengthDiagnostic,
   normalizeLetterAnswer,
@@ -609,6 +610,44 @@ test("rejects scrambled f(x) and smashed vertex crops; keeps 21px no-solution an
       figures: [{ url: figureUrl, alt: "Diagram from page 47" }],
     }),
     true,
+  );
+});
+
+test("shared quiz gate rejects character-spaced OCR, module boilerplate D, and exploded tables", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(isStudentUsableQuizItem, isStudentUsableDiagnosticItem);
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "T h e g r a p h s h o w s the relationship. Which choice is correct?",
+      choices: letterChoices(["Positive", "Negative", "None", "Undefined"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "Which choice completes the text with the most logical transition?",
+      choices: letterChoices(["However", "Therefore", "Meanwhile", "Module 2 Reading and Writing GO ON TO THE NEXT PAGE"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "Yes No Total Men 12 8 20 Women 15 5 20 Which choice uses data from the table?",
+      choices: letterChoices(["12", "15", "20", "8"]),
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
   );
 });
 

@@ -16,6 +16,7 @@ import {
 export {
   TUTOR_QUIZ_MAX_QUESTIONS,
   TUTOR_QUIZ_SPR_NOTE,
+  TUTOR_QUIZ_UNUSABLE_NOTE,
   isTutorQuizMcq,
   selectBankQuestionsForTutorQuiz,
   tutorQuizTimeLimitMinutes,

@@ -33,6 +33,9 @@ import {
   stemCitesVisual,
   looksSpacedProductChoice,
   looksStrippedRadicalChoice,
+  looksCharacterSpacedGarbage,
+  looksExplodedOcrTable,
+  looksModuleBoilerplateChoice,
   prepareStudentExtractText,
   referencesVisualStimulus,
   selectStimulusFigures,
@@ -552,6 +555,29 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
     ).length,
     0,
   );
+});
+
+test("rejects character-spaced OCR, module boilerplate choices, and exploded OCR tables", () => {
+  assert.equal(looksCharacterSpacedGarbage("T h e g r a p h s h o w s enrollment"), true);
+  assert.equal(looksCharacterSpacedGarbage("Which choice completes the text with the most logical transition?"), false);
+  assert.equal(looksModuleBoilerplateChoice("Module 2 Reading and Writing"), true);
+  assert.equal(looksModuleBoilerplateChoice("GO ON TO THE NEXT PAGE"), true);
+  assert.equal(looksModuleBoilerplateChoice("However"), false);
+  assert.equal(
+    looksExplodedOcrTable("Yes No Total Men 12 8 20 Women 15 5 20 Which choice uses data from the table?"),
+    true,
+  );
+  assert.equal(
+    extractPlainTextTable("Which choice\nbest describes\nthis graph\nfor students").table,
+    null,
+  );
+  assert.equal(isStudentReadableChoiceText("If you finish before time is called"), false);
+  assert.equal(hasCompleteLetterChoiceText([
+    { id: "a", label: "A", text: "However" },
+    { id: "b", label: "B", text: "Therefore" },
+    { id: "c", label: "C", text: "Meanwhile" },
+    { id: "d", label: "D", text: "STOP GO ON TO THE NEXT PAGE" },
+  ]), false);
 });
 
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {

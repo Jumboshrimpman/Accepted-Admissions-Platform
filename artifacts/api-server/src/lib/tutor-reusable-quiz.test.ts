@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   TUTOR_QUIZ_MAX_QUESTIONS,
   TUTOR_QUIZ_SPR_NOTE,
+  TUTOR_QUIZ_UNUSABLE_NOTE,
   isTutorQuizMcq,
   selectBankQuestionsForTutorQuiz,
   tutorQuizTimeLimitMinutes,
@@ -11,10 +12,12 @@ import {
 const mcq = {
   id: "q1",
   questionType: "mcq",
-  prompt: "Which choice is correct?",
+  prompt: "Which choice is correct for this practice item?",
   choices: [
     { id: "a", label: "A", text: "One" },
     { id: "b", label: "B", text: "Two" },
+    { id: "c", label: "C", text: "Three" },
+    { id: "d", label: "D", text: "Four" },
   ],
   correctAnswer: "a",
   estimatedSeconds: 60,
@@ -37,7 +40,7 @@ test("treats only SPR-like types as non-MCQ", () => {
 });
 
 test("selects bank questions in requested order and skips duplicates", () => {
-  const second = { ...mcq, id: "q3", prompt: "Second stem" };
+  const second = { ...mcq, id: "q3", prompt: "Which choice is correct for the second item?" };
   const planned = selectBankQuestionsForTutorQuiz([second, mcq], ["q1", "q1", "q3"]);
   assert.deepEqual(
     planned.selected.map((row) => row.id),
@@ -56,12 +59,29 @@ test("rejects unknown or incomplete items", () => {
     selectBankQuestionsForTutorQuiz([mcq], ["missing"]).error,
     "One or more bank questions were not found.",
   );
-  assert.match(
+  assert.equal(
     selectBankQuestionsForTutorQuiz(
       [{ ...mcq, prompt: "" }],
       ["q1"],
-    ).error ?? "",
-    /complete multiple-choice/,
+    ).error,
+    TUTOR_QUIZ_UNUSABLE_NOTE,
+  );
+  assert.equal(
+    selectBankQuestionsForTutorQuiz(
+      [
+        {
+          ...mcq,
+          choices: [
+            { id: "a", label: "A", text: "" },
+            { id: "b", label: "B", text: "" },
+            { id: "c", label: "C", text: "" },
+            { id: "d", label: "D", text: "Module 2 Reading and Writing" },
+          ],
+        },
+      ],
+      ["q1"],
+    ).error,
+    TUTOR_QUIZ_UNUSABLE_NOTE,
   );
   assert.equal(
     selectBankQuestionsForTutorQuiz(

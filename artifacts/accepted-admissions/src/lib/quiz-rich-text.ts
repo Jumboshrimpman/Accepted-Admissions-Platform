@@ -45,6 +45,20 @@ function looksTableCell(token: string): boolean {
   return /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token);
 }
 
+function isPlausibleDataTable(headers: string[], rows: string[][]): boolean {
+  if (headers.length < 2 || rows.length < 2) return false;
+  const cells = [...headers, ...rows.flat()];
+  const numeric = cells.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length;
+  const mathHeader = headers.some((header) =>
+    /^(?:x|y|f\(x\)|g\(x\)|h\(x\)|n|%|year|age|state|number|percent)$/i.test(header),
+  );
+  if (numeric === 0 && !mathHeader) return false;
+  if (headers.some((header) => /^(?:which|what|how|the|for|this|that|best|most|complete)$/i.test(header))) {
+    return false;
+  }
+  return true;
+}
+
 export function extractPlainTextTable(text: string | null | undefined): {
   table: { headers: string[]; rows: string[][] } | null;
   remainder: string;
@@ -72,11 +86,16 @@ export function extractPlainTextTable(text: string | null | undefined): {
   }
   if (!best) return { table: null, remainder: (text ?? "").trim() };
   const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line));
+  const headers = block[0] ?? [];
+  const rows = block.slice(1);
+  if (!isPlausibleDataTable(headers, rows)) {
+    return { table: null, remainder: (text ?? "").trim() };
+  }
   const remainder = [...lines.slice(0, best.start), ...lines.slice(best.end)]
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { table: { headers: block[0] ?? [], rows: block.slice(1) }, remainder };
+  return { table: { headers, rows }, remainder };
 }
 
 function studentTextPart(value: string): QuizRichPart | null {

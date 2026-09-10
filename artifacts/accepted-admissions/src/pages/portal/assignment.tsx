@@ -935,7 +935,7 @@ export default function PortalAssignment() {
 
   if (collaborative) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 pb-16">
+      <div className="mx-auto max-w-6xl space-y-5 pb-16">
         <p className="text-sm text-muted-foreground">
           {IN_SESSION_PRACTICE_CHECK_COPY} This is not a timed quiz.
         </p>
