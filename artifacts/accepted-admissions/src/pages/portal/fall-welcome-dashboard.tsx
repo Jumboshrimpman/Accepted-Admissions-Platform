@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useGetDashboard, type CurriculumSession, type Dashboard } from "@workspace/api-client-react";
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
-import { portalTutorsFromDashboard } from "@/lib/portal-tutors";
+import { portalTutorRosterKey, portalTutorsFromDashboard } from "@/lib/portal-tutors";
 import {
   collapsedListedSessions,
   displaySessionTitle,
@@ -96,9 +96,11 @@ export default function FallWelcomeDashboard() {
 export function ClientDashboardView({
   dashboard,
   adminPreview = false,
+  afterCurriculum,
 }: {
   dashboard: Dashboard;
   adminPreview?: boolean;
+  afterCurriculum?: ReactNode;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
   const studentSatCommerce =
@@ -173,7 +175,10 @@ export function ClientDashboardView({
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14">
-      <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
+      <section
+        className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
+        data-testid="portal-curriculum-section"
+      >
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
@@ -213,6 +218,14 @@ export function ClientDashboardView({
             )}
           </div>
         </div>
+        {afterCurriculum ? (
+          <div
+            className="mt-6 rounded-2xl bg-background p-1 text-foreground shadow-sm"
+            data-testid="curriculum-payment-receipts"
+          >
+            {afterCurriculum}
+          </div>
+        ) : null}
       </section>
 
       {viewer && (
@@ -323,7 +336,7 @@ export function ClientDashboardView({
             {tutors.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2" data-testid="client-tutor-roster">
                 {tutors.map((tutor) => (
-                  <div key={tutor.id} className="rounded-xl border p-4">
+                  <div key={portalTutorRosterKey(tutor)} className="rounded-xl border p-4">
                     <p className="font-semibold">{tutor.name}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{tutor.specialty}</p>
                   </div>

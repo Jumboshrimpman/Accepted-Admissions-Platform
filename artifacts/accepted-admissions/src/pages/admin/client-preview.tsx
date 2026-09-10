@@ -49,6 +49,16 @@ export default function AdminClientPreview() {
     );
   }
 
+  const offPlatformBilling = isOffPlatformProgramClient(preview.data.credits);
+  const financialCard = (
+    <FinancialCard
+      previewData={preview.data.previewFinancials}
+      previewOffer={preview.data.previewOffer}
+      adminPreview
+      offPlatformBilling={offPlatformBilling}
+    />
+  );
+
   return (
     <div className="mx-auto max-w-7xl space-y-5 pb-12">
       <div className="flex flex-col gap-3 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -67,28 +77,29 @@ export default function AdminClientPreview() {
           </Link>
         </Button>
       </div>
-       <div className="grid gap-5 xl:grid-cols-2">
-         <FinancialCard
-           previewData={preview.data.previewFinancials}
-           previewOffer={preview.data.previewOffer}
-           adminPreview
-           offPlatformBilling={isOffPlatformProgramClient(preview.data.credits)}
-         />
-         <ClientPreviewBookingCard
-           previewBooking={preview.data.previewBooking}
-           remainingHours={preview.data.previewFinancials.remainingHours}
-           hasVerifiedPayment={preview.data.previewFinancials.payments.some(
-             (payment) => Boolean(payment.verifiedAt) || payment.status === "paid" || payment.status === "partially_paid",
-           )}
-           offPlatformBilling={isOffPlatformProgramClient(preview.data.credits)}
-           hasAssignedProgramSessions={
-             (preview.data.curriculumSessions?.length ?? 0) > 0 ||
-             (preview.data.upcomingSessions?.length ?? 0) > 0
-           }
-         />
-       </div>
+      {!offPlatformBilling ? (
+        <div className="grid gap-5 xl:grid-cols-2">
+          {financialCard}
+          <ClientPreviewBookingCard
+            previewBooking={preview.data.previewBooking}
+            remainingHours={preview.data.previewFinancials.remainingHours}
+            hasVerifiedPayment={preview.data.previewFinancials.payments.some(
+              (payment) => Boolean(payment.verifiedAt) || payment.status === "paid" || payment.status === "partially_paid",
+            )}
+            offPlatformBilling={offPlatformBilling}
+            hasAssignedProgramSessions={
+              (preview.data.curriculumSessions?.length ?? 0) > 0 ||
+              (preview.data.upcomingSessions?.length ?? 0) > 0
+            }
+          />
+        </div>
+      ) : null}
       <div className="min-w-0 overflow-x-hidden rounded-3xl border-2 border-dashed border-primary/25 bg-muted/20 p-2 sm:p-4">
-        <ClientDashboardView dashboard={preview.data} adminPreview />
+        <ClientDashboardView
+          dashboard={preview.data}
+          adminPreview
+          afterCurriculum={offPlatformBilling ? financialCard : undefined}
+        />
       </div>
     </div>
   );
