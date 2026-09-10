@@ -812,8 +812,8 @@ test("stays inside one collection when cross-pack fill is disabled", async () =>
     preferredCollectionSlug: "sat-practice-test-4-digital",
     allowCrossCollectionFill: false,
   });
-  assert.ok(selected.length >= 80);
-  assert.ok(selected.length < 120);
+  assert.ok(selected.length >= 60);
+  assert.ok(selected.length < 80, "a single pack must stay thin rather than keep broken OCR to hit 80");
   assert.ok(selected.every((row) => row.collectionSlug === "sat-practice-test-4-digital"));
   assert.ok(selected.every((row) => isStudentUsableDiagnosticItem(row)));
 });
