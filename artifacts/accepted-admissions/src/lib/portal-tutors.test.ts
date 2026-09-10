@@ -55,6 +55,48 @@ test("dedupes Eunice and Nika when course and session tutor ids differ", () => {
   );
 });
 
+test("dedupes the same tutor by email or first name, including Xavier", () => {
+  const tutors = portalTutorsFromDashboard({
+    credits: { twelveSessionPlan: false },
+    courses: [
+      {
+        tutors: [
+          { id: "user-eunice", name: "Eunice", email: "eunice_chon@berkeley.edu", specialty: "SAT Tutor" },
+          { id: "user-xavier", name: "Xavier Morales", email: "xaver.rmz6@gmail.com", specialty: "SAT Tutor" },
+        ],
+      },
+    ],
+    curriculumSessions: [
+      {
+        subject: "SAT",
+        tutor: { id: "profile-eunice", name: "Eunice Chon", email: "eunice_chon@berkeley.edu" },
+      },
+      {
+        subject: "SAT",
+        tutor: { id: "profile-xavier", name: "Xavier", email: "xaver.rmz6@gmail.com" },
+      },
+    ],
+    upcomingSessions: [
+      {
+        subject: "IELTS",
+        tutor: { id: "nika-session", name: "Nika Raiffe" },
+      },
+      {
+        subject: "IELTS",
+        tutor: { id: "nika-other", name: "Nika" },
+      },
+    ],
+  });
+  assert.deepEqual(
+    tutors.map((tutor) => [tutor.name, tutor.specialty]),
+    [
+      ["Eunice Chon", "SAT"],
+      ["Nika Raiffe", "English"],
+      ["Xavier Morales", "SAT"],
+    ],
+  );
+});
+
 test("merges course and session tutors and maps IELTS to English", () => {
   const tutors = portalTutorsFromDashboard({
     credits: { twelveSessionPlan: false },

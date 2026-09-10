@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
-import { portalTutorsFromDashboard } from "@/lib/portal-tutors";
+import { portalTutorRosterKey, portalTutorsFromDashboard } from "@/lib/portal-tutors";
 import {
   collapsedListedSessions,
   displaySessionTitle,
@@ -329,7 +329,7 @@ export function ClientDashboardView({
             {tutors.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2" data-testid="client-tutor-roster">
                 {tutors.map((tutor) => (
-                  <div key={tutor.id} className="rounded-xl border p-4">
+                  <div key={portalTutorRosterKey(tutor)} className="rounded-xl border p-4">
                     <p className="font-semibold">{tutor.name}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{tutor.specialty}</p>
                   </div>
