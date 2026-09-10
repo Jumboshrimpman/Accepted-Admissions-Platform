@@ -99,11 +99,11 @@ export default function FallWelcomeDashboard() {
 export function ClientDashboardView({
   dashboard,
   adminPreview = false,
-  afterCurriculum,
+  afterDashboard,
 }: {
   dashboard: Dashboard;
   adminPreview?: boolean;
-  afterCurriculum?: ReactNode;
+  afterDashboard?: ReactNode;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
   const studentSatCommerce =
@@ -177,7 +177,7 @@ export function ClientDashboardView({
   });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-14">
+    <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
       <section
         className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
         data-testid="portal-curriculum-section"
@@ -221,14 +221,6 @@ export function ClientDashboardView({
             )}
           </div>
         </div>
-        {afterCurriculum ? (
-          <div
-            className="mt-6 rounded-2xl bg-background p-1 text-foreground shadow-sm"
-            data-testid="curriculum-payment-receipts"
-          >
-            {afterCurriculum}
-          </div>
-        ) : null}
       </section>
 
       {viewer && (
@@ -486,6 +478,12 @@ export function ClientDashboardView({
           ) : null}
         </CardContent>
       </Card>
+
+      {afterDashboard ? (
+        <div data-testid="portal-payment-receipts">
+          {afterDashboard}
+        </div>
+      ) : null}
     </div>
   );
 }

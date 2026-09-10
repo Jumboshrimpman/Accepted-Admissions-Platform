@@ -98,7 +98,7 @@ export default function AdminClientPreview() {
         <ClientDashboardView
           dashboard={preview.data}
           adminPreview
-          afterCurriculum={offPlatformBilling ? financialCard : undefined}
+          afterDashboard={offPlatformBilling ? financialCard : undefined}
         />
       </div>
     </div>
