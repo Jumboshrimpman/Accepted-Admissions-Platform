@@ -252,6 +252,7 @@ describe("administrator client preview", () => {
           bookingStatus: "confirmed",
           meetingUrl: "https://meet.google.com/rih-iayt-okb",
           tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-1", name: "Taito Goto" },
         },
         {
           id: "session-2",
@@ -266,6 +267,7 @@ describe("administrator client preview", () => {
           bookingStatus: "confirmed",
           meetingUrl: "https://meet.google.com/ielts-room",
           tutor: { id: "tutor-2", name: "Nika Raiffe", specialty: "IELTS Tutor", avatarUrl: null },
+          student: { id: "student-1", name: "Taito Goto" },
         },
       ],
       curriculumSessions: [
@@ -282,6 +284,7 @@ describe("administrator client preview", () => {
           bookingStatus: "confirmed",
           meetingUrl: "https://meet.google.com/rih-iayt-okb",
           tutor: { id: "tutor", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-1", name: "Taito Goto" },
           readiness: "ready",
           nextAction: "Open session plan",
           currentFocus: "SAT reasoning.",
@@ -301,6 +304,7 @@ describe("administrator client preview", () => {
           bookingStatus: "confirmed",
           meetingUrl: "https://meet.google.com/ielts-room",
           tutor: { id: "tutor-2", name: "Nika Raiffe", specialty: "IELTS Tutor", avatarUrl: null },
+          student: { id: "student-1", name: "Taito Goto" },
           readiness: "ready",
           nextAction: "Open session plan",
           currentFocus: "English communication.",
