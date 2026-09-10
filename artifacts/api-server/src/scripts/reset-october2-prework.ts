@@ -40,7 +40,7 @@ console.log(
       verify: [
         "Oct 2 Taito SAT pre-work is a single published full-length diagnostic.",
         "Question count is 80–120, with both RW and Math modules.",
-        "Every item is A–D MCQ (text choices or figure-primary with an image).",
+        "Every item is A–D MCQ (readable choice text, or a full-question crop — not a bare graph).",
         "No SPR text boxes, empty stems, or duplicate module prompts.",
         "Time limit is ≥134 minutes.",
         "Session-local forks on other meetings were not rewritten.",

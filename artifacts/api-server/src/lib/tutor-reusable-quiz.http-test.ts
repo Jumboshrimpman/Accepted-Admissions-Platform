@@ -166,6 +166,8 @@ test("tutors can assemble a reusable MCQ quiz from the keyed bank; students cann
         choices: [
           { id: "a", label: "A", text: "A transferable claim" },
           { id: "b", label: "B", text: "An unsupported list" },
+          { id: "c", label: "C", text: "A contradictory detail" },
+          { id: "d", label: "D", text: "An unrelated anecdote" },
         ],
         correctAnswer: "a",
         officialExplanation: "The passage opens with a transferable claim.",
@@ -184,10 +186,12 @@ test("tutors can assemble a reusable MCQ quiz from the keyed bank; students cann
         module: 1,
         questionNumber: 2,
         position: 2,
-        prompt: "What is the value of x?",
+        prompt: "What is the value of x in this equation?",
         choices: [
           { id: "a", label: "A", text: "2" },
           { id: "b", label: "B", text: "4" },
+          { id: "c", label: "C", text: "6" },
+          { id: "d", label: "D", text: "8" },
         ],
         correctAnswer: "b",
         officialExplanation: "Solve 2x = 8.",

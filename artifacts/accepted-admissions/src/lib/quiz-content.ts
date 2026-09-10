@@ -1,4 +1,6 @@
-import { isSafeQuizImageSrc } from "./quiz-rich-text.ts";
+import { isSafeQuizImageSrc, looksPreformattedQuizText, normalizeQuizProse } from "./quiz-rich-text.ts";
+
+export { normalizeQuizProse, looksPreformattedQuizText };
 
 const FIGURE_COMMENT = /<!--\s*\/?\s*sat-bank-figures\s*-->/gi;
 const HTML_COMMENT = /<!--[\s\S]*?-->/g;
@@ -52,23 +54,6 @@ export function isLiveListedSession(session: {
   return (session.status ?? "").trim().toLowerCase() !== "archived";
 }
 
-function looksPreformatted(text: string): boolean {
-  const lines = text.split("\n");
-  if (lines.length < 3) return false;
-  const symbolChars = (text.match(/[+|~_=<>*#\-]/g) ?? []).length;
-  return symbolChars / Math.max(text.length, 1) > 0.12;
-}
-
-export function normalizeQuizProse(value: string): string {
-  return value
-    .replace(/\u00a0/g, " ")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/([^\n])\n(?!\n)/g, "$1 ")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
-
 export function parseQuizContent(value: string | null | undefined): QuizContentSegment[] {
   const cleaned = stripQuizHtmlComments(value).replace(/\r\n/g, "\n");
   if (!cleaned.trim()) return [];
@@ -78,7 +63,7 @@ export function parseQuizContent(value: string | null | undefined): QuizContentS
     const index = match.index ?? 0;
     if (index > cursor) {
       const text = cleaned.slice(cursor, index);
-      const normalized = looksPreformatted(text) ? text.trim() : normalizeQuizProse(text);
+      const normalized = looksPreformattedQuizText(text) ? text.trim() : normalizeQuizProse(text);
       if (normalized) segments.push({ type: "text", value: normalized });
     }
     const src = match[2]!.trim();
@@ -89,7 +74,7 @@ export function parseQuizContent(value: string | null | undefined): QuizContentS
   }
   if (cursor < cleaned.length) {
     const text = cleaned.slice(cursor);
-    const normalized = looksPreformatted(text) ? text.trim() : normalizeQuizProse(text);
+    const normalized = looksPreformattedQuizText(text) ? text.trim() : normalizeQuizProse(text);
     if (normalized) segments.push({ type: "text", value: normalized });
   }
   return segments;

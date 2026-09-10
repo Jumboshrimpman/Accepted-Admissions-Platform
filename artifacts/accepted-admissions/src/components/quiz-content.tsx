@@ -5,7 +5,7 @@ import {
 } from "@/lib/quiz-content";
 
 const DEFAULT_IMAGE_CLASS =
-  "mx-auto my-3 max-h-80 max-w-full rounded-xl bg-white object-contain p-2 shadow-sm";
+  "mx-auto my-3 h-auto max-h-[min(44rem,85vh)] w-auto max-w-full rounded-xl bg-white object-contain p-2 shadow-sm";
 
 export function QuizFigurePrimary({
   src,
@@ -17,7 +17,7 @@ export function QuizFigurePrimary({
   imageClassName?: string;
 }) {
   return (
-    <div className={className} data-testid="quiz-figure-primary">
+    <div className={`max-w-full overflow-x-auto overflow-y-visible ${className ?? ""}`} data-testid="quiz-figure-primary">
       <img
         src={src}
         alt="Question and choices"
@@ -68,7 +68,7 @@ export function QuizContent({
   const segments = parseQuizContent(text);
   if (segments.length === 0) return null;
   return (
-    <div className={className} data-testid="quiz-content">
+    <div className={`min-w-0 max-w-full overflow-x-auto overflow-y-visible ${className ?? ""}`} data-testid="quiz-content">
       {segments.map((segment, index) =>
         segment.type === "image" ? (
           <img
@@ -80,12 +80,12 @@ export function QuizContent({
         ) : segment.value.includes("\n") ? (
           <pre
             key={`pre-${index}`}
-            className={preClassName ?? "whitespace-pre-wrap text-sm text-muted-foreground"}
+            className={preClassName ?? "min-w-0 overflow-x-auto whitespace-pre-wrap break-words text-sm text-muted-foreground"}
           >
             {segment.value}
           </pre>
         ) : (
-          <p key={`text-${index}`} className="leading-relaxed">
+          <p key={`text-${index}`} className="max-w-full whitespace-normal break-words leading-relaxed">
             {segment.value}
           </p>
         ),

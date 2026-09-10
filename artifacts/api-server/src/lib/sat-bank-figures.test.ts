@@ -75,12 +75,15 @@ test("linked-question rematerialize payload refreshes figures and official field
     difficulty: "hard",
     stimulus: null,
     figures: [{ url: figureUrl, alt: "Figure from page 10" }],
-    prompt: "How many organic farms?",
+    prompt: "Which choice most effectively uses data from the graph to complete the text?",
     choices: [],
     correctAnswer: "12",
     officialExplanation: "Count the labeled bar.",
   });
-  assert.equal(refreshed.prompt, "How many organic farms?");
+  assert.equal(
+    refreshed.prompt,
+    "Which choice most effectively uses data from the graph to complete the text?",
+  );
   assert.equal(refreshed.stimulus, `![Figure from page 10](${figureUrl})`);
   assert.equal(refreshed.correctAnswer, "12");
   assert.equal(refreshed.explanation, "Count the labeled bar.");
@@ -106,7 +109,7 @@ test("linked refresh classifies update vs insert vs skip and tallies counts", ()
   assert.deepEqual(counts, { updated: 2, skipped: 2, errors: 1 });
 });
 
-test("figure-primary materialize uses the composite crop and letter choices", () => {
+test("empty-choice figure crops do not materialize as letter-only A–D", () => {
   const content = materializedQuestionContent({
     section: "math",
     questionType: "spr",
@@ -121,12 +124,58 @@ test("figure-primary materialize uses the composite crop and letter choices", ()
     officialExplanation: "Choice B is correct because the cone volume formula applies.",
     extractGaps: { figurePrimary: true },
   });
-  assert.equal(content.questionType, "mcq");
-  assert.equal(content.prompt, "");
+  assert.equal(content.questionType, "spr");
   assert.equal(content.correctAnswer, "b");
-  assert.equal(content.stimulus, `![Question region including A–D](${figureUrl})`);
-  assert.deepEqual(content.choices.map((choice) => choice.label), ["A", "B", "C", "D"]);
+  assert.equal(content.choices.length, 0);
   assert.equal(content.explanation, "Choice B is correct because the cone volume formula applies.");
+});
+
+test("recovers a linear-function table and drops mismatched triangle crops", () => {
+  const content = materializedQuestionContent({
+    section: "math",
+    questionType: "mcq",
+    stimulus: null,
+    figures: [
+      { url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-img1.png", alt: "Figure from page 35" },
+      { url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-draw1.png", alt: "Diagram from page 35" },
+    ],
+    prompt:
+      "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x and their corresponding values of f(x)( ). Which ( ) ? equation defines f(x)",
+    choices: [
+      { id: "a", label: "A", text: "f(x)= 3x + 29" },
+      { id: "b", label: "B", text: "f(x)= 29x + 32" },
+      { id: "c", label: "C", text: "f(x)= 35x + 29" },
+      { id: "d", label: "D", text: "f(x)= 32x + 35" },
+    ],
+    correctAnswer: "A",
+    officialExplanation: "Choice A is correct.",
+  });
+  assert.match(content.prompt, /Which equation defines f\(x\)/);
+  assert.match(content.stimulus ?? "", /x\tf\(x\)|x\s+f\(x\)/);
+  assert.equal(content.stimulus?.includes("p35-img1"), false);
+  assert.equal(content.stimulus?.includes("p35-draw1"), false);
+  assert.equal(content.choices[0]?.text.includes("3x"), true);
+});
+
+test("does not attach a page-neighbor figure to a word problem that never cites one", () => {
+  const content = materializedQuestionContent({
+    section: "math",
+    questionType: "mcq",
+    stimulus: null,
+    figures: [{ url: figureUrl, alt: "Diagram from page 34" }],
+    prompt:
+      "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter of the triangle is 18 centimeters, what is the length of the third side?",
+    choices: [
+      { id: "a", label: "A", text: "2" },
+      { id: "b", label: "B", text: "8" },
+      { id: "c", label: "C", text: "10" },
+      { id: "d", label: "D", text: "24" },
+    ],
+    correctAnswer: "B",
+    officialExplanation: "Choice B is correct.",
+  });
+  assert.equal(content.stimulus, null);
+  assert.match(content.prompt, /18 centimeters/);
 });
 
 test("figure markdown line uses alt text when present", () => {

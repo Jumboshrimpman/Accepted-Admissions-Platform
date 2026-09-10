@@ -371,7 +371,49 @@ describe("student attempt UI", () => {
     expect(submitMutate).not.toHaveBeenCalled();
   });
 
-  test("figure-primary items show the composite image and A–D only, never SPR or leaked comments", () => {
+  test("graph items with complete A–D text show the choice copy, not letter-only buttons", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "figure_primary",
+      questionType: "mcq",
+      prompt:
+        "According to the US Department of Agriculture, in 2016 California had between 2,600 and 2,800 organic farms and ______ Which choice most effectively uses data from the graph to complete the text?",
+      stimulus:
+        "![Enrollment graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+        { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+        { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+        { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/Washington had between 600/);
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    const stem = screen.getByTestId("figure-primary-question");
+    expect(stem.className).not.toMatch(/md:grid-cols-2/);
+    expect(screen.getByTestId("quiz-stimulus-panel").className).toMatch(/overflow-visible/);
+  });
+
+  test("stimulus panel allows wide tables to scroll instead of clipping", () => {
+    mocks.questions[0]!.stimulus =
+      "Effects of Mycorrhizal Fungi on 3 Plant Species\nPlant species  Mycorrhizal host  Average mass\nCorn  yes  15.1";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "broccoli grown in soil containing mycorrhizal fungi had a slightly lower mass" },
+      { id: "b", label: "B", text: "corn grown in soil containing mycorrhizal fungi had a higher mass" },
+      { id: "c", label: "C", text: "marigolds grown in soil containing mycorrhizal fungi had a moderate mass" },
+      { id: "d", label: "D", text: "corn had the highest average mass of all three species grown" },
+    ];
+    render(<PortalAssignment />);
+    const panel = screen.getByTestId("quiz-stimulus-panel");
+    expect(panel.className).toMatch(/overflow-visible/);
+    expect(panel.className).not.toMatch(/overflow-hidden/);
+    expect(screen.getByTestId("quiz-question-stem").className).not.toMatch(/md:grid-cols-2/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/broccoli grown/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/corn had the highest/);
+  });
+
+  test("figure-primary items without usable choice text show unavailable, never letter-only buttons", () => {
     mocks.questions[0] = {
       ...mocks.questions[0]!,
       presentation: "figure_primary",
@@ -383,9 +425,8 @@ describe("student attempt UI", () => {
     };
     render(<PortalAssignment />);
     expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
-    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
-    expect(screen.getByRole("button", { name: "A" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "D" })).toBeTruthy();
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/student-produced response/i)).toBeNull();
     expect(screen.queryByText(/sat-bank-figures/)).toBeNull();
@@ -394,8 +435,418 @@ describe("student attempt UI", () => {
     expect(image.src).toBe(
       "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png",
     );
-    fireEvent.click(screen.getByRole("button", { name: "C" }));
-    expect(saveMutate).toHaveBeenCalled();
+  });
+
+  test("OCR-garbage and empty A–D shells are not shown as letter-only buttons", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "figure_primary",
+      prompt: "",
+      stimulus:
+        "![Scatterplot](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p36-draw2.png)",
+      choices: [
+        { id: "a", label: "A", text: "selecting" },
+        { id: "b", label: "B", text: "inspecting ~ ----~" },
+        { id: "c", label: "C", text: "creating ~" },
+        { id: "d", label: "D", text: "" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/selecting/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/inspecting/);
+    expect(screen.getByTestId("answer-choices").textContent).not.toMatch(/----/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/creating/);
+  });
+
+  test("long choice D wraps instead of clipping", () => {
+    mocks.questions[0]!.prompt =
+      "Which of the following is the best interpretation of f(5) is approximately equal to 243?";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "The value is 5 dollars greater in 1962." },
+      { id: "b", label: "B", text: "The value is approximately 243 dollars in 1962." },
+      { id: "c", label: "C", text: "The value is 5 times greater in 1962." },
+      {
+        id: "d",
+        label: "D",
+        text: "The value of the bank account is estimated to increase by approximately 243 dollars every 5 years between 1957 and 1972.",
+      },
+    ];
+    render(<PortalAssignment />);
+    const choices = screen.getByTestId("answer-choices");
+    expect(choices.className).toMatch(/overflow-visible/);
+    expect(choices.textContent).toMatch(/between 1957 and 1972/);
+    const option = screen.getAllByTestId("quiz-answer-choice").at(-1);
+    expect(option?.className).toMatch(/overflow-visible/);
+    expect(option?.className).toMatch(/items-start/);
+    expect(option?.textContent).toMatch(/between 1957 and 1972/);
+  });
+
+  test("partial figure crop does not stack broken OCR stem or letter-only buttons", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "text",
+      questionType: "mcq",
+      prompt:
+        "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area of the triangle, in square units?",
+      stimulus:
+        "![Question figure region page 38](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p38-q22-right.png)",
+      choices: [
+        { id: "a", label: "A", text: "8 2 + 80" },
+        { id: "b", label: "B", text: "12" },
+        { id: "c", label: "C", text: "24/80" },
+        { id: "d", label: "D", text: "24" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByAltText("Question figure region page 38")).toBeTruthy();
+    expect(screen.queryByText(/sides of length 2 2/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(
+      /Multiple-choice options unavailable/,
+    );
+  });
+
+  test("failed fraction dumps are not shown as A–D choices", () => {
+    mocks.questions[0]!.prompt =
+      "14x = 2 w + 19\n7y\nWhich equation correctly expresses w in terms of x and y ?\nf(x)";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "w = −19 y F 28x" },
+      { id: "b", label: "B", text: "−19 w = 14y 2⎞⎟ ⎛x" },
+      { id: "c", label: "C", text: "w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x" },
+      { id: "d", label: "D", text: "w = 14y ⎟⎟⎠ − 19 ⎜⎜⎜⎝ ⎟" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByText(/⎜/)).toBeNull();
+  });
+
+  test("word-problem stems do not show a mismatched page-neighbor figure", () => {
+    mocks.questions[0]!.prompt =
+      "The lengths of two sides of a triangle are 4 centimeters and 6 centimeters. If the perimeter of the triangle is 18 centimeters, what is the length, in centimeters, of the third side of this triangle?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-9-digital/p34-draw2.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "2" },
+      { id: "b", label: "B", text: "8" },
+      { id: "c", label: "C", text: "10" },
+      { id: "d", label: "D", text: "24" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByAltText("Diagram from page 34")).toBeNull();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/18 centimeters/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/24/);
+  });
+
+  test("slash-fraction equivalent equations show labeled A–D choice text", () => {
+    mocks.questions[0]!.prompt = "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "x/4 = 32" },
+      { id: "b", label: "B", text: "x/4 = 5" },
+      { id: "c", label: "C", text: "x/4 = 1" },
+      { id: "d", label: "D", text: "x/4 = -32" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/x\/4 \+ 1 = 33/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = 32/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = -32/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("unlabeled equation-list figure and missing-operator choices never become bare A–D", () => {
+    mocks.questions[0]!.prompt = "16 + 30 = 190 x\nWhich equation has the same solution as the given equation?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-9-digital/p34-draw2.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "x 16 = 30" },
+      { id: "b", label: "B", text: "16 x = 130" },
+      { id: "c", label: "C", text: "x 16 = 160" },
+      { id: "d", label: "D", text: "x 16 = 190" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/16 \+ 30 = 190 x/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("surfboard word problem does not double-render page-neighbor inequalities or bare A–D", () => {
+    mocks.questions[0]!.prompt =
+      "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 35](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-10-digital/p35-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "t 10 ≤75" },
+      { id: "b", label: "B", text: "t 10 + 25 ≤75" },
+      { id: "c", label: "C", text: "25 ≤75 t" },
+      { id: "d", label: "D", text: "t 25 + 10 ≤75" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByAltText("Diagram from page 35")).toBeNull();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/surfboard/);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("partial linear-function crop hides garbage OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt:
+        "= ^ h in\nFor the linear function f , the graph of y f(x)\nthe xy-plane has a slope of 7 and passes through the\n^ h. Which equation defines f ?\npoint,0 5\n^ h",
+      stimulus:
+        "![Question figure region page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-11-digital/p34-q3-right.png)",
+      choices: [
+        { id: "a", label: "A", text: "f(x) x 5 = ^ h" },
+        { id: "b", label: "B", text: "f(x) x 35 = ^ h" },
+        { id: "c", label: "C", text: "f(x) x/7 = 5 + ^ h" },
+        { id: "d", label: "D", text: "f(x) x/12 = 5 +" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/point,0 5/)).toBeNull();
+    expect(screen.queryByText(/\^ h in/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("pipe-backslash graph OCR and missing-operator polynomials are not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "The line graph shows the estimated number of chipmunks in a state park on April 1 of each year from 1989 to 1999.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year was the estimated number of chipmunks in the state park the greatest?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 42](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p42-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "1989" },
+      { id: "b", label: "B", text: "1994" },
+      { id: "c", label: "C", text: "1995" },
+      { id: "d", label: "D", text: "1998" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/I \\/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("run-on inequality systems render as separate lines", () => {
+    mocks.questions[0]!.prompt =
+      "The point (8, 2) in the x y-plane is a solution to which of the following systems of inequalities?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "x > 0 y > 0" },
+      { id: "b", label: "B", text: "x > 0 y < 0" },
+      { id: "c", label: "C", text: "x < 0 y > 0" },
+      { id: "d", label: "D", text: "x < 0 y < 0" },
+    ];
+    render(<PortalAssignment />);
+    const first = screen.getAllByTestId("quiz-answer-choice")[0];
+    expect(first?.textContent).toMatch(/x > 0/);
+    expect(first?.textContent).toMatch(/y > 0/);
+    expect(first?.querySelector(".whitespace-pre-wrap")?.textContent).toBe("x > 0\ny > 0");
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("slash-fraction quadratic choices stay visible", () => {
+    mocks.questions[0]!.prompt = "2 −4x −7x = −36\nWhat is the positive solution to the given equation?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "7/4" },
+      { id: "b", label: "B", text: "9/4" },
+      { id: "c", label: "C", text: "4" },
+      { id: "d", label: "D", text: "7" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/7\/4/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("mangled ( , x y ) stems are not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "x + y = 18\n5 y = x\nWhat is the solution ( ,x y) to the given system of equations?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "(15, 3)" },
+      { id: "b", label: "B", text: "(16, 2)" },
+      { id: "c", label: "C", text: "(17, 1)" },
+      { id: "d", label: "D", text: "(18, 0)" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("incomplete table crop hides broken OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt:
+        "= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?",
+      stimulus:
+        "![Question figure region page 43](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p43-q8-right.png)",
+      choices: [
+        { id: "a", label: "A", text: "x 1 2 3 h(x) 4 5 6" },
+        { id: "b", label: "B", text: "x 1 2 3 −2 h(x) 1 6" },
+        { id: "c", label: "C", text: "x 1 2 3 −1 h(x) 1 3" },
+        { id: "d", label: "D", text: "x 1 2 3 −2 h(x) 1 3" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/= x2/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("scrambled 270(0.1)x stem is not student-usable", () => {
+    mocks.questions[0]!.prompt = "= 270(0.1)x. What The function f is defined by f(x)\nis the value of f (0) ?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "0" },
+      { id: "b", label: "B", text: "1" },
+      { id: "c", label: "C", text: "27" },
+      { id: "d", label: "D", text: "270" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("21px juxtaposition equation stays readable with slash-fraction choices", () => {
+    mocks.questions[0]!.prompt =
+      "−3x + 21px = 84\nIn the given equation, p is a constant. The equation has no solution. What is the value of p ?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "0" },
+      { id: "b", label: "B", text: "1/7" },
+      { id: "c", label: "C", text: "4/3" },
+      { id: "d", label: "D", text: "4" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/21px/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/1\/7/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("scrambled f(x) definition is not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "= (x − 10)(x + 13) f(x)\nThe function f is defined by the given equation. For what value of x does f(x)( ) reach its minimum?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "−130" },
+      { id: "b", label: "B", text: "−13 23" },
+      { id: "c", label: "C", text: "− 2 3" },
+      { id: "d", label: "D", text: "− 2" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("smashed metal-ball vertex crop hides OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt:
+        "f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal\n9\nball’s height above the ground f(x)( ), in inches,",
+      stimulus:
+        "![Question figure region page 46](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p46-q19-left.png)",
+      choices: [
+        { id: "a", label: "A", text: "The metal ball’s minimum height was 3 inches above the ground." },
+        { id: "b", label: "B", text: "The metal ball’s minimum height was 7 inches above the ground." },
+        { id: "c", label: "C", text: "The metal ball’s height was 3 inches above the ground when it started moving." },
+        { id: "d", label: "D", text: "The metal ball’s height was 7 inches above the ground when it started moving. 20" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/2 \+ The function/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("dot plot with empty A–D never becomes letter-only buttons", () => {
+    mocks.questions[0]!.prompt =
+      "The dot plot represents the 15 values in data set A. Data set B is created by adding 56 to each of the values in data set A. Which of the following correctly compares the medians and the ranges of data sets A and B?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 47](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p47-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "" },
+      { id: "b", label: "B", text: "" },
+      { id: "c", label: "C", text: "" },
+      { id: "d", label: "D", text: "" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByAltText("Diagram from page 47")).toBeTruthy();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("library word problem hides an orphan figure fragment and does not invent letter-only A–D", () => {
+    mocks.questions[0]!.prompt =
+      "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. Based on these data, how many people voted against the proposal?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 45](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p45-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "" },
+      { id: "b", label: "B", text: "" },
+      { id: "c", label: "C", text: "" },
+      { id: "d", label: "D", text: "" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByAltText("Diagram from page 45")).toBeNull();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/library/);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("literal question-mark operator and missing exponents are not shown as A–D", () => {
+    mocks.questions[0]!.prompt = "12x3 −5x ? 3\nWhich expression is equivalent to";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "7x6" },
+      { id: "b", label: "B", text: "17x3" },
+      { id: "c", label: "C", text: "7x3" },
+      { id: "d", label: "D", text: "17x6" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByText(/7x6/)).toBeNull();
+  });
+
+  test("corrupt triangle stem with a figure hides OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt: "In the triangle shown, PQ QR. What is the value = of x?",
+      stimulus:
+        "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-11-digital/p34-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "156" },
+        { id: "b", label: "B", text: "66" },
+        { id: "c", label: "C", text: "48" },
+        { id: "d", label: "D", text: "24" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByAltText("Diagram from page 34")).toBeTruthy();
+    expect(screen.queryByText(/PQ QR/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("smashed x f(x) lines render as a data table, not one smashed prose line", () => {
+    mocks.questions[0]!.prompt =
+      "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "f(x)= 3x + 29" },
+      { id: "b", label: "B", text: "f(x)= 29x + 32" },
+      { id: "c", label: "C", text: "f(x)= 35x + 29" },
+      { id: "d", label: "D", text: "f(x)= 32x + 35" },
+    ];
+    render(<PortalAssignment />);
+    const table = screen.getByTestId("quiz-data-table");
+    expect(table.textContent).toMatch(/f\(x\)/);
+    expect(table.textContent).toMatch(/29/);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/linear function/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/3x \+ 29/);
   });
 
   test("renders markdown figure images from stimulus in the live quiz", () => {
@@ -436,7 +887,7 @@ describe("student attempt UI", () => {
           explanation: "The graph rises.",
           skill: "Transitions",
           flagged: false,
-          prompt: "Which transition is best?",
+          prompt: "Which choice most effectively uses data from the graph to complete the text?",
           stimulus:
             "![Enrollment graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png)",
           choices: [
@@ -490,7 +941,7 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("quiz-rich-text").textContent).toMatch(/oranges/);
   });
 
-  test("figure-primary comment shows one screenshot and A–D letters, not an SPR box", () => {
+  test("figure-primary comment without usable A–D text does not show letter-only buttons", () => {
     mocks.questions = [
       {
         id: "q-figure-primary",
@@ -508,8 +959,8 @@ describe("student attempt UI", () => {
     ];
     render(<PortalAssignment />);
     expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
-    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
-    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/D/);
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
   });

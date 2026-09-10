@@ -1,9 +1,16 @@
 import {
+  hasCompleteLetterChoiceText,
+  hasFullQuestionCrop,
+  hasMergedOrLeakedChoices,
+  hasReadableStudentStem,
+  hasRecoveredDataTable,
   hasRenderableFigures,
-  hasUsableChoiceText,
   isLetterAnswer,
   looksGarbledExtractText,
+  looksSmashedOrTruncatedExtract,
   normalizeLetterAnswer,
+  stemCitesVisual,
+  stripChartHeaderFragments,
   stripSatBankFigureComments,
   type BankFigureLike,
 } from "./sat-bank-figure-primary.ts";
@@ -64,34 +71,65 @@ export function isTrueSprQuizItem(input: Pick<DiagnosticQualityInput, "correctAn
 }
 
 function readableStudentText(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
-  const prompt = stripSatBankFigureComments(input.prompt);
-  const stimulus = stripSatBankFigureComments(input.stimulus);
-  return prompt.length >= 4 || stimulus.length >= 4;
+  return hasReadableStudentStem(input);
 }
 
 function isGarbledItem(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
-  return looksGarbledExtractText(input.prompt) || looksGarbledExtractText(input.stimulus);
+  const prompt = stripChartHeaderFragments(input.prompt);
+  const stimulus = stripChartHeaderFragments(input.stimulus);
+  return looksGarbledExtractText(prompt) || looksGarbledExtractText(stimulus);
 }
 
-/** Clean readable A–D item a student can answer from text alone. */
+function stemReferencesMissingVisual(input: DiagnosticQualityInput): boolean {
+  const haystack = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`;
+  if (!stemCitesVisual(haystack)) return false;
+  if (hasRecoveredDataTable(haystack) && /table/i.test(haystack)) return false;
+  return !hasRenderableFigures(input);
+}
+
+/** Clean readable A–D item a student can answer from text (plus a figure if cited). */
 export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
+  if (!hasCompleteLetterChoiceText(input.choices)) return false;
+  if (!readableStudentText(input)) return false;
   if (isGarbledItem(input)) return false;
-  if (!hasUsableChoiceText(input.choices)) return false;
-  return readableStudentText(input);
+  if (
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus))
+  ) {
+    return false;
+  }
+  if (stemReferencesMissingVisual(input)) return false;
+  return true;
 }
 
 /**
- * Student-usable diagnostic item: letter-key MCQ that is either a clean text
- * question or a figure-primary item with a real image. Drops true SPR and
- * irreparable OCR (empty/garbled stem, no choices, no figure).
+ * Shared student-usable gate for every quiz (diagnostic, routine pre-work,
+ * tutor-built bank quizzes, and lesson retries): letter-key MCQ with a
+ * readable stem and complete non-garbage A–D text. A cited graph/table must
+ * be present as a figure or a recovered data table. Full-question crops no
+ * longer unlock letter-only shells.
  */
-export function isStudentUsableDiagnosticItem(input: DiagnosticQualityInput): boolean {
+export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
   if (isTrueSprQuizItem(input)) return false;
+  if (!hasCompleteLetterChoiceText(input.choices)) return false;
+  if (hasMergedOrLeakedChoices(input.choices)) return false;
+  if (!hasReadableStudentStem(input)) return false;
   if (isCleanTextMcqItem(input)) return true;
-  return hasRenderableFigures(input);
+  if (isGarbledItem(input)) return false;
+  if (
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus))
+  ) {
+    return false;
+  }
+  if (stemReferencesMissingVisual(input)) return false;
+  return hasRenderableFigures(input) || hasRecoveredDataTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`);
 }
+
+/** @deprecated Use isStudentUsableQuizItem — same shared gate for all quizzes. */
+export const isStudentUsableDiagnosticItem = isStudentUsableQuizItem;
 
 export function diagnosticPromptFingerprint(input: DiagnosticQualityInput): string {
   const text = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`
@@ -149,7 +187,7 @@ export function selectUsableDiagnosticItems<T extends DiagnosticQualityInput>(
     allowCrossCollectionFill?: boolean;
   } = {},
 ): T[] {
-  const usable = items.filter((item) => isStudentUsableDiagnosticItem(item));
+  const usable = items.filter((item) => isStudentUsableQuizItem(item));
   const seenFingerprints = new Set<string>();
   const unique: T[] = [];
   for (const item of [...usable].sort(sortDiagnosticItems)) {
@@ -237,7 +275,7 @@ export function summarizeDiagnosticComposition(
     else fingerprints.add(fingerprint);
     if (isTrueSprQuizItem(item)) sprCount += 1;
     if (isCleanTextMcqItem(item)) cleanMcqCount += 1;
-    else if (hasRenderableFigures(item)) figurePrimaryCount += 1;
+    else if (hasFullQuestionCrop(item)) figurePrimaryCount += 1;
     if (item.section === "math") mathCount += 1;
     else rwCount += 1;
     if (
@@ -254,7 +292,7 @@ export function summarizeDiagnosticComposition(
     mathCount > 0 &&
     sprCount === 0 &&
     duplicatePrompts === 0 &&
-    selected.every((item) => isStudentUsableDiagnosticItem(item));
+    selected.every((item) => isStudentUsableQuizItem(item));
 
   return {
     questionCount: selected.length,

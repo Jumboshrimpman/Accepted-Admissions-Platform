@@ -57,8 +57,14 @@ import {
 } from "@/lib/student-attempt-ui";
 import {
   displayAnswerLabel,
+  formatStudentChoiceText,
   figurePrimaryChoices,
+  hasUsableChoiceText,
   isFigurePrimaryQuestion,
+  isStudentReadableChoiceText,
+  shouldHideMismatchedQuizFigures,
+  shouldHideQuizOcrStem,
+  shouldShowQuizChoices,
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
 
@@ -67,27 +73,64 @@ function QuizRichText({
   className,
   imageClassName,
   hideGarbledText,
+  hideImages,
 }: {
   text: string | null | undefined;
   className?: string;
   imageClassName?: string;
   hideGarbledText?: boolean;
+  hideImages?: boolean;
 }) {
   if (!text) return null;
-  const parts = splitQuizRichText(text, { hideGarbledText });
+  const parts = splitQuizRichText(text, { hideGarbledText, hideImages });
   if (parts.length === 0) return null;
   return (
-    <div className={className} data-testid="quiz-rich-text">
+    <div
+      className={`min-w-0 max-w-full overflow-x-auto overflow-y-visible ${className ?? ""}`}
+      data-testid="quiz-rich-text"
+    >
       {parts.map((part, index) =>
         part.type === "image" ? (
           <img
             key={`${part.src}-${index}`}
             src={part.src}
             alt={part.alt}
-            className={imageClassName ?? "my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"}
+            className={imageClassName ?? "my-3 h-auto max-h-[min(44rem,85vh)] w-auto max-w-full object-contain rounded-md bg-white"}
           />
+        ) : part.type === "table" ? (
+          <div key={`table-${index}`} className="my-3 max-w-full overflow-x-auto" data-testid="quiz-data-table">
+            <table className="min-w-[12rem] border-collapse text-sm">
+              <thead>
+                <tr>
+                  {part.headers.map((header) => (
+                    <th key={header} className="border border-border bg-muted/50 px-3 py-2 text-left font-medium">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {part.rows.map((row, rowIndex) => (
+                  <tr key={`row-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={`${rowIndex}-${cellIndex}`} className="border border-border px-3 py-2">
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : part.preformatted ? (
+          <pre
+            key={`text-${index}`}
+            className="min-w-0 overflow-x-auto whitespace-pre-wrap break-words leading-relaxed"
+          >
+            {part.value}
+          </pre>
         ) : (
-          <p key={`text-${index}`} className="whitespace-pre-wrap">
+          <p key={`text-${index}`} className="max-w-full whitespace-normal break-words leading-relaxed">
             {part.value}
           </p>
         ),
@@ -246,6 +289,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                               text={item.stimulus}
                               className="mt-2 text-sm text-muted-foreground"
                               hideGarbledText={item.presentation === "figure_primary"}
+                              hideImages={shouldHideMismatchedQuizFigures(item)}
                             />
                           ) : null}
                           {item.presentation === "figure_primary" && !item.prompt ? null : (
@@ -364,43 +408,13 @@ function AnswerChoices({
 }) {
   const ink = tone === "ink";
   const figurePrimary = isFigurePrimaryQuestion(question);
-  const choices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
-  if (figurePrimary) {
+  const rawChoices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
+  const choices = (rawChoices ?? [])
+    .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
+    .filter((choice) => isStudentReadableChoiceText(choice.text));
+  if (shouldShowQuizChoices({ ...question, choices }) && hasUsableChoiceText(choices)) {
     return (
-      <div className="space-y-3" data-testid="figure-primary-choices">
-        <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
-          {ink ? "Choose together" : "Select A, B, C, or D"}
-        </h3>
-        <div className="grid grid-cols-4 gap-3">
-          {choices.map((choice) => {
-            const isSelected = selected === choice.id;
-            return (
-              <button
-                key={choice.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => onSelect(choice.id)}
-                className={`flex h-14 items-center justify-center rounded-xl border-2 text-lg font-semibold transition-all ${
-                  ink
-                    ? isSelected
-                      ? "border-white bg-white/15 text-white shadow-sm"
-                      : "border-white/25 text-white hover:border-white/60 hover:bg-white/10"
-                    : isSelected
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/40 hover:bg-muted/50"
-                } ${disabled ? "cursor-default" : ""}`}
-              >
-                {choice.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-  if (choices && choices.length > 0) {
-    return (
-      <div className="space-y-3" data-testid="answer-choices">
+      <div className="min-w-0 max-w-full space-y-3 overflow-visible" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
           {ink ? "Choose together" : "Select your answer"}
         </h3>
@@ -412,7 +426,8 @@ function AnswerChoices({
               type="button"
               disabled={disabled}
               onClick={() => onSelect(choice.id)}
-              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-all ${
+              data-testid="quiz-answer-choice"
+              className={`flex w-full min-w-0 max-w-full items-start gap-4 overflow-visible rounded-xl border-2 p-4 text-left transition-all ${
                 ink
                   ? isSelected
                     ? "border-white bg-white/15 text-white shadow-sm"
@@ -435,7 +450,9 @@ function AnswerChoices({
               >
                 {choice.label}
               </div>
-              <div className="flex-1">{choice.text}</div>
+              <div className="min-w-0 max-w-full flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                {choice.text}
+              </div>
             </button>
           );
         })}
@@ -918,7 +935,7 @@ export default function PortalAssignment() {
 
   if (collaborative) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 pb-16">
+      <div className="mx-auto max-w-6xl space-y-5 pb-16">
         <p className="text-sm text-muted-foreground">
           {IN_SESSION_PRACTICE_CHECK_COPY} This is not a timed quiz.
         </p>
@@ -955,14 +972,15 @@ export default function PortalAssignment() {
               text={question.stimulus}
               className="mt-5 text-white/90"
               imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
-              hideGarbledText={isFigurePrimaryQuestion(question)}
+              hideGarbledText={shouldHideQuizOcrStem(question)}
+              hideImages={shouldHideMismatchedQuizFigures(question)}
             />
           ) : null}
-          {isFigurePrimaryQuestion(question) && !question.prompt ? null : (
+          {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
             <QuizRichText
               text={question.prompt}
               className="mt-5 text-xl font-medium leading-relaxed"
-              hideGarbledText={isFigurePrimaryQuestion(question)}
+              hideGarbledText={shouldHideQuizOcrStem(question)}
             />
           )}
           <div className="mt-6">
@@ -1050,7 +1068,7 @@ export default function PortalAssignment() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-24">
+    <div className="mx-auto max-w-6xl space-y-6 pb-24">
       <div className="sticky top-16 z-30 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-4 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold">
@@ -1098,33 +1116,29 @@ export default function PortalAssignment() {
         </div>
       </div>
       <div
-        className={
-          isFigurePrimaryQuestion(question)
-            ? "space-y-6 pt-4"
-            : "grid gap-8 pt-4 md:grid-cols-2"
-        }
-        data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : undefined}
+        className="min-w-0 space-y-6 overflow-visible pt-4"
+        data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : "quiz-question-stem"}
       >
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 overflow-visible" data-testid="quiz-stimulus-panel">
           {question.stimulus && (
-            <Card className="border-0 bg-muted/30 shadow-none">
-              <CardContent className="p-6">
+            <Card className="overflow-visible border-0 bg-muted/30 shadow-none">
+              <CardContent className="min-w-0 overflow-x-auto overflow-y-visible p-6">
                 <QuizRichText
                   text={question.stimulus}
-                  hideGarbledText={isFigurePrimaryQuestion(question)}
+                  hideGarbledText={shouldHideQuizOcrStem(question)}
+                  hideImages={shouldHideMismatchedQuizFigures(question)}
                 />
               </CardContent>
             </Card>
           )}
-          {isFigurePrimaryQuestion(question) && !question.prompt ? null : (
+          {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
             <QuizRichText
               text={question.prompt}
               className="text-lg font-medium leading-relaxed"
-              hideGarbledText={isFigurePrimaryQuestion(question)}
+              hideGarbledText={shouldHideQuizOcrStem(question)}
             />
           )}
         </div>
-        {isFigurePrimaryQuestion(question) ? null : <div />}
       </div>
       <div className="-mt-4">
         {showPrediction ? (
@@ -1173,7 +1187,7 @@ export default function PortalAssignment() {
         </p>
       ) : null}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background p-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Button
             variant="outline"
             size="lg"

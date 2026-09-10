@@ -8,10 +8,11 @@ Owner rule: when a math/SAT bank question has complex graphs, smashed OCR, or mi
 
 - Show the composite figure (and any remaining safe images).
 - Hide garbled stems and leaked `<!-- sat-bank-figures -->` comments.
-- Show only four letter buttons. No student-produced-response text box.
+- Show A–D **with real choice text**. Never letter-only buttons.
+- No student-produced-response text box.
 - Grade against the A–D key. Show `officialExplanation` after reveal/submit.
 
-Clean text MCQs with usable A–D copy stay normal text MCQs, even if they have a graph.
+Clean text MCQs with usable A–D copy stay normal text MCQs, even if they have a graph. A bare graph/table crop is **not** enough for letter-only figure-primary — the crop must include the stem and A–D, or the item must carry separate complete choice text.
 
 ## When the importer flips an item
 
@@ -67,7 +68,15 @@ If both snippet drawings and a question-region crop are present, the portal uses
 
 ## Reimport (including Taito Oct 2 diagnostic)
 
-Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Rebuild composition from usable MCQ rows: `docs/sat-diagnostic-october2.md`.
+Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, and tutor-built bank quizzes — uses the same `isStudentUsableQuizItem` gate. Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`.
+
+**Required after merge (Oct 2 live assignment does not change until rematerialize):**
+
+1. `POST /api/admin/sat-bank/import`
+2. `POST /api/admin/sat-bank/reset-first-sat-prework`  
+   or `node --experimental-strip-types src/scripts/reset-october2-prework.ts`
+
+In-place `--refresh-linked-only` cannot drop already-linked broken items.
 
 The Oct 2 Taito full-length diagnostic is linked to SAT bank rows. After new crops land in JSONL + `/media/sat-bank/`:
 

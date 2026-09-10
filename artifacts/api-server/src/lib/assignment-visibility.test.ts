@@ -108,7 +108,7 @@ test("assignment questions hide extract skill placeholders behind the section la
   );
 });
 
-test("figure-primary quiz items hide garbled stems and expose A–D letter choices", () => {
+test("figure-primary quiz items without usable A–D text do not invent letter-only choices", () => {
   const shaped = assignmentQuestionShape(
     {
       id: "q-fig-1",
@@ -124,15 +124,8 @@ test("figure-primary quiz items hide garbled stems and expose A–D letter choic
     },
     { position: 0, predictionFirst: false },
   );
-  assert.equal(shaped.presentation, "figure_primary");
-  assert.equal(shaped.questionType, "mcq");
-  assert.equal(shaped.prompt, "");
-  assert.equal(shaped.choices?.length, 4);
-  assert.deepEqual(
-    shaped.choices?.map((choice) => choice.label),
-    ["A", "B", "C", "D"],
-  );
-  assert.ok(shaped.choices?.every((choice) => choice.text === ""));
+  assert.equal(shaped.presentation, "text");
+  assert.equal(shaped.choices, undefined);
   assert.equal("correctAnswer" in shaped, false);
   const keyed = assignmentQuestionShape(
     {
@@ -151,7 +144,7 @@ test("figure-primary quiz items hide garbled stems and expose A–D letter choic
     { position: 0, predictionFirst: false },
     { includeKeys: true },
   );
-  assert.equal(keyed.presentation, "figure_primary");
+  assert.equal(keyed.choices, undefined);
   assert.equal(keyed.correctAnswer, "C");
   assert.equal(keyed.explanation, "Choice C is correct.");
 });
@@ -177,12 +170,7 @@ test("strips SAT bank figure comments and recovers A–D choices from a letter k
     },
     { position: 0 },
   );
-  assert.equal(["multiple_choice", "mcq"].includes(recovered.questionType), true);
-  assert.equal(recovered.choices?.length, 4);
-  assert.deepEqual(
-    recovered.choices?.map((choice) => choice.label),
-    ["A", "B", "C", "D"],
-  );
+  assert.equal(recovered.choices, undefined);
   assert.equal(recovered.prompt.includes("sat-bank-figures"), false);
   assert.equal(FIGURE_PRIMARY_PRESENTATION, "figure_primary");
   assert.equal(
