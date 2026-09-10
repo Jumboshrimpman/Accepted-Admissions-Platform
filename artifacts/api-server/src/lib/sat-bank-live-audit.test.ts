@@ -13,9 +13,17 @@ import {
   looksAxisTickBleed,
   looksExtractionMarkerBleed,
   looksGarbledExtractText,
+  looksLeakedNextQuestionChoice,
+  looksMalformedFractionChoice,
   looksSmashedAlgebraChoice,
   looksSmashedAlgebraText,
+  looksSmashedPiChoice,
+  looksSmashedPiToken,
+  looksSmashedRadicalText,
+  looksSmashedTableChoice,
+  looksSpacedDecimalChoice,
   looksSpacedGeometryLabels,
+  looksStackedFractionDump,
   stemCitesVisual,
 } from "./sat-bank-figure-primary.ts";
 
@@ -207,6 +215,172 @@ of p and x ?`,
       `late math must drop: ${prompt.slice(0, 40)}`,
     );
   }
+});
+
+test("live audit after #71 rematerialize: π smash, spaced decimals, junk bleed, flattened tables drop", () => {
+  const q84Prompt = `Note: Figure not drawn to scale.
+π 144 , The circle shown has center O, circumference
+and diameters PR and QS. The length of arc PS is
+twice the length of arc PQ. What is the length of
+arc QR ?`;
+  assert.equal(looksSmashedPiToken(q84Prompt), true);
+  assert.equal(looksSmashedPiChoice("24 π"), true);
+  assert.equal(looksSmashedPiChoice("π 48"), true);
+  assert.equal(looksSmashedPiChoice("24π"), false);
+  assert.equal(stemCitesVisual(q84Prompt), true);
+  const q84 = {
+    prompt: q84Prompt,
+    section: "math" as const,
+    choices: letterChoices(["24 π", "π 48", "72 π", "96 π"]),
+    questionType: "mcq",
+    correctAnswer: "B",
+    figures: figure,
+  };
+  assert.equal(isStudentUsableMathQuizItem(q84), false, "Q84 smashed π / figure OCR must drop even with a crop");
+  assert.equal(isStudentUsableQuizItem(q84), false);
+  assert.equal(isStudentUsableServedQuestion({ ...q84, subject: "Math" }), false);
+
+  const q86Prompt = `The scatterplot shows the relationship between x
+and y. A line of best fit is also shown.
+Which of the following is closest to the slope of this
+line of best fit?`;
+  assert.equal(looksSpacedDecimalChoice(".0 60"), true);
+  assert.equal(looksSpacedDecimalChoice(".2 50"), true);
+  assert.equal(looksSpacedDecimalChoice("0.60"), false);
+  const q86 = {
+    prompt: q86Prompt,
+    section: "math" as const,
+    choices: letterChoices([".0 60", ".2 50", ".7 80", ".8 00"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: figure,
+  };
+  assert.equal(isStudentUsableMathQuizItem(q86), false, "Q86 spaced-decimal slope choices must drop");
+  assert.equal(isStudentUsableQuizItem(q86), false);
+
+  const q90Prompt = `Circle A has a radius of n 3 and circle B has a radius
+129 , where n is a positive constant. The area of n of
+circle B is how many times the area of circle A?`;
+  assert.equal(looksSmashedRadicalText(q90Prompt), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: q90Prompt,
+      section: "math",
+      choices: letterChoices(["43", "86", "129", "1,849"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+    "Q90 smashed n√3 / area-of-n OCR must drop",
+  );
+
+  const q93Prompt = `12 −2 = −2
+n t w
+The given equation relates the variables n, t, and w,
+where n > 0, t > 0, and w > . Which expression is t
+equivalent to n ?`;
+  assert.equal(looksStackedFractionDump(q93Prompt), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: q93Prompt,
+      section: "math",
+      choices: letterChoices(["12 tw", "6( − ) t w", "w t − 6 tw 6 tw", "− w t"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+    "Q93 stacked-fraction dump must drop",
+  );
+
+  const junkChoice =
+    "26 - ------~ 5 7 = 2 + ( ) m n p The given equation relates the positive numbers m,";
+  assert.equal(looksLeakedNextQuestionChoice(junkChoice), true);
+  const q104 = {
+    prompt:
+      "What is the perimeter, in inches, of a rectangle with a\nlength of 4 inches and a width of 9 inches?",
+    section: "math" as const,
+    choices: letterChoices(["13", "17", "22", junkChoice]),
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q104), false, "Q104 junk-bleed choice D must drop");
+  assert.equal(isStudentUsableQuizItem(q104), false);
+
+  const q116Prompt = "2 x = −841\nHow many distinct real solutions does the given\nequation have?";
+  assert.equal(looksSmashedAlgebraText(q116Prompt), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: q116Prompt,
+      section: "math",
+      choices: letterChoices(["Exactly one", "Exactly two", "Infinitely many", "Zero"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+    "Q116 smashed 2 x = −841 must drop",
+  );
+
+  assert.equal(looksMalformedFractionChoice("−1 7"), true);
+  assert.equal(looksMalformedFractionChoice("7/4"), false);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt:
+        "= 7 + 1\n8 . Line j is Line k is defined by y x\nperpendicular to line k in the xy-plane. What is\nthe slope of line j ?",
+      section: "math",
+      choices: letterChoices(["−8", "−1 7", "1/8", "7"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+    "Q118 malformed −1 7 fraction choice must drop",
+  );
+
+  const q119Prompt = `2x −y > 883
+For which of the following tables are all the values of
+x and their corresponding values of y solutions to the
+given inequality?`;
+  const q119D =
+    "x y 0 442 −2 441 −4 440 - ------~ 20 5y = 10x + 11 −5y = 5x −21 The solution to the given system of equations is";
+  assert.equal(looksSmashedTableChoice("x y 440 0 −2 441 −4 442"), true);
+  assert.equal(looksLeakedNextQuestionChoice(q119D), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: q119Prompt,
+      section: "math",
+      choices: letterChoices([
+        "x y 440 0 −2 441 −4 442",
+        "x y 440 0 −2 442 −4 441",
+        "x y 0 442 −2 440 −4 441",
+        q119D,
+      ]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+    "Q119 flattened table + junk bleed must drop",
+  );
+
+  const q120Prompt = `y > 13 −18 x
+For which of the following tables are all the values of
+x and their corresponding values of y solutions to the
+given inequality?`;
+  assert.equal(looksSmashedTableChoice("x y 3 21 5 47 8 86"), true);
+  assert.equal(looksSmashedTableChoice("xy321547886"), true);
+  const q120 = {
+    prompt: q120Prompt,
+    section: "math" as const,
+    choices: letterChoices([
+      "x y 3 21 5 47 8 86",
+      "x y 3 26 5 42 8 86",
+      "x y 3 16 5 42 8 81",
+      "x y 3 26 5 52 8 91",
+    ]),
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q120), false, "Q120 flattened xy-table choices must drop");
+  assert.equal(isStudentUsableQuizItem(q120), false);
+  assert.equal(isSafeToShowStudentQuizItem(q120), false);
 });
 
 test("live audit: readable controls still stay", () => {

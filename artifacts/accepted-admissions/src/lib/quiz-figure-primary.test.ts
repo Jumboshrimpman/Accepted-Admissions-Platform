@@ -29,6 +29,11 @@ import {
   stemCitesVisual,
   looksExtractionMarkerBleed,
   looksSmashedAlgebraChoice,
+  looksSmashedPiChoice,
+  looksSmashedPiToken,
+  looksSpacedDecimalChoice,
+  looksLeakedNextQuestionChoice,
+  looksMalformedFractionChoice,
   stripSatBankFigureComments,
 } from "./quiz-figure-primary.ts";
 
@@ -559,6 +564,82 @@ test("live audit: extraction markers, missing cited figures, and smashed algebra
   assert.equal(
     isStudentAnswerableQuizQuestion({
       prompt: "66 = 66 x x\nHow many solutions does the given equation have?",
+      stimulus: null,
+      choices: letters(["Exactly one", "Exactly two", "Infinitely many", "Zero"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+});
+
+test("live audit after #71 rematerialize: π smash, spaced decimals, junk bleed, flattened tables are unanswerable", () => {
+  const letters = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const q84Prompt = `Note: Figure not drawn to scale.
+π 144 , The circle shown has center O, circumference
+and diameters PR and QS. The length of arc PS is
+twice the length of arc PQ. What is the length of
+arc QR ?`;
+  assert.equal(looksSmashedPiToken(q84Prompt), true);
+  assert.equal(looksSmashedPiChoice("24 π"), true);
+  assert.equal(looksSmashedPiChoice("π 48"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: q84Prompt,
+      stimulus: "![Circle](https://app.acceptedadmissions.org/media/sat-bank/circle.png)",
+      choices: letters(["24 π", "π 48", "72 π", "96 π"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(looksSpacedDecimalChoice(".0 60"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "The scatterplot shows the relationship between x and y. A line of best fit is also shown. Which of the following is closest to the slope of this line of best fit?",
+      stimulus: "![Scatterplot](https://app.acceptedadmissions.org/media/sat-bank/scatter.png)",
+      choices: letters([".0 60", ".2 50", ".7 80", ".8 00"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  const junkChoice =
+    "26 - ------~ 5 7 = 2 + ( ) m n p The given equation relates the positive numbers m,";
+  assert.equal(looksLeakedNextQuestionChoice(junkChoice), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "What is the perimeter, in inches, of a rectangle with a length of 4 inches and a width of 9 inches?",
+      stimulus: null,
+      choices: letters(["13", "17", "22", junkChoice]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(looksSmashedTableChoice("x y 3 21 5 47 8 86"), true);
+  assert.equal(looksSmashedTableChoice("xy321547886"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "y > 13 −18 x\nFor which of the following tables are all the values of x and their corresponding values of y solutions to the given inequality?",
+      stimulus: null,
+      choices: letters([
+        "x y 3 21 5 47 8 86",
+        "x y 3 26 5 42 8 86",
+        "x y 3 16 5 42 8 81",
+        "x y 3 26 5 52 8 91",
+      ]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(looksMalformedFractionChoice("−1 7"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "2 x = −841\nHow many distinct real solutions does the given equation have?",
       stimulus: null,
       choices: letters(["Exactly one", "Exactly two", "Infinitely many", "Zero"]),
       questionType: "mcq",

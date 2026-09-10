@@ -31,6 +31,12 @@ import {
   looksExtractionMarkerBleed,
   looksSmashedAlgebraChoice,
   looksSmashedAlgebraText,
+  looksSmashedPiChoice,
+  looksSmashedPiToken,
+  looksSmashedRadicalText,
+  looksSpacedDecimalChoice,
+  looksStackedFractionDump,
+  looksMalformedFractionChoice,
   looksAxisTickBleed,
   looksSpacedGeometryLabels,
   formatStudentChoiceText,
@@ -634,6 +640,19 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
     true,
   );
   assert.equal(looksSmashedAlgebraText("66 = 66 x x\nHow many solutions does the given equation have?"), true);
+  assert.equal(looksSmashedPiToken("π 144 , The circle shown has center O"), true);
+  assert.equal(looksSmashedPiChoice("24 π"), true);
+  assert.equal(looksSmashedPiChoice("π 48"), true);
+  assert.equal(looksSmashedPiChoice("24π"), false);
+  assert.equal(looksSpacedDecimalChoice(".0 60"), true);
+  assert.equal(looksSpacedDecimalChoice("0.60"), false);
+  assert.equal(looksSmashedTableChoice("x y 3 21 5 47 8 86"), true);
+  assert.equal(looksSmashedTableChoice("xy321547886"), true);
+  assert.equal(looksMalformedFractionChoice("−1 7"), true);
+  assert.equal(looksMalformedFractionChoice("7/4"), false);
+  assert.equal(looksSmashedRadicalText("Circle A has a radius of n 3 and circle B has a radius"), true);
+  assert.equal(looksStackedFractionDump("12 −2 = −2\nn t w\nThe given equation relates the variables"), true);
+  assert.equal(looksSmashedAlgebraText("2 x = −841\nHow many distinct real solutions?"), true);
   assert.equal(looksSmashedAlgebraChoice("y x p = 57 +"), true);
   assert.equal(looksSmashedAlgebraChoice("y px = + 57"), true);
   assert.equal(looksSmashedAlgebraChoice("y = 57 px px"), true);
