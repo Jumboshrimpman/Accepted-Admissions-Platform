@@ -116,8 +116,11 @@ describe("administrator client preview", () => {
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
     expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
     expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
-    expect(screen.getByTestId("portal-curriculum-section").textContent).toContain(
+    expect(screen.getByTestId("curriculum-payment-receipts").textContent).toContain(
       "SAT session payment and receipts",
+    );
+    expect(screen.getByTestId("portal-curriculum-section").contains(screen.getByTestId("curriculum-payment-receipts"))).toBe(
+      true,
     );
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
     expect(screen.queryByText("Single SAT Session")).toBeNull();
@@ -204,8 +207,11 @@ describe("administrator client preview", () => {
     expect(screen.queryByText(/must complete an SAT purchase/i)).toBeNull();
     expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
     expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
-    expect(screen.getByTestId("portal-curriculum-section").textContent).toContain(
+    expect(screen.getByTestId("curriculum-payment-receipts").textContent).toContain(
       "SAT session payment and receipts",
+    );
+    expect(screen.getByTestId("portal-curriculum-section").contains(screen.getByTestId("curriculum-payment-receipts"))).toBe(
+      true,
     );
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
     expect(screen.queryByText(/Meetings for this program are already scheduled/i)).toBeNull();
@@ -380,8 +386,11 @@ describe("administrator client preview", () => {
     expect(screen.queryByText("Payment verified — ready to book")).toBeNull();
     expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
     expect(screen.queryByText(/Meetings for this program are already scheduled/i)).toBeNull();
-    expect(screen.getByTestId("portal-curriculum-section").textContent).toContain(
+    expect(screen.getByTestId("curriculum-payment-receipts").textContent).toContain(
       "SAT session payment and receipts",
+    );
+    expect(screen.getByTestId("portal-curriculum-section").contains(screen.getByTestId("curriculum-payment-receipts"))).toBe(
+      true,
     );
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     const roster = screen.getByTestId("client-tutor-roster");
@@ -477,6 +486,7 @@ describe("administrator client preview", () => {
     expect(screen.getByText("Prepaid booking experience")).toBeTruthy();
     expect(screen.queryByText("A prepaid session is booked")).toBeNull();
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
+    expect(screen.queryByTestId("curriculum-payment-receipts")).toBeNull();
     expect(screen.queryByTestId("portal-curriculum-section")?.textContent ?? "").not.toContain(
       "SAT session payment and receipts",
     );

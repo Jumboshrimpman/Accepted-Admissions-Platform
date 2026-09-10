@@ -175,8 +175,10 @@ export function ClientDashboardView({
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14">
-      <section className="space-y-5" data-testid="portal-curriculum-section">
-        <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9">
+      <section
+        className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
+        data-testid="portal-curriculum-section"
+      >
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
@@ -216,9 +218,14 @@ export function ClientDashboardView({
             )}
           </div>
         </div>
-        </section>
-
-        {afterCurriculum}
+        {afterCurriculum ? (
+          <div
+            className="mt-6 rounded-2xl bg-background p-1 text-foreground shadow-sm"
+            data-testid="curriculum-payment-receipts"
+          >
+            {afterCurriculum}
+          </div>
+        ) : null}
       </section>
 
       {viewer && (
