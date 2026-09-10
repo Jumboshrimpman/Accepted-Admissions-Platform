@@ -104,6 +104,16 @@ test("later routine pre-work is 30–50 questions, not a full-length diagnostic"
     false,
   );
   assert.equal(
+    shouldReplaceFirstSessionPrework({
+      homeworkKind: "diagnostic",
+      questionCount: 40,
+      title: "SAT diagnostic (40 clean questions)",
+    }),
+    false,
+    "a fail-closed short diagnostic is already the first-session diagnostic",
+  );
+  assert.equal(diagnosticTimeLimitMinutes(40 * 75, { completeForm: false }) < 134, true);
+  assert.equal(
     shouldReplaceFirstSessionPrework({ homeworkKind: null, questionCount: 24, title: "Full SAT Practice Diagnostic" }),
     true,
   );

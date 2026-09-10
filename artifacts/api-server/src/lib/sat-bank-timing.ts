@@ -187,10 +187,17 @@ export function selectFullPracticeCollection<T extends TimedBankItem>(
   };
 }
 
-export function diagnosticTimeLimitMinutes(estimatedSeconds: number): number {
+export function diagnosticTimeLimitMinutes(
+  estimatedSeconds: number,
+  options: { completeForm?: boolean } = {},
+): number {
+  const estimated = Math.round(estimatedSeconds / 60) || 0;
+  if (options.completeForm === false) {
+    return Math.min(180, Math.max(25, estimated || 25));
+  }
   return Math.min(
     180,
-    Math.max(DIGITAL_SAT_STANDARD_MINUTES, Math.round(estimatedSeconds / 60) || DIGITAL_SAT_STANDARD_MINUTES),
+    Math.max(DIGITAL_SAT_STANDARD_MINUTES, estimated || DIGITAL_SAT_STANDARD_MINUTES),
   );
 }
 
@@ -220,7 +227,9 @@ export function shouldReplaceFirstSessionPrework(input: {
   questionCount: number;
   title?: string | null;
 }): boolean {
-  if (input.homeworkKind === "diagnostic" && input.questionCount >= 80) return false;
+  // A fail-closed short diagnostic is still the first-session diagnostic.
+  // Do not wipe it just because the bank could not fill 120.
+  if (input.homeworkKind === "diagnostic" && input.questionCount > 0) return false;
   return true;
 }
 

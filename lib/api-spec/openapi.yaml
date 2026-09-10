@@ -483,6 +483,33 @@ paths:
               schema: { $ref: "#/components/schemas/SatBankImportResult" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/sat-bank/rescore-usable:
+    post:
+      operationId: rescoreSatBankUsableFlags
+      tags: [administration]
+      summary: Re-score student-usable flags on bank rows without re-parsing JSONL
+      description: >
+        Walks every SAT/PSAT bank row and re-runs the live student-usable audit
+        (same gates as rematerialize and composition). Writes extractGaps.studentUsable
+        and studentUsableReasons. Does not import JSONL or rematerialize linked
+        quizzes. Use this when import 502s so skipping import stays safe.
+      responses:
+        "200":
+          description: Rescore counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scored, usable, unusable, reasons]
+                properties:
+                  scored: { type: number }
+                  usable: { type: number }
+                  unusable: { type: number }
+                  reasons:
+                    type: object
+                    additionalProperties: { type: number }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /admin/sat-bank/refresh-linked:
     post:
       operationId: refreshSatBankLinkedQuestions

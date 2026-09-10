@@ -429,6 +429,22 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
       ],
       questionType: "mcq",
     }),
+    false,
+    "a generic graph PNG is not enough without figure-primary / recovered data",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The graph of y = f(x) is shown. What is the vertex of the graph?",
+      stimulus: "![Question region](/media/sat-bank/pack/q-question.png)",
+      presentation: "figure_primary",
+      choices: [
+        { id: "a", label: "A", text: "(-2, 3)" },
+        { id: "b", label: "B", text: "(0, 0)" },
+        { id: "c", label: "C", text: "(2, -1)" },
+        { id: "d", label: "D", text: "(3, 4)" },
+      ],
+      questionType: "mcq",
+    }),
     true,
   );
   assert.equal(
@@ -692,6 +708,17 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
       questionType: "mcq",
     }),
     false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "In triangle QRS shown, QR RS. Which expression represents the length of QS?",
+      stimulus: "![Question region](/media/sat-bank/pack/q88-question.png)",
+      presentation: "figure_primary",
+      choices: letters(["18", "36", "72", "90"]),
+      questionType: "mcq",
+    }),
+    true,
+    "figure-primary + full crop + clean A–D may ship even if leftover OCR is smashed",
   );
 
   const junkD =

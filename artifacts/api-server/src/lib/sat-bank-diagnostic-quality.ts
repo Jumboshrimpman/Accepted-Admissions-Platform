@@ -4,14 +4,26 @@ import {
   hasMergedOrLeakedChoices,
   hasReadableStudentStem,
   hasRecoveredDataTable,
+  hasSolvableCitedVisual,
   hasUsableTableData,
   hasRenderableFigures,
   isLetterAnswer,
   looksBrokenMathOcr,
   looksExplodedOcrTable,
+  looksFlattenedFractionChoice,
   looksGarbledExtractText,
+  looksGluedInequalityChoice,
+  looksHardOcrMathRisk,
   looksIncompleteMathParens,
+  looksLeakedNextQuestionChoice,
+  looksSmashedAlgebraChoice,
+  looksSmashedAlgebraText,
   looksSmashedOrTruncatedExtract,
+  looksSmashedPiChoice,
+  looksSmashedPiToken,
+  looksSmashedTableChoice,
+  looksSmashedTrigToken,
+  looksSpacedDecimalChoice,
   looksExtractionMarkerBleed,
   normalizeLetterAnswer,
   stemCitesMathDataTable,
@@ -36,6 +48,48 @@ export const DIAGNOSTIC_MODULE_TARGETS: Record<DiagnosticModuleSlot, number> = {
 };
 
 export const MIN_USABLE_DIAGNOSTIC_QUESTIONS = 80;
+export const FULL_DIAGNOSTIC_QUESTION_COUNT =
+  DIAGNOSTIC_MODULE_TARGETS["rw-1"] +
+  DIAGNOSTIC_MODULE_TARGETS["rw-2"] +
+  DIAGNOSTIC_MODULE_TARGETS["math-1"] +
+  DIAGNOSTIC_MODULE_TARGETS["math-2"];
+
+export const STUDENT_USABLE_FAILURE_REASONS = [
+  "true_spr",
+  "missing_letter_key",
+  "incomplete_choices",
+  "leaked_or_merged_choices",
+  "extraction_marker_bleed",
+  "unreadable_stem",
+  "garbled_extract",
+  "smashed_extract",
+  "smashed_algebra",
+  "smashed_trig",
+  "smashed_pi",
+  "spaced_decimals",
+  "flattened_fractions",
+  "flattened_xy_table",
+  "junk_bleed_choice",
+  "table_cite_without_values",
+  "cited_visual_without_solvable_figure",
+  "exploded_ocr_table",
+  "unsure_math_presentation",
+] as const;
+
+export type StudentUsableFailureReason = (typeof STUDENT_USABLE_FAILURE_REASONS)[number];
+
+export type DiagnosticShortfall = {
+  questionCount: number;
+  rwCount: number;
+  mathCount: number;
+  modules: Record<DiagnosticModuleSlot, number>;
+  reasons: Partial<Record<StudentUsableFailureReason, number>>;
+};
+
+export type StudentUsableAudit = {
+  ok: boolean;
+  reasons: StudentUsableFailureReason[];
+};
 
 export type DiagnosticQualityInput = {
   id?: string | null;
@@ -67,6 +121,8 @@ export type DiagnosticComposition = {
   modules: Record<DiagnosticModuleSlot, number>;
   duplicatePrompts: number;
   sprCount: number;
+  residualJunk: number;
+  shortfall: DiagnosticShortfall;
   usable: boolean;
 };
 
@@ -147,13 +203,24 @@ function mathDependsOnVisual(input: DiagnosticQualityInput): boolean {
 
 function mathHasRequiredVisual(input: DiagnosticQualityInput): boolean {
   const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
-  // A generic page crop is not the table. Math table cites need recovered
-  // values (or a full-question crop that includes the table).
+  // Cite-without-data is never solvable. Recovered table values or a real
+  // full-question / figure-primary crop only — not a page-neighbor PNG.
   if (stemCitesMathDataTable(haystack) && !hasUsableTableData(haystack)) {
     return hasFullQuestionCrop(input);
   }
-  if (hasRenderableFigures(input)) return true;
+  if (mathDependsOnVisual(input)) {
+    return hasSolvableCitedVisual(input);
+  }
   return hasUsableTableData(haystack) && /table/i.test(haystack);
+}
+
+function mathFigurePrimarySalvage(input: DiagnosticQualityInput): boolean {
+  return (
+    isLetterAnswer(input.correctAnswer) &&
+    hasCompleteLetterChoiceText(input.choices) &&
+    !hasMergedOrLeakedChoices(input.choices) &&
+    hasFullQuestionCrop(input)
+  );
 }
 
 function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
@@ -169,24 +236,184 @@ function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
 
 /**
  * Math-only bar: if a student cannot solve the item as shown, drop it.
- * Host the figure when the stem depends on a graph/table/dot plot; never
- * salvage bleed by hiding OCR next to an unlabeled crop. Extraction-marker
- * wrappers, cited visuals without a figure, table cites without recovered
- * values, smashed trig/algebra, and unreadable choices never pass.
- * Figure-primary letter-only A–D and “has a crop so keep” are RW-only.
+ * A cited table/graph/figure needs recovered values or a real full-question
+ * crop — never a generic page-neighbor PNG. Extraction-marker wrappers,
+ * smashed trig/algebra, and unreadable choices never pass as text.
+ * Hard OCR may ship only as figure-primary (official image + clean A–D).
  */
 export function isStudentUsableMathQuizItem(input: DiagnosticQualityInput): boolean {
-  if (!isLetterAnswer(input.correctAnswer)) return false;
-  if (isTrueSprQuizItem(input)) return false;
-  if (!hasCompleteLetterChoiceText(input.choices)) return false;
-  if (hasMergedOrLeakedChoices(input.choices)) return false;
-  if (!readableStudentText(input)) return false;
-  if (isGarbledItem(input) || smashedExtract(input)) return false;
-  if (looksUnsureMathPresentation(input)) return false;
-  if (looksExtractionMarkerBleed(stemHaystack(input))) return false;
-  if (mathDependsOnVisual(input) && !mathHasRequiredVisual(input)) return false;
-  if (mathDependsOnVisual(input) && looksExplodedOcrTable(stemHaystack(input))) return false;
-  return isCleanTextMcqItem(input);
+  return auditStudentQuizItem({ ...input, section: input.section ?? "math" }).ok;
+}
+
+function choiceFailureReasons(
+  choices: DiagnosticQualityInput["choices"],
+): StudentUsableFailureReason[] {
+  const reasons = new Set<StudentUsableFailureReason>();
+  for (const choice of choices ?? []) {
+    const text = choice.text ?? "";
+    if (looksLeakedNextQuestionChoice(text)) reasons.add("junk_bleed_choice");
+    if (looksSmashedTrigToken(text)) reasons.add("smashed_trig");
+    if (looksSmashedPiChoice(text) || looksSmashedPiToken(text)) reasons.add("smashed_pi");
+    if (looksSpacedDecimalChoice(text)) reasons.add("spaced_decimals");
+    if (looksFlattenedFractionChoice(text)) reasons.add("flattened_fractions");
+    if (looksSmashedTableChoice(text)) reasons.add("flattened_xy_table");
+    if (looksSmashedAlgebraChoice(text) || looksSmashedAlgebraText(text)) reasons.add("smashed_algebra");
+    if (looksGluedInequalityChoice(text)) reasons.add("smashed_algebra");
+  }
+  return [...reasons];
+}
+
+function classifyMathFailures(input: DiagnosticQualityInput): StudentUsableFailureReason[] {
+  const reasons: StudentUsableFailureReason[] = [];
+  const haystack = stemHaystack(input);
+  if (!isLetterAnswer(input.correctAnswer)) reasons.push("missing_letter_key");
+  if (isTrueSprQuizItem(input)) reasons.push("true_spr");
+  if (hasMergedOrLeakedChoices(input.choices)) reasons.push("leaked_or_merged_choices");
+  if (!hasCompleteLetterChoiceText(input.choices)) {
+    reasons.push("incomplete_choices");
+    reasons.push(...choiceFailureReasons(input.choices));
+  } else {
+    reasons.push(...choiceFailureReasons(input.choices));
+  }
+  if (looksExtractionMarkerBleed(haystack)) reasons.push("extraction_marker_bleed");
+
+  const tableCiteWithoutValues =
+    stemCitesMathDataTable(haystack) && !hasUsableTableData(haystack) && !hasFullQuestionCrop(input);
+  if (tableCiteWithoutValues) reasons.push("table_cite_without_values");
+  if (mathDependsOnVisual(input) && !mathHasRequiredVisual(input)) {
+    if (!tableCiteWithoutValues) reasons.push("cited_visual_without_solvable_figure");
+  }
+  if (mathDependsOnVisual(input) && looksExplodedOcrTable(haystack) && !hasFullQuestionCrop(input)) {
+    reasons.push("exploded_ocr_table");
+  }
+
+  const hardOcr =
+    !readableStudentText(input) ||
+    isGarbledItem(input) ||
+    smashedExtract(input) ||
+    looksUnsureMathPresentation(input) ||
+    looksHardOcrMathRisk(haystack);
+  if (hardOcr && !mathFigurePrimarySalvage(input)) {
+    if (!readableStudentText(input)) reasons.push("unreadable_stem");
+    if (isGarbledItem(input)) reasons.push("garbled_extract");
+    if (smashedExtract(input)) reasons.push("smashed_extract");
+    if (looksSmashedTrigToken(haystack)) reasons.push("smashed_trig");
+    if (looksSmashedAlgebraText(haystack) || looksIncompleteMathParens(haystack)) {
+      reasons.push("smashed_algebra");
+    }
+    if (looksUnsureMathPresentation(input)) reasons.push("unsure_math_presentation");
+    if (
+      !reasons.includes("unreadable_stem") &&
+      !reasons.includes("garbled_extract") &&
+      !reasons.includes("smashed_extract") &&
+      !reasons.includes("smashed_trig") &&
+      !reasons.includes("smashed_algebra") &&
+      !reasons.includes("unsure_math_presentation")
+    ) {
+      reasons.push("garbled_extract");
+    }
+  }
+  return [...new Set(reasons)];
+}
+
+function classifyRwFailures(input: DiagnosticQualityInput): StudentUsableFailureReason[] {
+  const reasons: StudentUsableFailureReason[] = [];
+  if (!isLetterAnswer(input.correctAnswer)) reasons.push("missing_letter_key");
+  if (isTrueSprQuizItem(input)) reasons.push("true_spr");
+  if (hasMergedOrLeakedChoices(input.choices)) reasons.push("leaked_or_merged_choices");
+  if (!hasCompleteLetterChoiceText(input.choices)) {
+    reasons.push("incomplete_choices");
+    reasons.push(...choiceFailureReasons(input.choices));
+  }
+  if (looksExtractionMarkerBleed(stemHaystack(input))) reasons.push("extraction_marker_bleed");
+  if (!hasReadableStudentStem(input)) reasons.push("unreadable_stem");
+  if (isCleanTextMcqItem(input)) return [...new Set(reasons)];
+  if (isGarbledItem(input) || smashedExtract(input)) {
+    reasons.push(isGarbledItem(input) ? "garbled_extract" : "smashed_extract");
+  }
+  if (stemReferencesMissingVisual(input)) reasons.push("cited_visual_without_solvable_figure");
+  if (
+    !hasRenderableFigures(input) &&
+    !hasRecoveredDataTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`)
+  ) {
+    if (!reasons.includes("cited_visual_without_solvable_figure") && !reasons.includes("unreadable_stem")) {
+      reasons.push("unreadable_stem");
+    }
+  }
+  return [...new Set(reasons)];
+}
+
+/**
+ * Live-audit failure classes used by composition, rematerialize, and the
+ * pre-assign gate. Do not trust stored import flags — always re-run this.
+ */
+export function auditStudentQuizItem(input: DiagnosticQualityInput): StudentUsableAudit {
+  const reasons = isMathQuizItem(input) ? classifyMathFailures(input) : classifyRwFailures(input);
+  return { ok: reasons.length === 0, reasons };
+}
+
+export function auditQuizItems(items: readonly DiagnosticQualityInput[]): {
+  residualJunk: number;
+  droppedByReason: Partial<Record<StudentUsableFailureReason, number>>;
+  failed: Array<{ item: DiagnosticQualityInput; reasons: StudentUsableFailureReason[] }>;
+} {
+  const droppedByReason: Partial<Record<StudentUsableFailureReason, number>> = {};
+  const failed: Array<{ item: DiagnosticQualityInput; reasons: StudentUsableFailureReason[] }> = [];
+  for (const item of items) {
+    const audit = auditStudentQuizItem(item);
+    if (audit.ok) continue;
+    failed.push({ item, reasons: audit.reasons });
+    for (const reason of audit.reasons) {
+      droppedByReason[reason] = (droppedByReason[reason] ?? 0) + 1;
+    }
+  }
+  return { residualJunk: failed.length, droppedByReason, failed };
+}
+
+export function emptyDiagnosticShortfall(): DiagnosticShortfall {
+  return {
+    questionCount: FULL_DIAGNOSTIC_QUESTION_COUNT,
+    rwCount: LINEAR_SAT_RW_MAX,
+    mathCount: LINEAR_SAT_MATH_MAX,
+    modules: {
+      "rw-1": DIAGNOSTIC_MODULE_TARGETS["rw-1"],
+      "rw-2": DIAGNOSTIC_MODULE_TARGETS["rw-2"],
+      "math-1": DIAGNOSTIC_MODULE_TARGETS["math-1"],
+      "math-2": DIAGNOSTIC_MODULE_TARGETS["math-2"],
+    },
+    reasons: {},
+  };
+}
+
+export function diagnosticShortfallFromSelection(
+  selected: readonly DiagnosticQualityInput[],
+  droppedReasons: Partial<Record<StudentUsableFailureReason, number>> = {},
+): DiagnosticShortfall {
+  const modules: Record<DiagnosticModuleSlot, number> = {
+    "rw-1": 0,
+    "rw-2": 0,
+    "math-1": 0,
+    "math-2": 0,
+  };
+  let rwCount = 0;
+  let mathCount = 0;
+  for (const item of selected) {
+    modules[diagnosticModuleSlot(item)] += 1;
+    if (item.section === "math") mathCount += 1;
+    else rwCount += 1;
+  }
+  return {
+    questionCount: Math.max(0, FULL_DIAGNOSTIC_QUESTION_COUNT - selected.length),
+    rwCount: Math.max(0, LINEAR_SAT_RW_MAX - rwCount),
+    mathCount: Math.max(0, LINEAR_SAT_MATH_MAX - mathCount),
+    modules: {
+      "rw-1": Math.max(0, DIAGNOSTIC_MODULE_TARGETS["rw-1"] - modules["rw-1"]),
+      "rw-2": Math.max(0, DIAGNOSTIC_MODULE_TARGETS["rw-2"] - modules["rw-2"]),
+      "math-1": Math.max(0, DIAGNOSTIC_MODULE_TARGETS["math-1"] - modules["math-1"]),
+      "math-2": Math.max(0, DIAGNOSTIC_MODULE_TARGETS["math-2"] - modules["math-2"]),
+    },
+    reasons: droppedReasons,
+  };
 }
 
 /** Clean readable A–D item a student can answer from text (plus a figure if cited). */
@@ -216,19 +443,7 @@ export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
  * table after a merely-readable stem.
  */
 export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean {
-  if (!isLetterAnswer(input.correctAnswer)) return false;
-  if (isTrueSprQuizItem(input)) return false;
-  if (!hasCompleteLetterChoiceText(input.choices)) return false;
-  if (hasMergedOrLeakedChoices(input.choices)) return false;
-  if (isMathQuizItem(input)) {
-    return isStudentUsableMathQuizItem(input);
-  }
-  if (looksExtractionMarkerBleed(stemHaystack(input))) return false;
-  if (!hasReadableStudentStem(input)) return false;
-  if (isCleanTextMcqItem(input)) return true;
-  if (isGarbledItem(input) || smashedExtract(input)) return false;
-  if (stemReferencesMissingVisual(input)) return false;
-  return hasRenderableFigures(input) || hasRecoveredDataTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`);
+  return auditStudentQuizItem(input).ok;
 }
 
 /** @deprecated Use isStudentUsableQuizItem — same shared gate for all quizzes. */
@@ -398,16 +613,84 @@ export function selectUsableDiagnosticItems<T extends DiagnosticQualityInput>(
     });
     for (const item of [...sameModule, ...otherModule]) {
       if (count >= target) break;
+      if (!auditStudentQuizItem(item).ok) continue;
       if (take(item, slot)) count += 1;
     }
   }
 
-  return selected;
+  // Fail-closed: never pad leftover slots with items that fail the live audit.
+  return selected.filter((item) => auditStudentQuizItem(item).ok);
+}
+
+export function composeDiagnosticItems<T extends DiagnosticQualityInput>(
+  items: readonly T[],
+  options: {
+    preferredCollectionId?: string | null;
+    preferredCollectionSlug?: string | null;
+    allowCrossCollectionFill?: boolean;
+  } = {},
+): { selected: T[]; composition: DiagnosticComposition } {
+  const unusable = items.filter((item) => !auditStudentQuizItem(item).ok);
+  const droppedReasons: Partial<Record<StudentUsableFailureReason, number>> = {};
+  for (const item of unusable) {
+    for (const reason of auditStudentQuizItem(item).reasons) {
+      droppedReasons[reason] = (droppedReasons[reason] ?? 0) + 1;
+    }
+  }
+  const selected = selectUsableDiagnosticItems(items, options);
+  return {
+    selected,
+    composition: summarizeDiagnosticComposition(selected, {
+      droppedUnusable: unusable.length,
+      droppedReasons,
+      preferredCollectionId: options.preferredCollectionId,
+      preferredCollectionSlug: options.preferredCollectionSlug,
+    }),
+  };
+}
+
+/**
+ * Fail-closed assign bar: ship a short clean diagnostic rather than pad to 120.
+ * Block only when residual junk remains, SPR leaked in, or a section is empty.
+ * `usable` still means a complete clean 120 — that is not required to assign.
+ */
+export function canAssignDiagnostic(
+  composition: DiagnosticComposition,
+  selected: readonly DiagnosticQualityInput[] = [],
+): boolean {
+  if (composition.residualJunk > 0) return false;
+  if (composition.sprCount > 0) return false;
+  if (composition.rwCount === 0 || composition.mathCount === 0) return false;
+  if (selected.length > 0 && selected.some((item) => !auditStudentQuizItem(item).ok)) return false;
+  return composition.questionCount > 0;
+}
+
+export function diagnosticAssignmentCopy(
+  composition: DiagnosticComposition,
+  sessionTitle: string,
+): { title: string; instructions: string } {
+  if (composition.usable) {
+    return {
+      title: `Full-length SAT diagnostic — ${sessionTitle}`,
+      instructions:
+        "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score.",
+    };
+  }
+  return {
+    title: `SAT diagnostic (${composition.questionCount} clean questions) — ${sessionTitle}`,
+    instructions:
+      `Complete this SAT diagnostic from official College Board practice items. The bank could not fill a clean 120 (shortfall ${composition.shortfall.questionCount}: RW ${composition.shortfall.rwCount}, Math ${composition.shortfall.mathCount}), so only student-usable questions are included. Your result is an estimated SAT score range based on the questions shown. It is not an official College Board adaptive digital score.`,
+  };
 }
 
 export function summarizeDiagnosticComposition(
   selected: readonly DiagnosticQualityInput[],
-  options: { droppedUnusable?: number; preferredCollectionId?: string | null; preferredCollectionSlug?: string | null } = {},
+  options: {
+    droppedUnusable?: number;
+    droppedReasons?: Partial<Record<StudentUsableFailureReason, number>>;
+    preferredCollectionId?: string | null;
+    preferredCollectionSlug?: string | null;
+  } = {},
 ): DiagnosticComposition {
   const modules: Record<DiagnosticModuleSlot, number> = {
     "rw-1": 0,
@@ -442,13 +725,19 @@ export function summarizeDiagnosticComposition(
     }
   }
 
+  const audit = auditQuizItems(selected);
+  const shortfall = diagnosticShortfallFromSelection(selected, options.droppedReasons);
+  const completeForm =
+    selected.length === FULL_DIAGNOSTIC_QUESTION_COUNT &&
+    rwCount === LINEAR_SAT_RW_MAX &&
+    mathCount === LINEAR_SAT_MATH_MAX &&
+    DIAGNOSTIC_MODULE_ORDER.every((slot) => modules[slot] === DIAGNOSTIC_MODULE_TARGETS[slot]);
   const usable =
-    selected.length >= MIN_USABLE_DIAGNOSTIC_QUESTIONS &&
-    rwCount > 0 &&
-    mathCount > 0 &&
+    completeForm &&
     sprCount === 0 &&
     duplicatePrompts === 0 &&
-    selected.every((item) => isStudentUsableQuizItem(item));
+    audit.residualJunk === 0 &&
+    selected.every((item) => auditStudentQuizItem(item).ok);
 
   return {
     questionCount: selected.length,
@@ -461,6 +750,8 @@ export function summarizeDiagnosticComposition(
     modules,
     duplicatePrompts,
     sprCount,
+    residualJunk: audit.residualJunk,
+    shortfall,
     usable,
   };
 }
@@ -468,9 +759,9 @@ export function summarizeDiagnosticComposition(
 export function isUsableFullLengthDiagnostic(composition: DiagnosticComposition): boolean {
   return (
     composition.usable &&
-    composition.rwCount >= 40 &&
-    composition.mathCount >= 30 &&
-    composition.rwCount <= LINEAR_SAT_RW_MAX &&
-    composition.mathCount <= LINEAR_SAT_MATH_MAX
+    composition.residualJunk === 0 &&
+    composition.shortfall.questionCount === 0 &&
+    composition.rwCount === LINEAR_SAT_RW_MAX &&
+    composition.mathCount === LINEAR_SAT_MATH_MAX
   );
 }

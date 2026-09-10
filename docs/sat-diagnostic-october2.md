@@ -4,11 +4,32 @@ Owner: Taito Goto (`taito0525@gmail.com`), first Fall SAT with Eunice (Oct 2 JST
 
 Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop exists. PR #60 rebuilt the Oct 2 form from “usable MCQ,” but that predicate treated **any** renderable figure as enough. Live preview then shipped graph-only crops with empty A–D letter keys, missing tables, and clipped stems.
 
+## Why regex gates failed (root cause)
+
+PRs #71–#73 added live-audit detectors (extraction markers, missing figures, smashed algebra, smashed π, junk-bleed D, table-cite-without-values, smashed trig, flattened fractions). Composition still reported `usable: true` and 120/66/54 while students got trash. That was an architecture problem, not a missing regex.
+
+1. **Rematerialize already re-runs live gates.** `reset-first-sat-prework` rematerializes from current **bank DB rows**, then `dropUnusableAssignmentQuestions` calls `isStudentUsableQuizItem` on every candidate. It does **not** trust a stored `usable` column. There is no student-usable flag on the row — only a weak import-time `assignable` (`isAssignableBankItem`: has a prompt, 2+ choices, or figure-primary + letter key).
+2. **Import vs reset.** `POST /api/admin/sat-bank/import` re-parses JSONL, applies figure-primary heuristics, upserts bank content, then rematerializes every linked quiz. Reset copies **whatever is already in the bank**. A prod 502 on import leaves stale OCR/crops/choice text. New regexes still run live on that stale content — then composition **refills** dropped slots from other official packs that failed the same leaky gate.
+3. **Fail-open fill.** `selectUsableDiagnosticItems` filtered by the same incomplete regex, then padded to 120 from SAT 5–11. `usable` was `true` at ≥80 items if every selected row passed that leaky gate. After each harden PR, rematerialize dropped newly-detected junk and immediately filled with the next smash pattern the blacklist had not seen yet.
+4. **Figure-primary was optional window-dressing.** `shouldUseFigurePrimary` required a full-question crop *and* a still-readable cleaned stem, so smashed trig/algebra stayed as text. `mathHasRequiredVisual` treated **any** renderable PNG (`p35-draw1.png`, “Diagram from page 35”) as enough for a graph/triangle cite. Table cites were tightened in #73; graphs/scatterplots/triangles were not.
+
+## New approach (this PR)
+
+Stop shipping a “usable 120” built from junk. Policy, not another blacklist increment:
+
+| Change | Behavior |
+| --- | --- |
+| **Fail-closed composition** | `usable: true` only for a complete clean 120 (66/54, all four modules full) with zero residual junk. Cross-pack fill may use only items that pass the live audit. Leftover slots are **not** padded with failures. Shortfall counts + reasons are returned. **A short clean diagnostic is assignable** until the bank can fill 120. |
+| **Math figure/table policy** | A cited table/graph/figure/scatterplot/triangle is solvable only from recovered table values **or** a real full-question / figure-primary crop. Generic page-neighbor PNGs do not count. |
+| **Prefer figure-primary for hard OCR** | Smashed trig/systems/fractions + official question image + clean A–D → serve the crop. Text-only smash is dropped, not “repaired.” |
+| **Pre-assign audit** | Before linking a rematerialized diagnostic, `auditStudentQuizItem` rejects the whole assign if residual junk remains or RW/Math would be empty. A short clean RW+Math set **is assigned**. `reset-first-sat-prework` rematerializes the current quiz (unlinks junk) but **does not archive/replace** when assign is blocked. |
+| **Re-score without import** | `POST /api/admin/sat-bank/rescore-usable` re-runs the live audit on every bank row (writes `extractGaps.studentUsable`). Skipping a flaky import is safe for gates; import is only needed for new JSONL/crops. |
+
 ## Math usability bar (every student quiz)
 
 Sama’s 2026-09-09 bar applies to **all** quizzes — Oct 2 diagnostic, routine SAT pre-work, tutor-built bank quizzes, and lesson retries — via `isStudentUsableQuizItem`. **Math uses a stricter path than RW** (`isStudentUsableMathQuizItem`): do not polish broken OCR into a student stem.
 
-- **Figure-primary data, not OCR salvage:** if the stem depends on a graph, table, dot plot, or geometric figure, host the clean figure and keep stem text short and free of axis/table bleed. Visual + bleed, or visual + no figure → drop. Visual + clean stem + figure + complete A–D stays as **text + figure** (do not hide a useful stem).
+- **Figure-primary data, not OCR salvage:** if the stem depends on a graph, table, dot plot, or geometric figure, require recovered table values **or** a full-question crop. Generic page-neighbor PNGs are not enough. Hard OCR (trig, systems, smashed fractions) prefers the official question image + clean A–D when that crop exists; otherwise drop. Clean stem + full crop + complete A–D may stay text + figure.
 - **Extraction-marker bleed:** `Start referenced content` / `End referenced content` (any casing or mid-word line break) never ships. Do not polish the wrappers off — drop/replace.
 - **Cited visual without a usable figure:** `Note: Figures not drawn to scale`, `in the figure`, `dat plot`/`dot plot`, similar-triangle vertex labels, or a graph/table cite with no hosted figure (and no recovered table) → drop. Axis ticks OCR’d into the stem (`22 23 24 25 26`) are bleed even when a page crop URL exists. **Math table cites** (`the table shows` / `the table gives`) require recovered table values (or a full-question crop). A generic page diagram is not the table.
 - **Pure algebra/function:** reject character-spaced garbage, smashed exponents (`2 2`, `ax2`, `12x3`, `66 = 66 x x`, `2 x = −841`), incomplete parentheses (`x 16( + 15)`, `6( − ) t w`), smashed π tokens (`π 144`, `24 π` vs `π 48`), spaced decimals (`.0 60`), stacked-fraction dumps (`12 −2 = −2` / `n t w`), smashed radicals (`radius of n 3`), flattened xy-table choices (`x y 3 21 5 47 8 86`), smashed trig tokens (`cosQ`, `sinQ 18 18`), glued inequalities (`x>0y>0`), flattened fractions (`42a(k+1)k`), junk-bleed choices (`The given equation relates…` / `The function f gives the monthly fee…` after a numeric answer), leading bare `=` mid-stem (`the =12 teolength`), and unreadable choices (`y x p = 57 +`, `y px = + 57`, `y = 57 px px`). Ship only when stem + full A–D read as real SAT math.
@@ -35,50 +56,47 @@ The same student-usable gate (`isStudentUsableQuizItem`) is shared platform code
 
 ## Student UX after rebuild
 
-Taito (or a client preview) opens the Oct 2 pre-work and sees either:
+Taito (or a client preview) opens the Oct 2 pre-work and sees:
 
 - A readable text MCQ with A–D copy, and the graph/table when the stem cites one
+- Possibly fewer than 120 questions, if the bank cannot fill a clean form. That is intentional.
 
 No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No student-produced-response box. Submit still returns an estimated SAT range (linear scoring-guide method, not official Bluebook adaptive).
 
 ## How composition works
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
-2. Keep an item only if the official key is A–D **and** it has a readable stem **and** complete non-garbage A–D text (plus a figure or recovered table if the stem cites a graph/table).
-3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, extraction-marker bleed (`Start referenced content`), irreparable OCR, math items whose OCR lost exponents/radicals/fractions/operators (unless a full-question crop includes complete A–D), corrupt stems (`value = of`, axis ticks, spaced `P Q R` vertices, `^ h`, pipe/backslash residue), leaked/merged A–D lists, unlabeled choice lists, smashed algebra choices, and figures that do not match the stem.
+2. Keep an item only if the live audit (`auditStudentQuizItem`) returns no failure reasons.
+3. Drop true SPR, incomplete A–D, leaked choices, extraction-marker bleed, table-cite-without-values, cited visuals without a full-question crop or recovered table, smashed trig/algebra, and the other live-audit classes in `sat-bank-live-audit.test.ts`.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
-5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
-6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
+5. Fill dropped slots only with unused items that **also pass the live audit**. If a module cannot be filled cleanly, leave it short and record `shortfall` (counts + reasons). Do **not** pad with junk to hit 120.
+6. `usable: true` only for a complete clean 120 with `residualJunk === 0`. A thin clean set **can be assigned**; it is titled `SAT diagnostic (N clean questions)` and is not labeled a usable full-length form. First-session reconcile will not wipe a short diagnostic just because it is under 80 items.
+7. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
 
 The reusable bank still stores SPR and incomplete extracts. They are just not composed into student quizzes.
 
 ## Production runbook
 
-**Required after merge.** Landing this PR does not change the live Oct 2 assignment (`8f677668-827a-4908-a709-c816101ddebf` after the #72 rematerialize). After Code Checker / review merge the PR and the API deploy completes, ops **must** rebuild (`POST /api/admin/sat-bank/reset-first-sat-prework`). Re-import is recommended so JSONL flags stay in sync, but skip it if import is flaky — the shared gates run at rematerialize either way. A 2026-09-10 live audit after #72 still found table-cite-without-values, smashed trig (`cosQ`), junk-bleed D, smashed tan stems, and flattened fractions passing `usable: true`. `usable: true` is not enough until this rematerialize runs.
+**Required after merge.** Landing this PR does not change the live Oct 2 assignment. After Code Checker / review merge and the API deploy, ops may rematerialize. This PR **will refuse to stamp `usable: true` or pad junk to 120**. If both RW and Math have clean items, it **will assign the short clean set**. Do **not** rematerialize production from this cloud agent.
+
+**Correct prod sequence (skip import if it 502s):**
+
+1. Deploy the merged API (and `/media/sat-bank` if new full-question crops landed).
+2. Optional: `POST /api/admin/sat-bank/import` — only needed to pick up new JSONL/crops. A 502 leaves stale bank **content** but does **not** freeze usable flags; rematerialize and composition always re-run the live audit.
+3. Optional: `POST /api/admin/sat-bank/rescore-usable` — cheap live re-score of `extractGaps.studentUsable` with no JSONL parse.
+4. `POST /api/admin/sat-bank/reset-first-sat-prework`
+   - Rematerializes the current Oct 2 quiz and unlinks items that fail the live audit.
+   - Previews the new composition.
+   - If `assignBlocked: true` (empty RW or Math, or residual junk), the current assignment stays (junk already unlinked). Read `composition.shortfall` — add full-question crops, do not add regexes.
+   - If assignable (including a short clean form), archives the old quiz and links the new one. Title says “Full-length” only when `usable: true`.
 
 Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
 
-### 1. Deploy the merged API (and media if crops changed)
-
-Figures stay under `/media/sat-bank/...` (PR #50). If new question-region crops landed, deploy those static files with the API.
-
-### 2. Re-import bank content (recommended; skip if import is flaky)
-
-Admin → Curriculum → SAT/PSAT bank → **Import staged extracts**
-
-or:
-
-```http
-POST /api/admin/sat-bank/import
-POST /api/admin/sat-bank/refresh-linked
-```
-
-Import re-parses JSONL with the tighter figure-primary rules (choice text is kept when it is readable). Then rematerializes every **bank-linked** `questions` row. Session-local forks are skipped.
-
-To refresh only the current Oct 2 assignment without rebuilding it:
+### In-place refresh (no rebuild)
 
 ```http
 POST /api/admin/sat-bank/assignments/:assignmentId/refresh-linked
+POST /api/admin/sat-bank/rescore-usable
 ```
 
 or:
@@ -88,50 +106,42 @@ cd artifacts/api-server
 node --experimental-strip-types src/scripts/reset-october2-prework.ts --refresh-linked-only
 ```
 
-In-place refresh now rematerializes bank-linked rows **and unlinks items that fail `isStudentUsableQuizItem`**. It still cannot restore choice text a previous import wiped. Re-import JSONL, then use the rebuild so dropped slots can be filled from other official packs.
+In-place refresh rematerializes bank-linked rows and unlinks items that fail the live audit. It cannot restore wiped choice text or invent full-question crops. Re-import JSONL only when new crops landed.
 
-### 3. Rebuild and re-link Taito’s Oct 2 diagnostic
+### Full rebuild (assigns a short clean set if 120 is impossible)
 
 ```bash
 cd artifacts/api-server
 node --experimental-strip-types src/scripts/reset-october2-prework.ts
 ```
 
-or as administrator:
+or:
 
 ```http
 POST /api/admin/sat-bank/reset-first-sat-prework
 ```
 
-This:
-
-1. Rematerializes the current Oct 2 linked questions (skips forks) and unlinks remaining unusable items
-2. Archives that session’s before-session assignments, including older duplicate diagnostics, and deletes its attempts
-3. Builds a new published diagnostic from the cleaned MCQ bank
-4. Points the Oct 2 session pre-work plan at the new assignment
-5. Dedupes any leftover published full-length diagnostics on the course so only the live copy stays visible
+If `assignBlocked` is true, the current assignment is still the live one (junk already unlinked). Do not force a 120. `--no-reassign` rematerializes/unlinks and stops.
 
 It does **not** move or edit homework on other sessions (Nika IELTS, later Eunice SATs, Xavier capability, session-local tutor forks).
 
-`--no-reassign` archives Oct 2 pre-work and stops (no new quiz).
+### Verify
 
-### 4. Verify
-
-The script prints `composition`. Expect:
+The script prints `composition` and `assignBlocked`. Expect:
 
 | Check | Expected |
 | --- | --- |
-| `composition.usable` | `true` — **not sufficient alone**. Open the student quiz and confirm the stems below are gone. |
-| `questionCount` | 120 (or ≥80 if a pack is thin) |
-| `rwCount` / `mathCount` | 66 / 54 on a full rebuild |
+| `composition.usable` | `true` only for a complete clean 120 with `residualJunk === 0`. Otherwise `false` plus `shortfall`. |
+| `assignBlocked` | `true` only if RW or Math would be empty or residual junk remains. A short clean set is a successful rebuild. |
+| `questionCount` | 120 when usable; otherwise the clean short set (never padded with junk) |
+| `rwCount` / `mathCount` | 66 / 54 on a usable rebuild; fewer is OK until crops land |
 | `sprCount` | 0 |
 | `duplicatePrompts` | 0 |
-| Graph/table items | Choice text visible — never letter keys alone. Tables render as tables, not smashed `x f(x)` lines. Duplicate/orphan figure fragments are gone. No partial crop stacked on broken OCR; long choice D wraps instead of clipping |
+| `shortfall.reasons` | Explicit live-audit classes (table_cite_without_values, smashed_trig, …) |
+| Graph/table items | Recovered table values or a full-question crop — never a page-neighbor PNG alone |
 | Extraction markers | No `Start referenced content` / `End referenced content` in any stem |
-| Cited visuals | Every graph / table / dot plot / “figure not drawn” / similar-triangle item shows the figure (or a recovered table). Axis-tick bleed is dropped, not paired with a crop. |
-| Algebra | No smashed exponents (`66 = 66 x x`, `2 x = −841`), smashed π (`π 144`, `24 π` / `π 48`), spaced decimals (`.0 60`), flattened `x y 3 21…` table choices, or junk-bleed D (`The given equation relates…`) |
-| Time limit | ≥134 minutes |
-| Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
+| Algebra | No smashed trig/algebra as student-facing text unless a full-question crop + clean A–D is served |
+| Title | `Full-length SAT diagnostic — …` only when usable; otherwise `SAT diagnostic (N clean questions) — …` |
 
 Then as Taito or a client preview: open the Oct 2 diagnostic → a graph item must show the chart **and** A–D copy (or a crop that includes the choices) → tables/stems must not clip → no “Multiple-choice options unavailable” → answer A–D → submit → see an estimated SAT range. Flagged (and reported) items are excluded from the score denominator. Students can **Report question** from the quiz chrome; Sama sees the queue on Admin home and mail goes to `admin@acceptedadmissions.org`.
 

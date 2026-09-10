@@ -1,9 +1,10 @@
 /**
  * Rebuild Taito's October 2 full-length SAT diagnostic from usable MCQ bank rows.
  *
- * Default: rematerialize the current linked (non-fork) questions, archive the
- * broken assignment, and attach a new MCQ-only diagnostic (PT4 modules, dropped
- * SPR/OCR replaced with clean SAT MCQs from other official packs).
+ * Default: rematerialize the current linked (non-fork) questions, preview a
+ * fail-closed composition, and only archive/replace if the new set has no
+ * residual junk and both RW and Math are non-empty. Cross-pack fill may use
+ * only live-audit-clean items; leftover slots stay short instead of padding.
  *
  * Usage (requires DATABASE_URL):
  *   cd artifacts/api-server
@@ -36,15 +37,15 @@ console.log(
       reassignedAssignmentId: result.reassigned?.assignmentId ?? null,
       reassignedQuestionCount: result.reassigned?.questionCount ?? null,
       reassignedMinutes: result.reassigned?.targetMinutes ?? null,
+      assignBlocked: result.assignBlocked,
       composition: result.composition,
       verify: [
-        "Oct 2 Taito SAT pre-work is a single published full-length diagnostic.",
-        "Question count is 80–120, with both RW and Math modules.",
-        "Every item is A–D MCQ (readable choice text, or a full-question crop — not a bare graph).",
+        "Fail-closed: usable:true only for a complete clean 120 with zero residual junk.",
+        "If assignBlocked, the old assignment was rematerialized (junk unlinked) but not replaced.",
+        "Shortfall counts/reasons are explicit — do not pad with OCR junk to hit 120.",
+        "Math visual cites need recovered table values or a full-question crop, not a page-neighbor PNG.",
         "No SPR text boxes, empty stems, or duplicate module prompts.",
-        "Time limit is ≥134 minutes.",
         "Session-local forks on other meetings were not rewritten.",
-        "Student start → answer A–D → submit shows an estimated SAT range.",
       ],
     },
     null,

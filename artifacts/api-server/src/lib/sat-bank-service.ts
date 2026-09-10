@@ -36,9 +36,12 @@ import {
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
 import {
+  auditStudentQuizItem,
+  canAssignDiagnostic,
+  diagnosticAssignmentCopy,
+  composeDiagnosticItems,
   isStudentUsableQuizItem,
   quizItemFromServedQuestion,
-  selectUsableDiagnosticItems,
   summarizeDiagnosticComposition,
   type DiagnosticComposition,
 } from "./sat-bank-diagnostic-quality.ts";
@@ -152,6 +155,24 @@ function bankRowForDiagnostic(row: {
     correctAnswer: row.correctAnswer,
     extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
   };
+}
+
+function formatDiagnosticAssignBlock(composition: DiagnosticComposition): string {
+  const reasons = Object.entries(composition.shortfall.reasons)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6)
+    .map(([reason, count]) => `${reason}:${count}`)
+    .join(", ");
+  return [
+    `Diagnostic assign blocked (fail-closed).`,
+    `Selected ${composition.questionCount}/120 (${composition.rwCount} RW / ${composition.mathCount} Math).`,
+    `Shortfall ${composition.shortfall.questionCount} (RW ${composition.shortfall.rwCount}, Math ${composition.shortfall.mathCount}).`,
+    `Residual junk ${composition.residualJunk}.`,
+    reasons ? `Drop reasons: ${reasons}.` : "",
+    `Fewer clean items were kept rather than padding with OCR junk. Re-score usable flags, add full-question crops, then retry.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 async function walkExtractFiles(root: string): Promise<string[]> {
@@ -756,6 +777,8 @@ export async function assignPreworkFromBank(input: {
   questionCount: number;
   withinTolerance: boolean;
   extractIncomplete: boolean;
+  composition: DiagnosticComposition | null;
+  assignBlocked: boolean;
 }> {
   const [session] = await db
     .select()
@@ -824,15 +847,24 @@ export async function assignPreworkFromBank(input: {
       { status: 409 },
     );
   }
+  const diagnosticItems = pool.map((row) => ({ ...row, ...bankRowForDiagnostic(row) }));
+  const composed =
+    homeworkKind === "diagnostic"
+      ? composeDiagnosticItems(diagnosticItems, {
+          preferredCollectionId: collectionId,
+          allowCrossCollectionFill: !explicitCollection && !explicitIds,
+        })
+      : null;
+  if (homeworkKind === "diagnostic" && composed && !canAssignDiagnostic(composed.composition, composed.selected)) {
+    throw Object.assign(new Error(formatDiagnosticAssignBlock(composed.composition)), {
+      status: 409,
+      composition: composed.composition,
+      assignBlocked: true,
+    });
+  }
   const selected =
     homeworkKind === "diagnostic"
-      ? selectUsableDiagnosticItems(
-          pool.map((row) => ({ ...row, ...bankRowForDiagnostic(row) })),
-          {
-            preferredCollectionId: collectionId,
-            allowCrossCollectionFill: !explicitCollection && !explicitIds,
-          },
-        )
+      ? (composed?.selected ?? []).map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean)
       : selectQuestionsForCountBudget(
           pool.map((row) => ({
             id: row.id,
@@ -851,15 +883,22 @@ export async function assignPreworkFromBank(input: {
   );
   const resolvedMinutes =
     homeworkKind === "diagnostic"
-      ? diagnosticTimeLimitMinutes(estimatedSeconds)
+      ? diagnosticTimeLimitMinutes(estimatedSeconds, {
+          completeForm: Boolean(composed?.composition.usable),
+        })
       : routinePreworkTimeLimitMinutes(selected.length);
   if (!input.skipArchiveExisting) {
     await archiveSessionPrework(session.id);
   }
+  const diagnosticCopy =
+    homeworkKind === "diagnostic" && composed
+      ? diagnosticAssignmentCopy(composed.composition, session.title)
+      : null;
   const title =
-    homeworkKind === "diagnostic"
-      ? `Full-length SAT diagnostic — ${session.title}`
-      : `SAT pre-work (30–50 questions) — ${session.title}`;
+    diagnosticCopy?.title ??
+    (homeworkKind === "diagnostic"
+      ? `SAT diagnostic — ${session.title}`
+      : `SAT pre-work (30–50 questions) — ${session.title}`);
   const [assignment] = await db
     .insert(assignmentsTable)
     .values({
@@ -869,9 +908,10 @@ export async function assignPreworkFromBank(input: {
       title,
       subject: session.subject || "SAT",
       instructions:
-        homeworkKind === "diagnostic"
-          ? "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score."
-          : "30–50 official-bank questions for this session (not a full-length SAT). Accuracy is recorded; this is not an official SAT score.",
+        diagnosticCopy?.instructions ??
+        (homeworkKind === "diagnostic"
+          ? "Complete this SAT diagnostic from official College Board practice items. Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score."
+          : "30–50 official-bank questions for this session (not a full-length SAT). Accuracy is recorded; this is not an official SAT score."),
       status: "published",
       timeLimitMinutes: resolvedMinutes,
       maxAttempts: 1,
@@ -927,10 +967,86 @@ export async function assignPreworkFromBank(input: {
     questionCount: selected.length,
     withinTolerance:
       homeworkKind === "diagnostic"
-        ? selected.length >= 80
+        ? Boolean(composed?.composition.usable)
         : selected.length <= 50 && (selected.length >= 30 || selected.length === pool.length),
     extractIncomplete: selected.some((row) => !row.officialExplanation.trim()),
+    composition: composed?.composition ?? null,
+    assignBlocked: false,
   };
+}
+
+export async function previewDiagnosticComposition(options: {
+  collectionId?: string | null;
+} = {}): Promise<{
+  selectedCount: number;
+  composition: DiagnosticComposition;
+  assignable: boolean;
+}> {
+  await ensureOfficialExtractsImported().catch(() => undefined);
+  const collections = await listBankCollections();
+  const collectionId = options.collectionId ?? preferSatDiagnosticCollection(collections)?.id ?? null;
+  const pool = (
+    await db
+      .select()
+      .from(bankQuestionsTable)
+      .orderBy(asc(bankQuestionsTable.position), asc(bankQuestionsTable.questionNumber))
+  ).filter(
+    (row) =>
+      row.examFamily === "sat" &&
+      row.sourceKind === "official_extract" &&
+      isMultipleChoiceQuizItem({
+        questionType: row.questionType,
+        choices: Array.isArray(row.choices) ? row.choices : [],
+        correctAnswer: row.correctAnswer,
+      }) &&
+      isStudentUsableQuizItem(bankRowForDiagnostic(row)),
+  );
+  const composed = composeDiagnosticItems(
+    pool.map((row) => ({ ...row, ...bankRowForDiagnostic(row) })),
+    {
+      preferredCollectionId: collectionId,
+      allowCrossCollectionFill: true,
+    },
+  );
+  return {
+    selectedCount: composed.selected.length,
+    composition: composed.composition,
+    assignable: canAssignDiagnostic(composed.composition, composed.selected),
+  };
+}
+
+export async function rescoreBankUsableFlags(): Promise<{
+  scored: number;
+  usable: number;
+  unusable: number;
+  reasons: Partial<Record<string, number>>;
+}> {
+  const rows = await db.select().from(bankQuestionsTable);
+  let usable = 0;
+  let unusable = 0;
+  const reasons: Partial<Record<string, number>> = {};
+  for (const row of rows) {
+    const item = bankRowForDiagnostic(row);
+    const audit = auditStudentQuizItem(item);
+    const gaps = {
+      ...((row.extractGaps ?? {}) as Record<string, unknown>),
+      studentUsable: audit.ok,
+      studentUsableReasons: audit.reasons,
+    };
+    await db
+      .update(bankQuestionsTable)
+      .set({ extractGaps: gaps, updatedAt: new Date() })
+      .where(eq(bankQuestionsTable.id, row.id));
+    if (audit.ok) {
+      usable += 1;
+    } else {
+      unusable += 1;
+      for (const reason of audit.reasons) {
+        reasons[reason] = (reasons[reason] ?? 0) + 1;
+      }
+    }
+  }
+  return { scored: rows.length, usable, unusable, reasons };
 }
 
 export async function persistWeaknessGroups(input: {
@@ -1802,6 +1918,7 @@ export async function resetTaitoFirstSatPrework(input: {
   rematerialized: AssignmentLinkedRefreshCounts | null;
   reassigned: Awaited<ReturnType<typeof assignPreworkFromBank>> | null;
   composition: DiagnosticComposition | null;
+  assignBlocked: boolean;
 }> {
   const session = await findTaitoFirstSatSession();
   if (!session) {
@@ -1824,6 +1941,20 @@ export async function resetTaitoFirstSatPrework(input: {
       composition: existingAssignmentId
         ? await diagnosticCompositionForAssignment(existingAssignmentId)
         : null,
+      assignBlocked: false,
+    };
+  }
+  const preview =
+    input.reassignDiagnostic === false ? null : await previewDiagnosticComposition();
+  if (preview && !preview.assignable) {
+    return {
+      sessionId: session.id,
+      archivedAssignments: 0,
+      deletedAttempts: 0,
+      rematerialized,
+      reassigned: null,
+      composition: preview.composition,
+      assignBlocked: true,
     };
   }
   const reset = await resetSessionPreworkState(session.id);
@@ -1843,7 +1974,8 @@ export async function resetTaitoFirstSatPrework(input: {
     reassigned,
     composition: reassigned
       ? await diagnosticCompositionForAssignment(reassigned.assignmentId)
-      : null,
+      : preview?.composition ?? null,
+    assignBlocked: false,
   };
 }
 

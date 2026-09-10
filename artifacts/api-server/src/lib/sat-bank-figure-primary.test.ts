@@ -10,7 +10,9 @@ import {
   hasFullQuestionCrop,
   hasReadableStudentStem,
   hasRecoveredDataTable,
+  hasSolvableCitedVisual,
   hasUsableChoiceText,
+  isGenericPageNeighborFigure,
   isFullQuestionCrop,
   isStudentReadableChoiceText,
   isLetterAnswer,
@@ -39,6 +41,7 @@ import {
   looksMalformedFractionChoice,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
+  looksHardOcrMathRisk,
   looksSmashedTrigToken,
   stemCitesMathDataTable,
   looksAxisTickBleed,
@@ -123,7 +126,8 @@ test("garbled graph with usable A–D stays text unless a full-question crop exi
       correctAnswer: "B",
       figures: [{ url: figureUrl, alt: "Question region including choices A–D", role: "question_region" }],
     }),
-    false,
+    true,
+    "hard OCR + full-question crop + clean A–D must prefer figure-primary",
   );
 });
 
@@ -249,6 +253,36 @@ test("figure-primary src without usable A–D text does not invent letter-only c
   });
   assert.equal(fields.presentation, "text");
   assert.equal(fields.choices, undefined);
+});
+
+test("page-neighbor PNGs are not solvable cited visuals", () => {
+  const neighbor = { url: figureUrl, alt: "Diagram from page 35" };
+  const full = { url: figureUrl, alt: "Question region including choices A–D", role: "question_region" };
+  assert.equal(isGenericPageNeighborFigure(neighbor), true);
+  assert.equal(isGenericPageNeighborFigure(full), false);
+  assert.equal(
+    hasSolvableCitedVisual({
+      prompt: "The table shows three values of x. Which equation defines f(x)?",
+      figures: [neighbor],
+    }),
+    false,
+  );
+  assert.equal(
+    hasSolvableCitedVisual({
+      prompt: "x f(x)\n0 29\n1 32\n2 35\nThe table shows three values of x. Which equation defines f(x)?",
+      figures: [neighbor],
+    }),
+    true,
+  );
+  assert.equal(
+    hasSolvableCitedVisual({
+      prompt: "The graph of y = f(x) is shown. What is the vertex?",
+      figures: [full],
+    }),
+    true,
+  );
+  assert.equal(looksHardOcrMathRisk("cosQ 18"), true);
+  assert.equal(looksHardOcrMathRisk("x/4 + 1 = 33\nWhich equation has the same solution?"), false);
 });
 
 test("rejects graph-only crops as full-question screenshots", () => {
@@ -793,5 +827,10 @@ test("student-facing fields hide garbled stems and do not emit empty letter keys
   assert.equal(fields.presentation, "text");
   assert.equal(fields.choices, undefined);
   assert.equal(figurePrimaryStudentPrompt("V = i,.r3 V =3£wh"), "");
+  assert.equal(
+    figurePrimaryStudentPrompt("In triangle QRS shown, QR RS. Which expression represents the length of QS?"),
+    "",
+    "hard-OCR stems stay hidden when the official crop is served",
+  );
   assert.deepEqual(letterMcqChoices([]).map((choice) => choice.id), ["a", "b", "c", "d"]);
 });
