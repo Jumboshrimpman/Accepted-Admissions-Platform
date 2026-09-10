@@ -70,7 +70,7 @@ const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
 const STACKED_FRACTION_ORPHAN =
   /\b14x\s*=\s*2\s*w\b|\b19\s+7y\b|\b2\s+w\s*\+\s*19\s*7y\b|\n7y\s*(?:\n|$)/;
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
-const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-z]\s+[A-Za-z]|\d{1,3}\s+[A-Za-z])$/;
+const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-zπΠ]\s+[A-Za-zπΠ]|\d{1,3}\s+[A-Za-zπΠ])$/;
 const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;
 const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*What is the value/i;
 const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
@@ -108,7 +108,18 @@ const SMASHED_SLOPE_FRACTION = /slopeof1[–\-−]3|slope of 1[–\-−]3(?!\d)/
 const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
 const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
 const LEAKED_NEXT_QUESTION =
-  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer|set a goal to walk|On a certain day,|Note:\s*Figure not drawn|lines m and n are parallel/i;
+  /Which expression is equivalent|Which of the following (?:systems|equations|is|tables)|Select your answer|set a goal to walk|On a certain day,|Note:\s*Figure not drawn|lines m and n are parallel|The given (?:equation|system|function|inequality) relates|The solution to the given|Each side of equilateral|How many (?:distinct|Start referenced)|What is the (?:perimeter|value|length|area|slope)/i;
+const CHOICE_DASH_TILDE_BLEED = /-{3,}~|–{3,}~|—{2,}~/;
+const SMASHED_PI_STEM = /(?:^|\n|[,:;.])\s*[πΠ]\s+\d/;
+const SMASHED_PI_CHOICE = /^(?:[πΠ]\s+\d+|\d+\s+[πΠ])$/;
+const SPACED_DECIMAL_CHOICE = /(?:^|[^\d])-?\.\d+\s+\d|\d+\.\s+\d/;
+const FLATTENED_XY_TABLE = /^(?:x\s+y|xy)\s+-?\d/i;
+const FLATTENED_XY_COMPACT = /^xy-?\d/;
+const MALFORMED_FRACTION_CHOICE = /^[−-]?\d+\s+\d+$/;
+const SMASHED_RADICAL_RADIUS = /\bradius of [a-z]\s+\d|\barea of [a-z]\s+of\s+circle/i;
+const MISSING_CARET_LEADING = /(?:^|\n)\s*\d\s+[xy]\s*=/;
+const STACKED_FRACTION_TOP = /^-?\d+(?:\s+[−+\-]\s*-?\d+)+\s*=/;
+const STACKED_FRACTION_BOTTOM = /^[a-z](?:\s+[a-z]){1,5}$/i;
 const CARET_H_OCR = /\^\s*h\b/;
 const Y_FX_MISSING_EQUALS = /\by\s+f\s*\(\s*x\s*\)/;
 const BROKEN_POINT_ZERO_FIVE = /point\s*,?\s*0(?:\s*,\s*0)?\s+5\b/i;
@@ -122,7 +133,7 @@ const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x(?:\s+x|\s*Which|[A-Z]|\s*$)/m;
 const MISSING_OPERATOR_CHOICE =
   /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =
-  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|in the figure|the line graphed|the line graph|the dot plot|the dat plot|note:\s*figures? not drawn|figures? not drawn to scale|the graph models|y-intercept of the (?:graph|line)|the scatterplot|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the circle shown|in the figure|the line graphed|the line graph|the dot plot|the dat plot|note:\s*figures? not drawn|figures? not drawn to scale|the graph models|y-intercept of the (?:graph|line)|the scatterplot|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
 const SMASHED_VISUAL_CITE =
   /figures?notdrawntoscale|thescatterplot|thelinegraphed|righttriangles[a-z]{0,6}ands?[a-z]{0,6}aresimilar|thetableshows|usesdatafromthetable|datplot|inthefigure/;
 const LABELED_GEOMETRY =
@@ -223,9 +234,10 @@ function looksOperatorStarvedEquation(text: string): boolean {
     const withoutUnary = trimmed.replace(/^[−\-]\s*/, "").replace(/=\s*[−\-]/g, "=");
     if (/[+\-−×*/÷^]/.test(withoutUnary)) continue;
     const tokens = trimmed.split(/\s+/).filter(Boolean);
-    const mathish = tokens.filter(
-      (token) => token === "=" || /^[A-Za-z]$/.test(token) || /^-?\d/.test(token),
-    );
+    const mathish = tokens.filter((token) => {
+      const numeric = token.replace(/^[−–]/, "-");
+      return token === "=" || /^[A-Za-z]$/.test(token) || /^-?\d/.test(numeric);
+    });
     if (mathish.length >= 4) return true;
   }
   return false;
@@ -248,6 +260,10 @@ export function looksSmashedAlgebraText(text: string | null | undefined): boolea
   if (SIN_COS_OCR.test(raw)) return true;
   if (LEADING_EQ_SPLIT_NUM.test(raw)) return true;
   if (SPACED_FT_EQUALS.test(raw)) return true;
+  if (MISSING_CARET_LEADING.test(raw)) return true;
+  if (looksStackedFractionDump(raw)) return true;
+  if (looksSmashedRadicalText(raw)) return true;
+  if (looksSmashedPiToken(raw)) return true;
   return false;
 }
 
@@ -491,7 +507,7 @@ export function looksIncompleteMathParens(text: string | null | undefined): bool
   const raw = text ?? "";
   if (!raw.trim()) return false;
   if (/\(\s*[*/=]/.test(raw)) return true;
-  if (/\(\s+[+\-]/.test(raw)) return true;
+  if (/\(\s+[+\-−]/.test(raw)) return true;
   let depth = 0;
   let sawParen = false;
   for (const ch of raw) {
@@ -584,8 +600,55 @@ export function looksMissingOperatorChoice(text: string | null | undefined): boo
   return MISSING_OPERATOR_CHOICE.test(value);
 }
 
+export function looksSmashedPiToken(text: string | null | undefined): boolean {
+  return SMASHED_PI_STEM.test(text ?? "");
+}
+
+export function looksSmashedPiChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text).replace(/\bpi\b/gi, "π");
+  return SMASHED_PI_CHOICE.test(value);
+}
+
+export function looksSpacedDecimalChoice(text: string | null | undefined): boolean {
+  return SPACED_DECIMAL_CHOICE.test(cleanOcrChoiceText(text));
+}
+
+export function looksMalformedFractionChoice(text: string | null | undefined): boolean {
+  return MALFORMED_FRACTION_CHOICE.test(cleanOcrChoiceText(text));
+}
+
+export function looksSmashedRadicalText(text: string | null | undefined): boolean {
+  return SMASHED_RADICAL_RADIUS.test(text ?? "");
+}
+
+/** `12 −2 = −2` over `n t w` — stacked fraction OCR, not a readable equation. */
+export function looksStackedFractionDump(text: string | null | undefined): boolean {
+  const lines = (text ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (STACKED_FRACTION_TOP.test(lines[index]) && STACKED_FRACTION_BOTTOM.test(lines[index + 1])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function looksSmashedTableChoice(text: string | null | undefined): boolean {
-  return SMASHED_TABLE_CHOICE.test(cleanOcrChoiceText(text));
+  const cleaned = cleanOcrChoiceText(text);
+  if (!cleaned) return false;
+  if (SMASHED_TABLE_CHOICE.test(cleaned)) return true;
+  const compact = cleaned.replace(/\s+/g, "").toLowerCase();
+  if (FLATTENED_XY_COMPACT.test(compact) && (compact.match(/\d/g) ?? []).length >= 6) {
+    const lines = (text ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+    return lines.length <= 2;
+  }
+  if (FLATTENED_XY_TABLE.test(cleaned) && (cleaned.match(/-?\d+/g) ?? []).length >= 4) {
+    const lines = (text ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+    return lines.length <= 2;
+  }
+  return false;
 }
 
 /** `T h e g r a p h s h o w s` — OCR split every letter. */
@@ -655,8 +718,11 @@ export function formatStudentStemText(text: string | null | undefined): string {
 }
 
 export function looksLeakedNextQuestionChoice(text: string | null | undefined): boolean {
+  const raw = text ?? "";
   const value = cleanOcrChoiceText(text);
-  return value.length > 40 && LEAKED_NEXT_QUESTION.test(value);
+  if (value.length <= 40) return false;
+  if (LEAKED_NEXT_QUESTION.test(value)) return true;
+  return CHOICE_DASH_TILDE_BLEED.test(raw);
 }
 
 /** Stem actually cites a graph/table/shown figure — not a word-problem “triangle”. */
@@ -885,6 +951,9 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(value)) return false;
   if (looksMissingOperatorChoice(raw) || looksMissingOperatorChoice(value)) return false;
   if (looksSmashedTableChoice(raw) || looksSmashedTableChoice(value)) return false;
+  if (looksSmashedPiChoice(raw) || looksSmashedPiChoice(value)) return false;
+  if (looksSpacedDecimalChoice(raw) || looksSpacedDecimalChoice(value)) return false;
+  if (looksMalformedFractionChoice(raw) || looksMalformedFractionChoice(value)) return false;
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(value)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(value)) return false;
   if (looksSmashedAlgebraChoice(raw) || looksSmashedAlgebraChoice(value)) return false;

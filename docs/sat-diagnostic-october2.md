@@ -11,7 +11,7 @@ Sama’s 2026-09-09 bar applies to **all** quizzes — Oct 2 diagnostic, routine
 - **Figure-primary data, not OCR salvage:** if the stem depends on a graph, table, dot plot, or geometric figure, host the clean figure and keep stem text short and free of axis/table bleed. Visual + bleed, or visual + no figure → drop. Visual + clean stem + figure + complete A–D stays as **text + figure** (do not hide a useful stem).
 - **Extraction-marker bleed:** `Start referenced content` / `End referenced content` (any casing or mid-word line break) never ships. Do not polish the wrappers off — drop/replace.
 - **Cited visual without a usable figure:** `Note: Figures not drawn to scale`, `in the figure`, `dat plot`/`dot plot`, similar-triangle vertex labels, or a graph/table cite with no hosted figure (and no recovered table) → drop. Axis ticks OCR’d into the stem (`22 23 24 25 26`) are bleed even when a page crop URL exists.
-- **Pure algebra/function:** reject character-spaced garbage, smashed exponents (`2 2`, `ax2`, `12x3`, `66 = 66 x x`), incomplete parentheses (`x 16( + 15)`), and unreadable choices (`y x p = 57 +`, `y px = + 57`, `y = 57 px px`). Ship only when stem + full A–D read as real SAT math.
+- **Pure algebra/function:** reject character-spaced garbage, smashed exponents (`2 2`, `ax2`, `12x3`, `66 = 66 x x`, `2 x = −841`), incomplete parentheses (`x 16( + 15)`, `6( − ) t w`), smashed π tokens (`π 144`, `24 π` vs `π 48`), spaced decimals (`.0 60`), stacked-fraction dumps (`12 −2 = −2` / `n t w`), smashed radicals (`radius of n 3`), flattened xy-table choices (`x y 3 21 5 47 8 86`), junk-bleed choices (`The given equation relates…` after a numeric answer), and unreadable choices (`y x p = 57 +`, `y px = + 57`, `y = 57 px px`). Ship only when stem + full A–D read as real SAT math.
 - **If unsure whether a student can solve the math as shown, drop/replace at materialize.** Math never uses the RW fallback “has a crop, so keep.”
 - Full usable A–D — never “Multiple-choice options unavailable” or incomplete A–C
 - Fewer perfect math items beat 120 with junk. English/RW stays on the existing readable-stem path except extraction-marker bleed, which is rejected for every section.
@@ -54,7 +54,7 @@ The reusable bank still stores SPR and incomplete extracts. They are just not co
 
 ## Production runbook
 
-**Required after merge.** Landing this PR does not change the live Oct 2 assignment (`c00a9bbe-bb6b-4f93-9308-3b191b9066db`). After Code Checker / review merge the PR and the API deploy completes, ops **must** re-import the bank and rebuild. A 2026-09-10 live audit still found extraction-marker bleed, cited visuals without figures, and smashed algebra after PR #70 — `usable: true` is not enough until this rematerialize runs.
+**Required after merge.** Landing this PR does not change the live Oct 2 assignment (`2a609772-a4fa-45e3-9f67-d57c247bd528` after the #71 rematerialize). After Code Checker / review merge the PR and the API deploy completes, ops **must** rebuild (`POST /api/admin/sat-bank/reset-first-sat-prework`). Re-import is recommended so JSONL flags stay in sync, but skip it if import is flaky — the shared gates run at rematerialize either way. A 2026-09-10 live audit after #71 still found smashed π, spaced decimals, junk-bleed choices, and flattened xy-table choices passing `usable: true`. `usable: true` is not enough until this rematerialize runs.
 
 Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
 
@@ -62,7 +62,7 @@ Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this r
 
 Figures stay under `/media/sat-bank/...` (PR #50). If new question-region crops landed, deploy those static files with the API.
 
-### 2. Re-import bank content (required so graph-only rows are no longer figure-primary)
+### 2. Re-import bank content (recommended; skip if import is flaky)
 
 Admin → Curriculum → SAT/PSAT bank → **Import staged extracts**
 
@@ -129,7 +129,7 @@ The script prints `composition`. Expect:
 | Graph/table items | Choice text visible — never letter keys alone. Tables render as tables, not smashed `x f(x)` lines. Duplicate/orphan figure fragments are gone. No partial crop stacked on broken OCR; long choice D wraps instead of clipping |
 | Extraction markers | No `Start referenced content` / `End referenced content` in any stem |
 | Cited visuals | Every graph / table / dot plot / “figure not drawn” / similar-triangle item shows the figure (or a recovered table). Axis-tick bleed is dropped, not paired with a crop. |
-| Algebra | No smashed exponents (`66 = 66 x x`) or unreadable choices (`y x p = 57 +`) |
+| Algebra | No smashed exponents (`66 = 66 x x`, `2 x = −841`), smashed π (`π 144`, `24 π` / `π 48`), spaced decimals (`.0 60`), flattened `x y 3 21…` table choices, or junk-bleed D (`The given equation relates…`) |
 | Time limit | ≥134 minutes |
 | Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
 

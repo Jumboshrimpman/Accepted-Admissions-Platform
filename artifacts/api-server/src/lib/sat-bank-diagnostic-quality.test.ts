@@ -1262,6 +1262,14 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-rw-m1-q8",
     "sat-pt9-math-m1-q10",
     "sat-pt10-math-m2-q12",
+    "sat-pt9-math-m1-q12",
+    "sat-pt11-math-m1-q15",
+    "sat-pt8-math-m1-q18",
+    "sat-pt7-math-m1-q19",
+    "sat-pt10-math-m2-q4",
+    "sat-pt6-math-m2-q17",
+    "sat-pt5-math-m2-q19",
+    "sat-pt9-math-m2-q22",
   ];
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q2"),
@@ -1307,6 +1315,26 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     unusable.some((row) => row.sourceKey === "sat-pt10-math-m2-q12"),
     true,
     "66 = 66 x x smashed algebra must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt9-math-m1-q12"),
+    true,
+    "Q84 smashed π / circle-figure OCR must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q15"),
+    true,
+    "Q86 spaced-decimal slope choices must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt9-math-m2-q22"),
+    true,
+    "Q120 flattened xy-table choices must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt10-math-m2-q4"),
+    true,
+    "Q104 junk-bleed choice D must drop",
   );
   for (const key of brokenMathKeys) {
     assert.ok(
@@ -1372,6 +1400,14 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-rw-m1-q8",
     "sat-pt9-math-m1-q10",
     "sat-pt10-math-m2-q12",
+    "sat-pt9-math-m1-q12",
+    "sat-pt11-math-m1-q15",
+    "sat-pt8-math-m1-q18",
+    "sat-pt7-math-m1-q19",
+    "sat-pt10-math-m2-q4",
+    "sat-pt6-math-m2-q17",
+    "sat-pt5-math-m2-q19",
+    "sat-pt9-math-m2-q22",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }

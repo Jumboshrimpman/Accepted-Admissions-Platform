@@ -70,11 +70,11 @@ If both snippet drawings and a question-region crop are present, the portal uses
 
 Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, tutor-built bank quizzes, and lesson retries — uses `isStudentUsableQuizItem`. **Math is a separate, stricter path** (`isStudentUsableMathQuizItem`): host the clean figure when the stem depends on a graph/table/dot plot; keep stem text short and free of axis/table OCR bleed; reject smashed exponents, character-spaced algebra, and unreadable choices; if a student cannot solve the item as shown, drop it. Math does **not** keep a broken stem just because a crop exists. **RW and math both reject extraction-marker bleed** (`Start referenced content` / `End referenced content`). A cited visual without a usable figure is dropped. Incomplete or unavailable choice sets are dropped. Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`. The rebuild **replaces** dropped slots with unused clean SAT MCQs from other official packs; `--refresh-linked-only` only unlinks.
 
-Landing a quality-gate PR does **not** change the live Oct 2 assignment. After merge, parent must rematerialize Oct 2 again (`POST /api/admin/sat-bank/import` then `reset-first-sat-prework`).
+Landing a quality-gate PR does **not** change the live Oct 2 assignment. After merge, parent must rematerialize Oct 2 again. Import is recommended; `reset-first-sat-prework` is required.
 
 **Required after merge (Oct 2 live assignment does not change until rematerialize):**
 
-1. `POST /api/admin/sat-bank/import`
+1. `POST /api/admin/sat-bank/import` (recommended; skip if flaky)
 2. `POST /api/admin/sat-bank/reset-first-sat-prework`  
    or `node --experimental-strip-types src/scripts/reset-october2-prework.ts`
 
