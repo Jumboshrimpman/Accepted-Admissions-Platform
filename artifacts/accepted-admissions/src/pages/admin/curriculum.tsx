@@ -46,6 +46,7 @@ import {
   BANK_QUIZ_EMPTY_STATE,
   assignableBankQuizzes,
   bankQuizOptionLabel,
+  sessionHomeworkInventory,
   sessionPreworkQuizzes,
 } from "@/lib/assignable-bank-quizzes";
 import { questionStatusHelp, questionStatusLabel } from "@/lib/question-status";
@@ -858,7 +859,22 @@ function SessionCard({
   onEdit: () => void;
 }) {
   const prework = sessionPreworkQuizzes(assignments, session);
-  const reviews = submissions.filter((item) => prework.some((quiz) => quiz.id === item.assignmentId));
+  const inventory = sessionHomeworkInventory(assignments, session);
+  const reviews = submissions.filter((item) => inventory.some((quiz) => quiz.id === item.assignmentId));
+  const updateAssignment = useUpdateAdminAssignment();
+  const [inventoryMessage, setInventoryMessage] = useState("");
+  const setHomeworkStatus = (assignmentId: string, status: "published" | "archived", thenMessage: string) => {
+    updateAssignment.mutate(
+      { assignmentId, data: { status } },
+      {
+        onSuccess: () => {
+          setInventoryMessage(thenMessage);
+          onChanged();
+        },
+        onError: (error) => setInventoryMessage(errorText(error)),
+      },
+    );
+  };
   return (
     <Card className={session.conflict ? "border-destructive/50 bg-destructive/5" : ""}>
       <CardContent className="space-y-4 p-4">
@@ -910,11 +926,14 @@ function SessionCard({
           </div>
         )}
         <div className="rounded-lg border bg-muted/20 p-3" data-testid={`session-prework-${session.id}`}>
-          <p className="text-sm font-medium">Pre-session quiz</p>
-          {prework.length > 0 ? (
+          <p className="text-sm font-medium">Homework & diagnostics</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Students and tutors see the live copy. Archived reset leftovers stay here so you can restore one, archive extras, or edit title and visibility.
+          </p>
+          {inventory.length > 0 ? (
             <div className="mt-2 space-y-2">
-              {prework.map((quiz) => (
-                <div key={quiz.id} className="rounded-md bg-background px-3 py-2 text-sm">
+              {inventory.map((quiz) => (
+                <div key={quiz.id} className="rounded-md bg-background px-3 py-2 text-sm" data-testid={`session-homework-${quiz.id}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="font-medium">{quiz.title}</p>
@@ -926,12 +945,41 @@ function SessionCard({
                           <Link href={`/tutor/attempts/${item.attemptId}`}>Review {item.studentName}</Link>
                         </Button>
                       ))}
-                      {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && (
+                      {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && quiz.status !== "archived" && (
                         <span className="text-xs text-muted-foreground">No attempt yet</span>
                       )}
                       {reviews.some((item) => item.assignmentId === quiz.id) ? (
                         <ClearHomeworkButton sessionId={session.id} testId={`clear-homework-${session.id}`} onCleared={onChanged} />
                       ) : null}
+                      {quiz.status === "archived" ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={updateAssignment.isPending}
+                          data-testid={`activate-homework-${quiz.id}`}
+                          onClick={() =>
+                            setHomeworkStatus(
+                              quiz.id,
+                              "published",
+                              "This copy is now the live homework. Duplicate diagnostics were archived.",
+                            )
+                          }
+                        >
+                          Use this copy
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updateAssignment.isPending}
+                          data-testid={`archive-homework-${quiz.id}`}
+                          onClick={() =>
+                            setHomeworkStatus(quiz.id, "archived", "Archived this homework copy. It no longer appears to students or tutors.")
+                          }
+                        >
+                          Archive
+                        </Button>
+                      )}
                       <Button asChild size="sm" variant="outline">
                         <Link href={`/admin/curriculum?section=curriculum&tab=quizzes&quiz=${quiz.id}`}>Open quiz</Link>
                       </Button>
@@ -944,6 +992,7 @@ function SessionCard({
           ) : (
             <p className="mt-2 text-xs text-muted-foreground">No quiz attached. Assign one from the bank below.</p>
           )}
+          {inventoryMessage ? <p className="mt-2 text-xs text-muted-foreground">{inventoryMessage}</p> : null}
           <AssignPreworkControl
             session={session}
             assignments={assignments}

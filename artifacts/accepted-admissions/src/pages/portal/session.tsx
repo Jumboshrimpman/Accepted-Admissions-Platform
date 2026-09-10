@@ -23,6 +23,7 @@ import {
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
+import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
@@ -57,7 +58,9 @@ export default function PortalSession() {
   if (isLoading) return <div className="mx-auto max-w-4xl space-y-5"><Skeleton className="h-44 rounded-3xl" /><Skeleton className="h-80 rounded-2xl" /></div>;
   if (error || !session) return <Card className="mx-auto max-w-xl"><CardContent className="p-8 text-center"><h1 className="text-xl font-semibold">Session unavailable</h1><p className="mt-2 text-sm text-muted-foreground">This session is not visible to your account.</p></CardContent></Card>;
 
-  const beforeAssignments = session.assignments.filter((item) => item.deliveryPhase !== "during_session");
+  const beforeAssignments = sessionStatusHomework(
+    session.assignments.filter((item) => item.deliveryPhase !== "during_session"),
+  );
   const duringAssignments = session.assignments.filter((item) => item.deliveryPhase === "during_session");
   const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
   const reports = artifacts.filter((item) => item.kind === "report");
