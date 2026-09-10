@@ -459,6 +459,71 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/creating/);
   });
 
+  test("long choice D wraps instead of clipping", () => {
+    mocks.questions[0]!.prompt =
+      "Which of the following is the best interpretation of f(5) is approximately equal to 243?";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "The value is 5 dollars greater in 1962." },
+      { id: "b", label: "B", text: "The value is approximately 243 dollars in 1962." },
+      { id: "c", label: "C", text: "The value is 5 times greater in 1962." },
+      {
+        id: "d",
+        label: "D",
+        text: "The value of the bank account is estimated to increase by approximately 243 dollars every 5 years between 1957 and 1972.",
+      },
+    ];
+    render(<PortalAssignment />);
+    const choices = screen.getByTestId("answer-choices");
+    expect(choices.className).toMatch(/overflow-visible/);
+    expect(choices.textContent).toMatch(/between 1957 and 1972/);
+    const option = screen.getAllByTestId("quiz-answer-choice").at(-1);
+    expect(option?.className).toMatch(/overflow-visible/);
+    expect(option?.className).toMatch(/items-start/);
+    expect(option?.textContent).toMatch(/between 1957 and 1972/);
+  });
+
+  test("partial figure crop does not stack broken OCR stem or letter-only buttons", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "text",
+      questionType: "mcq",
+      prompt:
+        "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area of the triangle, in square units?",
+      stimulus:
+        "![Question figure region page 38](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p38-q22-right.png)",
+      choices: [
+        { id: "a", label: "A", text: "8 2 + 80" },
+        { id: "b", label: "B", text: "12" },
+        { id: "c", label: "C", text: "24/80" },
+        { id: "d", label: "D", text: "24" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByAltText("Question figure region page 38")).toBeTruthy();
+    expect(screen.queryByText(/sides of length 2 2/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(
+      /Multiple-choice options unavailable/,
+    );
+  });
+
+  test("failed fraction dumps are not shown as A–D choices", () => {
+    mocks.questions[0]!.prompt =
+      "14x = 2 w + 19\n7y\nWhich equation correctly expresses w in terms of x and y ?\nf(x)";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "w = −19 y F 28x" },
+      { id: "b", label: "B", text: "−19 w = 14y 2⎞⎟ ⎛x" },
+      { id: "c", label: "C", text: "w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x" },
+      { id: "d", label: "D", text: "w = 14y ⎟⎟⎠ − 19 ⎜⎜⎜⎝ ⎟" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByText(/⎜/)).toBeNull();
+  });
+
   test("smashed x f(x) lines render as a data table, not one smashed prose line", () => {
     mocks.questions[0]!.prompt =
       "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?";

@@ -45,6 +45,19 @@ const CHART_HEADER_LINE = /^(?:State|Year|Age|Number|Percent|Category|Country|Ci
 const OCR_TILDE = /[~∼˜]/;
 const OCR_DASH_RUN = /-{3,}|–{3,}|—{2,}/;
 const BROKEN_STEM_PLACEHOLDER = /\(\s*\)\s*\?|which\s*\(\s*\)/i;
+const MATH_LAYOUT_GLYPH = /[⎜⎟⎝⎠⎛⎞⎢⎥]/;
+const MISSING_CARET_POLYNOMIAL =
+  /(?:^|[=+\-,\s(])(?:[A-Za-z]|[2-9]\d*)?x2(?:\b|[+\-\s,)])/;
+const MISSING_CARET_PAREN_POWER = /\([^)\n]{1,24}\)2\b/;
+const MISSING_CARET_GROWTH = /\(\d+\.\d+\)x\b/;
+const SMASHED_QUADRATIC_LEAD = /\b2\s+4x\b/;
+const STRIPPED_TRIANGLE_SIDES = /(?:sides of length|right triangle)[\s\S]{0,160}\b2\s+2\s*,\s*6\s+2\b/i;
+const STRIPPED_RADICAL_CHOICE = /^(?:8\s+2\s*\+\s*80|\d+\s*\+\s*\d+\s+2)$/;
+const BROKEN_COORDINATE = /\(\s*,\s*x\s*y\s*\)/;
+const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
+const STACKED_FRACTION_ORPHAN = /\b14x\s*=\s*2\s*w\b|\n7y\s*(?:\n|$)/;
+const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
+const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-z]\s+[A-Za-z]|\d{1,3}\s+[A-Za-z])$/;
 function isAsciiGraphLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
@@ -254,6 +267,46 @@ export function looksBrokenStemPlaceholders(text: string | null | undefined): bo
   return BROKEN_STEM_PLACEHOLDER.test(text ?? "");
 }
 
+/** Failed fraction / box-drawing / pipe dumps such as `w = − 19 ⎜⎜⎝ ⎟⎟⎠ y`. */
+export function looksFailedMathLayoutDump(text: string | null | undefined): boolean {
+  const value = (text ?? "").trim();
+  if (!value) return false;
+  if (MATH_LAYOUT_GLYPH.test(value) || /[\uFFFD�]/.test(value)) return true;
+  const slashes = (value.match(/[|\\/]/g) ?? []).length;
+  if (value.length <= 96 && slashes >= 3 && /[=()]/.test(value)) return true;
+  if (/\bF\s+\d/.test(value) && /=/.test(value) && value.length <= 64) return true;
+  return false;
+}
+
+/** `b h`, `45 k` — OCR split a product that should be `bh` / `45k`. */
+export function looksSpacedProductChoice(text: string | null | undefined): boolean {
+  return SPACED_PRODUCT_CHOICE.test(cleanOcrChoiceText(text));
+}
+
+export function looksStrippedRadicalChoice(text: string | null | undefined): boolean {
+  return STRIPPED_RADICAL_CHOICE.test(cleanOcrChoiceText(text));
+}
+
+/**
+ * Missing exponents, stripped radicals, stacked-fraction orphans, or
+ * coordinate corruption that change the math a student would solve.
+ */
+export function looksBrokenMathOcr(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (looksFailedMathLayoutDump(raw)) return true;
+  if (MISSING_CARET_GROWTH.test(raw) && !/\(\d+\.\d+\)\^x\b/.test(raw)) return true;
+  if (MISSING_CARET_POLYNOMIAL.test(raw) && !/\bx\^2\b/.test(raw)) return true;
+  if (MISSING_CARET_PAREN_POWER.test(raw) && !/\)\^2\b/.test(raw)) return true;
+  if (SMASHED_QUADRATIC_LEAD.test(raw)) return true;
+  if (STRIPPED_TRIANGLE_SIDES.test(raw)) return true;
+  if (BROKEN_COORDINATE.test(raw)) return true;
+  if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
+  if (STACKED_FRACTION_ORPHAN.test(raw)) return true;
+  if (ORPHAN_FX_AFTER_W.test(raw)) return true;
+  return false;
+}
+
 export function prepareStudentExtractText(text: string | null | undefined): string {
   let value = stripSatBankFigureComments(text);
   if (!value) return "";
@@ -277,6 +330,9 @@ export function hasReadableStudentStem(input: {
   if (prose.length < 20) return false;
   if (/^note:\s*figures not drawn to scale\.?$/i.test(prose)) return false;
   if (looksBrokenStemPlaceholders(prose)) return false;
+  if (looksBrokenMathOcr(prose) || looksBrokenMathOcr(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`)) {
+    return false;
+  }
   if (looksGarbledExtractText(prose)) return false;
   return STEM_QUESTION.test(prose);
 }
@@ -398,6 +454,7 @@ export function looksGarbledExtractText(text: string | null | undefined): boolea
   const value = prepareStudentExtractText(text);
   if (!value) return Boolean(raw);
   if (looksBrokenStemPlaceholders(text) && looksBrokenStemPlaceholders(value)) return true;
+  if (looksBrokenMathOcr(value) || looksBrokenMathOcr(raw)) return true;
   if (ASCII_GRAPH.test(value)) return true;
   if (/[£]/.test(value) && /[=+\-]/.test(value)) return true;
   const letters = (value.match(/[A-Za-z]/g) ?? []).length;
@@ -417,6 +474,10 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   const value = cleanOcrChoiceText(raw);
   if (!value || SEE_FIGURE_CHOICE.test(value)) return false;
   if (OCR_TILDE.test(value) || OCR_DASH_RUN.test(value)) return false;
+  if (looksFailedMathLayoutDump(raw) || looksFailedMathLayoutDump(value)) return false;
+  if (looksSpacedProductChoice(value)) return false;
+  if (looksStrippedRadicalChoice(value)) return false;
+  if (looksBrokenMathOcr(value) && value.length <= 96) return false;
   if (looksTruncatedChoiceText(value)) return false;
   if (looksSmashedOrTruncatedExtract(value)) return false;
   return true;

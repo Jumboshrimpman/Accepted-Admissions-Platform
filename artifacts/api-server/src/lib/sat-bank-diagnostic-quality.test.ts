@@ -204,6 +204,98 @@ test("drops true SPR and irreparable OCR, keeps clean MCQ and figure-primary wit
   );
 });
 
+test("rejects PT4 math items whose OCR lost exponents, radicals, or dumped fractions", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m1-q16",
+      prompt:
+        "= 206(1.034)x models the value,\nThe function f(x)\nin dollars, of a certain bank account by the end of each year from 1957 through 1972, where x is the number of years after 1957. Which of the following is the best interpretation of f(5)?",
+      choices: letterChoices([
+        "The value of the bank account is estimated to be approximately 5 dollars greater in 1962 than in 1957.",
+        "The value of the bank account is estimated to be approximately 243 dollars in 1962.",
+        "The value, in dollars, of the bank account is estimated to be approximately 5 times greater in 1962 than in 1957.",
+        "The value of the bank account is estimated to increase by approximately 243 dollars every 5 years between 1957 and 1972.",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m1-q19",
+      prompt:
+        "14x = 2 w + 19\n7y\nThe given equation relates the distinct positive real numbers w, x, and y. Which equation correctly expresses w in terms of x and y ?\nf(x)",
+      choices: letterChoices([
+        "w = −19 y F 28x",
+        "−19 w = 14y 2⎞⎟ ⎛x",
+        "w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x",
+        "w = 14y ⎟⎟⎠ − 19 ⎜⎜⎜⎝ ⎟",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m1-q22",
+      prompt: "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area of the triangle, in square units?",
+      choices: letterChoices(["8 2 + 80", "12", "24/80", "24"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [
+        {
+          url: `${figureUrl}-p38-q22-right.png`,
+          alt: "Question figure region page 38",
+        },
+      ],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m1-q23",
+      prompt:
+        "2 4x + bx − 45, where b is a constant,\nThe expression can be rewritten as (hx + k)(x + j), where h, k, and j are integer constants. Which of the following must be an integer?",
+      choices: letterChoices(["b h", "b k", "45 h", "45 k"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m1-q24",
+      prompt:
+        "y = 2x2 − 21x + 64\ny = 3x + a\nIn the given system of equations, a is a constant. The graphs of the equations in the given system intersect at exactly one point, ( ,x y), in the x y-plane. What is the value of x ?",
+      choices: letterChoices(["−8", "−6", "6", "8"]),
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [{ url: `${figureUrl}-p39-q24-left.png`, alt: "Question figure region page 39" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m1-q26",
+      prompt:
+        "In the x y-plane, a parabola has vertex (9, −14) and intersects the x-axis at two points. If the equation of the parabola is written in the form y = ax2 + bx + c, where a, b, and c are constants, which of the\n? following could be the value of a + b + c",
+      choices: letterChoices(["−23", "−19", "−14", "−12"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",
@@ -234,6 +326,20 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
   assert.ok(unusable.some((row) => isTrueSprQuizItem(row)));
   assert.ok(unusable.some((row) => row.sourceKey === "sat-pt4-math-m1-q3"));
   assert.ok(unusable.some((row) => row.sourceKey === "sat-pt4-math-m1-q12"));
+  const brokenMathKeys = [
+    "sat-pt4-math-m1-q16",
+    "sat-pt4-math-m1-q19",
+    "sat-pt4-math-m1-q22",
+    "sat-pt4-math-m1-q23",
+    "sat-pt4-math-m1-q24",
+    "sat-pt4-math-m1-q26",
+  ];
+  for (const key of brokenMathKeys) {
+    assert.ok(
+      unusable.some((row) => row.sourceKey === key),
+      `expected ${key} to be dropped as broken math OCR`,
+    );
+  }
 
   const selected = selectUsableDiagnosticItems(records, {
     preferredCollectionSlug: "sat-practice-test-4-digital",
@@ -266,6 +372,16 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     selected.some((row) => row.sourceKey === "sat-pt4-math-m1-q3"),
     false,
   );
+  for (const key of [
+    "sat-pt4-math-m1-q16",
+    "sat-pt4-math-m1-q19",
+    "sat-pt4-math-m1-q22",
+    "sat-pt4-math-m1-q23",
+    "sat-pt4-math-m1-q24",
+    "sat-pt4-math-m1-q26",
+  ]) {
+    assert.equal(selected.some((row) => row.sourceKey === key), false, key);
+  }
   assert.equal(
     selected.some((row) => row.questionType === "spr" && !/^[a-d]$/i.test(row.correctAnswer)),
     false,

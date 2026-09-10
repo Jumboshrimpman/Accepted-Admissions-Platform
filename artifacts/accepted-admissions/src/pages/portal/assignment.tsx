@@ -62,6 +62,8 @@ import {
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
   isStudentReadableChoiceText,
+  shouldHideQuizOcrStem,
+  shouldShowQuizChoices,
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
 
@@ -406,9 +408,9 @@ function AnswerChoices({
   const choices = (rawChoices ?? [])
     .map((choice) => ({ ...choice, text: cleanOcrChoiceText(choice.text) }))
     .filter((choice) => isStudentReadableChoiceText(choice.text));
-  if (hasUsableChoiceText(choices)) {
+  if (shouldShowQuizChoices({ ...question, choices }) && hasUsableChoiceText(choices)) {
     return (
-      <div className="space-y-3" data-testid="answer-choices">
+      <div className="min-w-0 max-w-full space-y-3 overflow-visible" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
           {ink ? "Choose together" : "Select your answer"}
         </h3>
@@ -420,7 +422,8 @@ function AnswerChoices({
               type="button"
               disabled={disabled}
               onClick={() => onSelect(choice.id)}
-              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-all ${
+              data-testid="quiz-answer-choice"
+              className={`flex w-full min-w-0 max-w-full items-start gap-4 overflow-visible rounded-xl border-2 p-4 text-left transition-all ${
                 ink
                   ? isSelected
                     ? "border-white bg-white/15 text-white shadow-sm"
@@ -443,7 +446,9 @@ function AnswerChoices({
               >
                 {choice.label}
               </div>
-              <div className="min-w-0 flex-1 whitespace-normal break-words">{choice.text}</div>
+              <div className="min-w-0 max-w-full flex-1 whitespace-normal break-words [overflow-wrap:anywhere]">
+                {choice.text}
+              </div>
             </button>
           );
         })}
@@ -963,14 +968,14 @@ export default function PortalAssignment() {
               text={question.stimulus}
               className="mt-5 text-white/90"
               imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
-              hideGarbledText={isFigurePrimaryQuestion(question)}
+              hideGarbledText={shouldHideQuizOcrStem(question)}
             />
           ) : null}
-          {isFigurePrimaryQuestion(question) && !question.prompt ? null : (
+          {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
             <QuizRichText
               text={question.prompt}
               className="mt-5 text-xl font-medium leading-relaxed"
-              hideGarbledText={isFigurePrimaryQuestion(question)}
+              hideGarbledText={shouldHideQuizOcrStem(question)}
             />
           )}
           <div className="mt-6">
@@ -1115,16 +1120,16 @@ export default function PortalAssignment() {
               <CardContent className="min-w-0 overflow-x-auto overflow-y-visible p-6">
                 <QuizRichText
                   text={question.stimulus}
-                  hideGarbledText={isFigurePrimaryQuestion(question) && !hasUsableChoiceText(question.choices)}
+                  hideGarbledText={shouldHideQuizOcrStem(question)}
                 />
               </CardContent>
             </Card>
           )}
-          {isFigurePrimaryQuestion(question) && !question.prompt ? null : (
+          {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
             <QuizRichText
               text={question.prompt}
               className="text-lg font-medium leading-relaxed"
-              hideGarbledText={isFigurePrimaryQuestion(question) && !hasUsableChoiceText(question.choices)}
+              hideGarbledText={shouldHideQuizOcrStem(question)}
             />
           )}
         </div>

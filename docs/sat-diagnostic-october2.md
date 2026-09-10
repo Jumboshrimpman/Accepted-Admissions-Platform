@@ -11,7 +11,9 @@ A student-usable item is now only:
 
 Figure-primary never unlocks letter-only A–D. Empty choice text, OCR garbage (`~`, `----`, leftover tildes), a missing stem, or orphan/duplicate figure fragments are dropped. Smashed `x f(x)` / `0 29` lines are recovered as a table when possible.
 
-Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, and irreparable OCR.
+Math must render with the exponents, radicals, and fractions the student needs, or the item must be an intact full-question crop that includes complete A–D. Missing carets (`ax2`, `2x2`, `(1.034)x`), stripped radicals (`2 2`, `6 2`, `8 2 + 80`), spaced products (`b h`, `45 k`), stacked-fraction dumps (`⎜ ⎟ | \ /`), and `(, x y)` corruption are rejected. A partial figure-region crop is never paired with that broken OCR or with letter-only buttons.
+
+Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, and math OCR that is missing exponents or is a failed fraction/layout dump.
 
 This path rebuilds the diagnostic from **student-usable MCQ only**.
 
@@ -27,7 +29,7 @@ No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No s
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
 2. Keep an item only if the official key is A–D **and** it has a readable stem **and** complete non-garbage A–D text (plus a figure or recovered table if the stem cites a graph/table).
-3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, and irreparable OCR.
+3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, irreparable OCR, and math items whose OCR lost exponents/radicals/fractions (unless a full-question crop includes complete A–D).
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
 6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
@@ -107,7 +109,7 @@ The script prints `composition`. Expect:
 | `rwCount` / `mathCount` | 66 / 54 on a full rebuild |
 | `sprCount` | 0 |
 | `duplicatePrompts` | 0 |
-| Graph/table items | Choice text visible — never letter keys alone. Tables render as tables, not smashed `x f(x)` lines. Duplicate/orphan figure fragments are gone |
+| Graph/table items | Choice text visible — never letter keys alone. Tables render as tables, not smashed `x f(x)` lines. Duplicate/orphan figure fragments are gone. No partial crop stacked on broken OCR; long choice D wraps instead of clipping |
 | Time limit | ≥134 minutes |
 | Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
 

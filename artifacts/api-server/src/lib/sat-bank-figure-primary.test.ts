@@ -12,6 +12,7 @@ import {
   hasRecoveredDataTable,
   hasUsableChoiceText,
   isFullQuestionCrop,
+  isStudentReadableChoiceText,
   isLetterAnswer,
   isOrphanFigureFragment,
   letterMcqChoices,
@@ -19,7 +20,11 @@ import {
   looksSmashedOrTruncatedExtract,
   looksTruncatedChoiceText,
   normalizeLetterAnswer,
+  looksBrokenMathOcr,
+  looksFailedMathLayoutDump,
   looksGarbledExtractText,
+  looksSpacedProductChoice,
+  looksStrippedRadicalChoice,
   prepareStudentExtractText,
   referencesVisualStimulus,
   selectStimulusFigures,
@@ -294,6 +299,55 @@ test("detects smashed OCR, truncated choices, leftover chart headers, and graph 
     { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
   ]);
   assert.equal(preserved[0]?.text.includes("Washington"), true);
+});
+
+test("rejects math OCR that lost exponents, radicals, or dumped fractions", () => {
+  assert.equal(
+    looksBrokenMathOcr(
+      "= 206(1.034)x models the value,\nThe function f(x)\nin dollars, of a certain bank account",
+    ),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("f(x) = 206(1.034)^x models the value of the account."), false);
+  assert.equal(
+    looksBrokenMathOcr("14x = 2 w + 19\n7y\nWhich equation correctly expresses w in terms of x and y ?\nf(x)"),
+    true,
+  );
+  assert.equal(looksFailedMathLayoutDump("w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ � = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x"), true);
+  assert.equal(looksFailedMathLayoutDump("w = −19 y F 28x"), true);
+  assert.equal(isStudentReadableChoiceText("w = −19 y F 28x"), false);
+  assert.equal(isStudentReadableChoiceText("w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y"), false);
+  assert.equal(
+    looksBrokenMathOcr("A right triangle has sides of length 2 2 , 6 2 , and 80 units."),
+    true,
+  );
+  assert.equal(looksStrippedRadicalChoice("8 2 + 80"), true);
+  assert.equal(isStudentReadableChoiceText("8 2 + 80"), false);
+  assert.equal(looksBrokenMathOcr("2 4x + bx − 45, where b is a constant,"), true);
+  assert.equal(looksSpacedProductChoice("b h"), true);
+  assert.equal(looksSpacedProductChoice("45 k"), true);
+  assert.equal(isStudentReadableChoiceText("b h"), false);
+  assert.equal(isStudentReadableChoiceText("45 k"), false);
+  assert.equal(
+    looksBrokenMathOcr("y = 2x2 − 21x + 64\nintersect at exactly one point, ( ,x y), in the x y-plane."),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("y = 2x^2 − 21x + 64 intersect at (x, y) in the xy-plane."), false);
+  assert.equal(
+    looksBrokenMathOcr("y = ax2 + bx + c, which of the\n? following could be the value of a + b + c"),
+    true,
+  );
+  assert.equal(hasReadableStudentStem({
+    prompt:
+      "= 206(1.034)x models the value,\nThe function f(x)\nin dollars, of a certain bank account by the end of each year from 1957 through 1972, where x is the number of years after 1957. Which of the following is the best interpretation of f(5)?",
+  }), false);
+  assert.equal(
+    isFullQuestionCrop({
+      url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p38-q22-right.png",
+      alt: "Question figure region page 38",
+    }),
+    false,
+  );
 });
 
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {

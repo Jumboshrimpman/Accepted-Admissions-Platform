@@ -5,8 +5,13 @@ import {
   figurePrimaryChoices,
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
+  isStudentReadableChoiceText,
   letterMcqChoices,
+  looksBrokenMathOcr,
+  looksFailedMathLayoutDump,
   looksGarbledQuizText,
+  shouldHideQuizOcrStem,
+  shouldShowQuizChoices,
   stripSatBankFigureComments,
 } from "./quiz-figure-primary.ts";
 
@@ -52,6 +57,31 @@ test("preserves A–D choice text on figure-primary items instead of hiding it",
   assert.equal(hasUsableChoiceText(figurePrimaryChoices(question)), true);
   assert.match(figurePrimaryChoices(question)[0]?.text ?? "", /Washington/);
   assert.equal(letterMcqChoices(question.choices)[1]?.text.includes("New York"), true);
+});
+
+test("rejects fraction dumps, missing exponents, and hides OCR next to a crop", () => {
+  assert.equal(looksFailedMathLayoutDump("w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x"), true);
+  assert.equal(isStudentReadableChoiceText("w = −19 y F 28x"), false);
+  assert.equal(isStudentReadableChoiceText("b h"), false);
+  assert.equal(isStudentReadableChoiceText("8 2 + 80"), false);
+  assert.equal(looksBrokenMathOcr("y = 2x2 − 21x + 64\npoint, ( ,x y),"), true);
+  assert.equal(looksBrokenMathOcr("y = ax2 + bx + c, which of the\n? following could be"), true);
+  const triangle = {
+    presentation: "text" as const,
+    prompt: "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area?",
+    stimulus:
+      "![Question figure region page 38](https://app.acceptedadmissions.org/media/sat-bank/pack/p38-q22-right.png)",
+    choices: [
+      { id: "a", label: "A", text: "8 2 + 80" },
+      { id: "b", label: "B", text: "12" },
+      { id: "c", label: "C", text: "24/80" },
+      { id: "d", label: "D", text: "24" },
+    ],
+    questionType: "mcq",
+  };
+  assert.equal(shouldHideQuizOcrStem(triangle), true);
+  assert.equal(shouldShowQuizChoices(triangle), false);
+  assert.deepEqual(figurePrimaryChoices(triangle), []);
 });
 
 test("answer review shows the letter when choice text is empty", () => {
