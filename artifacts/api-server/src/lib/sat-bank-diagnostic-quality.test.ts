@@ -614,7 +614,7 @@ test("rejects scrambled f(x) and smashed vertex crops; keeps 21px no-solution an
       correctAnswer: "C",
       figures: [{ url: figureUrl, alt: "Diagram from page 47" }],
     }),
-    true,
+    false,
   );
 });
 
@@ -1257,6 +1257,11 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q15",
     "sat-pt4-math-m2-q18",
     "sat-pt4-math-m2-q19",
+    "sat-pt4-math-m2-q24",
+    "sat-pt4-math-m1-q9",
+    "sat-pt4-rw-m1-q8",
+    "sat-pt9-math-m1-q10",
+    "sat-pt10-math-m2-q12",
   ];
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q2"),
@@ -1280,8 +1285,28 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q24"),
-    false,
-    "dot-plot median/range comparison must stay usable when A–D text exists",
+    true,
+    "dot-plot axis ticks OCR'd into the stem must drop even when A–D text exists",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-rw-m1-q8"),
+    true,
+    "Start/End referenced content markers must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m1-q9"),
+    true,
+    "similar-triangle stem with spaced vertex labels must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt9-math-m1-q10"),
+    true,
+    "smashed y = px choices must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt10-math-m2-q12"),
+    true,
+    "66 = 66 x x smashed algebra must drop",
   );
   for (const key of brokenMathKeys) {
     assert.ok(
@@ -1342,6 +1367,11 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q15",
     "sat-pt4-math-m2-q18",
     "sat-pt4-math-m2-q19",
+    "sat-pt4-math-m2-q24",
+    "sat-pt4-math-m1-q9",
+    "sat-pt4-rw-m1-q8",
+    "sat-pt9-math-m1-q10",
+    "sat-pt10-math-m2-q12",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }

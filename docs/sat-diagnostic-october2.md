@@ -9,17 +9,19 @@ Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop
 Sama’s 2026-09-09 bar applies to **all** quizzes — Oct 2 diagnostic, routine SAT pre-work, tutor-built bank quizzes, and lesson retries — via `isStudentUsableQuizItem`. **Math uses a stricter path than RW** (`isStudentUsableMathQuizItem`): do not polish broken OCR into a student stem.
 
 - **Figure-primary data, not OCR salvage:** if the stem depends on a graph, table, dot plot, or geometric figure, host the clean figure and keep stem text short and free of axis/table bleed. Visual + bleed, or visual + no figure → drop. Visual + clean stem + figure + complete A–D stays as **text + figure** (do not hide a useful stem).
-- **Pure algebra/function:** reject character-spaced garbage, smashed exponents (`2 2`, `ax2`, `12x3`), and incomplete parentheses (`x 16( + 15)`). Ship only when stem + full A–D read as real SAT math.
+- **Extraction-marker bleed:** `Start referenced content` / `End referenced content` (any casing or mid-word line break) never ships. Do not polish the wrappers off — drop/replace.
+- **Cited visual without a usable figure:** `Note: Figures not drawn to scale`, `in the figure`, `dat plot`/`dot plot`, similar-triangle vertex labels, or a graph/table cite with no hosted figure (and no recovered table) → drop. Axis ticks OCR’d into the stem (`22 23 24 25 26`) are bleed even when a page crop URL exists.
+- **Pure algebra/function:** reject character-spaced garbage, smashed exponents (`2 2`, `ax2`, `12x3`, `66 = 66 x x`), incomplete parentheses (`x 16( + 15)`), and unreadable choices (`y x p = 57 +`, `y px = + 57`, `y = 57 px px`). Ship only when stem + full A–D read as real SAT math.
 - **If unsure whether a student can solve the math as shown, drop/replace at materialize.** Math never uses the RW fallback “has a crop, so keep.”
 - Full usable A–D — never “Multiple-choice options unavailable” or incomplete A–C
-- Fewer perfect math items beat 120 with junk. English/RW stays on the existing readable-stem path.
+- Fewer perfect math items beat 120 with junk. English/RW stays on the existing readable-stem path except extraction-marker bleed, which is rejected for every section.
 
 Composition (`selectUsableDiagnosticItems` / routine bank pool), rematerialize (`dropUnusableAssignmentQuestions`), student/viewer GET (`isStudentUsableServedQuestion`), tutor-built select (`selectBankQuestionsForTutorQuiz`), lesson retries, and quiz chrome (`isStudentAnswerableQuizQuestion`) all call that same gate.
 
 A student-usable item is only:
 
-- a clean text MCQ with a **readable stem** and complete A–D choice text (plus a figure if the stem cites a graph/table, or a recovered data table), or
-- a graph/table figure **plus** separate complete, non-garbage A–D text
+- a clean text MCQ with a **readable stem** (no extraction-marker wrappers) and complete A–D choice text (plus a figure if the stem cites a graph/table, or a recovered data table), or
+- a graph/table figure **plus** separate complete, non-garbage A–D text, **without** axis/vertex OCR bleed in the stem
 
 Figure-primary never unlocks letter-only A–D. Empty choice text, OCR garbage (`~`, `----`, leftover tildes), a missing stem, or orphan/duplicate figure fragments are dropped. Smashed `x f(x)` / `0 29` lines are recovered as a table when possible.
 
@@ -43,7 +45,7 @@ No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No s
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
 2. Keep an item only if the official key is A–D **and** it has a readable stem **and** complete non-garbage A–D text (plus a figure or recovered table if the stem cites a graph/table).
-3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, irreparable OCR, math items whose OCR lost exponents/radicals/fractions/operators (unless a full-question crop includes complete A–D), corrupt stems (`value = of`, axis ticks, `^ h`, pipe/backslash residue), leaked/merged A–D lists, unlabeled choice lists, and figures that do not match the stem.
+3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, extraction-marker bleed (`Start referenced content`), irreparable OCR, math items whose OCR lost exponents/radicals/fractions/operators (unless a full-question crop includes complete A–D), corrupt stems (`value = of`, axis ticks, spaced `P Q R` vertices, `^ h`, pipe/backslash residue), leaked/merged A–D lists, unlabeled choice lists, smashed algebra choices, and figures that do not match the stem.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
 6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
@@ -52,7 +54,7 @@ The reusable bank still stores SPR and incomplete extracts. They are just not co
 
 ## Production runbook
 
-**Required after merge.** Landing this PR does not change the live Oct 2 assignment. After Code Checker / review merge the PR and the API deploy completes, ops **must** re-import the bank (so figure-primary flags and wiped choice text are recomputed) and then run the rebuild below. In-place rematerialize of already-wiped rows is not enough.
+**Required after merge.** Landing this PR does not change the live Oct 2 assignment (`c00a9bbe-bb6b-4f93-9308-3b191b9066db`). After Code Checker / review merge the PR and the API deploy completes, ops **must** re-import the bank and rebuild. A 2026-09-10 live audit still found extraction-marker bleed, cited visuals without figures, and smashed algebra after PR #70 — `usable: true` is not enough until this rematerialize runs.
 
 Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
 
@@ -119,12 +121,15 @@ The script prints `composition`. Expect:
 
 | Check | Expected |
 | --- | --- |
-| `composition.usable` | `true` |
+| `composition.usable` | `true` — **not sufficient alone**. Open the student quiz and confirm the stems below are gone. |
 | `questionCount` | 120 (or ≥80 if a pack is thin) |
 | `rwCount` / `mathCount` | 66 / 54 on a full rebuild |
 | `sprCount` | 0 |
 | `duplicatePrompts` | 0 |
 | Graph/table items | Choice text visible — never letter keys alone. Tables render as tables, not smashed `x f(x)` lines. Duplicate/orphan figure fragments are gone. No partial crop stacked on broken OCR; long choice D wraps instead of clipping |
+| Extraction markers | No `Start referenced content` / `End referenced content` in any stem |
+| Cited visuals | Every graph / table / dot plot / “figure not drawn” / similar-triangle item shows the figure (or a recovered table). Axis-tick bleed is dropped, not paired with a crop. |
+| Algebra | No smashed exponents (`66 = 66 x x`) or unreadable choices (`y x p = 57 +`) |
 | Time limit | ≥134 minutes |
 | Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
 
