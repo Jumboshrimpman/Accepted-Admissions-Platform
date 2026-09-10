@@ -386,7 +386,7 @@ describe("curriculum bank IA", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     render(<AdminCurriculum />);
 
-    expect(screen.getByText("Pre-session quiz")).toBeTruthy();
+    expect(screen.getByText("Homework & diagnostics")).toBeTruthy();
     expect(screen.getByText("No quiz attached. Assign one from the bank below.")).toBeTruthy();
     fireEvent.click(screen.getByTestId("assign-prework-session-1"));
     expect(mocks.cloneAssignment).toHaveBeenCalledWith(
