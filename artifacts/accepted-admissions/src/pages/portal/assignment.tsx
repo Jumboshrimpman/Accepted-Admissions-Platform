@@ -60,8 +60,9 @@ import {
   displayAnswerLabel,
   formatStudentChoiceText,
   figurePrimaryChoices,
-  hasUsableChoiceText,
+  hasCompleteLetterChoiceText,
   isFigurePrimaryQuestion,
+  isStudentAnswerableQuizQuestion,
   isStudentReadableChoiceText,
   shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
@@ -413,7 +414,7 @@ function AnswerChoices({
   const choices = (rawChoices ?? [])
     .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
     .filter((choice) => isStudentReadableChoiceText(choice.text));
-  if (shouldShowQuizChoices({ ...question, choices }) && hasUsableChoiceText(choices)) {
+  if (shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices)) {
     return (
       <div className="min-w-0 max-w-full space-y-3 overflow-visible" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
@@ -460,20 +461,7 @@ function AnswerChoices({
       </div>
     );
   }
-  return (
-    <div
-      className={`space-y-3 rounded-xl border border-dashed p-4 ${ink ? "border-white/30 text-white/80" : "text-muted-foreground"}`}
-      data-testid="quiz-answer-unavailable"
-    >
-      <h3 className={`text-lg font-semibold ${ink ? "text-white" : "text-foreground"}`}>
-        Multiple-choice options unavailable
-      </h3>
-      <p className="text-sm">
-        This question is missing usable A–D choices, so it cannot be answered here. Ask your tutor
-        to replace it with a multiple-choice item.
-      </p>
-    </div>
-  );
+  return null;
 }
 
 export default function PortalAssignment() {
@@ -549,7 +537,8 @@ export default function PortalAssignment() {
     if (!attemptId && assignment?.latestAttemptId) setAttemptId(assignment.latestAttemptId);
   }, [assignment?.latestAttemptId, attemptId]);
 
-  const questionCount = assignment?.questions.length ?? 0;
+  const questions = (assignment?.questions ?? []).filter(isStudentAnswerableQuizQuestion);
+  const questionCount = questions.length;
   if (attempt?.id && questionCount > 0 && restoredAttemptId.current !== attempt.id) {
     restoredAttemptId.current = attempt.id;
     const restoredIndex = normalizeQuestionIndex(attempt.currentQuestionIndex, questionCount);
@@ -933,7 +922,18 @@ export default function PortalAssignment() {
       </div>
     );
   }
-  const question = assignment.questions[currentQuestionIndex];
+  if (questions.length === 0) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 py-10" data-testid="quiz-no-answerable-questions">
+        <h2 className="text-2xl font-bold">No answerable questions</h2>
+        <p className="text-muted-foreground">
+          This quiz has no complete A–D multiple-choice items, so it cannot be taken here.
+          Ask your tutor to replace the broken items. Flagged and reported questions aren’t scored.
+        </p>
+      </div>
+    );
+  }
+  const question = questions[currentQuestionIndex];
   if (!question) return null;
   const response = localResponses[question.id] ?? {};
   const showPrediction = studentSeesPredictionStep(question.predictionFirst);
@@ -947,7 +947,7 @@ export default function PortalAssignment() {
           {IN_SESSION_PRACTICE_CHECK_COPY} This is not a timed quiz.
         </p>
         <div className="flex flex-wrap gap-2" data-testid="practice-problem-picker">
-          {assignment.questions.map((item, index) => {
+          {questions.map((item, index) => {
             const recorded = Boolean(localResponses[item.id]?.finalAnswer?.trim());
             const checked = isQuestionFeedbackRevealed(localResponses[item.id]);
             return (
@@ -1065,7 +1065,7 @@ export default function PortalAssignment() {
           <Button
             variant="ghost"
             onClick={() => goToQuestion(currentQuestionIndex + 1)}
-            disabled={currentQuestionIndex >= assignment.questions.length - 1}
+            disabled={currentQuestionIndex >= questions.length - 1}
           >
             Next problem <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
@@ -1079,7 +1079,7 @@ export default function PortalAssignment() {
       <div className="sticky top-16 z-30 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-4 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold">
-            Question {currentQuestionIndex + 1} of {assignment.questions.length}
+            Question {currentQuestionIndex + 1} of {questions.length}
           </span>
           <div className="space-y-1">
             <Button
@@ -1302,7 +1302,7 @@ export default function PortalAssignment() {
               <CheckCircle className="ml-2 h-5 w-5" />
             </Button>
           ) : null}
-          {currentQuestionIndex < assignment.questions.length - 1 ? (
+          {currentQuestionIndex < questions.length - 1 ? (
             <Button
               size="lg"
               className="rounded-full"

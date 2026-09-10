@@ -62,7 +62,8 @@ const SMASHED_VERTEX_LATEX = /2 \+ The function\s+\(\s*\)|The function\s+\(\s*\)
 const SCRAMBLED_FUNCTION_DEFINED = /\bWhat The function\b/;
 const SMASHED_TABLE_CHOICE = /^x\s+\d+\s+\d+\s+\d+.*h\s*\(\s*x\s*\)/i;
 const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
-const STACKED_FRACTION_ORPHAN = /\b14x\s*=\s*2\s*w\b|\n7y\s*(?:\n|$)/;
+const STACKED_FRACTION_ORPHAN =
+  /\b14x\s*=\s*2\s*w\b|\b19\s+7y\b|\b2\s+w\s*\+\s*19\s*7y\b|\n7y\s*(?:\n|$)/;
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
 const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-z]\s+[A-Za-z]|\d{1,3}\s+[A-Za-z])$/;
 const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;

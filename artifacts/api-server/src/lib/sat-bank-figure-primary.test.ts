@@ -580,6 +580,19 @@ test("rejects character-spaced OCR, module boilerplate choices, and exploded OCR
   ]), false);
 });
 
+test("detects smashed stacked-fraction stems like 14x = 2 w + 19 7y", () => {
+  assert.equal(
+    looksBrokenMathOcr(
+      "14x = 2 w + 19 7y The given equation relates the distinct positive real numbers w, x, and y. Which equation correctly expresses w in terms of x and y ? f(x)",
+    ),
+    true,
+  );
+  assert.equal(hasCompleteLetterChoiceText([
+    { id: "a", label: "A", text: "2/29" },
+    { id: "b", label: "B", text: "2/58" },
+  ]), false);
+});
+
 test("detects smashed percent tables, missing similar-triangle figures, and axis-tick scatterplots", () => {
   assert.equal(
     looksExplodedOcrTable(

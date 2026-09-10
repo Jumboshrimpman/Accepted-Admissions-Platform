@@ -5,7 +5,6 @@ import {
   hasReadableStudentStem,
   hasRecoveredDataTable,
   hasRenderableFigures,
-  hasUsableChoiceText,
   isLetterAnswer,
   looksGarbledExtractText,
   looksSmashedOrTruncatedExtract,
@@ -173,29 +172,15 @@ export function quizItemFromServedQuestion(question: {
 export function isStudentUsableServedQuestion(
   question: Parameters<typeof quizItemFromServedQuestion>[0],
 ): boolean {
-  return isSafeToShowStudentQuizItem(quizItemFromServedQuestion(question));
+  return isStudentUsableQuizItem(quizItemFromServedQuestion(question));
 }
 
 /**
- * Serve-time gate: hide smashed/unavailable SAT items, but do not hide a
- * short tutor/fixture MCQ that has readable stem + usable choices.
- * Composition still uses the stricter isStudentUsableQuizItem (complete A–D).
+ * Serve-time and composition use the same gate: complete readable A–D,
+ * never empty/incomplete choice sets, never smashed OCR.
  */
 export function isSafeToShowStudentQuizItem(input: DiagnosticQualityInput): boolean {
-  if (isStudentUsableQuizItem(input)) return true;
-  if (!isLetterAnswer(input.correctAnswer) || isTrueSprQuizItem(input)) return false;
-  if (!hasUsableChoiceText(input.choices)) return false;
-  if (hasMergedOrLeakedChoices(input.choices)) return false;
-  if (!hasReadableStudentStem(input)) return false;
-  if (isGarbledItem(input)) return false;
-  if (
-    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
-    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus))
-  ) {
-    return false;
-  }
-  if (stemReferencesMissingVisual(input)) return false;
-  return true;
+  return isStudentUsableQuizItem(input);
 }
 
 export function diagnosticPromptFingerprint(input: DiagnosticQualityInput): string {

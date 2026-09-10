@@ -27,7 +27,8 @@ const SMASHED_VERTEX_LATEX = /2 \+ The function\s+\(\s*\)|The function\s+\(\s*\)
 const SCRAMBLED_FUNCTION_DEFINED = /\bWhat The function\b/;
 const SMASHED_TABLE_CHOICE = /^x\s+\d+\s+\d+\s+\d+.*h\s*\(\s*x\s*\)/i;
 const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
-const STACKED_FRACTION_ORPHAN = /\b14x\s*=\s*2\s*w\b|\n7y\s*(?:\n|$)/;
+const STACKED_FRACTION_ORPHAN =
+  /\b14x\s*=\s*2\s*w\b|\b19\s+7y\b|\b2\s+w\s*\+\s*19\s*7y\b|\n7y\s*(?:\n|$)/;
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
 const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-z]\s+[A-Za-z]|\d{1,3}\s+[A-Za-z])$/;
 const QUIZ_IMAGE = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/;
@@ -321,7 +322,36 @@ export function shouldShowQuizChoices(
       looksCharacterSpacedGarbage(choice.text),
   );
   if (dump) return false;
-  return hasUsableChoiceText(question.choices);
+  return hasCompleteLetterChoiceText(question.choices);
+}
+
+/** SAT A–D must all be present and readable. Two leftover keys are not enough. */
+export function hasCompleteLetterChoiceText(
+  choices: AssignmentQuestion["choices"],
+): boolean {
+  const labels = new Set<string>();
+  for (const choice of choices ?? []) {
+    if (!isStudentReadableChoiceText(choice.text)) continue;
+    const label = (choice.label ?? choice.id ?? "").toString().trim().toUpperCase();
+    if (/^[A-D]$/.test(label)) labels.add(label);
+  }
+  return labels.size >= 4;
+}
+
+/** Student-facing items must be answerable A–D. Never ship an unavailable-choice shell. */
+export function isStudentAnswerableQuizQuestion(
+  question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
+): boolean {
+  if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
+  if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(question.stimulus)) return false;
+  const raw = isFigurePrimaryQuestion(question)
+    ? figurePrimaryChoices(question)
+    : (question.choices ?? []).map((choice) => ({
+        ...choice,
+        text: formatStudentChoiceText(choice.text),
+      }));
+  const choices = raw.filter((choice) => isStudentReadableChoiceText(choice.text));
+  return shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices);
 }
 
 export function hasUsableChoiceText(choices: AssignmentQuestion["choices"]): boolean {

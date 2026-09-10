@@ -14,12 +14,15 @@ import {
   isCleanTextMcqItem,
   isStudentUsableDiagnosticItem,
   isStudentUsableQuizItem,
+  isStudentUsableServedQuestion,
   isTrueSprQuizItem,
   isUsableFullLengthDiagnostic,
   normalizeLetterAnswer,
   selectUsableDiagnosticItems,
   summarizeDiagnosticComposition,
 } from "./sat-bank-diagnostic-quality.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { hasCompleteLetterChoiceText } from "./sat-bank-figure-primary.ts";
 
 const figureUrl =
   "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q7-question.png";
@@ -719,6 +722,95 @@ test("drops remaining Oct 2 smashed-table, missing-figure, and unavailable-choic
       prompt:
         "Square P has a side length of x inches. Square Q has a perimeter that is 176 inches greater than the perimeter of square P. The function f gives the area of square Q, in square inches. Which of the following defines f?",
       choices: [],
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+});
+
+test("drops Oct 2 Q77–82 smashed stems, empty A–D, and incomplete A/B-only sets", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "14x = 2 w + 19 7y The given equation relates the distinct positive real numbers w, x, and y. Which equation correctly expresses w in terms of x and y ? f(x)",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area of the triangle, in square units?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "2 4x + bx − 45, where b is a constant, The expression can be rewritten as (hx + k)(x + j), where h, k, and j are integer constants. Which of the following must be an integer?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "y = 2x2 − 21x + 64 y = 3x + a In the given system of equations, a is a constant. The graphs of the equations in the given system intersect at exactly one point, ( , x y), in the x y-plane. What is the value of x?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "An isosceles right triangle has a hypotenuse of length 58 inches. What is the perimeter, in inches, of this triangle?",
+      choices: [
+        { id: "a", label: "A", text: "2/29" },
+        { id: "b", label: "B", text: "2/58" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "2/29" },
+      { id: "b", label: "B", text: "2/58" },
+    ]),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "In the x y-plane, a parabola has vertex (9, −14) and intersects the x-axis at two points. If the equation of the parabola is written in the form y = ax2 + bx + c, where a, b, and c are constants, which of the ? following could be the value of a + b + c",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableServedQuestion({
+      prompt: "An isosceles right triangle has a hypotenuse of length 58 inches. What is the perimeter?",
+      choices: letterChoices(["2/29", "2/58"]),
       questionType: "mcq",
       correctAnswer: "A",
     }),

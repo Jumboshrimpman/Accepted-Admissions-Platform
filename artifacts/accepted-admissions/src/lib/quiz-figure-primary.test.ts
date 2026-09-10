@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   displayAnswerLabel,
   figurePrimaryChoices,
+  hasCompleteLetterChoiceText,
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
+  isStudentAnswerableQuizQuestion,
   isStudentReadableChoiceText,
   letterMcqChoices,
   looksBrokenMathOcr,
@@ -35,6 +37,39 @@ test("strips leaked SAT bank figure comments", () => {
 test("treats ASCII scatterplots as garbled quiz text", () => {
   assert.equal(looksGarbledQuizText("10+-+-+-+--i------,f-----+---+---+"), true);
   assert.equal(looksGarbledQuizText("Which value of x satisfies the equation?"), false);
+});
+
+test("incomplete A/B-only sets and empty A–D are not student-answerable", () => {
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "2/29" },
+      { id: "b", label: "B", text: "2/58" },
+    ]),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "An isosceles right triangle has a hypotenuse of length 58 inches. What is the perimeter, in inches, of this triangle?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "2/29" },
+        { id: "b", label: "B", text: "2/58" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "14x = 2 w + 19 7y The given equation relates w, x, and y. Which equation correctly expresses w in terms of x and y ? f(x)",
+      stimulus: null,
+      choices: [],
+      questionType: "mcq",
+    }),
+    false,
+  );
 });
 
 test("figure-primary questions without usable choice text do not invent letter keys", () => {
