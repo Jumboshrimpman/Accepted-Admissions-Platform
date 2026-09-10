@@ -52,6 +52,7 @@ import type {
   AttachLibraryAssetInput,
   AttachQuestionInput,
   Attempt,
+  AttemptProgressInput,
   AttemptResponse,
   AttemptResponseInput,
   AttemptResult,
@@ -4782,12 +4783,15 @@ export const getPauseAttemptUrl = (attemptId: string,) => {
 /**
  * @summary Pause an active attempt
  */
-export const pauseAttempt = async (attemptId: string, options?: Parameters<typeof customFetch>[1]): Promise<Attempt> => {
+export const pauseAttempt = async (attemptId: string,
+    attemptProgressInput?: AttemptProgressInput, options?: Parameters<typeof customFetch>[1]): Promise<Attempt> => {
 
   return customFetch<Attempt>(getPauseAttemptUrl(attemptId),
   {
     ...options,
-    method: 'POST'
+    method: 'POST',
+    headers: attemptProgressInput ? { 'Content-Type': 'application/json', ...options?.headers } : options?.headers,
+    body: attemptProgressInput ? JSON.stringify(attemptProgressInput) : options?.body
 
 
   }
@@ -4798,8 +4802,8 @@ export const pauseAttempt = async (attemptId: string, options?: Parameters<typeo
 
 
 export const getPauseAttemptMutationOptions = <TError = ErrorType<UnauthorizedResponse | Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseAttempt>>, TError,{attemptId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof pauseAttempt>>, TError,{attemptId: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseAttempt>>, TError,{attemptId: string;data?: BodyType<AttemptProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pauseAttempt>>, TError,{attemptId: string;data?: BodyType<AttemptProgressInput>}, TContext> => {
 
 const mutationKey = ['pauseAttempt'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -4811,10 +4815,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pauseAttempt>>, {attemptId: string}> = (props) => {
-          const {attemptId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pauseAttempt>>, {attemptId: string;data?: BodyType<AttemptProgressInput>}> = (props) => {
+          const {attemptId,data} = props ?? {};
 
-          return  pauseAttempt(attemptId,requestOptions)
+          return  pauseAttempt(attemptId,data,requestOptions)
         }
 
 
@@ -4825,18 +4829,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type PauseAttemptMutationResult = NonNullable<Awaited<ReturnType<typeof pauseAttempt>>>
-
+    export type PauseAttemptMutationBody = BodyType<AttemptProgressInput>
     export type PauseAttemptMutationError = ErrorType<UnauthorizedResponse | Error>
 
     /**
  * @summary Pause an active attempt
  */
 export const usePauseAttempt = <TError = ErrorType<UnauthorizedResponse | Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseAttempt>>, TError,{attemptId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseAttempt>>, TError,{attemptId: string;data?: BodyType<AttemptProgressInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof pauseAttempt>>,
         TError,
-        {attemptId: string},
+        {attemptId: string;data?: BodyType<AttemptProgressInput>},
         TContext
       > => {
       return useMutation(getPauseAttemptMutationOptions(options));

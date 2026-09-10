@@ -25,20 +25,14 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
 import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
+import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
   return <CurriculumBlockView block={block} />;
 }
 
 function assignmentAction(status?: string | null, duringSession = false): string {
-  if (duringSession) {
-    if (status === "submitted" || status === "expired") return "Review practice";
-    if (status === "active" || status === "paused") return "Continue together";
-    return "Practice together";
-  }
-  if (status === "submitted" || status === "expired") return "Review answers";
-  if (status === "active" || status === "paused") return "Continue pre-work";
-  return "Start pre-work";
+  return studentAssignmentActionLabel(status, duringSession);
 }
 
 export default function PortalSession() {
@@ -101,7 +95,7 @@ export default function PortalSession() {
           {beforeAssignments.length ? beforeAssignments.map((assignment) => (
             <div key={assignment.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="font-medium">{assignment.title}</p><p className="mt-1 text-sm text-muted-foreground">{assignment.questionCount} questions · {assignment.timeLimitMinutes} minutes{assignment.latestScore == null ? "" : ` · ${Math.round(assignment.latestScore)}%`}</p></div>
-              <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={`/portal/assignments/${assignment.id}`}>{viewer && !assignment.latestAttemptId ? "Not started" : assignmentAction(assignment.latestAttemptStatus)}<ArrowIcon /></Link></Button>
+              <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{viewer && !assignment.latestAttemptId ? "Not started" : assignmentAction(assignment.latestAttemptStatus)}<ArrowIcon /></Link></Button>
             </div>
           )) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No preparation is required for this meeting.</p>}
           {analysis && (
@@ -120,7 +114,7 @@ export default function PortalSession() {
         <CardContent className="space-y-5">
           <SessionLessonDashboard sessionId={sessionId} audience="student" />
           {studentBlocks.length ? studentBlocks.map((block) => <div key={block.id} className="rounded-xl border p-4"><RenderBlock block={block} /></div>) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">The tutor has not published this sequence yet.</p>}
-          {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white"><div><p className="font-medium">{assignment.title}</p><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={`/portal/assignments/${assignment.id}`}>{assignmentAction(assignment.latestAttemptStatus, true)}</Link></Button></div>)}
+          {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white"><div><p className="font-medium">{assignment.title}</p><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{assignmentAction(assignment.latestAttemptStatus, true)}</Link></Button></div>)}
           {adaptiveLoading && <p className="text-sm text-muted-foreground">Loading the approved adaptive sequence…</p>}
           {adaptiveUnavailable && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground"><Sparkles className="mr-2 inline h-4 w-4" />Adaptive guidance is unavailable. The published tutor plan remains available.</p>}
           {adaptive && adaptive.publishedBlocks.length === 0 && adaptive.recommendations.length === 0 && <p className="text-xs text-muted-foreground">No adaptive additions have been published for this meeting.</p>}

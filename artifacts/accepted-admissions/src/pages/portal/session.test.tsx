@@ -2,6 +2,21 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({
+  assignments: [
+    {
+      id: "quiz-1",
+      title: "October pre-session mini-section",
+      deliveryPhase: "before_session",
+      questionCount: 3,
+      timeLimitMinutes: 20,
+      latestScore: null,
+      latestAttemptId: null as string | null,
+      latestAttemptStatus: null as string | null,
+    },
+  ],
+}));
+
 vi.mock("@workspace/api-client-react", () => ({
   getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
   getGetAdaptiveCurriculumQueryKey: (id: string) => ["/api/adaptive", id],
@@ -19,18 +34,7 @@ vi.mock("@workspace/api-client-react", () => ({
       meetingUrl: null,
       calendarEventUrl: null,
       studentNotes: null,
-      assignments: [
-        {
-          id: "quiz-1",
-          title: "October pre-session mini-section",
-          deliveryPhase: "before_session",
-          questionCount: 3,
-          timeLimitMinutes: 20,
-          latestScore: null,
-          latestAttemptId: null,
-          latestAttemptStatus: null,
-        },
-      ],
+      assignments: mocks.assignments,
       blocks: [],
       homework: [],
     },
@@ -78,6 +82,8 @@ import PortalSession from "./session";
 
 afterEach(() => {
   cleanup();
+  mocks.assignments[0]!.latestAttemptId = null;
+  mocks.assignments[0]!.latestAttemptStatus = null;
 });
 
 describe("student session quiz path", () => {
@@ -93,5 +99,13 @@ describe("student session quiz path", () => {
     );
     expect(screen.queryByTestId("opened-miss")).toBeNull();
     expect(screen.getByText(/Open a miss or similar problem and work it with your tutor/)).toBeTruthy();
+  });
+
+  test("in-progress pre-work shows Resume and opens the quiz with resume=1", () => {
+    mocks.assignments[0]!.latestAttemptId = "attempt-1";
+    mocks.assignments[0]!.latestAttemptStatus = "paused";
+    render(<PortalSession />);
+    const resume = screen.getByRole("link", { name: /^Resume$/i });
+    expect(resume.getAttribute("href")).toBe("/portal/assignments/quiz-1?resume=1");
   });
 });

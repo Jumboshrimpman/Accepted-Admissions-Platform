@@ -8,6 +8,7 @@ import {
   emptyAttemptSubmitError,
   isBrokenEmptyAttempt,
   isResumableIncompleteAttempt,
+  normalizeQuestionIndex,
   shouldFinalizeExpiredAttempt,
 } from "./student-attempt-guards.ts";
 
@@ -23,6 +24,14 @@ test("recorded answers count only non-empty finals, not predictions", () => {
     countRecordedAnswers([{ finalAnswer: "B" }, { finalAnswer: "  " }, { finalAnswer: "9" }]),
     2,
   );
+});
+
+test("question index is clamped so resume cannot land past the last item", () => {
+  assert.equal(normalizeQuestionIndex(undefined), 0);
+  assert.equal(normalizeQuestionIndex(-3, 10), 0);
+  assert.equal(normalizeQuestionIndex(4.8, 10), 4);
+  assert.equal(normalizeQuestionIndex(20, 5), 4);
+  assert.equal(normalizeQuestionIndex(2, 0), 0);
 });
 
 test("broken empty submits are the only attempts the first-session cleanup targets", () => {

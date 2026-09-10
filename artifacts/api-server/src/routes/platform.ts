@@ -280,6 +280,7 @@ import {
   UpdateQuestionBankItemBody,
   UpdateQuestionBankItemParams,
   UpdateQuestionBankItemResponse,
+  PauseAttemptBody,
   PauseAttemptParams,
   PauseAttemptResponse,
   ResumeAttemptParams,
@@ -415,6 +416,7 @@ import {
   countsTowardAttemptLimit,
   emptyAttemptSubmitError,
   isResumableIncompleteAttempt,
+  normalizeQuestionIndex,
   shouldFinalizeExpiredAttempt,
 } from "../lib/student-attempt-guards";
 import { estimateSatScoreFromScoringGuide } from "../lib/sat-scoring-guide";
@@ -3017,6 +3019,17 @@ async function timerSummary(attemptId: string) {
   };
 }
 
+async function persistCurrentQuestionIndex(
+  attemptId: string,
+  index: unknown,
+): Promise<void> {
+  if (typeof index !== "number" || !Number.isFinite(index)) return;
+  await db
+    .update(attemptsTable)
+    .set({ currentQuestionIndex: normalizeQuestionIndex(index) })
+    .where(eq(attemptsTable.id, attemptId));
+}
+
 async function attemptShape(attemptId: string) {
   const [record] = await db
     .select({
@@ -3060,6 +3073,7 @@ async function attemptShape(attemptId: string) {
       0,
       record.timeLimitMinutes * 60 - timing.activeSeconds,
     ),
+    currentQuestionIndex: normalizeQuestionIndex(attempt.currentQuestionIndex),
     result:
       attempt.status === "submitted" || attempt.status === "expired"
         ? await storedAttemptResult(attempt.id)
@@ -9243,7 +9257,7 @@ async function dashboardDataForUser(user: AppUser) {
       const nextAction = latestResult
         ? "Review answers"
         : attemptStatus === "active" || attemptStatus === "paused"
-          ? "Continue quiz"
+          ? "Resume"
           : preparation
             ? "Take quiz"
             : "Open session plan";
@@ -10545,6 +10559,7 @@ router.put(
         set: values,
       })
       .returning();
+    await persistCurrentQuestionIndex(attempt.id, body.data.currentQuestionIndex);
     res.json(
       SaveAttemptResponseResponse.parse(
         attemptResponseFeedbackShape({
@@ -10572,6 +10587,7 @@ router.post(
   "/attempts/:attemptId/pause",
   async (req: AuthedRequest, res): Promise<void> => {
     const params = PauseAttemptParams.safeParse(req.params);
+    const body = PauseAttemptBody.safeParse(req.body ?? {});
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
       return;
@@ -10592,9 +10608,15 @@ router.post(
       res.status(409).json({ error: "Attempt is not active" });
       return;
     }
+    const progress = body.success ? body.data : {};
     await db
       .update(attemptsTable)
-      .set({ status: "paused" })
+      .set({
+        status: "paused",
+        currentQuestionIndex: normalizeQuestionIndex(
+          progress.currentQuestionIndex ?? attempt.currentQuestionIndex,
+        ),
+      })
       .where(eq(attemptsTable.id, attempt.id));
     await db
       .insert(timerEventsTable)

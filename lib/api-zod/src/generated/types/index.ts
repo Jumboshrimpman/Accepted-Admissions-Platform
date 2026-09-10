@@ -91,6 +91,7 @@ export * from './attachLibraryAssetInput';
 export * from './attachQuestionInput';
 export * from './attempt';
 export * from './attemptAnalysis';
+export * from './attemptProgressInput';
 export * from './attemptAnalysisSource';
 export * from './attemptResponse';
 export * from './attemptResponseInput';

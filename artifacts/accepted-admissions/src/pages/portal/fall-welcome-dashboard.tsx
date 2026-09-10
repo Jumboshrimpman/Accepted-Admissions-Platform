@@ -23,6 +23,7 @@ import { BookingCard } from "@/pages/portal/booking-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
 import { PORTAL_BOOKING_SECTION_ID, canPurchaseOrBookSatCredits } from "@/lib/portal-sat";
+import { studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -45,7 +46,9 @@ function fallbackCurriculumSessions(dashboard: Dashboard): CurriculumSession[] {
 }
 
 function primaryHref(session: CurriculumSession): string {
-  if (session.preparation) return `/portal/assignments/${session.preparation.id}`;
+  if (session.preparation) {
+    return studentAssignmentHref(session.preparation.id, session.preparation.latestAttemptStatus);
+  }
   return `/portal/courses/${session.courseId}/sessions/${session.id}`;
 }
 

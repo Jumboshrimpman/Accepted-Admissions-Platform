@@ -1488,8 +1488,18 @@ paths:
       operationId: pauseAttempt
       tags: [assignments]
       summary: Pause an active attempt
+      description: >
+        Marks the attempt paused and stops the timer. Optional
+        currentQuestionIndex is stored so Resume returns the student to the
+        same item after Save for later.
       parameters:
         - $ref: "#/components/parameters/AttemptId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttemptProgressInput"
       responses:
         "200":
           description: Paused attempt state
@@ -3281,15 +3291,26 @@ components:
           description: >
             Grade this item immediately. Only allowed for during_session practice.
             Timed pre-work and diagnostics stay hidden until final submit.
+        currentQuestionIndex:
+          type: number
+          minimum: 0
+          description: Zero-based question index to restore on resume or refresh.
     TimerEvent:
       type: object
       required: [type, at]
       properties:
         type: { type: string, enum: [started, paused, resumed, submitted] }
         at: { type: string, format: date-time }
+    AttemptProgressInput:
+      type: object
+      properties:
+        currentQuestionIndex:
+          type: number
+          minimum: 0
+          description: Zero-based question index to restore when the student resumes.
     Attempt:
       type: object
-      required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, remainingSeconds, responses]
+      required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, remainingSeconds, currentQuestionIndex, responses]
       properties:
         id: { type: string }
         assignmentId: { type: string }
@@ -3299,6 +3320,7 @@ components:
         pausedSeconds: { type: number }
         pauseCount: { type: number }
         remainingSeconds: { type: number }
+        currentQuestionIndex: { type: number, minimum: 0 }
         responses:
           type: array
           items: { $ref: "#/components/schemas/AttemptResponse" }

@@ -2081,6 +2081,11 @@ export interface AttemptResponseInput {
    * Timed pre-work and diagnostics stay hidden until final submit.
    */
   checkAnswer?: boolean;
+  /**
+   * Zero-based question index to restore on resume or refresh.
+   * @minimum 0
+   */
+  currentQuestionIndex?: number;
 }
 
 export type TimerEventType = typeof TimerEventType[keyof typeof TimerEventType];
@@ -2216,9 +2221,18 @@ export interface Attempt {
   pausedSeconds: number;
   pauseCount: number;
   remainingSeconds: number;
+  currentQuestionIndex: number;
   responses: AttemptResponse[];
   timerEvents?: TimerEvent[];
   result?: AttemptResult | null;
+}
+
+export interface AttemptProgressInput {
+  /**
+   * Zero-based question index to restore when the student resumes.
+   * @minimum 0
+   */
+  currentQuestionIndex?: number;
 }
 
 export interface AttemptSubmission {

@@ -282,6 +282,9 @@ export const attemptsTable = pgTable("attempts", {
   reviewStatus: text("review_status").notNull().default("new"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  currentQuestionIndex: numeric("current_question_index", { mode: "number" })
+    .notNull()
+    .default(0),
   score: numeric("score", { mode: "number" }),
   result: jsonb("result").$type<Record<string, unknown> | null>(),
   analysis: jsonb("analysis").$type<Record<string, unknown> | null>(),
