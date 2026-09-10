@@ -31,7 +31,7 @@ No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No s
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
 2. Keep an item only if the official key is A–D **and** it has a readable stem **and** complete non-garbage A–D text (plus a figure or recovered table if the stem cites a graph/table).
-3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, irreparable OCR, math items whose OCR lost exponents/radicals/fractions (unless a full-question crop includes complete A–D), corrupt stems (`value = of`, axis ticks), leaked/merged A–D lists, and figures that do not match the stem.
+3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, irreparable OCR, math items whose OCR lost exponents/radicals/fractions/operators (unless a full-question crop includes complete A–D), corrupt stems (`value = of`, axis ticks, `^ h`, pipe/backslash residue), leaked/merged A–D lists, unlabeled choice lists, and figures that do not match the stem.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
 6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
