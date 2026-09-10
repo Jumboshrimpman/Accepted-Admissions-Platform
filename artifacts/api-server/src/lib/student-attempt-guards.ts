@@ -56,3 +56,17 @@ export function isBrokenEmptyAttempt(input: {
     input.answeredCount < 1
   );
 }
+
+export function normalizeQuestionIndex(
+  index: unknown,
+  questionCount = Number.POSITIVE_INFINITY,
+): number {
+  const raw = typeof index === "number" && Number.isFinite(index) ? Math.floor(index) : 0;
+  const safe = Math.max(0, raw);
+  const count =
+    typeof questionCount === "number" && Number.isFinite(questionCount)
+      ? Math.floor(questionCount)
+      : Number.POSITIVE_INFINITY;
+  if (count <= 0) return 0;
+  return Math.min(safe, count - 1);
+}

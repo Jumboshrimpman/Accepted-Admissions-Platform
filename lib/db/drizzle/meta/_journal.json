@@ -260,6 +260,13 @@
       "when": 1790300000000,
       "tag": "0037_retire_sat_test_product",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790400000000,
+      "tag": "0038_attempt_current_question_index",
+      "breakpoints": true
     }
   ]
 }

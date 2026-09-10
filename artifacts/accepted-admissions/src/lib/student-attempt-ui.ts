@@ -99,3 +99,49 @@ export const IN_SESSION_PER_QUESTION_FEEDBACK_COPY =
 
 export const IN_SESSION_PRACTICE_CHECK_COPY =
   "Check an answer to see whether it is correct and read the official explanation. Finish practice when the session work is done so the attempt is recorded.";
+
+export function isInProgressAttemptStatus(status?: string | null): boolean {
+  return status === "active" || status === "paused";
+}
+
+export function normalizeQuestionIndex(
+  index: unknown,
+  questionCount = Number.POSITIVE_INFINITY,
+): number {
+  const raw = typeof index === "number" && Number.isFinite(index) ? Math.floor(index) : 0;
+  const safe = Math.max(0, raw);
+  const count =
+    typeof questionCount === "number" && Number.isFinite(questionCount)
+      ? Math.floor(questionCount)
+      : Number.POSITIVE_INFINITY;
+  if (count <= 0) return 0;
+  return Math.min(safe, count - 1);
+}
+
+export function studentAssignmentActionLabel(
+  status?: string | null,
+  duringSession = false,
+): string {
+  if (duringSession) {
+    if (status === "submitted" || status === "expired") return "Review practice";
+    if (isInProgressAttemptStatus(status)) return "Resume";
+    return "Practice together";
+  }
+  if (status === "submitted" || status === "expired") return "Review answers";
+  if (isInProgressAttemptStatus(status)) return "Resume";
+  return "Start pre-work";
+}
+
+export function studentAssignmentHref(
+  assignmentId: string,
+  status?: string | null,
+): string {
+  const path = `/portal/assignments/${assignmentId}`;
+  return isInProgressAttemptStatus(status) ? `${path}?resume=1` : path;
+}
+
+export function wantsResumeAttempt(search?: string | null): boolean {
+  if (!search) return false;
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  return new URLSearchParams(query).get("resume") === "1";
+}

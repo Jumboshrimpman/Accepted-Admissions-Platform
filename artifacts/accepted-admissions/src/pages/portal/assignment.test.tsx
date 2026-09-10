@@ -4,6 +4,9 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 const submitMutate = vi.fn();
 const saveMutate = vi.fn();
 const startMutate = vi.fn();
+const pauseMutate = vi.fn();
+const resumeMutate = vi.fn();
+const setLocation = vi.fn();
 
 const mocks = vi.hoisted(() => ({
   deliveryPhase: "before_session" as "before_session" | "during_session",
@@ -41,11 +44,13 @@ const mocks = vi.hoisted(() => ({
       predictionFirst: true,
     },
   ],
+  search: "",
   attempt: {
     id: "attempt-1",
     assignmentId: "asg-1",
     status: "active" as const,
     remainingSeconds: 1200,
+    currentQuestionIndex: 0,
     responses: [] as Array<{
       questionId: string;
       prediction: string | null;
@@ -96,8 +101,8 @@ vi.mock("@workspace/api-client-react", () => ({
     isError: mocks.resultError,
   }),
   useStartAttempt: () => ({ mutate: startMutate, isPending: false }),
-  usePauseAttempt: () => ({ mutate: vi.fn(), isPending: false }),
-  useResumeAttempt: () => ({ mutate: vi.fn(), isPending: false }),
+  usePauseAttempt: () => ({ mutate: pauseMutate, isPending: false }),
+  useResumeAttempt: () => ({ mutate: resumeMutate, isPending: false }),
   useSaveAttemptResponse: () => ({ mutate: saveMutate, isPending: false }),
   useSubmitAttempt: () => ({ mutate: submitMutate, isPending: false }),
 }));
@@ -109,6 +114,8 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("wouter", () => ({
   Link: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
   useParams: () => ({ assignmentId: "asg-1" }),
+  useSearch: () => mocks.search,
+  useLocation: () => ["/portal/assignments/asg-1", setLocation],
 }));
 
 import PortalAssignment from "./assignment";
@@ -120,11 +127,16 @@ afterEach(() => {
   submitMutate.mockReset();
   saveMutate.mockReset();
   startMutate.mockReset();
+  pauseMutate.mockReset();
+  resumeMutate.mockReset();
+  setLocation.mockReset();
+  mocks.search = "";
   mocks.deliveryPhase = "before_session";
   mocks.title = "Practice quiz";
   mocks.questions = structuredClone(defaultQuestions);
   mocks.attempt.status = "active";
   mocks.attempt.remainingSeconds = 1200;
+  mocks.attempt.currentQuestionIndex = 0;
   mocks.attempt.responses = [];
   mocks.result = null;
   mocks.resultError = false;
@@ -522,5 +534,54 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByTestId("restart-empty-attempt"));
     expect(startMutate).toHaveBeenCalledWith({ assignmentId: "asg-1" }, expect.any(Object));
     expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  test("Save for later pauses without submitting and leaves the quiz", () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    fireEvent.click(screen.getByTestId("save-for-later"));
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(pauseMutate).toHaveBeenCalledWith(
+      { attemptId: "attempt-1", data: { currentQuestionIndex: 1 } },
+      expect.any(Object),
+    );
+    pauseMutate.mock.calls[0][1].onSuccess({
+      ...mocks.attempt,
+      status: "paused",
+      currentQuestionIndex: 1,
+    });
+    expect(setLocation).toHaveBeenCalledWith("/portal");
+  });
+
+  test("Resume restores the saved question, answers, and flags", () => {
+    mocks.attempt.currentQuestionIndex = 1;
+    mocks.attempt.responses = [
+      { questionId: "q1", prediction: null, predictionLocked: false, finalAnswer: "a", flagged: true },
+      { questionId: "q2", prediction: null, predictionLocked: false, finalAnswer: "b", flagged: false },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByText("Question 2 of 2")).toBeTruthy();
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /attached/i }).className).toMatch(/border-primary/);
+    expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Flagged/i })).toBeTruthy();
+  });
+
+  test("paused overlay offers Resume and Save for later, and ?resume=1 auto-resumes", () => {
+    mocks.attempt.status = "paused";
+    mocks.attempt.currentQuestionIndex = 1;
+    render(<PortalAssignment />);
+    expect(screen.getByRole("button", { name: /^Resume$/i })).toBeTruthy();
+    expect(screen.getByTestId("save-for-later")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("save-for-later"));
+    expect(setLocation).toHaveBeenCalledWith("/portal");
+    expect(submitMutate).not.toHaveBeenCalled();
+    cleanup();
+    mocks.search = "resume=1";
+    render(<PortalAssignment />);
+    expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
   });
 });

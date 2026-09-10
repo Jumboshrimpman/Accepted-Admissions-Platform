@@ -2899,6 +2899,7 @@ export const StartAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
+  "currentQuestionIndex": zod.number().min(0),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3017,6 +3018,7 @@ export const GetAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
+  "currentQuestionIndex": zod.number().min(0),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3334,7 +3336,8 @@ export const SaveAttemptResponseBody = zod.object({
   "finalAnswer": zod.string().max(saveAttemptResponseBodyFinalAnswerMax).nullish(),
   "flagged": zod.boolean().optional(),
   "timeSpentSeconds": zod.number().min(saveAttemptResponseBodyTimeSpentSecondsMin).optional(),
-  "checkAnswer": zod.boolean().optional()
+  "checkAnswer": zod.boolean().optional(),
+  "currentQuestionIndex": zod.number().min(0).optional()
 })
 
 export const SaveAttemptResponseResponse = zod.object({
@@ -3358,6 +3361,10 @@ export const PauseAttemptParams = zod.object({
   "attemptId": zod.coerce.string()
 })
 
+export const PauseAttemptBody = zod.object({
+  "currentQuestionIndex": zod.number().min(0).optional()
+})
+
 export const PauseAttemptResponse = zod.object({
   "id": zod.string(),
   "assignmentId": zod.string(),
@@ -3367,6 +3374,7 @@ export const PauseAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
+  "currentQuestionIndex": zod.number().min(0),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3485,6 +3493,7 @@ export const ResumeAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
+  "currentQuestionIndex": zod.number().min(0),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),

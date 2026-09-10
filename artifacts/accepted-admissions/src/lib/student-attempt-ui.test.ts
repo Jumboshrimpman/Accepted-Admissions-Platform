@@ -7,11 +7,16 @@ import {
   allowsPartialInSessionSubmit,
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
+  isInProgressAttemptStatus,
   isQuestionFeedbackRevealed,
+  normalizeQuestionIndex,
   shouldAutoSubmitOnExpiry,
+  studentAssignmentActionLabel,
+  studentAssignmentHref,
   studentCanSeeAnswerChoices,
   studentSeesFinishedResult,
   studentSeesPredictionStep,
+  wantsResumeAttempt,
 } from "./student-attempt-ui.ts";
 
 test("prediction cannot appear or auto-advance the student flow", () => {
@@ -54,6 +59,20 @@ test("in-session practice is collaborative, not a prediction quiz", () => {
   assert.equal(allowsInSessionPerQuestionFeedback({ deliveryPhase: "before_session" }), false);
   assert.equal(isQuestionFeedbackRevealed({ revealed: true, correct: false }), true);
   assert.equal(isQuestionFeedbackRevealed({ revealed: false, correct: null }), false);
+});
+
+test("resume copy and href restore an in-progress quiz from the portal", () => {
+  assert.equal(isInProgressAttemptStatus("paused"), true);
+  assert.equal(isInProgressAttemptStatus("submitted"), false);
+  assert.equal(studentAssignmentActionLabel("paused"), "Resume");
+  assert.equal(studentAssignmentActionLabel("active"), "Resume");
+  assert.equal(studentAssignmentActionLabel(null), "Start pre-work");
+  assert.equal(studentAssignmentActionLabel("paused", true), "Resume");
+  assert.equal(studentAssignmentHref("asg-1", "paused"), "/portal/assignments/asg-1?resume=1");
+  assert.equal(studentAssignmentHref("asg-1", null), "/portal/assignments/asg-1");
+  assert.equal(wantsResumeAttempt("resume=1"), true);
+  assert.equal(wantsResumeAttempt("foo=1"), false);
+  assert.equal(normalizeQuestionIndex(7, 3), 2);
 });
 
 test("timer expiry with zero answers does not show a finished result", () => {

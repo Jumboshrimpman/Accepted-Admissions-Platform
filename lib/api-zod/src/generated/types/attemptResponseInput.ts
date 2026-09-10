@@ -27,4 +27,9 @@ export interface AttemptResponseInput {
    * Timed pre-work and diagnostics stay hidden until final submit.
    */
   checkAnswer?: boolean;
+  /**
+   * Zero-based question index to restore on resume or refresh.
+   * @minimum 0
+   */
+  currentQuestionIndex?: number;
 }
