@@ -906,6 +906,87 @@ test("drops Oct 2 Q83–91 figure-only or wiped A–D items; keeps intact slash-
   );
 });
 
+test("drops Oct 2 Q92–98 OCR-garbage and wiped A–D items; keeps readable Q93 and Q98", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const emptyLetters = letterChoices(["", "", "", ""]);
+  const graphFigure = {
+    url: `${figureUrl}-p42-draw1.png`,
+    alt: "Estimated number of chipmunks",
+  };
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+      choices: emptyLetters,
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
+      choices: letterChoices(["(6,3)", "(3,6)", "(3,27)", "(27,3)"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableServedQuestion({
+      prompt: "s + 7 = 27\nr = 3\nWhat is the solution (r, s) to the given system of equations?",
+      choices: letterChoices(["(6,3)", "(3,6)", "(3,27)", "(27,3)"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "",
+      stimulus: `![Chipmunk line graph](${graphFigure.url})`,
+      choices: emptyLetters,
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [graphFigure],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "12x3 −5x ? 3Which expressionisequivalentto",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "x + y = 18 5 y = x What is thesolution (, x y) tothegivensystemofequations?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+      choices: letterChoices(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",

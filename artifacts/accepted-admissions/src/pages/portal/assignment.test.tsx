@@ -1136,6 +1136,82 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = -32/);
   });
 
+  test("Oct 2 Q92–98 drop OCR-garbage and wiped A–D items and keep readable Q93 and Q98", () => {
+    const figure =
+      "![Chipmunk line graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p42-draw1.png)";
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q92",
+        prompt:
+          "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "" },
+          { id: "b", label: "B", text: "" },
+          { id: "c", label: "C", text: "" },
+          { id: "d", label: "D", text: "" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q93",
+        prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "(6,3)" },
+          { id: "b", label: "B", text: "(3,6)" },
+          { id: "c", label: "C", text: "(3,27)" },
+          { id: "d", label: "D", text: "(27,3)" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q94",
+        prompt: "",
+        stimulus: figure,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q96",
+        prompt: "12x3 −5x ? 3Which expressionisequivalentto",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q97",
+        prompt: "x + y = 18 5 y = x What is thesolution (, x y) tothegivensystemofequations?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q98",
+        prompt:
+          "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x > 0 y > 0" },
+          { id: "b", label: "B", text: "x > 0 y < 0" },
+          { id: "c", label: "C", text: "x < 0 y > 0" },
+          { id: "d", label: "D", text: "x < 0 y < 0" },
+        ],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByText(/point0,0 5/)).toBeNull();
+    expect(screen.queryByText(/12x3/)).toBeNull();
+    expect(screen.queryByText(/\(, x y\)/)).toBeNull();
+    expect(screen.getByText("Question 1 of 2")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/s \+ 7 = 27/);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/r = 3/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/\(6,3\)/);
+  });
+
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
     mocks.assignmentError = true;
     render(<PortalAssignment />);

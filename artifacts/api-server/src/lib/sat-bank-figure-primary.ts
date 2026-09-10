@@ -82,7 +82,10 @@ const LEAKED_NEXT_QUESTION =
   /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer|set a goal to walk|On a certain day,|Note:\s*Figure not drawn|lines m and n are parallel/i;
 const CARET_H_OCR = /\^\s*h\b/;
 const Y_FX_MISSING_EQUALS = /\by\s+f\s*\(\s*x\s*\)/;
-const BROKEN_POINT_ZERO_FIVE = /point\s*,\s*0\s+5\b/i;
+const BROKEN_POINT_ZERO_FIVE = /point\s*,?\s*0(?:\s*,\s*0)?\s+5\b/i;
+const RUN_ON_EQUATION =
+  /([=≠]\s*-?\d+(?:\.\d+)?)\s+(?=(?:\d+\s+)?[A-Za-z]\s*[=≠])/g;
+const GLUED_STEM_QUESTION = /(\d)\s*(?=(?:What|Which|Select)\b)/g;
 const QUESTION_AS_OPERATOR = /[0-9x)]\s*\?\s*\d/;
 // Q88 live: "16+30=190 xWhich equation..." — space before x, then the next sentence glued on.
 // Also "16 + 30 = 190 x" at end of line. Do not match a legitimate "y = 3 x + 1".
@@ -474,6 +477,12 @@ export function formatStudentChoiceText(text: string | null | undefined): string
   );
 }
 
+/** `s + 7 = 27 r = 3What is` → one equation per line, then the question. */
+export function formatStudentStemText(text: string | null | undefined): string {
+  if (!text) return "";
+  return text.replace(RUN_ON_EQUATION, "$1\n").replace(GLUED_STEM_QUESTION, "$1\n");
+}
+
 export function looksLeakedNextQuestionChoice(text: string | null | undefined): boolean {
   const value = cleanOcrChoiceText(text);
   return value.length > 40 && LEAKED_NEXT_QUESTION.test(value);
@@ -524,7 +533,7 @@ export function prepareStudentExtractText(text: string | null | undefined): stri
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
-  return value;
+  return formatStudentStemText(value);
 }
 
 export function hasReadableStudentStem(input: {

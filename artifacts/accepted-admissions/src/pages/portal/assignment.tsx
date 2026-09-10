@@ -59,6 +59,7 @@ import {
 import {
   displayAnswerLabel,
   formatStudentChoiceText,
+  formatStudentStemText,
   figurePrimaryChoices,
   hasCompleteLetterChoiceText,
   isFigurePrimaryQuestion,
@@ -84,7 +85,7 @@ function QuizRichText({
   hideImages?: boolean;
 }) {
   if (!text) return null;
-  const parts = splitQuizRichText(text, { hideGarbledText, hideImages });
+  const parts = splitQuizRichText(formatStudentStemText(text), { hideGarbledText, hideImages });
   if (parts.length === 0) return null;
   return (
     <div
@@ -132,7 +133,7 @@ function QuizRichText({
             {part.value}
           </pre>
         ) : (
-          <p key={`text-${index}`} className="max-w-full whitespace-normal break-words leading-relaxed">
+          <p key={`text-${index}`} className="max-w-full whitespace-pre-wrap break-words leading-relaxed">
             {part.value}
           </p>
         ),

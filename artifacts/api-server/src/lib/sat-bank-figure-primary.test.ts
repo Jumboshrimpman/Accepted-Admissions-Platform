@@ -28,6 +28,7 @@ import {
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
   formatStudentChoiceText,
+  formatStudentStemText,
   looksSmashedTableChoice,
   hasMergedOrLeakedChoices,
   stemCitesVisual,
@@ -447,6 +448,13 @@ test("rejects smashed equations, missing operators, pipe OCR, and ?-as-operator;
     true,
   );
   assert.equal(
+    looksCorruptStemOcr(
+      "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+    ),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("point0,0 5"), true);
+  assert.equal(
     looksPipeBackslashOcr("The line graph shows the estimated number of chipmunks.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year?"),
     true,
   );
@@ -488,6 +496,19 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
   assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
   assert.equal(formatStudentChoiceText("x < 0 y < 0"), "x < 0\ny < 0");
   assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(
+    formatStudentStemText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
+  );
+  assert.equal(formatStudentStemText("y = 3 x + 1"), "y = 3 x + 1");
+  assert.equal(
+    prepareStudentExtractText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
+  );
+  assert.equal(
+    looksSmashedOrTruncatedExtract("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    false,
+  );
   assert.equal(
     looksBrokenMathOcr("= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?"),
     true,

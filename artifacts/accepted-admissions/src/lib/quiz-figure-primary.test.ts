@@ -16,6 +16,7 @@ import {
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
   formatStudentChoiceText,
+  formatStudentStemText,
   looksSmashedTableChoice,
   looksCharacterSpacedGarbage,
   looksExplodedOcrTable,
@@ -203,6 +204,13 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
   assert.equal(looksBrokenMathOcr("16 + 30 = 190 x\nWhich equation has the same solution?"), true);
   assert.equal(looksBrokenMathOcr("x/4 + 1 = 33\nWhich equation has the same solution?"), false);
   assert.equal(looksCorruptStemOcr("= ^ h in\nFor the linear function f , the graph of y f(x)\npoint,0 5"), true);
+  assert.equal(
+    looksCorruptStemOcr(
+      "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+    ),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("point0,0 5"), true);
   assert.equal(looksPipeBackslashOcr("I \\\n/ ' I '\\ I '\nI"), true);
   assert.equal(looksBrokenMathOcr("12x3 −5x ? 3\nWhich expression is equivalent to"), true);
   const surfboard = {
@@ -240,6 +248,35 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
 test("formats run-on inequalities and rejects mangled coordinates, table crops, and orphan figures", () => {
   assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
   assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(
+    formatStudentStemText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
+  );
+  assert.equal(formatStudentStemText("y = 3 x + 1"), "y = 3 x + 1");
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "(6,3)" },
+        { id: "b", label: "B", text: "(3,6)" },
+        { id: "c", label: "C", text: "(3,27)" },
+        { id: "d", label: "D", text: "(27,3)" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+      stimulus: null,
+      choices: [],
+      questionType: "mcq",
+    }),
+    false,
+  );
   assert.equal(looksBrokenMathOcr("What is the solution ( ,x y) to the given system?"), true);
   assert.equal(looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)"), true);
   assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), false);
