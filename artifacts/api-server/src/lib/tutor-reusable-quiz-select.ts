@@ -1,6 +1,6 @@
 import { isAssignableBankItem, isTutorQuizMcq } from "./sat-bank-import.ts";
 import { assignmentChoices } from "./assignment-visibility.ts";
-import { isStudentUsableQuizItem } from "./sat-bank-diagnostic-quality.ts";
+import { isStudentUsableQuizItem, quizSectionFromBankMeta } from "./sat-bank-diagnostic-quality.ts";
 
 export const TUTOR_QUIZ_MAX_QUESTIONS = 80;
 export const TUTOR_QUIZ_SPR_NOTE =
@@ -18,6 +18,9 @@ export type TutorQuizBankCandidate = {
   choices: unknown;
   correctAnswer: string;
   figures?: unknown;
+  section?: string | null;
+  subject?: string | null;
+  domain?: string | null;
   extractGaps?: { missingPrompt?: boolean; missingChoices?: boolean; figurePrimary?: boolean } | null;
   estimatedSeconds?: number | null;
 };
@@ -65,6 +68,8 @@ export function selectBankQuestionsForTutorQuiz<T extends TutorQuizBankCandidate
         correctAnswer: row.correctAnswer,
         questionType: row.questionType,
         extractGaps: row.extractGaps ?? undefined,
+        section: quizSectionFromBankMeta(row),
+        figures: Array.isArray(row.figures) ? row.figures : [],
       })
     ) {
       return {

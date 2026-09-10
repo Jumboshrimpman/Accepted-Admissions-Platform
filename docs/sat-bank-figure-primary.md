@@ -68,7 +68,7 @@ If both snippet drawings and a question-region crop are present, the portal uses
 
 ## Reimport (including Taito Oct 2 diagnostic)
 
-Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, and tutor-built bank quizzes — uses the same `isStudentUsableQuizItem` gate. Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`.
+Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, tutor-built bank quizzes, and lesson retries — uses `isStudentUsableQuizItem`. **Math is a separate, stricter path** (`isStudentUsableMathQuizItem`): host the clean figure when the stem depends on a graph/table/dot plot; keep stem text short and free of axis/table OCR bleed; reject smashed exponents and incomplete parentheses; if a student cannot solve the item as shown, drop it. Math does **not** keep a broken stem just because a crop exists. RW may still use a figure + recovered table after a readable stem. Incomplete or unavailable choice sets are dropped. Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`. The rebuild **replaces** dropped math slots with unused clean SAT MCQs from other official packs; `--refresh-linked-only` only unlinks.
 
 **Required after merge (Oct 2 live assignment does not change until rematerialize):**
 
@@ -76,7 +76,7 @@ Figure-primary display is not enough when the linked quiz still contains SPR, em
 2. `POST /api/admin/sat-bank/reset-first-sat-prework`  
    or `node --experimental-strip-types src/scripts/reset-october2-prework.ts`
 
-In-place `--refresh-linked-only` cannot drop already-linked broken items.
+In-place `--refresh-linked-only` rematerializes bank-linked rows and now unlinks items that fail `isStudentUsableQuizItem`. It still cannot restore wiped choice text or refill dropped slots — use the rebuild for that.
 
 The Oct 2 Taito full-length diagnostic is linked to SAT bank rows. After new crops land in JSONL + `/media/sat-bank/`:
 

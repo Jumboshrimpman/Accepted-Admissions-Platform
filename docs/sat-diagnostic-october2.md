@@ -4,7 +4,19 @@ Owner: Taito Goto (`taito0525@gmail.com`), first Fall SAT with Eunice (Oct 2 JST
 
 Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop exists. PR #60 rebuilt the Oct 2 form from “usable MCQ,” but that predicate treated **any** renderable figure as enough. Live preview then shipped graph-only crops with empty A–D letter keys, missing tables, and clipped stems.
 
-A student-usable item is now only:
+## Math usability bar (every student quiz)
+
+Sama’s 2026-09-09 bar applies to **all** quizzes — Oct 2 diagnostic, routine SAT pre-work, tutor-built bank quizzes, and lesson retries — via `isStudentUsableQuizItem`. **Math uses a stricter path than RW** (`isStudentUsableMathQuizItem`): do not polish broken OCR into a student stem.
+
+- **Figure-primary data, not OCR salvage:** if the stem depends on a graph, table, dot plot, or geometric figure, host the clean figure and keep stem text short and free of axis/table bleed. Visual + bleed, or visual + no figure → drop. Visual + clean stem + figure + complete A–D stays as **text + figure** (do not hide a useful stem).
+- **Pure algebra/function:** reject character-spaced garbage, smashed exponents (`2 2`, `ax2`, `12x3`), and incomplete parentheses (`x 16( + 15)`). Ship only when stem + full A–D read as real SAT math.
+- **If unsure whether a student can solve the math as shown, drop/replace at materialize.** Math never uses the RW fallback “has a crop, so keep.”
+- Full usable A–D — never “Multiple-choice options unavailable” or incomplete A–C
+- Fewer perfect math items beat 120 with junk. English/RW stays on the existing readable-stem path.
+
+Composition (`selectUsableDiagnosticItems` / routine bank pool), rematerialize (`dropUnusableAssignmentQuestions`), student/viewer GET (`isStudentUsableServedQuestion`), tutor-built select (`selectBankQuestionsForTutorQuiz`), lesson retries, and quiz chrome (`isStudentAnswerableQuizQuestion`) all call that same gate.
+
+A student-usable item is only:
 
 - a clean text MCQ with a **readable stem** and complete A–D choice text (plus a figure if the stem cites a graph/table, or a recovered data table), or
 - a graph/table figure **plus** separate complete, non-garbage A–D text
@@ -15,9 +27,9 @@ Math must render with the exponents, radicals, and fractions the student needs, 
 
 A figure that the stem never cites (page-neighbor crop on a word problem, unlabeled equation list, inequality dump) is dropped. Stems with clear OCR corruption (`PQ QR` missing `=`, `value = of`, `Xu123456`, axis-tick dumps, `^ h` / `y f(x)` / `point,0 5`, pipe/backslash graph residue, leaked next-question choices) are rejected. Bare A–D never ships. Unlabeled choice lists plus letter buttons never ship.
 
-Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, math OCR that is missing exponents or operators or is a failed fraction/layout dump, unlabeled A–D lists, pipe/backslash graph residue, mangled `( , x y )` stems, incomplete table crops, leaked geometry leftover in a numeric choice, scrambled `= (…) f(x)` / empty `f(x)( )`, exploded vertex-fraction OCR, character-spaced garbage (`T h e g r a p h`), junk choice D module boilerplate (`Module 2`, `GO ON TO THE NEXT PAGE`), and exploded contingency / OCR-as-table dumps.
+Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, math OCR that is missing exponents or operators or is a failed fraction/layout dump, unlabeled A–D lists, pipe/backslash graph residue, mangled `( , x y )` stems, incomplete table crops, leaked geometry leftover in a numeric choice, scrambled `= (…) f(x)` / empty `f(x)( )`, exploded vertex-fraction OCR, character-spaced garbage (`T h e g r a p h`), junk choice D module boilerplate (`Module 2`, `GO ON TO THE NEXT PAGE`), exploded contingency / OCR-as-table dumps, smashed `%` / pipe tables (Q15-style), similar-triangle stems with no figure (`Figuresnotdrawntoscale`), scatterplots with axis-tick OCR (`y U12345678910`), smashed slope/choices (`1–3`, `y=-+103x`), stacked `14x = 2 w + 19 7y` / stray `f(x)` (Q77), stripped-radical triangle area with no A–D (Q78), smashed `2 4x` factoring (Q79), mashed `2x2` / `( , x y)` systems (Q80), incomplete A/B-only sets such as `2/29` `2/58` (Q81), stray `? following` / `ax2` parabola stems (Q82), figure-only triangle/graph shells with wiped A–D (Q83–Q85), smashed `16+30=190 x` (Q88), surfboard stems with no A–D (Q91), `^ h` / `y f(x)` / `point0,0 5` stems (Q92), chipmunk graph-only shells (Q94), smashed `12x3 −5x ? 3` (Q96), `( , x y)` run-on systems (Q97), scrambled `h x` / `x2` table stems (Q99), `270(0.1)x` / `WhatThe function` stems (Q100), incomplete A–C library items (Q104), leading `=(x-10)(x+13) f(x)` stems (Q106), exploded vertex-form `metal 9` / `(-7) 3` OCR (Q107), smashed circle squares `2 2 x` (Q109), garbled prism `92 K 2 cm . 47` stems (Q110), `f X -2 2` graph junk (Q112), character-spaced `x x y 6 5 4 ? + +` (Q113), axis-bleed `12345678910` / missing scatterplot (Q114), dot-plot axis labels bled into the stem (`16 17 18 19 20 Diameter`) (Q115), smashed `x 16( + 15) ?` algebra (Q117), exploded two-way-table OCR under a cropped figure (Q119), and any item whose A–D copy is unavailable. Intact slash-fraction items (Q89 `x/4 + 1 = 33`, Q103 `7/4`) stay. Readable run-on systems (Q93 `s + 7 = 27 r = 3`) stay and render with equation breaks. Inequality systems (Q98) stay. Juxtaposition `21px` (Q105) stays. Students never see “Multiple-choice options unavailable” — those rows are unlinked at rematerialize and hidden at serve time.
 
-The same student-usable gate (`isStudentUsableQuizItem`) is shared platform code. Routine SAT pre-work, tutor-built bank quizzes, and lesson retries inherit it — not Oct 2 only. Prefer fewer perfect items over a full form of broken OCR.
+The same student-usable gate (`isStudentUsableQuizItem`) is shared platform code for composition, rematerialize, and student GET. Routine SAT pre-work, tutor-built bank quizzes, and lesson retries inherit it — not Oct 2 only. Tutor-built select passes `section` (and figures) so math items hit `isStudentUsableMathQuizItem`. Incomplete A–D (only A/B) is rejected. Prefer fewer perfect items over a full form of broken OCR.
 
 ## Student UX after rebuild
 
@@ -74,7 +86,7 @@ cd artifacts/api-server
 node --experimental-strip-types src/scripts/reset-october2-prework.ts --refresh-linked-only
 ```
 
-In-place refresh cannot drop SPR / empty / graph-only letter-key items that are already linked, and it cannot restore choice text that a previous import wiped. Re-import JSONL, then use the rebuild.
+In-place refresh now rematerializes bank-linked rows **and unlinks items that fail `isStudentUsableQuizItem`**. It still cannot restore choice text a previous import wiped. Re-import JSONL, then use the rebuild so dropped slots can be filled from other official packs.
 
 ### 3. Rebuild and re-link Taito’s Oct 2 diagnostic
 
@@ -91,10 +103,11 @@ POST /api/admin/sat-bank/reset-first-sat-prework
 
 This:
 
-1. Rematerializes the current Oct 2 linked questions (skips forks)
-2. Archives that session’s before-session assignments and deletes its attempts
+1. Rematerializes the current Oct 2 linked questions (skips forks) and unlinks remaining unusable items
+2. Archives that session’s before-session assignments, including older duplicate diagnostics, and deletes its attempts
 3. Builds a new published diagnostic from the cleaned MCQ bank
 4. Points the Oct 2 session pre-work plan at the new assignment
+5. Dedupes any leftover published full-length diagnostics on the course so only the live copy stays visible
 
 It does **not** move or edit homework on other sessions (Nika IELTS, later Eunice SATs, Xavier capability, session-local tutor forks).
 
@@ -115,7 +128,7 @@ The script prints `composition`. Expect:
 | Time limit | ≥134 minutes |
 | Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
 
-Then as Taito or a client preview: open the Oct 2 diagnostic → a graph item must show the chart **and** A–D copy (or a crop that includes the choices) → tables/stems must not clip → answer A–D → submit → see an estimated SAT range.
+Then as Taito or a client preview: open the Oct 2 diagnostic → a graph item must show the chart **and** A–D copy (or a crop that includes the choices) → tables/stems must not clip → no “Multiple-choice options unavailable” → answer A–D → submit → see an estimated SAT range. Flagged (and reported) items are excluded from the score denominator. Students can **Report question** from the quiz chrome; Sama sees the queue on Admin home and mail goes to `admin@acceptedadmissions.org`.
 
 ## Parallel work
 

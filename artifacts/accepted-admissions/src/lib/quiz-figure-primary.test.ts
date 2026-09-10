@@ -3,17 +3,22 @@ import test from "node:test";
 import {
   displayAnswerLabel,
   figurePrimaryChoices,
+  hasCompleteLetterChoiceText,
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
+  isStudentAnswerableQuizQuestion,
+  hasRecoveredQuizTable,
   isStudentReadableChoiceText,
   letterMcqChoices,
   looksBrokenMathOcr,
+  looksIncompleteMathParens,
   looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledQuizText,
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
   formatStudentChoiceText,
+  formatStudentStemText,
   looksSmashedTableChoice,
   looksCharacterSpacedGarbage,
   looksExplodedOcrTable,
@@ -35,6 +40,39 @@ test("strips leaked SAT bank figure comments", () => {
 test("treats ASCII scatterplots as garbled quiz text", () => {
   assert.equal(looksGarbledQuizText("10+-+-+-+--i------,f-----+---+---+"), true);
   assert.equal(looksGarbledQuizText("Which value of x satisfies the equation?"), false);
+});
+
+test("incomplete A/B-only sets and empty A–D are not student-answerable", () => {
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "2/29" },
+      { id: "b", label: "B", text: "2/58" },
+    ]),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "An isosceles right triangle has a hypotenuse of length 58 inches. What is the perimeter, in inches, of this triangle?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "2/29" },
+        { id: "b", label: "B", text: "2/58" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "14x = 2 w + 19 7y The given equation relates w, x, and y. Which equation correctly expresses w in terms of x and y ? f(x)",
+      stimulus: null,
+      choices: [],
+      questionType: "mcq",
+    }),
+    false,
+  );
 });
 
 test("figure-primary questions without usable choice text do not invent letter keys", () => {
@@ -76,6 +114,36 @@ test("rejects fraction dumps, missing exponents, and hides OCR next to a crop", 
   assert.equal(isStudentReadableChoiceText("8 2 + 80"), false);
   assert.equal(looksBrokenMathOcr("y = 2x2 − 21x + 64\npoint, ( ,x y),"), true);
   assert.equal(looksBrokenMathOcr("y = ax2 + bx + c, which of the\n? following could be"), true);
+  assert.equal(looksBrokenMathOcr("16+30=190 xWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksBrokenMathOcr("y = 3 x + 1"), false);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "x/4 = 32" },
+        { id: "b", label: "B", text: "x/4 = 5" },
+        { id: "c", label: "C", text: "x/4 = 1" },
+        { id: "d", label: "D", text: "x/4 = -32" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "Note: Figure not drawn to scale.",
+      stimulus: "![Triangle](/media/sat-bank/pack/p40-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "" },
+        { id: "b", label: "B", text: "" },
+        { id: "c", label: "C", text: "" },
+        { id: "d", label: "D", text: "" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
   const triangle = {
     presentation: "text" as const,
     prompt: "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area?",
@@ -138,6 +206,13 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
   assert.equal(looksBrokenMathOcr("16 + 30 = 190 x\nWhich equation has the same solution?"), true);
   assert.equal(looksBrokenMathOcr("x/4 + 1 = 33\nWhich equation has the same solution?"), false);
   assert.equal(looksCorruptStemOcr("= ^ h in\nFor the linear function f , the graph of y f(x)\npoint,0 5"), true);
+  assert.equal(
+    looksCorruptStemOcr(
+      "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+    ),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("point0,0 5"), true);
   assert.equal(looksPipeBackslashOcr("I \\\n/ ' I '\\ I '\nI"), true);
   assert.equal(looksBrokenMathOcr("12x3 −5x ? 3\nWhich expression is equivalent to"), true);
   const surfboard = {
@@ -175,9 +250,67 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
 test("formats run-on inequalities and rejects mangled coordinates, table crops, and orphan figures", () => {
   assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
   assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(
+    formatStudentStemText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
+  );
+  assert.equal(formatStudentStemText("y = 3 x + 1"), "y = 3 x + 1");
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "(6,3)" },
+        { id: "b", label: "B", text: "(3,6)" },
+        { id: "c", label: "C", text: "(3,27)" },
+        { id: "d", label: "D", text: "(27,3)" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+      stimulus: null,
+      choices: [],
+      questionType: "mcq",
+    }),
+    false,
+  );
   assert.equal(looksBrokenMathOcr("What is the solution ( ,x y) to the given system?"), true);
   assert.equal(looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)"), true);
+  assert.equal(looksBrokenMathOcr("= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?"), true);
+  assert.equal(
+    looksBrokenMathOcr(
+      "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+    ),
+    true,
+  );
   assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), false);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "7/4" },
+        { id: "b", label: "B", text: "9/4" },
+        { id: "c", label: "C", text: "4" },
+        { id: "d", label: "D", text: "7" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "7,500" },
+      { id: "b", label: "B", text: "15,000" },
+      { id: "c", label: "C", text: "22,500" },
+    ]),
+    false,
+  );
   assert.equal(looksSmashedTableChoice("x 1 2 3 h(x) 4 5 6"), true);
   assert.equal(isStudentReadableChoiceText("7/4"), true);
   const library = {
@@ -212,8 +345,116 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
     true,
   );
   assert.equal(
+    looksBrokenMathOcr(
+      "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+    ),
+    true,
+  );
+  assert.equal(
     looksBrokenMathOcr("f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal ball’s height"),
     true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height"),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("The equation 2 2 x + (y –1) = 49 represents circle A."), true);
+  assert.equal(looksBrokenMathOcr("the resulting prism has a surface area of 92 K 2 cm . 47"), true);
+  assert.equal(looksBrokenMathOcr("f X -2 2 = is The graph of the quadratic function y f(x) shown."), true);
+  assert.equal(looksBrokenMathOcr("Which expression is equivalent to x x y 6 5 4 ? + +"), true);
+  assert.equal(looksCorruptStemOcr("I, 7 X 12345678910 For how many of the 10 data points"), true);
+  assert.equal(
+    looksCorruptStemOcr("The dot plot gives the diameter. 16 17 18 19 20 Diameter (inches) Based on the dot plot"),
+    true,
+  );
+  assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = (x + 1"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = x^2 + 1"), false);
+  assert.equal(looksIncompleteMathParens("The point (6,3) is a solution."), false);
+  assert.equal(looksIncompleteMathParens("(-2, 3)"), false);
+  assert.equal(
+    hasRecoveredQuizTable("x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values."),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "f(x)= 3x + 29" },
+        { id: "b", label: "B", text: "f(x)= 29x + 32" },
+        { id: "c", label: "C", text: "f(x)= 35x + 29" },
+        { id: "d", label: "D", text: "f(x)= 32x + 35" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The graph of y = f(x) is shown. What is the vertex of the graph?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "(-2, 3)" },
+        { id: "b", label: "B", text: "(0, 0)" },
+        { id: "c", label: "C", text: "(2, -1)" },
+        { id: "d", label: "D", text: "(3, 4)" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The graph of y = f(x) is shown. What is the vertex of the graph?",
+      stimulus: "![Graph](/media/sat-bank/pack/graph.png)",
+      choices: [
+        { id: "a", label: "A", text: "(-2, 3)" },
+        { id: "b", label: "B", text: "(0, 0)" },
+        { id: "c", label: "C", text: "(2, -1)" },
+        { id: "d", label: "D", text: "(3, 4)" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    looksExplodedOcrTable(
+      "Live east Live west Total Less than 17 11 28 40 years old At least 18 89 107 Total 35 100 135 The table summarizes members",
+    ),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "The dot plot gives the diameter. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+      stimulus: "![Dot plot](/media/sat-bank/pack/p48-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "16" },
+        { id: "b", label: "B", text: "6" },
+        { id: "c", label: "C", text: "4" },
+        { id: "d", label: "D", text: "1" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "I, 7 X 12345678910 For how many of the 10 data points is the actual y-value greater than the y-value predicted by the line of best fit?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "3" },
+        { id: "b", label: "B", text: "4" },
+        { id: "c", label: "C", text: "6" },
+        { id: "d", label: "D", text: "7" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
   );
   assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
   const metalBall = {

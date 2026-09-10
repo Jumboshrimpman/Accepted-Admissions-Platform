@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
       choices: [
         { id: "a", label: "A", text: "However" },
         { id: "b", label: "B", text: "Therefore" },
+        { id: "c", label: "C", text: "Meanwhile" },
+        { id: "d", label: "D", text: "Similarly" },
       ],
       skill: "Transitions",
       difficulty: "medium" as const,
@@ -38,6 +40,8 @@ const mocks = vi.hoisted(() => ({
       choices: [
         { id: "a", label: "A", text: "collected" },
         { id: "b", label: "B", text: "attached" },
+        { id: "c", label: "C", text: "created" },
+        { id: "d", label: "D", text: "decided" },
       ],
       skill: "Words in Context",
       difficulty: "medium" as const,
@@ -70,6 +74,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  customFetch: vi.fn(async () => ({ id: "report-1" })),
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getGetAttemptQueryKey: (id: string) => ["/api/attempts", id],
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
@@ -122,6 +127,10 @@ import PortalAssignment from "./assignment";
 
 const defaultQuestions = structuredClone(mocks.questions);
 
+function keepOnlyFirstQuestion() {
+  mocks.questions = [mocks.questions[0]!];
+}
+
 afterEach(() => {
   cleanup();
   submitMutate.mockReset();
@@ -149,6 +158,8 @@ afterEach(() => {
   mocks.questions[0]!.choices = [
     { id: "a", label: "A", text: "However" },
     { id: "b", label: "B", text: "Therefore" },
+    { id: "c", label: "C", text: "Meanwhile" },
+    { id: "d", label: "D", text: "Similarly" },
   ];
 });
 
@@ -423,18 +434,17 @@ describe("student attempt UI", () => {
         "![Question region](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png)\n<!-- /sat-bank-figures -->",
       choices: [],
     };
+    mocks.questions = [mocks.questions[0]!];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
-    expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/student-produced response/i)).toBeNull();
     expect(screen.queryByText(/sat-bank-figures/)).toBeNull();
     expect(screen.queryByText(/V = i/)).toBeNull();
-    const image = screen.getByAltText("Question region") as HTMLImageElement;
-    expect(image.src).toBe(
-      "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png",
-    );
   });
 
   test("OCR-garbage and empty A–D shells are not shown as letter-only buttons", () => {
@@ -451,12 +461,13 @@ describe("student attempt UI", () => {
         { id: "d", label: "D", text: "" },
       ],
     };
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/selecting/);
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/inspecting/);
-    expect(screen.getByTestId("answer-choices").textContent).not.toMatch(/----/);
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/creating/);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.queryByText(/----/)).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("long choice D wraps instead of clipping", () => {
@@ -498,14 +509,14 @@ describe("student attempt UI", () => {
         { id: "d", label: "D", text: "24" },
       ],
     };
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
-    expect(screen.getByAltText("Question figure region page 38")).toBeTruthy();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByText(/sides of length 2 2/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
     expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(
-      /Multiple-choice options unavailable/,
-    );
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("failed fraction dumps are not shown as A–D choices", () => {
@@ -518,9 +529,11 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x" },
       { id: "d", label: "D", text: "w = 14y ⎟⎟⎠ − 19 ⎜⎜⎜⎝ ⎟" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
     expect(screen.queryByText(/⎜/)).toBeNull();
   });
 
@@ -567,10 +580,12 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "x 16 = 160" },
       { id: "d", label: "D", text: "x 16 = 190" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByText(/16 \+ 30 = 190 x/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("surfboard word problem does not double-render page-neighbor inequalities or bare A–D", () => {
@@ -584,11 +599,14 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "25 ≤75 t" },
       { id: "d", label: "D", text: "t 25 + 10 ≤75" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByAltText("Diagram from page 35")).toBeNull();
-    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/surfboard/);
+    expect(screen.queryByText(/surfboard/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("partial linear-function crop hides garbage OCR and never shows letter-only A–D", () => {
@@ -605,11 +623,13 @@ describe("student attempt UI", () => {
         { id: "d", label: "D", text: "f(x) x/12 = 5 +" },
       ],
     };
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByText(/point,0 5/)).toBeNull();
     expect(screen.queryByText(/\^ h in/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("pipe-backslash graph OCR and missing-operator polynomials are not student-usable", () => {
@@ -623,10 +643,12 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "1995" },
       { id: "d", label: "D", text: "1998" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByText(/I \\/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("run-on inequality systems render as separate lines", () => {
@@ -672,9 +694,11 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "(17, 1)" },
       { id: "d", label: "D", text: "(18, 0)" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("incomplete table crop hides broken OCR and never shows letter-only A–D", () => {
@@ -691,10 +715,12 @@ describe("student attempt UI", () => {
         { id: "d", label: "D", text: "x 1 2 3 −2 h(x) 1 3" },
       ],
     };
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByText(/= x2/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("scrambled 270(0.1)x stem is not student-usable", () => {
@@ -706,9 +732,11 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "27" },
       { id: "d", label: "D", text: "270" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("21px juxtaposition equation stays readable with slash-fraction choices", () => {
@@ -737,9 +765,11 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "− 2 3" },
       { id: "d", label: "D", text: "− 2" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("smashed metal-ball vertex crop hides OCR and never shows letter-only A–D", () => {
@@ -756,10 +786,12 @@ describe("student attempt UI", () => {
         { id: "d", label: "D", text: "The metal ball’s height was 7 inches above the ground when it started moving. 20" },
       ],
     };
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByText(/2 \+ The function/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("dot plot with empty A–D never becomes letter-only buttons", () => {
@@ -773,10 +805,12 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "" },
       { id: "d", label: "D", text: "" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
-    expect(screen.getByAltText("Diagram from page 47")).toBeTruthy();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("library word problem hides an orphan figure fragment and does not invent letter-only A–D", () => {
@@ -790,11 +824,14 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "" },
       { id: "d", label: "D", text: "" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByAltText("Diagram from page 45")).toBeNull();
-    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/library/);
+    expect(screen.queryByText(/library/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("literal question-mark operator and missing exponents are not shown as A–D", () => {
@@ -806,9 +843,11 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "7x3" },
       { id: "d", label: "D", text: "17x6" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
     expect(screen.queryByText(/7x6/)).toBeNull();
   });
 
@@ -825,11 +864,13 @@ describe("student attempt UI", () => {
         { id: "d", label: "D", text: "24" },
       ],
     };
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
-    expect(screen.getByAltText("Diagram from page 34")).toBeTruthy();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByText(/PQ QR/)).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
   test("smashed x f(x) lines render as a data table, not one smashed prose line", () => {
@@ -933,12 +974,14 @@ describe("student attempt UI", () => {
         predictionFirst: false,
       },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
     expect(screen.queryByText(/sat-bank-figures/i)).toBeNull();
-    expect(screen.getByTestId("quiz-rich-text").textContent).toMatch(/oranges/);
   });
 
   test("figure-primary comment without usable A–D text does not show letter-only buttons", () => {
@@ -957,12 +1000,418 @@ describe("student attempt UI", () => {
         predictionFirst: false,
       },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
-    expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
     expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
-    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
+  });
+
+  test("Oct 2 Q77–82 smashed or incomplete A–D items are dropped, never shown as unavailable", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q77",
+        prompt:
+          "14x = 2 w + 19 7y The given equation relates the distinct positive real numbers w, x, and y. Which equation correctly expresses w in terms of x and y ? f(x)",
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q78",
+        prompt:
+          "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area of the triangle, in square units?",
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q79",
+        prompt:
+          "2 4x + bx − 45, where b is a constant, The expression can be rewritten as (hx + k)(x + j). Which of the following must be an integer?",
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q80",
+        prompt:
+          "y = 2x2 − 21x + 64 y = 3x + a The graphs intersect at exactly one point, ( , x y). What is the value of x?",
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q81",
+        prompt:
+          "An isosceles right triangle has a hypotenuse of length 58 inches. What is the perimeter, in inches, of this triangle?",
+        choices: [
+          { id: "a", label: "A", text: "2/29" },
+          { id: "b", label: "B", text: "2/58" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q82",
+        prompt:
+          "In the x y-plane, a parabola has vertex (9, −14). If y = ax2 + bx + c, which of the ? following could be the value of a + b + c",
+        choices: [],
+      },
+    ];
+    keepOnlyFirstQuestion();
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.queryByText(/2\/29/)).toBeNull();
+    expect(screen.queryByText(/14x = 2 w/)).toBeNull();
+  });
+
+  test("Oct 2 Q83–91 drop figure-only or wiped A–D items and keep intact slash-fraction Q89", () => {
+    const figure =
+      "![Question figure](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p40-draw1.png)";
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q83",
+        prompt: "Note: Figure not drawn to scale.",
+        stimulus: figure,
+        choices: [
+          { id: "a", label: "A", text: "" },
+          { id: "b", label: "B", text: "" },
+          { id: "c", label: "C", text: "" },
+          { id: "d", label: "D", text: "" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q84",
+        prompt: "",
+        stimulus: figure,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q85",
+        prompt: "",
+        stimulus: figure,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q88",
+        prompt: "16+30=190 xWhich equation has the same solution as the given equation?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q89",
+        prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x/4 = 32" },
+          { id: "b", label: "B", text: "x/4 = 5" },
+          { id: "c", label: "C", text: "x/4 = 1" },
+          { id: "d", label: "D", text: "x/4 = -32" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q91",
+        prompt:
+          "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?",
+        stimulus: null,
+        choices: [],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByText(/16\+30=190/)).toBeNull();
+    expect(screen.getByText("Question 1 of 1")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/x\/4 \+ 1 = 33/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = 32/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = -32/);
+  });
+
+  test("Oct 2 Q92–98 drop OCR-garbage and wiped A–D items and keep readable Q93 and Q98", () => {
+    const figure =
+      "![Chipmunk line graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p42-draw1.png)";
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q92",
+        prompt:
+          "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "" },
+          { id: "b", label: "B", text: "" },
+          { id: "c", label: "C", text: "" },
+          { id: "d", label: "D", text: "" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q93",
+        prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "(6,3)" },
+          { id: "b", label: "B", text: "(3,6)" },
+          { id: "c", label: "C", text: "(3,27)" },
+          { id: "d", label: "D", text: "(27,3)" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q94",
+        prompt: "",
+        stimulus: figure,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q96",
+        prompt: "12x3 −5x ? 3Which expressionisequivalentto",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q97",
+        prompt: "x + y = 18 5 y = x What is thesolution (, x y) tothegivensystemofequations?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q98",
+        prompt:
+          "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x > 0 y > 0" },
+          { id: "b", label: "B", text: "x > 0 y < 0" },
+          { id: "c", label: "C", text: "x < 0 y > 0" },
+          { id: "d", label: "D", text: "x < 0 y < 0" },
+        ],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByText(/point0,0 5/)).toBeNull();
+    expect(screen.queryByText(/12x3/)).toBeNull();
+    expect(screen.queryByText(/\(, x y\)/)).toBeNull();
+    expect(screen.getByText("Question 1 of 2")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/s \+ 7 = 27/);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/r = 3/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/\(6,3\)/);
+  });
+
+  test("Oct 2 Q99–106 drop scrambled or incomplete A–D items and keep slash-fraction Q103 and 21px Q105", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q99",
+        prompt:
+          "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q100",
+        prompt: "= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q103",
+        prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "7/4" },
+          { id: "b", label: "B", text: "9/4" },
+          { id: "c", label: "C", text: "4" },
+          { id: "d", label: "D", text: "7" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q104",
+        prompt:
+          "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. A social media post reported that 15,000 more people voted in favor of the proposal than voted against it. Based on these data, how many people voted against the proposal?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "7,500" },
+          { id: "b", label: "B", text: "15,000" },
+          { id: "c", label: "C", text: "22,500" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q105",
+        prompt:
+          "−3x + 21px = 84 In thegivenequation, p isaconstant. Theequationhasnosolution. Whatisthevalueof p ?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "0" },
+          { id: "b", label: "B", text: "1/7" },
+          { id: "c", label: "C", text: "4/3" },
+          { id: "d", label: "D", text: "4" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q106",
+        prompt:
+          "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+        stimulus: null,
+        choices: [],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByText(/h x Which/)).toBeNull();
+    expect(screen.queryByText(/WhatThe function/)).toBeNull();
+    expect(screen.queryByText(/library/)).toBeNull();
+    expect(screen.queryByText(/\(x −10\)\(x \+13\) f\(x\)/)).toBeNull();
+    expect(screen.getByText("Question 1 of 2")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/−36/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/7\/4/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
+  });
+
+  test("Oct 2 Q107–114 drop exploded OCR, missing figures, and character-spaced garbage", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q107",
+        prompt:
+          "f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height above the ground f(x), in inches",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q109",
+        prompt: "The equation 2 2 x + (y –1) = 49 represents circle A. 2 2 (x –2) + (y –1) =",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q110",
+        prompt:
+          "Two identical rectangular prisms each have a height of 90 centimeters (cm). The resulting prism has a surface area of 92 K 2 cm . 47 What is the side length?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "4" },
+          { id: "b", label: "B", text: "8" },
+          { id: "c", label: "C", text: "9" },
+          { id: "d", label: "D", text: "16" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q112",
+        prompt: "f X -2 2 = is The graph of the quadratic function y f(x) shown. What is the vertex of the graph?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q113",
+        prompt: "Which expression is equivalent to x x y 6 5 4 ? + +",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x15" },
+          { id: "b", label: "B", text: "y15" },
+          { id: "c", label: "C", text: "xy114+" },
+          { id: "d", label: "D", text: "xy304+" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q114",
+        prompt:
+          "I, 7 X 12345678910 For how many of the 10 data points is the actual y-value greater than the y-value predicted by the line of best fit?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "3" },
+          { id: "b", label: "B", text: "4" },
+          { id: "c", label: "C", text: "6" },
+          { id: "d", label: "D", text: "7" },
+        ],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
+    expect(screen.queryByText(/metal 9/)).toBeNull();
+    expect(screen.queryByText(/2 2 x/)).toBeNull();
+    expect(screen.queryByText(/92 K 2/)).toBeNull();
+    expect(screen.queryByText(/x x y 6 5 4/)).toBeNull();
+    expect(screen.queryByText(/12345678910/)).toBeNull();
+  });
+
+  test("Oct 2 Q115/Q117/Q119 drop axis-bleed, smashed algebra, and exploded two-way tables", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q115",
+        prompt:
+          "The dot plot gives the diameter, to the nearest inch, of each of the sea stars in these tide pools. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+        stimulus:
+          "![Dot plot](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p48-draw1.png)",
+        choices: [
+          { id: "a", label: "A", text: "16" },
+          { id: "b", label: "B", text: "6" },
+          { id: "c", label: "C", text: "4" },
+          { id: "d", label: "D", text: "1" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q117",
+        prompt: "x 16( + 15) ? Which expression is equivalent to",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x16+31" },
+          { id: "b", label: "B", text: "16+240x" },
+          { id: "c", label: "C", text: "16+1x" },
+          { id: "d", label: "D", text: "x16+15" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q119",
+        prompt:
+          "Live east Live west of the river Total Less than 17 11 28 40 years old At least 18 89 107 40 years old Total 35 100 135 The table summarizes members of a local organization. What is the probability that the selected member is at least 40 years old?",
+        stimulus:
+          "![Cropped table](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p49-draw1.png)",
+        choices: [
+          { id: "a", label: "A", text: "28/135" },
+          { id: "b", label: "B", text: "35/135" },
+          { id: "c", label: "C", text: "100/135" },
+          { id: "d", label: "D", text: "107/135" },
+        ],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
+    expect(screen.queryByText(/16 17 18 19 20/)).toBeNull();
+    expect(screen.queryByText(/x 16\(/)).toBeNull();
+    expect(screen.queryByText(/Live east Live west/)).toBeNull();
   });
 
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
@@ -1019,6 +1468,22 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Flagged/i })).toBeTruthy();
+    expect(screen.getByText(/Flagged and reported questions aren’t scored/i)).toBeTruthy();
+  });
+
+  test("Report question sits next to Save for later and can be sent without leaving the quiz", async () => {
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("report-question")).toBeTruthy();
+    expect(screen.getByTestId("save-for-later")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("report-question"));
+    expect(screen.getByTestId("report-question-form")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("What looks wrong?"), {
+      target: { value: "Table is smashed" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send report" }));
+    expect(await screen.findByTestId("report-question-status")).toBeTruthy();
+    expect(screen.getByTestId("report-question").textContent).toMatch(/Reported/);
+    expect(screen.getByText(/Which transition is best/)).toBeTruthy();
   });
 
   test("paused overlay offers Resume and Save for later, and ?resume=1 auto-resumes", () => {

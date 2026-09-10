@@ -48,7 +48,7 @@ export function sessionPreworkQuizzes<T extends BankQuizCandidate>(
   );
 }
 
-/** Admin inventory: every before-session copy on the meeting, including archived resets. */
+/** Admin inventory: live before-session copies only. Archived reset leftovers stay hidden. */
 export function sessionHomeworkInventory<T extends BankQuizCandidate>(
   assignments: T[],
   session: { id: string },
@@ -62,7 +62,7 @@ export function sessionHomeworkInventory<T extends BankQuizCandidate>(
     if (item.deliveryPhase !== "before_session") continue;
     result.push(item);
   }
-  return result.sort((left, right) => {
+  return sessionStatusHomework(result).sort((left, right) => {
     const statusScore = (status: string) =>
       status === "published" ? 2 : status === "archived" ? 0 : 1;
     const statusDelta = statusScore(right.status) - statusScore(left.status);

@@ -333,6 +333,27 @@ export const reviewQueueTable = pgTable("review_queue_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const questionReportsTable = pgTable(
+  "question_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    attemptId: uuid("attempt_id").notNull().references(() => attemptsTable.id),
+    assignmentId: uuid("assignment_id").notNull().references(() => assignmentsTable.id),
+    questionId: uuid("question_id").notNull().references(() => questionsTable.id),
+    questionIndex: numeric("question_index", { mode: "number" }).notNull().default(0),
+    studentUserId: uuid("student_user_id").notNull().references(() => usersTable.id),
+    reason: text("reason").notNull(),
+    note: text("note"),
+    stemSnippet: text("stem_snippet").notNull().default(""),
+    status: text("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("question_reports_status_created_idx").on(table.status, table.createdAt),
+    index("question_reports_attempt_question_idx").on(table.attemptId, table.questionId),
+  ],
+);
+
 export const sessionArtifactsTable = pgTable(
   "session_artifacts",
   {

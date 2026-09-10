@@ -599,11 +599,12 @@ describe("curriculum bank IA", () => {
     );
   });
 
-  test("session homework inventory shows archived duplicates and can restore or archive a copy", () => {
+  test("session homework inventory hides archived diagnostic leftovers", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     mocks.curriculum.assignments[0]!.sessionId = "session-1";
     mocks.curriculum.assignments[0]!.sessionTitle = "Taito SAT with Eunice";
     mocks.curriculum.assignments[0]!.title = "Full-length SAT diagnostic — Taito’s SAT Session with Eunice";
+    mocks.curriculum.assignments[0]!.questionCount = 120;
     mocks.curriculum.assignments.push({
       ...mocks.curriculum.assignments[0]!,
       id: "quiz-archived-1",
@@ -620,16 +621,11 @@ describe("curriculum bank IA", () => {
     render(<AdminCurriculum />);
 
     expect(screen.getByTestId("session-homework-quiz-1")).toBeTruthy();
-    expect(screen.getByTestId("session-homework-quiz-archived-1").textContent).toMatch(/archived/);
-    expect(screen.getByTestId("session-homework-quiz-archived-2").textContent).toMatch(/archived/);
+    expect(screen.queryByTestId("session-homework-quiz-archived-1")).toBeNull();
+    expect(screen.queryByTestId("session-homework-quiz-archived-2")).toBeNull();
     fireEvent.click(screen.getByTestId("archive-homework-quiz-1"));
     expect(mocks.updateAssignment).toHaveBeenCalledWith(
       { assignmentId: "quiz-1", data: { status: "archived" } },
-      expect.any(Object),
-    );
-    fireEvent.click(screen.getByTestId("activate-homework-quiz-archived-2"));
-    expect(mocks.updateAssignment).toHaveBeenCalledWith(
-      { assignmentId: "quiz-archived-2", data: { status: "published" } },
       expect.any(Object),
     );
   });

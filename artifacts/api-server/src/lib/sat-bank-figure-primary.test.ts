@@ -21,6 +21,7 @@ import {
   looksTruncatedChoiceText,
   normalizeLetterAnswer,
   looksBrokenMathOcr,
+  looksIncompleteMathParens,
   looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledExtractText,
@@ -28,6 +29,7 @@ import {
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
   formatStudentChoiceText,
+  formatStudentStemText,
   looksSmashedTableChoice,
   hasMergedOrLeakedChoices,
   stemCitesVisual,
@@ -431,6 +433,8 @@ test("rejects corrupt stems, leaked A–D, and page-neighbor figures on word pro
 
 test("rejects smashed equations, missing operators, pipe OCR, and ?-as-operator; keeps slash fractions", () => {
   assert.equal(looksBrokenMathOcr("16 + 30 = 190 x\nWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksBrokenMathOcr("16+30=190 xWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksBrokenMathOcr("y = 3 x + 1"), false);
   assert.equal(looksMissingOperatorChoice("x 16 = 30"), true);
   assert.equal(looksMissingOperatorChoice("16 x = 130"), true);
   assert.equal(looksMissingOperatorChoice("t 10 ≤75"), true);
@@ -444,6 +448,13 @@ test("rejects smashed equations, missing operators, pipe OCR, and ?-as-operator;
     looksCorruptStemOcr("= ^ h in\nFor the linear function f , the graph of y f(x)\npoint,0 5"),
     true,
   );
+  assert.equal(
+    looksCorruptStemOcr(
+      "= ^ h inFor thelinearfunctionf , thegraphof y f(x)thexy-planehasaslopeof7andpassesthrough the ^ h. Whichequationdefinesf ? point0,0 5 ^ h",
+    ),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("point0,0 5"), true);
   assert.equal(
     looksPipeBackslashOcr("The line graph shows the estimated number of chipmunks.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year?"),
     true,
@@ -487,13 +498,36 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
   assert.equal(formatStudentChoiceText("x < 0 y < 0"), "x < 0\ny < 0");
   assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
   assert.equal(
+    formatStudentStemText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
+  );
+  assert.equal(formatStudentStemText("y = 3 x + 1"), "y = 3 x + 1");
+  assert.equal(
+    prepareStudentExtractText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
+  );
+  assert.equal(
+    looksSmashedOrTruncatedExtract("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
+    false,
+  );
+  assert.equal(
     looksBrokenMathOcr("= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+    ),
     true,
   );
   assert.equal(looksSmashedTableChoice("x 1 2 3 h(x) 4 5 6"), true);
   assert.equal(isStudentReadableChoiceText("x 1 2 3 h(x) 4 5 6"), false);
   assert.equal(
     looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)\nis the value of f (0) ?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?"),
     true,
   );
   assert.equal(
@@ -530,7 +564,57 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   );
   assert.equal(
     looksBrokenMathOcr(
+      "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+    ),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
       "f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal\n9\nball’s height above the ground f(x)( ), in inches,",
+    ),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height above the ground f(x), in inches",
+    ),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "The equation 2 2 x + (y –1) = 49 represents circle A. Which equation represents circle B? 2 2 (x –2) + (y –1) =",
+    ),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "the resulting prism has a surface area of 92 K 2 cm . 47 What is the side length, in cm, of each square base?",
+    ),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("f X -2 2 = is The graph of the quadratic function y f(x) shown."), true);
+  assert.equal(looksBrokenMathOcr("Which expression is equivalent to x x y 6 5 4 ? + +"), true);
+  assert.equal(looksCorruptStemOcr("I, 7 X 12345678910 For how many of the 10 data points"), true);
+  assert.equal(stemCitesVisual("predicted by the line of best fit?"), true);
+  assert.equal(
+    looksCorruptStemOcr(
+      "The dot plot gives the diameter of each sea star. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+    ),
+    true,
+  );
+  assert.equal(
+    looksCorruptStemOcr("Data Set A\n22 23 24 25 26\nThe dot plot represents the 15 values in data set A."),
+    false,
+  );
+  assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = (x + 1"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = x^2 + 1"), false);
+  assert.equal(looksIncompleteMathParens("The point (6,3) is a solution."), false);
+  assert.equal(looksIncompleteMathParens("(-2, 3)"), false);
+  assert.equal(looksBrokenMathOcr("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(
+    looksExplodedOcrTable(
+      "Live east Live west of the river Total Less than 17 11 28 40 years old At least 18 89 107 40 years old Total 35 100 135 The table summarizes members",
     ),
     true,
   );
@@ -578,6 +662,41 @@ test("rejects character-spaced OCR, module boilerplate choices, and exploded OCR
     { id: "c", label: "C", text: "Meanwhile" },
     { id: "d", label: "D", text: "STOP GO ON TO THE NEXT PAGE" },
   ]), false);
+});
+
+test("detects smashed stacked-fraction stems like 14x = 2 w + 19 7y", () => {
+  assert.equal(
+    looksBrokenMathOcr(
+      "14x = 2 w + 19 7y The given equation relates the distinct positive real numbers w, x, and y. Which equation correctly expresses w in terms of x and y ? f(x)",
+    ),
+    true,
+  );
+  assert.equal(hasCompleteLetterChoiceText([
+    { id: "a", label: "A", text: "2/29" },
+    { id: "b", label: "B", text: "2/58" },
+  ]), false);
+});
+
+test("detects smashed percent tables, missing similar-triangle figures, and axis-tick scatterplots", () => {
+  assert.equal(
+    looksExplodedOcrTable(
+      "AblationRates SPC AST HTC OCC iron 20% 28% 90% 98% potassium 44% 74% 97% 100%",
+    ),
+    true,
+  );
+  assert.equal(
+    stemCitesVisual(
+      "Note:Figuresnotdrawntoscale.RighttrianglesPQR and STU are similar,whereP corresponds to S.",
+    ),
+    true,
+  );
+  assert.equal(
+    stemCitesVisual("Thescatterplotshowingtherelationshipbetweentwovariables, x and y."),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("y U12345678910 Which equation is the linear model?"), true);
+  assert.equal(isStudentReadableChoiceText("y=-+103x"), false);
+  assert.equal(looksBrokenMathOcr("Linetinthexy-planehasaslopeof1–3andpassesthrough"), true);
 });
 
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {
