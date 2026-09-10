@@ -20,9 +20,11 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import {
+  collapsedItems,
   disclosedSessions,
   displaySessionTitle,
   formatSessionDateTime,
@@ -66,8 +68,15 @@ type AdminOverviewWithPlatform = AdminOverview & {
   };
 };
 
+function notificationsByNewest<T extends { createdAt: string | Date }>(notifications: readonly T[]): T[] {
+  return [...notifications].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+}
+
 export default function AdminDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const [showAllNotifications, setShowAllNotifications] = useState(false);
   const { data: overview, isLoading: overviewLoading } = useGetAdminOverview();
   const { data: curriculum } = useGetAdminCurriculum();
   const queryClient = useQueryClient();
@@ -82,9 +91,25 @@ export default function AdminDashboard() {
   const platform = (overview as typeof overview & { platform?: { outstandingInvoices: number; upcomingSessions: number; newRequests: number } } | undefined)?.platform;
   const loginActivity = overview?.loginActivity ?? [];
   const guidanceRequests = overview?.guidanceRequests ?? [];
-  const notifications = overview?.notifications ?? [];
-  const activeNotifications = notifications.filter((notification) => notification.status === "unread");
-  const priorNotifications = notifications.filter((notification) => notification.status !== "unread");
+  const notifications = notificationsByNewest(overview?.notifications ?? []);
+  const notificationList = collapsedItems(notifications, showAllNotifications);
+  const unreadCount = notifications.filter((notification) => notification.status === "unread").length;
+  const priorCount = notifications.length - unreadCount;
+  const activeNotifications = notificationList.visible.filter((notification) => notification.status === "unread");
+  const priorNotifications = notificationList.visible.filter((notification) => notification.status !== "unread");
+  const applyNotificationStatus = (notificationId: string, status: "unread" | "read" | "dismissed") => {
+    updateNotification.mutate(
+      { notificationId, data: { status } },
+      {
+        onSuccess: (updated) =>
+          queryClient.setQueryData<AdminOverviewWithPlatform>(getGetAdminOverviewQueryKey(), (current) =>
+            current
+              ? { ...current, notifications: current.notifications.map((item) => (item.id === updated.id ? updated : item)) }
+              : current,
+          ),
+      },
+    );
+  };
   const administrators = (overview?.users ?? []).filter((user) => user.role === "administrator");
   const accessConflicts = overview?.accessConflicts ?? [];
   const latestLogin = loginActivity[0];
@@ -141,63 +166,40 @@ export default function AdminDashboard() {
               <section aria-labelledby="active-notifications-heading" className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <h2 id="active-notifications-heading" className="text-sm font-semibold">Needs attention</h2>
-                  <Badge variant="default">{activeNotifications.length}</Badge>
+                  <Badge variant="default">{unreadCount}</Badge>
                 </div>
                 {activeNotifications.map((notification) => (
                   <AdminNotificationItem
                     key={notification.id}
                     notification={notification}
                     isPending={updateNotification.isPending}
-                    onUpdate={(status) =>
-                      updateNotification.mutate(
-                        { notificationId: notification.id, data: { status } },
-                        {
-                          onSuccess: (updated) =>
-                            queryClient.setQueryData<AdminOverviewWithPlatform>(getGetAdminOverviewQueryKey(), (current) =>
-                              current
-                                ? { ...current, notifications: current.notifications.map((item) => (item.id === updated.id ? updated : item)) }
-                                : current,
-                            ),
-                        },
-                      )
-                    }
+                    onUpdate={(status) => applyNotificationStatus(notification.id, status)}
                   />
                 ))}
               </section>
             )}
             {priorNotifications.length > 0 && (
-              <details className="group border-t pt-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <section aria-labelledby="prior-notifications-heading" className="space-y-3 border-t pt-5">
+                <div className="flex items-center justify-between gap-3">
                   <h2 id="prior-notifications-heading" className="text-sm font-semibold">Prior notifications</h2>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{priorNotifications.length}</Badge>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                  </div>
-                </summary>
-                <div className="mt-3 space-y-3" aria-labelledby="prior-notifications-heading">
-                  {priorNotifications.map((notification) => (
-                    <AdminNotificationItem
-                      key={notification.id}
-                      notification={notification}
-                      isPending={updateNotification.isPending}
-                      onUpdate={(status) =>
-                        updateNotification.mutate(
-                          { notificationId: notification.id, data: { status } },
-                          {
-                            onSuccess: (updated) =>
-                              queryClient.setQueryData<AdminOverviewWithPlatform>(getGetAdminOverviewQueryKey(), (current) =>
-                                current
-                                  ? { ...current, notifications: current.notifications.map((item) => (item.id === updated.id ? updated : item)) }
-                                  : current,
-                              ),
-                          },
-                        )
-                      }
-                    />
-                  ))}
+                  <Badge variant="secondary">{priorCount}</Badge>
                 </div>
-              </details>
+                {priorNotifications.map((notification) => (
+                  <AdminNotificationItem
+                    key={notification.id}
+                    notification={notification}
+                    isPending={updateNotification.isPending}
+                    onUpdate={(status) => applyNotificationStatus(notification.id, status)}
+                  />
+                ))}
+              </section>
             )}
+            <SessionListDisclosure
+              canToggle={notificationList.canToggle}
+              expanded={showAllNotifications}
+              onToggle={() => setShowAllNotifications((value) => !value)}
+              testId="assignment-notifications-show-more"
+            />
           </CardContent>
         </Card>
       )}

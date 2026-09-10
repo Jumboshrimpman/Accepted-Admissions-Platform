@@ -243,6 +243,24 @@ afterEach(() => {
   mocks.overview.users = [];
 });
 
+function assignmentNotification(
+  id: string,
+  createdAt: string,
+  status: "unread" | "read" | "dismissed" = "unread",
+) {
+  return {
+    id,
+    kind: "guidance_request_assigned",
+    guidanceRequestId: `request-${id}`,
+    title: `Assignment ${id}`,
+    message: `Message for ${id}`,
+    status,
+    readAt: status === "unread" ? null : createdAt,
+    dismissedAt: status === "dismissed" ? createdAt : null,
+    createdAt,
+  };
+}
+
 describe("administrator overview", () => {
   test("separates active assignment alerts and supports clearing or restoring alerts", () => {
     mocks.overview.notifications = [
@@ -291,6 +309,65 @@ describe("administrator overview", () => {
       { notificationId: "notification-read", data: { status: "unread" } },
       expect.any(Object),
     );
+  });
+
+  test("shows every assignment notification when there are three or fewer", () => {
+    mocks.overview.notifications = [
+      assignmentNotification("notification-3", "2026-09-03T12:00:00.000Z"),
+      assignmentNotification("notification-2", "2026-09-02T12:00:00.000Z"),
+      assignmentNotification("notification-1", "2026-09-01T12:00:00.000Z", "read"),
+    ];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByTestId("notification-notification-3")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-2")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-1")).toBeTruthy();
+    expect(screen.queryByTestId("assignment-notifications-show-more")).toBeNull();
+  });
+
+  test("shows the three newest assignment notifications and a Show more control when more exist", () => {
+    mocks.overview.notifications = [
+      assignmentNotification("notification-oldest", "2026-09-01T12:00:00.000Z"),
+      assignmentNotification("notification-2", "2026-09-02T12:00:00.000Z"),
+      assignmentNotification("notification-3", "2026-09-03T12:00:00.000Z"),
+      assignmentNotification("notification-4", "2026-09-04T12:00:00.000Z"),
+      assignmentNotification("notification-newest", "2026-09-05T12:00:00.000Z"),
+    ];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByTestId("notification-notification-newest")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-4")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-3")).toBeTruthy();
+    expect(screen.queryByTestId("notification-notification-2")).toBeNull();
+    expect(screen.queryByTestId("notification-notification-oldest")).toBeNull();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
+  });
+
+  test("expands older assignment notifications and can collapse them again", () => {
+    mocks.overview.notifications = [
+      assignmentNotification("notification-oldest", "2026-09-01T12:00:00.000Z"),
+      assignmentNotification("notification-2", "2026-09-02T12:00:00.000Z"),
+      assignmentNotification("notification-3", "2026-09-03T12:00:00.000Z"),
+      assignmentNotification("notification-4", "2026-09-04T12:00:00.000Z"),
+      assignmentNotification("notification-newest", "2026-09-05T12:00:00.000Z"),
+    ];
+
+    render(<AdminDashboard />);
+
+    fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
+    expect(screen.getByTestId("notification-notification-newest")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-4")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-3")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-2")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-oldest")).toBeTruthy();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
+
+    fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
+    expect(screen.queryByTestId("notification-notification-2")).toBeNull();
+    expect(screen.queryByTestId("notification-notification-oldest")).toBeNull();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
   });
 
   test("removes attention surfaces and keeps login activity collapsed by default", () => {

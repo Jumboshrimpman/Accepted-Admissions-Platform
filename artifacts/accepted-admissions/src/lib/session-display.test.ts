@@ -5,6 +5,7 @@ import {
   canCancelOrRescheduleSession,
   displaySessionTitle,
   collapsedListedSessions,
+  collapsedItems,
   disclosedSessions,
   listedSessionMeetingKey,
   uniqueListedSessions,
@@ -172,6 +173,20 @@ test("discloses three sessions before expansion without reordering", () => {
   const sessions = ["first", "second", "third", "fourth", "fifth"];
   assert.deepEqual(disclosedSessions(sessions, false), sessions.slice(0, 3));
   assert.deepEqual(disclosedSessions(sessions, true), sessions);
+});
+
+test("collapses older items behind a disclosure when more than three exist", () => {
+  const items = ["newest", "second", "third", "fourth", "oldest"];
+  const collapsed = collapsedItems(items, false);
+  assert.deepEqual(collapsed.visible, ["newest", "second", "third"]);
+  assert.equal(collapsed.hiddenCount, 2);
+  assert.equal(collapsed.canToggle, true);
+  const expanded = collapsedItems(items, true);
+  assert.deepEqual(expanded.visible, items);
+  assert.equal(expanded.canToggle, true);
+  const shortList = collapsedItems(["one", "two", "three"], false);
+  assert.deepEqual(shortList.visible, ["one", "two", "three"]);
+  assert.equal(shortList.canToggle, false);
 });
 
 test("uniqueListedSessions drops duplicate ids and same-day tutor meetings", () => {
