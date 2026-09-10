@@ -774,4 +774,39 @@ describe("authenticated role dashboard flows", () => {
       /^\/tutor\//,
     );
   });
+
+  test("admin tutor Upcoming sessions omits cancelled meetings", () => {
+    const tutorDashboard = dashboardForRole("tutor");
+    mocks.dashboard = {
+      ...tutorDashboard,
+      user: {
+        ...tutorDashboard.user,
+        id: "admin-user",
+        displayName: "Admin Tutor",
+        email: "admin@example.invalid",
+        role: "administrator",
+      },
+      upcomingSessions: [
+        {
+          ...tutorDashboard.upcomingSessions[0],
+          id: "session-live",
+          title: "Live SAT Session with Eunice",
+          bookingStatus: "confirmed",
+        },
+        {
+          ...tutorDashboard.upcomingSessions[0],
+          id: "session-cancelled",
+          title: "Cancelled SAT Session with Xavier",
+          bookingStatus: "cancelled",
+          dateTime: "2026-10-03T16:00:00.000Z",
+        },
+      ],
+    } as Dashboard;
+    render(<TutorDashboard />);
+
+    expect(screen.getByText("Upcoming sessions")).toBeTruthy();
+    expect(screen.getByText("Live SAT Session with Eunice")).toBeTruthy();
+    expect(screen.getByText("1 scheduled")).toBeTruthy();
+    expect(screen.queryByText("Cancelled SAT Session with Xavier")).toBeNull();
+  });
 });

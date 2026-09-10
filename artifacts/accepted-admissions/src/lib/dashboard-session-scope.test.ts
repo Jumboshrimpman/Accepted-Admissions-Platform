@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sessionsForDashboardRole } from "./dashboard-session-scope.ts";
+import { sessionsForDashboardRole, upcomingSessionsForDashboard } from "./dashboard-session-scope.ts";
 
 const sat = { id: "sat", tutor: { id: "eunice" }, student: { id: "taito" } };
 const english = { id: "eng", tutor: { id: "nika" }, student: { id: "taito" } };
@@ -73,5 +73,11 @@ test("student and tutor lists hide cancelled bookings; admin history may keep th
   assert.deepEqual(
     sessionsForDashboardRole([live, cancelled], { id: "admin", role: "administrator" }).map((item) => item.id),
     ["sat", "cancelled"],
+  );
+  assert.deepEqual(
+    upcomingSessionsForDashboard([live, cancelled, archived, xavier], { id: "admin", role: "administrator" }).map(
+      (item) => item.id,
+    ),
+    ["sat"],
   );
 });

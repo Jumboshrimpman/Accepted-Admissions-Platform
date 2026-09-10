@@ -12,6 +12,8 @@ import { clientForAdminPreview, dashboardSessionShape, dashboardSessionsForUser 
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { createDashboardRoleFixture } from "./dashboard-fixtures.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isUpcomingListedSession } from "./session-listing.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SHARED_FALL_MEETING_URL, calendarEventUrlForSession } from "./session-schedule.ts";
 
 test("role fixtures keep dashboard sessions, assignments, and meeting data scoped", async () => {
@@ -153,6 +155,11 @@ test("cancelled meetings drop off student and tutor dashboard lists", async () =
       adminSessions.some((session) => session.id === fixture.sessionIds.studentSat),
       true,
       "admin history may still include cancelled meetings",
+    );
+    assert.deepEqual(
+      adminSessions.filter((session) => isUpcomingListedSession(session)).map((session) => session.id),
+      [fixture.sessionIds.studentEnglish],
+      "admin tutor upcoming lists still omit cancelled meetings",
     );
   } finally {
     await fixture.cleanup();

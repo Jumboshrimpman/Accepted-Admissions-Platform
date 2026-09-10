@@ -387,6 +387,7 @@ export {
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,
+  isUpcomingListedSession,
   liveClientBookingSessions,
 } from "./session-listing.ts";
 

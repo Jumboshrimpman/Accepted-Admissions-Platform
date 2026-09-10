@@ -10,6 +10,7 @@ export function sessionsForDashboardRole<T>(
       student?: { id?: string } | null;
       bookingStatus?: string | null;
       status?: string | null;
+      cancelledAt?: string | Date | null;
     };
     if (viewer.role !== "administrator" && !isLiveListedSession(row)) {
       return false;
@@ -25,4 +26,20 @@ export function sessionsForDashboardRole<T>(
     }
     return true;
   });
+}
+
+/** Upcoming session cards hide cancelled meetings for every role, including admin tutor view. */
+export function upcomingSessionsForDashboard<T>(
+  sessions: T[],
+  viewer: { id: string; role: string },
+): T[] {
+  return sessionsForDashboardRole(sessions, viewer).filter((session) =>
+    isLiveListedSession(
+      session as {
+        bookingStatus?: string | null;
+        status?: string | null;
+        cancelledAt?: string | Date | null;
+      },
+    ),
+  );
 }
