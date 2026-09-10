@@ -68,6 +68,7 @@ import {
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
+import { isDuplicateSessionPrework } from "./session-homework.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import {
   asBankFigures,
@@ -1884,4 +1885,100 @@ export async function homeworkKindForAssignment(
     return plan.homeworkKind;
   }
   return null;
+}
+
+/** Admin publish/archive of session pre-work: retarget the plan and hide duplicate copies. */
+export async function syncSessionPreworkAfterAssignmentUpdate(assignment: {
+  id: string;
+  sessionId: string | null;
+  deliveryPhase: string | null;
+  title: string;
+  status: string;
+  timeLimitMinutes?: number | null;
+}): Promise<void> {
+  if (!assignment.sessionId || assignment.deliveryPhase !== "before_session") return;
+  const sessionId = assignment.sessionId;
+  if (assignment.status === "published") {
+    const siblings = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.sessionId, sessionId));
+    const homeworkKind = isFullLengthDiagnosticAssignment({ title: assignment.title })
+      ? "diagnostic"
+      : ((await homeworkKindForAssignment(assignment.id)) ?? "routine");
+    for (const sibling of siblings) {
+      if (
+        !isDuplicateSessionPrework(
+          { id: assignment.id, title: assignment.title, homeworkKind, status: assignment.status },
+          {
+            id: sibling.id,
+            title: sibling.title,
+            status: sibling.status,
+            deliveryPhase: sibling.deliveryPhase,
+          },
+        )
+      ) {
+        continue;
+      }
+      await db
+        .update(assignmentsTable)
+        .set({ status: "archived" })
+        .where(eq(assignmentsTable.id, sibling.id));
+    }
+    const [existingPlan] = await db
+      .select()
+      .from(sessionPreworkPlansTable)
+      .where(eq(sessionPreworkPlansTable.sessionId, sessionId))
+      .limit(1);
+    const targetMinutes =
+      assignment.timeLimitMinutes ??
+      existingPlan?.targetMinutes ??
+      (homeworkKind === "diagnostic" ? 164 : 60);
+    const planValues = {
+      assignmentId: assignment.id,
+      homeworkKind: existingPlan?.homeworkKind ?? homeworkKind,
+      targetMinutes,
+      estimatedSeconds: existingPlan?.estimatedSeconds ?? targetMinutes * 60,
+      status: "assigned",
+      updatedAt: new Date(),
+    };
+    if (existingPlan) {
+      await db
+        .update(sessionPreworkPlansTable)
+        .set(planValues)
+        .where(eq(sessionPreworkPlansTable.id, existingPlan.id));
+    } else {
+      await db.insert(sessionPreworkPlansTable).values({ sessionId, ...planValues });
+    }
+    await db
+      .update(sessionsTable)
+      .set({ hasHomework: true, updatedAt: new Date() })
+      .where(eq(sessionsTable.id, sessionId));
+    return;
+  }
+  if (assignment.status !== "archived") return;
+  const [plan] = await db
+    .select()
+    .from(sessionPreworkPlansTable)
+    .where(eq(sessionPreworkPlansTable.sessionId, sessionId))
+    .limit(1);
+  if (!plan || plan.assignmentId !== assignment.id) return;
+  const [next] = await db
+    .select()
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, sessionId),
+        eq(assignmentsTable.deliveryPhase, "before_session"),
+        ne(assignmentsTable.id, assignment.id),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    )
+    .limit(1);
+  if (next) {
+    await db
+      .update(sessionPreworkPlansTable)
+      .set({ assignmentId: next.id, updatedAt: new Date() })
+      .where(eq(sessionPreworkPlansTable.id, plan.id));
+  }
 }

@@ -21,7 +21,7 @@ const scheduleModule = await import("./session-schedule.ts");
 const { TAITO_STUDENT_EMAIL, taitoSessionDateTime } = scheduleModule;
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 const bankModule = await import("./sat-bank-service.ts");
-const { dedupeFullLengthDiagnostics } = bankModule;
+const { dedupeFullLengthDiagnostics, syncSessionPreworkAfterAssignmentUpdate } = bankModule;
 
 test("reconcile does not duplicate Oct 2 or overwrite admin-edited clock fields", async () => {
   const suffix = randomUUID();
@@ -261,6 +261,95 @@ test("dedupeFullLengthDiagnostics archives extra copies and keeps the scored ful
     if (question?.id) {
       await db.delete(questionsTable).where(eq(questionsTable.id, question.id));
     }
+    await db.delete(sessionsTable).where(eq(sessionsTable.id, session!.id));
+    await db.delete(coursesTable).where(eq(coursesTable.id, course!.id));
+  }
+});
+
+test("publishing a diagnostic archives sibling copies and retargets the session plan", async () => {
+  const suffix = randomUUID();
+  const [course] = await db
+    .insert(coursesTable)
+    .values({
+      title: `Oct2 activate fixture ${suffix}`,
+      subject: "SAT",
+      term: "Fall 2026",
+      status: "active",
+    })
+    .returning();
+  const [session] = await db
+    .insert(sessionsTable)
+    .values({
+      courseId: course!.id,
+      dateTime: taitoSessionDateTime("2026-10-02"),
+      timezone: "Asia/Tokyo",
+      subject: "SAT",
+      title: "Taito’s SAT Session with Eunice",
+      status: "published",
+      bookingStatus: "confirmed",
+      hasHomework: true,
+    })
+    .returning();
+  const [live, archived] = await db
+    .insert(assignmentsTable)
+    .values([
+      {
+        courseId: course!.id,
+        sessionId: session!.id,
+        deliveryPhase: "before_session",
+        title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+        subject: "SAT",
+        instructions: "Current extra.",
+        status: "published",
+        timeLimitMinutes: 134,
+        maxAttempts: 1,
+      },
+      {
+        courseId: course!.id,
+        sessionId: session!.id,
+        deliveryPhase: "before_session",
+        title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+        subject: "SAT",
+        instructions: "Restore this copy.",
+        status: "archived",
+        timeLimitMinutes: 134,
+        maxAttempts: 1,
+      },
+    ])
+    .returning();
+  await db.insert(sessionPreworkPlansTable).values({
+    sessionId: session!.id,
+    assignmentId: live!.id,
+    homeworkKind: "diagnostic",
+    targetMinutes: 134,
+    estimatedSeconds: 8000,
+    status: "assigned",
+  });
+
+  try {
+    const [restored] = await db
+      .update(assignmentsTable)
+      .set({ status: "published" })
+      .where(eq(assignmentsTable.id, archived!.id))
+      .returning();
+    await syncSessionPreworkAfterAssignmentUpdate(restored!);
+    const [previous] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.id, live!.id));
+    const [plan] = await db
+      .select()
+      .from(sessionPreworkPlansTable)
+      .where(eq(sessionPreworkPlansTable.sessionId, session!.id));
+    assert.equal(previous?.status, "archived");
+    assert.equal(plan?.assignmentId, archived!.id);
+  } finally {
+    await db
+      .delete(sessionPreworkPlansTable)
+      .where(eq(sessionPreworkPlansTable.sessionId, session!.id));
+    await db
+      .delete(assignmentsTable)
+      .where(inArray(assignmentsTable.id, [live!.id, archived!.id]));
     await db.delete(sessionsTable).where(eq(sessionsTable.id, session!.id));
     await db.delete(coursesTable).where(eq(coursesTable.id, course!.id));
   }

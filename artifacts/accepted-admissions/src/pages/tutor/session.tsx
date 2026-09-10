@@ -20,6 +20,7 @@ import {
 } from "@workspace/api-client-react";
 import { ClearHomeworkButton } from "@/components/clear-homework-button";
 import { TutorAnalysisBrief } from "@/components/tutor-analysis-brief";
+import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homework";
 import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
@@ -74,10 +75,15 @@ export default function TutorSession() {
     session?.assignments.find(
       (assignment) => assignment.deliveryPhase === "during_session",
     )?.id ?? "";
+  const visibleHomework = sessionStatusHomework(session?.homework ?? []);
   const beforeAssignmentId =
     session?.assignments.find(
-      (assignment) => assignment.deliveryPhase === "before_session",
-    )?.id ?? "";
+      (assignment) =>
+        assignment.deliveryPhase === "before_session" && assignment.status !== "archived",
+    )?.id ??
+    session?.assignments.find((assignment) => assignment.deliveryPhase === "before_session")
+      ?.id ??
+    "";
   const { data: duringAssignment } = useGetAssignment(duringAssignmentId, {
     query: {
       enabled: Boolean(duringAssignmentId),
@@ -303,11 +309,11 @@ export default function TutorSession() {
             <div className="rounded-xl border bg-background p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-semibold">Homework status & results</p>
-                <Badge variant="outline">{session.homework?.length ?? 0} assignment{session.homework?.length === 1 ? "" : "s"}</Badge>
+                <Badge variant="outline">{visibleHomework.length} assignment{visibleHomework.length === 1 ? "" : "s"}</Badge>
               </div>
-              {session.homework && session.homework.length > 0 ? (
+              {visibleHomework.length > 0 ? (
                 <div className="mt-3 space-y-3">
-                  {session.homework.map((homework) => (
+                  {visibleHomework.map((homework) => (
                     <div key={homework.assignmentId} className="rounded-lg border p-3">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -543,14 +549,14 @@ export default function TutorSession() {
                         skill: item.skill,
                         prompt: "prompt" in item ? String((item as { prompt?: string | null }).prompt ?? "") : "",
                       }))
-                    : (session.homework ?? [])
+                    : visibleHomework
                         .filter((item) => (item.mistakeCount ?? 0) > 0)
                         .map((item) => ({
                           skill: item.title,
                           prompt: `${item.mistakeCount} incorrect on pre-work`,
                         }))
                 }
-                reviewHref={adaptive?.homework?.latestAttemptId ? `/tutor/attempts/${adaptive.homework.latestAttemptId}` : session.homework?.find((item) => item.attemptId)?.attemptId ? `/tutor/attempts/${session.homework.find((item) => item.attemptId)!.attemptId}` : null}
+                reviewHref={adaptive?.homework?.latestAttemptId ? `/tutor/attempts/${adaptive.homework.latestAttemptId}` : visibleHomework.find((item) => item.attemptId)?.attemptId ? `/tutor/attempts/${visibleHomework.find((item) => item.attemptId)!.attemptId}` : null}
               />
 
               {adaptive && adaptive.recommendations.length > 0 && (

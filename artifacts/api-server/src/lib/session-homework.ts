@@ -1,3 +1,8 @@
+import {
+  isFullLengthDiagnosticAssignment,
+  pickDiagnosticKeeper,
+} from "./assignment-visibility.ts";
+
 export const IN_SESSION_HOMEWORK_COMPLETION_TITLE = "In-session homework completion";
 export const MAX_IN_SESSION_HOMEWORK_QUESTIONS = 15;
 
@@ -5,6 +10,96 @@ export type SessionHomeworkCandidate = {
   deliveryPhase?: string | null;
   status?: string | null;
 };
+
+/** Session homework status lists: one row per assignment, no archived leftovers. */
+export type StatusHomeworkCandidate = {
+  id?: string;
+  assignmentId?: string;
+  title?: string | null;
+  status?: string | null;
+  homeworkKind?: string | null;
+  questionCount?: number | null;
+  attemptCount?: number | null;
+  deliveryPhase?: string | null;
+};
+
+export function statusHomeworkId(item: StatusHomeworkCandidate): string | null {
+  return item.assignmentId ?? item.id ?? null;
+}
+
+/** Same-title or same full-length diagnostic copies left by reset/reassign. */
+export function isDuplicateSessionPrework(
+  keeper: StatusHomeworkCandidate,
+  candidate: StatusHomeworkCandidate,
+): boolean {
+  const keeperId = statusHomeworkId(keeper);
+  const candidateId = statusHomeworkId(candidate);
+  if (!keeperId || !candidateId || keeperId === candidateId) return false;
+  if (candidate.status === "archived") return false;
+  if (
+    candidate.deliveryPhase === "during_session" ||
+    keeper.deliveryPhase === "during_session"
+  ) {
+    return false;
+  }
+  const keeperDiagnostic = isFullLengthDiagnosticAssignment({
+    title: keeper.title,
+    homeworkKind: keeper.homeworkKind,
+    questionCount: keeper.questionCount,
+  });
+  const candidateDiagnostic = isFullLengthDiagnosticAssignment({
+    title: candidate.title,
+    homeworkKind: candidate.homeworkKind,
+    questionCount: candidate.questionCount,
+  });
+  if (keeperDiagnostic && candidateDiagnostic) return true;
+  const keeperTitle = keeper.title?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+  const candidateTitle = candidate.title?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+  return Boolean(keeperTitle) && keeperTitle === candidateTitle;
+}
+
+/**
+ * Student/tutor Homework status & results: hide archived reset leftovers,
+ * dedupe by assignment id, and keep one current full-length diagnostic.
+ */
+export function selectStatusHomework<T extends StatusHomeworkCandidate>(
+  items: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const item of items) {
+    const id = statusHomeworkId(item);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (item.status === "archived") continue;
+    unique.push(item);
+  }
+  const diagnostics = unique.filter((item) =>
+    isFullLengthDiagnosticAssignment({
+      title: item.title,
+      homeworkKind: item.homeworkKind,
+      questionCount: item.questionCount,
+    }),
+  );
+  if (diagnostics.length <= 1) return unique;
+  const keeper = pickDiagnosticKeeper(
+    diagnostics.map((item) => ({
+      id: statusHomeworkId(item)!,
+      status: item.status ?? "published",
+      questionCount: item.questionCount ?? 0,
+      attemptCount: item.attemptCount ?? 0,
+    })),
+  );
+  const keeperId = keeper?.id;
+  return unique.filter((item) => {
+    const isDiagnostic = isFullLengthDiagnosticAssignment({
+      title: item.title,
+      homeworkKind: item.homeworkKind,
+      questionCount: item.questionCount,
+    });
+    return !isDiagnostic || statusHomeworkId(item) === keeperId;
+  });
+}
 
 export type WrongAnswerCandidate = {
   correct: boolean;

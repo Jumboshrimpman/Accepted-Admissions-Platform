@@ -5,11 +5,92 @@ import {
   canShowClearHomework,
   hydrateMistakePrompts,
   allowsInSessionPerQuestionFeedback,
+  isDuplicateSessionPrework,
   isInSessionHomeworkCompletion,
   selectActivePrework,
   selectInSessionHomeworkQuestionIds,
+  selectStatusHomework,
   wrongAnswersOnly,
 } from "./session-homework.ts";
+
+test("status homework hides archived leftovers and keeps one current diagnostic", () => {
+  const listed = selectStatusHomework([
+    {
+      assignmentId: "archived-1",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      homeworkKind: "diagnostic",
+      questionCount: 120,
+      attemptCount: 0,
+    },
+    {
+      assignmentId: "archived-1",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      homeworkKind: "diagnostic",
+      questionCount: 120,
+      attemptCount: 0,
+    },
+    {
+      assignmentId: "archived-2",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      homeworkKind: "diagnostic",
+      questionCount: 98,
+      attemptCount: 0,
+    },
+    {
+      assignmentId: "archived-3",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      homeworkKind: "diagnostic",
+      questionCount: 120,
+      attemptCount: 1,
+    },
+    {
+      id: "live-diagnostic",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "published",
+      homeworkKind: "diagnostic",
+      questionCount: 120,
+      attemptCount: 0,
+    },
+    {
+      id: "empty-extra",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "published",
+      homeworkKind: "diagnostic",
+      questionCount: 0,
+      attemptCount: 0,
+    },
+    {
+      id: "routine-prework",
+      title: "October 9 mini-section",
+      status: "published",
+      homeworkKind: "routine",
+      questionCount: 40,
+      attemptCount: 0,
+    },
+  ]);
+  assert.deepEqual(
+    listed.map((item) => item.assignmentId ?? item.id),
+    ["live-diagnostic", "routine-prework"],
+  );
+  assert.equal(
+    isDuplicateSessionPrework(
+      { id: "live-diagnostic", title: "Full-length SAT diagnostic", homeworkKind: "diagnostic" },
+      { id: "archived-1", title: "Full-length SAT diagnostic", status: "archived" },
+    ),
+    false,
+  );
+  assert.equal(
+    isDuplicateSessionPrework(
+      { id: "live-diagnostic", title: "Full-length SAT diagnostic", homeworkKind: "diagnostic" },
+      { id: "empty-extra", title: "Full SAT Practice Diagnostic", status: "published", questionCount: 0 },
+    ),
+    true,
+  );
+});
 
 test("selectActivePrework ignores archived session copies left by replace/remove", () => {
   const archived = {

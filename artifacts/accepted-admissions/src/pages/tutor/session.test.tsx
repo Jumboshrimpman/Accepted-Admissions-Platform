@@ -35,6 +35,39 @@ vi.mock("@workspace/api-client-react", () => ({
       blocks: [],
       homework: [
         {
+          assignmentId: "quiz-archived-1",
+          title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+          status: "archived",
+          deadline: null,
+          attemptStatus: null,
+          score: null,
+          mistakeCount: 0,
+          attemptId: null,
+          analysis: null,
+        },
+        {
+          assignmentId: "quiz-archived-2",
+          title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+          status: "archived",
+          deadline: null,
+          attemptStatus: null,
+          score: null,
+          mistakeCount: 0,
+          attemptId: null,
+          analysis: null,
+        },
+        {
+          assignmentId: "quiz-archived-3",
+          title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+          status: "archived",
+          deadline: null,
+          attemptStatus: null,
+          score: null,
+          mistakeCount: 0,
+          attemptId: null,
+          analysis: null,
+        },
+        {
           assignmentId: "quiz-1",
           title: "October pre-session mini-section",
           status: "published",
@@ -149,6 +182,8 @@ describe("tutor session review page", () => {
     expect(screen.queryByText("Generate original practice drafts")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create drafts" })).toBeNull();
     expect(screen.getByText("Homework status & results")).toBeTruthy();
+    expect(screen.getByText("1 assignment")).toBeTruthy();
+    expect(screen.queryAllByText("Full-length SAT diagnostic — Taito’s SAT Session with Eunice")).toHaveLength(0);
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
       "/tutor/attempts/attempt-1",
     );
