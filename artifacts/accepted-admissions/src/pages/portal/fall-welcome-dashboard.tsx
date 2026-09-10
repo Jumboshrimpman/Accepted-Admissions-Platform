@@ -7,7 +7,7 @@ import {
   type Dashboard,
   type FinancialSummary,
 } from "@workspace/api-client-react";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, Eye, Sparkles, Target, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { portalTutorRosterKey, portalTutorsFromDashboard } from "@/lib/portal-tutors";
 import {
+  collapsedItems,
   collapsedListedSessions,
   displaySessionTitle,
   formatSessionDate,
@@ -35,7 +36,7 @@ import {
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
 } from "@/lib/portal-sat";
-import { studentAssignmentHref } from "@/lib/student-attempt-ui";
+import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -79,6 +80,14 @@ function preparationStatus(assignment: Dashboard["assignments"][number]): string
   }
   if (assignment.deadline && new Date(assignment.deadline).getTime() < Date.now()) return "Past due";
   return "Not started";
+}
+
+function quizUrgency(assignment: Dashboard["assignments"][number]): number {
+  const status = preparationStatus(assignment);
+  if (status === "Past due") return 0;
+  if (status === "In progress") return 1;
+  if (status === "Not started") return 2;
+  return 3;
 }
 
 export default function FallWelcomeDashboard() {
@@ -159,6 +168,13 @@ export function ClientDashboardView({
   const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const [showAllQuizzes, setShowAllQuizzes] = useState(false);
+  const quizzes = [...dashboard.assignments].sort((left, right) => {
+    const urgency = quizUrgency(left) - quizUrgency(right);
+    if (urgency !== 0) return urgency;
+    return left.title.localeCompare(right.title);
+  });
+  const quizList = collapsedItems(quizzes, showAllQuizzes);
   const scopedSessions = sessionsForDashboardRole(
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
@@ -437,14 +453,55 @@ export function ClientDashboardView({
         </Card>
       )}
 
-      {!dashboard.curriculumSessions?.length && dashboard.assignments.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-lg">Required preparation</CardTitle><CardDescription>A compact status list while the detailed roadmap is loading.</CardDescription></CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {dashboard.assignments.map((assignment) => <Badge key={assignment.id} variant="outline"><span>{assignment.title}</span><span aria-hidden="true"> · </span><span>{preparationStatus(assignment)}</span></Badge>)}
-          </CardContent>
-        </Card>
-      )}
+      <Card data-testid="client-quizzes">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ClipboardList className="h-5 w-5 text-primary" />
+            Quizzes
+          </CardTitle>
+          <CardDescription>
+            Assigned practice and diagnostics for this account. Older items stay behind Show more.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {quizzes.length > 0 ? (
+            <>
+              {quizList.visible.map((assignment) => (
+                <div
+                  key={assignment.id}
+                  className="flex flex-col gap-2 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">{assignment.title}</p>
+                      <Badge variant="outline">{preparationStatus(assignment)}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{assignment.subject}</p>
+                  </div>
+                  {adminPreview ? (
+                    <Button disabled variant="ghost" size="sm">Read only</Button>
+                  ) : (
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>
+                        {viewer ? "Review" : studentAssignmentActionLabel(assignment.latestAttemptStatus)}
+                        <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <SessionListDisclosure
+                canToggle={quizList.canToggle}
+                expanded={showAllQuizzes}
+                onToggle={() => setShowAllQuizzes((value) => !value)}
+                testId="assignment-notifications-show-more"
+              />
+            </>
+          ) : (
+            <p className="py-3 text-sm text-muted-foreground">No quizzes are assigned yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b px-5 py-5 sm:px-6">

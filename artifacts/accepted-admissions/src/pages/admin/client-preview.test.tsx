@@ -124,6 +124,7 @@ describe("administrator client preview", () => {
     expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
     expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
     expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
     expectPaymentReceiptsLast();
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
@@ -483,6 +484,7 @@ describe("administrator client preview", () => {
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
     expectPaymentReceiptsLast();
     expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Session roadmap")).toBeTruthy();
     expect(screen.queryByText("One plan. Twelve focused meetings.")).toBeNull();
     expect(screen.queryByText("Eunice Chon")).toBeNull();
@@ -751,6 +753,7 @@ describe("administrator client preview", () => {
     expect(
       screen.getByText("Your tutor relationships will appear here once the matching tutor account is provisioned."),
     ).toBeTruthy();
+    expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Your sessions will appear here when they are scheduled.")).toBeTruthy();
     expect(screen.getByText("Session roadmap")).toBeTruthy();
     expect(screen.getByText("No sessions are visible for this account.")).toBeTruthy();

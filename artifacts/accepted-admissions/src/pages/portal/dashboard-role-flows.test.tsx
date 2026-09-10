@@ -331,10 +331,14 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getAllByRole("link", { name: /Open calendar/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.getByTestId("client-quizzes").textContent).toContain("Quizzes");
     expect(screen.getByText("In progress")).toBeTruthy();
+    expect(screen.getByText("Past due")).toBeTruthy();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
+    fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
     expect(screen.getByText("85%")).toBeTruthy();
     expect(screen.getByText("Complete")).toBeTruthy();
-    expect(screen.getByText("Past due")).toBeTruthy();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
     expect(screen.getByText("Your tutors")).toBeTruthy();
     const roster = screen.getByTestId("client-tutor-roster");
     expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);
