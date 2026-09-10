@@ -28,6 +28,11 @@ import {
   looksLeakedNextQuestionChoice,
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
+  looksExtractionMarkerBleed,
+  looksSmashedAlgebraChoice,
+  looksSmashedAlgebraText,
+  looksAxisTickBleed,
+  looksSpacedGeometryLabels,
   formatStudentChoiceText,
   formatStudentStemText,
   looksSmashedTableChoice,
@@ -54,6 +59,21 @@ test("detects leaked sat-bank-figures comments and strips them", () => {
   const raw = "<!-- sat-bank-figures -->\nV = i,.r3\n<!-- /sat-bank-figures -->";
   assert.equal(looksGarbledExtractText(raw), true);
   assert.equal(stripSatBankFigureComments(raw), "V = i,.r3");
+});
+
+test("detects extraction-marker bleed even when wrappers wrap a real sentence", () => {
+  const live =
+    "from any B. terrenus. Start referenced content: But e\nvolutionary links between predators and their prey can\npersist across centuries and continents. End referenced content.2001, B. terrenus was";
+  assert.equal(looksExtractionMarkerBleed(live), true);
+  assert.equal(looksGarbledExtractText(live), true);
+  assert.equal(
+    looksExtractionMarkerBleed("Start refere\nnced Content: employees insisted on more favorable benefits. End referenced Content."),
+    true,
+  );
+  assert.equal(
+    looksExtractionMarkerBleed("Which choice best describes the function of the third sentence in the text?"),
+    false,
+  );
 });
 
 test("detects ASCII scatterplots and smashed OCR without flagging clean stems", () => {
@@ -604,8 +624,20 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   );
   assert.equal(
     looksCorruptStemOcr("Data Set A\n22 23 24 25 26\nThe dot plot represents the 15 values in data set A."),
-    false,
+    true,
   );
+  assert.equal(looksAxisTickBleed("Data Set A\n22 23 24 25 26\nThe dat plot represents the 15 values."), true);
+  assert.equal(
+    looksSpacedGeometryLabels(
+      "Note: Figures not drawn to scale.\nRight triangles P Q R and S T U are similar, where P corresponds to S.",
+    ),
+    true,
+  );
+  assert.equal(looksSmashedAlgebraText("66 = 66 x x\nHow many solutions does the given equation have?"), true);
+  assert.equal(looksSmashedAlgebraChoice("y x p = 57 +"), true);
+  assert.equal(looksSmashedAlgebraChoice("y px = + 57"), true);
+  assert.equal(looksSmashedAlgebraChoice("y = 57 px px"), true);
+  assert.equal(isStudentReadableChoiceText("y = 57"), true);
   assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);
   assert.equal(looksIncompleteMathParens("f(x) = (x + 1"), true);
   assert.equal(looksIncompleteMathParens("f(x) = x^2 + 1"), false);
@@ -619,6 +651,13 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
     true,
   );
   assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
+  assert.equal(stemCitesVisual("The dat plot represents the 15 values in data set A."), true);
+  assert.equal(
+    stemCitesVisual(
+      "Note: Figures not drawn to scale.\nRight triangles P Q R and S T U are similar, where P corresponds to S.",
+    ),
+    true,
+  );
   assert.equal(
     selectStimulusFigures(
       [{ url: figureUrl, alt: "Diagram from page 47" }],

@@ -18,7 +18,7 @@ const MISSING_CARET_GROWTH = /\(\d+\.\d+\)x\b/;
 const SMASHED_QUADRATIC_LEAD = /\b2\s+4x\b/;
 const STRIPPED_TRIANGLE_SIDES = /(?:sides of length|right triangle)[\s\S]{0,160}\b2\s+2\s*,\s*6\s+2\b/i;
 const STRIPPED_RADICAL_CHOICE = /^(?:8\s+2\s*\+\s*80|\d+\s*\+\s*\d+\s+2)$/;
-const BROKEN_COORDINATE = /\(\s*,\s*x\s*y\s*\)/;
+const BROKEN_COORDINATE = /\(\s*,\s*x\s*y\s*\)|\bx\s*y\s*\(\s*,\s*\)|\(\s*,\s*\)/;
 const SMASHED_HX_LINE = /\bh\s+x(?:\s*$|\s*\n|\s+Which\b)/;
 const EMPTY_PAREN_FOR_GIVEN = /\(\s*\)\s+for the given/i;
 const EMPTY_FX_PARENS = /does\s+f\s*\(\s*x\s*\)\s*\(\s*\)|f\s*\(\s*x\s*\)\s*\(\s*\)\s*reach/i;
@@ -43,6 +43,27 @@ const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
 const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b|\b12345678910\b/;
 const AXIS_LABEL_BLEED =
   /\b\d{1,2}(?:\s+\d{1,2}){3,}\s+(?:Diameter|inches)\b|\b\d{8,}Diameter\b/i;
+const EXTRACTION_MARKER_COMPACT = /startreferencedcontent|endreferencedcontent/;
+const SPACED_TRIANGLE_VERTICES = /\btriangles?\s+[A-Z](?:\s+[A-Z]){2}\b/i;
+const SPACED_VERTEX_LABEL = /\b[A-Z](?:\s+[A-Z]){2}\b/g;
+const DAT_PLOT_OCR = /\bda[tr]\s*plots?\b/i;
+const REPEATED_ISOLATED_VAR = /\b([A-Za-z])\s+\1\b/;
+const TRAILING_BINARY_OP = /[=+\-−×*/÷]\s*$/;
+const EQUALS_THEN_PLUS = /=\s*\+\s/;
+const ORPHAN_OPERATOR_EQUALS = /[+\-−×*/÷]\s*=/;
+const SPACED_CHOICE_VARS = /^[A-Za-z](?:\s+[A-Za-z]){2,}\s*=/;
+const DUPLICATED_MATH_IDENT = /\b([A-Za-z]{1,4})\s+\1\b/;
+const SPACED_FUNCTION_NAME = /(?:^|\n)\s*[A-Za-z]\s+[A-Za-z]\s*=/;
+const LEADING_EQ_SMASHED_VARS = /^=\s*\d+[^\n]{0,40}\b[A-Za-z]\s+[A-Za-z]\s*$/m;
+const MISSING_CARET_GROWTH_SPACED = /\d+\.\d+\s+[A-Za-z](?:\s|$)/;
+const MISSING_OPERATOR_STEM = /(?:^|\n)\s*[A-Za-z]\s+\d+\s*=/;
+const STACKED_FRACTION_LINE = /=\s*[−-]?\d+\s+[A-Za-z]\s*\n\s*\d+/;
+const LEADING_EQ_THEN_FX_VAR = /^=\s*.{0,48}\bf\s*\(\s*x\s*\)\s+[A-Za-z]/m;
+const LEADING_INEQUALITY_SMASHED = /(?:^|\n)\s*[<>≤≥]\s*\d+[^\n]{0,28}\b[A-Za-z]\s+[A-Za-z]/;
+const STACKED_EQ_NUMBERS = /=\s*\d+\s+\d+\s+[A-Za-z]/;
+const SIN_COS_OCR = /\bsin\s+is\s+cos\b/i;
+const LEADING_EQ_SPLIT_NUM = /^=\s*\d+\s*[+\-]\s*\d+\s+\d+/m;
+const SPACED_FT_EQUALS = /\bf\s+t\s*=/;
 const SMASHED_DISTRIBUTE = /[xy]\s*\d+\s*\(\s*[+\-]/;
 const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
 const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
@@ -57,11 +78,11 @@ const GLUED_STEM_QUESTION = /(\d)\s*(?=(?:What|Which|Select)\b)/g;
 const QUESTION_AS_OPERATOR = /[0-9x)]\s*\?\s*\d/;
 // Q88 live: "16+30=190 xWhich equation..." — space before x, then the next sentence glued on.
 // Also "16 + 30 = 190 x" at end of line. Do not match a legitimate "y = 3 x + 1".
-const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x(?:\s*Which|[A-Z]|\s*$)/m;
+const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x(?:\s+x|\s*Which|[A-Z]|\s*$)/m;
 const MISSING_OPERATOR_CHOICE =
   /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =
-  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|the dot plot|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart)|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|in the figure|the graph shows|the line graphed|the line graph|the dot plot|the dat plot|note:\s*figures? not drawn|figures? not drawn to scale|the graph models|y-intercept of the (?:graph|line)|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart)|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
 const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
 const MODULE_BOILERPLATE =
   /^(?:DIRECTIONS|STOP)\b|\bGO ON TO THE NEXT(?:\s+PAGE)?\b|\bTHIS IS THE END OF\b|\bIf you finish before time is called\b|\bUnauthorized copying or reuse\b|\bModule\s+[12](?:\s+(?:Reading|Writing|Math))?\b/;
@@ -73,6 +94,98 @@ export function stripSatBankFigureComments(text: string | null | undefined): str
     .replace(FIGURE_PRIMARY_COMMENT, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function compactExtractText(text: string | null | undefined): string {
+  return (text ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function looksExtractionMarkerBleed(text: string | null | undefined): boolean {
+  return EXTRACTION_MARKER_COMPACT.test(compactExtractText(text));
+}
+
+export function looksOcrFigureArt(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  const tildes = (raw.match(/[~∼˜]/g) ?? []).length;
+  const commaRuns = raw.match(/,{3,}/g) ?? [];
+  if (tildes >= 2 && commaRuns.length >= 1) return true;
+  if (commaRuns.length >= 2) return true;
+  if (tildes >= 3) return true;
+  if (tildes >= 1 && /[\\/'`]/.test(raw) && /[.,]{2,}/.test(raw)) return true;
+  return false;
+}
+
+export function looksAxisTickBleed(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (AXIS_LABEL_BLEED.test(raw)) return true;
+  for (const line of raw.split("\n")) {
+    const tokens = line.trim().split(/\s+/).filter(Boolean);
+    if (tokens.length < 4 || tokens.length > 12) continue;
+    if (!tokens.every((token) => /^\d{1,2}$/.test(token))) continue;
+    const nums = tokens.map(Number);
+    let consecutive = 0;
+    for (let index = 1; index < nums.length; index += 1) {
+      if (Math.abs(nums[index] - nums[index - 1]) === 1) consecutive += 1;
+    }
+    if (consecutive >= 3) return true;
+  }
+  return DAT_PLOT_OCR.test(raw) && /\b\d{1,2}(?:\s+\d{1,2}){3,}\b/.test(raw);
+}
+
+export function looksSpacedGeometryLabels(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (SPACED_TRIANGLE_VERTICES.test(raw)) return true;
+  const labels = raw.match(SPACED_VERTEX_LABEL) ?? [];
+  return labels.length >= 2 && /triangle|similar|congruent|angle|figure/i.test(raw);
+}
+
+function looksOperatorStarvedEquation(text: string): boolean {
+  const collapsed = text.replace(/([^\n])\n=\n?/g, "$1 =\n");
+  for (const line of collapsed.split("\n")) {
+    const trimmed = line.split(/\b(?:What|Which|How)\b/)[0]?.trim() ?? "";
+    if (!trimmed || trimmed.length > 48 || !/=/.test(trimmed)) continue;
+    const withoutUnary = trimmed.replace(/^[−\-]\s*/, "").replace(/=\s*[−\-]/g, "=");
+    if (/[+\-−×*/÷^]/.test(withoutUnary)) continue;
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    const mathish = tokens.filter(
+      (token) => token === "=" || /^[A-Za-z]$/.test(token) || /^-?\d/.test(token),
+    );
+    if (mathish.length >= 4) return true;
+  }
+  return false;
+}
+
+export function looksSmashedAlgebraText(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (looksOperatorStarvedEquation(raw)) return true;
+  if (REPEATED_ISOLATED_VAR.test(raw) && (/=/.test(raw) || raw.length <= 48)) return true;
+  if (SPACED_FUNCTION_NAME.test(raw)) return true;
+  if (LEADING_EQ_SMASHED_VARS.test(raw)) return true;
+  if (LEADING_EQ_THEN_FX_VAR.test(raw)) return true;
+  if (MISSING_CARET_GROWTH_SPACED.test(raw) && /=/.test(raw)) return true;
+  if (MISSING_OPERATOR_STEM.test(raw)) return true;
+  if (STACKED_FRACTION_LINE.test(raw)) return true;
+  if (LEADING_INEQUALITY_SMASHED.test(raw)) return true;
+  if (STACKED_EQ_NUMBERS.test(raw)) return true;
+  if (SIN_COS_OCR.test(raw)) return true;
+  if (LEADING_EQ_SPLIT_NUM.test(raw)) return true;
+  if (SPACED_FT_EQUALS.test(raw)) return true;
+  return false;
+}
+
+export function looksSmashedAlgebraChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  if (!value) return false;
+  if (TRAILING_BINARY_OP.test(value) && /[A-Za-z]/.test(value)) return true;
+  if (EQUALS_THEN_PLUS.test(value)) return true;
+  if (ORPHAN_OPERATOR_EQUALS.test(value) && !/[<>≤≥]/.test(value)) return true;
+  if (SPACED_CHOICE_VARS.test(value)) return true;
+  if (DUPLICATED_MATH_IDENT.test(value) && /=/.test(value)) return true;
+  if (looksOperatorStarvedEquation(value) && value.length <= 64) return true;
+  if (REPEATED_ISOLATED_VAR.test(value) && /=/.test(value)) return true;
+  return false;
 }
 
 export function looksFailedMathLayoutDump(text: string | null | undefined): boolean {
@@ -141,6 +254,7 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;
   if (ORPHAN_FX_AFTER_W.test(raw)) return true;
   if (looksCorruptStemOcr(raw)) return true;
+  if (looksSmashedAlgebraText(raw)) return true;
   return false;
 }
 
@@ -152,6 +266,9 @@ export function looksCorruptStemOcr(text: string | null | undefined): boolean {
   if (AXIS_TICK_OCR.test(raw)) return true;
   if (SMASHED_AXIS_TICKS.test(raw)) return true;
   if (AXIS_LABEL_BLEED.test(raw)) return true;
+  if (looksAxisTickBleed(raw)) return true;
+  if (looksSpacedGeometryLabels(raw)) return true;
+  if (looksOcrFigureArt(raw)) return true;
   if (BROKEN_WHERE_MODEL.test(raw)) return true;
   if (BROKEN_END_OF_DOMAIN.test(raw)) return true;
   if (CARET_H_OCR.test(raw)) return true;
@@ -250,14 +367,23 @@ export function stemCitesVisual(text: string | null | undefined): boolean {
   const value = stripSatBankFigureComments(text);
   if (!value) return false;
   if (STEM_CITES_VISUAL.test(value)) return true;
+  if (DAT_PLOT_OCR.test(value)) return true;
+  if (looksSpacedGeometryLabels(value)) return true;
   if (LABELED_GEOMETRY.test(value) && /\b(?:similar|congruent|shown|angle)\b/i.test(value)) {
     return true;
   }
+  const compact = compactExtractText(value);
+  if (compact.includes("datplot") || compact.includes("dotplot") || compact.includes("inthefigure")) {
+    return true;
+  }
+  if (compact.includes("figuresnotdrawn") || compact.includes("figurenotdrawn")) return true;
   return /\b(?:the table|table shows)\b/i.test(value);
 }
 
 export function looksGarbledQuizText(text: string | null | undefined): boolean {
   if (/<!--\s*\/?sat-bank-figures\s*-->/i.test(text ?? "")) return true;
+  if (looksExtractionMarkerBleed(text)) return true;
+  if (looksOcrFigureArt(text)) return true;
   const value = stripSatBankFigureComments(text);
   if (!value) return false;
   if (looksBrokenMathOcr(value)) return true;
@@ -304,6 +430,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksSmashedTableChoice(raw) || looksSmashedTableChoice(cleaned)) return false;
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(cleaned)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(cleaned)) return false;
+  if (looksSmashedAlgebraChoice(raw) || looksSmashedAlgebraChoice(cleaned)) return false;
   if (looksBrokenMathOcr(cleaned) && cleaned.length <= 96) return false;
   return true;
 }

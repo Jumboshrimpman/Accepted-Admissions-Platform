@@ -27,6 +27,8 @@ import {
   shouldHideQuizOcrStem,
   shouldShowQuizChoices,
   stemCitesVisual,
+  looksExtractionMarkerBleed,
+  looksSmashedAlgebraChoice,
   stripSatBankFigureComments,
 } from "./quiz-figure-primary.ts";
 
@@ -508,5 +510,59 @@ test("answer review shows the letter when choice text is empty", () => {
       { id: "b", label: "B", text: "Therefore" },
     ]),
     "Therefore",
+  );
+});
+
+test("live audit: extraction markers, missing cited figures, and smashed algebra are unanswerable", () => {
+  const letters = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const markerPrompt =
+    "from any B. terrenus. Start referenced content: But e\nvolutionary links persist. End referenced content. Which choice best describes the function of the third sentence?";
+  assert.equal(looksExtractionMarkerBleed(markerPrompt), true);
+  assert.equal(looksGarbledQuizText(markerPrompt), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: markerPrompt,
+      stimulus: null,
+      choices: letters([
+        "It states a hypothesis.",
+        "It presents a generalization.",
+        "It offers an alternative.",
+        "It provides context.",
+      ]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    stemCitesVisual(
+      "Note: Figures not drawn to scale.\nRight triangles P Q R and S T U are similar, where P corresponds to S.",
+    ),
+    true,
+  );
+  assert.equal(stemCitesVisual("The dat plot represents the 15 values in data set A."), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "Note: Figures not drawn to scale.\nRight triangles P Q R and S T U are similar, where P corresponds to S. If the measure of angle Q is 18°, what is the measure of angle S ?",
+      stimulus: null,
+      choices: letters(["18°", "72°", "82°", "162°"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(looksSmashedAlgebraChoice("y x p = 57 +"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "66 = 66 x x\nHow many solutions does the given equation have?",
+      stimulus: null,
+      choices: letters(["Exactly one", "Exactly two", "Infinitely many", "Zero"]),
+      questionType: "mcq",
+    }),
+    false,
   );
 });

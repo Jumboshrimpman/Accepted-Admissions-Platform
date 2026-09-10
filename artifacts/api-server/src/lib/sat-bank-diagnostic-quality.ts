@@ -11,6 +11,7 @@ import {
   looksGarbledExtractText,
   looksIncompleteMathParens,
   looksSmashedOrTruncatedExtract,
+  looksExtractionMarkerBleed,
   normalizeLetterAnswer,
   stemCitesVisual,
   stripChartHeaderFragments,
@@ -78,6 +79,9 @@ function readableStudentText(input: Pick<DiagnosticQualityInput, "prompt" | "sti
 }
 
 function isGarbledItem(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
+  const raw = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  if (looksExtractionMarkerBleed(raw)) return true;
+  if (looksGarbledExtractText(raw)) return true;
   const prompt = stripChartHeaderFragments(input.prompt);
   const stimulus = stripChartHeaderFragments(input.stimulus);
   return looksGarbledExtractText(prompt) || looksGarbledExtractText(stimulus);
@@ -149,6 +153,7 @@ function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
   const stem = stemHaystack(input);
   if (looksBrokenMathOcr(stem) || looksIncompleteMathParens(stem)) return true;
   if (looksExplodedOcrTable(stem)) return true;
+  if (looksExtractionMarkerBleed(stem)) return true;
   if (/\bWhatThe\b/i.test(stem)) return true;
   if (/\bfollowing\s*\??\s*$/i.test(stem)) return true;
   if (/\(\s*,\s*[xy]\s+[xy]/i.test(stem)) return true;
@@ -158,8 +163,9 @@ function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
 /**
  * Math-only bar: if a student cannot solve the item as shown, drop it.
  * Host the figure when the stem depends on a graph/table/dot plot; never
- * salvage bleed by hiding OCR next to an unlabeled crop. Figure-primary
- * letter-only A–D and “has a crop so keep” are RW-only.
+ * salvage bleed by hiding OCR next to an unlabeled crop. Extraction-marker
+ * wrappers, cited visuals without a figure, and smashed algebra never pass.
+ * Figure-primary letter-only A–D and “has a crop so keep” are RW-only.
  */
 export function isStudentUsableMathQuizItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
@@ -169,6 +175,7 @@ export function isStudentUsableMathQuizItem(input: DiagnosticQualityInput): bool
   if (!readableStudentText(input)) return false;
   if (isGarbledItem(input) || smashedExtract(input)) return false;
   if (looksUnsureMathPresentation(input)) return false;
+  if (looksExtractionMarkerBleed(stemHaystack(input))) return false;
   if (mathDependsOnVisual(input) && !mathHasRequiredVisual(input)) return false;
   if (mathDependsOnVisual(input) && looksExplodedOcrTable(stemHaystack(input))) return false;
   return isCleanTextMcqItem(input);
@@ -208,6 +215,7 @@ export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean 
   if (isMathQuizItem(input)) {
     return isStudentUsableMathQuizItem(input);
   }
+  if (looksExtractionMarkerBleed(stemHaystack(input))) return false;
   if (!hasReadableStudentStem(input)) return false;
   if (isCleanTextMcqItem(input)) return true;
   if (isGarbledItem(input) || smashedExtract(input)) return false;
