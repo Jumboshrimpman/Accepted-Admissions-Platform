@@ -92,11 +92,12 @@ export default function AdminDashboard() {
   const loginActivity = overview?.loginActivity ?? [];
   const guidanceRequests = overview?.guidanceRequests ?? [];
   const notifications = notificationsByNewest(overview?.notifications ?? []);
-  const notificationList = collapsedItems(notifications, showAllNotifications);
-  const unreadCount = notifications.filter((notification) => notification.status === "unread").length;
-  const priorCount = notifications.length - unreadCount;
-  const activeNotifications = notificationList.visible.filter((notification) => notification.status === "unread");
-  const priorNotifications = notificationList.visible.filter((notification) => notification.status !== "unread");
+  const unreadNotifications = notifications.filter((notification) => notification.status === "unread");
+  const priorNotifications = notifications.filter((notification) => notification.status !== "unread");
+  const unreadList = collapsedItems(unreadNotifications, showAllNotifications);
+  const unreadCount = unreadNotifications.length;
+  const priorCount = priorNotifications.length;
+  const activeNotifications = unreadList.visible;
   const applyNotificationStatus = (notificationId: string, status: "unread" | "read" | "dismissed") => {
     updateNotification.mutate(
       { notificationId, data: { status } },
@@ -176,30 +177,39 @@ export default function AdminDashboard() {
                     onUpdate={(status) => applyNotificationStatus(notification.id, status)}
                   />
                 ))}
+                <SessionListDisclosure
+                  canToggle={unreadList.canToggle}
+                  expanded={showAllNotifications}
+                  onToggle={() => setShowAllNotifications((value) => !value)}
+                  testId="assignment-notifications-show-more"
+                />
               </section>
             )}
-            {priorNotifications.length > 0 && (
-              <section aria-labelledby="prior-notifications-heading" className="space-y-3 border-t pt-5">
-                <div className="flex items-center justify-between gap-3">
+            {priorCount > 0 && (
+              <details
+                className={`group${activeNotifications.length > 0 ? " border-t pt-5" : ""}`}
+                aria-labelledby="prior-notifications-heading"
+                data-testid="prior-notifications"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                   <h2 id="prior-notifications-heading" className="text-sm font-semibold">Prior notifications</h2>
-                  <Badge variant="secondary">{priorCount}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{priorCount}</Badge>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </div>
+                </summary>
+                <div className="space-y-3 pt-3">
+                  {priorNotifications.map((notification) => (
+                    <AdminNotificationItem
+                      key={notification.id}
+                      notification={notification}
+                      isPending={updateNotification.isPending}
+                      onUpdate={(status) => applyNotificationStatus(notification.id, status)}
+                    />
+                  ))}
                 </div>
-                {priorNotifications.map((notification) => (
-                  <AdminNotificationItem
-                    key={notification.id}
-                    notification={notification}
-                    isPending={updateNotification.isPending}
-                    onUpdate={(status) => applyNotificationStatus(notification.id, status)}
-                  />
-                ))}
-              </section>
+              </details>
             )}
-            <SessionListDisclosure
-              canToggle={notificationList.canToggle}
-              expanded={showAllNotifications}
-              onToggle={() => setShowAllNotifications((value) => !value)}
-              testId="assignment-notifications-show-more"
-            />
           </CardContent>
         </Card>
       )}
