@@ -1,5 +1,12 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useGetDashboard, type CurriculumSession, type Dashboard } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
+import {
+  useGetDashboard,
+  type AdminClientPreviewBooking,
+  type AdminClientPreviewOffer,
+  type CurriculumSession,
+  type Dashboard,
+  type FinancialSummary,
+} from "@workspace/api-client-react";
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Eye, Sparkles, Target, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +26,15 @@ import {
   uniqueListedSessions,
 } from "@/lib/session-display";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
-import { BookingCard } from "@/pages/portal/booking-card";
+import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-card";
+import { FinancialCard } from "@/pages/portal/financial-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
-import { PORTAL_BOOKING_SECTION_ID, canPurchaseOrBookSatCredits } from "@/lib/portal-sat";
+import {
+  PORTAL_BOOKING_SECTION_ID,
+  canPurchaseOrBookSatCredits,
+  isOffPlatformProgramClient,
+} from "@/lib/portal-sat";
 import { studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 const FALL_DATES = [
@@ -99,11 +111,15 @@ export default function FallWelcomeDashboard() {
 export function ClientDashboardView({
   dashboard,
   adminPreview = false,
-  afterDashboard,
+  previewFinancials,
+  previewOffer,
+  previewBooking,
 }: {
   dashboard: Dashboard;
   adminPreview?: boolean;
-  afterDashboard?: ReactNode;
+  previewFinancials?: FinancialSummary;
+  previewOffer?: AdminClientPreviewOffer;
+  previewBooking?: AdminClientPreviewBooking;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
   const studentSatCommerce =
@@ -138,7 +154,9 @@ export function ClientDashboardView({
     return () => window.clearTimeout(timer);
   }, [location, setLocation]);
 
+  const offPlatformBilling = isOffPlatformProgramClient(dashboard.credits);
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
+  const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
   const [showAllSessions, setShowAllSessions] = useState(false);
   const scopedSessions = sessionsForDashboardRole(
@@ -259,7 +277,7 @@ export function ClientDashboardView({
         </div>
       )}
 
-      {dashboard.credits.selfServeSatBooking && (studentSatCommerce || viewer) ? (
+      {showSelfServeBooking && (studentSatCommerce || viewer) ? (
         <Card data-testid="client-credit-balance">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -315,7 +333,26 @@ export function ClientDashboardView({
         </Card>
       )}
 
-      {studentSatCommerce && dashboard.credits.selfServeSatBooking && <BookingCard />}
+      {studentSatCommerce && showSelfServeBooking ? <BookingCard /> : null}
+      {adminPreview && showSelfServeBooking && previewBooking ? (
+        <ClientPreviewBookingCard
+          previewBooking={previewBooking}
+          remainingHours={previewFinancials?.remainingHours ?? dashboard.credits.remainingHours}
+          hasVerifiedPayment={
+            previewFinancials?.payments.some(
+              (payment) =>
+                Boolean(payment.verifiedAt) ||
+                payment.status === "paid" ||
+                payment.status === "partially_paid",
+            ) ?? false
+          }
+          offPlatformBilling={offPlatformBilling}
+          hasAssignedProgramSessions={
+            (dashboard.curriculumSessions?.length ?? 0) > 0 ||
+            (dashboard.upcomingSessions?.length ?? 0) > 0
+          }
+        />
+      ) : null}
 
       <Card>
         <CardHeader className="pb-3">
@@ -479,9 +516,14 @@ export function ClientDashboardView({
         </CardContent>
       </Card>
 
-      {afterDashboard ? (
+      {adminPreview && previewFinancials ? (
         <div data-testid="portal-payment-receipts">
-          {afterDashboard}
+          <FinancialCard
+            previewData={previewFinancials}
+            previewOffer={previewOffer}
+            adminPreview
+            offPlatformBilling={offPlatformBilling}
+          />
         </div>
       ) : null}
     </div>

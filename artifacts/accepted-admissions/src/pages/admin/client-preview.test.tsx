@@ -123,6 +123,8 @@ describe("administrator client preview", () => {
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
     expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
     expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
+    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
     expectPaymentReceiptsLast();
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
     expect(screen.queryByText("Single SAT Session")).toBeNull();
@@ -476,12 +478,15 @@ describe("administrator client preview", () => {
     render(<AdminClientPreview />);
 
     expect(screen.getByText("Prepaid booking experience")).toBeTruthy();
+    expect(screen.getByTestId("client-dashboard").textContent).toContain("Prepaid booking experience");
     expect(screen.queryByText("A prepaid session is booked")).toBeNull();
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
-    expect(screen.queryByTestId("portal-payment-receipts")).toBeNull();
-    expect(screen.queryByTestId("portal-curriculum-section")?.textContent ?? "").not.toContain(
-      "SAT session payment and receipts",
-    );
+    expectPaymentReceiptsLast();
+    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.getByText("Session roadmap")).toBeTruthy();
+    expect(screen.queryByText("One plan. Twelve focused meetings.")).toBeNull();
+    expect(screen.queryByText("Eunice Chon")).toBeNull();
+    expect(screen.queryByText("Nika Raiffe")).toBeNull();
   });
 
   test("self-serve prepaid booked sessions show the next upcoming and hide the rest", () => {
@@ -596,6 +601,8 @@ describe("administrator client preview", () => {
     render(<AdminClientPreview />);
 
     expect(screen.getByText("Prepaid booking experience")).toBeTruthy();
+    expect(screen.getByTestId("client-dashboard").textContent).toContain("Prepaid booking experience");
+    expectPaymentReceiptsLast();
     expect(screen.queryByText("A prepaid session is booked")).toBeNull();
     expect(screen.getByText("Michelle next SAT session")).toBeTruthy();
     expect(screen.queryByText("Michelle mid SAT session")).toBeNull();
@@ -676,5 +683,84 @@ describe("administrator client preview", () => {
     expect(screen.getByText(/Google Calendar is disconnected/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.queryByTestId("financial-card-collapsed")).toBeNull();
+    expectPaymentReceiptsLast();
+  });
+
+  test("empty self-serve clients use the same dashboard construction without Taito data", () => {
+    mocks.preview = {
+      user: {
+        id: "student-3",
+        displayName: "Jordan Lee",
+        email: "jordan@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      welcomeMessage: "Welcome back.",
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      progress: {
+        totalSessions: 0,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring credit.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: {
+        calendarStatus: "disconnected",
+        availability: null,
+        sessions: [],
+      },
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.getByText("Welcome back, Jordan.")).toBeTruthy();
+    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(
+      screen.getByText("Your tutor relationships will appear here once the matching tutor account is provisioned."),
+    ).toBeTruthy();
+    expect(screen.getByText("Your sessions will appear here when they are scheduled.")).toBeTruthy();
+    expect(screen.getByText("Session roadmap")).toBeTruthy();
+    expect(screen.getByText("No sessions are visible for this account.")).toBeTruthy();
+    expect(screen.getByText("Prepaid booking experience")).toBeTruthy();
+    expect(screen.queryByText("One plan. Twelve focused meetings.")).toBeNull();
+    expect(screen.queryByText("Fall 2026 curriculum")).toBeNull();
+    expect(screen.queryByText("Twelve-session roadmap")).toBeNull();
+    expect(screen.queryByText("Eunice Chon")).toBeNull();
+    expect(screen.queryByText("Nika Raiffe")).toBeNull();
+    expect(screen.queryByText(/Taito/i)).toBeNull();
+    expectPaymentReceiptsLast();
   });
 });
