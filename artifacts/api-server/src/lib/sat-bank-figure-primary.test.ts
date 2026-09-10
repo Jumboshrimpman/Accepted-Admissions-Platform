@@ -595,6 +595,23 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   assert.equal(looksBrokenMathOcr("Which expression is equivalent to x x y 6 5 4 ? + +"), true);
   assert.equal(looksCorruptStemOcr("I, 7 X 12345678910 For how many of the 10 data points"), true);
   assert.equal(stemCitesVisual("predicted by the line of best fit?"), true);
+  assert.equal(
+    looksCorruptStemOcr(
+      "The dot plot gives the diameter of each sea star. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+    ),
+    true,
+  );
+  assert.equal(
+    looksCorruptStemOcr("Data Set A\n22 23 24 25 26\nThe dot plot represents the 15 values in data set A."),
+    false,
+  );
+  assert.equal(looksBrokenMathOcr("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(
+    looksExplodedOcrTable(
+      "Live east Live west of the river Total Less than 17 11 28 40 years old At least 18 89 107 40 years old Total 35 100 135 The table summarizes members",
+    ),
+    true,
+  );
   assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
   assert.equal(
     selectStimulusFigures(

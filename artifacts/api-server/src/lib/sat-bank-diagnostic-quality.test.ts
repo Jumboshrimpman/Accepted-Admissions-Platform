@@ -1135,6 +1135,55 @@ test("drops Oct 2 Q107–114 exploded OCR, missing figures, and character-spaced
   );
 });
 
+test("drops Oct 2 Q115/Q117/Q119 axis-bleed, smashed algebra, and exploded two-way tables", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const dotPlot = {
+    url: `${figureUrl}-p48-draw1.png`,
+    alt: "Dot plot of sea star diameters",
+  };
+  const tableCrop = {
+    url: `${figureUrl}-p49-draw1.png`,
+    alt: "Cropped two-way table",
+  };
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "To study the characteristics of sea stars in a group of tide pools, researchers measured the diameter of the sea stars within the tide pools. The dot plot gives the diameter, to the nearest inch, of each of the sea stars in these tide pools. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter, to the nearest inch, of 16 inches?",
+      choices: letterChoices(["16", "6", "4", "1"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [dotPlot],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "x 16( + 15) ? Which expression is equivalent to",
+      choices: letterChoices(["x16+31", "16+240x", "16+1x", "x16+15"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "Live east Live west of the river of the river Total Less than 17 11 28 40 years old At least 18 89 107 40 years old Total 35 100 135 The table summarizes members of a local organization by age and whether they live east or west of the river. If a member of the organization is selected at random, what is the probability that the selected member is at least 40 years old?",
+      choices: letterChoices(["28/135", "35/135", "100/135", "107/135"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [tableCrop],
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",

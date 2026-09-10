@@ -77,6 +77,9 @@ const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
 const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b|\b12345678910\b/;
 const AXIS_SEQUENCE_OCR =
   /(?:^|\n)\s*y\s*U?\s*1\s*2\s*3\s*4\s*5\s*6\s*7\s*8\s*9\s*10\b|\byU?12345678910\b|\by\s+U\s*12345678910\b/i;
+const AXIS_LABEL_BLEED =
+  /\b\d{1,2}(?:\s+\d{1,2}){3,}\s+(?:Diameter|inches)\b|\b\d{8,}Diameter\b/i;
+const SMASHED_DISTRIBUTE = /[xy]\s*\d+\s*\(\s*[+\-]/;
 const SMASHED_PERCENT_TABLE =
   /(?:%\s*){4,}|\b\d+\s*%\s+\d+\s*%\s+\d+\s*%/i;
 const GARBLED_SIGNED_CHOICE = /=\s*[+\-]{2,}|\by\s*=\s*-\+/i;
@@ -385,6 +388,7 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (SMASHED_PRISM_AREA.test(raw)) return true;
   if (SMASHED_SPACED_POLY.test(raw)) return true;
   if (SMASHED_FX_AXIS.test(raw)) return true;
+  if (SMASHED_DISTRIBUTE.test(raw)) return true;
   if (SCRAMBLED_FUNCTION_DEFINED.test(raw)) return true;
   if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;
@@ -402,6 +406,7 @@ export function looksCorruptStemOcr(text: string | null | undefined): boolean {
   if (AXIS_TICK_OCR.test(raw)) return true;
   if (SMASHED_AXIS_TICKS.test(raw)) return true;
   if (AXIS_SEQUENCE_OCR.test(raw)) return true;
+  if (AXIS_LABEL_BLEED.test(raw)) return true;
   if (BROKEN_WHERE_MODEL.test(raw)) return true;
   if (BROKEN_END_OF_DOMAIN.test(raw)) return true;
   if (CARET_H_OCR.test(raw)) return true;
@@ -468,6 +473,13 @@ export function looksExplodedOcrTable(text: string | null | undefined): boolean 
   const compact = value.replace(/\s+/g, " ");
   const numbers = compact.match(/\b\d+(?:\.\d+)?\b/g) ?? [];
   if (CONTINGENCY_WORD.test(compact) && numbers.length >= 6 && lines.length <= 2) return true;
+  if (
+    CONTINGENCY_WORD.test(compact) &&
+    numbers.length >= 8 &&
+    /years old|live east|live west/i.test(compact)
+  ) {
+    return true;
+  }
   const pipes = (compact.match(/\|/g) ?? []).length;
   if (pipes >= 8 && lines.length <= 2 && numbers.length >= 4) return true;
   const percents = (compact.match(/%/g) ?? []).length;

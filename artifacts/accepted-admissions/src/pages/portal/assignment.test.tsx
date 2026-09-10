@@ -1362,6 +1362,58 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/12345678910/)).toBeNull();
   });
 
+  test("Oct 2 Q115/Q117/Q119 drop axis-bleed, smashed algebra, and exploded two-way tables", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q115",
+        prompt:
+          "The dot plot gives the diameter, to the nearest inch, of each of the sea stars in these tide pools. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+        stimulus:
+          "![Dot plot](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p48-draw1.png)",
+        choices: [
+          { id: "a", label: "A", text: "16" },
+          { id: "b", label: "B", text: "6" },
+          { id: "c", label: "C", text: "4" },
+          { id: "d", label: "D", text: "1" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q117",
+        prompt: "x 16( + 15) ? Which expression is equivalent to",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x16+31" },
+          { id: "b", label: "B", text: "16+240x" },
+          { id: "c", label: "C", text: "16+1x" },
+          { id: "d", label: "D", text: "x16+15" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q119",
+        prompt:
+          "Live east Live west of the river Total Less than 17 11 28 40 years old At least 18 89 107 40 years old Total 35 100 135 The table summarizes members of a local organization. What is the probability that the selected member is at least 40 years old?",
+        stimulus:
+          "![Cropped table](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p49-draw1.png)",
+        choices: [
+          { id: "a", label: "A", text: "28/135" },
+          { id: "b", label: "B", text: "35/135" },
+          { id: "c", label: "C", text: "100/135" },
+          { id: "d", label: "D", text: "107/135" },
+        ],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
+    expect(screen.queryByText(/16 17 18 19 20/)).toBeNull();
+    expect(screen.queryByText(/x 16\(/)).toBeNull();
+    expect(screen.queryByText(/Live east Live west/)).toBeNull();
+  });
+
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
     mocks.assignmentError = true;
     render(<PortalAssignment />);

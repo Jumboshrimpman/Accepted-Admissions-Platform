@@ -362,6 +362,32 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
   assert.equal(looksBrokenMathOcr("Which expression is equivalent to x x y 6 5 4 ? + +"), true);
   assert.equal(looksCorruptStemOcr("I, 7 X 12345678910 For how many of the 10 data points"), true);
   assert.equal(
+    looksCorruptStemOcr("The dot plot gives the diameter. 16 17 18 19 20 Diameter (inches) Based on the dot plot"),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(
+    looksExplodedOcrTable(
+      "Live east Live west Total Less than 17 11 28 40 years old At least 18 89 107 Total 35 100 135 The table summarizes members",
+    ),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "The dot plot gives the diameter. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+      stimulus: "![Dot plot](/media/sat-bank/pack/p48-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "16" },
+        { id: "b", label: "B", text: "6" },
+        { id: "c", label: "C", text: "4" },
+        { id: "d", label: "D", text: "1" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
     isStudentAnswerableQuizQuestion({
       prompt:
         "I, 7 X 12345678910 For how many of the 10 data points is the actual y-value greater than the y-value predicted by the line of best fit?",
