@@ -54,6 +54,10 @@ const SMASHED_QUADRATIC_LEAD = /\b2\s+4x\b/;
 const STRIPPED_TRIANGLE_SIDES = /(?:sides of length|right triangle)[\s\S]{0,160}\b2\s+2\s*,\s*6\s+2\b/i;
 const STRIPPED_RADICAL_CHOICE = /^(?:8\s+2\s*\+\s*80|\d+\s*\+\s*\d+\s+2)$/;
 const BROKEN_COORDINATE = /\(\s*,\s*x\s*y\s*\)/;
+const SMASHED_HX_LINE = /(?:^|\n)\s*h\s+x\s*(?:\n|$)/;
+const EMPTY_PAREN_FOR_GIVEN = /\(\s*\)\s+for the given/i;
+const SCRAMBLED_FUNCTION_DEFINED = /\bWhat The function\b/;
+const SMASHED_TABLE_CHOICE = /^x\s+\d+\s+\d+\s+\d+.*h\s*\(\s*x\s*\)/i;
 const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
 const STACKED_FRACTION_ORPHAN = /\b14x\s*=\s*2\s*w\b|\n7y\s*(?:\n|$)/;
 const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
@@ -65,7 +69,7 @@ const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b/;
 const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
 const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
 const LEAKED_NEXT_QUESTION =
-  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer|set a goal to walk|On a certain day,/i;
+  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer|set a goal to walk|On a certain day,|Note:\s*Figure not drawn|lines m and n are parallel/i;
 const CARET_H_OCR = /\^\s*h\b/;
 const Y_FX_MISSING_EQUALS = /\by\s+f\s*\(\s*x\s*\)/;
 const BROKEN_POINT_ZERO_FIVE = /point\s*,\s*0\s+5\b/i;
@@ -322,6 +326,9 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (SMASHED_QUADRATIC_LEAD.test(raw)) return true;
   if (STRIPPED_TRIANGLE_SIDES.test(raw)) return true;
   if (BROKEN_COORDINATE.test(raw)) return true;
+  if (SMASHED_HX_LINE.test(raw)) return true;
+  if (EMPTY_PAREN_FOR_GIVEN.test(raw)) return true;
+  if (SCRAMBLED_FUNCTION_DEFINED.test(raw)) return true;
   if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;
   if (ORPHAN_FX_AFTER_W.test(raw)) return true;
@@ -362,6 +369,20 @@ export function looksMissingOperatorChoice(text: string | null | undefined): boo
   if (/[*/÷^]/.test(value)) return false;
   if (/\b[A-Za-z]\s*[/÷]\s*-?\d/.test(value)) return false;
   return MISSING_OPERATOR_CHOICE.test(value);
+}
+
+export function looksSmashedTableChoice(text: string | null | undefined): boolean {
+  return SMASHED_TABLE_CHOICE.test(cleanOcrChoiceText(text));
+}
+
+/** `x > 0 y > 0` → one inequality per line so a student can read the system. */
+export function formatStudentChoiceText(text: string | null | undefined): string {
+  const cleaned = cleanOcrChoiceText(text);
+  if (!cleaned) return "";
+  return cleaned.replace(
+    /([xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?)(?:\s+)(?=[xy]\s*[<>≤≥])/gi,
+    "$1\n",
+  );
 }
 
 export function looksLeakedNextQuestionChoice(text: string | null | undefined): boolean {
@@ -573,6 +594,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksStrippedRadicalChoice(value)) return false;
   if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(value)) return false;
   if (looksMissingOperatorChoice(raw) || looksMissingOperatorChoice(value)) return false;
+  if (looksSmashedTableChoice(raw) || looksSmashedTableChoice(value)) return false;
   if (looksBrokenMathOcr(value) && value.length <= 96) return false;
   if (looksTruncatedChoiceText(value)) return false;
   if (looksSmashedOrTruncatedExtract(value)) return false;
@@ -609,7 +631,7 @@ export function letterMcqChoices(
       const choiceLabel = (choice.label ?? "").trim().toUpperCase();
       return id === label.toLowerCase() || choiceLabel === label;
     });
-    const text = cleanOcrChoiceText(found?.text);
+    const text = formatStudentChoiceText(found?.text);
     return {
       id: found?.id?.trim().toLowerCase() || label.toLowerCase(),
       label,
@@ -696,7 +718,7 @@ export function applyFigurePrimaryToRecord<
     figurePrimary && isLetterAnswer(record.correctAnswer) ? "mcq" : record.questionType;
   const cleanedChoices = record.choices.map((choice) => ({
     ...choice,
-    text: isStudentReadableChoiceText(choice.text) ? cleanOcrChoiceText(choice.text) : choice.text,
+    text: isStudentReadableChoiceText(choice.text) ? formatStudentChoiceText(choice.text) : choice.text,
   }));
   return {
     ...record,
@@ -734,7 +756,7 @@ export function studentFacingFigurePrimaryFields(input: FigurePrimaryInput): {
     id: (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
       String.fromCharCode(97 + index),
     label: (choice.label ?? choice.id ?? String.fromCharCode(65 + index)).toString(),
-    text: isStudentReadableChoiceText(choice.text) ? cleanOcrChoiceText(choice.text) : "",
+    text: isStudentReadableChoiceText(choice.text) ? formatStudentChoiceText(choice.text) : "",
   }));
   const usableChoices = hasUsableChoiceText(cleanedChoices) ? cleanedChoices : undefined;
   if (!figurePrimary) {

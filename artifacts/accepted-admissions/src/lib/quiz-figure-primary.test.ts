@@ -13,6 +13,8 @@ import {
   looksGarbledQuizText,
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
+  formatStudentChoiceText,
+  looksSmashedTableChoice,
   shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
   shouldShowQuizChoices,
@@ -165,6 +167,36 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
   };
   assert.equal(shouldShowQuizChoices(slashFractions), true);
   assert.equal(shouldHideMismatchedQuizFigures(slashFractions), false);
+});
+
+test("formats run-on inequalities and rejects mangled coordinates, table crops, and orphan figures", () => {
+  assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
+  assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(looksBrokenMathOcr("What is the solution ( ,x y) to the given system?"), true);
+  assert.equal(looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)"), true);
+  assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), false);
+  assert.equal(looksSmashedTableChoice("x 1 2 3 h(x) 4 5 6"), true);
+  assert.equal(isStudentReadableChoiceText("7/4"), true);
+  const library = {
+    presentation: "text" as const,
+    prompt:
+      "A proposal for a new library was included on an election ballot. Based on these data, how many people voted against the proposal?",
+    stimulus:
+      "![Diagram from page 45](https://app.acceptedadmissions.org/media/sat-bank/pack/p45-draw1.png)",
+    choices: [
+      { id: "a", label: "A", text: "7,500" },
+      { id: "b", label: "B", text: "15,000" },
+      { id: "c", label: "C", text: "22,500" },
+      {
+        id: "d",
+        label: "D",
+        text: "45,000/16 t m n Note: Figure not drawn to scale. In the figure, lines m and n are parallel. If",
+      },
+    ],
+    questionType: "mcq",
+  };
+  assert.equal(shouldHideMismatchedQuizFigures(library), true);
+  assert.equal(isStudentReadableChoiceText(library.choices[3]!.text), false);
 });
 
 test("answer review shows the letter when choice text is empty", () => {

@@ -629,6 +629,106 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
   });
 
+  test("run-on inequality systems render as separate lines", () => {
+    mocks.questions[0]!.prompt =
+      "The point (8, 2) in the x y-plane is a solution to which of the following systems of inequalities?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "x > 0 y > 0" },
+      { id: "b", label: "B", text: "x > 0 y < 0" },
+      { id: "c", label: "C", text: "x < 0 y > 0" },
+      { id: "d", label: "D", text: "x < 0 y < 0" },
+    ];
+    render(<PortalAssignment />);
+    const first = screen.getAllByTestId("quiz-answer-choice")[0];
+    expect(first?.textContent).toMatch(/x > 0/);
+    expect(first?.textContent).toMatch(/y > 0/);
+    expect(first?.querySelector(".whitespace-pre-wrap")?.textContent).toBe("x > 0\ny > 0");
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("slash-fraction quadratic choices stay visible", () => {
+    mocks.questions[0]!.prompt = "2 −4x −7x = −36\nWhat is the positive solution to the given equation?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "7/4" },
+      { id: "b", label: "B", text: "9/4" },
+      { id: "c", label: "C", text: "4" },
+      { id: "d", label: "D", text: "7" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/7\/4/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("mangled ( , x y ) stems are not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "x + y = 18\n5 y = x\nWhat is the solution ( ,x y) to the given system of equations?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "(15, 3)" },
+      { id: "b", label: "B", text: "(16, 2)" },
+      { id: "c", label: "C", text: "(17, 1)" },
+      { id: "d", label: "D", text: "(18, 0)" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("incomplete table crop hides broken OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt:
+        "= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?",
+      stimulus:
+        "![Question figure region page 43](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p43-q8-right.png)",
+      choices: [
+        { id: "a", label: "A", text: "x 1 2 3 h(x) 4 5 6" },
+        { id: "b", label: "B", text: "x 1 2 3 −2 h(x) 1 6" },
+        { id: "c", label: "C", text: "x 1 2 3 −1 h(x) 1 3" },
+        { id: "d", label: "D", text: "x 1 2 3 −2 h(x) 1 3" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/= x2/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("scrambled 270(0.1)x stem is not student-usable", () => {
+    mocks.questions[0]!.prompt = "= 270(0.1)x. What The function f is defined by f(x)\nis the value of f (0) ?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "0" },
+      { id: "b", label: "B", text: "1" },
+      { id: "c", label: "C", text: "27" },
+      { id: "d", label: "D", text: "270" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("library word problem hides an orphan figure fragment and does not invent letter-only A–D", () => {
+    mocks.questions[0]!.prompt =
+      "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. Based on these data, how many people voted against the proposal?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 45](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p45-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "" },
+      { id: "b", label: "B", text: "" },
+      { id: "c", label: "C", text: "" },
+      { id: "d", label: "D", text: "" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByAltText("Diagram from page 45")).toBeNull();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/library/);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
   test("literal question-mark operator and missing exponents are not shown as A–D", () => {
     mocks.questions[0]!.prompt = "12x3 −5x ? 3\nWhich expression is equivalent to";
     mocks.questions[0]!.stimulus = null;

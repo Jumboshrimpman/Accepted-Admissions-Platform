@@ -462,6 +462,90 @@ test("rejects unlabeled-choice crops, missing operators, clipped OCR, and ?-as-o
   );
 });
 
+test("rejects mangled coordinates, incomplete table crops, scrambled stems, and orphan geometry; keeps slash-fraction quadratics and formats inequalities", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q4",
+      prompt: "x + y = 18\n5 y = x\nWhat is the solution ( ,x y) to the given system of equations?",
+      choices: letterChoices(["(15, 3)", "(16, 2)", "(17, 1)", "(18, 0)"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q5",
+      prompt: "The point (8, 2) in the x y-plane is a solution to which of the following systems of inequalities?",
+      choices: letterChoices(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q8",
+      prompt:
+        "= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?",
+      choices: letterChoices([
+        "x 1 2 3 h(x) 4 5 6",
+        "x 1 2 3 −2 h(x) 1 6",
+        "x 1 2 3 −1 h(x) 1 3",
+        "x 1 2 3 −2 h(x) 1 3",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [{ url: `${figureUrl}-p43-q8-right.png`, alt: "Question figure region page 43" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q9",
+      prompt: "= 270(0.1)x. What The function f is defined by f(x)\nis the value of f (0) ?",
+      choices: letterChoices(["0", "1", "27", "270"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q12",
+      prompt: "2 −4x −7x = −36\nWhat is the positive solution to the given equation?",
+      choices: letterChoices(["7/4", "9/4", "4", "7"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q15",
+      prompt:
+        "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. A social media post reported that 15,000 more people voted in favor of the proposal than voted against it. Based on these data, how many people voted against the proposal?",
+      choices: letterChoices([
+        "7,500",
+        "15,000",
+        "22,500",
+        "45,000/16 t m n Note: Figure not drawn to scale. In the figure, lines m and n are parallel. If",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [{ url: figureUrl, alt: "Diagram from page 45" }],
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",
@@ -507,11 +591,25 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt11-math-m1-q3",
     "sat-pt4-math-m2-q1",
     "sat-pt4-math-m2-q3",
+    "sat-pt4-math-m2-q4",
+    "sat-pt4-math-m2-q8",
+    "sat-pt4-math-m2-q9",
+    "sat-pt4-math-m2-q15",
   ];
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q2"),
     false,
     "slash-fraction equivalent-equation item must stay usable",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q5"),
+    false,
+    "run-on inequality systems stay usable after spacing is fixed at render time",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q12"),
+    false,
+    "slash-fraction quadratic item must stay usable",
   );
   for (const key of brokenMathKeys) {
     assert.ok(
@@ -566,6 +664,10 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt11-math-m1-q3",
     "sat-pt4-math-m2-q1",
     "sat-pt4-math-m2-q3",
+    "sat-pt4-math-m2-q4",
+    "sat-pt4-math-m2-q8",
+    "sat-pt4-math-m2-q9",
+    "sat-pt4-math-m2-q15",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }

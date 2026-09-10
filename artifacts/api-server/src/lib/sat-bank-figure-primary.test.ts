@@ -27,6 +27,8 @@ import {
   looksLeakedNextQuestionChoice,
   looksMissingOperatorChoice,
   looksPipeBackslashOcr,
+  formatStudentChoiceText,
+  looksSmashedTableChoice,
   hasMergedOrLeakedChoices,
   stemCitesVisual,
   looksSpacedProductChoice,
@@ -467,6 +469,51 @@ test("rejects smashed equations, missing operators, pipe OCR, and ?-as-operator;
     0,
   );
   assert.equal(stemCitesVisual("The line graph shows the estimated number of chipmunks."), true);
+});
+
+test("rejects mangled coordinates, scrambled function stems, smashed tables, and leaked geometry; formats run-on inequalities", () => {
+  assert.equal(
+    looksBrokenMathOcr("x + y = 18\n5 y = x\nWhat is the solution ( ,x y) to the given system of equations?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("What is the solution (x, y) to the given system of equations?"),
+    false,
+  );
+  assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
+  assert.equal(formatStudentChoiceText("x < 0 y < 0"), "x < 0\ny < 0");
+  assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(
+    looksBrokenMathOcr("= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?"),
+    true,
+  );
+  assert.equal(looksSmashedTableChoice("x 1 2 3 h(x) 4 5 6"), true);
+  assert.equal(isStudentReadableChoiceText("x 1 2 3 h(x) 4 5 6"), false);
+  assert.equal(
+    looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)\nis the value of f (0) ?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution to the given equation?"),
+    false,
+  );
+  assert.equal(isStudentReadableChoiceText("7/4"), true);
+  assert.equal(
+    looksLeakedNextQuestionChoice(
+      "45,000/16 t m n Note: Figure not drawn to scale. In the figure, lines m and n are parallel. If",
+    ),
+    true,
+  );
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: figureUrl, alt: "Diagram from page 45" }],
+      {
+        prompt:
+          "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. Based on these data, how many people voted against the proposal?",
+      },
+    ).length,
+    0,
+  );
 });
 
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {

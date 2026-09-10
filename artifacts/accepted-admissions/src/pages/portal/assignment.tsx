@@ -56,8 +56,8 @@ import {
   wantsResumeAttempt,
 } from "@/lib/student-attempt-ui";
 import {
-  cleanOcrChoiceText,
   displayAnswerLabel,
+  formatStudentChoiceText,
   figurePrimaryChoices,
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
@@ -410,7 +410,7 @@ function AnswerChoices({
   const figurePrimary = isFigurePrimaryQuestion(question);
   const rawChoices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
   const choices = (rawChoices ?? [])
-    .map((choice) => ({ ...choice, text: cleanOcrChoiceText(choice.text) }))
+    .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
     .filter((choice) => isStudentReadableChoiceText(choice.text));
   if (shouldShowQuizChoices({ ...question, choices }) && hasUsableChoiceText(choices)) {
     return (
@@ -450,7 +450,7 @@ function AnswerChoices({
               >
                 {choice.label}
               </div>
-              <div className="min-w-0 max-w-full flex-1 whitespace-normal break-words [overflow-wrap:anywhere]">
+              <div className="min-w-0 max-w-full flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                 {choice.text}
               </div>
             </button>
