@@ -12,7 +12,9 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   isCleanTextMcqItem,
+  isMathQuizItem,
   isStudentUsableDiagnosticItem,
+  isStudentUsableMathQuizItem,
   isStudentUsableQuizItem,
   isStudentUsableServedQuestion,
   isTrueSprQuizItem,
@@ -625,6 +627,26 @@ test("shared quiz gate rejects character-spaced OCR, module boilerplate D, and e
     }));
 
   assert.equal(isStudentUsableQuizItem, isStudentUsableDiagnosticItem);
+  assert.equal(
+    isMathQuizItem({
+      prompt: "Which choice completes the text with the most logical transition?",
+      section: "rw",
+      choices: letterChoices(["However", "Therefore", "Meanwhile", "Similarly"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: "The graph of y = f(x) is shown in the xy-plane. What is the vertex of the graph?",
+      section: "math",
+      choices: letterChoices(["(-2, 3)", "(0, 0)", "(2, -1)", "(3, 4)"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
   assert.equal(
     isStudentUsableQuizItem({
       prompt: "T h e g r a p h s h o w s the relationship. Which choice is correct?",

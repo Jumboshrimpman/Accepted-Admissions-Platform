@@ -21,6 +21,7 @@ import {
   looksTruncatedChoiceText,
   normalizeLetterAnswer,
   looksBrokenMathOcr,
+  looksIncompleteMathParens,
   looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledExtractText,
@@ -605,6 +606,11 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
     looksCorruptStemOcr("Data Set A\n22 23 24 25 26\nThe dot plot represents the 15 values in data set A."),
     false,
   );
+  assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = (x + 1"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = x^2 + 1"), false);
+  assert.equal(looksIncompleteMathParens("The point (6,3) is a solution."), false);
+  assert.equal(looksIncompleteMathParens("(-2, 3)"), false);
   assert.equal(looksBrokenMathOcr("x 16( + 15) ? Which expression is equivalent to"), true);
   assert.equal(
     looksExplodedOcrTable(

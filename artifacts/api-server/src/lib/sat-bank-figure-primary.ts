@@ -361,6 +361,26 @@ export function looksStrippedRadicalChoice(text: string | null | undefined): boo
   return STRIPPED_RADICAL_CHOICE.test(cleanOcrChoiceText(text));
 }
 
+/** `( + 15)`, trailing open `f(x) = (x+1`, or a dangling close. Keep `(-2, 3)`. */
+export function looksIncompleteMathParens(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (/\(\s*[*/=]/.test(raw)) return true;
+  if (/\(\s+[+\-]/.test(raw)) return true;
+  let depth = 0;
+  let sawParen = false;
+  for (const ch of raw) {
+    if (ch === "(") {
+      depth += 1;
+      sawParen = true;
+    } else if (ch === ")") {
+      depth -= 1;
+      if (depth < 0) return true;
+    }
+  }
+  return sawParen && depth !== 0 && /[=<>≤≥]|f\s*\(|equation|expression/i.test(raw);
+}
+
 /**
  * Missing exponents, stripped radicals, stacked-fraction orphans, or
  * coordinate corruption that change the math a student would solve.
@@ -368,6 +388,7 @@ export function looksStrippedRadicalChoice(text: string | null | undefined): boo
 export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   const raw = text ?? "";
   if (!raw.trim()) return false;
+  if (looksIncompleteMathParens(raw)) return true;
   if (looksFailedMathLayoutDump(raw)) return true;
   if (MISSING_CARET_GROWTH.test(raw) && !/\(\d+\.\d+\)\^x\b/.test(raw)) return true;
   if (MISSING_CARET_POLYNOMIAL.test(raw) && !/\bx\^[2-9]\b/.test(raw)) return true;

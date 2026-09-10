@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  isMathQuizItem,
   isSafeToShowStudentQuizItem,
+  isStudentUsableMathQuizItem,
   isStudentUsableQuizItem,
   isStudentUsableServedQuestion,
 } from "./sat-bank-diagnostic-quality.ts";
@@ -234,23 +236,98 @@ test("shared math gate drops every Sama-flagged messy item and keeps readable co
   for (const item of FLAGGED_DROPS) {
     const input = {
       prompt: item.prompt,
+      section: "math" as const,
       choices: item.choices ?? empty,
       questionType: "mcq",
       correctAnswer: "A",
       figures: item.figures,
     };
+    assert.equal(isMathQuizItem(input), true, `${item.id} must take the math path`);
+    assert.equal(isStudentUsableMathQuizItem(input), false, `${item.id} must drop on the math bar`);
     assert.equal(isStudentUsableQuizItem(input), false, `${item.id} must drop`);
-    assert.equal(isSafeToShowStudentQuizItem(input), false, `${item.id} must drop on the shared alias`);
-    assert.equal(isStudentUsableServedQuestion(input), false, `${item.id} must drop at serve time`);
+    assert.equal(isSafeToShowStudentQuizItem(input), false, `${item.id} must drop on the shared wrapper`);
+    assert.equal(
+      isStudentUsableServedQuestion({ ...input, subject: "Math" }),
+      false,
+      `${item.id} must drop at serve time`,
+    );
   }
   for (const item of FLAGGED_KEEPS) {
     const input = {
       prompt: item.prompt,
+      section: "math" as const,
       choices: item.choices,
       questionType: "mcq",
       correctAnswer: "A",
     };
+    assert.equal(isMathQuizItem(input), true, `${item.id} must take the math path`);
     assert.equal(isStudentUsableQuizItem(input), true, `${item.id} must stay`);
-    assert.equal(isStudentUsableServedQuestion(input), true, `${item.id} must stay at serve time`);
+    assert.equal(isStudentUsableMathQuizItem(input), true, `${item.id} must stay on the math bar`);
+    assert.equal(
+      isStudentUsableServedQuestion({ ...input, subject: "Math" }),
+      true,
+      `${item.id} must stay at serve time`,
+    );
   }
+});
+
+test("math path is stricter than RW and does not salvage a crop next to broken OCR", () => {
+  const letters = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const figure = [{ url: figureUrl, alt: "Unlabeled graph crop" }];
+
+  const mathMissingFigure = {
+    prompt:
+      "The graph of y = f(x) is shown in the xy-plane. What is the vertex of the graph?",
+    section: "math" as const,
+    choices: letters(["(-2, 3)", "(0, 0)", "(2, -1)", "(3, 4)"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  assert.equal(isMathQuizItem(mathMissingFigure), true);
+  assert.equal(isStudentUsableMathQuizItem(mathMissingFigure), false);
+  assert.equal(isStudentUsableQuizItem(mathMissingFigure), false);
+
+  const mathCleanWithFigure = {
+    ...mathMissingFigure,
+    figures: figure,
+  };
+  assert.equal(isStudentUsableMathQuizItem(mathCleanWithFigure), true);
+  assert.equal(isStudentUsableQuizItem(mathCleanWithFigure), true);
+
+  const mathBleedWithFigure = {
+    prompt:
+      "The dot plot gives the diameter. 16 17 18 19 20 Diameter (inches) Based on the dot plot, how many sea stars had a diameter of 16 inches?",
+    section: "math" as const,
+    choices: letters(["16", "6", "4", "1"]),
+    questionType: "mcq",
+    correctAnswer: "B",
+    figures: [{ url: `${figureUrl}-dots`, alt: "Dot plot" }],
+  };
+  assert.equal(isStudentUsableMathQuizItem(mathBleedWithFigure), false);
+
+  const rwTableCite = {
+    prompt: "Which choice most effectively uses data from the table to complete the example?",
+    section: "rw" as const,
+    choices: letters(["iron is 20%.", "sodium is 100%.", "iron is 90%.", "potassium is 75%."]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  assert.equal(isMathQuizItem(rwTableCite), false);
+  assert.equal(isStudentUsableQuizItem(rwTableCite), false);
+
+  const rwVocab = {
+    prompt:
+      "Particle physicists spend much of their time ______ what is invisible.\nWhich choice completes the text with the most logical and precise word or phrase?",
+    section: "rw" as const,
+    choices: letters(["selecting", "inspecting ~ ---~", "creating ~", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "B",
+  };
+  assert.equal(isMathQuizItem(rwVocab), false);
+  assert.equal(isStudentUsableQuizItem(rwVocab), true);
 });

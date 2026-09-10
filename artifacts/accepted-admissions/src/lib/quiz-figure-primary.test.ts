@@ -7,9 +7,11 @@ import {
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
   isStudentAnswerableQuizQuestion,
+  hasRecoveredQuizTable,
   isStudentReadableChoiceText,
   letterMcqChoices,
   looksBrokenMathOcr,
+  looksIncompleteMathParens,
   looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledQuizText,
@@ -365,7 +367,59 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
     looksCorruptStemOcr("The dot plot gives the diameter. 16 17 18 19 20 Diameter (inches) Based on the dot plot"),
     true,
   );
+  assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = (x + 1"), true);
+  assert.equal(looksIncompleteMathParens("f(x) = x^2 + 1"), false);
+  assert.equal(looksIncompleteMathParens("The point (6,3) is a solution."), false);
+  assert.equal(looksIncompleteMathParens("(-2, 3)"), false);
+  assert.equal(
+    hasRecoveredQuizTable("x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values."),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "f(x)= 3x + 29" },
+        { id: "b", label: "B", text: "f(x)= 29x + 32" },
+        { id: "c", label: "C", text: "f(x)= 35x + 29" },
+        { id: "d", label: "D", text: "f(x)= 32x + 35" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
   assert.equal(looksBrokenMathOcr("x 16( + 15) ? Which expression is equivalent to"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The graph of y = f(x) is shown. What is the vertex of the graph?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "(-2, 3)" },
+        { id: "b", label: "B", text: "(0, 0)" },
+        { id: "c", label: "C", text: "(2, -1)" },
+        { id: "d", label: "D", text: "(3, 4)" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The graph of y = f(x) is shown. What is the vertex of the graph?",
+      stimulus: "![Graph](/media/sat-bank/pack/graph.png)",
+      choices: [
+        { id: "a", label: "A", text: "(-2, 3)" },
+        { id: "b", label: "B", text: "(0, 0)" },
+        { id: "c", label: "C", text: "(2, -1)" },
+        { id: "d", label: "D", text: "(3, 4)" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
   assert.equal(
     looksExplodedOcrTable(
       "Live east Live west Total Less than 17 11 28 40 years old At least 18 89 107 Total 35 100 135 The table summarizes members",

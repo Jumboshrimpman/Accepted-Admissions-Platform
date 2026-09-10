@@ -92,6 +92,45 @@ test("rejects unknown or incomplete items", () => {
   );
 });
 
+test("rejects math items a student cannot solve as shown", () => {
+  const mathGraph = {
+    id: "math-graph",
+    questionType: "mcq",
+    section: "math",
+    subject: "Math",
+    prompt: "The graph of y = f(x) is shown in the xy-plane. What is the vertex of the graph?",
+    choices: [
+      { id: "a", label: "A", text: "(-2, 3)" },
+      { id: "b", label: "B", text: "(0, 0)" },
+      { id: "c", label: "C", text: "(2, -1)" },
+      { id: "d", label: "D", text: "(3, 4)" },
+    ],
+    correctAnswer: "A",
+    estimatedSeconds: 90,
+  };
+  assert.equal(
+    selectBankQuestionsForTutorQuiz([mathGraph], ["math-graph"]).error,
+    TUTOR_QUIZ_UNUSABLE_NOTE,
+  );
+  assert.deepEqual(
+    selectBankQuestionsForTutorQuiz(
+      [
+        {
+          ...mathGraph,
+          figures: [
+            {
+              url: "https://app.acceptedadmissions.org/media/sat-bank/pack/graph.png",
+              alt: "Graph of y = f(x)",
+            },
+          ],
+        },
+      ],
+      ["math-graph"],
+    ).selected.map((row) => row.id),
+    ["math-graph"],
+  );
+});
+
 test("time limit stays within a short custom-quiz band", () => {
   assert.equal(tutorQuizTimeLimitMinutes(0, 3), 5);
   assert.equal(tutorQuizTimeLimitMinutes(12 * 60, 8), 12);

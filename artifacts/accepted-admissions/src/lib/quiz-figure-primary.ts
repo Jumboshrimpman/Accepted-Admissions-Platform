@@ -93,9 +93,30 @@ export function looksStrippedRadicalChoice(text: string | null | undefined): boo
   return STRIPPED_RADICAL_CHOICE.test(cleanOcrChoiceText(text));
 }
 
+/** `( + 15)`, trailing open `f(x) = (x+1`, or a dangling close. Keep `(-2, 3)`. */
+export function looksIncompleteMathParens(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (/\(\s*[*/=]/.test(raw)) return true;
+  if (/\(\s+[+\-]/.test(raw)) return true;
+  let depth = 0;
+  let sawParen = false;
+  for (const ch of raw) {
+    if (ch === "(") {
+      depth += 1;
+      sawParen = true;
+    } else if (ch === ")") {
+      depth -= 1;
+      if (depth < 0) return true;
+    }
+  }
+  return sawParen && depth !== 0 && /[=<>≤≥]|f\s*\(|equation|expression/i.test(raw);
+}
+
 export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   const raw = text ?? "";
   if (!raw.trim()) return false;
+  if (looksIncompleteMathParens(raw)) return true;
   if (looksFailedMathLayoutDump(raw)) return true;
   if (MISSING_CARET_GROWTH.test(raw) && !/\(\d+\.\d+\)\^x\b/.test(raw)) return true;
   if (MISSING_CARET_POLYNOMIAL.test(raw) && !/\bx\^[2-9]\b/.test(raw)) return true;
@@ -293,6 +314,23 @@ export function hasQuizFigure(
   return QUIZ_IMAGE.test(`${question.stimulus ?? ""}\n${question.prompt ?? ""}`);
 }
 
+/** Recovered `x / f(x)` (or similar) data table in the stem — counts as the visual. */
+export function hasRecoveredQuizTable(text: string | null | undefined): boolean {
+  const lines = (text ?? "").split("\n");
+  let header = false;
+  let numericRows = 0;
+  for (const line of lines) {
+    const cells = line.trim().split(/\s+/).filter(Boolean);
+    if (cells.length < 2 || cells.length > 6) continue;
+    if (!cells.every((cell) => /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(cell))) {
+      continue;
+    }
+    if (cells.some((cell) => /^(?:x|y|f\(x\)|g\(x\)|h\(x\))$/i.test(cell))) header = true;
+    if (cells.some((cell) => /^-?\d+(?:\.\d+)?$/.test(cell))) numericRows += 1;
+  }
+  return header && numericRows >= 2;
+}
+
 /** Hide mangled OCR when a crop is on screen — never stack both. */
 export function shouldHideQuizOcrStem(
   question: Pick<AssignmentQuestion, "presentation" | "prompt" | "stimulus" | "choices" | "questionType"> & {
@@ -375,7 +413,16 @@ export function isStudentAnswerableQuizQuestion(
   question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
 ): boolean {
   if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
-  if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(question.stimulus)) return false;
+  const stimulusText = (question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ");
+  if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(stimulusText)) return false;
+  const stem = `${question.prompt ?? ""}\n${stimulusText}`;
+  if (
+    stemCitesVisual(stem) &&
+    !hasQuizFigure(question) &&
+    !hasRecoveredQuizTable(`${question.prompt ?? ""}\n${stimulusText}`)
+  ) {
+    return false;
+  }
   const raw = isFigurePrimaryQuestion(question)
     ? figurePrimaryChoices(question)
     : (question.choices ?? []).map((choice) => ({

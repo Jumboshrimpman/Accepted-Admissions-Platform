@@ -6,7 +6,10 @@ import {
   hasRecoveredDataTable,
   hasRenderableFigures,
   isLetterAnswer,
+  looksBrokenMathOcr,
+  looksExplodedOcrTable,
   looksGarbledExtractText,
+  looksIncompleteMathParens,
   looksSmashedOrTruncatedExtract,
   normalizeLetterAnswer,
   stemCitesVisual,
@@ -80,11 +83,95 @@ function isGarbledItem(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus"
   return looksGarbledExtractText(prompt) || looksGarbledExtractText(stimulus);
 }
 
+function smashedExtract(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
+  return (
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus))
+  );
+}
+
+function stemHaystack(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): string {
+  return `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`;
+}
+
 function stemReferencesMissingVisual(input: DiagnosticQualityInput): boolean {
-  const haystack = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`;
+  const haystack = stemHaystack(input);
   if (!stemCitesVisual(haystack)) return false;
   if (hasRecoveredDataTable(haystack) && /table/i.test(haystack)) return false;
   return !hasRenderableFigures(input);
+}
+
+export function quizSectionFromBankMeta(input: {
+  section?: string | null;
+  subject?: string | null;
+  domain?: string | null;
+}): "math" | "rw" | undefined {
+  const explicit = input.section?.trim().toLowerCase();
+  if (explicit === "math") return "math";
+  if (
+    explicit === "rw" ||
+    explicit === "reading" ||
+    explicit === "writing" ||
+    explicit === "reading and writing"
+  ) {
+    return "rw";
+  }
+  if (input.subject && /math/i.test(input.subject)) return "math";
+  if (input.domain && /math/i.test(input.domain)) return "math";
+  return undefined;
+}
+
+/** Algebra/function markers — not RW “the table” / “the graph” alone. */
+const MATH_CONTENT_MARKERS =
+  /\b(?:xy[- ]plane|x y-plane|system of equations|quadratic|polynomial|linear function|exponential function|dot plot|scatterplot|vertex form|standard form|which equation)\b|given\s*equation|f\s*\(\s*x\s*\)|\by\s*=\s*[+\-]?\d/i;
+
+export function isMathQuizItem(input: DiagnosticQualityInput): boolean {
+  const section = quizSectionFromBankMeta(input);
+  if (section === "math") return true;
+  if (section === "rw") return false;
+  const blob = `${input.prompt ?? ""}\n${input.stimulus ?? ""}\n${(input.choices ?? [])
+    .map((choice) => choice.text ?? "")
+    .join("\n")}`;
+  return MATH_CONTENT_MARKERS.test(blob);
+}
+
+function mathDependsOnVisual(input: DiagnosticQualityInput): boolean {
+  return stemCitesVisual(stemHaystack(input));
+}
+
+function mathHasRequiredVisual(input: DiagnosticQualityInput): boolean {
+  const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  if (hasRenderableFigures(input)) return true;
+  return hasRecoveredDataTable(haystack) && /table/i.test(haystack);
+}
+
+function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
+  const stem = stemHaystack(input);
+  if (looksBrokenMathOcr(stem) || looksIncompleteMathParens(stem)) return true;
+  if (looksExplodedOcrTable(stem)) return true;
+  if (/\bWhatThe\b/i.test(stem)) return true;
+  if (/\bfollowing\s*\??\s*$/i.test(stem)) return true;
+  if (/\(\s*,\s*[xy]\s+[xy]/i.test(stem)) return true;
+  return false;
+}
+
+/**
+ * Math-only bar: if a student cannot solve the item as shown, drop it.
+ * Host the figure when the stem depends on a graph/table/dot plot; never
+ * salvage bleed by hiding OCR next to an unlabeled crop. Figure-primary
+ * letter-only A–D and “has a crop so keep” are RW-only.
+ */
+export function isStudentUsableMathQuizItem(input: DiagnosticQualityInput): boolean {
+  if (!isLetterAnswer(input.correctAnswer)) return false;
+  if (isTrueSprQuizItem(input)) return false;
+  if (!hasCompleteLetterChoiceText(input.choices)) return false;
+  if (hasMergedOrLeakedChoices(input.choices)) return false;
+  if (!readableStudentText(input)) return false;
+  if (isGarbledItem(input) || smashedExtract(input)) return false;
+  if (looksUnsureMathPresentation(input)) return false;
+  if (mathDependsOnVisual(input) && !mathHasRequiredVisual(input)) return false;
+  if (mathDependsOnVisual(input) && looksExplodedOcrTable(stemHaystack(input))) return false;
+  return isCleanTextMcqItem(input);
 }
 
 /** Clean readable A–D item a student can answer from text (plus a figure if cited). */
@@ -107,26 +194,23 @@ export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
  * Shared student-usable gate for every quiz (Oct 2 diagnostic, routine SAT
  * pre-work, tutor-built bank quizzes, and lesson retries).
  *
- * Math bar: complete readable stem (no smashed exponents, axis-label bleed,
- * or `ax2` / `x 16( + 15)` junk); a graph/table/dot plot when the stem
- * depends on one (labels on the image, not pasted into prose); and full
- * usable A–D. Prefer drop/replace at materialize over shipping junk.
- * Empty, incomplete, or “unavailable” choice sets never ship.
+ * Math uses a stricter path than RW: complete readable stem + full A–D, a
+ * hosted figure (or recovered table) when the stem depends on a visual, and
+ * no OCR-bleed salvage. If a student cannot solve the math as shown, drop
+ * or replace at materialize. RW may still keep a clean figure + recovered
+ * table after a merely-readable stem.
  */
 export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
   if (isTrueSprQuizItem(input)) return false;
   if (!hasCompleteLetterChoiceText(input.choices)) return false;
   if (hasMergedOrLeakedChoices(input.choices)) return false;
+  if (isMathQuizItem(input)) {
+    return isStudentUsableMathQuizItem(input);
+  }
   if (!hasReadableStudentStem(input)) return false;
   if (isCleanTextMcqItem(input)) return true;
-  if (isGarbledItem(input)) return false;
-  if (
-    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
-    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus))
-  ) {
-    return false;
-  }
+  if (isGarbledItem(input) || smashedExtract(input)) return false;
   if (stemReferencesMissingVisual(input)) return false;
   return hasRenderableFigures(input) || hasRecoveredDataTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`);
 }
@@ -142,6 +226,7 @@ export function quizItemFromServedQuestion(question: {
   questionType?: string | null;
   correctAnswer?: string | null;
   extractGaps?: Record<string, unknown> | null;
+  section?: string | null;
   subject?: string | null;
   domain?: string | null;
   figures?: BankFigureLike[] | null;
@@ -168,7 +253,7 @@ export function quizItemFromServedQuestion(question: {
     questionType: question.questionType,
     correctAnswer: question.correctAnswer,
     extractGaps: question.extractGaps,
-    section: /math/i.test(`${question.subject ?? ""} ${question.domain ?? ""}`) ? "math" : "rw",
+    section: quizSectionFromBankMeta(question),
   };
 }
 
