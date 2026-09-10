@@ -113,21 +113,21 @@ beforeEach(() => {
         ok: true,
         json: async () => [
           {
-            id: "prod-test",
-            slug: "test-sat-hour",
-            name: "test",
-            description: "Temporary $1 test product that grants 1 SAT hour.",
-            durationHours: 1,
-            totalPriceCents: 100,
-            effectiveHourlyRateCents: 100,
-          },
-          {
             id: "prod-1",
-            slug: "sat-hour",
+            slug: "single-sat-session",
             name: "Single SAT session",
             description: "One prepaid hour",
             durationHours: 1,
             totalPriceCents: 13000,
+            effectiveHourlyRateCents: 13000,
+          },
+          {
+            id: "prod-10",
+            slug: "ten-sat-session-package",
+            name: "Ten SAT Session Package",
+            description: "Ten prepaid hours",
+            durationHours: 10,
+            totalPriceCents: 130000,
             effectiveHourlyRateCents: 13000,
           },
         ],
@@ -142,10 +142,14 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-page")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
     expect(screen.getByTestId("portal-sat-purchase")).toBeTruthy();
-    expect(await screen.findByTestId("portal-sat-offer-prod-test")).toBeTruthy();
-    expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("test");
-    expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("$1");
-    expect(screen.getByTestId("portal-sat-offer-prod-test").textContent).toContain("1 credit");
+    expect(await screen.findByTestId("portal-sat-offer-prod-1")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-offer-prod-1").textContent).toContain("Single SAT session");
+    expect(screen.getByTestId("portal-sat-offer-prod-1").textContent).toContain("$130");
+    expect(screen.getByTestId("portal-sat-offer-prod-1").textContent).toContain("1 credit");
+    expect(screen.getByTestId("portal-sat-offer-prod-10").textContent).toContain("$1,300");
+    expect(screen.getByTestId("portal-sat-offer-prod-10").textContent).toContain("10 credits");
+    expect(screen.queryByTestId("portal-sat-offer-prod-test")).toBeNull();
+    expect(screen.queryByText(/^test$/)).toBeNull();
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toMatch(/12:00–1:00 PM America\/New_York/);
@@ -204,6 +208,49 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-23")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-30")).toBeTruthy();
     expect(screen.queryByTestId("portal-sat-upcoming-eastern-2026-10-30")).toBeNull();
+  });
+
+  test("does not surface a retired test SAT product even if the catalog payload includes it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/api/credits")) {
+          return {
+            ok: true,
+            json: async () => ({ remainingHours: mocks.remainingHours }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "prod-test",
+              slug: "test-sat-hour",
+              name: "test",
+              description: "Temporary $1 test product that grants 1 SAT hour.",
+              durationHours: 1,
+              totalPriceCents: 100,
+              effectiveHourlyRateCents: 100,
+            },
+            {
+              id: "prod-1",
+              slug: "single-sat-session",
+              name: "Single SAT session",
+              description: "One prepaid hour",
+              durationHours: 1,
+              totalPriceCents: 13000,
+              effectiveHourlyRateCents: 13000,
+            },
+          ],
+        };
+      }),
+    );
+    render(<PortalSat />);
+    expect(await screen.findByTestId("portal-sat-offer-prod-1")).toBeTruthy();
+    expect(screen.queryByTestId("portal-sat-offer-prod-test")).toBeNull();
+    expect(screen.queryByText(/^test$/)).toBeNull();
+    expect(screen.getByTestId("portal-sat-offer-prod-1").textContent).toContain("$130");
   });
 
   test("hides checkout for off-platform clients such as Taito", () => {

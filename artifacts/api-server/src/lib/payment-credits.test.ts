@@ -9,8 +9,9 @@ import { processStripeWebhook } from "./payment-service.ts";
 import { backfillPaidUncreditedPayments, listPaidUncreditedPayments } from "./payment-fulfillment.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { verifyStripeSignature } from "./stripe-client.ts";
-// @ts-expect-error Native Node test execution requires the source extension.
-import { TEST_SAT_HOUR_DURATION_HOURS, TEST_SAT_HOUR_PRICE_CENTS } from "./sat-catalog.ts";
+
+const DISCOUNTED_HOUR_PRICE_CENTS = 100;
+const DISCOUNTED_HOUR_DURATION_HOURS = 1;
 
 const SINGLE_PRICE_CENTS = 13_000;
 const PACKAGE_PRICE_CENTS = 130_000;
@@ -394,11 +395,11 @@ test("admin manual grant records an audit trail", async () => {
   }
 });
 
-test("$1 test SAT hour grants catalog durationHours, not a dollar fraction", async () => {
+test("a non-catalog charge amount still grants durationHours, not a dollar fraction", async () => {
   const fixture = await createPurchaseFixture({
-    amountCents: TEST_SAT_HOUR_PRICE_CENTS,
-    durationHours: TEST_SAT_HOUR_DURATION_HOURS,
-    slug: "test-sat-hour",
+    amountCents: DISCOUNTED_HOUR_PRICE_CENTS,
+    durationHours: DISCOUNTED_HOUR_DURATION_HOURS,
+    slug: "duration-hours-fixture",
   });
   try {
     await processStripeWebhook({
@@ -408,7 +409,7 @@ test("$1 test SAT hour grants catalog durationHours, not a dollar fraction", asy
         object: {
           id: `cs_test_${fixture.suffix}`,
           payment_status: "paid",
-          amount_total: TEST_SAT_HOUR_PRICE_CENTS,
+          amount_total: DISCOUNTED_HOUR_PRICE_CENTS,
           metadata: { payment_id: fixture.paymentId },
         },
       },
@@ -418,7 +419,7 @@ test("$1 test SAT hour grants catalog durationHours, not a dollar fraction", asy
       .select()
       .from(fixture.db.creditLedgerTable)
       .where(eq(fixture.db.creditLedgerTable.clientUserId, fixture.userId));
-    assert.equal(Number(entry?.hours), TEST_SAT_HOUR_DURATION_HOURS);
+    assert.equal(Number(entry?.hours), DISCOUNTED_HOUR_DURATION_HOURS);
   } finally {
     await cleanupFixture(fixture);
   }
@@ -426,9 +427,9 @@ test("$1 test SAT hour grants catalog durationHours, not a dollar fraction", asy
 
 test("missing catalog product refuses to mark checkout paid and grants no credit", async () => {
   const fixture = await createPurchaseFixture({
-    amountCents: TEST_SAT_HOUR_PRICE_CENTS,
-    durationHours: TEST_SAT_HOUR_DURATION_HOURS,
-    slug: "test-sat-hour",
+    amountCents: DISCOUNTED_HOUR_PRICE_CENTS,
+    durationHours: DISCOUNTED_HOUR_DURATION_HOURS,
+    slug: "duration-hours-fixture",
   });
   try {
     await fixture.db.db
@@ -444,7 +445,7 @@ test("missing catalog product refuses to mark checkout paid and grants no credit
             object: {
               id: `cs_test_${fixture.suffix}`,
               payment_status: "paid",
-              amount_total: TEST_SAT_HOUR_PRICE_CENTS,
+              amount_total: DISCOUNTED_HOUR_PRICE_CENTS,
               metadata: { payment_id: fixture.paymentId },
             },
           },
@@ -464,9 +465,9 @@ test("missing catalog product refuses to mark checkout paid and grants no credit
 
 test("paid-but-uncredited backfill grants durationHours once", async () => {
   const fixture = await createPurchaseFixture({
-    amountCents: TEST_SAT_HOUR_PRICE_CENTS,
-    durationHours: TEST_SAT_HOUR_DURATION_HOURS,
-    slug: "test-sat-hour",
+    amountCents: DISCOUNTED_HOUR_PRICE_CENTS,
+    durationHours: DISCOUNTED_HOUR_DURATION_HOURS,
+    slug: "duration-hours-fixture",
   });
   try {
     await fixture.db.db

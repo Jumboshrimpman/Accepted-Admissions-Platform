@@ -195,6 +195,9 @@ describe("login helpers", () => {
     expect(
       loginReturnPath("?returnTo=/sat", "https://app.acceptedadmissions.org"),
     ).toBe("/sat");
+    expect(
+      loginReturnPath("?returnTo=/portal/sat", "https://app.acceptedadmissions.org"),
+    ).toBe("/portal/sat");
     expect(loginReturnPath("", "https://app.acceptedadmissions.org")).toBe(
       "/portal",
     );

@@ -253,6 +253,13 @@
       "when": 1790200000000,
       "tag": "0036_sat_booking_hours_7_to_21",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790300000000,
+      "tag": "0037_retire_sat_test_product",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,7 @@ That public origin is rewritten by Vercel to the Railway API (`/api/:path*` in `
 | Production (required) | `https://app.acceptedadmissions.org/api/stripe/webhook` |
 | Retired / broken | `https://accepted-admissions-platform.replit.app/api/stripe/webhook` |
 
-The Replit host previously recorded 100% delivery errors. A paid Checkout (`test` / `test-sat-hour`) then stayed uncredited until the event was resent to the public app URL.
+The Replit host previously recorded 100% delivery errors. A paid Checkout then stayed uncredited until the event was resent to the public app URL.
 
 Also set `STRIPE_WEBHOOK_SECRET` on Railway (the signing secret for this endpoint). Do not invent or commit secrets.
 
@@ -31,7 +31,7 @@ On `checkout.session.completed` with `payment_status=paid` (or `payment_intent.s
 
 Never mark a catalog purchase paid when the product row is missing. That fails the webhook (HTTP 500) so Stripe retries after ops restore the product. Signature failures stay HTTP 400.
 
-Hours come from `sat_products.durationHours`, not from the charge amount. The $1 `test` / `test-sat-hour` SKU still grants 1 hour.
+Hours come from `sat_products.durationHours`, not from the charge amount. The retired $1 `test-sat-hour` SKU is no longer sold.
 
 ## If a webhook is missed again
 

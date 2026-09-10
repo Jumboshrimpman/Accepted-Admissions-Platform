@@ -88,7 +88,7 @@ export default function ClientRequest() {
             <h1 className="font-display mt-4 text-5xl tracking-tight md:text-6xl">Tell us what support you are looking for.</h1>
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">Use this form when your needs go beyond the listed SAT offer, when you want to learn about our tutors, or when you want to confirm whether Accepted Admissions is the right fit before taking another step.</p>
             <Link href="/sat" data-testid="link-request-sat" className="mt-6 inline-flex items-center text-sm font-semibold text-primary hover:underline">
-              Looking for the one-session SAT offer? View it here <ArrowRight className="ml-2 h-4 w-4" />
+              Looking for SAT tutoring? Start here <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
             <div className="mt-8 space-y-4 text-sm text-muted-foreground">
               <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Share contact information, student context, the support you are considering, and general availability.</span></div>

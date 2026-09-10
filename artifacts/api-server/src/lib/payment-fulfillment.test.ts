@@ -3,22 +3,19 @@ import test from "node:test";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { missingProductFulfillmentError, paymentRequiresCatalogProduct, purchaseCreditFulfillmentKey, purchaseCreditHours } from "./payment-fulfillment-rules.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
-import { TEST_SAT_HOUR_DURATION_HOURS, TEST_SAT_HOUR_PRICE_CENTS } from "./sat-catalog.ts";
-
 test("purchase fulfillment hours always come from product.durationHours", () => {
   assert.equal(purchaseCreditHours({ durationHours: 1 }), 1);
   assert.equal(purchaseCreditHours({ durationHours: 10 }), 10);
-  assert.equal(purchaseCreditHours({ durationHours: TEST_SAT_HOUR_DURATION_HOURS }), 1);
   assert.equal(purchaseCreditHours({ durationHours: "3" }), 3);
   assert.throws(() => purchaseCreditHours({ durationHours: 0 }), /durationHours/);
   assert.throws(() => purchaseCreditHours({ durationHours: -1 }), /durationHours/);
   assert.throws(() => purchaseCreditHours({ durationHours: "missing" }), /durationHours/);
 });
 
-test("$1 test SAT hour still grants one catalog hour, not a dollar-derived fraction", () => {
-  assert.equal(TEST_SAT_HOUR_PRICE_CENTS, 100);
-  assert.equal(purchaseCreditHours({ durationHours: TEST_SAT_HOUR_DURATION_HOURS }), 1);
-  assert.notEqual(TEST_SAT_HOUR_PRICE_CENTS / 13_000, TEST_SAT_HOUR_DURATION_HOURS);
+test("credits come from durationHours even when the charge is not the live hourly rate", () => {
+  const discountedPriceCents = 100;
+  assert.equal(purchaseCreditHours({ durationHours: 1 }), 1);
+  assert.notEqual(discountedPriceCents / 13_000, 1);
 });
 
 test("checkout payments require a catalog product before they can be marked paid", () => {

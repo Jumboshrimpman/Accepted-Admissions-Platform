@@ -133,7 +133,7 @@ export function LandingContent({ content }: { content: HomeContent }) {
           <div className="grid gap-5 sm:grid-cols-3">
             {[
               ["01", "Choose a path", "Explore the SAT offer or tell us what broader support you are considering."],
-              ["02", "Take the next action", "Sign in to purchase the session, or submit a private request for review."],
+              ["02", "Take the next action", "Sign in to view SAT tutoring pricing, or submit a private request for review."],
               ["03", "Continue with context", "After purchase, scheduling continues in the portal. Requests receive a personal follow-up."],
             ].map(([number, headingLabel, body]) => (
               <div key={number} className="rounded-lg border bg-card p-5">

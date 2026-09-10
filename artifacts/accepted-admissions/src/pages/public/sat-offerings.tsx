@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/components/portal-auth";
-import {
-  getGetCurrentUserQueryKey,
-  useCreatePaymentCheckout,
-  useGetCurrentUser,
-} from "@workspace/api-client-react";
-import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
+import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
+import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PublicSiteShell, fetchPublicJson } from "@/components/public-site-shell";
 import {
   DEFAULT_SAT_CONTENT,
@@ -18,22 +13,18 @@ import {
   type SatContent,
 } from "@/lib/public-site-content";
 
-type Product = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  durationHours: number;
-  totalPriceCents: number;
-  effectiveHourlyRateCents: number;
-};
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+export function satPricingSignInHref(returnTo = `${basePath}/portal/sat`): string {
+  return `${basePath}/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
 
 export function SatMarketingContent({ content }: { content: SatContent }) {
   return (
     <main>
       <section className="border-b bg-background">
         <div className="container mx-auto max-w-3xl px-6 py-16">
-          <p className="font-metadata text-accent">Current online offers</p>
+          <p className="font-metadata text-accent">SAT tutoring</p>
           <h1 className="font-display mt-4 text-5xl tracking-tight">{content.title}</h1>
           <p className="mt-6 text-lg leading-relaxed text-muted-foreground">{content.body.heroLead}</p>
           <p className="mt-6 leading-relaxed text-muted-foreground">
@@ -51,18 +42,10 @@ export function SatMarketingContent({ content }: { content: SatContent }) {
 
 export default function SatOfferings() {
   const { isSignedIn } = usePortalAuth();
-  const [products, setProducts] = useState<Product[]>([]);
   const [content, setContent] = useState<SatContent>(DEFAULT_SAT_CONTENT);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [checkoutProductId, setCheckoutProductId] = useState("");
-  const [checkoutMessage, setCheckoutMessage] = useState("");
-  const [pendingProductId, setPendingProductId] = useState<string | null>(null);
-  const checkout = useCreatePaymentCheckout();
   const {
     data: currentUser,
     isLoading: currentUserLoading,
-    error: currentUserError,
   } = useGetCurrentUser({
     query: {
       queryKey: getGetCurrentUserQueryKey(),
@@ -70,122 +53,23 @@ export default function SatOfferings() {
       retry: false,
     },
   });
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const accountReady = Boolean(isSignedIn) && !currentUserLoading;
-  const canCheckout = accountReady && currentUser?.role === "student";
-
-  const accessMessage = (() => {
-    if (!isSignedIn || canCheckout || currentUserLoading) return null;
-    if (currentUser?.role === "administrator") {
-      return {
-        text: "Administrators cannot purchase the student offer. Open the administrator workspace or request guidance.",
-        href: "/admin",
-        label: "Open administrator workspace",
-      };
-    }
-    if (currentUser?.role === "tutor") {
-      return {
-        text: "Tutors cannot purchase the student offer. Open the tutor workspace or request guidance.",
-        href: "/tutor",
-        label: "Open tutor workspace",
-      };
-    }
-    if (currentUser?.role === "viewer") {
-      return {
-        text: "This offer is reserved for provisioned student accounts. Review your client workspace or request guidance.",
-        href: "/portal",
-        label: "Open client workspace",
-      };
-    }
-    return {
-      text: currentUserError
-        ? "This account could not be verified for student checkout right now. Request guidance and we’ll help with the next step."
-        : "This offer is available only to provisioned student accounts. Request guidance and we’ll help with the next step.",
-      href: "/client-request",
-      label: "Request guidance",
-    };
-  })();
+  const signedInStudent = Boolean(isSignedIn) && currentUser?.role === "student";
+  const pricingHref = signedInStudent ? "/portal/sat" : satPricingSignInHref();
+  const pricingLabel = signedInStudent
+    ? "Open SAT book and pay"
+    : isSignedIn && currentUserLoading
+      ? "Checking account access…"
+      : "Sign in to view SAT pricing";
 
   useEffect(() => {
-    const storedProductId = window.sessionStorage.getItem("accepted:pending-product");
-    if (storedProductId) setPendingProductId(storedProductId);
     fetchPublicJson<unknown>("/api/public/content/sat")
       .then((result) => setContent(normalizeSatContent(result)))
       .catch(() => setContent(DEFAULT_SAT_CONTENT));
-    fetchPublicJson<unknown>("/api/public/products")
-      .then((nextProducts) => {
-        if (!Array.isArray(nextProducts)) throw new Error("Products response is malformed");
-        setProducts(
-          nextProducts.filter((product): product is Product => {
-            if (!product || typeof product !== "object") return false;
-            const candidate = product as Record<string, unknown>;
-            return (
-              typeof candidate.id === "string" &&
-              typeof candidate.slug === "string" &&
-              typeof candidate.name === "string" &&
-              typeof candidate.description === "string" &&
-              typeof candidate.durationHours === "number" &&
-              typeof candidate.totalPriceCents === "number" &&
-              typeof candidate.effectiveHourlyRateCents === "number"
-            );
-          }),
-        );
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => {
-    if (!isSignedIn || !pendingProductId || loading || !products.length || currentUserLoading) return;
-    if (!currentUser || currentUser.role !== "student") {
-      setPendingProductId(null);
-      window.sessionStorage.removeItem("accepted:pending-product");
-      return;
-    }
-    if (!products.some((product) => product.id === pendingProductId)) {
-      setPendingProductId(null);
-      window.sessionStorage.removeItem("accepted:pending-product");
-      return;
-    }
-    setPendingProductId(null);
-    window.sessionStorage.removeItem("accepted:pending-product");
-    startCheckout(pendingProductId);
-  }, [isSignedIn, pendingProductId, loading, products, currentUserLoading, currentUser]);
-
-  const startCheckout = (productId: string) => {
-    setCheckoutMessage("");
-    if (!isSignedIn) {
-      window.sessionStorage.setItem("accepted:pending-product", productId);
-      const returnTo = `${basePath}/sat`;
-      window.location.assign(`${basePath}/login?returnTo=${encodeURIComponent(returnTo)}`);
-      return;
-    }
-    if (!canCheckout) {
-      setCheckoutMessage(accessMessage?.text ?? "Student checkout is unavailable for this account.");
-      return;
-    }
-    setCheckoutProductId(productId);
-    checkout.mutate(
-      { data: { productId } },
-      {
-        onSuccess: (session) => window.location.assign(session.url),
-        onError: (checkoutError) => {
-          const status = (checkoutError as { status?: number } | null)?.status;
-          const message =
-            status === 403
-              ? "Student checkout is available only to provisioned student accounts. Please request guidance if you need help."
-              : (checkoutError as { data?: { error?: string } } | null)?.data?.error ??
-                "Secure Checkout is temporarily unavailable.";
-          setCheckoutMessage(message);
-          setCheckoutProductId("");
-        },
-      },
-    );
-  };
 
   return (
     <PublicSiteShell
-      eyebrow="One session, available online"
+      eyebrow="SAT tutoring"
       title={content.seoTitle || "SAT tutoring | Accepted Admissions"}
       description={content.seoDescription || DEFAULT_SAT_CONTENT.seoDescription || ""}
     >
@@ -194,19 +78,19 @@ export default function SatOfferings() {
           <div className="container relative mx-auto grid gap-12 px-6 py-20 md:grid-cols-[1.05fr_.95fr] md:items-center md:py-28">
             <div>
               <Badge className="font-metadata mb-6 rounded-sm bg-accent/10 px-3 py-1 text-accent hover:bg-accent/10">
-                Current online offers
+                SAT tutoring
               </Badge>
-               <h1 className="font-display max-w-3xl text-5xl tracking-tight md:text-7xl">
-                 Prepaid <span className="text-accent">SAT session credits.</span>
+              <h1 className="font-display max-w-3xl text-5xl tracking-tight md:text-7xl">
+                Focused <span className="text-accent">SAT tutoring.</span>
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                 {content.body.heroLead}
+                {content.body.heroLead}
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-13 w-full rounded-md bg-primary px-7 text-primary-foreground sm:w-auto">
-                  <a href="#session-offer" data-testid="link-sat-offer">
-                    View session offers <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
+                  <Link href={pricingHref} data-testid="link-sat-pricing-signin">
+                    {pricingLabel} <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="h-13 rounded-md px-7">
                   <Link href="/client-request" data-testid="link-sat-guidance">
@@ -214,122 +98,67 @@ export default function SatOfferings() {
                   </Link>
                 </Button>
               </div>
-              {isSignedIn && currentUser?.role === "student" ? (
+              {signedInStudent ? (
                 <p className="mt-4 text-sm">
                   <Link href="/portal/sat" className="font-semibold text-primary hover:underline" data-testid="link-sat-stay-in-portal">
                     Book and pay inside your client portal
                   </Link>
-                  {" "}if you already have an account — this page is the public offer.
+                  {" "}— SAT prices and checkout stay behind sign-in.
                 </p>
               ) : null}
               <p className="mt-4 text-sm text-muted-foreground">
                 Looking for a different service? Campus tours, college advising, and other requests use the{" "}
                 <Link href="/client-request" className="font-semibold text-primary hover:underline">
                   guidance form
-                </Link>{" "}
-                instead of SAT checkout. Financial aid for SAT tutoring is considered case by case — mention it in that request.
+                </Link>
+                {" "}instead of SAT checkout. Financial aid for SAT tutoring is considered case by case — mention it in that request.
               </p>
             </div>
             <Card className="rounded-xl border bg-card shadow-sm">
               <CardHeader>
-                 <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-md bg-primary/10 text-primary"><Sparkles className="h-5 w-5" /></div>
-                 <CardTitle className="font-display text-3xl">From offer to scheduled session</CardTitle>
-                <CardDescription>What to expect before and after secure checkout.</CardDescription>
+                <CardTitle className="font-display text-3xl">How SAT tutoring continues</CardTitle>
+                <CardDescription>Pricing and payment stay in the signed-in client portal.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                 {[
-                   ["1. Review the offers", "Confirm session credits and the current approved prices below."],
-                   ["2. Sign in and pay", "Signed-out visitors are sent to sign in and returned here to continue secure checkout."],
-                   ["3. Schedule after payment", "Once payment is verified, choose an available time in the client portal."],
+                {[
+                  ["1. Learn about SAT tutoring", "This public page explains the path. It does not list prices or start checkout."],
+                  ["2. Sign in to view pricing", "Signed-out visitors are sent to sign in before any SAT prices or payment options appear."],
+                  ["3. Pay and schedule in the portal", "Self-serve clients purchase prepaid credits and book available times after a verified Stripe payment."],
                 ].map(([title, description], index) => (
-                    <div key={title} className="flex gap-4 rounded-lg border bg-background p-4" data-testid={`step-sat-${index + 1}`}>
-                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{index + 1}</span>
+                  <div key={title} className="flex gap-4 rounded-lg border bg-background p-4" data-testid={`step-sat-${index + 1}`}>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{index + 1}</span>
                     <div><p className="font-semibold">{title}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p></div>
                   </div>
                 ))}
-                 <div className="flex items-start gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+                <div className="flex items-start gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
                   <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                    <span>Scheduling is a post-purchase portal step. Availability is checked again when a time is booked.</span>
+                  <span>Scheduling is a post-purchase portal step. Availability is checked again when a time is booked.</span>
                 </div>
               </CardContent>
             </Card>
           </div>
         </section>
 
-         <section id="session-offer" className="container mx-auto scroll-mt-28 px-6 py-20">
+        <section className="container mx-auto scroll-mt-28 px-6 py-20">
           <div className="mb-10 max-w-2xl">
-               <p className="font-metadata text-accent">The current offers</p>
-                <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">SAT session credit packages.</h2>
-               <p className="mt-3 text-muted-foreground">{content.body.offersIntro} Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
+            <p className="font-metadata text-accent">Inside the portal</p>
+            <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">SAT pricing stays behind sign-in.</h2>
+            <p className="mt-3 text-muted-foreground">{content.body.offersIntro} Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
           </div>
-          {loading ? (
-             <div className="max-w-2xl" data-testid="status-sat-loading"><Skeleton className="h-72 rounded-lg" /></div>
-          ) : error ? (
-             <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground" role="alert" data-testid="status-sat-error">SAT offers are temporarily unavailable. Please use the guidance request form and we’ll help you directly.</div>
-          ) : products.length === 0 ? (
-             <div className="rounded-lg border border-dashed p-10 text-center" data-testid="status-sat-empty">
-               <h3 className="text-lg font-semibold">Online session credits are not available right now</h3>
-               <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">This page does not promise availability. Tell us what you are working toward and we’ll help you find the right next step.</p>
-               <Button asChild variant="outline" className="mt-5 rounded-md"><Link href="/client-request" data-testid="link-sat-empty-guidance">Request guidance</Link></Button>
-            </div>
-          ) : (
-             <div className="grid gap-6 md:grid-cols-2">
-               {products.map((product) => {
-                 const durationMinutes = Math.round(product.durationHours * 60);
-                 const credits = Math.round(product.durationHours);
-                 const price = (product.totalPriceCents / 100).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-                 return (
-                   <Card key={product.id} className="relative overflow-hidden rounded-xl border-accent/40 shadow-sm" data-testid={`card-sat-offer-${product.id}`}>
-                     <Badge className="font-metadata absolute right-5 top-5 rounded-sm bg-accent text-accent-foreground">{credits} credit{credits === 1 ? "" : "s"}</Badge>
-                  <CardHeader className="pb-4">
-                       <p className="text-sm font-medium text-muted-foreground">Accepted Admissions · SAT tutoring</p>
-                    <CardTitle className="mt-2 text-2xl">{product.name}</CardTitle>
-                    <CardDescription className="min-h-10 leading-relaxed">{product.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                     <div className="mb-5" data-testid={`price-sat-offer-${product.id}`}>
-                        <span className="font-display text-5xl">{price}</span>
-                        <span className="ml-2 text-sm text-muted-foreground">one-time</span>
-                         <p className="mt-1 text-sm font-medium text-accent">{credits} prepaid {durationMinutes}-minute session credit{credits === 1 ? "" : "s"}</p>
-                    </div>
-                     <Button
-                        data-testid={`button-sat-checkout-${product.id}`}
-                        variant="default"
-                         className="w-full rounded-md"
-                       onClick={() => startCheckout(product.id)}
-                        disabled={checkout.isPending || (Boolean(isSignedIn) && (currentUserLoading || !canCheckout))}
-                     >
-                       {checkout.isPending && checkoutProductId === product.id
-                         ? "Opening secure Checkout…"
-                          : !isSignedIn
-                            ? "Sign in to purchase this session"
-                            : currentUserLoading
-                              ? "Checking account access…"
-                              : canCheckout
-                            ? "Continue to secure checkout"
-                             : "Student checkout unavailable"}
-                     </Button>
-                      {!isSignedIn && <p className="mt-3 text-center text-xs text-muted-foreground">You’ll return to this offer after signing in.</p>}
-                      {accessMessage && (
-                        <p className="mt-3 text-center text-xs text-muted-foreground">
-                          {accessMessage.text}{" "}
-                          <Link href={accessMessage.href} className="font-semibold text-primary hover:underline">
-                            {accessMessage.label}
-                          </Link>
-                        </p>
-                      )}
-                  </CardContent>
-                </Card>
-                );
-              })}
-            </div>
-          )}
-           {checkoutMessage && (
-             <p className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive" role="alert" data-testid="status-sat-checkout-error">
-               {checkoutMessage}
-             </p>
-           )}
-       </section>
+          <Card className="max-w-2xl" data-testid="card-sat-signin-required">
+            <CardHeader>
+              <CardTitle>Sign in to view SAT tutoring prices</CardTitle>
+              <CardDescription>
+                Prepaid session credits and Stripe checkout are available only after you sign in to your client portal.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="rounded-md" data-testid="button-sat-signin-for-pricing">
+                <Link href={pricingHref}>{pricingLabel}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="border-y bg-card">
           <div className="container mx-auto grid gap-8 px-6 py-16 md:grid-cols-3">

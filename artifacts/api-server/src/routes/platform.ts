@@ -140,10 +140,12 @@ import {
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
   ACCEPTED_SAT_CATALOG_SLUGS,
+  RETIRED_TEST_SAT_HOUR_SLUG,
   SINGLE_SAT_SESSION_PRICE_CENTS,
   SINGLE_SAT_SESSION_SLUG,
   TEN_SAT_SESSION_PACKAGE_SLUG,
   isAcceptedSatCatalogProduct,
+  isRetiredSatTestProduct,
 } from "../lib/sat-catalog";
 import {
   isLibraryAssetKind,
@@ -1774,15 +1776,15 @@ async function ensureUpgradeSeedData(): Promise<void> {
         title: "SAT tutoring",
         seoTitle: "SAT tutoring | Accepted Admissions",
         seoDescription:
-          "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
+          "SAT tutoring with Accepted Admissions. Sign in to view pricing and purchase prepaid session credits in your client portal.",
         body: {
           heroLead:
-            "Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked with our SAT tutors.",
+            "One-on-one SAT tutoring with the Accepted Admissions team. Sign in to your client portal to view current pricing and purchase prepaid session credits.",
           offersIntro:
-            "Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on our SAT tutors’ available calendar.",
+            "SAT booking and payment stay inside the signed-in client portal. Request broader guidance if you need a different service.",
           sections: [
-            "Review the current single-hour and ten-hour SAT tutoring credits available online.",
-            "Sign in to purchase, then use verified prepaid credits to schedule with our SAT tutors in the client portal.",
+            "Sign in to view SAT tutoring pricing and purchase prepaid session credits.",
+            "After a verified Stripe payment, use credits to schedule with our SAT tutors in the client portal.",
           ],
         },
         status: "published",
@@ -1802,7 +1804,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
             "Harvard students and recent graduates provide focused one-on-one SAT tutoring, with thoughtful guidance for families whose needs go beyond a single session.",
           satPathTitle: "Need SAT tutoring now?",
           satPathBlurb:
-            "Purchase one hour or a ten-hour package at $130 per credit, then book open times with our SAT tutors.",
+            "Sign in to your client portal to view SAT tutoring pricing and book sessions with our SAT tutors.",
           guidancePathTitle: "Need a broader conversation?",
           guidancePathBlurb:
             "Admissions guidance, IELTS support, or another request starts with a private inquiry—not checkout.",
@@ -1903,9 +1905,16 @@ async function ensureUpgradeSeedData(): Promise<void> {
   const satCopyMentionsNamedTutors = [satBody?.heroLead, satBody?.offersIntro, ...satSections].some(
     (value) => typeof value === "string" && /Xavier or Eunice/i.test(value),
   );
+  const satCopyMentionsPublicPrices = [
+    satBody?.heroLead,
+    satBody?.offersIntro,
+    satSeed?.seoDescription,
+    ...satSections,
+  ].some((value) => typeof value === "string" && /\$130|\$1,300|approved prices/i.test(value));
   if (
     satSeed &&
     (satCopyMentionsNamedTutors ||
+      satCopyMentionsPublicPrices ||
       satSections.some((section) => section.includes("single SAT tutoring session currently available")) ||
       (typeof satSeed.seoDescription === "string" &&
         satSeed.seoDescription.includes("current 60-minute SAT tutoring offer")))
@@ -1914,20 +1923,52 @@ async function ensureUpgradeSeedData(): Promise<void> {
       .update(publicContentTable)
       .set({
         seoDescription:
-          "Explore prepaid SAT session credits at $130/hour, see approved prices, and continue to secure checkout.",
+          "SAT tutoring with Accepted Admissions. Sign in to view pricing and purchase prepaid session credits in your client portal.",
         body: {
           heroLead:
-            "Purchase a single hour or a ten-hour package at $130 per credit. Funds settle with Accepted Admissions; credits unlock after a verified Stripe payment and can be booked with our SAT tutors.",
+            "One-on-one SAT tutoring with the Accepted Admissions team. Sign in to your client portal to view current pricing and purchase prepaid session credits.",
           offersIntro:
-            "Book hourly ($130 for one credit) or buy ten hours at once ($1,300). Use credits anytime on our SAT tutors’ available calendar.",
+            "SAT booking and payment stay inside the signed-in client portal. Request broader guidance if you need a different service.",
           sections: [
-            "Review the current single-hour and ten-hour SAT tutoring credits available online.",
-            "Sign in to purchase, then use verified prepaid credits to schedule with our SAT tutors in the client portal.",
+            "Sign in to view SAT tutoring pricing and purchase prepaid session credits.",
+            "After a verified Stripe payment, use credits to schedule with our SAT tutors in the client portal.",
           ],
         },
         updatedAt: new Date(),
       })
       .where(eq(publicContentTable.id, satSeed.id));
+  }
+
+  const [homeSeed] = await db
+    .select()
+    .from(publicContentTable)
+    .where(
+      and(
+        eq(publicContentTable.slug, "home"),
+        isNull(publicContentTable.updatedBy),
+      ),
+    )
+    .limit(1);
+  const homeBody =
+    homeSeed?.body && typeof homeSeed.body === "object" && !Array.isArray(homeSeed.body)
+      ? (homeSeed.body as Record<string, unknown>)
+      : null;
+  if (
+    homeSeed &&
+    typeof homeBody?.satPathBlurb === "string" &&
+    /\$130|\$1,300/.test(homeBody.satPathBlurb)
+  ) {
+    await db
+      .update(publicContentTable)
+      .set({
+        body: {
+          ...homeBody,
+          satPathBlurb:
+            "Sign in to your client portal to view SAT tutoring pricing and book sessions with our SAT tutors.",
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(publicContentTable.id, homeSeed.id));
   }
 
   const [successSeed] = await db
@@ -4502,7 +4543,7 @@ router.get(
   },
 );
 
-router.get("/public/products", async (_req, res): Promise<void> => {
+router.get("/public/products", requireAppUser, async (_req: AuthedRequest, res): Promise<void> => {
   await ensurePublicPlatformData();
   const products = await db
     .select()
@@ -6190,6 +6231,7 @@ router.get(
     const products = await db
       .select()
       .from(satProductsTable)
+      .where(ne(satProductsTable.slug, RETIRED_TEST_SAT_HOUR_SLUG))
       .orderBy(asc(satProductsTable.durationHours));
     res.json(products);
   },
@@ -6208,6 +6250,7 @@ router.post(
     const active = body.active === undefined ? true : body.active === true;
     if (
       !/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(slug) ||
+      isRetiredSatTestProduct(slug) ||
       name.length < 2 ||
       name.length > 200 ||
       description.length > 1000 ||
@@ -6274,6 +6317,7 @@ router.patch(
     const active = body.active === undefined ? existing.active : body.active === true;
     if (
       !/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(slug) ||
+      isRetiredSatTestProduct(slug) ||
       name.length < 2 ||
       name.length > 200 ||
       description.length > 1000 ||
@@ -6347,6 +6391,7 @@ router.get(
           active: satProductsTable.active,
         })
         .from(satProductsTable)
+        .where(ne(satProductsTable.slug, RETIRED_TEST_SAT_HOUR_SLUG))
         .orderBy(asc(satProductsTable.durationHours)),
       db
         .select({

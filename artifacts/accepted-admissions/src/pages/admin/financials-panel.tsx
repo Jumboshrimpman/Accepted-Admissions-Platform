@@ -138,9 +138,12 @@ export function AdminFinancialsPanel() {
   const mismatches = data.paymentCreditMismatches ?? [];
   const expectedWebhookUrl =
     data.expectedStripeWebhookUrl ?? "https://app.acceptedadmissions.org/api/stripe/webhook";
+  const catalogProducts = data.products.filter(
+    (product) => product.slug !== "test-sat-hour" && product.name.toLowerCase() !== "test",
+  );
   const selectedClient = clientUserId || data.clients[0]?.id || "";
-  const selectedProduct = productId || data.products[0]?.id || "";
-  const selectedProductRecord = data.products.find((product) => product.id === selectedProduct);
+  const selectedProduct = productId || catalogProducts[0]?.id || "";
+  const selectedProductRecord = catalogProducts.find((product) => product.id === selectedProduct);
   const invoicePriceCents = Math.round(
     Number(invoiceUnitPrice || (selectedProductRecord?.totalPriceCents ?? 0) / 100) * 100,
   );
@@ -242,7 +245,7 @@ export function AdminFinancialsPanel() {
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
             <h3 className="font-semibold">Authoritative SAT catalog</h3>
-            <p className="text-sm text-muted-foreground">Public checkout sells Single SAT Session ($130 / 1 credit), Ten SAT Session Package ($1,300 / 10 credits at $130/hour), and a temporary test SKU named test ($1 / 1 credit). Credits book any open hour with our SAT tutors after a verified Stripe payment.</p>
+            <p className="text-sm text-muted-foreground">Signed-in self-serve checkout sells Single SAT Session ($130 / 1 credit) and Ten SAT Session Package ($1,300 / 10 credits at $130/hour). Credits book any open hour with our SAT tutors after a verified Stripe payment.</p>
           </div>
           <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
@@ -275,7 +278,7 @@ export function AdminFinancialsPanel() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="border-b text-xs uppercase text-muted-foreground"><tr><th className="p-2">Product</th><th className="p-2">Hours</th><th className="p-2">Price</th><th className="p-2">Status</th><th className="hidden p-2">Action</th></tr></thead>
-              <tbody>{data.products.map((product) => (
+              <tbody>{catalogProducts.map((product) => (
                 <tr key={product.id} className="border-b">
                   <td className="p-2"><p className="font-medium">{product.name}</p><p className="text-xs text-muted-foreground">{product.slug}</p></td>
                   <td className="p-2">{product.durationHours}</td>
@@ -292,7 +295,7 @@ export function AdminFinancialsPanel() {
           <div><h3 className="font-semibold">Create an invoice</h3><p className="text-sm text-muted-foreground">Invoice edits never mark a payment as verified. Use reconciliation after funds are confirmed.</p></div>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm font-medium">Client<select value={selectedClient} onChange={(event) => setClientUserId(event.target.value)} className="mt-2 h-10 w-full rounded-md border bg-background px-3">{data.clients.map((client) => <option key={client.id} value={client.id}>{client.displayName} · {client.email}</option>)}</select></label>
-            <label className="text-sm font-medium">Product reference<select value={selectedProduct} onChange={(event) => setProductId(event.target.value)} className="mt-2 h-10 w-full rounded-md border bg-background px-3">{data.products.filter((product) => product.active).map((product) => <option key={product.id} value={product.id}>{product.name} · {money(product.totalPriceCents)}</option>)}</select></label>
+            <label className="text-sm font-medium">Product reference<select value={selectedProduct} onChange={(event) => setProductId(event.target.value)} className="mt-2 h-10 w-full rounded-md border bg-background px-3">{catalogProducts.filter((product) => product.active).map((product) => <option key={product.id} value={product.id}>{product.name} · {money(product.totalPriceCents)}</option>)}</select></label>
           </div>
           <div className="grid gap-3 md:grid-cols-4">
             <Input placeholder="Line item description" value={invoiceDescription} onChange={(event) => setInvoiceDescription(event.target.value)} />
