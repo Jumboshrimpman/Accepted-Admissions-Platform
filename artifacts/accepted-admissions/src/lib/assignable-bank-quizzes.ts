@@ -48,6 +48,75 @@ export function sessionPreworkQuizzes<T extends BankQuizCandidate>(
   );
 }
 
+/** Admin inventory: every before-session copy on the meeting, including archived resets. */
+export function sessionHomeworkInventory<T extends BankQuizCandidate>(
+  assignments: T[],
+  session: { id: string },
+): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of assignments) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    if (item.sessionId !== session.id) continue;
+    if (item.deliveryPhase !== "before_session") continue;
+    result.push(item);
+  }
+  return result.sort((left, right) => {
+    const statusScore = (status: string) =>
+      status === "published" ? 2 : status === "archived" ? 0 : 1;
+    const statusDelta = statusScore(right.status) - statusScore(left.status);
+    if (statusDelta !== 0) return statusDelta;
+    return right.questionCount - left.questionCount;
+  });
+}
+
+function isStatusDiagnostic(item: { title: string; questionCount: number }): boolean {
+  const title = item.title.trim().toLowerCase();
+  if (title.includes("full-length sat diagnostic")) return true;
+  if (title.includes("full sat practice diagnostic")) return true;
+  return title.includes("diagnostic") && item.questionCount >= 80;
+}
+
+/**
+ * Student/tutor Homework status & results: hide archived leftovers, one row per id,
+ * and one current full-length diagnostic.
+ */
+export function sessionStatusHomework<
+  T extends {
+    id?: string;
+    assignmentId?: string;
+    title: string;
+    status: string;
+    questionCount?: number;
+  },
+>(items: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const item of items) {
+    const id = item.assignmentId ?? item.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (item.status === "archived") continue;
+    unique.push(item);
+  }
+  const diagnostics = unique.filter((item) =>
+    isStatusDiagnostic({ title: item.title, questionCount: item.questionCount ?? 0 }),
+  );
+  if (diagnostics.length <= 1) return unique;
+  const keeper = [...diagnostics].sort((left, right) => {
+    return (right.questionCount ?? 0) - (left.questionCount ?? 0);
+  })[0];
+  const keeperId = keeper?.assignmentId ?? keeper?.id;
+  return unique.filter((item) => {
+    const isDiagnostic = isStatusDiagnostic({
+      title: item.title,
+      questionCount: item.questionCount ?? 0,
+    });
+    return !isDiagnostic || (item.assignmentId ?? item.id) === keeperId;
+  });
+}
+
 export function assignableBankQuizzes(
   assignments: BankQuizCandidate[],
   session: { id: string; courseId: string },

@@ -5,7 +5,9 @@ import {
   assignableBankQuizzes,
   bankQuizOptionLabel,
   isReusableBankQuiz,
+  sessionHomeworkInventory,
   sessionPreworkQuizzes,
+  sessionStatusHomework,
   type BankQuizCandidate,
 } from "./assignable-bank-quizzes.ts";
 
@@ -21,6 +23,72 @@ function quiz(overrides: Partial<BankQuizCandidate> = {}): BankQuizCandidate {
     ...overrides,
   };
 }
+
+test("session homework inventory lists archived reset copies for admin", () => {
+  const inventory = sessionHomeworkInventory(
+    [
+      quiz({ id: "live", sessionId: "session-1", questionCount: 120 }),
+      quiz({ id: "live", sessionId: "session-1", questionCount: 120 }),
+      quiz({
+        id: "archived-old",
+        sessionId: "session-1",
+        status: "archived",
+        questionCount: 98,
+      }),
+      quiz({ id: "other-session", sessionId: "session-2" }),
+    ],
+    { id: "session-1" },
+  );
+  assert.deepEqual(
+    inventory.map((item) => item.id),
+    ["live", "archived-old"],
+  );
+});
+
+test("status homework hides archived leftovers and collapses extra diagnostics", () => {
+  const listed = sessionStatusHomework([
+    {
+      assignmentId: "archived-1",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      questionCount: 120,
+    },
+    {
+      assignmentId: "archived-2",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      questionCount: 120,
+    },
+    {
+      assignmentId: "archived-3",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "archived",
+      questionCount: 98,
+    },
+    {
+      assignmentId: "live",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "published",
+      questionCount: 120,
+    },
+    {
+      assignmentId: "empty-extra",
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      status: "published",
+      questionCount: 0,
+    },
+    {
+      id: "routine",
+      title: "October 9 mini-section",
+      status: "published",
+      questionCount: 40,
+    },
+  ]);
+  assert.deepEqual(
+    listed.map((item) => item.assignmentId ?? item.id),
+    ["live", "routine"],
+  );
+});
 
 test("session pre-work excludes archived clones", () => {
   const prework = sessionPreworkQuizzes(

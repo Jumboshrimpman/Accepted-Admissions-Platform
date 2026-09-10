@@ -299,6 +299,8 @@ afterEach(() => {
   mocks.curriculum.assignments[0]!.sessionId = null;
   mocks.curriculum.assignments[0]!.sessionTitle = null;
   mocks.curriculum.assignments[0]!.status = "published";
+  mocks.curriculum.assignments[0]!.title = "October pre-session mini-section";
+  mocks.curriculum.assignments[0]!.questionCount = 3;
   mocks.curriculum.submissions = [];
   mocks.curriculum.sessions = mocks.curriculum.sessions.filter((session) => session.id === "session-1");
   mocks.curriculum.sessions[0]!.dateTime = "2026-10-02T16:00:00.000Z";
@@ -384,7 +386,7 @@ describe("curriculum bank IA", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     render(<AdminCurriculum />);
 
-    expect(screen.getByText("Pre-session quiz")).toBeTruthy();
+    expect(screen.getByText("Homework & diagnostics")).toBeTruthy();
     expect(screen.getByText("No quiz attached. Assign one from the bank below.")).toBeTruthy();
     fireEvent.click(screen.getByTestId("assign-prework-session-1"));
     expect(mocks.cloneAssignment).toHaveBeenCalledWith(
@@ -594,6 +596,41 @@ describe("curriculum bank IA", () => {
     expect(mocks.createAssignment).toHaveBeenCalled();
     expect(mocks.setLocation).toHaveBeenCalledWith(
       "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-created",
+    );
+  });
+
+  test("session homework inventory shows archived duplicates and can restore or archive a copy", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.assignments[0]!.sessionId = "session-1";
+    mocks.curriculum.assignments[0]!.sessionTitle = "Taito SAT with Eunice";
+    mocks.curriculum.assignments[0]!.title = "Full-length SAT diagnostic — Taito’s SAT Session with Eunice";
+    mocks.curriculum.assignments.push({
+      ...mocks.curriculum.assignments[0]!,
+      id: "quiz-archived-1",
+      status: "archived",
+      questionCount: 98,
+    });
+    mocks.curriculum.assignments.push({
+      ...mocks.curriculum.assignments[0]!,
+      id: "quiz-archived-2",
+      status: "archived",
+      questionCount: 120,
+    });
+
+    render(<AdminCurriculum />);
+
+    expect(screen.getByTestId("session-homework-quiz-1")).toBeTruthy();
+    expect(screen.getByTestId("session-homework-quiz-archived-1").textContent).toMatch(/archived/);
+    expect(screen.getByTestId("session-homework-quiz-archived-2").textContent).toMatch(/archived/);
+    fireEvent.click(screen.getByTestId("archive-homework-quiz-1"));
+    expect(mocks.updateAssignment).toHaveBeenCalledWith(
+      { assignmentId: "quiz-1", data: { status: "archived" } },
+      expect.any(Object),
+    );
+    fireEvent.click(screen.getByTestId("activate-homework-quiz-archived-2"));
+    expect(mocks.updateAssignment).toHaveBeenCalledWith(
+      { assignmentId: "quiz-archived-2", data: { status: "published" } },
+      expect.any(Object),
     );
   });
 

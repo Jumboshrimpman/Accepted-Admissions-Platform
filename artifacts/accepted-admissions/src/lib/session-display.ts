@@ -279,15 +279,32 @@ export function displaySessionTitle(title: string, subject: string): string {
   return `English${title.slice("IELTS".length)}`;
 }
 
+export const DEFAULT_VISIBLE_UPCOMING_COUNT = 3;
+
+export function collapsedItems<T>(
+  items: readonly T[],
+  expanded: boolean,
+  initialCount = DEFAULT_VISIBLE_UPCOMING_COUNT,
+): {
+  visible: T[];
+  hiddenCount: number;
+  canToggle: boolean;
+} {
+  const hiddenCount = Math.max(0, items.length - initialCount);
+  return {
+    visible: expanded ? [...items] : items.slice(0, initialCount),
+    hiddenCount,
+    canToggle: hiddenCount > 0,
+  };
+}
+
 export function disclosedSessions<T>(
   sessions: readonly T[],
   expanded: boolean,
-  initialCount = 3,
+  initialCount = DEFAULT_VISIBLE_UPCOMING_COUNT,
 ): readonly T[] {
-  return expanded ? sessions : sessions.slice(0, initialCount);
+  return collapsedItems(sessions, expanded, initialCount).visible;
 }
-
-export const DEFAULT_VISIBLE_UPCOMING_COUNT = 3;
 
 export type ListedSession = {
   id: string;

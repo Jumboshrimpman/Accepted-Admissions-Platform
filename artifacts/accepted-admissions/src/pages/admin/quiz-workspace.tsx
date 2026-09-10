@@ -355,6 +355,9 @@ function QuizDetail({
         <p className="mt-1 text-sm text-muted-foreground">
           {quiz.programTitle}
           {quiz.sessionTitle ? ` · currently on ${quiz.sessionTitle}` : " · assign from here or from a session"}
+          {quiz.sessionId
+            ? " · Edit title, status, or visibility here. Archived copies stay off the student/tutor homework list."
+            : ""}
         </p>
       </div>
       {editing ? (
