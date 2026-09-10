@@ -29,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
-import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
+import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
 import {
   displaySessionTitle,
   disclosedSessions,
@@ -71,10 +71,11 @@ export default function TutorDashboard() {
   }
 
   const openQueue = queue?.filter((item) => item.status === "open") ?? [];
-  const upcomingSessions = disclosedSessions(
-    sessionsForDashboardRole(dashboard.upcomingSessions, dashboard.user),
-    showAllSessions,
+  const scopedUpcoming = upcomingSessionsForDashboard(
+    dashboard.upcomingSessions,
+    dashboard.user,
   );
+  const upcomingSessions = disclosedSessions(scopedUpcoming, showAllSessions);
   const fallCourse =
     dashboard.courses.find((course) => /fall/i.test(course.title)) ??
     dashboard.courses[0];
@@ -199,7 +200,7 @@ export default function TutorDashboard() {
                 Open a session workspace to teach and review.
               </CardDescription>
             </div>
-            <Badge variant="secondary">{dashboard.upcomingSessions.length} scheduled</Badge>
+            <Badge variant="secondary">{scopedUpcoming.length} scheduled</Badge>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -238,7 +239,7 @@ export default function TutorDashboard() {
                   </div>
                 </div>
               ))}
-              {dashboard.upcomingSessions.length > 3 && (
+              {scopedUpcoming.length > 3 && (
                 <div className="px-6 py-4 sm:px-7">
                   <Button
                     variant="outline"
@@ -247,7 +248,7 @@ export default function TutorDashboard() {
                   >
                     {showAllSessions
                       ? "View less"
-                      : `View more (${dashboard.upcomingSessions.length - 3})`}
+                      : `View more (${scopedUpcoming.length - 3})`}
                   </Button>
                 </div>
               )}

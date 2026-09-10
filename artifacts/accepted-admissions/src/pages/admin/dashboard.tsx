@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { previewableStudents } from "@/lib/previewable-students";
+import { isLiveListedSession } from "@/lib/quiz-content";
 import {
   disclosedSessions,
   displaySessionTitle,
@@ -88,7 +89,7 @@ export default function AdminDashboard() {
   const accessConflicts = overview?.accessConflicts ?? [];
   const latestLogin = loginActivity[0];
   const upcomingSessions = (curriculum?.sessions ?? [])
-    .filter((session) => new Date(session.dateTime).getTime() >= Date.now() && session.status !== "archived" && session.bookingStatus !== "cancelled")
+    .filter((session) => new Date(session.dateTime).getTime() >= Date.now() && isLiveListedSession(session))
     .sort((left, right) => new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime());
   const visibleUpcomingSessions = disclosedSessions(upcomingSessions, showAllSessions);
   const newRequestCount = platform?.newRequests ?? guidanceRequests.filter((request) => request.status === "new").length;

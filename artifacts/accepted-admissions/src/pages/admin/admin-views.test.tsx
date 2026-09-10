@@ -85,7 +85,18 @@ const mocks = vi.hoisted(() => ({
       sessionCount: number;
       completedSessionCount: number;
     }>,
-    sessions: [],
+    sessions: [] as Array<{
+      id: string;
+      courseId: string;
+      dateTime: string;
+      timezone: string;
+      durationMinutes: number;
+      subject: string;
+      title: string;
+      status: string;
+      bookingStatus: string;
+      cancelledAt?: string | null;
+    }>,
     assignments: [],
     blocks: [],
     questionStatus: [],
@@ -228,6 +239,7 @@ afterEach(() => {
   mocks.curriculum.clients = [];
   mocks.curriculum.tutors = [];
   mocks.curriculum.programs = [];
+  mocks.curriculum.sessions = [];
   mocks.overview.users = [];
 });
 
@@ -295,6 +307,53 @@ describe("administrator overview", () => {
     expect(disclosure.open).toBe(true);
     expect(screen.getByText("taito@example.invalid")).toBeTruthy();
     expect(screen.getByText("student")).toBeTruthy();
+  });
+
+  test("omits cancelled meetings from Upcoming sessions", () => {
+    mocks.curriculum.sessions = [
+      {
+        id: "session-live",
+        courseId: "course-1",
+        dateTime: "2026-10-02T16:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        subject: "SAT",
+        title: "Live SAT Session with Eunice",
+        status: "published",
+        bookingStatus: "confirmed",
+      },
+      {
+        id: "session-cancelled",
+        courseId: "course-1",
+        dateTime: "2026-10-03T16:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        subject: "SAT",
+        title: "Cancelled SAT Session with Xavier",
+        status: "published",
+        bookingStatus: "cancelled",
+      },
+      {
+        id: "session-cancelled-at",
+        courseId: "course-1",
+        dateTime: "2026-10-04T16:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        subject: "SAT",
+        title: "Cancelled-at SAT Session",
+        status: "published",
+        bookingStatus: "confirmed",
+        cancelledAt: "2026-09-07T20:00:00.000Z",
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByText("Upcoming sessions")).toBeTruthy();
+    expect(screen.getByText("Live SAT Session with Eunice")).toBeTruthy();
+    expect(screen.getByText("1 scheduled")).toBeTruthy();
+    expect(screen.queryByText("Cancelled SAT Session with Xavier")).toBeNull();
+    expect(screen.queryByText("Cancelled-at SAT Session")).toBeNull();
   });
 
   test("makes client portal preview obvious on overview", () => {

@@ -44,7 +44,9 @@ export function isUnfinishedHomeworkClientCopy(value: string | null | undefined)
 export function isLiveListedSession(session: {
   bookingStatus?: string | null;
   status?: string | null;
+  cancelledAt?: string | Date | null;
 }): boolean {
+  if (session.cancelledAt) return false;
   const booking = session.bookingStatus?.trim().toLowerCase() ?? "";
   if (booking === "cancelled" || booking === "canceled") return false;
   return (session.status ?? "").trim().toLowerCase() !== "archived";

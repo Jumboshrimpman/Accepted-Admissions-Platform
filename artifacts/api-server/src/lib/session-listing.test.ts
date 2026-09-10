@@ -6,12 +6,14 @@ import {
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,
+  isUpcomingListedSession,
   liveClientBookingSessions,
 } from "./session-listing.ts";
 
 test("cancelled bookings are excluded from student and tutor lists", () => {
   assert.equal(isCancelledBooking({ bookingStatus: "cancelled" }), true);
   assert.equal(isCancelledBooking({ bookingStatus: "Canceled" }), true);
+  assert.equal(isCancelledBooking({ cancelledAt: "2026-09-07T20:00:00.000Z" }), true);
   assert.equal(isCancelledBooking({ bookingStatus: "confirmed" }), false);
   assert.equal(isCancelledBooking({ bookingStatus: "rescheduled" }), false);
   assert.equal(isStudentCurriculumSession({ bookingStatus: "cancelled", status: "published" }), false);
@@ -61,4 +63,27 @@ test("student curriculum hides homework still attached to cancelled samapostgrad
     false,
   );
   assert.equal(assignmentTiedToCancelledSession({ sessionId: null }, cancelledSessionIds), false);
+});
+
+test("upcoming lists omit cancelled meetings even when the date is still in the future", () => {
+  const now = Date.parse("2026-09-10T00:00:00.000Z");
+  const live = {
+    dateTime: "2026-10-02T16:00:00.000Z",
+    bookingStatus: "confirmed",
+    status: "published",
+  };
+  const cancelled = {
+    dateTime: "2026-10-02T17:00:00.000Z",
+    bookingStatus: "cancelled",
+    status: "published",
+  };
+  const cancelledAtOnly = {
+    dateTime: "2026-10-02T18:00:00.000Z",
+    bookingStatus: "confirmed",
+    status: "published",
+    cancelledAt: "2026-09-07T20:00:00.000Z",
+  };
+  assert.equal(isUpcomingListedSession(live, now), true);
+  assert.equal(isUpcomingListedSession(cancelled, now), false);
+  assert.equal(isUpcomingListedSession(cancelledAtOnly, now), false);
 });

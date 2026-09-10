@@ -114,6 +114,7 @@ import {
   hidesCancelledSessions,
   isCancelledBooking,
   isStudentCurriculumSession,
+  isUpcomingListedSession,
   liveClientBookingSessions,
   publicSessionShape,
   reconcileTaitoSessions,
@@ -9312,7 +9313,7 @@ async function dashboardDataForUser(user: AppUser) {
       courses,
       upcomingSessions: await Promise.all(
         scopedSessions
-          .filter((session) => session.dateTime.getTime() >= Date.now())
+          .filter((session) => isUpcomingListedSession(session))
           .slice(0, 12)
           .map(async (session) => {
             const student = session.clientUserId
