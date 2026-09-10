@@ -68,7 +68,7 @@ If both snippet drawings and a question-region crop are present, the portal uses
 
 ## Reimport (including Taito Oct 2 diagnostic)
 
-Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, and tutor-built bank quizzes — uses the same `isStudentUsableQuizItem` gate for composition, rematerialize, and student GET. Incomplete A–D (A/B only) and empty choice sets are dropped so students never see “Multiple-choice options unavailable.” Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`.
+Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, tutor-built bank quizzes, and lesson retries — uses the same `isStudentUsableQuizItem` math bar: readable stem, cited figure with labels on the image, and complete A–D. Incomplete or unavailable choice sets are dropped. Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`. The rebuild **replaces** dropped math slots with unused clean SAT MCQs from other official packs; `--refresh-linked-only` only unlinks.
 
 **Required after merge (Oct 2 live assignment does not change until rematerialize):**
 

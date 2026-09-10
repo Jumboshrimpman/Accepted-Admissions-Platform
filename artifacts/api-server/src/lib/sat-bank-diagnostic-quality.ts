@@ -104,11 +104,14 @@ export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
 }
 
 /**
- * Shared student-usable gate for every quiz (diagnostic, routine pre-work,
- * tutor-built bank quizzes, and lesson retries): letter-key MCQ with a
- * readable stem and complete non-garbage A–D text. A cited graph/table must
- * be present as a figure or a recovered data table. Full-question crops no
- * longer unlock letter-only shells.
+ * Shared student-usable gate for every quiz (Oct 2 diagnostic, routine SAT
+ * pre-work, tutor-built bank quizzes, and lesson retries).
+ *
+ * Math bar: complete readable stem (no smashed exponents, axis-label bleed,
+ * or `ax2` / `x 16( + 15)` junk); a graph/table/dot plot when the stem
+ * depends on one (labels on the image, not pasted into prose); and full
+ * usable A–D. Prefer drop/replace at materialize over shipping junk.
+ * Empty, incomplete, or “unavailable” choice sets never ship.
  */
 export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;

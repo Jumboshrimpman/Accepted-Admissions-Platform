@@ -4,7 +4,18 @@ Owner: Taito Goto (`taito0525@gmail.com`), first Fall SAT with Eunice (Oct 2 JST
 
 Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop exists. PR #60 rebuilt the Oct 2 form from “usable MCQ,” but that predicate treated **any** renderable figure as enough. Live preview then shipped graph-only crops with empty A–D letter keys, missing tables, and clipped stems.
 
-A student-usable item is now only:
+## Math usability bar (every student quiz)
+
+Sama’s 2026-09-09 bar applies to **all** quizzes — Oct 2 diagnostic, routine SAT pre-work, tutor-built bank quizzes, and lesson retries — via `isStudentUsableQuizItem`:
+
+- Complete readable stem: no smashed exponents (`2 2`, `ax2`, `12x3`), no axis-label bleed into prose (`16 17 18 19 20 Diameter`), no `x 16( + 15)` junk
+- Readable figures when the stem depends on a graph/table/dot plot (labels on the image, not pasted into text)
+- Full usable A–D — never “Multiple-choice options unavailable” or incomplete A–C
+- Prefer drop/replace at materialize over a broken math item. Fewer perfect math items beat 120 with junk
+
+Composition (`selectUsableDiagnosticItems` / routine bank pool), rematerialize (`dropUnusableAssignmentQuestions`), student/viewer GET (`isStudentUsableServedQuestion`), tutor-built select (`selectBankQuestionsForTutorQuiz`), lesson retries, and quiz chrome (`isStudentAnswerableQuizQuestion`) all call that same gate.
+
+A student-usable item is only:
 
 - a clean text MCQ with a **readable stem** and complete A–D choice text (plus a figure if the stem cites a graph/table, or a recovered data table), or
 - a graph/table figure **plus** separate complete, non-garbage A–D text
