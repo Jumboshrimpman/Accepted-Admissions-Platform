@@ -7,6 +7,9 @@ vi.mock("wouter", () => ({
 
 vi.mock("@/components/public-site-shell", () => ({
   PublicSiteShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  fetchPublicJson: async () => {
+    throw new Error("use default public home copy");
+  },
 }));
 
 import Landing from "./landing";
