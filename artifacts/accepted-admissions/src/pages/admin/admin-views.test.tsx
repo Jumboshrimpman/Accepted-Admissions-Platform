@@ -292,10 +292,14 @@ describe("administrator overview", () => {
 
     expect(screen.getByRole("heading", { name: "Needs attention" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Prior notifications" })).toBeTruthy();
+    const priorDisclosure = screen.getByTestId("prior-notifications") as HTMLDetailsElement;
+    expect(priorDisclosure.open).toBe(false);
     expect(screen.getByTestId("notification-read-notification-unread")).toBeTruthy();
     expect(screen.getByTestId("notification-dismiss-notification-unread")).toBeTruthy();
     expect(screen.queryByTestId("notification-read-notification-read")).toBeNull();
     expect(screen.queryByTestId("notification-dismiss-notification-read")).toBeNull();
+    fireEvent.click(screen.getByRole("heading", { name: "Prior notifications" }).closest("summary")!);
+    expect(priorDisclosure.open).toBe(true);
     expect(screen.getByTestId("notification-restore-notification-read")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("notification-read-notification-unread"));
@@ -322,8 +326,37 @@ describe("administrator overview", () => {
 
     expect(screen.getByTestId("notification-notification-3")).toBeTruthy();
     expect(screen.getByTestId("notification-notification-2")).toBeTruthy();
-    expect(screen.getByTestId("notification-notification-1")).toBeTruthy();
+    expect((screen.getByTestId("prior-notifications") as HTMLDetailsElement).open).toBe(false);
     expect(screen.queryByTestId("assignment-notifications-show-more")).toBeNull();
+
+    fireEvent.click(screen.getByRole("heading", { name: "Prior notifications" }).closest("summary")!);
+    expect(screen.getByTestId("notification-notification-1")).toBeTruthy();
+  });
+
+  test("keeps the prior notifications section collapsed until it is expanded", () => {
+    mocks.overview.notifications = [
+      assignmentNotification("notification-unread", "2026-09-05T12:00:00.000Z"),
+      assignmentNotification("notification-read-newest", "2026-09-04T12:00:00.000Z", "read"),
+      assignmentNotification("notification-read-older", "2026-09-03T12:00:00.000Z", "read"),
+      assignmentNotification("notification-dismissed", "2026-09-02T12:00:00.000Z", "dismissed"),
+    ];
+
+    render(<AdminDashboard />);
+
+    const priorDisclosure = screen.getByTestId("prior-notifications") as HTMLDetailsElement;
+    expect(screen.getByTestId("notification-notification-unread")).toBeTruthy();
+    expect(priorDisclosure.open).toBe(false);
+    expect(screen.getByRole("heading", { name: "Prior notifications" })).toBeTruthy();
+    expect(priorDisclosure.textContent).toContain("3");
+
+    fireEvent.click(priorDisclosure.querySelector("summary")!);
+    expect(priorDisclosure.open).toBe(true);
+    expect(screen.getByTestId("notification-notification-read-newest")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-read-older")).toBeTruthy();
+    expect(screen.getByTestId("notification-notification-dismissed")).toBeTruthy();
+
+    fireEvent.click(priorDisclosure.querySelector("summary")!);
+    expect(priorDisclosure.open).toBe(false);
   });
 
   test("shows the three newest assignment notifications and a Show more control when more exist", () => {
