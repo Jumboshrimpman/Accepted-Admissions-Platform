@@ -1067,6 +1067,74 @@ test("drops Oct 2 Q99–106 scrambled or incomplete A–D items; keeps slash-fra
   );
 });
 
+test("drops Oct 2 Q107–114 exploded OCR, missing figures, and character-spaced garbage", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height above the ground f(x), in inches, x seconds after it started moving on a track, where 0 ≤ x ≤ 10. Which of the following is the best interpretation of the vertex of the graph of y = (f(x)) in the x y-plane?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "The equation 2 2 x + (y –1) = 49 represents circle A. Circle B is obtained by shifting circle A down 2 units in the x y-plane. Which of the following equations represents circle B? 2 2 (x –2) + (y –1) =",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "Two identical rectangular prisms each have a height of 90 centimeters (cm). The base of each prism is a 2 cm . square, and the surface area of each prism is K If the prisms are glued together along a square base, the resulting prism has a surface area of 92 K 2 cm . 47 What is the side length, in cm, of each square base?",
+      choices: letterChoices(["4", "8", "9", "16"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "f X -2 2 = is The graph of the quadratic function y f(x) shown. What is the vertex of the graph?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "Which expression is equivalent to x x y 6 5 4 ? + +",
+      choices: letterChoices(["x15", "y15", "xy114+", "xy304+"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "I, 7 X 12345678910 For how many of the 10 data points is the actual y-value greater than the y-value predicted by the line of best fit?",
+      choices: letterChoices(["3", "4", "6", "7"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",

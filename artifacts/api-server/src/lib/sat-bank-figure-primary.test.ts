@@ -573,6 +573,28 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
     ),
     true,
   );
+  assert.equal(
+    looksBrokenMathOcr(
+      "f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height above the ground f(x), in inches",
+    ),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "The equation 2 2 x + (y –1) = 49 represents circle A. Which equation represents circle B? 2 2 (x –2) + (y –1) =",
+    ),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "the resulting prism has a surface area of 92 K 2 cm . 47 What is the side length, in cm, of each square base?",
+    ),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("f X -2 2 = is The graph of the quadratic function y f(x) shown."), true);
+  assert.equal(looksBrokenMathOcr("Which expression is equivalent to x x y 6 5 4 ? + +"), true);
+  assert.equal(looksCorruptStemOcr("I, 7 X 12345678910 For how many of the 10 data points"), true);
+  assert.equal(stemCitesVisual("predicted by the line of best fit?"), true);
   assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
   assert.equal(
     selectStimulusFigures(

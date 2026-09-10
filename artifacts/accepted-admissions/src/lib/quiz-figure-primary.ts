@@ -23,7 +23,12 @@ const SMASHED_HX_LINE = /\bh\s+x(?:\s*$|\s*\n|\s+Which\b)/;
 const EMPTY_PAREN_FOR_GIVEN = /\(\s*\)\s+for the given/i;
 const EMPTY_FX_PARENS = /does\s+f\s*\(\s*x\s*\)\s*\(\s*\)|f\s*\(\s*x\s*\)\s*\(\s*\)\s*reach/i;
 const LEADING_EQ_THEN_FX = /^=\s*(?:\([^)]+\)\s*)+f\s*\(\s*x\s*\)/m;
-const SMASHED_VERTEX_LATEX = /2 \+ The function\s+\(\s*\)|The function\s+\(\s*\)\s*\(\s*[−-]?7\)/i;
+const SMASHED_VERTEX_LATEX =
+  /2 \+ The function|The function\s+\(\s*[−-]?7\s*\)\s*3|metal\s+9\s*ball|f\s*\(\s*x\s*\)\s*=\s*1\s+x\b/i;
+const SMASHED_CIRCLE_SQUARE = /\b2\s+2\s+(?:x|\()/;
+const SMASHED_PRISM_AREA = /92\s*K\s*2\s*cm|K\s*2\s*cm\s*\.|2\s*cm\s*\.\s*square/i;
+const SMASHED_SPACED_POLY = /[xy]\s+[xy](?:\s+[xy])?\s+\d(?:\s+\d){2,}\s*\?/;
+const SMASHED_FX_AXIS = /\bf\s*X\s*-?2\s+2\b/i;
 const SCRAMBLED_FUNCTION_DEFINED = /\bWhat\s*The function\b/;
 const SMASHED_TABLE_CHOICE = /^x\s+\d+\s+\d+\s+\d+.*h\s*\(\s*x\s*\)/i;
 const STRAY_QUESTION_FOLLOWING = /\?\s+following\b/i;
@@ -35,7 +40,7 @@ const QUIZ_IMAGE = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/;
 const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;
 const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*What is the value/i;
 const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
-const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b/;
+const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b|\b12345678910\b/;
 const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
 const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
 const LEAKED_NEXT_QUESTION =
@@ -53,7 +58,7 @@ const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x(?:\s*Which|[A-Z]|\s*$)/m;
 const MISSING_OPERATOR_CHOICE =
   /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =
-  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|the dot plot|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|the dot plot|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart)|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
 const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
 const MODULE_BOILERPLATE =
   /^(?:DIRECTIONS|STOP)\b|\bGO ON TO THE NEXT(?:\s+PAGE)?\b|\bTHIS IS THE END OF\b|\bIf you finish before time is called\b|\bUnauthorized copying or reuse\b|\bModule\s+[12](?:\s+(?:Reading|Writing|Math))?\b/;
@@ -102,6 +107,10 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (EMPTY_FX_PARENS.test(raw)) return true;
   if (LEADING_EQ_THEN_FX.test(raw)) return true;
   if (SMASHED_VERTEX_LATEX.test(raw)) return true;
+  if (SMASHED_CIRCLE_SQUARE.test(raw)) return true;
+  if (SMASHED_PRISM_AREA.test(raw)) return true;
+  if (SMASHED_SPACED_POLY.test(raw)) return true;
+  if (SMASHED_FX_AXIS.test(raw)) return true;
   if (SCRAMBLED_FUNCTION_DEFINED.test(raw)) return true;
   if (STRAY_QUESTION_FOLLOWING.test(raw)) return true;
   if (STACKED_FRACTION_ORPHAN.test(raw)) return true;

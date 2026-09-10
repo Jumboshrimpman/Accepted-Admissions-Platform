@@ -1288,6 +1288,80 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
   });
 
+  test("Oct 2 Q107–114 drop exploded OCR, missing figures, and character-spaced garbage", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q107",
+        prompt:
+          "f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height above the ground f(x), in inches",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q109",
+        prompt: "The equation 2 2 x + (y –1) = 49 represents circle A. 2 2 (x –2) + (y –1) =",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q110",
+        prompt:
+          "Two identical rectangular prisms each have a height of 90 centimeters (cm). The resulting prism has a surface area of 92 K 2 cm . 47 What is the side length?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "4" },
+          { id: "b", label: "B", text: "8" },
+          { id: "c", label: "C", text: "9" },
+          { id: "d", label: "D", text: "16" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q112",
+        prompt: "f X -2 2 = is The graph of the quadratic function y f(x) shown. What is the vertex of the graph?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q113",
+        prompt: "Which expression is equivalent to x x y 6 5 4 ? + +",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x15" },
+          { id: "b", label: "B", text: "y15" },
+          { id: "c", label: "C", text: "xy114+" },
+          { id: "d", label: "D", text: "xy304+" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q114",
+        prompt:
+          "I, 7 X 12345678910 For how many of the 10 data points is the actual y-value greater than the y-value predicted by the line of best fit?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "3" },
+          { id: "b", label: "B", text: "4" },
+          { id: "c", label: "C", text: "6" },
+          { id: "d", label: "D", text: "7" },
+        ],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.getByTestId("quiz-no-answerable-questions")).toBeTruthy();
+    expect(screen.queryByText(/metal 9/)).toBeNull();
+    expect(screen.queryByText(/2 2 x/)).toBeNull();
+    expect(screen.queryByText(/92 K 2/)).toBeNull();
+    expect(screen.queryByText(/x x y 6 5 4/)).toBeNull();
+    expect(screen.queryByText(/12345678910/)).toBeNull();
+  });
+
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
     mocks.assignmentError = true;
     render(<PortalAssignment />);

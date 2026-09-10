@@ -352,6 +352,30 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
     looksBrokenMathOcr("f(x) = 1 x\n2 + The function ( ) ( −7) 3 gives a metal ball’s height"),
     true,
   );
+  assert.equal(
+    looksBrokenMathOcr("f(x)=1 x 2 + The function (-7) 3 gives a metal 9 ball’s height"),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("The equation 2 2 x + (y –1) = 49 represents circle A."), true);
+  assert.equal(looksBrokenMathOcr("the resulting prism has a surface area of 92 K 2 cm . 47"), true);
+  assert.equal(looksBrokenMathOcr("f X -2 2 = is The graph of the quadratic function y f(x) shown."), true);
+  assert.equal(looksBrokenMathOcr("Which expression is equivalent to x x y 6 5 4 ? + +"), true);
+  assert.equal(looksCorruptStemOcr("I, 7 X 12345678910 For how many of the 10 data points"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "I, 7 X 12345678910 For how many of the 10 data points is the actual y-value greater than the y-value predicted by the line of best fit?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "3" },
+        { id: "b", label: "B", text: "4" },
+        { id: "c", label: "C", text: "6" },
+        { id: "d", label: "D", text: "7" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
   assert.equal(stemCitesVisual("The dot plot represents the 15 values in data set A."), true);
   const metalBall = {
     presentation: "text" as const,
