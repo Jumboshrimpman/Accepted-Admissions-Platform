@@ -149,6 +149,7 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
     ],
     questionType: "mcq",
   };
+  assert.equal(isFigurePrimaryQuestion(surfboard), false);
   assert.equal(shouldHideMismatchedQuizFigures(surfboard), true);
   assert.equal(shouldShowQuizChoices(surfboard), false);
   const slashFractions = {

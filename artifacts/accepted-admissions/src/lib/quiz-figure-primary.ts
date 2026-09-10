@@ -205,6 +205,17 @@ export function shouldHideQuizOcrStem(
   return hasQuizFigure(question) || isFigurePrimaryQuestion(question);
 }
 
+function isExplicitFigurePrimaryQuestion(
+  question: Pick<AssignmentQuestion, "presentation" | "prompt" | "stimulus"> & {
+    figurePrimary?: boolean | null;
+    figurePrimarySrc?: string | null;
+  },
+): boolean {
+  if (question.presentation === "figure_primary" || question.figurePrimary === true) return true;
+  if (question.figurePrimarySrc?.trim()) return true;
+  return /<!--\s*figure-primary/i.test(`${question.prompt ?? ""}\n${question.stimulus ?? ""}`);
+}
+
 /** Page-neighbor crop on a clean word problem that never cites a figure. */
 export function shouldHideMismatchedQuizFigures(
   question: Pick<AssignmentQuestion, "presentation" | "prompt" | "stimulus" | "choices" | "questionType"> & {
@@ -213,12 +224,17 @@ export function shouldHideMismatchedQuizFigures(
   },
 ): boolean {
   if (!hasQuizFigure(question)) return false;
-  if (isFigurePrimaryQuestion(question)) return false;
   const stem = `${question.prompt ?? ""}\n${(question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ")}`;
-  if (looksCorruptStemOcr(stem) || looksBrokenMathOcr(question.prompt) || looksGarbledQuizText(question.prompt)) {
+  const broken =
+    looksCorruptStemOcr(stem) ||
+    looksBrokenMathOcr(question.prompt) ||
+    looksGarbledQuizText(question.prompt);
+  if (broken) return false;
+  if (stemCitesVisual(stem)) return false;
+  if (isExplicitFigurePrimaryQuestion(question) && !stripSatBankFigureComments(question.prompt)) {
     return false;
   }
-  return !stemCitesVisual(stem);
+  return true;
 }
 
 export function shouldShowQuizChoices(
@@ -262,17 +278,20 @@ export function isFigurePrimaryQuestion(
     figurePrimarySrc?: string | null;
   },
 ): boolean {
-  if (question.presentation === "figure_primary" || question.figurePrimary === true) return true;
-  if (question.figurePrimarySrc?.trim()) return true;
-  if (/<!--\s*figure-primary/i.test(`${question.prompt ?? ""}\n${question.stimulus ?? ""}`)) {
-    return true;
-  }
+  if (isExplicitFigurePrimaryQuestion(question)) return true;
   if (question.presentation === "text") return false;
   const images = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/.test(
     `${question.stimulus ?? ""}\n${question.prompt ?? ""}`,
   );
   const garbled =
     looksGarbledQuizText(question.prompt) || looksGarbledQuizText(question.stimulus);
+  const stem = `${question.prompt ?? ""}\n${(question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ")}`;
+  const cleanUncited =
+    !garbled &&
+    !looksCorruptStemOcr(question.prompt) &&
+    !looksBrokenMathOcr(question.prompt) &&
+    !stemCitesVisual(stem);
+  if (cleanUncited) return false;
   const spr = (question.questionType ?? "").toLowerCase() === "spr";
   const missingChoices = !hasUsableChoiceText(question.choices);
   if (garbled && (images || missingChoices || spr)) return true;
