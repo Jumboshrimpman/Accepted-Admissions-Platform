@@ -987,6 +987,86 @@ test("drops Oct 2 Q92–98 OCR-garbage and wiped A–D items; keeps readable Q93
   );
 });
 
+test("drops Oct 2 Q99–106 scrambled or incomplete A–D items; keeps slash-fraction Q103 and 21px Q105", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
+      choices: letterChoices(["7/4", "9/4", "4", "7"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    true,
+  );
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "7,500" },
+      { id: "b", label: "B", text: "15,000" },
+      { id: "c", label: "C", text: "22,500" },
+    ]),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. A social media post reported that 15,000 more people voted in favor of the proposal than voted against it. Based on these data, how many people voted against the proposal?",
+      choices: [
+        { id: "a", label: "A", text: "7,500" },
+        { id: "b", label: "B", text: "15,000" },
+        { id: "c", label: "C", text: "22,500" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "−3x + 21px = 84 In thegivenequation, p isaconstant. Theequationhasnosolution. Whatisthevalueof p ?",
+      choices: letterChoices(["0", "1/7", "4/3", "4"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",

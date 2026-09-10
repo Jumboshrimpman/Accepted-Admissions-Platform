@@ -1212,6 +1212,82 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/\(6,3\)/);
   });
 
+  test("Oct 2 Q99–106 drop scrambled or incomplete A–D items and keep slash-fraction Q103 and 21px Q105", () => {
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q99",
+        prompt:
+          "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q100",
+        prompt: "= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q103",
+        prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "7/4" },
+          { id: "b", label: "B", text: "9/4" },
+          { id: "c", label: "C", text: "4" },
+          { id: "d", label: "D", text: "7" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q104",
+        prompt:
+          "A proposal for a new library was included on an election ballot. A radio show stated that 3 times as many people voted in favor of the proposal as people who voted against it. A social media post reported that 15,000 more people voted in favor of the proposal than voted against it. Based on these data, how many people voted against the proposal?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "7,500" },
+          { id: "b", label: "B", text: "15,000" },
+          { id: "c", label: "C", text: "22,500" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q105",
+        prompt:
+          "−3x + 21px = 84 In thegivenequation, p isaconstant. Theequationhasnosolution. Whatisthevalueof p ?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "0" },
+          { id: "b", label: "B", text: "1/7" },
+          { id: "c", label: "C", text: "4/3" },
+          { id: "d", label: "D", text: "4" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q106",
+        prompt:
+          "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+        stimulus: null,
+        choices: [],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByText(/h x Which/)).toBeNull();
+    expect(screen.queryByText(/WhatThe function/)).toBeNull();
+    expect(screen.queryByText(/library/)).toBeNull();
+    expect(screen.queryByText(/\(x −10\)\(x \+13\) f\(x\)/)).toBeNull();
+    expect(screen.getByText("Question 1 of 2")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/−36/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/7\/4/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
+  });
+
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
     mocks.assignmentError = true;
     render(<PortalAssignment />);

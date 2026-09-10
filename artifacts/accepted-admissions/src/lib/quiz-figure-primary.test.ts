@@ -279,7 +279,36 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
   );
   assert.equal(looksBrokenMathOcr("What is the solution ( ,x y) to the given system?"), true);
   assert.equal(looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)"), true);
+  assert.equal(looksBrokenMathOcr("= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?"), true);
+  assert.equal(
+    looksBrokenMathOcr(
+      "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+    ),
+    true,
+  );
   assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), false);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "7/4" },
+        { id: "b", label: "B", text: "9/4" },
+        { id: "c", label: "C", text: "4" },
+        { id: "d", label: "D", text: "7" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "7,500" },
+      { id: "b", label: "B", text: "15,000" },
+      { id: "c", label: "C", text: "22,500" },
+    ]),
+    false,
+  );
   assert.equal(looksSmashedTableChoice("x 1 2 3 h(x) 4 5 6"), true);
   assert.equal(isStudentReadableChoiceText("7/4"), true);
   const library = {
@@ -311,6 +340,12 @@ test("rejects scrambled f(x) and smashed vertex OCR; keeps 21px and shows dot-pl
   );
   assert.equal(
     looksBrokenMathOcr("= (x − 10)(x + 13) f(x)\nFor what value of x does f(x)( ) reach its minimum?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+    ),
     true,
   );
   assert.equal(

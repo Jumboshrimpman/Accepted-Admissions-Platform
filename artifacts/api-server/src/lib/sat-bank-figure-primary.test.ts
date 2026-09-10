@@ -513,10 +513,20 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
     looksBrokenMathOcr("= x2 −3\nh x\nWhich table gives three values of x and their\n( ) for the given corresponding values of h x\nfunction h?"),
     true,
   );
+  assert.equal(
+    looksBrokenMathOcr(
+      "= x2 −3 h x Which tablegivesthreevaluesof x andtheirfor thegivencorrespondingvaluesof x functionh?",
+    ),
+    true,
+  );
   assert.equal(looksSmashedTableChoice("x 1 2 3 h(x) 4 5 6"), true);
   assert.equal(isStudentReadableChoiceText("x 1 2 3 h(x) 4 5 6"), false);
   assert.equal(
     looksBrokenMathOcr("= 270(0.1)x. What The function f is defined by f(x)\nis the value of f (0) ?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("= 270(0.1)x. WhatThe functionf isdefinedby f(x)isthevalueof f (0)?"),
     true,
   );
   assert.equal(
@@ -549,6 +559,12 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   );
   assert.equal(
     looksBrokenMathOcr("= (x − 10)(x + 13) f(x)\nThe function f is defined by the given equation. For what value of x does f(x)( ) reach its minimum?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr(
+      "=(x −10)(x +13) f(x) The functionf isdefinedby thegivenequation. Forwhatvalueof x doesf(x)reachitsminimum?",
+    ),
     true,
   );
   assert.equal(
