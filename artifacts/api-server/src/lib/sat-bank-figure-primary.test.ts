@@ -431,6 +431,8 @@ test("rejects corrupt stems, leaked A–D, and page-neighbor figures on word pro
 
 test("rejects smashed equations, missing operators, pipe OCR, and ?-as-operator; keeps slash fractions", () => {
   assert.equal(looksBrokenMathOcr("16 + 30 = 190 x\nWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksBrokenMathOcr("16+30=190 xWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksBrokenMathOcr("y = 3 x + 1"), false);
   assert.equal(looksMissingOperatorChoice("x 16 = 30"), true);
   assert.equal(looksMissingOperatorChoice("16 x = 130"), true);
   assert.equal(looksMissingOperatorChoice("t 10 ≤75"), true);

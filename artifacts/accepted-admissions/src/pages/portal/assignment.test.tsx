@@ -1068,6 +1068,74 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/14x = 2 w/)).toBeNull();
   });
 
+  test("Oct 2 Q83–91 drop figure-only or wiped A–D items and keep intact slash-fraction Q89", () => {
+    const figure =
+      "![Question figure](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p40-draw1.png)";
+    mocks.questions = [
+      {
+        ...mocks.questions[0]!,
+        id: "q83",
+        prompt: "Note: Figure not drawn to scale.",
+        stimulus: figure,
+        choices: [
+          { id: "a", label: "A", text: "" },
+          { id: "b", label: "B", text: "" },
+          { id: "c", label: "C", text: "" },
+          { id: "d", label: "D", text: "" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q84",
+        prompt: "",
+        stimulus: figure,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q85",
+        prompt: "",
+        stimulus: figure,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q88",
+        prompt: "16+30=190 xWhich equation has the same solution as the given equation?",
+        stimulus: null,
+        choices: [],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q89",
+        prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "x/4 = 32" },
+          { id: "b", label: "B", text: "x/4 = 5" },
+          { id: "c", label: "C", text: "x/4 = 1" },
+          { id: "d", label: "D", text: "x/4 = -32" },
+        ],
+      },
+      {
+        ...mocks.questions[0]!,
+        id: "q91",
+        prompt:
+          "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?",
+        stimulus: null,
+        choices: [],
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
+    expect(screen.queryByText(/16\+30=190/)).toBeNull();
+    expect(screen.getByText("Question 1 of 1")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/x\/4 \+ 1 = 33/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = 32/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = -32/);
+  });
+
   test("failed assignment fetch shows an empty-state error instead of a skeleton", () => {
     mocks.assignmentError = true;
     render(<PortalAssignment />);

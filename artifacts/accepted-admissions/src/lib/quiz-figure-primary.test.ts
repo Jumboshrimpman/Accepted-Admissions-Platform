@@ -111,6 +111,36 @@ test("rejects fraction dumps, missing exponents, and hides OCR next to a crop", 
   assert.equal(isStudentReadableChoiceText("8 2 + 80"), false);
   assert.equal(looksBrokenMathOcr("y = 2x2 − 21x + 64\npoint, ( ,x y),"), true);
   assert.equal(looksBrokenMathOcr("y = ax2 + bx + c, which of the\n? following could be"), true);
+  assert.equal(looksBrokenMathOcr("16+30=190 xWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksBrokenMathOcr("y = 3 x + 1"), false);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "x/4 = 32" },
+        { id: "b", label: "B", text: "x/4 = 5" },
+        { id: "c", label: "C", text: "x/4 = 1" },
+        { id: "d", label: "D", text: "x/4 = -32" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "Note: Figure not drawn to scale.",
+      stimulus: "![Triangle](/media/sat-bank/pack/p40-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "" },
+        { id: "b", label: "B", text: "" },
+        { id: "c", label: "C", text: "" },
+        { id: "d", label: "D", text: "" },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+  );
   const triangle = {
     presentation: "text" as const,
     prompt: "A right triangle has sides of length 2 2 , 6 2 , and 80 units. What is the area?",

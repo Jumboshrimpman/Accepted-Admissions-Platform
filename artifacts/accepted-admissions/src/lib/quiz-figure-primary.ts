@@ -44,7 +44,9 @@ const CARET_H_OCR = /\^\s*h\b/;
 const Y_FX_MISSING_EQUALS = /\by\s+f\s*\(\s*x\s*\)/;
 const BROKEN_POINT_ZERO_FIVE = /point\s*,\s*0\s+5\b/i;
 const QUESTION_AS_OPERATOR = /[0-9x)]\s*\?\s*\d/;
-const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x\s*$/m;
+// Q88 live: "16+30=190 xWhich equation..." — space before x, then the next sentence glued on.
+// Also "16 + 30 = 190 x" at end of line. Do not match a legitimate "y = 3 x + 1".
+const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x(?:\s*Which|[A-Z]|\s*$)/m;
 const MISSING_OPERATOR_CHOICE =
   /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =

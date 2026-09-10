@@ -818,6 +818,94 @@ test("drops Oct 2 Q77–82 smashed stems, empty A–D, and incomplete A/B-only s
   );
 });
 
+test("drops Oct 2 Q83–91 figure-only or wiped A–D items; keeps intact slash-fraction Q89", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const emptyLetters = letterChoices(["", "", "", ""]);
+  const triangleFigure = {
+    url: `${figureUrl}-p40-q27-draw1.png`,
+    alt: "Diagram from page 40",
+  };
+  const graphFigure = {
+    url: `${figureUrl}-p41-draw1.png`,
+    alt: "Diagram from page 41",
+  };
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "Note: Figure not drawn to scale.",
+      choices: emptyLetters,
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [triangleFigure],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "",
+      stimulus: `![Exponential graph](${graphFigure.url})`,
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [graphFigure],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "",
+      stimulus: `![Parabola](${graphFigure.url})`,
+      choices: emptyLetters,
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [{ ...graphFigure, alt: "Diagram from page 42" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "16+30=190 xWhich equation has the same solution as the given equation?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+      choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableServedQuestion({
+      prompt: "x/4 + 1 = 33 Which equation has the same solution as the given equation?",
+      choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "D",
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",
