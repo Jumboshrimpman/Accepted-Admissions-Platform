@@ -38,6 +38,7 @@ import {
 import {
   auditStudentQuizItem,
   canAssignDiagnostic,
+  diagnosticAssignmentCopy,
   composeDiagnosticItems,
   isStudentUsableQuizItem,
   quizItemFromServedQuestion,
@@ -882,15 +883,22 @@ export async function assignPreworkFromBank(input: {
   );
   const resolvedMinutes =
     homeworkKind === "diagnostic"
-      ? diagnosticTimeLimitMinutes(estimatedSeconds)
+      ? diagnosticTimeLimitMinutes(estimatedSeconds, {
+          completeForm: Boolean(composed?.composition.usable),
+        })
       : routinePreworkTimeLimitMinutes(selected.length);
   if (!input.skipArchiveExisting) {
     await archiveSessionPrework(session.id);
   }
+  const diagnosticCopy =
+    homeworkKind === "diagnostic" && composed
+      ? diagnosticAssignmentCopy(composed.composition, session.title)
+      : null;
   const title =
-    homeworkKind === "diagnostic"
-      ? `Full-length SAT diagnostic — ${session.title}`
-      : `SAT pre-work (30–50 questions) — ${session.title}`;
+    diagnosticCopy?.title ??
+    (homeworkKind === "diagnostic"
+      ? `SAT diagnostic — ${session.title}`
+      : `SAT pre-work (30–50 questions) — ${session.title}`);
   const [assignment] = await db
     .insert(assignmentsTable)
     .values({
@@ -900,9 +908,10 @@ export async function assignPreworkFromBank(input: {
       title,
       subject: session.subject || "SAT",
       instructions:
-        homeworkKind === "diagnostic"
-          ? "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score."
-          : "30–50 official-bank questions for this session (not a full-length SAT). Accuracy is recorded; this is not an official SAT score.",
+        diagnosticCopy?.instructions ??
+        (homeworkKind === "diagnostic"
+          ? "Complete this SAT diagnostic from official College Board practice items. Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score."
+          : "30–50 official-bank questions for this session (not a full-length SAT). Accuracy is recorded; this is not an official SAT score."),
       status: "published",
       timeLimitMinutes: resolvedMinutes,
       maxAttempts: 1,

@@ -19,10 +19,10 @@ Stop shipping a “usable 120” built from junk. Policy, not another blacklist 
 
 | Change | Behavior |
 | --- | --- |
-| **Fail-closed composition** | `usable: true` only for a complete clean 120 (66/54, all four modules full) with zero residual junk. Cross-pack fill may use only items that pass the live audit. Leftover slots are **not** padded with failures. Shortfall counts + reasons are returned. |
+| **Fail-closed composition** | `usable: true` only for a complete clean 120 (66/54, all four modules full) with zero residual junk. Cross-pack fill may use only items that pass the live audit. Leftover slots are **not** padded with failures. Shortfall counts + reasons are returned. **A short clean diagnostic is assignable** until the bank can fill 120. |
 | **Math figure/table policy** | A cited table/graph/figure/scatterplot/triangle is solvable only from recovered table values **or** a real full-question / figure-primary crop. Generic page-neighbor PNGs do not count. |
 | **Prefer figure-primary for hard OCR** | Smashed trig/systems/fractions + official question image + clean A–D → serve the crop. Text-only smash is dropped, not “repaired.” |
-| **Pre-assign audit** | Before linking a rematerialized diagnostic, `auditStudentQuizItem` rejects the whole assign if residual junk remains or RW/Math would be empty. `reset-first-sat-prework` rematerializes the current quiz (unlinks junk) but **does not archive/replace** when assign is blocked. |
+| **Pre-assign audit** | Before linking a rematerialized diagnostic, `auditStudentQuizItem` rejects the whole assign if residual junk remains or RW/Math would be empty. A short clean RW+Math set **is assigned**. `reset-first-sat-prework` rematerializes the current quiz (unlinks junk) but **does not archive/replace** when assign is blocked. |
 | **Re-score without import** | `POST /api/admin/sat-bank/rescore-usable` re-runs the live audit on every bank row (writes `extractGaps.studentUsable`). Skipping a flaky import is safe for gates; import is only needed for new JSONL/crops. |
 
 ## Math usability bar (every student quiz)
@@ -56,9 +56,10 @@ The same student-usable gate (`isStudentUsableQuizItem`) is shared platform code
 
 ## Student UX after rebuild
 
-Taito (or a client preview) opens the Oct 2 pre-work and sees either:
+Taito (or a client preview) opens the Oct 2 pre-work and sees:
 
 - A readable text MCQ with A–D copy, and the graph/table when the stem cites one
+- Possibly fewer than 120 questions, if the bank cannot fill a clean form. That is intentional.
 
 No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No student-produced-response box. Submit still returns an estimated SAT range (linear scoring-guide method, not official Bluebook adaptive).
 
@@ -69,14 +70,14 @@ No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No s
 3. Drop true SPR, incomplete A–D, leaked choices, extraction-marker bleed, table-cite-without-values, cited visuals without a full-question crop or recovered table, smashed trig/algebra, and the other live-audit classes in `sat-bank-live-audit.test.ts`.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots only with unused items that **also pass the live audit**. If a module cannot be filled cleanly, leave it short and record `shortfall` (counts + reasons). Do **not** pad with junk to hit 120.
-6. `usable: true` only for a complete clean 120 with `residualJunk === 0`. A thin clean set can still be inspected; it cannot be labeled a usable full diagnostic.
+6. `usable: true` only for a complete clean 120 with `residualJunk === 0`. A thin clean set **can be assigned**; it is titled `SAT diagnostic (N clean questions)` and is not labeled a usable full-length form. First-session reconcile will not wipe a short diagnostic just because it is under 80 items.
 7. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
 
 The reusable bank still stores SPR and incomplete extracts. They are just not composed into student quizzes.
 
 ## Production runbook
 
-**Required after merge.** Landing this PR does not change the live Oct 2 assignment. After Code Checker / review merge and the API deploy, ops may rematerialize. This PR **will refuse to reassign** a new “usable 120” if the bank cannot compose a clean RW+Math set. That is intentional. Do **not** rematerialize production from this cloud agent.
+**Required after merge.** Landing this PR does not change the live Oct 2 assignment. After Code Checker / review merge and the API deploy, ops may rematerialize. This PR **will refuse to stamp `usable: true` or pad junk to 120**. If both RW and Math have clean items, it **will assign the short clean set**. Do **not** rematerialize production from this cloud agent.
 
 **Correct prod sequence (skip import if it 502s):**
 
@@ -86,8 +87,8 @@ The reusable bank still stores SPR and incomplete extracts. They are just not co
 4. `POST /api/admin/sat-bank/reset-first-sat-prework`
    - Rematerializes the current Oct 2 quiz and unlinks items that fail the live audit.
    - Previews the new composition.
-   - If `assignBlocked: true`, the current assignment stays (junk already unlinked). Read `composition.shortfall` — add full-question crops, do not add regexes.
-   - If assignable, archives the old quiz and links the new one.
+   - If `assignBlocked: true` (empty RW or Math, or residual junk), the current assignment stays (junk already unlinked). Read `composition.shortfall` — add full-question crops, do not add regexes.
+   - If assignable (including a short clean form), archives the old quiz and links the new one. Title says “Full-length” only when `usable: true`.
 
 Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
 
@@ -107,7 +108,7 @@ node --experimental-strip-types src/scripts/reset-october2-prework.ts --refresh-
 
 In-place refresh rematerializes bank-linked rows and unlinks items that fail the live audit. It cannot restore wiped choice text or invent full-question crops. Re-import JSONL only when new crops landed.
 
-### Full rebuild (blocked if the bank is dirty)
+### Full rebuild (assigns a short clean set if 120 is impossible)
 
 ```bash
 cd artifacts/api-server
@@ -131,16 +132,16 @@ The script prints `composition` and `assignBlocked`. Expect:
 | Check | Expected |
 | --- | --- |
 | `composition.usable` | `true` only for a complete clean 120 with `residualJunk === 0`. Otherwise `false` plus `shortfall`. |
-| `assignBlocked` | `true` if RW or Math would be empty or residual junk remains — do not treat that as a successful rebuild. |
+| `assignBlocked` | `true` only if RW or Math would be empty or residual junk remains. A short clean set is a successful rebuild. |
 | `questionCount` | 120 when usable; otherwise the clean short set (never padded with junk) |
-| `rwCount` / `mathCount` | 66 / 54 on a usable rebuild |
+| `rwCount` / `mathCount` | 66 / 54 on a usable rebuild; fewer is OK until crops land |
 | `sprCount` | 0 |
 | `duplicatePrompts` | 0 |
 | `shortfall.reasons` | Explicit live-audit classes (table_cite_without_values, smashed_trig, …) |
 | Graph/table items | Recovered table values or a full-question crop — never a page-neighbor PNG alone |
 | Extraction markers | No `Start referenced content` / `End referenced content` in any stem |
 | Algebra | No smashed trig/algebra as student-facing text unless a full-question crop + clean A–D is served |
-| Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` (only after a successful reassign) |
+| Title | `Full-length SAT diagnostic — …` only when usable; otherwise `SAT diagnostic (N clean questions) — …` |
 
 Then as Taito or a client preview: open the Oct 2 diagnostic → a graph item must show the chart **and** A–D copy (or a crop that includes the choices) → tables/stems must not clip → no “Multiple-choice options unavailable” → answer A–D → submit → see an estimated SAT range. Flagged (and reported) items are excluded from the score denominator. Students can **Report question** from the quiz chrome; Sama sees the queue on Admin home and mail goes to `admin@acceptedadmissions.org`.
 

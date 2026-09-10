@@ -649,6 +649,11 @@ export function composeDiagnosticItems<T extends DiagnosticQualityInput>(
   };
 }
 
+/**
+ * Fail-closed assign bar: ship a short clean diagnostic rather than pad to 120.
+ * Block only when residual junk remains, SPR leaked in, or a section is empty.
+ * `usable` still means a complete clean 120 — that is not required to assign.
+ */
 export function canAssignDiagnostic(
   composition: DiagnosticComposition,
   selected: readonly DiagnosticQualityInput[] = [],
@@ -658,6 +663,24 @@ export function canAssignDiagnostic(
   if (composition.rwCount === 0 || composition.mathCount === 0) return false;
   if (selected.length > 0 && selected.some((item) => !auditStudentQuizItem(item).ok)) return false;
   return composition.questionCount > 0;
+}
+
+export function diagnosticAssignmentCopy(
+  composition: DiagnosticComposition,
+  sessionTitle: string,
+): { title: string; instructions: string } {
+  if (composition.usable) {
+    return {
+      title: `Full-length SAT diagnostic — ${sessionTitle}`,
+      instructions:
+        "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score.",
+    };
+  }
+  return {
+    title: `SAT diagnostic (${composition.questionCount} clean questions) — ${sessionTitle}`,
+    instructions:
+      `Complete this SAT diagnostic from official College Board practice items. The bank could not fill a clean 120 (shortfall ${composition.shortfall.questionCount}: RW ${composition.shortfall.rwCount}, Math ${composition.shortfall.mathCount}), so only student-usable questions are included. Your result is an estimated SAT score range based on the questions shown. It is not an official College Board adaptive digital score.`,
+  };
 }
 
 export function summarizeDiagnosticComposition(

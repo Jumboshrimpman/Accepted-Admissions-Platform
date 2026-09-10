@@ -14,6 +14,7 @@ import {
   auditStudentQuizItem,
   canAssignDiagnostic,
   composeDiagnosticItems,
+  diagnosticAssignmentCopy,
   isCleanTextMcqItem,
   isMathQuizItem,
   isStudentUsableDiagnosticItem,
@@ -1368,6 +1369,7 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     assert.equal(composition.usable, true);
     assert.equal(isUsableFullLengthDiagnostic(composition), true);
     assert.ok(composition.filledFromOtherPacks > 0);
+    assert.equal(canAssignDiagnostic(composition, selected), true);
   } else {
     assert.equal(composition.usable, false);
     assert.ok(composition.shortfall.questionCount > 0);
@@ -1375,6 +1377,11 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     assert.ok(
       composition.shortfall.mathCount > 0 || composition.shortfall.rwCount > 0,
       "a thin clean bank must report section shortfall instead of padding junk",
+    );
+    assert.equal(
+      canAssignDiagnostic(composition, selected),
+      composition.rwCount > 0 && composition.mathCount > 0,
+      "a short clean form with both sections is assignable",
     );
   }
   assert.ok(selected.every((row) => row.examFamily === "sat"));
@@ -1447,6 +1454,55 @@ test("stays inside one collection when cross-pack fill is disabled", async () =>
   const single = summarizeDiagnosticComposition(selected);
   assert.equal(single.usable, false);
   assert.ok(single.shortfall.questionCount > 0);
+});
+
+test("fail-closed: a short clean diagnostic is assignable and is not labeled usable 120", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const rw = Array.from({ length: 8 }, (_, index) => ({
+    id: `rw-short-${index}`,
+    sourceKey: `rw-short-${index}`,
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "rw" as const,
+    module: 1,
+    questionNumber: index + 1,
+    position: index,
+    prompt: `Which choice completes the text with the most logical and precise word or phrase? Item ${index + 1}.`,
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  }));
+  const math = Array.from({ length: 6 }, (_, index) => ({
+    id: `math-short-${index}`,
+    sourceKey: `math-short-${index}`,
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "math" as const,
+    module: 1,
+    questionNumber: index + 1,
+    position: 20 + index,
+    prompt: `x/4 + ${index + 1} = 33\nWhich equation has the same solution as the given equation?`,
+    choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  }));
+  const { selected, composition } = composeDiagnosticItems([...rw, ...math], {
+    preferredCollectionSlug: "sat-practice-test-4-digital",
+  });
+  assert.equal(selected.length, 14);
+  assert.equal(composition.usable, false);
+  assert.ok(composition.shortfall.questionCount > 0);
+  assert.equal(composition.residualJunk, 0);
+  assert.equal(canAssignDiagnostic(composition, selected), true);
+  const copy = diagnosticAssignmentCopy(composition, "Taito’s SAT Session with Eunice");
+  assert.match(copy.title, /14 clean questions/);
+  assert.equal(copy.title.includes("Full-length"), false);
+  assert.match(copy.instructions, /could not fill a clean 120/);
 });
 
 test("fail-closed: cannot mark usable or assign when only dirty math remains", () => {

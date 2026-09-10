@@ -252,7 +252,9 @@ export function AssignBankPreworkControl({
   return (
     <div className="mt-3 space-y-2" data-testid={`assign-bank-prework-${sessionId}`}>
       <p className="text-sm font-medium">
-        {homeworkKind === "diagnostic" ? "Full-length diagnostic pre-work" : "30–50 question bank pre-work"}
+        {homeworkKind === "diagnostic"
+          ? "SAT diagnostic pre-work (fail-closed; may be short of 120)"
+          : "30–50 question bank pre-work"}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
@@ -310,7 +312,7 @@ export function AssignBankPreworkControl({
           {assign.isPending
             ? "Assigning…"
             : homeworkKind === "diagnostic"
-              ? "Assign full diagnostic"
+              ? "Assign diagnostic"
               : "Assign 30–50 question pre-work"}
         </Button>
         <Button
@@ -346,7 +348,11 @@ export function AssignBankPreworkControl({
                     ? `Rebuild blocked (fail-closed). Current assignment was rematerialized but not replaced. Shortfall ${shortfall?.questionCount ?? "—"} (RW ${shortfall?.rwCount ?? "—"} / Math ${shortfall?.mathCount ?? "—"}). Residual junk ${result.composition?.residualJunk ?? 0}. Add full-question crops or re-score, then retry.`
                     : `Reset ${result.deletedAttempts ?? 0} attempt(s) and archived ${result.archivedAssignments ?? 0} assignment(s).${
                         assigned
-                          ? ` Re-attached ${assigned.questionCount ?? 0} diagnostic questions (~${assigned.targetMinutes ?? "—"} min).`
+                          ? ` Re-attached ${assigned.questionCount ?? 0} clean diagnostic questions (~${assigned.targetMinutes ?? "—"} min)${
+                              result.composition?.usable
+                                ? "."
+                                : ` — short of 120 (shortfall ${shortfall?.questionCount ?? "—"}).`
+                            }`
                           : ""
                       } Bank questions were not deleted.`,
                 );
