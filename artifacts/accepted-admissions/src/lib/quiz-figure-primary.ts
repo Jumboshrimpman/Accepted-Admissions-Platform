@@ -14,7 +14,7 @@ const MATH_LAYOUT_GLYPH = /[⎜⎟⎝⎠⎛⎞⎢⎥]/;
 const MISSING_CARET_POLYNOMIAL =
   /(?:^|[=+\-,\s(])(?:[A-Za-z]|\d+)?x[2-9](?:\b|[+\-\s,)?])/;
 const MISSING_CARET_PAREN_POWER = /\([^)\n]{1,24}\)2\b/;
-const MISSING_CARET_GROWTH = /\(\d+\.\d+\)x\b/;
+const MISSING_CARET_GROWTH = /\(\d+\.\d+\)[A-Za-z]\b/;
 const SMASHED_QUADRATIC_LEAD = /\b2\s+4x\b/;
 const STRIPPED_TRIANGLE_SIDES = /(?:sides of length|right triangle)[\s\S]{0,160}\b2\s+2\s*,\s*6\s+2\b/i;
 const STRIPPED_RADICAL_CHOICE = /^(?:8\s+2\s*\+\s*80|\d+\s*\+\s*\d+\s+2)$/;
@@ -38,7 +38,7 @@ const ORPHAN_FX_AFTER_W = /expresses\s+w[\s\S]{0,80}\bf\(x\)\s*$/i;
 const SPACED_PRODUCT_CHOICE = /^(?:[A-Za-zπΠ]\s+[A-Za-zπΠ]|\d{1,3}\s+[A-Za-zπΠ])$/;
 const QUIZ_IMAGE = /!\[[^\]]*\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/;
 const STRAY_VALUE_EQUALS_OF = /value\s*=\s*of\b/i;
-const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*What is the value/i;
+const MISSING_SEGMENT_RELATION = /\b[A-Z]{2}\s+[A-Z]{2}\.\s*(?:What|Which)\b/i;
 const AXIS_TICK_OCR = /(?:^|\n)\s*X\s+(?:u\s+)?-?\d+(?:\s+-?\d+){2,}/i;
 const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b|\b12345678910\b/;
 const AXIS_LABEL_BLEED =
@@ -62,13 +62,36 @@ const LEADING_EQ_THEN_FX_VAR = /^=\s*.{0,48}\bf\s*\(\s*x\s*\)\s+[A-Za-z]/m;
 const LEADING_INEQUALITY_SMASHED = /(?:^|\n)\s*[<>≤≥]\s*\d+[^\n]{0,28}\b[A-Za-z]\s+[A-Za-z]/;
 const STACKED_EQ_NUMBERS = /=\s*\d+\s+\d+\s+[A-Za-z]/;
 const SIN_COS_OCR = /\bsin\s+is\s+cos\b/i;
+const SMASHED_TRIG_FN = /\b(?:sin|cos|tan)[A-Z](?:\s+\d+){0,3}\b/;
+const BARE_EQ_AFTER_WORD = /\b(?:the|and|where|if|is)\s+=\s*-?\d/;
+const TEO_LENGTH_OCR = /\bteo\s*length\b/i;
+const HAS_HAVE_OCR = /\bhas\s*\(\s*have\s*\)/i;
+const INCOMPLETE_TRAILING_ASK =
+  /\b(?:what is the|of the|if [A-Z]{2}(?:\s+\d+)?|the solution to the given[^.?\n]*is)\s*$/i;
+const MISSING_SEGMENT_MEASURE = /\b[A-Z]{2}\s+\d+\s+units\b/;
+const SMASHED_IF_SEGMENT = /\bIf\s+[A-Z]{2}\s+\d+(?:\s+what\b|\s*$)/i;
+const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
+const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+[+\-]\d+[A-Za-z][+\-]\d+[A-Za-z]\s*=/;
+const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
+const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
+const FLATTENED_PAREN_FRACTION = /\([^0-9)][^)]{0,24}\)[A-Za-z]/;
+const MODULE_BOILERPLATE_SUFFIX =
+  /\s+If you finish before time is called[\s\S]*$/i;
+const FLATTENED_MIXED_ALNUM = /[A-Za-z]\d+[A-Za-z]/;
+const SPACED_TRAILING_VAR_CHOICE = /^\d+[A-Za-z]\s+[A-Za-z]$/;
+const TRAILING_COMMA_FRACTION = /^[−-]?\d+\/\d+,$/;
+const MATH_TABLE_CITE =
+  /\b(?:the table (?:shows|gives|above)|table shows|table gives|table above)\b/i;
+const MATH_TABLE_CONTEXT =
+  /\b(?:linear function|selected values|corresponding values|distribution of|exponential relationship|values of [xyf]|f\s*\(\s*x\s*\)|function f)\b/i;
+const RW_TABLE_CITE = /\b(?:complete the text|most effectively uses data)\b/i;
 const LEADING_EQ_SPLIT_NUM = /^=\s*\d+\s*[+\-]\s*\d+\s+\d+/m;
 const SPACED_FT_EQUALS = /\bf\s+t\s*=/;
 const SMASHED_DISTRIBUTE = /[xy]\s*\d+\s*\(\s*[+\-]/;
 const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
 const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
 const LEAKED_NEXT_QUESTION =
-  /Which expression is equivalent|Which of the following (?:systems|equations|is|tables)|Select your answer|set a goal to walk|On a certain day,|Note:\s*Figure not drawn|lines m and n are parallel|The given (?:equation|system|function|inequality) relates|The solution to the given|Each side of equilateral|How many (?:distinct|Start referenced)|What is the (?:perimeter|value|length|area|slope)/i;
+  /Which expression is equivalent|Which of the following (?:systems|equations|is|tables)|Select your answer|set a goal to walk|On a certain day,|Note:\s*Figure not drawn|lines m and n are parallel|The given (?:equation|system|function|inequality) relates|The solution to the given|The function f gives|monthly fee|crates in storage|facility charg|in dollars,\s*The function|Each side of equilateral|How many (?:distinct|Start referenced)|What is the (?:perimeter|value|length|area|slope)/i;
 const CHOICE_DASH_TILDE_BLEED = /-{3,}~|–{3,}~|—{2,}~/;
 const SMASHED_PI_STEM = /(?:^|\n|[,:;.])\s*[πΠ]\s+\d/;
 const SMASHED_PI_CHOICE = /^(?:[πΠ]\s+\d+|\d+\s+[πΠ])$/;
@@ -182,6 +205,9 @@ export function looksSmashedAlgebraText(text: string | null | undefined): boolea
   if (LEADING_INEQUALITY_SMASHED.test(raw)) return true;
   if (STACKED_EQ_NUMBERS.test(raw)) return true;
   if (SIN_COS_OCR.test(raw)) return true;
+  if (looksSmashedTrigToken(raw)) return true;
+  if (COMPACT_POLY_EQ.test(raw)) return true;
+  if (MISSING_CARET_GROWTH_SUM.test(raw) && !/\^/.test(raw)) return true;
   if (LEADING_EQ_SPLIT_NUM.test(raw)) return true;
   if (SPACED_FT_EQUALS.test(raw)) return true;
   if (MISSING_CARET_LEADING.test(raw)) return true;
@@ -247,7 +273,7 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (!raw.trim()) return false;
   if (looksIncompleteMathParens(raw)) return true;
   if (looksFailedMathLayoutDump(raw)) return true;
-  if (MISSING_CARET_GROWTH.test(raw) && !/\(\d+\.\d+\)\^x\b/.test(raw)) return true;
+  if (MISSING_CARET_GROWTH.test(raw) && !/\(\d+\.\d+\)\^[A-Za-z]\b/.test(raw)) return true;
   if (MISSING_CARET_POLYNOMIAL.test(raw) && !/\bx\^[2-9]\b/.test(raw)) return true;
   if (QUESTION_AS_OPERATOR.test(raw)) return true;
   if (SMASHED_TRAILING_X_EQ.test(raw)) return true;
@@ -279,6 +305,13 @@ export function looksCorruptStemOcr(text: string | null | undefined): boolean {
   if (!raw.trim()) return false;
   if (STRAY_VALUE_EQUALS_OF.test(raw)) return true;
   if (MISSING_SEGMENT_RELATION.test(raw)) return true;
+  if (MISSING_SEGMENT_MEASURE.test(raw)) return true;
+  if (SMASHED_IF_SEGMENT.test(raw)) return true;
+  if (BARE_EQ_AFTER_WORD.test(raw)) return true;
+  if (TEO_LENGTH_OCR.test(raw)) return true;
+  if (HAS_HAVE_OCR.test(raw)) return true;
+  if (STRAY_COMPARISON_IN_PROSE.test(raw)) return true;
+  if (INCOMPLETE_TRAILING_ASK.test(raw.trim())) return true;
   if (AXIS_TICK_OCR.test(raw)) return true;
   if (SMASHED_AXIS_TICKS.test(raw)) return true;
   if (AXIS_LABEL_BLEED.test(raw)) return true;
@@ -325,7 +358,46 @@ export function looksSpacedDecimalChoice(text: string | null | undefined): boole
 }
 
 export function looksMalformedFractionChoice(text: string | null | undefined): boolean {
-  return MALFORMED_FRACTION_CHOICE.test(cleanOcrChoiceText(text));
+  const value = cleanOcrChoiceText(text);
+  if (MALFORMED_FRACTION_CHOICE.test(value)) return true;
+  return TRAILING_COMMA_FRACTION.test(value);
+}
+
+/** `cosQ`, `sinQ 18 18` — trig name glued to a vertex without parens/args. */
+export function looksSmashedTrigToken(text: string | null | undefined): boolean {
+  return SMASHED_TRIG_FN.test(text ?? "") || SMASHED_TRIG_FN.test(cleanOcrChoiceText(text));
+}
+
+/** `x>0y>0` — inequalities smashed together. Spaced `x > 0 y > 0` stays. */
+export function looksGluedInequalityChoice(text: string | null | undefined): boolean {
+  return GLUED_INEQUALITY_PAIR.test(cleanOcrChoiceText(text).replace(/\s+/g, " "));
+}
+
+/** `42a(k+1)k`, `84ak2k`, `84a k` — slash dropped out of a fraction. */
+export function looksFlattenedFractionChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  if (!value) return false;
+  if (FLATTENED_PAREN_FRACTION.test(value)) return true;
+  if (FLATTENED_MIXED_ALNUM.test(value) && !/\^/.test(value) && !/\//.test(value)) return true;
+  return SPACED_TRAILING_VAR_CHOICE.test(value);
+}
+
+/**
+ * Math stem cites a data table (`the table shows/gives`) that a student
+ * must read. RW “uses data from the table to complete the text” is excluded.
+ */
+export function stemCitesMathDataTable(text: string | null | undefined): boolean {
+  const value = stripSatBankFigureComments(text);
+  if (!value || !/\btable\b/i.test(value)) return false;
+  if (RW_TABLE_CITE.test(value)) return false;
+  if (MATH_TABLE_CITE.test(value)) return true;
+  if (MATH_TABLE_CONTEXT.test(value) && /\b(?:the table|table shows)\b/i.test(value)) return true;
+  const compact = compactExtractText(value);
+  return (
+    compact.includes("thetableshows") ||
+    compact.includes("thetablegives") ||
+    compact.includes("thetableabove")
+  );
 }
 
 export function looksSmashedRadicalText(text: string | null | undefined): boolean {
@@ -467,6 +539,7 @@ export function looksGarbledQuizText(text: string | null | undefined): boolean {
 
 export function cleanOcrChoiceText(text: string | null | undefined): string {
   return (text ?? "")
+    .replace(MODULE_BOILERPLATE_SUFFIX, "")
     .replace(/[~\u223c˜]+/g, " ")
     .replace(/-{3,}|–{3,}|—{2,}/g, " ")
     .replace(/\s+/g, " ")
@@ -497,6 +570,9 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksSmashedPiChoice(raw) || looksSmashedPiChoice(cleaned)) return false;
   if (looksSpacedDecimalChoice(raw) || looksSpacedDecimalChoice(cleaned)) return false;
   if (looksMalformedFractionChoice(raw) || looksMalformedFractionChoice(cleaned)) return false;
+  if (looksSmashedTrigToken(raw) || looksSmashedTrigToken(cleaned)) return false;
+  if (looksGluedInequalityChoice(raw) || looksGluedInequalityChoice(cleaned)) return false;
+  if (looksFlattenedFractionChoice(raw) || looksFlattenedFractionChoice(cleaned)) return false;
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(cleaned)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(cleaned)) return false;
   if (looksSmashedAlgebraChoice(raw) || looksSmashedAlgebraChoice(cleaned)) return false;
@@ -525,6 +601,15 @@ export function hasRecoveredQuizTable(text: string | null | undefined): boolean 
     if (cells.some((cell) => /^-?\d+(?:\.\d+)?$/.test(cell))) numericRows += 1;
   }
   return header && numericRows >= 2;
+}
+
+function hasInlineNamedTableValues(text: string | null | undefined): boolean {
+  const pairs = (text ?? "").match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\s+\d{2,}/g) ?? [];
+  return pairs.length >= 2;
+}
+
+function hasUsableQuizTableData(text: string | null | undefined): boolean {
+  return hasRecoveredQuizTable(text) || hasInlineNamedTableValues(text);
 }
 
 /** Hide mangled OCR when a crop is on screen — never stack both. */
@@ -612,6 +697,13 @@ export function isStudentAnswerableQuizQuestion(
   const stimulusText = (question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ");
   if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(stimulusText)) return false;
   const stem = `${question.prompt ?? ""}\n${stimulusText}`;
+  if (
+    stemCitesMathDataTable(stem) &&
+    !hasUsableQuizTableData(`${question.prompt ?? ""}\n${stimulusText}`) &&
+    question.presentation !== "figure_primary"
+  ) {
+    return false;
+  }
   if (
     stemCitesVisual(stem) &&
     !hasQuizFigure(question) &&

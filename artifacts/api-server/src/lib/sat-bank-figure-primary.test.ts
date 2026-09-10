@@ -37,6 +37,10 @@ import {
   looksSpacedDecimalChoice,
   looksStackedFractionDump,
   looksMalformedFractionChoice,
+  looksFlattenedFractionChoice,
+  looksGluedInequalityChoice,
+  looksSmashedTrigToken,
+  stemCitesMathDataTable,
   looksAxisTickBleed,
   looksSpacedGeometryLabels,
   formatStudentChoiceText,
@@ -656,7 +660,27 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   assert.equal(looksSmashedAlgebraChoice("y x p = 57 +"), true);
   assert.equal(looksSmashedAlgebraChoice("y px = + 57"), true);
   assert.equal(looksSmashedAlgebraChoice("y = 57 px px"), true);
+  assert.equal(looksSmashedTrigToken("cosQ 18"), true);
+  assert.equal(looksSmashedTrigToken("sinQ 18 18"), true);
+  assert.equal(looksSmashedTrigToken("cos(Q)"), false);
+  assert.equal(looksFlattenedFractionChoice("42a(k+1)k"), true);
+  assert.equal(looksFlattenedFractionChoice("84ak2k"), true);
+  assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
+  assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksMalformedFractionChoice("51/904,"), true);
+  assert.equal(
+    stemCitesMathDataTable(
+      "For the linear function f, the table shows three values of x and their corresponding values of f(x).",
+    ),
+    true,
+  );
+  assert.equal(
+    stemCitesMathDataTable("Which choice most effectively uses data from the table to complete the text?"),
+    false,
+  );
   assert.equal(isStudentReadableChoiceText("y = 57"), true);
+  assert.equal(isStudentReadableChoiceText("V(x) = x(x + 9)(x + 7)"), true);
   assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);
   assert.equal(looksIncompleteMathParens("f(x) = (x + 1"), true);
   assert.equal(looksIncompleteMathParens("f(x) = x^2 + 1"), false);

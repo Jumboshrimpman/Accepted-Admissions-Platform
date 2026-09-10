@@ -4,6 +4,7 @@ import {
   hasMergedOrLeakedChoices,
   hasReadableStudentStem,
   hasRecoveredDataTable,
+  hasUsableTableData,
   hasRenderableFigures,
   isLetterAnswer,
   looksBrokenMathOcr,
@@ -13,6 +14,7 @@ import {
   looksSmashedOrTruncatedExtract,
   looksExtractionMarkerBleed,
   normalizeLetterAnswer,
+  stemCitesMathDataTable,
   stemCitesVisual,
   stripChartHeaderFragments,
   stripSatBankFigureComments,
@@ -145,8 +147,13 @@ function mathDependsOnVisual(input: DiagnosticQualityInput): boolean {
 
 function mathHasRequiredVisual(input: DiagnosticQualityInput): boolean {
   const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  // A generic page crop is not the table. Math table cites need recovered
+  // values (or a full-question crop that includes the table).
+  if (stemCitesMathDataTable(haystack) && !hasUsableTableData(haystack)) {
+    return hasFullQuestionCrop(input);
+  }
   if (hasRenderableFigures(input)) return true;
-  return hasRecoveredDataTable(haystack) && /table/i.test(haystack);
+  return hasUsableTableData(haystack) && /table/i.test(haystack);
 }
 
 function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
@@ -164,7 +171,8 @@ function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
  * Math-only bar: if a student cannot solve the item as shown, drop it.
  * Host the figure when the stem depends on a graph/table/dot plot; never
  * salvage bleed by hiding OCR next to an unlabeled crop. Extraction-marker
- * wrappers, cited visuals without a figure, and smashed algebra never pass.
+ * wrappers, cited visuals without a figure, table cites without recovered
+ * values, smashed trig/algebra, and unreadable choices never pass.
  * Figure-primary letter-only A–D and “has a crop so keep” are RW-only.
  */
 export function isStudentUsableMathQuizItem(input: DiagnosticQualityInput): boolean {
