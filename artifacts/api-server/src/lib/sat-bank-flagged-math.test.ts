@@ -296,8 +296,18 @@ test("math path is stricter than RW and does not salvage a crop next to broken O
     ...mathMissingFigure,
     figures: figure,
   };
-  assert.equal(isStudentUsableMathQuizItem(mathCleanWithFigure), true);
-  assert.equal(isStudentUsableQuizItem(mathCleanWithFigure), true);
+  assert.equal(
+    isStudentUsableMathQuizItem(mathCleanWithFigure),
+    false,
+    "an unlabeled page crop cannot satisfy a graph cite",
+  );
+  assert.equal(isStudentUsableQuizItem(mathCleanWithFigure), false);
+  const mathCleanWithFullCrop = {
+    ...mathMissingFigure,
+    figures: [{ url: figureUrl, alt: "Question region including choices A–D", role: "question_region" }],
+  };
+  assert.equal(isStudentUsableMathQuizItem(mathCleanWithFullCrop), true);
+  assert.equal(isStudentUsableQuizItem(mathCleanWithFullCrop), true);
 
   const mathBleedWithFigure = {
     prompt:

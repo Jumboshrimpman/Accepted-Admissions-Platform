@@ -661,9 +661,15 @@ export function shouldHideMismatchedQuizFigures(
 }
 
 export function shouldShowQuizChoices(
-  question: Pick<AssignmentQuestion, "prompt" | "choices">,
+  question: Pick<AssignmentQuestion, "prompt" | "choices" | "presentation">,
 ): boolean {
-  if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
+  const figurePrimarySalvage = question.presentation === "figure_primary";
+  if (
+    !figurePrimarySalvage &&
+    (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt))
+  ) {
+    return false;
+  }
   const dump = (question.choices ?? []).some(
     (choice) =>
       looksFailedMathLayoutDump(choice.text) ||
@@ -693,12 +699,31 @@ export function hasCompleteLetterChoiceText(
 export function isStudentAnswerableQuizQuestion(
   question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
 ): boolean {
-  if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
+  const figurePrimarySalvage =
+    question.presentation === "figure_primary" &&
+    hasQuizFigure(question) &&
+    hasCompleteLetterChoiceText(question.choices);
   const stimulusText = (question.stimulus ?? "").replace(/!\[[^\]]*\]\([^)]+\)/g, " ");
-  if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(stimulusText)) return false;
+  if (!figurePrimarySalvage) {
+    if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
+    if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(stimulusText)) return false;
+  }
   const stem = `${question.prompt ?? ""}\n${stimulusText}`;
   if (
     stemCitesMathDataTable(stem) &&
+    !hasUsableQuizTableData(`${question.prompt ?? ""}\n${stimulusText}`) &&
+    question.presentation !== "figure_primary"
+  ) {
+    return false;
+  }
+  const mathVisualCite =
+    stemCitesVisual(stem) &&
+    (stemCitesMathDataTable(stem) ||
+      /\b(?:xy[- ]plane|vertex of the graph|scatterplot|dot plot|in the (?:figure|triangle|graph)|the triangle shown|the graph shown)\b/i.test(
+        stem,
+      ));
+  if (
+    mathVisualCite &&
     !hasUsableQuizTableData(`${question.prompt ?? ""}\n${stimulusText}`) &&
     question.presentation !== "figure_primary"
   ) {
@@ -772,7 +797,7 @@ export function isFigurePrimaryQuestion(
 export function figurePrimaryChoices(
   question: Pick<AssignmentQuestion, "choices" | "presentation" | "prompt" | "stimulus" | "questionType">,
 ): NonNullable<AssignmentQuestion["choices"]> {
-  if (looksBrokenMathOcr(question.prompt)) return [];
+  if (looksBrokenMathOcr(question.prompt) && question.presentation !== "figure_primary") return [];
   if ((question.choices ?? []).some((choice) => looksFailedMathLayoutDump(choice.text))) {
     return [];
   }

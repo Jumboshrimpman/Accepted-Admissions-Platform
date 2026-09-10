@@ -388,6 +388,58 @@ export function hasFullQuestionCrop(input: {
   return false;
 }
 
+const PAGE_NEIGHBOR_ALT =
+  /\b(?:diagram|figure|image) from page\b|\bfigure region page\b|\bunlabeled (?:graph|figure|crop)\b/i;
+
+/**
+ * Page-sibling / graph-only PNG. These do not make a cited table or
+ * diagram solvable — students still cannot read the official values.
+ */
+export function isGenericPageNeighborFigure(figure: BankFigureLike): boolean {
+  if (isFullQuestionCrop(figure)) return false;
+  const alt = figure.alt ?? "";
+  const hay = `${alt} ${figure.path ?? ""} ${figure.url ?? ""} ${figure.role ?? ""}`;
+  if (PAGE_NEIGHBOR_ALT.test(alt)) return true;
+  if (FIGURE_ONLY_ALT.test(alt)) return true;
+  if (/figure\s+region/i.test(alt)) return true;
+  if (GRAPH_ONLY_FILE.test(hay)) return true;
+  return false;
+}
+
+/**
+ * A cited table/graph/figure is solvable only from recovered values or a
+ * real full-question / figure-primary crop. Generic page-neighbor PNGs
+ * do not count.
+ */
+export function hasSolvableCitedVisual(input: {
+  figures?: BankFigureLike[] | null;
+  stimulus?: string | null;
+  prompt?: string | null;
+  figurePrimarySrc?: string | null;
+}): boolean {
+  const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  if (hasUsableTableData(haystack)) return true;
+  return hasFullQuestionCrop(input);
+}
+
+/**
+ * Trig, systems, and fraction OCR that students cannot trust as text.
+ * Prefer a full-question crop over attempting to repair the tokens.
+ */
+export function looksHardOcrMathRisk(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (looksBrokenMathOcr(raw)) return true;
+  if (looksSmashedTrigToken(raw)) return true;
+  if (looksSmashedAlgebraText(raw)) return true;
+  if (looksSmashedPiToken(raw)) return true;
+  if (looksStackedFractionDump(raw)) return true;
+  if (looksIncompleteMathParens(raw)) return true;
+  if (looksGluedInequalityChoice(raw)) return true;
+  if (looksFlattenedFractionChoice(raw)) return true;
+  return false;
+}
+
 export function referencesVisualStimulus(text: string | null | undefined): boolean {
   return VISUAL_STIMULUS_REF.test(stripSatBankFigureComments(text));
 }
@@ -1094,7 +1146,14 @@ export function letterMcqChoices(
 
 export function figurePrimaryStudentPrompt(prompt: string | null | undefined): string {
   const cleaned = prepareStudentExtractText(prompt);
-  if (!cleaned || looksGarbledExtractText(cleaned)) return "";
+  if (!cleaned) return "";
+  if (
+    looksGarbledExtractText(cleaned) ||
+    looksHardOcrMathRisk(cleaned) ||
+    looksBrokenMathOcr(cleaned)
+  ) {
+    return "";
+  }
   return cleaned;
 }
 
@@ -1123,10 +1182,19 @@ export function shouldUseFigurePrimary(input: FigurePrimaryInput): boolean {
   const fullCrop = hasFullQuestionCrop(input);
   const completeChoices = hasCompleteLetterChoiceText(input.choices);
   const readableStem = hasReadableStudentStem(input);
+  const raw = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  const hardOcr =
+    looksHardOcrMathRisk(raw) ||
+    looksGarbledExtractText(raw) ||
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus));
 
   if (!letter) return false;
   if (!completeChoices) return false;
   if (!fullCrop) return false;
+  // Hard OCR + official question image + clean A–D: serve the crop.
+  // Do not keep smashed trig/algebra as student-facing text.
+  if (hardOcr) return true;
   if (completeChoices && readableStem && !looksGarbledExtractText(prepareStudentExtractText(input.prompt))) {
     return false;
   }

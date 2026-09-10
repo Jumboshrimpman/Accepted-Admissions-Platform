@@ -44,6 +44,7 @@ export function SatBankPanel({
   });
   const importBank = useImportSatBank();
   const [message, setMessage] = useState("");
+  const [rescoring, setRescoring] = useState(false);
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getListSatBankCollectionsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListSatBankQuestionsQueryKey() });
@@ -91,6 +92,29 @@ export function SatBankPanel({
             >
               <Download className="mr-2 h-4 w-4" />
               {importBank.isPending ? "Importing…" : "Import staged extracts"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={rescoring}
+              data-testid="rescore-sat-bank-usable"
+              onClick={() => {
+                setRescoring(true);
+                customFetch<{ scored: number; usable: number; unusable: number }>(
+                  "/api/admin/sat-bank/rescore-usable",
+                  { method: "POST" },
+                )
+                  .then((result) => {
+                    setMessage(
+                      `Re-scored ${result.scored} bank rows live: ${result.usable} usable, ${result.unusable} unusable. Import was not required.`,
+                    );
+                    refresh();
+                  })
+                  .catch((error) => setMessage(errorText(error)))
+                  .finally(() => setRescoring(false));
+              }}
+            >
+              {rescoring ? "Re-scoring…" : "Re-score usable flags"}
             </Button>
             <p className="self-center text-xs text-muted-foreground">
               {questions.data?.length ?? 0} bank questions · {collections.data?.length ?? 0} source
@@ -302,19 +326,29 @@ export function AssignBankPreworkControl({
             customFetch<{
               archivedAssignments?: number;
               deletedAttempts?: number;
+              assignBlocked?: boolean;
               reassigned?: { questionCount?: number; targetMinutes?: number } | null;
+              composition?: {
+                usable?: boolean;
+                questionCount?: number;
+                shortfall?: { questionCount?: number; rwCount?: number; mathCount?: number };
+                residualJunk?: number;
+              } | null;
             }>(path, {
               method: "POST",
               body: JSON.stringify({ reassignDiagnostic: isFirstSatSession || homeworkKind === "diagnostic" }),
             })
               .then((result) => {
                 const assigned = result.reassigned;
+                const shortfall = result.composition?.shortfall;
                 setMessage(
-                  `Reset ${result.deletedAttempts ?? 0} attempt(s) and archived ${result.archivedAssignments ?? 0} assignment(s).${
-                    assigned
-                      ? ` Re-attached ${assigned.questionCount ?? 0} diagnostic questions (~${assigned.targetMinutes ?? "—"} min).`
-                      : ""
-                  } Bank questions were not deleted.`,
+                  result.assignBlocked
+                    ? `Rebuild blocked (fail-closed). Current assignment was rematerialized but not replaced. Shortfall ${shortfall?.questionCount ?? "—"} (RW ${shortfall?.rwCount ?? "—"} / Math ${shortfall?.mathCount ?? "—"}). Residual junk ${result.composition?.residualJunk ?? 0}. Add full-question crops or re-score, then retry.`
+                    : `Reset ${result.deletedAttempts ?? 0} attempt(s) and archived ${result.archivedAssignments ?? 0} assignment(s).${
+                        assigned
+                          ? ` Re-attached ${assigned.questionCount ?? 0} diagnostic questions (~${assigned.targetMinutes ?? "—"} min).`
+                          : ""
+                      } Bank questions were not deleted.`,
                 );
                 onChanged();
               })

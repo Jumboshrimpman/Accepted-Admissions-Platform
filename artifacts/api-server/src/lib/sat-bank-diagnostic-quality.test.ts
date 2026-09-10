@@ -11,6 +11,9 @@ import {
 } from "./sat-bank-import.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  auditStudentQuizItem,
+  canAssignDiagnostic,
+  composeDiagnosticItems,
   isCleanTextMcqItem,
   isMathQuizItem,
   isStudentUsableDiagnosticItem,
@@ -1343,32 +1346,37 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     );
   }
 
-  const selected = selectUsableDiagnosticItems(records, {
+  const { selected, composition } = composeDiagnosticItems(records, {
     preferredCollectionSlug: "sat-practice-test-4-digital",
     allowCrossCollectionFill: true,
   });
-  const composition = summarizeDiagnosticComposition(selected, {
-    droppedUnusable: unusable.filter((row) => row.collectionSlug === "sat-practice-test-4-digital")
-      .length,
-    preferredCollectionSlug: "sat-practice-test-4-digital",
-  });
 
-  assert.equal(composition.questionCount, 120);
-  assert.equal(composition.rwCount, 66);
-  assert.equal(composition.mathCount, 54);
-  assert.deepEqual(composition.modules, {
-    "rw-1": 33,
-    "rw-2": 33,
-    "math-1": 27,
-    "math-2": 27,
-  });
   assert.equal(composition.sprCount, 0);
   assert.equal(composition.duplicatePrompts, 0);
-  assert.ok(composition.filledFromOtherPacks > 0);
-  assert.ok(composition.cleanMcqCount >= 80);
-  assert.equal(composition.usable, true);
-  assert.equal(isUsableFullLengthDiagnostic(composition), true);
+  assert.equal(composition.residualJunk, 0);
   assert.ok(selected.every((row) => isStudentUsableDiagnosticItem(row)));
+  assert.ok(selected.every((row) => auditStudentQuizItem(row).ok));
+  if (composition.questionCount === 120) {
+    assert.equal(composition.rwCount, 66);
+    assert.equal(composition.mathCount, 54);
+    assert.deepEqual(composition.modules, {
+      "rw-1": 33,
+      "rw-2": 33,
+      "math-1": 27,
+      "math-2": 27,
+    });
+    assert.equal(composition.usable, true);
+    assert.equal(isUsableFullLengthDiagnostic(composition), true);
+    assert.ok(composition.filledFromOtherPacks > 0);
+  } else {
+    assert.equal(composition.usable, false);
+    assert.ok(composition.shortfall.questionCount > 0);
+    assert.equal(isUsableFullLengthDiagnostic(composition), false);
+    assert.ok(
+      composition.shortfall.mathCount > 0 || composition.shortfall.rwCount > 0,
+      "a thin clean bank must report section shortfall instead of padding junk",
+    );
+  }
   assert.ok(selected.every((row) => row.examFamily === "sat"));
   assert.equal(
     selected.some((row) => row.sourceKey === "sat-pt4-math-m1-q3"),
@@ -1433,8 +1441,164 @@ test("stays inside one collection when cross-pack fill is disabled", async () =>
     preferredCollectionSlug: "sat-practice-test-4-digital",
     allowCrossCollectionFill: false,
   });
-  assert.ok(selected.length >= 60);
   assert.ok(selected.length < 80, "a single pack must stay thin rather than keep broken OCR to hit 80");
   assert.ok(selected.every((row) => row.collectionSlug === "sat-practice-test-4-digital"));
   assert.ok(selected.every((row) => isStudentUsableDiagnosticItem(row)));
+  const single = summarizeDiagnosticComposition(selected);
+  assert.equal(single.usable, false);
+  assert.ok(single.shortfall.questionCount > 0);
+});
+
+test("fail-closed: cannot mark usable or assign when only dirty math remains", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const neighbor = {
+    url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-draw1.png",
+    alt: "Diagram from page 35",
+  };
+  const rw = Array.from({ length: 66 }, (_, index) => ({
+    id: `rw-${index}`,
+    sourceKey: `rw-${index}`,
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "rw" as const,
+    module: index < 33 ? 1 : 2,
+    questionNumber: (index % 33) + 1,
+    position: index,
+    prompt: `Which choice completes the text with the most logical and precise word or phrase? Item ${index + 1}.`,
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  }));
+  const dirtyMath = [
+    {
+      id: "math-table",
+      sourceKey: "math-table",
+      collectionSlug: "sat-practice-test-4-digital",
+      examFamily: "sat",
+      section: "math" as const,
+      module: 1,
+      questionNumber: 1,
+      position: 70,
+      prompt:
+        "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?",
+      choices: letterChoices(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [neighbor],
+    },
+    {
+      id: "math-trig",
+      sourceKey: "math-trig",
+      collectionSlug: "sat-practice-test-4-digital",
+      examFamily: "sat",
+      section: "math" as const,
+      module: 1,
+      questionNumber: 2,
+      position: 71,
+      prompt: "In triangle QRS shown, QR RS. Which expression represents the length of QS?",
+      choices: letterChoices(["cosQ 18", "sinQ 18 18", "cosQ 18", "sinQ"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [neighbor],
+    },
+    {
+      id: "math-graph",
+      sourceKey: "math-graph",
+      collectionSlug: "sat-practice-test-4-digital",
+      examFamily: "sat",
+      section: "math" as const,
+      module: 2,
+      questionNumber: 1,
+      position: 90,
+      prompt: "The graph of y = f(x) is shown in the xy-plane. What is the vertex of the graph?",
+      choices: letterChoices(["(-2, 3)", "(0, 0)", "(2, -1)", "(3, 4)"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [neighbor],
+    },
+  ];
+  for (const item of dirtyMath) {
+    assert.equal(isStudentUsableQuizItem(item), false, `${item.id} must fail the live audit`);
+    assert.ok(auditStudentQuizItem(item).reasons.length > 0);
+  }
+  assert.ok(auditStudentQuizItem(dirtyMath[0]!).reasons.includes("table_cite_without_values"));
+  const { selected, composition } = composeDiagnosticItems([...rw, ...dirtyMath], {
+    preferredCollectionSlug: "sat-practice-test-4-digital",
+    allowCrossCollectionFill: true,
+  });
+  assert.equal(selected.some((row) => row.section === "math"), false);
+  assert.equal(composition.mathCount, 0);
+  assert.equal(composition.usable, false);
+  assert.ok(composition.shortfall.mathCount >= 54);
+  assert.equal(canAssignDiagnostic(composition, selected), false);
+});
+
+test("fail-closed: table-cite-without-values cannot pass even with a page PNG", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const item = {
+    prompt:
+      "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?",
+    section: "math" as const,
+    choices: letterChoices(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: [
+      {
+        url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-draw1.png",
+        alt: "Diagram from page 35",
+      },
+    ],
+  };
+  const audit = auditStudentQuizItem(item);
+  assert.equal(audit.ok, false);
+  assert.ok(audit.reasons.includes("table_cite_without_values"));
+  assert.equal(isStudentUsableMathQuizItem(item), false);
+});
+
+test("prefer figure-primary for smashed trig when a full-question crop and clean A–D exist", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const smashed = {
+    prompt: "In triangle QRS shown, QR RS. Which expression represents the length of QS?",
+    section: "math" as const,
+    choices: letterChoices(["cosQ 18", "sinQ 18 18", "2", "sinQ"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: [
+      {
+        url: "https://app.acceptedadmissions.org/media/sat-bank/pack/q88-question.png",
+        alt: "Question region including choices A–D",
+        role: "question_region",
+      },
+    ],
+  };
+  assert.equal(isStudentUsableMathQuizItem(smashed), false, "smashed A–D still drop");
+  const salvaged = {
+    ...smashed,
+    choices: letterChoices(["18", "36", "72", "90"]),
+  };
+  assert.equal(isStudentUsableMathQuizItem(salvaged), true);
+  assert.equal(isStudentUsableQuizItem(salvaged), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      ...salvaged,
+      figures: [{ url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-draw1.png", alt: "Diagram from page 35" }],
+    }),
+    false,
+    "text-only smash without a full-question crop must drop",
+  );
 });

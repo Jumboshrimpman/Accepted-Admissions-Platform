@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  auditStudentQuizItem,
+  canAssignDiagnostic,
+  composeDiagnosticItems,
   isMathQuizItem,
   isSafeToShowStudentQuizItem,
   isStudentUsableMathQuizItem,
@@ -532,6 +535,79 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
     false,
     "Q109 flattened table + missing-caret growth must drop",
   );
+});
+
+test("live audit: smashed trig with a full-question crop and clean A–D may ship as figure-primary", () => {
+  const smashedChoices = letterChoices(["cosQ 18", "sinQ 18 18", "2", "sinQ"]);
+  const cleanChoices = letterChoices(["18", "36", "72", "90"]);
+  const fullCrop = [
+    {
+      url: "https://app.acceptedadmissions.org/media/sat-bank/pack/q88-question.png",
+      alt: "Question region including choices A–D",
+      role: "question_region",
+    },
+  ];
+  const prompt = "In triangle QRS shown, QR RS. Which expression represents the length of QS?";
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt,
+      section: "math",
+      choices: smashedChoices,
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: fullCrop,
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt,
+      section: "math",
+      choices: cleanChoices,
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: fullCrop,
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt,
+      section: "math",
+      choices: cleanChoices,
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: figure,
+    }),
+    false,
+  );
+});
+
+test("live audit: fail-closed cannot assign a diagnostic built only from dirty math", () => {
+  const q68 = {
+    id: "q68",
+    sourceKey: "q68",
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "math" as const,
+    module: 1,
+    questionNumber: 8,
+    position: 8,
+    prompt:
+      "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?",
+    choices: letterChoices(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: figure,
+  };
+  assert.ok(auditStudentQuizItem(q68).reasons.includes("table_cite_without_values"));
+  const { selected, composition } = composeDiagnosticItems([q68], {
+    preferredCollectionSlug: "sat-practice-test-4-digital",
+  });
+  assert.equal(selected.length, 0);
+  assert.equal(composition.usable, false);
+  assert.ok(composition.shortfall.mathCount > 0);
+  assert.equal(canAssignDiagnostic(composition, selected), false);
 });
 
 test("live audit: readable controls still stay", () => {

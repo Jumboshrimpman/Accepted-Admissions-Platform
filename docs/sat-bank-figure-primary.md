@@ -16,15 +16,15 @@ Clean text MCQs with usable A–D copy stay normal text MCQs, even if they have 
 
 ## When the importer flips an item
 
+Figure-primary now requires a **full-question crop** and **complete readable A–D**. Empty letter keys never unlock an item.
+
 Any of:
 
-- Explicit `presentation: "figure_primary"`, `extractGaps.figurePrimary`, or an extraction note containing `figure_primary`
-- Garbled / ASCII-art prompt or stimulus and an A–D official key
-- Missing/empty choice text (or “(see figure)”) plus figures and an A–D key
-- SPR whose official key is actually a letter (`A`–`D`), especially with figures or parse-failure notes
-- Extract notes / `figuresIncomplete` on a letter-key item with a missing stem or choices
+- Hard OCR (smashed trig/algebra/fractions) + full-question crop + clean A–D — prefer the official image over repairing tokens
+- Explicit `presentation: "figure_primary"` / `extractGaps.figurePrimary` **and** a full-question crop + complete A–D
+- Garbled prompt plus a full-question crop and complete A–D
 
-Genuine numeric SPR (`9; 9.0`) stays SPR.
+Genuine numeric SPR (`9; 9.0`) stays SPR. A page-neighbor PNG is not a full-question crop.
 
 ## JSONL / media convention (ops re-extract)
 
@@ -44,10 +44,10 @@ Extractor scripts are not required to live in this repo. On the ops machine:
    {
      "questionType": "mcq",
      "choices": [
-       { "label": "A", "text": "" },
-       { "label": "B", "text": "" },
-       { "label": "C", "text": "" },
-       { "label": "D", "text": "" }
+       { "label": "A", "text": "18" },
+       { "label": "B", "text": "36" },
+       { "label": "C", "text": "72" },
+       { "label": "D", "text": "90" }
      ],
      "figures": [
        {
@@ -68,7 +68,9 @@ If both snippet drawings and a question-region crop are present, the portal uses
 
 ## Reimport (including Taito Oct 2 diagnostic)
 
-Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, tutor-built bank quizzes, and lesson retries — uses `isStudentUsableQuizItem`. **Math is a separate, stricter path** (`isStudentUsableMathQuizItem`): host the clean figure when the stem depends on a graph/table/dot plot; keep stem text short and free of axis/table OCR bleed; reject smashed exponents, character-spaced algebra, smashed trig (`cosQ`), glued inequalities, flattened fractions, and unreadable choices; if a student cannot solve the item as shown, drop it. A math stem that cites a table must have recovered table values (or a full-question crop) — a generic page diagram is not enough. Math does **not** keep a broken stem just because a crop exists. **RW and math both reject extraction-marker bleed** (`Start referenced content` / `End referenced content`). A cited visual without a usable figure is dropped. Incomplete or unavailable choice sets are dropped. Rebuild Oct 2 from usable MCQ rows: `docs/sat-diagnostic-october2.md`. The rebuild **replaces** dropped slots with unused clean SAT MCQs from other official packs; `--refresh-linked-only` only unlinks.
+Figure-primary display is not enough when the linked quiz still contains SPR, empty stems, or items without a crop. Every student quiz — diagnostic, routine pre-work, tutor-built bank quizzes, and lesson retries — uses `isStudentUsableQuizItem`. **Math is a separate, stricter path** (`isStudentUsableMathQuizItem`): a cited table/graph/figure is solvable only from recovered values or a **full-question crop**. Generic page-neighbor PNGs do not count. Hard OCR (trig, systems, smashed fractions) prefers the official question image + clean A–D when that crop exists; text-only smash is dropped, not repaired. Extraction-marker bleed never ships. Incomplete A–D never ships. Composition is **fail-closed**: it will not mark `usable: true` or reassign a diagnostic if residual junk remains or RW/Math would be empty. See `docs/sat-diagnostic-october2.md`. `--refresh-linked-only` only unlinks.
+
+**Re-score without import:** `POST /api/admin/sat-bank/rescore-usable` re-runs the live audit on bank rows. Use it when import 502s. Rematerialize already re-evaluates live; skipping import is safe for gates.
 
 Landing a quality-gate PR does **not** change the live Oct 2 assignment. After merge, parent must rematerialize Oct 2 again. Import is recommended; `reset-first-sat-prework` is required.
 

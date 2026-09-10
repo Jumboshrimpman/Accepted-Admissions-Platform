@@ -104,6 +104,7 @@ describe("SAT/PSAT bank panel", () => {
     expect(screen.queryByText(/Seed fixture/)).toBeNull();
     fireEvent.click(screen.getByTestId("import-sat-bank"));
     expect(importMutate).toHaveBeenCalled();
+    expect(screen.getByTestId("rescore-sat-bank-usable").textContent).toMatch(/Re-score usable flags/);
   });
 
   test("assigns 30–50 question session pre-work as routine accuracy work, not an official SAT score", () => {

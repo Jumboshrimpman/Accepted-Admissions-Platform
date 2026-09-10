@@ -40,8 +40,10 @@ import {
   refreshLinkedQuestionsFromBank,
   rematerializeAssignmentLinkedQuestions,
   requestSimilarRetry,
+  rescoreBankUsableFlags,
   resetSessionPreworkState,
   resetTaitoFirstSatPrework,
+  previewDiagnosticComposition,
 } from "../lib/sat-bank-service";
 
 type AuthedRequest = Request & { appUser?: AppUser };
@@ -65,7 +67,13 @@ function serviceError(res: Response, error: unknown, fallback: string): void {
     ? (error as { status: number }).status
     : 500;
   const message = error instanceof Error ? error.message : fallback;
-  res.status(status >= 400 && status < 600 ? status : 500).json({ error: message });
+  const composition = (error as { composition?: unknown }).composition;
+  const assignBlocked = (error as { assignBlocked?: boolean }).assignBlocked;
+  res.status(status >= 400 && status < 600 ? status : 500).json({
+    error: message,
+    ...(composition ? { composition } : {}),
+    ...(assignBlocked ? { assignBlocked: true } : {}),
+  });
 }
 
 router.post(
@@ -85,6 +93,19 @@ router.post(
       ...ImportSatBankResponse.parse(result),
       linkedRefresh: result.linkedRefresh,
     });
+  },
+);
+
+router.post(
+  "/admin/sat-bank/rescore-usable",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    try {
+      const result = await rescoreBankUsableFlags();
+      res.json(result);
+    } catch (error) {
+      serviceError(res, error, "Could not re-score SAT bank usable flags");
+    }
   },
 );
 
@@ -201,8 +222,20 @@ router.post(
       return;
     }
     try {
-      const reset = await resetSessionPreworkState(session.id);
       const reassignDiagnostic = req.body?.reassignDiagnostic !== false;
+      if (reassignDiagnostic) {
+        const preview = await previewDiagnosticComposition();
+        if (!preview.assignable) {
+          res.status(409).json({
+            error: "Diagnostic assign blocked: the bank cannot compose a clean RW+Math set.",
+            composition: preview.composition,
+            assignBlocked: true,
+            reassigned: null,
+          });
+          return;
+        }
+      }
+      const reset = await resetSessionPreworkState(session.id);
       const assigned = reassignDiagnostic
         ? await assignPreworkFromBank({
             sessionId: session.id,
@@ -213,6 +246,8 @@ router.post(
       res.status(201).json({
         ...reset,
         reassigned: assigned,
+        composition: assigned?.composition ?? null,
+        assignBlocked: false,
       });
     } catch (error) {
       serviceError(res, error, "Could not reset session pre-work");
