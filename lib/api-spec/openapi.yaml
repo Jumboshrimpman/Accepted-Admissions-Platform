@@ -1537,6 +1537,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /attempts/{attemptId}/question-reports:
+    post:
+      operationId: reportAttemptQuestion
+      tags: [assignments]
+      summary: Report the current question as incorrect or a bug
+      description: >
+        Students can report a broken or incorrect item and continue the quiz.
+        Creates an admin queue row and emails admin@acceptedadmissions.org.
+        Reported questions are excluded from scoring along with flagged items.
+      parameters:
+        - $ref: "#/components/parameters/AttemptId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [questionId, reason]
+              properties:
+                questionId: { type: string }
+                reason: { type: string, enum: [incorrect, bug, other] }
+                note: { type: string }
+      responses:
+        "201":
+          description: Report recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  attemptId: { type: string }
+                  assignmentId: { type: string }
+                  questionId: { type: string }
+                  questionIndex: { type: number }
+                  reason: { type: string }
+                  note: { type: string, nullable: true }
+                  stemSnippet: { type: string }
+                  status: { type: string }
+                  emailDelivery:
+                    type: object
+                    properties:
+                      status: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/question-reports:
+    get:
+      operationId: listAdminQuestionReports
+      tags: [admin]
+      summary: List student question reports for the admin queue
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Question reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      type: object
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/question-reports/{reportId}:
+    patch:
+      operationId: updateAdminQuestionReport
+      tags: [admin]
+      summary: Resolve or dismiss a student question report
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [open, resolved, dismissed] }
+      responses:
+        "200":
+          description: Updated report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /attempts/{attemptId}/submit:
     post:
       operationId: submitAttempt

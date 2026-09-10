@@ -928,7 +928,7 @@ function SessionCard({
         <div className="rounded-lg border bg-muted/20 p-3" data-testid={`session-prework-${session.id}`}>
           <p className="text-sm font-medium">Homework & diagnostics</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Students and tutors see the live copy. Archived reset leftovers stay here so you can restore one, archive extras, or edit title and visibility.
+            Only the current live homework copy is listed. Archived Oct 2 / diagnostic leftovers stay hidden. Use Archive if a duplicate is still showing.
           </p>
           {inventory.length > 0 ? (
             <div className="mt-2 space-y-2">

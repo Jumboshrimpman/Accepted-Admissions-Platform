@@ -13,6 +13,7 @@ import {
   examSourceAssetsTable,
   examSourceCollectionsTable,
   homeworkWeaknessGroupsTable,
+  questionReportsTable,
   questionsTable,
   remediationRetriesTable,
   responsesTable,
@@ -36,6 +37,7 @@ import {
 } from "./sat-bank-import.ts";
 import {
   isStudentUsableQuizItem,
+  quizItemFromServedQuestion,
   selectUsableDiagnosticItems,
   summarizeDiagnosticComposition,
   type DiagnosticComposition,
@@ -520,6 +522,7 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
 export type AssignmentLinkedRefreshCounts = LinkedRefreshCounts & {
   skippedForks: number;
   skippedUnlinked: number;
+  droppedUnusable: number;
 };
 
 export async function rematerializeAssignmentLinkedQuestions(
@@ -531,7 +534,7 @@ export async function rematerializeAssignmentLinkedQuestions(
     .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
   const questionIds = [...new Set(links.map((link) => link.questionId))];
   if (questionIds.length === 0) {
-    return { ...emptyLinkedRefreshCounts(), skippedForks: 0, skippedUnlinked: 0 };
+    return { ...emptyLinkedRefreshCounts(), skippedForks: 0, skippedUnlinked: 0, droppedUnusable: 0 };
   }
   const questions = await db
     .select({
@@ -577,7 +580,68 @@ export async function rematerializeAssignmentLinkedQuestions(
       errors += 1;
     }
   }
-  return { updated, skipped, errors, skippedForks, skippedUnlinked };
+  const droppedUnusable = await dropUnusableAssignmentQuestions(assignmentId);
+  return { updated, skipped, errors, skippedForks, skippedUnlinked, droppedUnusable };
+}
+
+async function dropUnusableAssignmentQuestions(assignmentId: string): Promise<number> {
+  const links = await db
+    .select({
+      questionId: assignmentQuestionsTable.questionId,
+      position: assignmentQuestionsTable.position,
+      question: questionsTable,
+    })
+    .from(assignmentQuestionsTable)
+    .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId))
+    .orderBy(asc(assignmentQuestionsTable.position));
+  if (links.length === 0) return 0;
+  const banks = await db
+    .select()
+    .from(bankQuestionsTable)
+    .where(
+      inArray(
+        bankQuestionsTable.linkedQuestionId,
+        links.map((link) => link.questionId),
+      ),
+    );
+  const bankByQuestion = new Map(banks.map((row) => [row.linkedQuestionId, row]));
+  const keep: Array<{ questionId: string }> = [];
+  let dropped = 0;
+  for (const link of links) {
+    const bank = bankByQuestion.get(link.questionId);
+    const usable = isStudentUsableQuizItem(
+      bank
+        ? bankRowForDiagnostic(bank)
+        : quizItemFromServedQuestion(link.question),
+    );
+    if (usable) keep.push({ questionId: link.questionId });
+    else dropped += 1;
+  }
+  if (dropped === 0) return 0;
+  const dropIds = links
+    .filter((link) => !keep.some((row) => row.questionId === link.questionId))
+    .map((link) => link.questionId);
+  await db
+    .delete(assignmentQuestionsTable)
+    .where(
+      and(
+        eq(assignmentQuestionsTable.assignmentId, assignmentId),
+        inArray(assignmentQuestionsTable.questionId, dropIds),
+      ),
+    );
+  for (const [index, row] of keep.entries()) {
+    await db
+      .update(assignmentQuestionsTable)
+      .set({ position: index })
+      .where(
+        and(
+          eq(assignmentQuestionsTable.assignmentId, assignmentId),
+          eq(assignmentQuestionsTable.questionId, row.questionId),
+        ),
+      );
+  }
+  return dropped;
 }
 
 export async function diagnosticCompositionForAssignment(
@@ -1598,6 +1662,7 @@ export async function recordRetryOutcome(input: {
 
 async function deleteAttemptsByIds(attemptIds: string[]): Promise<number> {
   if (attemptIds.length === 0) return 0;
+  await db.delete(questionReportsTable).where(inArray(questionReportsTable.attemptId, attemptIds));
   await db.delete(reviewQueueTable).where(inArray(reviewQueueTable.attemptId, attemptIds));
   await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, attemptIds));
   await db.delete(responsesTable).where(inArray(responsesTable.attemptId, attemptIds));
@@ -1770,8 +1835,10 @@ export async function resetTaitoFirstSatPrework(input: {
           actorUserId: input.actorUserId,
           homeworkKind: "diagnostic",
         });
+  const deduped = await dedupeFullLengthDiagnostics(session.courseId);
   return {
     ...reset,
+    archivedAssignments: reset.archivedAssignments + deduped.archivedAssignments,
     rematerialized,
     reassigned,
     composition: reassigned

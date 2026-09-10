@@ -137,6 +137,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  customFetch: async () => ({ reports: [] }),
   getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
   getGetAdminCurriculumQueryKey: () => ["/api/admin/curriculum"],
   getListAdminAccessGrantsQueryKey: () => ["/api/admin/access-grants"],
@@ -196,7 +197,6 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetSatBankCollection: () => ({ data: undefined, isLoading: false }),
   useImportSatBank: () => ({ mutate: vi.fn(), isPending: false }),
   useAssignSatBankPrework: () => ({ mutate: vi.fn(), isPending: false }),
-  customFetch: vi.fn(),
   useUpdateAdminGuidanceRequest: () => ({
     mutate: mocks.updateGuidanceRequest,
     isPending: false,
@@ -644,9 +644,15 @@ describe("administrator overview", () => {
     );
   });
 
+  test("shows the reported questions queue on admin home", async () => {
+    render(<AdminDashboard />);
+    expect(await screen.findByTestId("card-question-reports")).toBeTruthy();
+    expect(screen.getByText(/No open question reports/i)).toBeTruthy();
+    expect(screen.getByText(/admin@acceptedadmissions.org/i)).toBeTruthy();
+  });
+
   test("shows an empty guidance request state and new total", () => {
     render(<AdminDashboard />);
-
     expect(screen.getByTestId("empty-guidance-requests")).toBeTruthy();
     expect(screen.getByTestId("count-guidance-requests").textContent).toBe("0 total");
     expect(screen.getByTestId("count-new-guidance-requests").textContent).toBe("0 new");

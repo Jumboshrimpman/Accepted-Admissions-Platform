@@ -580,6 +580,28 @@ test("rejects character-spaced OCR, module boilerplate choices, and exploded OCR
   ]), false);
 });
 
+test("detects smashed percent tables, missing similar-triangle figures, and axis-tick scatterplots", () => {
+  assert.equal(
+    looksExplodedOcrTable(
+      "AblationRates SPC AST HTC OCC iron 20% 28% 90% 98% potassium 44% 74% 97% 100%",
+    ),
+    true,
+  );
+  assert.equal(
+    stemCitesVisual(
+      "Note:Figuresnotdrawntoscale.RighttrianglesPQR and STU are similar,whereP corresponds to S.",
+    ),
+    true,
+  );
+  assert.equal(
+    stemCitesVisual("Thescatterplotshowingtherelationshipbetweentwovariables, x and y."),
+    true,
+  );
+  assert.equal(looksCorruptStemOcr("y U12345678910 Which equation is the linear model?"), true);
+  assert.equal(isStudentReadableChoiceText("y=-+103x"), false);
+  assert.equal(looksBrokenMathOcr("Linetinthexy-planehasaslopeof1–3andpassesthrough"), true);
+});
+
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {
   const fields = studentFacingFigurePrimaryFields({
     prompt: "<!-- sat-bank-figures -->\nV = i,.r3",

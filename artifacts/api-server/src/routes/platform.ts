@@ -410,6 +410,15 @@ import {
   skillLabelForBank,
 } from "../lib/sat-bank-skill";
 import { answersMatch } from "../lib/sat-bank-retry";
+import { isStudentUsableServedQuestion } from "../lib/sat-bank-diagnostic-quality";
+import { scoreAttemptItems } from "../lib/attempt-scoring";
+import {
+  createQuestionReport,
+  isQuestionReportReason,
+  listQuestionReports,
+  reportedQuestionIdsForAttempt,
+  updateQuestionReportStatus,
+} from "../lib/question-reports";
 import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
@@ -3378,19 +3387,21 @@ async function finalizeAttemptResult(
       submittedResponses.find((response) => response.questionId === question.id) ??
       null,
   }));
-  let correctCount = 0;
+  const reportedQuestionIds = await reportedQuestionIdsForAttempt(attempt.attempt.id);
+  const scoredItems: Array<{ correct: boolean; flagged: boolean; reported: boolean }> = [];
   for (const item of joined) {
-    const correct = item.response?.finalAnswer === item.question.correctAnswer;
-    if (correct) correctCount += 1;
+    const correct = answersMatch(item.response?.finalAnswer, item.question.correctAnswer);
+    const flagged = item.response?.flagged ?? false;
+    const reported = reportedQuestionIds.has(item.question.id);
+    scoredItems.push({ correct, flagged, reported });
     if (item.response) {
       await db
         .update(responsesTable)
-        .set({ correct })
+        .set({ correct: flagged || reported ? null : correct })
         .where(eq(responsesTable.id, item.response.id));
     }
   }
-  const totalCount = joined.length;
-  const score = totalCount === 0 ? 0 : (correctCount / totalCount) * 100;
+  const { correctCount, totalCount, score } = scoreAttemptItems(scoredItems);
   const timing = await timerSummary(attempt.attempt.id);
   const items = joined.map(({ response, question }) => {
     const facing = assignmentQuestionShape(question, { position: 0 });
@@ -3418,11 +3429,14 @@ async function finalizeAttemptResult(
     subject: question.subject,
     };
   });
-  const breakdown = skillBreakdownFromItems(items);
+  const scoredForAnalysis = items.filter(
+    (item) => !item.flagged && !reportedQuestionIds.has(item.questionId),
+  );
+  const breakdown = skillBreakdownFromItems(scoredForAnalysis);
   const homeworkKind = await homeworkKindForAssignment(attempt.assignment.id);
   const analysis = deterministicAnalysis(
     breakdown,
-    items,
+    scoredForAnalysis,
     score,
     attempt.assignment.title,
     homeworkKind,
@@ -3431,7 +3445,7 @@ async function finalizeAttemptResult(
     homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
   const estimatedSatScore =
     scoreReporting === "estimated_diagnostic"
-      ? estimateSatScoreFromScoringGuide(items)
+      ? estimateSatScoreFromScoringGuide(scoredForAnalysis)
       : null;
   const result: AttemptResultPayload = {
     attemptId: attempt.attempt.id,
@@ -7357,6 +7371,40 @@ router.get(
   },
 );
 
+router.get(
+  "/admin/question-reports",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    res.json({ reports: await listQuestionReports(status) });
+  },
+);
+
+router.patch(
+  "/admin/question-reports/:reportId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const reportId = String(req.params.reportId ?? "");
+    const status = String((req.body as { status?: unknown })?.status ?? "");
+    if (!reportId || !["open", "resolved", "dismissed"].includes(status)) {
+      res.status(400).json({ error: "Question report status must be open, resolved, or dismissed." });
+      return;
+    }
+    const updated = await updateQuestionReportStatus(
+      reportId,
+      status as "open" | "resolved" | "dismissed",
+    );
+    if (!updated) {
+      res.status(404).json({ error: "Question report not found" });
+      return;
+    }
+    res.json({
+      id: updated.id,
+      status: updated.status,
+    });
+  },
+);
+
 router.patch(
   "/admin/notifications/:notificationId",
   ensureRole(["administrator"]),
@@ -9804,9 +9852,18 @@ async function listAssignmentsForUser(
         latestAttemptStatus: attempts[0]?.status ?? null,
       };
     }),
-  ).then((items) =>
-    items.filter((item): item is NonNullable<typeof item> => item !== null),
-  );
+  ).then((items) => {
+    const listed = items.filter((item): item is NonNullable<typeof item> => item !== null);
+    if (!studentFacing) return listed;
+    const bySession = new Map<string | null, typeof listed>();
+    for (const item of listed) {
+      const key = item.sessionId;
+      const group = bySession.get(key) ?? [];
+      group.push(item);
+      bySession.set(key, group);
+    }
+    return [...bySession.values()].flatMap((group) => selectStatusHomework(group));
+  });
 }
 
 async function ensureDuringSessionAssignment(
@@ -10172,8 +10229,9 @@ router.get(
       req.appUser!.role === "student" || req.appUser!.role === "viewer"
         ? joined.filter(
             ({ question }) =>
-              question.reviewStatus === "reviewed" ||
-              question.reviewStatus === "approved",
+              (question.reviewStatus === "reviewed" ||
+                question.reviewStatus === "approved") &&
+              isStudentUsableServedQuestion(question),
           )
         : joined;
     const [latestAttempt] = await db
@@ -10622,6 +10680,55 @@ router.post(
       .insert(timerEventsTable)
       .values({ attemptId: attempt.id, type: "paused" });
     res.json(PauseAttemptResponse.parse(await attemptShape(attempt.id)));
+  },
+);
+
+router.post(
+  "/attempts/:attemptId/question-reports",
+  async (req: AuthedRequest, res): Promise<void> => {
+    const attemptId = String(req.params.attemptId ?? "");
+    const questionId = String((req.body as { questionId?: unknown })?.questionId ?? "");
+    const reason = String((req.body as { reason?: unknown })?.reason ?? "");
+    const note = (req.body as { note?: unknown })?.note;
+    if (!attemptId || !questionId) {
+      res.status(400).json({ error: "Question report needs an attempt and question." });
+      return;
+    }
+    if (!isQuestionReportReason(reason)) {
+      res.status(400).json({ error: "Choose whether the question is incorrect, a bug, or something else." });
+      return;
+    }
+    if (req.appUser!.role !== "student") {
+      res.status(403).json({ error: "Only students can report a question." });
+      return;
+    }
+    try {
+      const created = await createQuestionReport({
+        attemptId,
+        questionId,
+        studentUserId: req.appUser!.id,
+        reason,
+        note: typeof note === "string" ? note : null,
+      });
+      res.status(201).json({
+        id: created.report.id,
+        attemptId: created.report.attemptId,
+        assignmentId: created.report.assignmentId,
+        questionId: created.report.questionId,
+        questionIndex: created.report.questionIndex,
+        reason: created.report.reason,
+        note: created.report.note,
+        stemSnippet: created.report.stemSnippet,
+        status: created.report.status,
+        createdAt: created.report.createdAt,
+        emailDelivery: created.emailDelivery,
+      });
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 500;
+      res.status(status).json({
+        error: error instanceof Error ? error.message : "Could not report this question.",
+      });
+    }
   },
 );
 

@@ -70,6 +70,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  customFetch: vi.fn(async () => ({ id: "report-1" })),
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getGetAttemptQueryKey: (id: string) => ["/api/attempts", id],
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
@@ -1019,6 +1020,22 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Flagged/i })).toBeTruthy();
+    expect(screen.getByText(/Flagged and reported questions aren’t scored/i)).toBeTruthy();
+  });
+
+  test("Report question sits next to Save for later and can be sent without leaving the quiz", async () => {
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("report-question")).toBeTruthy();
+    expect(screen.getByTestId("save-for-later")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("report-question"));
+    expect(screen.getByTestId("report-question-form")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("What looks wrong?"), {
+      target: { value: "Table is smashed" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send report" }));
+    expect(await screen.findByTestId("report-question-status")).toBeTruthy();
+    expect(screen.getByTestId("report-question").textContent).toMatch(/Reported/);
+    expect(screen.getByText(/Which transition is best/)).toBeTruthy();
   });
 
   test("paused overlay offers Resume and Save for later, and ?resume=1 auto-resumes", () => {

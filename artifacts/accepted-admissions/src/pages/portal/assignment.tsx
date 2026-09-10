@@ -13,6 +13,7 @@ import {
   useSaveAttemptResponse,
   useStartAttempt,
   useSubmitAttempt,
+  customFetch,
   type AssignmentQuestion,
   type AttemptResponse,
   type AttemptResult,
@@ -523,6 +524,12 @@ export default function PortalAssignment() {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<"incorrect" | "bug" | "other">("bug");
+  const [reportNote, setReportNote] = useState("");
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportPending, setReportPending] = useState(false);
+  const [reportedQuestionIds, setReportedQuestionIds] = useState<Set<string>>(new Set());
   const expirySubmitted = useRef(false);
   const restoredAttemptId = useRef<string | null>(null);
   const autoResumed = useRef(false);
@@ -1074,14 +1081,17 @@ export default function PortalAssignment() {
           <span className="text-lg font-semibold">
             Question {currentQuestionIndex + 1} of {assignment.questions.length}
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => updateResponse(question.id, { flagged: !response.flagged })}
-            className={response.flagged ? "bg-destructive/10 text-destructive" : "text-muted-foreground"}
-          >
-            <Flag className="mr-2 h-4 w-4" /> {response.flagged ? "Flagged" : "Flag"}
-          </Button>
+          <div className="space-y-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => updateResponse(question.id, { flagged: !response.flagged })}
+              className={response.flagged ? "bg-destructive/10 text-destructive" : "text-muted-foreground"}
+            >
+              <Flag className="mr-2 h-4 w-4" /> {response.flagged ? "Flagged" : "Flag"}
+            </Button>
+            <p className="text-xs text-muted-foreground">Flagged and reported questions aren’t scored.</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div
@@ -1111,10 +1121,93 @@ export default function PortalAssignment() {
               >
                 <BookmarkPlus className="mr-2 h-4 w-4" /> Save for later
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11"
+                data-testid="report-question"
+                onClick={() => {
+                  setReportOpen((open) => !open);
+                  setReportMessage(null);
+                }}
+                disabled={reportPending || reportedQuestionIds.has(question.id)}
+              >
+                <CircleAlert className="mr-2 h-4 w-4" />
+                {reportedQuestionIds.has(question.id) ? "Reported" : "Report question"}
+              </Button>
             </>
           )}
         </div>
       </div>
+      {reportOpen && !viewer && attemptId ? (
+        <form
+          className="space-y-3 rounded-xl border bg-muted/20 p-4"
+          data-testid="report-question-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setReportPending(true);
+            setReportMessage(null);
+            try {
+              await customFetch(`/api/attempts/${attemptId}/question-reports`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  questionId: question.id,
+                  reason: reportReason,
+                  note: reportNote.trim() || undefined,
+                }),
+              });
+              setReportedQuestionIds((current) => new Set(current).add(question.id));
+              setReportOpen(false);
+              setReportNote("");
+              setReportMessage("Reported. You can keep going — this question isn’t scored.");
+            } catch (error) {
+              setReportMessage(error instanceof Error ? error.message : "Could not report this question.");
+            } finally {
+              setReportPending(false);
+            }
+          }}
+        >
+          <p className="text-sm font-medium">
+            Report this question as incorrect or a bug. You can continue the quiz after sending it.
+            Reported questions aren’t scored.
+          </p>
+          <label className="block text-sm">
+            <span className="text-muted-foreground">Reason</span>
+            <select
+              className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+              value={reportReason}
+              onChange={(event) => setReportReason(event.target.value as "incorrect" | "bug" | "other")}
+            >
+              <option value="incorrect">Answer or wording looks incorrect</option>
+              <option value="bug">Broken display / missing figure</option>
+              <option value="other">Something else</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-muted-foreground">Optional note</span>
+            <textarea
+              className="mt-1 min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
+              value={reportNote}
+              onChange={(event) => setReportNote(event.target.value)}
+              placeholder="What looks wrong?"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm" disabled={reportPending}>
+              {reportPending ? "Sending…" : "Send report"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setReportOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
+      {reportMessage ? (
+        <p className="text-sm text-muted-foreground" data-testid="report-question-status">
+          {reportMessage}
+        </p>
+      ) : null}
       <div
         className="min-w-0 space-y-6 overflow-visible pt-4"
         data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : "quiz-question-stem"}

@@ -76,7 +76,7 @@ Figure-primary display is not enough when the linked quiz still contains SPR, em
 2. `POST /api/admin/sat-bank/reset-first-sat-prework`  
    or `node --experimental-strip-types src/scripts/reset-october2-prework.ts`
 
-In-place `--refresh-linked-only` cannot drop already-linked broken items.
+In-place `--refresh-linked-only` rematerializes bank-linked rows and now unlinks items that fail `isStudentUsableQuizItem`. It still cannot restore wiped choice text or refill dropped slots — use the rebuild for that.
 
 The Oct 2 Taito full-length diagnostic is linked to SAT bank rows. After new crops land in JSONL + `/media/sat-bank/`:
 

@@ -24,16 +24,23 @@ function quiz(overrides: Partial<BankQuizCandidate> = {}): BankQuizCandidate {
   };
 }
 
-test("session homework inventory lists archived reset copies for admin", () => {
+test("session homework inventory hides archived leftovers and extra diagnostics", () => {
   const inventory = sessionHomeworkInventory(
     [
-      quiz({ id: "live", sessionId: "session-1", questionCount: 120 }),
-      quiz({ id: "live", sessionId: "session-1", questionCount: 120 }),
+      quiz({ id: "live", sessionId: "session-1", questionCount: 120, title: "Full-length SAT diagnostic" }),
+      quiz({ id: "live", sessionId: "session-1", questionCount: 120, title: "Full-length SAT diagnostic" }),
       quiz({
         id: "archived-old",
         sessionId: "session-1",
         status: "archived",
         questionCount: 98,
+        title: "Full-length SAT diagnostic",
+      }),
+      quiz({
+        id: "empty-extra",
+        sessionId: "session-1",
+        questionCount: 0,
+        title: "Full-length SAT diagnostic",
       }),
       quiz({ id: "other-session", sessionId: "session-2" }),
     ],
@@ -41,7 +48,7 @@ test("session homework inventory lists archived reset copies for admin", () => {
   );
   assert.deepEqual(
     inventory.map((item) => item.id),
-    ["live", "archived-old"],
+    ["live"],
   );
 });
 

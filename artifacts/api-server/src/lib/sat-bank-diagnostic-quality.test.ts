@@ -651,6 +651,81 @@ test("shared quiz gate rejects character-spaced OCR, module boilerplate D, and e
   );
 });
 
+test("drops remaining Oct 2 smashed-table, missing-figure, and unavailable-choice items", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "AblationRatesforThreeElementsinCosmicDust,byDustSourceElement SPC AST HTC OCC iron 20% 28% 90% 98% potassium 44% 74% 97% 100% sodium 45% 75% 99% 100% Earth’s atmosphere is bombarded by cosmic dust. Which choice most effectively uses data from the table to complete the example?",
+      choices: letterChoices([
+        "iron from SPC dust is 20%.",
+        "sodium from OCC dust is 100%.",
+        "iron from HTC dust is 90%.",
+        "potassium from AST dust is 75%.",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "Note:Figuresnotdrawntoscale. Righttriangles PQR and STU are similar, where P corresponds to S. If the measure of angle Q is 18°, what is the measure of angle S?",
+      choices: letterChoices(["18°", "72°", "82°", "162°"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "Thescatterplotshowingtherelationshipbetweentwovariables, x and y. y U12345678910 Which of the following equations is the most appropriate linear model for the data shown?",
+      choices: letterChoices(["y = 0.9 + 9.4x", "y = 0.9 − 9.4x", "y = 9.4 + 0.9x", "y = 9.4 − 0.9x"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "Linetinthexy-planehasaslopeof1–3andpassesthroughthepoint(9,10). Which equation defines line t?",
+      choices: letterChoices(["y=13x-3", "y=9+10x", "y=-+103x", "y=-+133"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "=206(1.034)x models the value, The function f(x) in dollars, of a certain bank account by the end of each year from 1957 through 1972, where x is the number of years after 1957. Which of the following is the best interpretation of f(5) is approximately equal to 243 in this context?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "Square P has a side length of x inches. Square Q has a perimeter that is 176 inches greater than the perimeter of square P. The function f gives the area of square Q, in square inches. Which of the following defines f?",
+      choices: [],
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",

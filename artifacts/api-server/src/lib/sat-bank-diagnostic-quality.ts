@@ -5,6 +5,7 @@ import {
   hasReadableStudentStem,
   hasRecoveredDataTable,
   hasRenderableFigures,
+  hasUsableChoiceText,
   isLetterAnswer,
   looksGarbledExtractText,
   looksSmashedOrTruncatedExtract,
@@ -130,6 +131,72 @@ export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean 
 
 /** @deprecated Use isStudentUsableQuizItem — same shared gate for all quizzes. */
 export const isStudentUsableDiagnosticItem = isStudentUsableQuizItem;
+
+export function quizItemFromServedQuestion(question: {
+  id?: string | null;
+  prompt?: string | null;
+  stimulus?: string | null;
+  choices?: unknown;
+  questionType?: string | null;
+  correctAnswer?: string | null;
+  extractGaps?: Record<string, unknown> | null;
+  subject?: string | null;
+  domain?: string | null;
+  figures?: BankFigureLike[] | null;
+}): DiagnosticQualityInput {
+  const choices = Array.isArray(question.choices)
+    ? question.choices.flatMap((item, index) => {
+        if (!item || typeof item !== "object") return [];
+        const row = item as { id?: unknown; label?: unknown; text?: unknown };
+        return [
+          {
+            id: String(row.id ?? row.label ?? String.fromCharCode(97 + index)),
+            label: String(row.label ?? row.id ?? String.fromCharCode(65 + index)),
+            text: String(row.text ?? ""),
+          },
+        ];
+      })
+    : [];
+  return {
+    id: question.id,
+    prompt: question.prompt,
+    stimulus: question.stimulus,
+    choices,
+    figures: question.figures ?? [],
+    questionType: question.questionType,
+    correctAnswer: question.correctAnswer,
+    extractGaps: question.extractGaps,
+    section: /math/i.test(`${question.subject ?? ""} ${question.domain ?? ""}`) ? "math" : "rw",
+  };
+}
+
+export function isStudentUsableServedQuestion(
+  question: Parameters<typeof quizItemFromServedQuestion>[0],
+): boolean {
+  return isSafeToShowStudentQuizItem(quizItemFromServedQuestion(question));
+}
+
+/**
+ * Serve-time gate: hide smashed/unavailable SAT items, but do not hide a
+ * short tutor/fixture MCQ that has readable stem + usable choices.
+ * Composition still uses the stricter isStudentUsableQuizItem (complete A–D).
+ */
+export function isSafeToShowStudentQuizItem(input: DiagnosticQualityInput): boolean {
+  if (isStudentUsableQuizItem(input)) return true;
+  if (!isLetterAnswer(input.correctAnswer) || isTrueSprQuizItem(input)) return false;
+  if (!hasUsableChoiceText(input.choices)) return false;
+  if (hasMergedOrLeakedChoices(input.choices)) return false;
+  if (!hasReadableStudentStem(input)) return false;
+  if (isGarbledItem(input)) return false;
+  if (
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.prompt)) ||
+    looksSmashedOrTruncatedExtract(stripChartHeaderFragments(input.stimulus))
+  ) {
+    return false;
+  }
+  if (stemReferencesMissingVisual(input)) return false;
+  return true;
+}
 
 export function diagnosticPromptFingerprint(input: DiagnosticQualityInput): string {
   const text = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`

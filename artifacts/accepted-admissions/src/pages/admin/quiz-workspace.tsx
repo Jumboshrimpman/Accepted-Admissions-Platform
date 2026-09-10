@@ -356,7 +356,7 @@ function QuizDetail({
           {quiz.programTitle}
           {quiz.sessionTitle ? ` · currently on ${quiz.sessionTitle}` : " · assign from here or from a session"}
           {quiz.sessionId
-            ? " · Edit title, status, or visibility here. Archived copies stay off the student/tutor homework list."
+            ? " · Edit title, status, or visibility here. Archived copies stay off homework status and client quiz lists."
             : ""}
         </p>
       </div>

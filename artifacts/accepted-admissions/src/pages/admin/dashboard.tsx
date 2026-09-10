@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
+import { QuestionReportsQueue } from "./question-reports-queue";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import {
@@ -155,6 +156,8 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       )}
+
+      <QuestionReportsQueue />
 
       {notifications.length > 0 && (
         <Card data-testid="card-admin-notifications">
