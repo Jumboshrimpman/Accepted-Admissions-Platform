@@ -165,7 +165,25 @@ and B?`;
   };
   assert.equal(stemCitesVisual(inTheFigure.prompt), true);
   assert.equal(isStudentUsableMathQuizItem(inTheFigure), false);
-  assert.equal(isStudentUsableMathQuizItem({ ...inTheFigure, figures: figure }), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({ ...inTheFigure, figures: figure }),
+    false,
+    "a generic page-neighbor PNG is not a solvable cited figure",
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      ...inTheFigure,
+      figures: [
+        {
+          url: "https://app.acceptedadmissions.org/media/sat-bank/pack/q-question.png",
+          alt: "Question region including choices A–D",
+          role: "question_region",
+        },
+      ],
+    }),
+    true,
+    "a real full-question crop makes a clean cited-figure item solvable",
+  );
 });
 
 test("live audit: smashed algebra stems and choices never pass", () => {

@@ -1,9 +1,10 @@
 /**
  * Rebuild Taito's October 2 full-length SAT diagnostic from usable MCQ bank rows.
  *
- * Default: rematerialize the current linked (non-fork) questions, archive the
- * broken assignment, and attach a new MCQ-only diagnostic (PT4 modules, dropped
- * SPR/OCR replaced with clean SAT MCQs from other official packs).
+ * Default: rematerialize the current linked (non-fork) questions, preview a
+ * fail-closed composition, and only archive/replace if the new set has no
+ * residual junk and both RW and Math are non-empty. Cross-pack fill may use
+ * only live-audit-clean items; leftover slots stay short instead of padding.
  *
  * Usage (requires DATABASE_URL):
  *   cd artifacts/api-server
