@@ -4,10 +4,12 @@ export function SessionListDisclosure({
   canToggle,
   expanded,
   onToggle,
+  testId = "session-list-show-more",
 }: {
   canToggle: boolean;
   expanded: boolean;
   onToggle: () => void;
+  testId?: string;
 }) {
   if (!canToggle) return null;
   return (
@@ -17,7 +19,7 @@ export function SessionListDisclosure({
       className="rounded-full"
       onClick={onToggle}
       aria-expanded={expanded}
-      data-testid="session-list-show-more"
+      data-testid={testId}
     >
       {expanded ? "Show less" : "Show more"}
     </Button>

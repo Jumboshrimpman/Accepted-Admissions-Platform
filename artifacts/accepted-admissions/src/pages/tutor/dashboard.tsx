@@ -29,8 +29,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
 import {
+  collapsedItems,
   displaySessionTitle,
   disclosedSessions,
   formatSessionDate,
@@ -46,6 +48,7 @@ import {
 
 export default function TutorDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
   const queryClient = useQueryClient();
   const { data: dashboard, isLoading: loadingDashboard, error } = useGetDashboard();
   const { data: queue, isLoading: loadingQueue } = useListReviewQueue();
@@ -152,7 +155,12 @@ export default function TutorDashboard() {
     });
   });
 
-  const attentionItems = Array.from(attentionByAttempt.values()).slice(0, 8);
+  const attentionItems = Array.from(attentionByAttempt.values()).sort((left, right) => {
+    const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : 0;
+    const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
+  const alertList = collapsedItems(attentionItems, showAllAlerts);
   const markQueueItemsReviewed = (items: typeof openQueue) => {
     items.forEach((item) => {
       updateReview.mutate(
@@ -283,7 +291,7 @@ export default function TutorDashboard() {
         <CardContent className="px-6 pb-6">
           {attentionItems.length > 0 ? (
             <div className="space-y-3">
-              {attentionItems.map((item) => (
+              {alertList.visible.map((item) => (
                 <div
                   key={item.attemptId}
                   className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-start sm:justify-between"
@@ -345,6 +353,12 @@ export default function TutorDashboard() {
                   </div>
                 </div>
               ))}
+              <SessionListDisclosure
+                canToggle={alertList.canToggle}
+                expanded={showAllAlerts}
+                onToggle={() => setShowAllAlerts((value) => !value)}
+                testId="assignment-notifications-show-more"
+              />
             </div>
           ) : (
             <div className="flex items-center gap-3 py-5 text-sm text-muted-foreground">

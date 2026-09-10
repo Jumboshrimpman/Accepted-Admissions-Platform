@@ -274,6 +274,28 @@ function dashboardForRole(
   } as unknown as Dashboard;
 }
 
+function tutorSubmission(attemptId: string, assignmentTitle: string, submittedAt: string) {
+  return {
+    attemptId,
+    assignmentId: `assignment-${attemptId}`,
+    assignmentTitle,
+    studentUserId: "student",
+    studentName: "Taito Goto",
+    status: "submitted" as const,
+    score: 80,
+    submittedAt,
+    reviewStatus: "new" as const,
+    mistakeCount: 2,
+    tutorNotes: null,
+    analysisPreview: null,
+    nextFocus: [],
+    sessionOpener: null,
+    skipRehash: [],
+    sectionBreakdown: [],
+    missClusters: [],
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.queue = [
@@ -558,6 +580,56 @@ describe("authenticated role dashboard flows", () => {
       { itemId: "queue-1", data: { status: "reviewed", tutorNote: "Reviewed and approved." } },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  test("shows every tutor submission alert when there are three or fewer", () => {
+    mocks.queue = [];
+    mocks.dashboard = {
+      ...dashboardForRole("tutor"),
+      newSubmissions: [
+        tutorSubmission("attempt-3", "Newest quiz", "2026-09-03T12:00:00.000Z"),
+        tutorSubmission("attempt-2", "Middle quiz", "2026-09-02T12:00:00.000Z"),
+        tutorSubmission("attempt-1", "Oldest quiz", "2026-09-01T12:00:00.000Z"),
+      ],
+    } as Dashboard;
+    render(<TutorDashboard />);
+
+    expect(screen.getByTestId("submission-alert-attempt-3")).toBeTruthy();
+    expect(screen.getByTestId("submission-alert-attempt-2")).toBeTruthy();
+    expect(screen.getByTestId("submission-alert-attempt-1")).toBeTruthy();
+    expect(screen.queryByTestId("assignment-notifications-show-more")).toBeNull();
+  });
+
+  test("shows the three newest tutor submission alerts and a Show more control when more exist", () => {
+    mocks.queue = [];
+    mocks.dashboard = {
+      ...dashboardForRole("tutor"),
+      newSubmissions: [
+        tutorSubmission("attempt-oldest", "Oldest quiz", "2026-09-01T12:00:00.000Z"),
+        tutorSubmission("attempt-2", "Second quiz", "2026-09-02T12:00:00.000Z"),
+        tutorSubmission("attempt-3", "Third quiz", "2026-09-03T12:00:00.000Z"),
+        tutorSubmission("attempt-4", "Fourth quiz", "2026-09-04T12:00:00.000Z"),
+        tutorSubmission("attempt-newest", "Newest quiz", "2026-09-05T12:00:00.000Z"),
+      ],
+    } as Dashboard;
+    render(<TutorDashboard />);
+
+    expect(screen.getByTestId("submission-alert-attempt-newest")).toBeTruthy();
+    expect(screen.getByTestId("submission-alert-attempt-4")).toBeTruthy();
+    expect(screen.getByTestId("submission-alert-attempt-3")).toBeTruthy();
+    expect(screen.queryByTestId("submission-alert-attempt-2")).toBeNull();
+    expect(screen.queryByTestId("submission-alert-attempt-oldest")).toBeNull();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
+    expect(screen.getByText("5 to review")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
+    expect(screen.getByTestId("submission-alert-attempt-2")).toBeTruthy();
+    expect(screen.getByTestId("submission-alert-attempt-oldest")).toBeTruthy();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
+
+    fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
+    expect(screen.queryByTestId("submission-alert-attempt-oldest")).toBeNull();
+    expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
   });
 
   test("adaptive guidance never shows Skill not in extract to clients", () => {
