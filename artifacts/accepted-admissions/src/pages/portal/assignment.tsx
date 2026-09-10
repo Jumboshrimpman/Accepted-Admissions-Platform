@@ -525,14 +525,14 @@ export default function PortalAssignment() {
     if (!attemptId && assignment?.latestAttemptId) setAttemptId(assignment.latestAttemptId);
   }, [assignment?.latestAttemptId, attemptId]);
 
-  useEffect(() => {
-    if (!attempt?.id || !assignment?.questions.length) return;
-    if (restoredAttemptId.current === attempt.id) return;
+  const questionCount = assignment?.questions.length ?? 0;
+  if (attempt?.id && questionCount > 0 && restoredAttemptId.current !== attempt.id) {
     restoredAttemptId.current = attempt.id;
-    setCurrentQuestionIndex(
-      normalizeQuestionIndex(attempt.currentQuestionIndex, assignment.questions.length),
-    );
-  }, [attempt?.currentQuestionIndex, attempt?.id, assignment?.questions.length]);
+    const restoredIndex = normalizeQuestionIndex(attempt.currentQuestionIndex, questionCount);
+    if (restoredIndex !== currentQuestionIndex) {
+      setCurrentQuestionIndex(restoredIndex);
+    }
+  }
 
   useEffect(() => {
     if (autoResumed.current || viewer || !attemptId || attempt?.status !== "paused") return;

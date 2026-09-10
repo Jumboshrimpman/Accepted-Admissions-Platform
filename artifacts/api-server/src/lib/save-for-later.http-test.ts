@@ -250,7 +250,7 @@ test("save for later pauses an attempt and resume restores answers, flags, and q
       .select({ id: attemptsTable.id })
       .from(attemptsTable)
       .where(eq(attemptsTable.assignmentId, homework!.id));
-    const leftoverIds = leftoverAttempts.map((row) => row.id);
+    const leftoverIds = leftoverAttempts.map((row: { id: string }) => row.id);
     if (leftoverIds.length > 0) {
       await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, leftoverIds));
       await db.delete(responsesTable).where(inArray(responsesTable.attemptId, leftoverIds));

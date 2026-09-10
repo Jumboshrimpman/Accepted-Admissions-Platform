@@ -537,6 +537,7 @@ describe("student attempt UI", () => {
   });
 
   test("Save for later pauses without submitting and leaves the quiz", () => {
+    render(<PortalAssignment />);
     fireEvent.click(screen.getByRole("button", { name: /However/i }));
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     fireEvent.click(screen.getByTestId("save-for-later"));
@@ -563,10 +564,10 @@ describe("student attempt UI", () => {
     expect(screen.getByText("Question 2 of 2")).toBeTruthy();
     expect(screen.getByText("Which word is most precise?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /attached/i }).className).toMatch(/border-primary/);
+    expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", false);
     fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Flagged/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", false);
   });
 
   test("paused overlay offers Resume and Save for later, and ?resume=1 auto-resumes", () => {
