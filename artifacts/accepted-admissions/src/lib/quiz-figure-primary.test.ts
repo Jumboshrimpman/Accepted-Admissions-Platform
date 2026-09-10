@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   displayAnswerLabel,
   figurePrimaryChoices,
+  hasUsableChoiceText,
   isFigurePrimaryQuestion,
+  letterMcqChoices,
   looksGarbledQuizText,
   stripSatBankFigureComments,
 } from "./quiz-figure-primary.ts";
@@ -33,6 +35,25 @@ test("figure-primary questions expose A–D even when the payload omitted choice
     figurePrimaryChoices(question).map((choice) => choice.label),
     ["A", "B", "C", "D"],
   );
+});
+
+test("preserves A–D choice text on figure-primary items instead of hiding it", () => {
+  const question = {
+    presentation: "figure_primary" as const,
+    prompt: "Which choice uses data from the graph?",
+    stimulus: "![Graph](/media/sat-bank/pack/p10-draw1.png)",
+    choices: [
+      { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+      { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+      { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+      { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+    ],
+    questionType: "mcq",
+  };
+  assert.equal(isFigurePrimaryQuestion(question), true);
+  assert.equal(hasUsableChoiceText(figurePrimaryChoices(question)), true);
+  assert.match(figurePrimaryChoices(question)[0]?.text ?? "", /Washington/);
+  assert.equal(letterMcqChoices(question.choices)[1]?.text.includes("New York"), true);
 });
 
 test("answer review shows the letter when choice text is empty", () => {

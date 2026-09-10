@@ -371,6 +371,48 @@ describe("student attempt UI", () => {
     expect(submitMutate).not.toHaveBeenCalled();
   });
 
+  test("graph items with complete A–D text show the choice copy, not letter-only buttons", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "figure_primary",
+      questionType: "mcq",
+      prompt:
+        "According to the US Department of Agriculture, in 2016 California had between 2,600 and 2,800 organic farms and ______ Which choice most effectively uses data from the graph to complete the text?",
+      stimulus:
+        "![Enrollment graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p10-draw1.png)",
+      choices: [
+        { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+        { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+        { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+        { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/Washington had between 600/);
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    const stem = screen.getByTestId("figure-primary-question");
+    expect(stem.className).not.toMatch(/md:grid-cols-2/);
+    expect(screen.getByTestId("quiz-stimulus-panel").className).toMatch(/overflow-visible/);
+  });
+
+  test("stimulus panel allows wide tables to scroll instead of clipping", () => {
+    mocks.questions[0]!.stimulus =
+      "Effects of Mycorrhizal Fungi on 3 Plant Species\nPlant species  Mycorrhizal host  Average mass\nCorn  yes  15.1";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "broccoli grown in soil containing mycorrhizal fungi had a slightly lower mass" },
+      { id: "b", label: "B", text: "corn grown in soil containing mycorrhizal fungi had a higher mass" },
+      { id: "c", label: "C", text: "marigolds grown in soil containing mycorrhizal fungi had a moderate mass" },
+      { id: "d", label: "D", text: "corn had the highest average mass of all three species grown" },
+    ];
+    render(<PortalAssignment />);
+    const panel = screen.getByTestId("quiz-stimulus-panel");
+    expect(panel.className).toMatch(/overflow-visible/);
+    expect(panel.className).not.toMatch(/overflow-hidden/);
+    expect(screen.getByTestId("quiz-question-stem").className).not.toMatch(/md:grid-cols-2/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/broccoli grown/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/corn had the highest/);
+  });
+
   test("figure-primary items show the composite image and A–D only, never SPR or leaked comments", () => {
     mocks.questions[0] = {
       ...mocks.questions[0]!,

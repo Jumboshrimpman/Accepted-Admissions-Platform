@@ -91,6 +91,69 @@ test("drops true SPR and irreparable OCR, keeps clean MCQ and figure-primary wit
     }),
     true,
   );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt: "",
+      choices: [
+        { id: "a", label: "A", text: "" },
+        { id: "b", label: "B", text: "" },
+        { id: "c", label: "C", text: "" },
+        { id: "d", label: "D", text: "" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "C",
+      extractGaps: { figurePrimary: true },
+      figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt:
+        "According to the US Department of Agriculture, in 2016 California had between 2,600 and 2,800 organic farms and ______ Which choice most effectively uses data from the graph to complete the text?",
+      choices: [
+        { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+        { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+        { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+        { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt:
+        "According to the US Department of Agriculture, in 2016 California had between 2,600 and 2,800 organic farms and ______ Which choice most effectively uses data from the graph to complete the text?",
+      choices: [
+        { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+        { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+        { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+        { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt: "USStateswiththeGreatestNumberofOrganicFarmsin2016 State Organicfarmingisamethod",
+      choices: [
+        { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+        { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+        { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+        { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
+    }),
+    false,
+  );
 });
 
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {

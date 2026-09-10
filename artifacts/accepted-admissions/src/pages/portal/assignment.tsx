@@ -58,6 +58,7 @@ import {
 import {
   displayAnswerLabel,
   figurePrimaryChoices,
+  hasUsableChoiceText,
   isFigurePrimaryQuestion,
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
@@ -77,17 +78,27 @@ function QuizRichText({
   const parts = splitQuizRichText(text, { hideGarbledText });
   if (parts.length === 0) return null;
   return (
-    <div className={className} data-testid="quiz-rich-text">
+    <div
+      className={`min-w-0 max-w-full overflow-x-auto overflow-y-visible ${className ?? ""}`}
+      data-testid="quiz-rich-text"
+    >
       {parts.map((part, index) =>
         part.type === "image" ? (
           <img
             key={`${part.src}-${index}`}
             src={part.src}
             alt={part.alt}
-            className={imageClassName ?? "my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"}
+            className={imageClassName ?? "my-3 h-auto max-h-[min(44rem,85vh)] w-auto max-w-full object-contain rounded-md bg-white"}
           />
+        ) : part.preformatted ? (
+          <pre
+            key={`text-${index}`}
+            className="min-w-0 overflow-x-auto whitespace-pre-wrap break-words leading-relaxed"
+          >
+            {part.value}
+          </pre>
         ) : (
-          <p key={`text-${index}`} className="whitespace-pre-wrap">
+          <p key={`text-${index}`} className="max-w-full whitespace-normal break-words leading-relaxed">
             {part.value}
           </p>
         ),
@@ -365,7 +376,8 @@ function AnswerChoices({
   const ink = tone === "ink";
   const figurePrimary = isFigurePrimaryQuestion(question);
   const choices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
-  if (figurePrimary) {
+  const letterOnly = figurePrimary && !hasUsableChoiceText(choices);
+  if (letterOnly) {
     return (
       <div className="space-y-3" data-testid="figure-primary-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
@@ -435,7 +447,7 @@ function AnswerChoices({
               >
                 {choice.label}
               </div>
-              <div className="flex-1">{choice.text}</div>
+              <div className="min-w-0 flex-1 whitespace-normal break-words">{choice.text || choice.label}</div>
             </button>
           );
         })}
@@ -1050,7 +1062,7 @@ export default function PortalAssignment() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-24">
+    <div className="mx-auto max-w-6xl space-y-6 pb-24">
       <div className="sticky top-16 z-30 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-4 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold">
@@ -1098,20 +1110,16 @@ export default function PortalAssignment() {
         </div>
       </div>
       <div
-        className={
-          isFigurePrimaryQuestion(question)
-            ? "space-y-6 pt-4"
-            : "grid gap-8 pt-4 md:grid-cols-2"
-        }
-        data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : undefined}
+        className="min-w-0 space-y-6 overflow-visible pt-4"
+        data-testid={isFigurePrimaryQuestion(question) ? "figure-primary-question" : "quiz-question-stem"}
       >
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 overflow-visible" data-testid="quiz-stimulus-panel">
           {question.stimulus && (
-            <Card className="border-0 bg-muted/30 shadow-none">
-              <CardContent className="p-6">
+            <Card className="overflow-visible border-0 bg-muted/30 shadow-none">
+              <CardContent className="min-w-0 overflow-x-auto overflow-y-visible p-6">
                 <QuizRichText
                   text={question.stimulus}
-                  hideGarbledText={isFigurePrimaryQuestion(question)}
+                  hideGarbledText={isFigurePrimaryQuestion(question) && !hasUsableChoiceText(question.choices)}
                 />
               </CardContent>
             </Card>
@@ -1120,11 +1128,10 @@ export default function PortalAssignment() {
             <QuizRichText
               text={question.prompt}
               className="text-lg font-medium leading-relaxed"
-              hideGarbledText={isFigurePrimaryQuestion(question)}
+              hideGarbledText={isFigurePrimaryQuestion(question) && !hasUsableChoiceText(question.choices)}
             />
           )}
         </div>
-        {isFigurePrimaryQuestion(question) ? null : <div />}
       </div>
       <div className="-mt-4">
         {showPrediction ? (
@@ -1173,7 +1180,7 @@ export default function PortalAssignment() {
         </p>
       ) : null}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background p-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Button
             variant="outline"
             size="lg"

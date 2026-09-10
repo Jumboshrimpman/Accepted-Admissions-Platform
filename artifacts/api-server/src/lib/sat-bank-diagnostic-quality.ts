@@ -1,9 +1,13 @@
 import {
+  hasCompleteLetterChoiceText,
+  hasFullQuestionCrop,
   hasRenderableFigures,
-  hasUsableChoiceText,
   isLetterAnswer,
   looksGarbledExtractText,
+  looksSmashedOrTruncatedExtract,
   normalizeLetterAnswer,
+  referencesVisualStimulus,
+  stripChartHeaderFragments,
   stripSatBankFigureComments,
   type BankFigureLike,
 } from "./sat-bank-figure-primary.ts";
@@ -64,33 +68,59 @@ export function isTrueSprQuizItem(input: Pick<DiagnosticQualityInput, "correctAn
 }
 
 function readableStudentText(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
-  const prompt = stripSatBankFigureComments(input.prompt);
-  const stimulus = stripSatBankFigureComments(input.stimulus);
-  return prompt.length >= 4 || stimulus.length >= 4;
+  const prompt = stripChartHeaderFragments(input.prompt);
+  const stimulus = stripChartHeaderFragments(input.stimulus);
+  return prompt.length >= 12 || stimulus.length >= 12;
 }
 
 function isGarbledItem(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
   return looksGarbledExtractText(input.prompt) || looksGarbledExtractText(input.stimulus);
 }
 
-/** Clean readable A–D item a student can answer from text alone. */
+function stemReferencesMissingVisual(input: DiagnosticQualityInput): boolean {
+  const haystack = `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`;
+  if (!referencesVisualStimulus(haystack)) return false;
+  return !hasRenderableFigures(input);
+}
+
+/** Clean readable A–D item a student can answer from text (plus a figure if cited). */
 export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
   if (isGarbledItem(input)) return false;
-  if (!hasUsableChoiceText(input.choices)) return false;
-  return readableStudentText(input);
+  if (
+    looksSmashedOrTruncatedExtract(input.prompt) ||
+    looksSmashedOrTruncatedExtract(input.stimulus)
+  ) {
+    return false;
+  }
+  if (!hasCompleteLetterChoiceText(input.choices)) return false;
+  if (!readableStudentText(input)) return false;
+  if (stemReferencesMissingVisual(input)) return false;
+  return true;
 }
 
 /**
- * Student-usable diagnostic item: letter-key MCQ that is either a clean text
- * question or a figure-primary item with a real image. Drops true SPR and
- * irreparable OCR (empty/garbled stem, no choices, no figure).
+ * Student-usable diagnostic item: letter-key MCQ that is either
+ * - a clean text question with readable A–D copy (and a figure if the stem
+ *   cites a graph/table), or
+ * - a full-question crop (stem + choices in the image) served as figure-primary, or
+ * - a graph/table figure plus separate complete A–D text.
+ * Drops true SPR, empty/missing choices, graph-only letter keys, and
+ * irreparable OCR.
  */
 export function isStudentUsableDiagnosticItem(input: DiagnosticQualityInput): boolean {
   if (!isLetterAnswer(input.correctAnswer)) return false;
   if (isTrueSprQuizItem(input)) return false;
   if (isCleanTextMcqItem(input)) return true;
-  return hasRenderableFigures(input);
+  if (hasFullQuestionCrop(input)) return true;
+  if (isGarbledItem(input)) return false;
+  if (
+    looksSmashedOrTruncatedExtract(input.prompt) ||
+    looksSmashedOrTruncatedExtract(input.stimulus)
+  ) {
+    return false;
+  }
+  return hasCompleteLetterChoiceText(input.choices) && hasRenderableFigures(input);
 }
 
 export function diagnosticPromptFingerprint(input: DiagnosticQualityInput): string {
@@ -237,7 +267,7 @@ export function summarizeDiagnosticComposition(
     else fingerprints.add(fingerprint);
     if (isTrueSprQuizItem(item)) sprCount += 1;
     if (isCleanTextMcqItem(item)) cleanMcqCount += 1;
-    else if (hasRenderableFigures(item)) figurePrimaryCount += 1;
+    else if (hasFullQuestionCrop(item)) figurePrimaryCount += 1;
     if (item.section === "math") mathCount += 1;
     else rwCount += 1;
     if (

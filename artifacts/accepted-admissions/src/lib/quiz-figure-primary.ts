@@ -31,7 +31,7 @@ export function looksGarbledQuizText(text: string | null | undefined): boolean {
   return (value.match(/[=~<>_]{2,}|\.{3,}[^\s]|:\s*\.\.\.|-\s*<:/g) ?? []).length >= 2;
 }
 
-function hasUsableChoiceText(choices: AssignmentQuestion["choices"]): boolean {
+export function hasUsableChoiceText(choices: AssignmentQuestion["choices"]): boolean {
   return (choices ?? []).filter((choice) => {
     const text = choice.text.trim();
     return text.length > 0 && !SEE_FIGURE_CHOICE.test(text);
@@ -46,7 +46,12 @@ export function letterMcqChoices(
       (choice) =>
         choice.id.toLowerCase() === label.toLowerCase() || choice.label.toUpperCase() === label,
     );
-    return { id: found?.id || label.toLowerCase(), label, text: "" };
+    const text = (found?.text ?? "").trim();
+    return {
+      id: found?.id || label.toLowerCase(),
+      label,
+      text: text && !SEE_FIGURE_CHOICE.test(text) ? text : "",
+    };
   });
 }
 
@@ -80,7 +85,8 @@ export function figurePrimaryChoices(
   if (!isFigurePrimaryQuestion(question)) {
     return question.choices ?? [];
   }
-  return letterMcqChoices(question.choices);
+  const letters = letterMcqChoices(question.choices);
+  return hasUsableChoiceText(letters) ? letters : letterMcqChoices(question.choices);
 }
 
 export function displayAnswerLabel(

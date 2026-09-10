@@ -11,7 +11,7 @@ Owner rule: when a math/SAT bank question has complex graphs, smashed OCR, or mi
 - Show only four letter buttons. No student-produced-response text box.
 - Grade against the A–D key. Show `officialExplanation` after reveal/submit.
 
-Clean text MCQs with usable A–D copy stay normal text MCQs, even if they have a graph.
+Clean text MCQs with usable A–D copy stay normal text MCQs, even if they have a graph. A bare graph/table crop is **not** enough for letter-only figure-primary — the crop must include the stem and A–D, or the item must carry separate complete choice text.
 
 ## When the importer flips an item
 

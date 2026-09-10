@@ -4,13 +4,20 @@ import test from "node:test";
 import {
   applyFigurePrimaryToRecord,
   figurePrimaryStudentPrompt,
+  hasCompleteLetterChoiceText,
+  hasFullQuestionCrop,
   hasUsableChoiceText,
+  isFullQuestionCrop,
   isLetterAnswer,
   letterMcqChoices,
+  looksSmashedOrTruncatedExtract,
+  looksTruncatedChoiceText,
   normalizeLetterAnswer,
   looksGarbledExtractText,
+  referencesVisualStimulus,
   selectStimulusFigures,
   shouldUseFigurePrimary,
+  stripChartHeaderFragments,
   stripSatBankFigureComments,
   studentFacingFigurePrimaryFields,
 } from "./sat-bank-figure-primary.ts";
@@ -36,18 +43,30 @@ test("detects ASCII scatterplots and smashed OCR without flagging clean stems", 
   );
 });
 
-test("marks garbled graph + letter key as figure-primary even when choice text is present", () => {
+test("garbled graph with usable A–D stays text unless a full-question crop exists", () => {
+  const choices = [
+    { id: "a", label: "A", text: "Positive" },
+    { id: "b", label: "B", text: "Negative" },
+    { id: "c", label: "C", text: "None" },
+    { id: "d", label: "D", text: "Undefined" },
+  ];
   assert.equal(
     shouldUseFigurePrimary({
       prompt: "The scatterplot shows the relationship.\n10+-+-+-+--i------,f-----+---+---+",
-      choices: [
-        { id: "a", label: "A", text: "Positive" },
-        { id: "b", label: "B", text: "Negative" },
-        { id: "c", label: "C", text: "None" },
-        { id: "d", label: "D", text: "Undefined" },
-      ],
+      choices,
       questionType: "mcq",
       correctAnswer: "B",
+      figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
+    }),
+    false,
+  );
+  assert.equal(
+    shouldUseFigurePrimary({
+      prompt: "The scatterplot shows the relationship.\n10+-+-+-+--i------,f-----+---+---+",
+      choices,
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [{ url: figureUrl, alt: "Question region including choices A–D", role: "question_region" }],
     }),
     true,
   );
@@ -140,6 +159,91 @@ test("honors the PR #56 figure-primary src comment as an explicit MC-only hook",
   assert.equal(fields.questionType, "mcq");
   assert.equal(fields.stimulus, `![Question region](${src})`);
   assert.deepEqual(fields.choices?.map((choice) => choice.label), ["A", "B", "C", "D"]);
+});
+
+test("rejects graph-only crops as full-question screenshots", () => {
+  assert.equal(isFullQuestionCrop({ url: figureUrl, alt: "Diagram from page 10" }), false);
+  assert.equal(
+    isFullQuestionCrop({
+      url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p11-q15-left.png",
+      alt: "Question figure region page 11",
+    }),
+    false,
+  );
+  assert.equal(
+    isFullQuestionCrop({
+      url: figureUrl,
+      alt: "Question region including choices A–D",
+      role: "question_region",
+    }),
+    true,
+  );
+  assert.equal(
+    hasFullQuestionCrop({
+      figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
+      prompt: "Use the graph.",
+    }),
+    false,
+  );
+  assert.equal(
+    hasFullQuestionCrop({
+      figures: [{ url: figureUrl, alt: "Question region including A–D", role: "question_region" }],
+    }),
+    true,
+  );
+});
+
+test("detects smashed OCR, truncated choices, leftover chart headers, and graph citations", () => {
+  assert.equal(looksSmashedOrTruncatedExtract("USStateswiththeGreatestNumberofOrganicFarmsin2016 State"), true);
+  assert.equal(
+    looksSmashedOrTruncatedExtract("Organic farming is a method of growing food that tries to reduce harm."),
+    false,
+  );
+  assert.equal(looksTruncatedChoiceText("broccoli grown in soil containing mycorrhizal fungi had a sl"), true);
+  assert.equal(looksTruncatedChoiceText("Washington had between 600 and 800 organic farms."), false);
+  assert.equal(hasUsableChoiceText([{ text: "(see figure)" }, { text: "" }]), false);
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "However" },
+      { id: "b", label: "B", text: "Therefore" },
+    ]),
+    false,
+  );
+  assert.equal(
+    hasCompleteLetterChoiceText([
+      { id: "a", label: "A", text: "However" },
+      { id: "b", label: "B", text: "Therefore" },
+      { id: "c", label: "C", text: "Meanwhile" },
+      { id: "d", label: "D", text: "Similarly" },
+    ]),
+    true,
+  );
+  assert.equal(stripChartHeaderFragments("Organic Farms in 2016\nState\nOrganic farming is a method."), "Organic Farms in 2016\nOrganic farming is a method.");
+  assert.equal(referencesVisualStimulus("Which choice most effectively uses data from the graph to complete the text?"), true);
+  assert.equal(referencesVisualStimulus("Several artworks depict a female figure fishing."), false);
+  assert.equal(
+    shouldUseFigurePrimary({
+      prompt: "Use the graph.",
+      choices: [
+        { id: "a", label: "A", text: "" },
+        { id: "b", label: "B", text: "" },
+        { id: "c", label: "C", text: "" },
+        { id: "d", label: "D", text: "" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+      extractGaps: { figurePrimary: true },
+      figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
+    }),
+    false,
+  );
+  const preserved = letterMcqChoices([
+    { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+    { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+    { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+    { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+  ]);
+  assert.equal(preserved[0]?.text.includes("Washington"), true);
 });
 
 test("student-facing fields hide garbled stems and emit letter-only choices", () => {

@@ -2,31 +2,35 @@
 
 Owner: Taito Goto (`taito0525@gmail.com`), first Fall SAT with Eunice (Oct 2 JST). Pays off-platform. Curriculum priority is the reusable SAT/PSAT bank.
 
-Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop exists. The linked Oct 2 quiz was still unusable because composition kept:
+Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop exists. PR #60 rebuilt the Oct 2 form from “usable MCQ,” but that predicate treated **any** renderable figure as enough. Live preview then shipped graph-only crops with empty A–D letter keys, missing tables, and clipped stems.
 
-- True SPR / free-response keys
-- Empty or smashed OCR stems with no figure
-- Empty A–D shells marked figure-primary but with no image
-- A ~106–107 item slice (120 minus SPR) instead of a clean linear SAT form
+A student-usable item is now only:
+
+- a clean text MCQ with a readable stem **and** complete A–D choice text (plus a figure if the stem cites a graph/table), or
+- a **full-question crop** (stem + choices in the image — not a bare graph/table), with letter keys, or
+- a graph/table figure **plus** separate complete A–D text
+
+Dropped: true SPR, empty/missing choice text, graph-only figure-primary, stems that cite a graph/table with no figure, and smashed/truncated OCR.
 
 This path rebuilds the diagnostic from **student-usable MCQ only**.
 
 ## Student UX after rebuild
 
-Taito opens the Oct 2 pre-work and sees either:
+Taito (or a client preview) opens the Oct 2 pre-work and sees either:
 
-- A readable text MCQ with A–D copy, or
-- A figure-primary item (full question crop including A–D) plus letter buttons
+- A readable text MCQ with A–D copy, and the graph/table when the stem cites one, or
+- A figure-primary item whose crop includes the stem **and** A–D, plus letter buttons
 
-No student-produced-response box. Submit still returns an estimated SAT range (linear scoring-guide method, not official Bluebook adaptive).
+No letter-only buttons next to a bare chart. No student-produced-response box. Submit still returns an estimated SAT range (linear scoring-guide method, not official Bluebook adaptive).
 
 ## How composition works
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
 2. Keep an item only if the official key is A–D **and** it is either:
-   - a clean text MCQ (readable stem + usable choice text), or
-   - figure-primary **with a renderable image**
-3. Drop true SPR and irreparable OCR (empty/garbled stem, no choices, no figure).
+   - a clean text MCQ (readable stem + complete A–D choice text; figure required if the stem cites a graph/table), or
+   - figure-primary **with a full-question crop** (stem + choices in the image), or
+   - a figure plus separate complete A–D text
+3. Drop true SPR, empty/truncated choices, graph-only letter-key items, missing cited figures, and irreparable OCR.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
 6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
@@ -35,7 +39,7 @@ The reusable bank still stores SPR and incomplete extracts. They are just not co
 
 ## Production runbook
 
-**Required after merge.** Landing this PR does not change Taito’s live Oct 2 assignment. After Code Checker / review merge the PR and the API deploy completes, ops **must** run the rebuild below. In-place rematerialize is not enough.
+**Required after merge.** Landing this PR does not change the live Oct 2 assignment. After Code Checker / review merge the PR and the API deploy completes, ops **must** re-import the bank (so figure-primary flags and wiped choice text are recomputed) and then run the rebuild below. In-place rematerialize of already-wiped rows is not enough.
 
 Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
 
@@ -43,7 +47,7 @@ Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this r
 
 Figures stay under `/media/sat-bank/...` (PR #50). If new question-region crops landed, deploy those static files with the API.
 
-### 2. Import / rematerialize bank content (optional but recommended)
+### 2. Re-import bank content (required so graph-only rows are no longer figure-primary)
 
 Admin → Curriculum → SAT/PSAT bank → **Import staged extracts**
 
@@ -54,7 +58,7 @@ POST /api/admin/sat-bank/import
 POST /api/admin/sat-bank/refresh-linked
 ```
 
-Import upserts bank rows and rematerializes every **bank-linked** `questions` row. Session-local forks are skipped.
+Import re-parses JSONL with the tighter figure-primary rules (choice text is kept when it is readable). Then rematerializes every **bank-linked** `questions` row. Session-local forks are skipped.
 
 To refresh only the current Oct 2 assignment without rebuilding it:
 
@@ -69,7 +73,7 @@ cd artifacts/api-server
 node --experimental-strip-types src/scripts/reset-october2-prework.ts --refresh-linked-only
 ```
 
-In-place refresh cannot drop SPR / empty items that are already linked. Use the rebuild for that.
+In-place refresh cannot drop SPR / empty / graph-only letter-key items that are already linked, and it cannot restore choice text that a previous import wiped. Re-import JSONL, then use the rebuild.
 
 ### 3. Rebuild and re-link Taito’s Oct 2 diagnostic
 
@@ -106,11 +110,12 @@ The script prints `composition`. Expect:
 | `rwCount` / `mathCount` | 66 / 54 on a full rebuild |
 | `sprCount` | 0 |
 | `duplicatePrompts` | 0 |
+| Graph/table items | Choice text visible, or a crop that includes A–D — never letter keys alone |
 | Time limit | ≥134 minutes |
 | Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
 
-Then as Taito: open the Oct 2 diagnostic → read a text item and a figure-primary item → answer A–D → submit → see an estimated SAT range.
+Then as Taito or a client preview: open the Oct 2 diagnostic → a graph item must show the chart **and** A–D copy (or a crop that includes the choices) → tables/stems must not clip → answer A–D → submit → see an estimated SAT range.
 
 ## Parallel work
 
-PR #59 (Taito portal session list / unpaid banner / Nika) is UI-only. This branch only changes diagnostic **content and assignment quality**. Do not rebase onto that portal branch.
+This branch only changes diagnostic **content quality, quiz layout, and assignment composition**. No Clerk invites. Do not merge from this runbook.
