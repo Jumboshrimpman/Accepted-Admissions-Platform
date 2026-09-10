@@ -12,7 +12,7 @@ const OCR_TILDE = /[~∼˜]/;
 const OCR_DASH_RUN = /-{3,}|–{3,}|—{2,}/;
 const MATH_LAYOUT_GLYPH = /[⎜⎟⎝⎠⎛⎞⎢⎥]/;
 const MISSING_CARET_POLYNOMIAL =
-  /(?:^|[=+\-,\s(])(?:[A-Za-z]|[2-9]\d*)?x2(?:\b|[+\-\s,)])/;
+  /(?:^|[=+\-,\s(])(?:[A-Za-z]|\d+)?x[2-9](?:\b|[+\-\s,)?])/;
 const MISSING_CARET_PAREN_POWER = /\([^)\n]{1,24}\)2\b/;
 const MISSING_CARET_GROWTH = /\(\d+\.\d+\)x\b/;
 const SMASHED_QUADRATIC_LEAD = /\b2\s+4x\b/;
@@ -31,9 +31,16 @@ const SMASHED_AXIS_TICKS = /\b246810\b|\bXu\d{3,}\b/;
 const BROKEN_WHERE_MODEL = /According to the [^,\n]{0,48}, where\s+model/i;
 const BROKEN_END_OF_DOMAIN = /after the end of\s+0\s*[≤<]/i;
 const LEAKED_NEXT_QUESTION =
-  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer/i;
+  /Which expression is equivalent|Which of the following (?:systems|equations|is)|Select your answer|set a goal to walk|On a certain day,/i;
+const CARET_H_OCR = /\^\s*h\b/;
+const Y_FX_MISSING_EQUALS = /\by\s+f\s*\(\s*x\s*\)/;
+const BROKEN_POINT_ZERO_FIVE = /point\s*,\s*0\s+5\b/i;
+const QUESTION_AS_OPERATOR = /[0-9x)]\s*\?\s*\d/;
+const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x\s*$/m;
+const MISSING_OPERATOR_CHOICE =
+  /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =
-  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the graph shows|the line graph|note:\s*figure not drawn|the graph models|y-intercept of the graph|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart))\b/i;
 const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
@@ -67,7 +74,9 @@ export function looksBrokenMathOcr(text: string | null | undefined): boolean {
   if (!raw.trim()) return false;
   if (looksFailedMathLayoutDump(raw)) return true;
   if (MISSING_CARET_GROWTH.test(raw) && !/\(\d+\.\d+\)\^x\b/.test(raw)) return true;
-  if (MISSING_CARET_POLYNOMIAL.test(raw) && !/\bx\^2\b/.test(raw)) return true;
+  if (MISSING_CARET_POLYNOMIAL.test(raw) && !/\bx\^[2-9]\b/.test(raw)) return true;
+  if (QUESTION_AS_OPERATOR.test(raw)) return true;
+  if (SMASHED_TRAILING_X_EQ.test(raw)) return true;
   if (MISSING_CARET_PAREN_POWER.test(raw) && !/\)\^2\b/.test(raw)) return true;
   if (SMASHED_QUADRATIC_LEAD.test(raw)) return true;
   if (STRIPPED_TRIANGLE_SIDES.test(raw)) return true;
@@ -88,7 +97,28 @@ export function looksCorruptStemOcr(text: string | null | undefined): boolean {
   if (SMASHED_AXIS_TICKS.test(raw)) return true;
   if (BROKEN_WHERE_MODEL.test(raw)) return true;
   if (BROKEN_END_OF_DOMAIN.test(raw)) return true;
+  if (CARET_H_OCR.test(raw)) return true;
+  if (Y_FX_MISSING_EQUALS.test(raw) && !/\by\s*=\s*f\s*\(\s*x\s*\)/.test(raw)) return true;
+  if (BROKEN_POINT_ZERO_FIVE.test(raw)) return true;
+  if (looksPipeBackslashOcr(raw)) return true;
   return false;
+}
+
+export function looksPipeBackslashOcr(text: string | null | undefined): boolean {
+  return (text ?? "").split("\n").some((line) => {
+    const compact = line.trim().replace(/\s+/g, "");
+    if (compact.length < 2) return false;
+    if (!/^[I|\\/'`]+$/.test(compact)) return false;
+    return /[|\\/]/.test(compact);
+  });
+}
+
+export function looksMissingOperatorChoice(text: string | null | undefined): boolean {
+  const value = cleanOcrChoiceText(text);
+  if (!value) return false;
+  if (/[*/÷^]/.test(value)) return false;
+  if (/\b[A-Za-z]\s*[/÷]\s*-?\d/.test(value)) return false;
+  return MISSING_OPERATOR_CHOICE.test(value);
 }
 
 export function looksLeakedNextQuestionChoice(text: string | null | undefined): boolean {
@@ -148,6 +178,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksSpacedProductChoice(cleaned)) return false;
   if (looksStrippedRadicalChoice(cleaned)) return false;
   if (looksLeakedNextQuestionChoice(raw) || looksLeakedNextQuestionChoice(cleaned)) return false;
+  if (looksMissingOperatorChoice(raw) || looksMissingOperatorChoice(cleaned)) return false;
   if (looksBrokenMathOcr(cleaned) && cleaned.length <= 96) return false;
   return true;
 }
@@ -195,7 +226,10 @@ export function shouldShowQuizChoices(
 ): boolean {
   if (looksBrokenMathOcr(question.prompt) || looksCorruptStemOcr(question.prompt)) return false;
   const dump = (question.choices ?? []).some(
-    (choice) => looksFailedMathLayoutDump(choice.text) || looksLeakedNextQuestionChoice(choice.text),
+    (choice) =>
+      looksFailedMathLayoutDump(choice.text) ||
+      looksLeakedNextQuestionChoice(choice.text) ||
+      looksMissingOperatorChoice(choice.text),
   );
   if (dump) return false;
   return hasUsableChoiceText(question.choices);

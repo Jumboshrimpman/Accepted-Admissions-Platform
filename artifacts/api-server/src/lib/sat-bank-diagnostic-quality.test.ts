@@ -377,6 +377,91 @@ test("rejects corrupt stems and mismatched page-neighbor figures; keeps clean wo
   );
 });
 
+test("rejects unlabeled-choice crops, missing operators, clipped OCR, and ?-as-operator; keeps slash fractions", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt9-math-m1-q2",
+      prompt: "16 + 30 = 190 x\nWhich equation has the same solution as the given equation?",
+      choices: letterChoices([
+        "x 16 = 30",
+        "16 x = 130",
+        "x 16 = 160",
+        "x 16 = 190 , _ _ ____, 3 Ty set a goal to walk at least 24 kilometers every day to prepare for a multiday hike. On a certain day, Ty plans to walk at an average speed of 4 kilometers per",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [{ url: figureUrl, alt: "Diagram from page 34" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt11-math-m1-q2",
+      prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+      choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt10-math-m1-q3",
+      prompt:
+        "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?",
+      choices: letterChoices(["t 10 ≤75", "t 10 + 25 ≤75", "25 ≤75 t", "t 25 + 10 ≤75"]),
+      questionType: "mcq",
+      correctAnswer: "D",
+      figures: [
+        { url: `${figureUrl}-draw1`, alt: "Diagram from page 35" },
+        { url: `${figureUrl}-draw2`, alt: "Diagram from page 35" },
+      ],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt11-math-m1-q3",
+      prompt:
+        "= ^ h in\nFor the linear function f , the graph of y f(x)\nthe xy-plane has a slope of 7 and passes through the\n^ h. Which equation defines f ?\npoint,0 5\n^ h",
+      choices: letterChoices(["f(x) x 5 = ^ h", "f(x) x 35 = ^ h", "f(x) x/7 = 5 + ^ h", "f(x) x/12 = 5 +"]),
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [{ url: `${figureUrl}-p34-q3-right.png`, alt: "Question figure region page 34" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q1",
+      prompt:
+        "The line graph shows the estimated number of chipmunks in a state park on April 1 of each year from 1989 to 1999.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year was the estimated number of chipmunks in the state park the greatest?",
+      choices: letterChoices(["1989", "1994", "1995", "1998"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: [{ url: figureUrl, alt: "Diagram from page 42" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      sourceKey: "sat-pt4-math-m2-q3",
+      prompt: "12x3 −5x ? 3\nWhich expression is equivalent to",
+      choices: letterChoices(["7x6", "17x3", "7x3", "17x6"]),
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+  );
+});
+
 test("legacy assignable+letter filter still admits garbage that the usable filter drops", () => {
   const emptyFigurePrimary = {
     questionType: "mcq",
@@ -417,7 +502,17 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt11-math-m1-q1",
     "sat-pt8-math-m1-q1",
     "sat-pt6-math-m1-q1",
+    "sat-pt9-math-m1-q2",
+    "sat-pt10-math-m1-q3",
+    "sat-pt11-math-m1-q3",
+    "sat-pt4-math-m2-q1",
+    "sat-pt4-math-m2-q3",
   ];
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q2"),
+    false,
+    "slash-fraction equivalent-equation item must stay usable",
+  );
   for (const key of brokenMathKeys) {
     assert.ok(
       unusable.some((row) => row.sourceKey === key),
@@ -466,6 +561,11 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt11-math-m1-q1",
     "sat-pt8-math-m1-q1",
     "sat-pt6-math-m1-q1",
+    "sat-pt9-math-m1-q2",
+    "sat-pt10-math-m1-q3",
+    "sat-pt11-math-m1-q3",
+    "sat-pt4-math-m2-q1",
+    "sat-pt4-math-m2-q3",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }

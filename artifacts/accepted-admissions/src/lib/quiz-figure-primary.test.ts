@@ -11,6 +11,8 @@ import {
   looksCorruptStemOcr,
   looksFailedMathLayoutDump,
   looksGarbledQuizText,
+  looksMissingOperatorChoice,
+  looksPipeBackslashOcr,
   shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
   shouldShowQuizChoices,
@@ -120,6 +122,48 @@ test("hides page-neighbor figures on word problems and rejects corrupt stems", (
   };
   assert.equal(shouldHideQuizOcrStem(brokenTriangle), true);
   assert.equal(shouldShowQuizChoices(brokenTriangle), false);
+});
+
+test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fractions", () => {
+  assert.equal(looksMissingOperatorChoice("x 16 = 30"), true);
+  assert.equal(looksMissingOperatorChoice("t 10 ≤75"), true);
+  assert.equal(looksMissingOperatorChoice("x/4 = 32"), false);
+  assert.equal(isStudentReadableChoiceText("x/4 = 32"), true);
+  assert.equal(isStudentReadableChoiceText("7x6"), false);
+  assert.equal(looksBrokenMathOcr("16 + 30 = 190 x\nWhich equation has the same solution?"), true);
+  assert.equal(looksBrokenMathOcr("x/4 + 1 = 33\nWhich equation has the same solution?"), false);
+  assert.equal(looksCorruptStemOcr("= ^ h in\nFor the linear function f , the graph of y f(x)\npoint,0 5"), true);
+  assert.equal(looksPipeBackslashOcr("I \\\n/ ' I '\\ I '\nI"), true);
+  assert.equal(looksBrokenMathOcr("12x3 −5x ? 3\nWhich expression is equivalent to"), true);
+  const surfboard = {
+    presentation: "text" as const,
+    prompt:
+      "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75. Which inequality represents this situation?",
+    stimulus:
+      "![Diagram from page 35](https://app.acceptedadmissions.org/media/sat-bank/pack/p35-draw1.png)",
+    choices: [
+      { id: "a", label: "A", text: "t 10 ≤75" },
+      { id: "b", label: "B", text: "t 10 + 25 ≤75" },
+      { id: "c", label: "C", text: "25 ≤75 t" },
+      { id: "d", label: "D", text: "t 25 + 10 ≤75" },
+    ],
+    questionType: "mcq",
+  };
+  assert.equal(shouldHideMismatchedQuizFigures(surfboard), true);
+  assert.equal(shouldShowQuizChoices(surfboard), false);
+  const slashFractions = {
+    ...surfboard,
+    prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+    stimulus: null,
+    choices: [
+      { id: "a", label: "A", text: "x/4 = 32" },
+      { id: "b", label: "B", text: "x/4 = 5" },
+      { id: "c", label: "C", text: "x/4 = 1" },
+      { id: "d", label: "D", text: "x/4 = -32" },
+    ],
+  };
+  assert.equal(shouldShowQuizChoices(slashFractions), true);
+  assert.equal(shouldHideMismatchedQuizFigures(slashFractions), false);
 });
 
 test("answer review shows the letter when choice text is empty", () => {

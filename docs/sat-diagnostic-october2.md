@@ -11,11 +11,11 @@ A student-usable item is now only:
 
 Figure-primary never unlocks letter-only A–D. Empty choice text, OCR garbage (`~`, `----`, leftover tildes), a missing stem, or orphan/duplicate figure fragments are dropped. Smashed `x f(x)` / `0 29` lines are recovered as a table when possible.
 
-Math must render with the exponents, radicals, and fractions the student needs, or the item must be an intact full-question crop that includes complete A–D. Missing carets (`ax2`, `2x2`, `(1.034)x`), stripped radicals (`2 2`, `6 2`, `8 2 + 80`), spaced products (`b h`, `45 k`), stacked-fraction dumps (`⎜ ⎟ | \ /`), and `(, x y)` corruption are rejected. A partial figure-region crop is never paired with that broken OCR or with letter-only buttons.
+Math must render with the exponents, radicals, and fractions the student needs, or the item must be an intact full-question crop that includes complete A–D. Missing carets (`ax2`, `2x2`, `12x3`, `(1.034)x`), stripped radicals (`2 2`, `6 2`, `8 2 + 80`), spaced products (`b h`, `45 k`), stacked-fraction dumps (`⎜ ⎟ | \ /`), missing operators (`x 16 = 30`, `t 10 ≤75`, `5x ? 3`), and `(, x y)` corruption are rejected. Slash fractions (`x/4`) stay. A partial figure-region crop is never paired with that broken OCR or with letter-only buttons.
 
-A figure that the stem never cites (page-neighbor crop on a word problem) is dropped. Stems with clear OCR corruption (`PQ QR` missing `=`, `value = of`, `Xu123456`, axis-tick dumps, leaked next-question choices) are rejected. Bare A–D never ships.
+A figure that the stem never cites (page-neighbor crop on a word problem, unlabeled equation list, inequality dump) is dropped. Stems with clear OCR corruption (`PQ QR` missing `=`, `value = of`, `Xu123456`, axis-tick dumps, `^ h` / `y f(x)` / `point,0 5`, pipe/backslash graph residue, leaked next-question choices) are rejected. Bare A–D never ships. Unlabeled choice lists plus letter buttons never ship.
 
-Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, and math OCR that is missing exponents or is a failed fraction/layout dump.
+Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, irreparable OCR, math OCR that is missing exponents or operators or is a failed fraction/layout dump, unlabeled A–D lists, and pipe/backslash graph residue.
 
 This path rebuilds the diagnostic from **student-usable MCQ only**.
 

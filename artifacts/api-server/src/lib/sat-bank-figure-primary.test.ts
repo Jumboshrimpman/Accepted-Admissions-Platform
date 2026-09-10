@@ -25,6 +25,8 @@ import {
   looksFailedMathLayoutDump,
   looksGarbledExtractText,
   looksLeakedNextQuestionChoice,
+  looksMissingOperatorChoice,
+  looksPipeBackslashOcr,
   hasMergedOrLeakedChoices,
   stemCitesVisual,
   looksSpacedProductChoice,
@@ -420,6 +422,51 @@ test("rejects corrupt stems, leaked A–D, and page-neighbor figures on word pro
     ).length,
     1,
   );
+});
+
+test("rejects smashed equations, missing operators, pipe OCR, and ?-as-operator; keeps slash fractions", () => {
+  assert.equal(looksBrokenMathOcr("16 + 30 = 190 x\nWhich equation has the same solution as the given equation?"), true);
+  assert.equal(looksMissingOperatorChoice("x 16 = 30"), true);
+  assert.equal(looksMissingOperatorChoice("16 x = 130"), true);
+  assert.equal(looksMissingOperatorChoice("t 10 ≤75"), true);
+  assert.equal(looksMissingOperatorChoice("t 10 + 25 ≤75"), true);
+  assert.equal(looksMissingOperatorChoice("25 ≤75 t"), true);
+  assert.equal(isStudentReadableChoiceText("x 16 = 30"), false);
+  assert.equal(isStudentReadableChoiceText("x/4 = 32"), true);
+  assert.equal(isStudentReadableChoiceText("x/4 = -32"), true);
+  assert.equal(looksBrokenMathOcr("x/4 + 1 = 33\nWhich equation has the same solution as the given equation?"), false);
+  assert.equal(
+    looksCorruptStemOcr("= ^ h in\nFor the linear function f , the graph of y f(x)\npoint,0 5"),
+    true,
+  );
+  assert.equal(
+    looksPipeBackslashOcr("The line graph shows the estimated number of chipmunks.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year?"),
+    true,
+  );
+  assert.equal(
+    looksCorruptStemOcr("The line graph shows the estimated number of chipmunks.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year?"),
+    true,
+  );
+  assert.equal(looksBrokenMathOcr("12x3 −5x ? 3\nWhich expression is equivalent to"), true);
+  assert.equal(isStudentReadableChoiceText("7x6"), false);
+  assert.equal(isStudentReadableChoiceText("17x3"), false);
+  assert.equal(
+    looksLeakedNextQuestionChoice(
+      "x 16 = 190 , _ _ ____, 3 Ty set a goal to walk at least 24 kilometers every day to prepare for a multiday hike. On a certain day, Ty plans to walk at an average speed of 4 kilometers per",
+    ),
+    true,
+  );
+  assert.equal(
+    selectStimulusFigures(
+      [{ url: figureUrl, alt: "Diagram from page 35" }],
+      {
+        prompt:
+          "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?",
+      },
+    ).length,
+    0,
+  );
+  assert.equal(stemCitesVisual("The line graph shows the estimated number of chipmunks."), true);
 });
 
 test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {

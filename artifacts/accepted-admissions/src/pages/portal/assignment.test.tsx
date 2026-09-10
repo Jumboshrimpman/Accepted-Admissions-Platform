@@ -541,6 +541,109 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/24/);
   });
 
+  test("slash-fraction equivalent equations show labeled A–D choice text", () => {
+    mocks.questions[0]!.prompt = "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "x/4 = 32" },
+      { id: "b", label: "B", text: "x/4 = 5" },
+      { id: "c", label: "C", text: "x/4 = 1" },
+      { id: "d", label: "D", text: "x/4 = -32" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/x\/4 \+ 1 = 33/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = 32/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = -32/);
+    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+  });
+
+  test("unlabeled equation-list figure and missing-operator choices never become bare A–D", () => {
+    mocks.questions[0]!.prompt = "16 + 30 = 190 x\nWhich equation has the same solution as the given equation?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-9-digital/p34-draw2.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "x 16 = 30" },
+      { id: "b", label: "B", text: "16 x = 130" },
+      { id: "c", label: "C", text: "x 16 = 160" },
+      { id: "d", label: "D", text: "x 16 = 190" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/16 \+ 30 = 190 x/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("surfboard word problem does not double-render page-neighbor inequalities or bare A–D", () => {
+    mocks.questions[0]!.prompt =
+      "The total cost, in dollars, to rent a surfboard consists of a $25 service fee and a $10 per hour rental fee. A person rents a surfboard for t hours and intends to spend a maximum of $75 to rent the surfboard. Which inequality represents this situation?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 35](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-10-digital/p35-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "t 10 ≤75" },
+      { id: "b", label: "B", text: "t 10 + 25 ≤75" },
+      { id: "c", label: "C", text: "25 ≤75 t" },
+      { id: "d", label: "D", text: "t 25 + 10 ≤75" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByAltText("Diagram from page 35")).toBeNull();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/surfboard/);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("partial linear-function crop hides garbage OCR and never shows letter-only A–D", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      prompt:
+        "= ^ h in\nFor the linear function f , the graph of y f(x)\nthe xy-plane has a slope of 7 and passes through the\n^ h. Which equation defines f ?\npoint,0 5\n^ h",
+      stimulus:
+        "![Question figure region page 34](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-11-digital/p34-q3-right.png)",
+      choices: [
+        { id: "a", label: "A", text: "f(x) x 5 = ^ h" },
+        { id: "b", label: "B", text: "f(x) x 35 = ^ h" },
+        { id: "c", label: "C", text: "f(x) x/7 = 5 + ^ h" },
+        { id: "d", label: "D", text: "f(x) x/12 = 5 +" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/point,0 5/)).toBeNull();
+    expect(screen.queryByText(/\^ h in/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("pipe-backslash graph OCR and missing-operator polynomials are not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "The line graph shows the estimated number of chipmunks in a state park on April 1 of each year from 1989 to 1999.\nI \\\n/ ' I '\\ I '\nI\nBased on the line graph, in which year was the estimated number of chipmunks in the state park the greatest?";
+    mocks.questions[0]!.stimulus =
+      "![Diagram from page 42](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p42-draw1.png)";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "1989" },
+      { id: "b", label: "B", text: "1994" },
+      { id: "c", label: "C", text: "1995" },
+      { id: "d", label: "D", text: "1998" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByText(/I \\/)).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+  });
+
+  test("literal question-mark operator and missing exponents are not shown as A–D", () => {
+    mocks.questions[0]!.prompt = "12x3 −5x ? 3\nWhich expression is equivalent to";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "7x6" },
+      { id: "b", label: "B", text: "17x3" },
+      { id: "c", label: "C", text: "7x3" },
+      { id: "d", label: "D", text: "17x6" },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable")).toBeTruthy();
+    expect(screen.queryByText(/7x6/)).toBeNull();
+  });
+
   test("corrupt triangle stem with a figure hides OCR and never shows letter-only A–D", () => {
     mocks.questions[0] = {
       ...mocks.questions[0]!,
