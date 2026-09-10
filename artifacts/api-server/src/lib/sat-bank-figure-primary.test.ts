@@ -3,17 +3,24 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   applyFigurePrimaryToRecord,
+  cleanOcrChoiceText,
+  extractPlainTextTable,
   figurePrimaryStudentPrompt,
   hasCompleteLetterChoiceText,
   hasFullQuestionCrop,
+  hasReadableStudentStem,
+  hasRecoveredDataTable,
   hasUsableChoiceText,
   isFullQuestionCrop,
   isLetterAnswer,
+  isOrphanFigureFragment,
   letterMcqChoices,
+  looksOcrGarbageChoice,
   looksSmashedOrTruncatedExtract,
   looksTruncatedChoiceText,
   normalizeLetterAnswer,
   looksGarbledExtractText,
+  prepareStudentExtractText,
   referencesVisualStimulus,
   selectStimulusFigures,
   shouldUseFigurePrimary,
@@ -68,29 +75,66 @@ test("garbled graph with usable A–D stays text unless a full-question crop exi
       correctAnswer: "B",
       figures: [{ url: figureUrl, alt: "Question region including choices A–D", role: "question_region" }],
     }),
+    false,
+  );
+});
+
+test("cleans OCR tildes from vocab choices and recovers smashed tables", () => {
+  assert.equal(cleanOcrChoiceText("inspecting ~ ---~"), "inspecting");
+  assert.equal(cleanOcrChoiceText("creating ~"), "creating");
+  assert.equal(looksOcrGarbageChoice("----"), true);
+  assert.equal(looksOcrGarbageChoice("inspecting"), false);
+  assert.equal(hasCompleteLetterChoiceText([
+    { id: "a", label: "A", text: "selecting" },
+    { id: "b", label: "B", text: "inspecting ~ ---~" },
+    { id: "c", label: "C", text: "creating ~" },
+    { id: "d", label: "D", text: "deciding" },
+  ]), true);
+  const table = extractPlainTextTable("x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values.");
+  assert.deepEqual(table.table, { headers: ["x", "f(x)"], rows: [["0", "29"], ["1", "32"], ["2", "35"]] });
+  assert.equal(hasRecoveredDataTable("x f(x)\n0 29\n1 32\n2 35\nWhich equation defines f(x)?"), true);
+  assert.match(
+    prepareStudentExtractText("For the linear function f, the table shows three values of f(x)( ). Which ( ) ? equation defines f(x)"),
+    /Which equation defines f\(x\)/,
+  );
+  assert.equal(
+    hasReadableStudentStem({
+      prompt:
+        "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x and their corresponding values of f(x)( ). Which ( ) ? equation defines f(x)",
+    }),
     true,
   );
 });
 
-test("converts SPR items whose official key is a letter and figures exist", () => {
+test("drops orphan page-sibling figures when a draw crop or recovered table exists", () => {
+  const img1 = { url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-img1.png", alt: "Figure from page 35" };
+  const img2 = { url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-img2.png", alt: "Figure from page 35" };
+  const draw = { url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p35-draw1.png", alt: "Diagram from page 35" };
+  assert.equal(isOrphanFigureFragment(img1, [img1, img2, draw]), true);
+  const triangles = selectStimulusFigures([img1, img2, draw], {
+    prompt: "Right triangles PQR and STU are similar. What is the measure of angle S?",
+  });
+  assert.equal(triangles.length, 1);
+  assert.equal(triangles[0]?.url, draw.url);
+  const tableItem = selectStimulusFigures([img1, draw], {
+    prompt: "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values. Which equation defines f(x)?",
+  });
+  assert.equal(tableItem.length, 0);
+});
+
+test("does not convert empty-choice SPR items into letter-only figure-primary", () => {
   const record = applyFigurePrimaryToRecord({
     prompt: "V = i,.r3 V =3£wh V=½nr2h",
     stimulus: null,
     choices: [],
     questionType: "spr",
     correctAnswer: "C",
-    figures: [{ url: figureUrl, alt: "Question region", role: "question_region" }],
+    figures: [{ url: figureUrl, alt: "Question region including choices A–D", role: "question_region" }],
     extractGaps: { spr: true, missingChoices: true, notes: [] },
     assignable: true,
   });
-  assert.equal(record.questionType, "mcq");
-  assert.equal(record.extractGaps.figurePrimary, true);
-  assert.equal(record.assignable, true);
-  assert.deepEqual(
-    record.choices.map((choice) => choice.label),
-    ["A", "B", "C", "D"],
-  );
-  assert.ok(record.choices.every((choice) => choice.text === ""));
+  assert.equal(record.extractGaps.figurePrimary, false);
+  assert.equal(record.questionType, "spr");
 });
 
 test("letter keys normalize to a lowercase a–d id for grading", () => {
@@ -146,7 +190,7 @@ test("prefers a composite question-region crop over snippet figures", () => {
   assert.equal(selected[0]?.url, figureUrl);
 });
 
-test("honors the PR #56 figure-primary src comment as an explicit MC-only hook", () => {
+test("figure-primary src without usable A–D text does not invent letter-only choices", () => {
   const src = "https://app.acceptedadmissions.org/media/sat-bank/pack/q7-question.png";
   const fields = studentFacingFigurePrimaryFields({
     prompt: `<!-- figure-primary src="${src}" -->`,
@@ -155,10 +199,8 @@ test("honors the PR #56 figure-primary src comment as an explicit MC-only hook",
     questionType: "spr",
     correctAnswer: "A",
   });
-  assert.equal(fields.presentation, "figure_primary");
-  assert.equal(fields.questionType, "mcq");
-  assert.equal(fields.stimulus, `![Question region](${src})`);
-  assert.deepEqual(fields.choices?.map((choice) => choice.label), ["A", "B", "C", "D"]);
+  assert.equal(fields.presentation, "text");
+  assert.equal(fields.choices, undefined);
 });
 
 test("rejects graph-only crops as full-question screenshots", () => {
@@ -167,6 +209,14 @@ test("rejects graph-only crops as full-question screenshots", () => {
     isFullQuestionCrop({
       url: "https://app.acceptedadmissions.org/media/sat-bank/pack/p11-q15-left.png",
       alt: "Question figure region page 11",
+    }),
+    false,
+  );
+  assert.equal(
+    isFullQuestionCrop({
+      url: figureUrl,
+      alt: "Question region",
+      role: "question_region",
     }),
     false,
   );
@@ -246,7 +296,7 @@ test("detects smashed OCR, truncated choices, leftover chart headers, and graph 
   assert.equal(preserved[0]?.text.includes("Washington"), true);
 });
 
-test("student-facing fields hide garbled stems and emit letter-only choices", () => {
+test("student-facing fields hide garbled stems and do not emit empty letter keys", () => {
   const fields = studentFacingFigurePrimaryFields({
     prompt: "<!-- sat-bank-figures -->\nV = i,.r3",
     stimulus: `![Question region](${figureUrl})`,
@@ -255,9 +305,8 @@ test("student-facing fields hide garbled stems and emit letter-only choices", ()
     correctAnswer: "A",
     extractGaps: { figurePrimary: true },
   });
-  assert.equal(fields.presentation, "figure_primary");
-  assert.equal(fields.prompt, "");
+  assert.equal(fields.presentation, "text");
+  assert.equal(fields.choices, undefined);
   assert.equal(figurePrimaryStudentPrompt("V = i,.r3 V =3£wh"), "");
   assert.deepEqual(letterMcqChoices([]).map((choice) => choice.id), ["a", "b", "c", "d"]);
-  assert.match(fields.stimulus ?? "", /Question region/);
 });

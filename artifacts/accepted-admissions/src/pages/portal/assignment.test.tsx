@@ -413,7 +413,7 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/corn had the highest/);
   });
 
-  test("figure-primary items show the composite image and A–D only, never SPR or leaked comments", () => {
+  test("figure-primary items without usable choice text show unavailable, never letter-only buttons", () => {
     mocks.questions[0] = {
       ...mocks.questions[0]!,
       presentation: "figure_primary",
@@ -425,9 +425,8 @@ describe("student attempt UI", () => {
     };
     render(<PortalAssignment />);
     expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
-    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
-    expect(screen.getByRole("button", { name: "A" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "D" })).toBeTruthy();
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/student-produced response/i)).toBeNull();
     expect(screen.queryByText(/sat-bank-figures/)).toBeNull();
@@ -436,8 +435,45 @@ describe("student attempt UI", () => {
     expect(image.src).toBe(
       "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q1.png",
     );
-    fireEvent.click(screen.getByRole("button", { name: "C" }));
-    expect(saveMutate).toHaveBeenCalled();
+  });
+
+  test("OCR-garbage and empty A–D shells are not shown as letter-only buttons", () => {
+    mocks.questions[0] = {
+      ...mocks.questions[0]!,
+      presentation: "figure_primary",
+      prompt: "",
+      stimulus:
+        "![Scatterplot](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p36-draw2.png)",
+      choices: [
+        { id: "a", label: "A", text: "selecting" },
+        { id: "b", label: "B", text: "inspecting ~ ----~" },
+        { id: "c", label: "C", text: "creating ~" },
+        { id: "d", label: "D", text: "" },
+      ],
+    };
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/selecting/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/inspecting/);
+    expect(screen.getByTestId("answer-choices").textContent).not.toMatch(/----/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/creating/);
+  });
+
+  test("smashed x f(x) lines render as a data table, not one smashed prose line", () => {
+    mocks.questions[0]!.prompt =
+      "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?";
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "f(x)= 3x + 29" },
+      { id: "b", label: "B", text: "f(x)= 29x + 32" },
+      { id: "c", label: "C", text: "f(x)= 35x + 29" },
+      { id: "d", label: "D", text: "f(x)= 32x + 35" },
+    ];
+    render(<PortalAssignment />);
+    const table = screen.getByTestId("quiz-data-table");
+    expect(table.textContent).toMatch(/f\(x\)/);
+    expect(table.textContent).toMatch(/29/);
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/linear function/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/3x \+ 29/);
   });
 
   test("renders markdown figure images from stimulus in the live quiz", () => {
@@ -532,7 +568,7 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("quiz-rich-text").textContent).toMatch(/oranges/);
   });
 
-  test("figure-primary comment shows one screenshot and A–D letters, not an SPR box", () => {
+  test("figure-primary comment without usable A–D text does not show letter-only buttons", () => {
     mocks.questions = [
       {
         id: "q-figure-primary",
@@ -550,8 +586,8 @@ describe("student attempt UI", () => {
     ];
     render(<PortalAssignment />);
     expect(screen.getByTestId("figure-primary-question")).toBeTruthy();
-    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/A/);
-    expect(screen.getByTestId("figure-primary-choices").textContent).toMatch(/D/);
+    expect(screen.queryByTestId("figure-primary-choices")).toBeNull();
+    expect(screen.getByTestId("quiz-answer-unavailable").textContent).toMatch(/Multiple-choice options unavailable/);
     expect(screen.queryByTestId("spr-answer")).toBeNull();
     expect(screen.queryByPlaceholderText(/Type the student-produced response/i)).toBeNull();
   });

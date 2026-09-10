@@ -1,4 +1,7 @@
-import { studentFacingFigurePrimaryFields } from "./sat-bank-figure-primary.ts";
+import {
+  hasUsableChoiceText,
+  studentFacingFigurePrimaryFields,
+} from "./sat-bank-figure-primary.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 
 export function isAssignmentListedForRole(
@@ -111,12 +114,6 @@ export function assignmentQuestionShape(
   options?: { includeKeys?: boolean },
 ) {
   const existingChoices = assignmentChoices(question.choices);
-  const recoveredChoices =
-    existingChoices && existingChoices.length > 0
-      ? existingChoices
-      : isLetterMultipleChoiceAnswer(question.correctAnswer)
-        ? letterMultipleChoiceChoices()
-        : undefined;
   const facing = studentFacingFigurePrimaryFields({
     prompt: question.prompt,
     stimulus: question.stimulus,
@@ -126,6 +123,9 @@ export function assignmentQuestionShape(
     tags: question.tags,
     extractGaps: question.extractGaps,
   });
+  const usableFacing = facing.choices && hasUsableChoiceText(facing.choices) ? facing.choices : undefined;
+  const recoveredChoices =
+    existingChoices && hasUsableChoiceText(existingChoices) ? existingChoices : usableFacing;
   const figurePrimary = facing.presentation === "figure_primary";
   const rawType = question.questionType?.trim() || "multiple_choice";
   const questionType = figurePrimary

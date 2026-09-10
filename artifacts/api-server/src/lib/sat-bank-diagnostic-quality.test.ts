@@ -89,7 +89,55 @@ test("drops true SPR and irreparable OCR, keeps clean MCQ and figure-primary wit
       correctAnswer: "C",
       figures: [{ url: figureUrl, role: "question_region" }],
     }),
+    false,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt: "Particle physicists spend much of their time ______ what is invisible.\nWhich choice completes the text with the most logical and precise word or phrase?",
+      choices: [
+        { id: "a", label: "A", text: "selecting" },
+        { id: "b", label: "B", text: "inspecting ~ ---~" },
+        { id: "c", label: "C", text: "creating ~" },
+        { id: "d", label: "D", text: "deciding" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
     true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt:
+        "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x and their corresponding values of f(x)( ). Which ( ) ? equation defines f(x)",
+      choices: [
+        { id: "a", label: "A", text: "f(x)= 3x + 29" },
+        { id: "b", label: "B", text: "f(x)= 29x + 32" },
+        { id: "c", label: "C", text: "f(x)= 35x + 29" },
+        { id: "d", label: "D", text: "f(x)= 32x + 35" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [
+        { url: `${figureUrl}-tri-1`, alt: "Figure from page 35" },
+        { url: `${figureUrl}-tri-2`, alt: "Diagram from page 35" },
+      ],
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt: "",
+      choices: [
+        { id: "a", label: "A", text: "" },
+        { id: "b", label: "B", text: "" },
+        { id: "c", label: "C", text: "" },
+        { id: "d", label: "D", text: "" },
+      ],
+      questionType: "mcq",
+      correctAnswer: "C",
+      figures: [{ url: figureUrl, alt: "Question region including choices A–D", role: "question_region" }],
+    }),
+    false,
   );
   assert.equal(
     isStudentUsableDiagnosticItem({

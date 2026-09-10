@@ -22,7 +22,7 @@ test("treats ASCII scatterplots as garbled quiz text", () => {
   assert.equal(looksGarbledQuizText("Which value of x satisfies the equation?"), false);
 });
 
-test("figure-primary questions expose A–D even when the payload omitted choices", () => {
+test("figure-primary questions without usable choice text do not invent letter keys", () => {
   const question = {
     presentation: "figure_primary" as const,
     prompt: "",
@@ -31,10 +31,8 @@ test("figure-primary questions expose A–D even when the payload omitted choice
     questionType: "mcq",
   };
   assert.equal(isFigurePrimaryQuestion(question), true);
-  assert.deepEqual(
-    figurePrimaryChoices(question).map((choice) => choice.label),
-    ["A", "B", "C", "D"],
-  );
+  assert.deepEqual(figurePrimaryChoices(question), []);
+  assert.equal(hasUsableChoiceText(figurePrimaryChoices(question)), false);
 });
 
 test("preserves A–D choice text on figure-primary items instead of hiding it", () => {

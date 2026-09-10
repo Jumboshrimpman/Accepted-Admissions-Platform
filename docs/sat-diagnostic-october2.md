@@ -6,11 +6,12 @@ Figure-primary (PR #57) made garbled math *display* as image + A–D when a crop
 
 A student-usable item is now only:
 
-- a clean text MCQ with a readable stem **and** complete A–D choice text (plus a figure if the stem cites a graph/table), or
-- a **full-question crop** (stem + choices in the image — not a bare graph/table), with letter keys, or
-- a graph/table figure **plus** separate complete A–D text
+- a clean text MCQ with a **readable stem** and complete A–D choice text (plus a figure if the stem cites a graph/table, or a recovered data table), or
+- a graph/table figure **plus** separate complete, non-garbage A–D text
 
-Dropped: true SPR, empty/missing choice text, graph-only figure-primary, stems that cite a graph/table with no figure, and smashed/truncated OCR.
+Figure-primary never unlocks letter-only A–D. Empty choice text, OCR garbage (`~`, `----`, leftover tildes), a missing stem, or orphan/duplicate figure fragments are dropped. Smashed `x f(x)` / `0 29` lines are recovered as a table when possible.
+
+Dropped: true SPR, empty/missing/garbage choice text, missing stems, graph-only letter-key shells, duplicate/orphan figure fragments, stems that cite a graph/table with no figure and no recovered table, and irreparable OCR.
 
 This path rebuilds the diagnostic from **student-usable MCQ only**.
 
@@ -18,19 +19,15 @@ This path rebuilds the diagnostic from **student-usable MCQ only**.
 
 Taito (or a client preview) opens the Oct 2 pre-work and sees either:
 
-- A readable text MCQ with A–D copy, and the graph/table when the stem cites one, or
-- A figure-primary item whose crop includes the stem **and** A–D, plus letter buttons
+- A readable text MCQ with A–D copy, and the graph/table when the stem cites one
 
-No letter-only buttons next to a bare chart. No student-produced-response box. Submit still returns an estimated SAT range (linear scoring-guide method, not official Bluebook adaptive).
+No letter-only buttons next to a bare chart, scatterplot, or triangle crop. No student-produced-response box. Submit still returns an estimated SAT range (linear scoring-guide method, not official Bluebook adaptive).
 
 ## How composition works
 
 1. Prefer official **SAT Practice Test 4** in module order (RW 1 → RW 2 → Math 1 → Math 2).
-2. Keep an item only if the official key is A–D **and** it is either:
-   - a clean text MCQ (readable stem + complete A–D choice text; figure required if the stem cites a graph/table), or
-   - figure-primary **with a full-question crop** (stem + choices in the image), or
-   - a figure plus separate complete A–D text
-3. Drop true SPR, empty/truncated choices, graph-only letter-key items, missing cited figures, and irreparable OCR.
+2. Keep an item only if the official key is A–D **and** it has a readable stem **and** complete non-garbage A–D text (plus a figure or recovered table if the stem cites a graph/table).
+3. Drop true SPR, empty/truncated/OCR-garbage choices, missing stems, graph-only letter-key items, orphan/duplicate figure fragments, missing cited figures, and irreparable OCR.
 4. Deduplicate near-identical prompts so module twins do not appear twice.
 5. Fill dropped slots with unused **clean SAT MCQs** from other official SAT packs (same section) so the form stays the linear 33+33+27+27 shape (66 RW + 54 Math).
 6. Session-local forks (`generationMethod = session-copy` / `session-copy` tag) are never overwritten.
@@ -110,7 +107,7 @@ The script prints `composition`. Expect:
 | `rwCount` / `mathCount` | 66 / 54 on a full rebuild |
 | `sprCount` | 0 |
 | `duplicatePrompts` | 0 |
-| Graph/table items | Choice text visible, or a crop that includes A–D — never letter keys alone |
+| Graph/table items | Choice text visible — never letter keys alone. Tables render as tables, not smashed `x f(x)` lines. Duplicate/orphan figure fragments are gone |
 | Time limit | ≥134 minutes |
 | Title | `Full-length SAT diagnostic — Taito’s SAT Session with Eunice` |
 

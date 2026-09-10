@@ -1,9 +1,13 @@
 import { assignmentChoices, assignmentDifficulty } from "./assignment-visibility.ts";
 import {
+  extractPlainTextTable,
+  formatRecoveredTable,
   figurePrimaryStudentPrompt,
+  hasCompleteLetterChoiceText,
   isLetterAnswer,
   letterMcqChoices,
   normalizeLetterAnswer,
+  prepareStudentExtractText,
   selectStimulusFigures,
   shouldUseFigurePrimary,
   stripSatBankFigureComments,
@@ -108,20 +112,31 @@ export function materializedQuestionContent(bank: {
   tags?: string[] | null;
 }) {
   const figures = asBankFigures(bank.figures);
+  const parsedChoices = assignmentChoices(bank.choices) ?? [];
   const figurePrimary = shouldUseFigurePrimary({
     prompt: bank.prompt,
     stimulus: bank.stimulus,
-    choices: assignmentChoices(bank.choices) ?? [],
+    choices: parsedChoices,
     figures,
     questionType: bank.questionType,
     correctAnswer: bank.correctAnswer,
     extractGaps: bank.extractGaps,
     tags: bank.tags,
   });
-  const stimulusFigures = figurePrimary ? selectStimulusFigures(figures) : figures;
+  const extracted = extractPlainTextTable(bank.prompt);
+  const tableBlock = extracted.table ? formatRecoveredTable(extracted.table) : null;
+  const cleanedPrompt = prepareStudentExtractText(extracted.remainder || bank.prompt);
+  const stimulusFigures = selectStimulusFigures(figures, {
+    prompt: bank.prompt,
+    stimulus: bank.stimulus,
+  });
   const stimulus = stripSatBankFigureComments(
-    enrichStimulusWithFigures(bank.stimulus, stimulusFigures) ?? "",
+    enrichStimulusWithFigures(
+      [tableBlock, prepareStudentExtractText(bank.stimulus)].filter(Boolean).join("\n\n") || null,
+      stimulusFigures,
+    ) ?? "",
   );
+  const cleanedChoices = letterMcqChoices(parsedChoices);
   return {
     subject: quizSubject(bank.section),
     domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
@@ -136,13 +151,18 @@ export function materializedQuestionContent(bank: {
     difficulty: assignmentDifficulty(bank.difficulty),
     stimulus: stimulus || null,
     prompt: figurePrimary
-      ? figurePrimaryStudentPrompt(bank.prompt)
-      : bank.prompt?.trim() ||
+      ? figurePrimaryStudentPrompt(cleanedPrompt)
+      : cleanedPrompt ||
         "Figure or table was not recovered from this PDF page. Open the linked source PDF.",
     choices:
       figurePrimary && isLetterAnswer(bank.correctAnswer)
-        ? letterMcqChoices(assignmentChoices(bank.choices))
-        : assignmentChoices(bank.choices) ?? [],
+        ? hasCompleteLetterChoiceText(cleanedChoices)
+          ? cleanedChoices
+          : []
+        : parsedChoices.map((choice) => ({
+            ...choice,
+            text: cleanedChoices.find((item) => item.id === choice.id)?.text || choice.text,
+          })),
     correctAnswer: normalizeLetterAnswer(bank.correctAnswer),
     explanation: bank.officialExplanation ?? "",
     reviewStatus: "approved" as const,

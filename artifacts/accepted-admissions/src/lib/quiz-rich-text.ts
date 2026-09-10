@@ -2,7 +2,8 @@ import { looksGarbledQuizText, stripSatBankFigureComments } from "./quiz-figure-
 
 export type QuizRichPart =
   | { type: "text"; value: string; preformatted?: boolean }
-  | { type: "image"; alt: string; src: string };
+  | { type: "image"; alt: string; src: string }
+  | { type: "table"; headers: string[]; rows: string[][] };
 
 const IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/g;
 const CHART_HEADER_LINE = /^(?:State|Year|Age|Number|Percent|Category|Country|City)$/im;
@@ -31,6 +32,53 @@ export function normalizeQuizProse(value: string): string {
     .trim();
 }
 
+function tokenizeTableLine(line: string): string[] {
+  if (/\t/.test(line) || / {2,}/.test(line)) {
+    return line.split(/\s{2,}|\t/).map((cell) => cell.trim()).filter(Boolean);
+  }
+  return line.trim().split(/\s+/).filter(Boolean);
+}
+
+function looksTableCell(token: string): boolean {
+  if (token.length > 36) return false;
+  if (/[.?!]$/.test(token) && token.length > 12) return false;
+  return /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token);
+}
+
+export function extractPlainTextTable(text: string | null | undefined): {
+  table: { headers: string[]; rows: string[][] } | null;
+  remainder: string;
+} {
+  const lines = (text ?? "").split("\n");
+  let best: { start: number; end: number } | null = null;
+  let index = 0;
+  while (index < lines.length) {
+    const cells = tokenizeTableLine(lines[index] ?? "");
+    if (cells.length < 2 || !cells.every(looksTableCell)) {
+      index += 1;
+      continue;
+    }
+    const columns = cells.length;
+    let end = index + 1;
+    while (end < lines.length) {
+      const next = tokenizeTableLine(lines[end] ?? "");
+      if (next.length !== columns || !next.every(looksTableCell)) break;
+      end += 1;
+    }
+    if (end - index >= 3 && (!best || end - index > best.end - best.start)) {
+      best = { start: index, end };
+    }
+    index = Math.max(end, index + 1);
+  }
+  if (!best) return { table: null, remainder: (text ?? "").trim() };
+  const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line));
+  const remainder = [...lines.slice(0, best.start), ...lines.slice(best.end)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { table: { headers: block[0] ?? [], rows: block.slice(1) }, remainder };
+}
+
 function studentTextPart(value: string): QuizRichPart | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -39,6 +87,19 @@ function studentTextPart(value: string): QuizRichPart | null {
   }
   const normalized = normalizeQuizProse(trimmed);
   return normalized ? { type: "text", value: normalized } : null;
+}
+
+function pushTextAndTables(parts: QuizRichPart[], value: string, hideGarbledText?: boolean) {
+  const extracted = extractPlainTextTable(value);
+  if (extracted.remainder) {
+    const part = studentTextPart(extracted.remainder);
+    if (part && !(hideGarbledText && looksGarbledQuizText(part.type === "text" ? part.value : ""))) {
+      parts.push(part);
+    }
+  }
+  if (extracted.table && extracted.table.rows.length >= 2) {
+    parts.push({ type: "table", ...extracted.table });
+  }
 }
 
 /** Split quiz stimulus/prompt into text and markdown images. Unsafe URLs stay as text. */
@@ -55,11 +116,7 @@ export function splitQuizRichText(
   let match: RegExpExecArray | null;
   while ((match = matcher.exec(text))) {
     if (match.index > lastIndex) {
-      const value = text.slice(lastIndex, match.index);
-      const part = studentTextPart(value);
-      if (part && !(options?.hideGarbledText && looksGarbledQuizText(part.value))) {
-        parts.push(part);
-      }
+      pushTextAndTables(parts, text.slice(lastIndex, match.index), options?.hideGarbledText);
     }
     const alt = match[1]?.trim() || "Figure";
     const src = match[2] ?? "";
@@ -71,10 +128,7 @@ export function splitQuizRichText(
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) {
-    const part = studentTextPart(text.slice(lastIndex));
-    if (part && !(options?.hideGarbledText && looksGarbledQuizText(part.value))) {
-      parts.push(part);
-    }
+    pushTextAndTables(parts, text.slice(lastIndex), options?.hideGarbledText);
   }
   return parts;
 }

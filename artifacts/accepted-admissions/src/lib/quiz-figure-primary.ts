@@ -8,6 +8,8 @@ const FIGURE_PRIMARY_COMMENT =
 const ASCII_GRAPH = /\+[-+]{3,}|\|[-+|]{6,}|[0-9]+\+[-+]+/;
 const SEE_FIGURE_CHOICE = /^(?:\(see figure\)|see figure)$/i;
 const LETTER_LABELS = ["A", "B", "C", "D"] as const;
+const OCR_TILDE = /[~∼˜]/;
+const OCR_DASH_RUN = /-{3,}|–{3,}|—{2,}/;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
   return (text ?? "")
@@ -31,11 +33,34 @@ export function looksGarbledQuizText(text: string | null | undefined): boolean {
   return (value.match(/[=~<>_]{2,}|\.{3,}[^\s]|:\s*\.\.\.|-\s*<:/g) ?? []).length >= 2;
 }
 
+export function cleanOcrChoiceText(text: string | null | undefined): string {
+  return (text ?? "")
+    .replace(/[~\u223c˜]+/g, " ")
+    .replace(/-{3,}|–{3,}|—{2,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function looksOcrGarbageChoice(text: string | null | undefined): boolean {
+  const raw = (text ?? "").trim();
+  if (!raw) return true;
+  if (/^[~\-\s._]+$/.test(raw)) return true;
+  const cleaned = cleanOcrChoiceText(raw);
+  if (!cleaned) return true;
+  return OCR_TILDE.test(cleaned) || OCR_DASH_RUN.test(cleaned);
+}
+
+export function isStudentReadableChoiceText(text: string | null | undefined): boolean {
+  const raw = (text ?? "").trim();
+  if (!raw || SEE_FIGURE_CHOICE.test(raw)) return false;
+  const cleaned = cleanOcrChoiceText(raw);
+  if (!cleaned || SEE_FIGURE_CHOICE.test(cleaned)) return false;
+  if (OCR_TILDE.test(cleaned) || OCR_DASH_RUN.test(cleaned)) return false;
+  return true;
+}
+
 export function hasUsableChoiceText(choices: AssignmentQuestion["choices"]): boolean {
-  return (choices ?? []).filter((choice) => {
-    const text = choice.text.trim();
-    return text.length > 0 && !SEE_FIGURE_CHOICE.test(text);
-  }).length >= 2;
+  return (choices ?? []).filter((choice) => isStudentReadableChoiceText(choice.text)).length >= 2;
 }
 
 export function letterMcqChoices(
@@ -46,11 +71,11 @@ export function letterMcqChoices(
       (choice) =>
         choice.id.toLowerCase() === label.toLowerCase() || choice.label.toUpperCase() === label,
     );
-    const text = (found?.text ?? "").trim();
+    const text = cleanOcrChoiceText(found?.text);
     return {
       id: found?.id || label.toLowerCase(),
       label,
-      text: text && !SEE_FIGURE_CHOICE.test(text) ? text : "",
+      text: isStudentReadableChoiceText(text) ? text : "",
     };
   });
 }
@@ -86,7 +111,7 @@ export function figurePrimaryChoices(
     return question.choices ?? [];
   }
   const letters = letterMcqChoices(question.choices);
-  return hasUsableChoiceText(letters) ? letters : letterMcqChoices(question.choices);
+  return hasUsableChoiceText(letters) ? letters : [];
 }
 
 export function displayAnswerLabel(

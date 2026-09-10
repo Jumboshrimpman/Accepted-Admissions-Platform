@@ -42,6 +42,23 @@ const VISUAL_STIMULUS_REF =
   /\b(?:from the (?:graph|table|chart|figure)|in the (?:graph|table|chart)|the (?:graph|table|chart) (?:shows|above)|data from the (?:graph|table|chart)|according to the (?:graph|table|chart)|shown (?:in|on) the (?:graph|table|chart|figure)|uses data from the (?:graph|table|chart))\b/i;
 const SHORT_FUNCTION_WORDS = /^(?:a|an|the|to|of|in|on|or|and|for|as|at|by|is|it|be)$/i;
 const CHART_HEADER_LINE = /^(?:State|Year|Age|Number|Percent|Category|Country|City)$/im;
+const OCR_TILDE = /[~∼˜]/;
+const OCR_DASH_RUN = /-{3,}|–{3,}|—{2,}/;
+const BROKEN_STEM_PLACEHOLDER = /\(\s*\)\s*\?|which\s*\(\s*\)/i;
+function isAsciiGraphLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (ASCII_GRAPH.test(trimmed)) return true;
+  const symbols = (trimmed.match(/[+\-|~=]/g) ?? []).length;
+  return trimmed.length >= 8 && symbols / trimmed.length > 0.4;
+}
+const LEADING_OCR_JUNK_LINE =
+  /^(?:[._~=\-:]{2,}|\.{3,}.*|[A-Z]\s*[~_]{2,}.*|[PQRSTU]\s*$|[PQRSTU]\s+[._~=\-]{2,})$/;
+const GEOMETRY_STEM = /\b(?:triangle|triangles|angle|similar|congruent|right triangle)\b/i;
+const TABLE_STEM = /\b(?:the table|table shows|linear function|values of [xf]|f\s*\(\s*x\s*\))\b/i;
+const GRAPH_STEM = /\b(?:scatterplot|scatter plot|the graph|the chart)\b/i;
+const STEM_QUESTION =
+  /\?|\b(?:which|what|how|find|complete the text|most nearly|according to|equation defines)\b/i;
 
 export function stripSatBankFigureComments(text: string | null | undefined): string {
   return (text ?? "")
@@ -106,13 +123,11 @@ export function isFullQuestionCrop(figure: BankFigureLike): boolean {
   const alt = figure.alt ?? "";
   const role = `${figure.role ?? ""} ${figure.kind ?? ""}`;
   const hay = `${alt} ${figure.path ?? ""} ${figure.url ?? ""}`;
-  if (/question[_\s-]?region|composite/i.test(role)) return true;
-  if (FULL_QUESTION_CROP.test(hay)) return true;
-  if (/question\s+region/i.test(alt) && !/figure\s+region/i.test(alt)) return true;
   if (FIGURE_ONLY_ALT.test(alt)) return false;
   if (/figure\s+region/i.test(alt)) return false;
   if (GRAPH_ONLY_FILE.test(`${figure.path ?? ""} ${figure.url ?? ""}`)) return false;
-  if (QUESTION_FILE.test(hay)) return true;
+  if (FULL_QUESTION_CROP.test(hay)) return true;
+  if (/question[_\s-]?region|composite/i.test(role) && FULL_QUESTION_CROP.test(hay)) return true;
   return false;
 }
 
@@ -122,7 +137,6 @@ export function hasFullQuestionCrop(input: {
   prompt?: string | null;
   figurePrimarySrc?: string | null;
 }): boolean {
-  if (readFigurePrimarySrc(input)) return true;
   if ((input.figures ?? []).some((figure) => resolveFigureUrl(figure) && isFullQuestionCrop(figure))) {
     return true;
   }
@@ -130,6 +144,8 @@ export function hasFullQuestionCrop(input: {
   for (const match of text.matchAll(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+|\/media\/[^)\s]+)\)/g)) {
     if (isFullQuestionCrop({ alt: match[1], url: match[2] })) return true;
   }
+  const src = readFigurePrimarySrc(input);
+  if (src) return isFullQuestionCrop({ url: src, alt: "", path: src });
   return false;
 }
 
@@ -138,25 +154,209 @@ export function referencesVisualStimulus(text: string | null | undefined): boole
 }
 
 export function stripChartHeaderFragments(text: string | null | undefined): string {
-  return stripSatBankFigureComments(text)
-    .split("\n")
-    .filter((line) => !CHART_HEADER_LINE.test(line.trim()))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
+  return prepareStudentExtractText(text);
+}
+
+export function cleanOcrChoiceText(text: string | null | undefined): string {
+  return (text ?? "")
+    .replace(/[~\u223c˜]+/g, " ")
+    .replace(/-{3,}|–{3,}|—{2,}/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-export function selectStimulusFigures(figures: BankFigureLike[] | null | undefined): BankFigureLike[] {
-  const usable = (figures ?? []).filter((figure) => resolveFigureUrl(figure));
-  const composite = usable.filter(isCompositeFigure);
-  return composite.length > 0 ? composite : usable;
+export function looksOcrGarbageChoice(text: string | null | undefined): boolean {
+  const raw = (text ?? "").trim();
+  if (!raw) return true;
+  if (/^[~\-\s._]+$/.test(raw)) return true;
+  const cleaned = cleanOcrChoiceText(raw);
+  if (!cleaned) return true;
+  if (OCR_TILDE.test(cleaned) || OCR_DASH_RUN.test(cleaned)) return true;
+  return false;
+}
+
+function tokenizeTableLine(line: string): string[] {
+  if (/\t/.test(line) || / {2,}/.test(line)) {
+    return line.split(/\s{2,}|\t/).map((cell) => cell.trim()).filter(Boolean);
+  }
+  return line.trim().split(/\s+/).filter(Boolean);
+}
+
+function looksTableCell(token: string): boolean {
+  if (token.length > 36) return false;
+  if (/[.?!]$/.test(token) && token.length > 12) return false;
+  return /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token);
+}
+
+export function extractPlainTextTable(text: string | null | undefined): {
+  table: { headers: string[]; rows: string[][] } | null;
+  remainder: string;
+} {
+  const lines = stripSatBankFigureComments(text).split("\n");
+  let best: { start: number; end: number; columns: number } | null = null;
+  let index = 0;
+  while (index < lines.length) {
+    const cells = tokenizeTableLine(lines[index] ?? "");
+    if (cells.length < 2 || !cells.every(looksTableCell)) {
+      index += 1;
+      continue;
+    }
+    const columns = cells.length;
+    let end = index + 1;
+    while (end < lines.length) {
+      const next = tokenizeTableLine(lines[end] ?? "");
+      if (next.length !== columns || !next.every(looksTableCell)) break;
+      end += 1;
+    }
+    if (end - index >= 3 && (!best || end - index > best.end - best.start)) {
+      best = { start: index, end, columns };
+    }
+    index = end;
+  }
+  if (!best) return { table: null, remainder: stripSatBankFigureComments(text) };
+  const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line));
+  const remainder = [...lines.slice(0, best.start), ...lines.slice(best.end)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return {
+    table: { headers: block[0] ?? [], rows: block.slice(1) },
+    remainder,
+  };
+}
+
+export function hasRecoveredDataTable(text: string | null | undefined): boolean {
+  const extracted = extractPlainTextTable(text);
+  return Boolean(extracted.table && extracted.table.rows.length >= 2);
+}
+
+export function formatRecoveredTable(table: { headers: string[]; rows: string[][] }): string {
+  const width = table.headers.length;
+  const lines = [table.headers.join("\t"), ...table.rows.map((row) => row.slice(0, width).join("\t"))];
+  return lines.join("\n");
+}
+
+function stripAsciiAndOcrJunkLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (CHART_HEADER_LINE.test(trimmed)) return false;
+      if (isAsciiGraphLine(trimmed)) return false;
+      if (LEADING_OCR_JUNK_LINE.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+}
+
+export function looksBrokenStemPlaceholders(text: string | null | undefined): boolean {
+  return BROKEN_STEM_PLACEHOLDER.test(text ?? "");
+}
+
+export function prepareStudentExtractText(text: string | null | undefined): string {
+  let value = stripSatBankFigureComments(text);
+  if (!value) return "";
+  value = stripAsciiAndOcrJunkLines(value);
+  value = value
+    .replace(/\(\s*\)\s*\?/g, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  return value;
+}
+
+export function hasReadableStudentStem(input: {
+  prompt?: string | null;
+  stimulus?: string | null;
+}): boolean {
+  const extracted = extractPlainTextTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`);
+  const prose = prepareStudentExtractText(extracted.remainder).replace(/\s+/g, " ").trim();
+  if (prose.length < 20) return false;
+  if (/^note:\s*figures not drawn to scale\.?$/i.test(prose)) return false;
+  if (looksBrokenStemPlaceholders(prose)) return false;
+  if (looksGarbledExtractText(prose)) return false;
+  return STEM_QUESTION.test(prose);
+}
+
+function figurePageKey(figure: BankFigureLike): string | null {
+  const hay = `${figure.path ?? ""} ${figure.url ?? ""}`;
+  const match = hay.match(/(?:^|[/_-])(p\d+)[-_]/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+function figureHay(figure: BankFigureLike): string {
+  return `${figure.alt ?? ""} ${figure.path ?? ""} ${figure.url ?? ""} ${figure.role ?? ""}`;
+}
+
+export function isOrphanFigureFragment(
+  figure: BankFigureLike,
+  siblings: BankFigureLike[] = [],
+): boolean {
+  const hay = figureHay(figure);
+  if (/page[_\s-]?header|question[_\s-]?number|cropped?\s+fragment|corner\s+crop/i.test(hay)) {
+    return true;
+  }
+  const page = figurePageKey(figure);
+  if (!page) return false;
+  const samePage = siblings.filter((other) => figurePageKey(other) === page && resolveFigureUrl(other));
+  const isImg = /[-_]img\d+/i.test(hay);
+  const hasDraw = samePage.some((other) => /[-_]draw\d+/i.test(figureHay(other)));
+  return isImg && hasDraw;
+}
+
+function figuresMatchStem(
+  figure: BankFigureLike,
+  stem: string,
+  recoveredTable: boolean,
+): boolean {
+  const hay = figureHay(figure);
+  if (TABLE_STEM.test(stem) && !GEOMETRY_STEM.test(stem) && recoveredTable) {
+    return /table/i.test(hay);
+  }
+  if (GEOMETRY_STEM.test(stem) && /scatter|graph|chart|plot/i.test(hay) && !/triangle|angle|similar/i.test(hay)) {
+    return false;
+  }
+  if (GRAPH_STEM.test(stem) && /triangle|angle|similar/i.test(hay)) return false;
+  return true;
+}
+
+export function selectStimulusFigures(
+  figures: BankFigureLike[] | null | undefined,
+  context?: { prompt?: string | null; stimulus?: string | null },
+): BankFigureLike[] {
+  const seen = new Set<string>();
+  const usable = (figures ?? []).filter((figure) => {
+    const url = resolveFigureUrl(figure);
+    if (!url || seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+  const stem = `${context?.prompt ?? ""}\n${context?.stimulus ?? ""}`;
+  const recoveredTable = hasRecoveredDataTable(stem);
+  const matching = usable.filter((figure) => figuresMatchStem(figure, stem, recoveredTable));
+  const withoutOrphans = matching.filter((figure) => !isOrphanFigureFragment(figure, matching));
+  const pool = withoutOrphans.length > 0 ? withoutOrphans : matching;
+  const composite = pool.filter((figure) => isCompositeFigure(figure) || isFullQuestionCrop(figure));
+  if (composite.length > 0) return composite.slice(0, 1);
+  if (GEOMETRY_STEM.test(stem) || GRAPH_STEM.test(stem)) {
+    const preferred = pool.filter((figure) => /[-_]draw\d+/i.test(figureHay(figure)));
+    if (preferred.length > 0) return preferred.slice(0, 1);
+    return pool.slice(0, 1);
+  }
+  return pool;
 }
 
 export function hasRenderableFigures(input: {
   figures?: BankFigureLike[] | null;
   stimulus?: string | null;
+  prompt?: string | null;
 }): boolean {
-  return selectStimulusFigures(input.figures).length > 0 || hasMarkdownOrMediaImage(input.stimulus);
+  return (
+    selectStimulusFigures(input.figures, input).length > 0 || hasMarkdownOrMediaImage(input.stimulus)
+  );
 }
 
 export function looksTruncatedChoiceText(text: string | null | undefined): boolean {
@@ -194,8 +394,10 @@ export function looksSmashedOrTruncatedExtract(text: string | null | undefined):
 
 export function looksGarbledExtractText(text: string | null | undefined): boolean {
   if (/<!--\s*\/?sat-bank-figures\s*-->/i.test(text ?? "")) return true;
-  const value = stripSatBankFigureComments(text);
-  if (!value) return false;
+  const raw = stripSatBankFigureComments(text);
+  const value = prepareStudentExtractText(text);
+  if (!value) return Boolean(raw);
+  if (looksBrokenStemPlaceholders(text) && looksBrokenStemPlaceholders(value)) return true;
   if (ASCII_GRAPH.test(value)) return true;
   if (/[£]/.test(value) && /[=+\-]/.test(value)) return true;
   const letters = (value.match(/[A-Za-z]/g) ?? []).length;
@@ -209,8 +411,12 @@ export function looksGarbledExtractText(text: string | null | undefined): boolea
 }
 
 export function isStudentReadableChoiceText(text: string | null | undefined): boolean {
-  const value = (text ?? "").trim();
+  const raw = (text ?? "").trim();
+  if (!raw || SEE_FIGURE_CHOICE.test(raw)) return false;
+  if (looksOcrGarbageChoice(raw) && !cleanOcrChoiceText(raw)) return false;
+  const value = cleanOcrChoiceText(raw);
   if (!value || SEE_FIGURE_CHOICE.test(value)) return false;
+  if (OCR_TILDE.test(value) || OCR_DASH_RUN.test(value)) return false;
   if (looksTruncatedChoiceText(value)) return false;
   if (looksSmashedOrTruncatedExtract(value)) return false;
   return true;
@@ -245,7 +451,7 @@ export function letterMcqChoices(
       const choiceLabel = (choice.label ?? "").trim().toUpperCase();
       return id === label.toLowerCase() || choiceLabel === label;
     });
-    const text = (found?.text ?? "").trim();
+    const text = cleanOcrChoiceText(found?.text);
     return {
       id: found?.id?.trim().toLowerCase() || label.toLowerCase(),
       label,
@@ -255,8 +461,8 @@ export function letterMcqChoices(
 }
 
 export function figurePrimaryStudentPrompt(prompt: string | null | undefined): string {
-  const cleaned = stripChartHeaderFragments(prompt);
-  if (!cleaned || looksGarbledExtractText(prompt)) return "";
+  const cleaned = prepareStudentExtractText(prompt);
+  if (!cleaned || looksGarbledExtractText(cleaned)) return "";
   return cleaned;
 }
 
@@ -277,40 +483,23 @@ export function isExplicitFigurePrimary(input: FigurePrimaryInput): boolean {
 }
 
 /**
- * Prefer a full-question crop + A–D when OCR/text is unusable or the item was
- * misclassified as SPR but the official key is a letter.
- *
- * Graph/table-only crops never unlock letter-only mode. Clean A–D copy stays
- * a text MCQ even when a figure exists.
+ * Figure-primary is only for a full-question crop that still has complete,
+ * non-garbage A–D text. Empty, tilde/dash, or missing-stem items stay out.
  */
 export function shouldUseFigurePrimary(input: FigurePrimaryInput): boolean {
   const letter = isLetterAnswer(input.correctAnswer);
   const fullCrop = hasFullQuestionCrop(input);
   const completeChoices = hasCompleteLetterChoiceText(input.choices);
-  const readableStem =
-    stripChartHeaderFragments(input.prompt).length >= 12 &&
-    !looksGarbledExtractText(input.prompt) &&
-    !looksGarbledExtractText(input.stimulus);
+  const readableStem = hasReadableStudentStem(input);
 
-  if (completeChoices && readableStem) return false;
   if (!letter) return false;
+  if (!completeChoices) return false;
   if (!fullCrop) return false;
-
-  if (isExplicitFigurePrimary(input)) return true;
-
-  const garbled =
-    looksGarbledExtractText(input.prompt) || looksGarbledExtractText(input.stimulus);
-  const missingPrompt = stripSatBankFigureComments(input.prompt).length < 4;
-  const missingChoices = !hasUsableChoiceText(input.choices);
-  const spr = (input.questionType ?? "").toLowerCase() === "spr";
-  const notes = notesFrom(input);
-  const figureNoted =
-    input.extractGaps?.figuresIncomplete === true || notes.some((note) => FIGURE_NOTE.test(note));
-
-  if (spr && (garbled || missingPrompt || figureNoted || missingChoices)) return true;
-  if (garbled) return true;
-  if (missingPrompt || missingChoices || figureNoted) return true;
-  return false;
+  if (completeChoices && readableStem && !looksGarbledExtractText(prepareStudentExtractText(input.prompt))) {
+    return false;
+  }
+  if (!readableStem && prepareStudentExtractText(input.prompt).length < 20) return false;
+  return isExplicitFigurePrimary(input) || looksGarbledExtractText(input.prompt);
 }
 
 export function applyFigurePrimaryToRecord<
@@ -347,21 +536,25 @@ export function applyFigurePrimaryToRecord<
   }
   const nextType =
     figurePrimary && isLetterAnswer(record.correctAnswer) ? "mcq" : record.questionType;
-  const nextChoices =
-    figurePrimary && isLetterAnswer(record.correctAnswer)
-      ? letterMcqChoices(record.choices)
-      : record.choices;
+  const cleanedChoices = record.choices.map((choice) => ({
+    ...choice,
+    text: isStudentReadableChoiceText(choice.text) ? cleanOcrChoiceText(choice.text) : choice.text,
+  }));
   return {
     ...record,
+    prompt: prepareStudentExtractText(record.prompt) || record.prompt,
     questionType: nextType,
-    choices: nextChoices,
+    choices:
+      figurePrimary && isLetterAnswer(record.correctAnswer)
+        ? letterMcqChoices(cleanedChoices)
+        : cleanedChoices,
     extractGaps: {
       ...record.extractGaps,
       figurePrimary,
       notes,
     },
     assignable:
-      figurePrimary && isLetterAnswer(record.correctAnswer)
+      figurePrimary && isLetterAnswer(record.correctAnswer) && hasCompleteLetterChoiceText(record.choices)
         ? true
         : record.assignable,
   };
@@ -379,20 +572,19 @@ export function studentFacingFigurePrimaryFields(input: FigurePrimaryInput): {
   const stimulus = explicitSrc
     ? `![Question region](${explicitSrc})`
     : stripSatBankFigureComments(input.stimulus);
+  const cleanedChoices = (input.choices ?? []).map((choice, index) => ({
+    id: (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
+      String.fromCharCode(97 + index),
+    label: (choice.label ?? choice.id ?? String.fromCharCode(65 + index)).toString(),
+    text: isStudentReadableChoiceText(choice.text) ? cleanOcrChoiceText(choice.text) : "",
+  }));
+  const usableChoices = hasUsableChoiceText(cleanedChoices) ? cleanedChoices : undefined;
   if (!figurePrimary) {
     return {
       presentation: "text",
-      prompt:
-        stripChartHeaderFragments(input.prompt) || "Question prompt is unavailable.",
-      stimulus: stimulus ? stripChartHeaderFragments(stimulus) || stimulus : null,
-      choices: hasUsableChoiceText(input.choices)
-        ? (input.choices ?? []).map((choice, index) => ({
-            id: (choice.id ?? choice.label ?? String.fromCharCode(97 + index)).toString().trim() ||
-              String.fromCharCode(97 + index),
-            label: (choice.label ?? choice.id ?? String.fromCharCode(65 + index)).toString(),
-            text: choice.text ?? "",
-          }))
-        : undefined,
+      prompt: prepareStudentExtractText(input.prompt) || "Question prompt is unavailable.",
+      stimulus: stimulus ? prepareStudentExtractText(stimulus) || stimulus : null,
+      choices: usableChoices,
       questionType: input.questionType?.trim() || "multiple_choice",
     };
   }
@@ -400,7 +592,7 @@ export function studentFacingFigurePrimaryFields(input: FigurePrimaryInput): {
     presentation: FIGURE_PRIMARY,
     prompt: figurePrimaryStudentPrompt(input.prompt),
     stimulus: stimulus || null,
-    choices: letterMcqChoices(input.choices),
+    choices: hasCompleteLetterChoiceText(cleanedChoices) ? letterMcqChoices(cleanedChoices) : undefined,
     questionType: "mcq",
   };
 }

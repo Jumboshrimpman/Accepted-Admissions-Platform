@@ -56,10 +56,12 @@ import {
   wantsResumeAttempt,
 } from "@/lib/student-attempt-ui";
 import {
+  cleanOcrChoiceText,
   displayAnswerLabel,
   figurePrimaryChoices,
   hasUsableChoiceText,
   isFigurePrimaryQuestion,
+  isStudentReadableChoiceText,
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
 
@@ -90,6 +92,31 @@ function QuizRichText({
             alt={part.alt}
             className={imageClassName ?? "my-3 h-auto max-h-[min(44rem,85vh)] w-auto max-w-full object-contain rounded-md bg-white"}
           />
+        ) : part.type === "table" ? (
+          <div key={`table-${index}`} className="my-3 max-w-full overflow-x-auto" data-testid="quiz-data-table">
+            <table className="min-w-[12rem] border-collapse text-sm">
+              <thead>
+                <tr>
+                  {part.headers.map((header) => (
+                    <th key={header} className="border border-border bg-muted/50 px-3 py-2 text-left font-medium">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {part.rows.map((row, rowIndex) => (
+                  <tr key={`row-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={`${rowIndex}-${cellIndex}`} className="border border-border px-3 py-2">
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : part.preformatted ? (
           <pre
             key={`text-${index}`}
@@ -375,42 +402,11 @@ function AnswerChoices({
 }) {
   const ink = tone === "ink";
   const figurePrimary = isFigurePrimaryQuestion(question);
-  const choices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
-  const letterOnly = figurePrimary && !hasUsableChoiceText(choices);
-  if (letterOnly) {
-    return (
-      <div className="space-y-3" data-testid="figure-primary-choices">
-        <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
-          {ink ? "Choose together" : "Select A, B, C, or D"}
-        </h3>
-        <div className="grid grid-cols-4 gap-3">
-          {choices.map((choice) => {
-            const isSelected = selected === choice.id;
-            return (
-              <button
-                key={choice.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => onSelect(choice.id)}
-                className={`flex h-14 items-center justify-center rounded-xl border-2 text-lg font-semibold transition-all ${
-                  ink
-                    ? isSelected
-                      ? "border-white bg-white/15 text-white shadow-sm"
-                      : "border-white/25 text-white hover:border-white/60 hover:bg-white/10"
-                    : isSelected
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/40 hover:bg-muted/50"
-                } ${disabled ? "cursor-default" : ""}`}
-              >
-                {choice.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-  if (choices && choices.length > 0) {
+  const rawChoices = figurePrimary ? figurePrimaryChoices(question) : question.choices;
+  const choices = (rawChoices ?? [])
+    .map((choice) => ({ ...choice, text: cleanOcrChoiceText(choice.text) }))
+    .filter((choice) => isStudentReadableChoiceText(choice.text));
+  if (hasUsableChoiceText(choices)) {
     return (
       <div className="space-y-3" data-testid="answer-choices">
         <h3 className={`text-lg font-semibold ${ink ? "text-white" : ""}`}>
@@ -447,7 +443,7 @@ function AnswerChoices({
               >
                 {choice.label}
               </div>
-              <div className="min-w-0 flex-1 whitespace-normal break-words">{choice.text || choice.label}</div>
+              <div className="min-w-0 flex-1 whitespace-normal break-words">{choice.text}</div>
             </button>
           );
         })}
