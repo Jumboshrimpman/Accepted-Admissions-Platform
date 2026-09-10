@@ -21,7 +21,7 @@ const STRIPPED_RADICAL_CHOICE = /^(?:8\s+2\s*\+\s*80|\d+\s*\+\s*\d+\s+2)$/;
 const BROKEN_COORDINATE = /\(\s*,\s*x\s*y\s*\)/;
 const SMASHED_HX_LINE = /(?:^|\n)\s*h\s+x\s*(?:\n|$)/;
 const EMPTY_PAREN_FOR_GIVEN = /\(\s*\)\s+for the given/i;
-const EMPTY_FX_PARENS = /f\s*\(\s*x\s*\)\s*\(\s*\)/;
+const EMPTY_FX_PARENS = /does\s+f\s*\(\s*x\s*\)\s*\(\s*\)|f\s*\(\s*x\s*\)\s*\(\s*\)\s*reach/i;
 const LEADING_EQ_THEN_FX = /^=\s*(?:\([^)]+\)\s*)+f\s*\(\s*x\s*\)/m;
 const SMASHED_VERTEX_LATEX = /2 \+ The function\s+\(\s*\)|The function\s+\(\s*\)\s*\(\s*[−-]?7\)/i;
 const SCRAMBLED_FUNCTION_DEFINED = /\bWhat The function\b/;
