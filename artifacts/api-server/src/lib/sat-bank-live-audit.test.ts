@@ -13,6 +13,8 @@ import {
   looksAxisTickBleed,
   looksExtractionMarkerBleed,
   looksGarbledExtractText,
+  looksFlattenedFractionChoice,
+  looksGluedInequalityChoice,
   looksLeakedNextQuestionChoice,
   looksMalformedFractionChoice,
   looksSmashedAlgebraChoice,
@@ -21,9 +23,11 @@ import {
   looksSmashedPiToken,
   looksSmashedRadicalText,
   looksSmashedTableChoice,
+  looksSmashedTrigToken,
   looksSpacedDecimalChoice,
   looksSpacedGeometryLabels,
   looksStackedFractionDump,
+  stemCitesMathDataTable,
   stemCitesVisual,
 } from "./sat-bank-figure-primary.ts";
 
@@ -381,6 +385,153 @@ given inequality?`;
   assert.equal(isStudentUsableMathQuizItem(q120), false, "Q120 flattened xy-table choices must drop");
   assert.equal(isStudentUsableQuizItem(q120), false);
   assert.equal(isSafeToShowStudentQuizItem(q120), false);
+});
+
+test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, tan, flattened fractions drop", () => {
+  const q68Prompt =
+    "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?";
+  assert.equal(stemCitesVisual(q68Prompt), true);
+  assert.equal(stemCitesMathDataTable(q68Prompt), true);
+  const q68 = {
+    prompt: q68Prompt,
+    section: "math" as const,
+    choices: letterChoices(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: figure,
+  };
+  assert.equal(isStudentUsableMathQuizItem(q68), false, "Q68 table cite without recovered values must drop even with a crop");
+  assert.equal(isStudentUsableQuizItem(q68), false);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      ...q68,
+      prompt: `x f(x)\n0 29\n1 32\n2 35\n${q68Prompt}`,
+    }),
+    true,
+    "Q68 stays when the table values were recovered",
+  );
+
+  const q88Prompt =
+    "In triangle QRS shown, QR RS. Which expression < represents the length of QS?";
+  assert.equal(looksSmashedTrigToken("cosQ 18"), true);
+  assert.equal(looksSmashedTrigToken("sinQ 18 18"), true);
+  assert.equal(looksSmashedTrigToken("sinQ"), true);
+  assert.equal(looksSmashedTrigToken("cos(Q)"), false);
+  assert.equal(looksSmashedTrigToken("sin(18°)"), false);
+  const q88 = {
+    prompt: q88Prompt,
+    section: "math" as const,
+    choices: letterChoices(["cosQ 18", "sinQ 18 18", "cosQ 18", "sinQ"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: figure,
+  };
+  assert.equal(isStudentUsableMathQuizItem(q88), false, "Q88 smashed trig choices / missing QR=RS must drop");
+  assert.equal(isStudentUsableQuizItem(q88), false);
+
+  const junkD =
+    "1-6=45+600()f(x), in dollars, The function f gives the monthly fee f(x) a facility charge to keep x crates in storage.";
+  assert.equal(looksLeakedNextQuestionChoice(junkD), true);
+  const q106 = {
+    prompt:
+      "−11, −9, 26\nA data set of three numbers is shown. If a number from this data set is selected at random, what is the",
+    section: "math" as const,
+    choices: letterChoices(["0/1", "3", "2/3", junkD]),
+    questionType: "mcq",
+    correctAnswer: "C",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q106), false, "Q106 junk-bleed choice D must drop");
+  assert.equal(isStudentUsableQuizItem(q106), false);
+
+  const q120Prompt =
+    "In triangle XYZ, angle Z is a right angle and the =12 teolength of YZ 21 units. If XZ 5 what is the";
+  const q120 = {
+    prompt: q120Prompt,
+    section: "math" as const,
+    choices: letterChoices(["188", "168", "84", "71"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: figure,
+  };
+  assert.equal(isStudentUsableMathQuizItem(q120), false, "Q120 smashed tan / bare =12 / incomplete If XZ must drop");
+  assert.equal(isStudentUsableQuizItem(q120), false);
+  assert.equal(isStudentUsableServedQuestion({ ...q120, subject: "Math" }), false);
+
+  assert.equal(looksFlattenedFractionChoice("84a k"), true);
+  assert.equal(looksFlattenedFractionChoice("84ak2k"), true);
+  assert.equal(looksFlattenedFractionChoice("42a(k+1)k"), true);
+  assert.equal(looksFlattenedFractionChoice("42a(k2+1)k"), true);
+  assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
+  assert.equal(looksFlattenedFractionChoice("21px"), false);
+  const q119 = {
+    prompt: "Which expression is equivalent to 42a + 42ak?",
+    section: "math" as const,
+    choices: letterChoices(["84a k", "84ak2k", "42a(k+1)k", "42a(k2+1)k"]),
+    questionType: "mcq",
+    correctAnswer: "C",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q119), false, "Q119 flattened fraction choices must drop");
+  assert.equal(isStudentUsableQuizItem(q119), false);
+
+  assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+      section: "math",
+      choices: letterChoices(["x>0y>0", "x>0y<0", "x<0y>0", "x<0y<0"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+    "Q95 glued inequality choices must drop",
+  );
+
+  assert.equal(looksMalformedFractionChoice("51/904,"), true);
+  assert.equal(looksMalformedFractionChoice("75/9778,"), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt:
+        "The table shows selected values from function f.\nx f(x)\n11\nWhich statement best describes function f?",
+      section: "math",
+      choices: letterChoices([
+        "decreasing linear",
+        "increasing linear",
+        "decreasing exponential",
+        "increasing exponential",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: figure,
+    }),
+    false,
+    "Q76 cited table with no recovered rows must drop",
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt:
+        "The table gives the distribution of votes for a new school mascot and grade level for 80 students.\nGrade level\nWhat is the probability?",
+      section: "math",
+      choices: letterChoices(["1/9", "1/5", "1/4", "2/3"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: figure,
+    }),
+    false,
+    "Q78 table-gives cite without recovered values must drop",
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt:
+        "Time (years) Total amount (dollars)\nRosa opened a savings account at a bank. The table shows the exponential relationship between the time and the amount.",
+      section: "math",
+      choices: letterChoices(["n=(1+604)t", "n=(1+0.004)t", "n=604(1+0.004)t", "n=0.004(1+604)t"]),
+      questionType: "mcq",
+      correctAnswer: "C",
+    }),
+    false,
+    "Q109 flattened table + missing-caret growth must drop",
+  );
 });
 
 test("live audit: readable controls still stay", () => {

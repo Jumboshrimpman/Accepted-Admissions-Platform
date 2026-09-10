@@ -34,6 +34,10 @@ import {
   looksSpacedDecimalChoice,
   looksLeakedNextQuestionChoice,
   looksMalformedFractionChoice,
+  looksFlattenedFractionChoice,
+  looksGluedInequalityChoice,
+  looksSmashedTrigToken,
+  stemCitesMathDataTable,
   stripSatBankFigureComments,
 } from "./quiz-figure-primary.ts";
 
@@ -642,6 +646,89 @@ arc QR ?`;
       prompt: "2 x = −841\nHow many distinct real solutions does the given equation have?",
       stimulus: null,
       choices: letters(["Exactly one", "Exactly two", "Infinitely many", "Zero"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+});
+
+test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, tan, flattened fractions are unanswerable", () => {
+  const letters = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const q68Prompt =
+    "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?";
+  assert.equal(stemCitesMathDataTable(q68Prompt), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: q68Prompt,
+      stimulus: "![Diagram](https://app.acceptedadmissions.org/media/sat-bank/p35-draw1.png)",
+      choices: letters(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: `x f(x)\n0 29\n1 32\n2 35\n${q68Prompt}`,
+      stimulus: null,
+      choices: letters(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+      questionType: "mcq",
+    }),
+    true,
+  );
+
+  assert.equal(looksSmashedTrigToken("cosQ 18"), true);
+  assert.equal(looksSmashedTrigToken("sinQ 18 18"), true);
+  assert.equal(looksSmashedTrigToken("cos(Q)"), false);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "In triangle QRS shown, QR RS. Which expression < represents the length of QS?",
+      stimulus: "![Triangle](https://app.acceptedadmissions.org/media/sat-bank/triangle.png)",
+      choices: letters(["cosQ 18", "sinQ 18 18", "cosQ 18", "sinQ"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+
+  const junkD =
+    "1-6=45+600()f(x), in dollars, The function f gives the monthly fee f(x) a facility charge to keep x crates in storage.";
+  assert.equal(looksLeakedNextQuestionChoice(junkD), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "−11, −9, 26\nA data set of three numbers is shown. If a number from this data set is selected at random, what is the",
+      stimulus: null,
+      choices: letters(["0/1", "3", "2/3", junkD]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "In triangle XYZ, angle Z is a right angle and the =12 teolength of YZ 21 units. If XZ 5 what is the",
+      stimulus: "![Triangle](https://app.acceptedadmissions.org/media/sat-bank/xyz.png)",
+      choices: letters(["188", "168", "84", "71"]),
+      questionType: "mcq",
+    }),
+    false,
+  );
+
+  assert.equal(looksFlattenedFractionChoice("42a(k+1)k"), true);
+  assert.equal(looksFlattenedFractionChoice("84ak2k"), true);
+  assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
+  assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "Which expression is equivalent to 42a + 42ak?",
+      stimulus: null,
+      choices: letters(["84a k", "84ak2k", "42a(k+1)k", "42a(k2+1)k"]),
       questionType: "mcq",
     }),
     false,
