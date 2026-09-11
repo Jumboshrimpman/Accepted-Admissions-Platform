@@ -36,6 +36,7 @@ import {
   looksMalformedFractionChoice,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
+  looksSmashedYxToken,
   looksSmashedTrigToken,
   stemCitesMathDataTable,
   stripSatBankFigureComments,
@@ -751,6 +752,57 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
   assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
   assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
   assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "Effects of Mycorrhizal Fungi on 3 Plant Species\nAverage mass of plants grown in soil containing\nAverage mass of plants grown in soil\nWhich choice most effectively uses data from the table to complete the statement?",
+      stimulus: "![Diagram](https://app.acceptedadmissions.org/media/sat-bank/p12-q17-left.png)",
+      choices: letters([
+        "broccoli grown in soil containing mycorrhizal fungi had a slightly higher average mass than broccoli grown in soil that had been treated to kill fungi.",
+        "corn grown in soil containing mycorrhizal fungi had a higher average mass than broccoli grown in soil containing mycorrhizal fungi.",
+        "marigolds grown in soil containing mycorrhizal fungi had a much higher average mass than marigolds grown in soil that had been treated to kill fungi.",
+        "corn had the highest average mass of all three species grown in soil that had been treated to kill fungi, while marigolds had the lowest.",
+      ]),
+      questionType: "mcq",
+    }),
+    false,
+    "RW Q14 table/chart cite without recovered values is unanswerable even with a PNG",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?",
+      stimulus: "![Question region including choices A–D](/media/sat-bank/pack/q-question.png)",
+      presentation: "figure_primary",
+      choices: letters(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+      questionType: "mcq",
+    }),
+    false,
+    "Q68 table cite without values is unanswerable even as figure-primary",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+      stimulus: null,
+      choices: letters(["x > 0y > 0", "x > 0y < 0", "x < 0y > 0", "x < 0y < 0"]),
+      questionType: "mcq",
+    }),
+    false,
+    "Q95 0y glued inequalities are unanswerable",
+  );
+  assert.equal(looksSmashedYxToken("3 = 4 + 17yx"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "3 = 4 + 17yx\n−3 = 9 − 23yx\nThe solution to the given system of equations is. What is the value of x?",
+      stimulus: null,
+      choices: letters(["−18", "−6", "6", "18"]),
+      questionType: "mcq",
+    }),
+    false,
+    "Q112 17yx system smash is unanswerable",
+  );
+
   assert.equal(
     isStudentAnswerableQuizQuestion({
       prompt: "Which expression is equivalent to 42a + 42ak?",

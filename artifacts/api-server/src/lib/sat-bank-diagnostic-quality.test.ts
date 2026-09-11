@@ -195,6 +195,29 @@ test("drops true SPR and irreparable OCR, keeps clean MCQ and figure-primary wit
       correctAnswer: "A",
       figures: [{ url: figureUrl, alt: "Diagram from page 10" }],
     }),
+    false,
+    "a page-neighbor PNG is not a recovered graph",
+  );
+  assert.equal(
+    isStudentUsableDiagnosticItem({
+      prompt:
+        "According to the US Department of Agriculture, in 2016 California had between 2,600 and 2,800 organic farms and ______ Which choice most effectively uses data from the graph to complete the text?",
+      choices: [
+        { id: "a", label: "A", text: "Washington had between 600 and 800 organic farms." },
+        { id: "b", label: "B", text: "New York had fewer than 800 organic farms." },
+        { id: "c", label: "C", text: "Wisconsin and Iowa each had between 1,200 and 1,400 organic farms." },
+        { id: "d", label: "D", text: "Pennsylvania had more than 1,200 organic farms." },
+      ],
+      questionType: "mcq",
+      correctAnswer: "A",
+      figures: [
+        {
+          url: figureUrl,
+          alt: "Question region including choices A–D",
+          role: "question_region",
+        },
+      ],
+    }),
     true,
   );
   assert.equal(

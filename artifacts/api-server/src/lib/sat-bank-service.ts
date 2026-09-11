@@ -137,7 +137,14 @@ function bankRowForDiagnostic(row: {
   questionType: string;
   correctAnswer: string;
   extractGaps: unknown;
+  domain?: string | null;
+  skill?: string | null;
+  difficulty?: string | null;
+  officialExplanation?: string | null;
+  subject?: string | null;
+  tags?: string[] | null;
 }) {
+  const facing = materializedQuestionContent(row);
   return {
     id: row.id,
     sourceKey: row.sourceKey,
@@ -147,14 +154,52 @@ function bankRowForDiagnostic(row: {
     module: asFiniteNumber(row.module),
     questionNumber: asFiniteNumber(row.questionNumber),
     position: asFiniteNumber(row.position),
-    prompt: row.prompt,
-    stimulus: row.stimulus,
-    choices: asChoices(row.choices),
+    prompt: facing.prompt,
+    stimulus: facing.stimulus,
+    choices: facing.choices ?? asChoices(row.choices),
     figures: asBankFigures(row.figures),
-    questionType: row.questionType,
+    questionType: facing.questionType || row.questionType,
     correctAnswer: row.correctAnswer,
     extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
   };
+}
+
+function assignmentItemForLiveAudit(
+  question: {
+    id?: string | null;
+    prompt?: string | null;
+    stimulus?: string | null;
+    choices?: unknown;
+    questionType?: string | null;
+    correctAnswer?: string | null;
+    extractGaps?: Record<string, unknown> | null;
+    subject?: string | null;
+    domain?: string | null;
+  },
+  bank?: {
+    section?: string | null;
+    figures?: unknown;
+    module?: number | null;
+    questionNumber?: number | null;
+    position?: number | null;
+    collectionId?: string | null;
+    examFamily?: string | null;
+    extractGaps?: unknown;
+  } | null,
+) {
+  return quizItemFromServedQuestion({
+    id: question.id,
+    prompt: question.prompt,
+    stimulus: question.stimulus,
+    choices: question.choices,
+    questionType: question.questionType,
+    correctAnswer: question.correctAnswer,
+    extractGaps: question.extractGaps ?? ((bank?.extractGaps ?? {}) as Record<string, unknown>),
+    section: bank?.section,
+    subject: question.subject,
+    domain: question.domain,
+    figures: asBankFigures(bank?.figures),
+  });
 }
 
 function formatDiagnosticAssignBlock(composition: DiagnosticComposition): string {
@@ -631,11 +676,7 @@ async function dropUnusableAssignmentQuestions(assignmentId: string): Promise<nu
   let dropped = 0;
   for (const link of links) {
     const bank = bankByQuestion.get(link.questionId);
-    const usable = isStudentUsableQuizItem(
-      bank
-        ? bankRowForDiagnostic(bank)
-        : quizItemFromServedQuestion(link.question),
-    );
+    const usable = isStudentUsableQuizItem(assignmentItemForLiveAudit(link.question, bank));
     if (usable) keep.push({ questionId: link.questionId });
     else dropped += 1;
   }
@@ -690,16 +731,14 @@ export async function diagnosticCompositionForAssignment(
   const bankByQuestion = new Map(banks.map((row) => [row.linkedQuestionId, row]));
   const selected = questions.map((question) => {
     const bank = bankByQuestion.get(question.id);
-    if (bank) return bankRowForDiagnostic(bank);
     return {
+      ...assignmentItemForLiveAudit(question, bank),
       id: question.id,
-      prompt: question.prompt,
-      stimulus: question.stimulus,
-      choices: asChoices(question.choices),
-      figures: [],
-      questionType: question.questionType,
-      correctAnswer: question.correctAnswer,
-      section: /math/i.test(`${question.subject} ${question.domain}`) ? "math" : "rw",
+      module: bank?.module,
+      questionNumber: bank?.questionNumber,
+      position: links.find((link) => link.questionId === question.id)?.position,
+      collectionId: bank?.collectionId,
+      examFamily: bank?.examFamily,
     };
   });
   return summarizeDiagnosticComposition(selected);

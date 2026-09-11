@@ -74,6 +74,9 @@ const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
 const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+[+\-]\d+[A-Za-z][+\-]\d+[A-Za-z]\s*=/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
+const GLUED_INEQUALITY_DIGIT_VAR = /\d[xy](?:\s*[<>≤≥]|$)/;
+const SMASHED_YX_PRODUCT = /\d+yx\b|\d+\s+y\s+x\b/;
+const ISOLATED_I_GLYPHS = /(?:^|\n).*?\d\s+I\s+I(?:\s|$)|(?:^|\n)\s*I(?:\s+I)+\s*(?:\n|$)/;
 const FLATTENED_PAREN_FRACTION = /\([^0-9)][^)]{0,24}\)[A-Za-z]/;
 const MODULE_BOILERPLATE_SUFFIX =
   /\s+If you finish before time is called[\s\S]*$/i;
@@ -85,6 +88,10 @@ const MATH_TABLE_CITE =
 const MATH_TABLE_CONTEXT =
   /\b(?:linear function|selected values|corresponding values|distribution of|exponential relationship|values of [xyf]|f\s*\(\s*x\s*\)|function f)\b/i;
 const RW_TABLE_CITE = /\b(?:complete the text|most effectively uses data)\b/i;
+const RW_OR_GENERIC_TABLE_CITE =
+  /\b(?:uses data from the table|data from the table|from the table to complete)\b/i;
+const CHART_HEADER_WITHOUT_TABLE_WORD =
+  /\beffects of\b[\s\S]{0,100}\bon\b[\s\S]{0,160}\baverage mass\b|\baverage mass of plants\b|\bpoll results\b/i;
 const LEADING_EQ_SPLIT_NUM = /^=\s*\d+\s*[+\-]\s*\d+\s+\d+/m;
 const SPACED_FT_EQUALS = /\bf\s+t\s*=/;
 const SMASHED_DISTRIBUTE = /[xy]\s*\d+\s*\(\s*[+\-]/;
@@ -99,7 +106,9 @@ const SPACED_DECIMAL_CHOICE = /(?:^|[^\d])-?\.\d+\s+\d|\d+\.\s+\d/;
 const FLATTENED_XY_TABLE = /^(?:x\s+y|xy)\s+-?\d/i;
 const FLATTENED_XY_COMPACT = /^xy-?\d/;
 const MALFORMED_FRACTION_CHOICE = /^[−-]?\d+\s+\d+$/;
-const SMASHED_RADICAL_RADIUS = /\bradius of [a-z]\s+\d|\barea of [a-z]\s+of\s+circle/i;
+const SMASHED_RADICAL_RADIUS =
+  /\bradius of [a-z]\s+\d|\barea of [a-z]\s+of\s+circle|\bradius of the \w+ is \d+\s+\d+\b/i;
+const STRIPPED_RADICAL_MULTI = /^\d+\s+\d+\s+\d+$/;
 const MISSING_CARET_LEADING = /(?:^|\n)\s*\d\s+[xy]\s*=/;
 const STACKED_FRACTION_TOP = /^-?\d+(?:\s+[−+\-]\s*-?\d+)+\s*=/;
 const STACKED_FRACTION_BOTTOM = /^[a-z](?:\s+[a-z]){1,5}$/i;
@@ -116,7 +125,7 @@ const SMASHED_TRAILING_X_EQ = /=\s*\d+\s+x(?:\s+x|\s*Which|[A-Z]|\s*$)/m;
 const MISSING_OPERATOR_CHOICE =
   /^(?:[A-Za-z]\s+\d+|\d+\s+[A-Za-z])(?:\s*[+\-]\s*(?:\d+|[A-Za-z]))*\s*[=≤≥<>]|[=≤≥<>]\s*\d+\s+[A-Za-z]\s*$/;
 const STEM_CITES_VISUAL =
-  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the circle shown|in the figure|the graph shows|the line graphed|the line graph|the dot plot|the dat plot|note:\s*figures? not drawn|figures? not drawn to scale|the graph models|y-intercept of the (?:graph|line)|the scatterplot|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart)|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
+  /\b(?:in the triangle shown|the triangle shown|the graph shown|the figure shown|the circle shown|in the figure|the graph shows|the line graphed|the line graph|the dot plot|the dat plot|the histogram|note:\s*figures? not drawn|figures? not drawn to scale|the graph models|y-intercept of the (?:graph|line)|the scatterplot|uses data from the (?:graph|table|chart)|from the (?:graph|table|chart)|line of best fit|the graph of the quadratic|vertex of the graph)\b/i;
 const LABELED_GEOMETRY = /\btriangles?\s+[A-Z]{3}\b/i;
 const MODULE_BOILERPLATE =
   /^(?:DIRECTIONS|STOP)\b|\bGO ON TO THE NEXT(?:\s+PAGE)?\b|\bTHIS IS THE END OF\b|\bIf you finish before time is called\b|\bUnauthorized copying or reuse\b|\bModule\s+[12](?:\s+(?:Reading|Writing|Math))?\b/;
@@ -214,6 +223,7 @@ export function looksSmashedAlgebraText(text: string | null | undefined): boolea
   if (looksStackedFractionDump(raw)) return true;
   if (looksSmashedRadicalText(raw)) return true;
   if (looksSmashedPiToken(raw)) return true;
+  if (SMASHED_YX_PRODUCT.test(raw)) return true;
   return false;
 }
 
@@ -245,7 +255,8 @@ export function looksSpacedProductChoice(text: string | null | undefined): boole
 }
 
 export function looksStrippedRadicalChoice(text: string | null | undefined): boolean {
-  return STRIPPED_RADICAL_CHOICE.test(cleanOcrChoiceText(text));
+  const value = cleanOcrChoiceText(text);
+  return STRIPPED_RADICAL_CHOICE.test(value) || STRIPPED_RADICAL_MULTI.test(value);
 }
 
 /** `( + 15)`, trailing open `f(x) = (x+1`, or a dangling close. Keep `(-2, 3)`. */
@@ -324,6 +335,7 @@ export function looksCorruptStemOcr(text: string | null | undefined): boolean {
   if (Y_FX_MISSING_EQUALS.test(raw) && !/\by\s*=\s*f\s*\(\s*x\s*\)/.test(raw)) return true;
   if (BROKEN_POINT_ZERO_FIVE.test(raw)) return true;
   if (looksPipeBackslashOcr(raw)) return true;
+  if (looksIsolatedIGlyphs(raw)) return true;
   return false;
 }
 
@@ -368,9 +380,12 @@ export function looksSmashedTrigToken(text: string | null | undefined): boolean 
   return SMASHED_TRIG_FN.test(text ?? "") || SMASHED_TRIG_FN.test(cleanOcrChoiceText(text));
 }
 
-/** `x>0y>0` — inequalities smashed together. Spaced `x > 0 y > 0` stays. */
+/** `x>0y>0` / `x > 0y > 0` — inequalities smashed together. Spaced `x > 0 y > 0` stays. */
 export function looksGluedInequalityChoice(text: string | null | undefined): boolean {
-  return GLUED_INEQUALITY_PAIR.test(cleanOcrChoiceText(text).replace(/\s+/g, " "));
+  const value = cleanOcrChoiceText(text).replace(/\s+/g, " ");
+  if (!value) return false;
+  if (GLUED_INEQUALITY_PAIR.test(value)) return true;
+  return GLUED_INEQUALITY_DIGIT_VAR.test(value);
 }
 
 /** `42a(k+1)k`, `84ak2k`, `84a k` — slash dropped out of a fraction. */
@@ -400,8 +415,33 @@ export function stemCitesMathDataTable(text: string | null | undefined): boolean
   );
 }
 
+export function stemCitesDataTable(text: string | null | undefined): boolean {
+  const value = stripSatBankFigureComments(text);
+  if (!value) return false;
+  if (stemCitesMathDataTable(value)) return true;
+  if (RW_OR_GENERIC_TABLE_CITE.test(value) || (RW_TABLE_CITE.test(value) && /\btable\b/i.test(value))) {
+    return true;
+  }
+  if (CHART_HEADER_WITHOUT_TABLE_WORD.test(value)) return true;
+  const compact = compactExtractText(value);
+  return (
+    compact.includes("usesdatafromthetable") ||
+    compact.includes("datafromthetable") ||
+    compact.includes("averagemassofplants") ||
+    compact.includes("pollresults")
+  );
+}
+
 export function looksSmashedRadicalText(text: string | null | undefined): boolean {
   return SMASHED_RADICAL_RADIUS.test(text ?? "");
+}
+
+export function looksSmashedYxToken(text: string | null | undefined): boolean {
+  return SMASHED_YX_PRODUCT.test(text ?? "");
+}
+
+export function looksIsolatedIGlyphs(text: string | null | undefined): boolean {
+  return ISOLATED_I_GLYPHS.test(text ?? "");
 }
 
 /** `12 −2 = −2` over `n t w` — stacked fraction OCR, not a readable equation. */
@@ -510,10 +550,12 @@ export function stemCitesVisual(text: string | null | undefined): boolean {
   if (LABELED_GEOMETRY.test(value) && /\b(?:similar|congruent|shown|angle)\b/i.test(value)) {
     return true;
   }
+  if (stemCitesMathDataTable(value) || stemCitesDataTable(value)) return true;
   const compact = compactExtractText(value);
   if (compact.includes("datplot") || compact.includes("dotplot") || compact.includes("inthefigure")) {
     return true;
   }
+  if (compact.includes("histogram")) return true;
   if (compact.includes("figuresnotdrawn") || compact.includes("figurenotdrawn")) return true;
   return /\b(?:the table|table shows)\b/i.test(value);
 }
@@ -576,6 +618,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(cleaned)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(cleaned)) return false;
   if (looksSmashedAlgebraChoice(raw) || looksSmashedAlgebraChoice(cleaned)) return false;
+  if (looksSmashedYxToken(raw) || looksSmashedYxToken(cleaned)) return false;
   if (looksBrokenMathOcr(cleaned) && cleaned.length <= 96) return false;
   return true;
 }
@@ -609,6 +652,9 @@ function hasInlineNamedTableValues(text: string | null | undefined): boolean {
 }
 
 function hasUsableQuizTableData(text: string | null | undefined): boolean {
+  if (looksIsolatedIGlyphs(text) || looksPipeBackslashOcr(text)) {
+    return hasRecoveredQuizTable(text);
+  }
   return hasRecoveredQuizTable(text) || hasInlineNamedTableValues(text);
 }
 
@@ -709,30 +755,27 @@ export function isStudentAnswerableQuizQuestion(
     if (looksGarbledQuizText(question.prompt) || looksGarbledQuizText(stimulusText)) return false;
   }
   const stem = `${question.prompt ?? ""}\n${stimulusText}`;
-  if (
-    stemCitesMathDataTable(stem) &&
-    !hasUsableQuizTableData(`${question.prompt ?? ""}\n${stimulusText}`) &&
-    question.presentation !== "figure_primary"
-  ) {
+  const tableHaystack = `${question.prompt ?? ""}\n${stimulusText}`;
+  if (stemCitesDataTable(stem) && !hasUsableQuizTableData(tableHaystack)) {
+    return false;
+  }
+  if (stemCitesMathDataTable(stem) && !hasUsableQuizTableData(tableHaystack)) {
     return false;
   }
   const mathVisualCite =
     stemCitesVisual(stem) &&
     (stemCitesMathDataTable(stem) ||
-      /\b(?:xy[- ]plane|vertex of the graph|scatterplot|dot plot|in the (?:figure|triangle|graph)|the triangle shown|the graph shown)\b/i.test(
+      /\b(?:xy[- ]plane|vertex of the graph|scatterplot|dot plot|histogram|in the (?:figure|triangle|graph)|the triangle shown|the graph shown)\b/i.test(
         stem,
       ));
-  if (
-    mathVisualCite &&
-    !hasUsableQuizTableData(`${question.prompt ?? ""}\n${stimulusText}`) &&
-    question.presentation !== "figure_primary"
-  ) {
+  if (mathVisualCite && !hasUsableQuizTableData(tableHaystack) && question.presentation !== "figure_primary") {
     return false;
   }
   if (
     stemCitesVisual(stem) &&
     !hasQuizFigure(question) &&
-    !hasRecoveredQuizTable(`${question.prompt ?? ""}\n${stimulusText}`)
+    !hasRecoveredQuizTable(tableHaystack) &&
+    !hasUsableQuizTableData(tableHaystack)
   ) {
     return false;
   }
