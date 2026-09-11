@@ -36,6 +36,7 @@ import {
   looksMalformedFractionChoice,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
+  looksGluedMinusSpacing,
   looksSmashedStackedFraction,
   looksSmashedChartHeaders,
   looksSmashedYxToken,
@@ -307,6 +308,67 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
   assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), true);
   assert.equal(looksBrokenMathOcr("2 –4x –7x = –36\nWhat is the positive solution?"), true);
   assert.equal(looksBrokenMathOcr("2 - 4x - 7x = -36\nWhat is the positive solution?"), false);
+  assert.equal(looksGluedMinusSpacing("y-5x=6"), true);
+  assert.equal(looksGluedMinusSpacing("y −5x = 6"), true);
+  assert.equal(looksGluedMinusSpacing("bytheequationy-5x=6"), true);
+  assert.equal(looksGluedMinusSpacing("V(x)=9x(x-7)"), false);
+  assert.equal(looksGluedMinusSpacing("V(x) = x(x+9)(x-7)"), false);
+  assert.equal(looksGluedMinusSpacing("x+7"), false);
+  assert.equal(looksGluedMinusSpacing("21px"), false);
+  assert.equal(looksGluedMinusSpacing("y=4x-6"), false);
+  assert.equal(looksGluedMinusSpacing("2 - 4x"), false);
+  assert.equal(looksGluedMinusSpacing("y - 5x = 6"), false);
+  assert.equal(looksBrokenMathOcr("y-5x=6\nWhat is the best interpretation of 6?"), true);
+  assert.equal(isStudentReadableChoiceText("V(x)=9x(x-7)"), true);
+  assert.equal(isStudentReadableChoiceText("y=4x-6"), true);
+  assert.equal(isStudentReadableChoiceText("y = 4x - 6"), true);
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "andthe totallengthof fabric that shepurchasedy,in\nyards,isrepresented bytheequationy-5x=6.\nWhatisthebestinterpretationof6inthiscontext?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "Kaylani made 6 suits." },
+        { id: "b", label: "B", text: "Kaylani purchased a total of 6 yards of fabric." },
+        { id: "c", label: "C", text: "Kaylani used a total of 6 yards of fabric to make the suits." },
+        { id: "d", label: "D", text: "Kaylani purchased 6 yards more fabric than she used to make the suits." },
+      ],
+      questionType: "mcq",
+    }),
+    false,
+    "Q82 y-5x / y −5x smash must drop",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "A right rectangular prism has a height of 9 inches.\nWhich function V gives the volume of the prism?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "V(x)=x(x+9)(x+7)" },
+        { id: "b", label: "B", text: "V(x)=x(x+9)(x-7)" },
+        { id: "c", label: "C", text: "V(x)=9x(x+7)" },
+        { id: "d", label: "D", text: "V(x)=9x(x-7)" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+    "Q85 compact (x-7) / x+7 choices stay",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "Line r in the xy-plane has a slope of 4 and passes through the point (0, 6). Which equation defines line r ?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "y=-6x+4" },
+        { id: "b", label: "B", text: "y=6x+4" },
+        { id: "c", label: "C", text: "y=4x-6" },
+        { id: "d", label: "D", text: "y=4x+6" },
+      ],
+      questionType: "mcq",
+    }),
+    true,
+    "Q93 compact 4x-6 choices stay",
+  );
   assert.equal(
     isStudentAnswerableQuizQuestion({
       prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",

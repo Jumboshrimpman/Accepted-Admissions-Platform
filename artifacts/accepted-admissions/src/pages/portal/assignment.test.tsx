@@ -668,6 +668,22 @@ describe("student attempt UI", () => {
     expect(screen.queryByTestId("answer-choices")).toBeNull();
   });
 
+  test("Q82 y −5x glued-coeff smash is not student-usable", () => {
+    mocks.questions[0]!.prompt =
+      "andthe totallengthof fabric that shepurchasedy,in\nyards,isrepresented bytheequationy-5x=6.\nWhatisthebestinterpretationof6inthiscontext?";
+    mocks.questions[0]!.stimulus = null;
+    mocks.questions[0]!.choices = [
+      { id: "a", label: "A", text: "Kaylani made 6 suits." },
+      { id: "b", label: "B", text: "Kaylani purchased a total of 6 yards of fabric." },
+      { id: "c", label: "C", text: "Kaylani used a total of 6 yards of fabric to make the suits." },
+      { id: "d", label: "D", text: "Kaylani purchased 6 yards more fabric than she used to make the suits." },
+    ];
+    keepOnlyFirstQuestion();
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-answer-choice")).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
+  });
+
   test("smashed 2 –4x –7x quadratic OCR is not student-usable", () => {
     mocks.questions[0]!.prompt = "2 −4x −7x = −36\nWhat is the positive solution to the given equation?";
     mocks.questions[0]!.stimulus = null;

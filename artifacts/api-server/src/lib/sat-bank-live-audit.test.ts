@@ -19,6 +19,7 @@ import {
   looksGarbledExtractText,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
+  looksGluedMinusSpacing,
   looksLeakedNextQuestionChoice,
   looksMalformedFractionChoice,
   looksSmashedAlgebraChoice,
@@ -1106,6 +1107,119 @@ test("live audit after #77 rematerialize: Q97 smashed 2 –4x –7x drops; missi
   assert.ok((composed.composition.shortfall.reasons.missing_letter_key ?? 0) >= 1);
 });
 
+test("live audit after #78 rematerialize: Q82 y −5x is real smash; Q85/Q93 compact minus stays", () => {
+  const q82OfficialPrompt =
+    "Kaylani used fabric measuring 5 yards in length to\nmake each suit for a men’s choir. The relationship\nbetween the number of suits that Kaylani made, x,\nand the total length of fabric that she purchased y, in\nyards, is represented by the equation y −5x = 6.\nWhat is the best interpretation of 6 in this context?";
+  const q82LivePrompt =
+    "andthe totallengthof fabric that shepurchasedy,in\nyards,isrepresented bytheequationy-5x=6.\nWhatisthebestinterpretationof6inthiscontext?";
+  const q82Choices = letterChoices([
+    "Kaylani made 6 suits.",
+    "Kaylani purchased a total of 6 yards of fabric.",
+    "Kaylani used a total of 6 yards of fabric to make the suits.",
+    "Kaylani purchased 6 yards more fabric than she used to make the suits.",
+  ]);
+  const q85OfficialPrompt =
+    "A right rectangular prism has a height of 9 inches.\nThe length of the prism’s base is x inches, which is\n7 inches more than the width of the prism’s base.\nWhich function V gives the volume of the prism,\nin cubic inches, in terms of the length of the\nprism’s base?";
+  const q85CompactChoices = letterChoices([
+    "V(x) = x(x+9)(x+7)",
+    "V(x) = x(x+9)(x-7)",
+    "V(x) = 9x(x+7)",
+    "V(x) = 9x(x-7)",
+  ]);
+  const q93OfficialPrompt =
+    "Line r in the xy-plane has a slope of 4 and passes\nthrough the point (0, 6). Which equation defines\nline r ?";
+  const q93CompactChoices = letterChoices(["y=-6x+4", "y=6x+4", "y=4x-6", "y=4x+6"]);
+
+  assert.equal(looksGluedMinusSpacing("y −5x = 6"), true, "Q82 official: space before minus glued to 5x");
+  assert.equal(looksGluedMinusSpacing("y-5x=6"), true);
+  assert.equal(looksGluedMinusSpacing("bytheequationy-5x=6"), true);
+  assert.equal(looksGluedMinusSpacing("2 −4x"), true, "Q97-family coeff glue");
+  assert.equal(looksSmashedAlgebraText(q82OfficialPrompt), true);
+  assert.equal(looksSmashedAlgebraText(q82LivePrompt), true);
+
+  assert.equal(looksGluedMinusSpacing("V(x) = x(x+9)(x-7)"), false, "Q85 compact SAT minus is not smash");
+  assert.equal(looksGluedMinusSpacing("V(x) = 9x(x −7)"), false);
+  assert.equal(looksGluedMinusSpacing("x+7"), false);
+  assert.equal(looksGluedMinusSpacing("21px"), false);
+  assert.equal(looksGluedMinusSpacing("y=4x-6"), false, "Q93 compact 4x-6 is not smash");
+  assert.equal(looksGluedMinusSpacing("y = 4x −6"), false);
+  assert.equal(looksGluedMinusSpacing("2 - 4x"), false);
+  assert.equal(looksGluedMinusSpacing("y - 5x = 6"), false);
+  assert.equal(looksGluedMinusSpacing("y = −6x + 4"), false);
+  assert.equal(looksGluedMinusSpacing("(-7)"), false);
+  assert.equal(looksGluedMinusSpacing("the xy-plane"), false);
+  assert.equal(looksGluedMinusSpacing("COVID-19 research"), false);
+
+  const q82Official = {
+    id: "q82-official",
+    prompt: q82OfficialPrompt,
+    section: "math" as const,
+    choices: q82Choices,
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  const q82Live = { ...q82Official, id: "q82-live", prompt: q82LivePrompt };
+  const q85Official = {
+    id: "q85-official",
+    prompt: q85OfficialPrompt,
+    section: "math" as const,
+    choices: q85CompactChoices,
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  const q93Official = {
+    id: "q93-official",
+    prompt: q93OfficialPrompt,
+    section: "math" as const,
+    choices: q93CompactChoices,
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+
+  for (const item of [q82Official, q82Live]) {
+    assert.equal(isStudentUsableMathQuizItem(item), false, `${item.id} y −5x smash must drop`);
+    assert.ok(auditStudentQuizItem(item).reasons.includes("smashed_algebra"), `${item.id} smashed_algebra`);
+  }
+  assert.equal(isStudentUsableMathQuizItem(q85Official), true, "Q85 compact (x-7) is a false-positive auditor flag");
+  assert.equal(isStudentUsableMathQuizItem(q93Official), true, "Q93 compact 4x-6 is a false-positive auditor flag");
+
+  const spacedKeep = {
+    id: "q82-spaced",
+    prompt:
+      "The relationship is represented by the equation y - 5x = 6.\nWhat is the best interpretation of 6 in this context?",
+    section: "math" as const,
+    choices: q82Choices,
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  assert.equal(isStudentUsableMathQuizItem(spacedKeep), true, "spaced y - 5x = 6 must stay");
+
+  const cleanRw = {
+    id: "rw-clean-glued",
+    prompt: "Which choice completes the text with the most logical transition?",
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 1,
+    position: 1,
+    choices: letterChoices(["However", "Therefore", "Meanwhile", "Similarly"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const composed = composeDiagnosticItems([cleanRw, spacedKeep, q82Live, q85Official, q93Official]);
+  assert.equal(composed.selected.some((item) => item.id === "q82-live"), false);
+  assert.equal(composed.selected.some((item) => item.id === "q85-official"), true);
+  assert.equal(composed.selected.some((item) => item.id === "q93-official"), true);
+  assert.equal(composed.selected.some((item) => item.id === "q82-spaced"), true);
+
+  const leakedQ82 = summarizeDiagnosticComposition([cleanRw, q82Official, q85Official, q93Official]);
+  assert.ok(leakedQ82.residualJunk >= 1, "leaked Q82 smash cannot report residualJunk===0");
+  assert.equal(canAssignDiagnostic(leakedQ82, [cleanRw, q82Official, q85Official, q93Official]), false);
+
+  const compactOnly = summarizeDiagnosticComposition([cleanRw, q85Official, q93Official]);
+  assert.equal(compactOnly.residualJunk, 0, "Q85/Q93 compact minus must not count as residual junk");
+  assert.equal(canAssignDiagnostic(compactOnly, [cleanRw, q85Official, q93Official]), true);
+});
+
 test("live audit: readable controls still stay", () => {
   assert.equal(
     isStudentUsableMathQuizItem({
@@ -1138,6 +1252,23 @@ test("live audit: readable controls still stay", () => {
       correctAnswer: "B",
     }),
     true,
+  );
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt:
+        "The COVID-19 study notes that well-known y-intercept graphs can mislead readers.\nWhich choice best describes the function of the underlined sentence?",
+      section: "rw",
+      choices: letterChoices([
+        "It states a hypothesis.",
+        "It presents a generalization.",
+        "It offers an alternative.",
+        "It provides context.",
+      ]),
+      questionType: "mcq",
+      correctAnswer: "B",
+    }),
+    true,
+    "hyphenated COVID-19 / y-intercept RW must stay",
   );
   assert.equal(
     isStudentUsableMathQuizItem({

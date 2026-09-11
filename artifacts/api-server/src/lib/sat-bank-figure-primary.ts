@@ -109,6 +109,11 @@ const SMASHED_IF_SEGMENT = /\bIf\s+[A-Z]{2}\s+\d+(?:\s+what\b|\s*$)/i;
 const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
 /** Glued compact poly OCR: `2-4x-7x=` / `2 –4x –7x =`. Spaced `2 - 4x - 7x =` stays. */
 const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+\s*[+\-−–]\d+[A-Za-z]\s*[+\-−–]\d+[A-Za-z]\s*=/;
+/**
+ * Minus glued onto a coefficient×variable: `y −5x`, `y-5x`, `2 −4x`.
+ * Compact SAT `x-7` / `4x-6` / `(x-7)` stays — those are not OCR smash.
+ */
+const GLUED_MINUS_ONTO_COEFF_VAR = /[A-Za-z0-9)\]]\s*[−–-]\d+[A-Za-z]/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
 /** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
@@ -304,6 +309,7 @@ export function looksSmashedAlgebraText(text: string | null | undefined): boolea
   if (SIN_COS_OCR.test(raw)) return true;
   if (looksSmashedTrigToken(raw)) return true;
   if (COMPACT_POLY_EQ.test(raw)) return true;
+  if (looksGluedMinusSpacing(raw)) return true;
   if (MISSING_CARET_GROWTH_SUM.test(raw) && !/\^/.test(raw)) return true;
   if (LEADING_EQ_SPLIT_NUM.test(raw)) return true;
   if (SPACED_FT_EQUALS.test(raw)) return true;
@@ -327,7 +333,20 @@ export function looksSmashedAlgebraChoice(text: string | null | undefined): bool
   if (DUPLICATED_MATH_IDENT.test(value) && /=/.test(value)) return true;
   if (looksOperatorStarvedEquation(value) && value.length <= 64) return true;
   if (REPEATED_ISOLATED_VAR.test(value) && /=/.test(value)) return true;
+  if (looksGluedMinusSpacing(value)) return true;
   return false;
+}
+
+/**
+ * Minus glued onto the next coefficient×variable (`5x`, `4x`).
+ * COMPACT_POLY only saw two-term `2-4x-7x=`. Q82 `y −5x = 6` is one term.
+ * Compact SAT juxtaposition stays: `x-7`, `4x-6`, `V(x)=x(x+9)(x-7)`, `x+7`, `21px`.
+ * Spaced `2 - 4x` / `y - 5x` stay. Unary `−6x`, `= −6`, `(-7)` stay.
+ */
+export function looksGluedMinusSpacing(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  return GLUED_MINUS_ONTO_COEFF_VAR.test(raw);
 }
 
 export function readFigurePrimarySrc(input: FigurePrimaryInput): string | null {
@@ -1227,6 +1246,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(value)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(value)) return false;
   if (looksSmashedAlgebraChoice(raw) || looksSmashedAlgebraChoice(value)) return false;
+  if (looksGluedMinusSpacing(raw) || looksGluedMinusSpacing(value)) return false;
   if (looksSmashedYxToken(raw) || looksSmashedYxToken(value)) return false;
   if (looksBrokenMathOcr(value) && value.length <= 96) return false;
   if (GARBLED_SIGNED_CHOICE.test(raw) || GARBLED_SIGNED_CHOICE.test(value)) return false;
