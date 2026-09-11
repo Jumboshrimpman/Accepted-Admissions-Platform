@@ -198,6 +198,11 @@ const FLAGGED_DROPS: Array<{
     choices: letters(["28/135", "35/135", "100/135", "107/135"]),
     figures: [{ url: `${figureUrl}-table`, alt: "Cropped table" }],
   },
+  {
+    id: "Q95",
+    prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+    choices: letters(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
+  },
 ];
 
 const FLAGGED_KEEPS: Array<{
@@ -214,11 +219,6 @@ const FLAGGED_KEEPS: Array<{
     id: "Q93",
     prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
     choices: letters(["(6,3)", "(3,6)", "(3,27)", "(27,3)"]),
-  },
-  {
-    id: "Q98",
-    prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
-    choices: letters(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
   },
   {
     id: "Q103",

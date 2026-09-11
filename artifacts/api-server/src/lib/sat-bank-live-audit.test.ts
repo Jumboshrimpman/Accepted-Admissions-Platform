@@ -34,6 +34,9 @@ import {
   looksSpacedDecimalChoice,
   looksSpacedGeometryLabels,
   looksStackedFractionDump,
+  looksSmashedStackedFraction,
+  looksSmashedChartHeaders,
+  hasUsableTableData,
   stemCitesDataTable,
   stemCitesMathDataTable,
   stemCitesVisual,
@@ -500,7 +503,10 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
   assert.equal(isStudentUsableQuizItem(q119), false);
 
   assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
-  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0\ny > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 and y > 0"), false);
   assert.equal(
     isStudentUsableMathQuizItem({
       prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
@@ -717,7 +723,8 @@ The table shows the results of a poll. A total of 803 voters selected at random 
   );
 
   assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
-  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0\ny > 0"), true);
   const q95 = {
     id: "q95-math",
     prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
@@ -825,6 +832,194 @@ II. The mean number of points per player for data set B is less than the mean fo
   assert.equal(canAssignDiagnostic(leaked, [cleanRw, cleanMath, ...junk]), false);
 });
 
+test("live audit after #76 rematerialize: served Q14/Q85/Q95 variants still drop", () => {
+  const pageCrop = [
+    {
+      url: "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p12-q17-left.png",
+      alt: "Question figure region page 12",
+    },
+  ];
+  const q14Choices = letterChoices([
+    "broccoli grown in soil containing mycorrhizal fungi had a slightly higher average mass than broccoli grown in soil that had been treated to kill fungi.",
+    "corn grown in soil containing mycorrhizal fungi had a higher average mass than broccoli grown in soil containing mycorrhizal fungi.",
+    "marigolds grown in soil containing mycorrhizal fungi had a much higher average mass than marigolds grown in soil that had been treated to kill fungi.",
+    "corn had the highest average mass of all three species grown in soil that had been treated to kill fungi, while marigolds had the lowest.",
+  ]);
+
+  const q14ScreenshotPrompt = `Effects of Mycorrhizal Fungi on 3 Plant Species
+Average mass of plants
+grown in soil containing Average mass of plants`;
+  assert.equal(looksSmashedChartHeaders(q14ScreenshotPrompt), true);
+  assert.equal(
+    isStudentUsableQuizItem({
+      prompt: q14ScreenshotPrompt,
+      section: "rw",
+      choices: q14Choices,
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+    "admin-visible Q14 headers without rows must drop",
+  );
+
+  const q14ServedPrompt = `Effects of Mycorrhizal Fungi on 3 Plant Species
+Average mass of plants
+grown in soil containing Average mass of plants
+Plant Mycorrhizal mycorrhizal fungi grown in soil treated
+species host (in grams) to kill fungi (in grams)
+Mycorrhizal fungi in soil benefits many plants, substantially increasing the mass of some. After several weeks, the student measured the plants’ average mass and was surprised to discover that ______
+Which choice most effectively uses data from the table to complete the statement?`;
+  const q14ServedStimulus = "Corn\tyes\t15.1\nMarigold\tyes\t10.2\nBroccoli\tno\t7.5";
+  assert.equal(looksSmashedChartHeaders(q14ServedPrompt), true);
+  assert.equal(hasUsableTableData(`${q14ServedPrompt}\n${q14ServedStimulus}`), false);
+  const q14Served = {
+    id: "q14-served",
+    prompt: q14ServedPrompt,
+    stimulus: q14ServedStimulus,
+    section: "rw" as const,
+    choices: q14Choices,
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: pageCrop,
+  };
+  const q14Audit = auditStudentQuizItem(q14Served);
+  assert.equal(q14Audit.ok, false, "rematerialized Q14 must not salvage a Corn/yes/15.1 fake table in stimulus");
+  assert.ok(q14Audit.reasons.includes("table_cite_without_values"));
+  assert.equal(isStudentUsableQuizItem(q14Served), false);
+
+  const q95Prompt =
+    "The point (8, 2) in the x y-plane is a solution to which of the following systems of inequalities?";
+  const q95Spaced = {
+    id: "q95-spaced",
+    prompt: q95Prompt,
+    section: "math" as const,
+    choices: letterChoices(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const q95Newline = {
+    ...q95Spaced,
+    id: "q95-newline",
+    choices: letterChoices(["x > 0\ny > 0", "x > 0\ny < 0", "x < 0\ny > 0", "x < 0\ny < 0"]),
+  };
+  const q95Glued = {
+    ...q95Spaced,
+    id: "q95-glued",
+    choices: letterChoices(["x > 0y > 0", "x > 0y < 0", "x < 0y > 0", "x < 0y < 0"]),
+  };
+  assert.equal(isStudentUsableMathQuizItem(q95Spaced), false, "bank/rematerialized spaced Q95 must drop");
+  assert.equal(isStudentUsableMathQuizItem(q95Newline), false, "newline-split Q95 must drop");
+  assert.equal(isStudentUsableMathQuizItem(q95Glued), false, "admin-smashed 0y Q95 must drop");
+  assert.ok(auditStudentQuizItem(q95Spaced).reasons.length > 0);
+
+  const q85Screenshot = `of the ballroom, where the length of each side of the
+model is 1
+10 times the length of the corresponding`;
+  const q85Bank = `The floor of a ballroom has an area of 600 square
+meters. An architect creates a scale model of the floor
+of the ballroom, where the length of each side of the
+model is 1
+10 times the length of the corresponding
+side of the actual floor of the ballroom. What is the
+area, in square meters, of the scale model?`;
+  assert.equal(looksSmashedStackedFraction(q85Screenshot), true);
+  assert.equal(looksSmashedStackedFraction(q85Bank), true);
+  assert.equal(looksSmashedStackedFraction("model is 1/10 times the length of the corresponding side"), false);
+  assert.equal(looksStackedFractionDump(q85Bank), false);
+  const q85 = {
+    id: "q85-math",
+    prompt: q85Bank,
+    section: "math" as const,
+    choices: letterChoices(["6", "10", "60", "150"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q85), false, "Q85 stacked 1/10 scale factor must drop");
+  assert.equal(
+    isStudentUsableMathQuizItem({ ...q85, prompt: q85Screenshot }),
+    false,
+    "admin-visible truncated Q85 stacked 1/10 must drop",
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      ...q85,
+      prompt:
+        "The floor of a ballroom has an area of 600 square meters. An architect creates a scale model of the floor of the ballroom, where the length of each side of the model is 1/10 times the length of the corresponding side of the actual floor. What is the area, in square meters, of the scale model?",
+    }),
+    true,
+    "slash-form 1/10 scale factor stays",
+  );
+
+  const cleanRw = {
+    id: "clean-rw",
+    sourceKey: "clean-rw",
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 1,
+    position: 1,
+    prompt:
+      "Particle physicists spend much of their time ______ what is invisible.\nWhich choice completes the text with the most logical and precise word or phrase?",
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "B",
+  };
+  const cleanMath = {
+    id: "clean-math",
+    sourceKey: "clean-math",
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "math" as const,
+    module: 1,
+    questionNumber: 1,
+    position: 20,
+    prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+    choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const junk = [
+    {
+      ...q14Served,
+      sourceKey: "q14-served",
+      collectionSlug: "sat-practice-test-4-digital",
+      examFamily: "sat",
+      module: 1,
+      questionNumber: 14,
+      position: 14,
+    },
+    {
+      ...q95Spaced,
+      sourceKey: "q95-spaced",
+      collectionSlug: "sat-practice-test-4-digital",
+      examFamily: "sat",
+      module: 2,
+      questionNumber: 5,
+      position: 95,
+    },
+    {
+      ...q85,
+      sourceKey: "q85-math",
+      collectionSlug: "sat-practice-test-10-digital",
+      examFamily: "sat",
+      module: 1,
+      questionNumber: 22,
+      position: 85,
+    },
+  ];
+  const composed = composeDiagnosticItems([cleanRw, cleanMath, ...junk], {
+    preferredCollectionSlug: "sat-practice-test-4-digital",
+  });
+  assert.equal(composed.selected.some((item) => item.id === "q14-served"), false);
+  assert.equal(composed.selected.some((item) => item.id === "q95-spaced"), false);
+  assert.equal(composed.selected.some((item) => item.id === "q85-math"), false);
+
+  const leaked = summarizeDiagnosticComposition([cleanRw, cleanMath, ...junk]);
+  assert.ok(leaked.residualJunk >= 3, "live served Q14/Q85/Q95 cannot report residualJunk===0");
+  assert.equal(canAssignDiagnostic(leaked, [cleanRw, cleanMath, ...junk]), false);
+});
+
 test("live audit: readable controls still stay", () => {
   assert.equal(
     isStudentUsableMathQuizItem({
@@ -855,6 +1050,17 @@ test("live audit: readable controls still stay", () => {
       choices: letterChoices(["selecting", "inspecting ~ ---~", "creating ~", "deciding"]),
       questionType: "mcq",
       correctAnswer: "B",
+    }),
+    true,
+  );
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt:
+        "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+      section: "math",
+      choices: letterChoices(["x > 0 and y > 0", "x > 0 and y < 0", "x < 0 and y > 0", "x < 0 and y < 0"]),
+      questionType: "mcq",
+      correctAnswer: "A",
     }),
     true,
   );

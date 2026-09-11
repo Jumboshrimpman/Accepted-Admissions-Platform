@@ -56,6 +56,10 @@ function isPlausibleDataTable(headers: string[], rows: string[][]): boolean {
   if (headers.some((header) => /^(?:which|what|how|the|for|this|that|best|most|complete)$/i.test(header))) {
     return false;
   }
+  if (headers.some((header) => /^-?\d+\.\d+$/.test(header))) return false;
+  const hasYesNo = headers.some((header) => /^(?:yes|no)$/i.test(header));
+  const hasNumericHeader = headers.some((header) => /^-?\d+(?:\.\d+)?$/.test(header));
+  if (hasYesNo && hasNumericHeader) return false;
   return true;
 }
 

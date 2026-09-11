@@ -651,7 +651,7 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
-  test("run-on inequality systems render as separate lines", () => {
+  test("run-on inequality systems are not student-usable", () => {
     mocks.questions[0]!.prompt =
       "The point (8, 2) in the x y-plane is a solution to which of the following systems of inequalities?";
     mocks.questions[0]!.stimulus = null;
@@ -662,11 +662,8 @@ describe("student attempt UI", () => {
       { id: "d", label: "D", text: "x < 0 y < 0" },
     ];
     render(<PortalAssignment />);
-    const first = screen.getAllByTestId("quiz-answer-choice")[0];
-    expect(first?.textContent).toMatch(/x > 0/);
-    expect(first?.textContent).toMatch(/y > 0/);
-    expect(first?.querySelector(".whitespace-pre-wrap")?.textContent).toBe("x > 0\ny > 0");
-    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByTestId("quiz-answer-choice")).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
   });
 
   test("slash-fraction quadratic choices stay visible", () => {
@@ -1136,7 +1133,7 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/x\/4 = -32/);
   });
 
-  test("Oct 2 Q92–98 drop OCR-garbage and wiped A–D items and keep readable Q93 and Q98", () => {
+  test("Oct 2 Q92–98 drop OCR-garbage and wiped A–D items and keep readable Q93", () => {
     const figure =
       "![Chipmunk line graph](https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p42-draw1.png)";
     mocks.questions = [
@@ -1206,7 +1203,8 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/point0,0 5/)).toBeNull();
     expect(screen.queryByText(/12x3/)).toBeNull();
     expect(screen.queryByText(/\(, x y\)/)).toBeNull();
-    expect(screen.getByText("Question 1 of 2")).toBeTruthy();
+    expect(screen.queryByText(/x > 0 y > 0/)).toBeNull();
+    expect(screen.getByText("Question 1 of 1")).toBeTruthy();
     expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/s \+ 7 = 27/);
     expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/r = 3/);
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/\(6,3\)/);

@@ -10,6 +10,7 @@ import {
   hasFullQuestionCrop,
   hasReadableStudentStem,
   hasRecoveredDataTable,
+  hasUsableTableData,
   hasSolvableCitedVisual,
   hasUsableChoiceText,
   isGenericPageNeighborFigure,
@@ -38,6 +39,8 @@ import {
   looksSmashedRadicalText,
   looksSpacedDecimalChoice,
   looksStackedFractionDump,
+  looksSmashedStackedFraction,
+  looksSmashedChartHeaders,
   looksMalformedFractionChoice,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
@@ -563,7 +566,9 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
   );
   assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
   assert.equal(formatStudentChoiceText("x < 0 y < 0"), "x < 0\ny < 0");
-  assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), false);
+  assert.equal(isStudentReadableChoiceText("x > 0\ny > 0"), false);
+  assert.equal(isStudentReadableChoiceText("x > 0 and y > 0"), true);
   assert.equal(
     formatStudentStemText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
     "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
@@ -693,6 +698,36 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   assert.equal(looksMalformedFractionChoice("7/4"), false);
   assert.equal(looksSmashedRadicalText("Circle A has a radius of n 3 and circle B has a radius"), true);
   assert.equal(looksStackedFractionDump("12 −2 = −2\nn t w\nThe given equation relates the variables"), true);
+  assert.equal(
+    looksSmashedStackedFraction(
+      "of the ballroom, where the length of each side of the\nmodel is 1\n10 times the length of the corresponding",
+    ),
+    true,
+  );
+  assert.equal(
+    looksSmashedStackedFraction(
+      "The floor of a ballroom has an area of 600 square\nmeters. An architect creates a scale model of the floor\nof the ballroom, where the length of each side of the\nmodel is 1\n10 times the length of the corresponding\nside of the actual floor of the ballroom. What is the\narea, in square meters, of the scale model?",
+    ),
+    true,
+  );
+  assert.equal(looksSmashedStackedFraction("model is 1/10 times the length"), false);
+  assert.equal(
+    looksSmashedChartHeaders(
+      "Effects of Mycorrhizal Fungi on 3 Plant Species\nAverage mass of plants\ngrown in soil containing Average mass of plants",
+    ),
+    true,
+  );
+  assert.equal(
+    extractPlainTextTable("Corn yes 15.1\nMarigold yes 10.2\nBroccoli no 7.5\nWhich choice uses data from the table?")
+      .table,
+    null,
+  );
+  assert.equal(
+    hasUsableTableData(
+      "Average mass of plants\ngrown in soil containing Average mass of plants\nCorn\tyes\t15.1\nMarigold\tyes\t10.2\nBroccoli\tno\t7.5",
+    ),
+    false,
+  );
   assert.equal(looksSmashedAlgebraText("2 x = −841\nHow many distinct real solutions?"), true);
   assert.equal(looksSmashedAlgebraChoice("y x p = 57 +"), true);
   assert.equal(looksSmashedAlgebraChoice("y px = + 57"), true);
@@ -704,8 +739,10 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   assert.equal(looksFlattenedFractionChoice("84ak2k"), true);
   assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
   assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
-  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), true);
   assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0\ny > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 and y > 0"), false);
   assert.equal(looksMalformedFractionChoice("51/904,"), true);
   assert.equal(
     stemCitesMathDataTable(
