@@ -74,7 +74,13 @@ const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
 const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+[+\-]\d+[A-Za-z][+\-]\d+[A-Za-z]\s*=/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
+/** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
 const GLUED_INEQUALITY_DIGIT_VAR = /\d[xy](?:\s*[<>≤≥]|$)/;
+const INEQUALITY_ATOM = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?/gi;
+const INEQUALITY_CONNECTOR = /\b(?:and|or)\b|[{},;]/;
+const SMASHED_CHART_HEADERS =
+  /average mass of plants[\s\S]{0,160}average mass of plants|grown in soil containing\s+Average mass/i;
+const STACKED_SCALE_FRACTION_BOTTOM = /^(\d{1,3})\s+(times|of|the|as)\b/i;
 const SMASHED_YX_PRODUCT = /\d+yx\b|\d+\s+y\s+x\b/;
 const ISOLATED_I_GLYPHS = /(?:^|\n).*?\d\s+I\s+I(?:\s|$)|(?:^|\n)\s*I(?:\s+I)+\s*(?:\n|$)/;
 const FLATTENED_PAREN_FRACTION = /\([^0-9)][^)]{0,24}\)[A-Za-z]/;
@@ -221,6 +227,7 @@ export function looksSmashedAlgebraText(text: string | null | undefined): boolea
   if (SPACED_FT_EQUALS.test(raw)) return true;
   if (MISSING_CARET_LEADING.test(raw)) return true;
   if (looksStackedFractionDump(raw)) return true;
+  if (looksSmashedStackedFraction(raw)) return true;
   if (looksSmashedRadicalText(raw)) return true;
   if (looksSmashedPiToken(raw)) return true;
   if (SMASHED_YX_PRODUCT.test(raw)) return true;
@@ -380,12 +387,23 @@ export function looksSmashedTrigToken(text: string | null | undefined): boolean 
   return SMASHED_TRIG_FN.test(text ?? "") || SMASHED_TRIG_FN.test(cleanOcrChoiceText(text));
 }
 
-/** `x>0y>0` / `x > 0y > 0` — inequalities smashed together. Spaced `x > 0 y > 0` stays. */
+/**
+ * Two inequalities in one choice without `and`/`or`/brace/comma.
+ * Covers `x>0y>0`, `x > 0y > 0`, bank `x > 0 y > 0`, and rematerialized
+ * `x > 0\ny > 0` (admin single-line inputs smash the newline to `0y`).
+ */
 export function looksGluedInequalityChoice(text: string | null | undefined): boolean {
-  const value = cleanOcrChoiceText(text).replace(/\s+/g, " ");
-  if (!value) return false;
-  if (GLUED_INEQUALITY_PAIR.test(value)) return true;
-  return GLUED_INEQUALITY_DIGIT_VAR.test(value);
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  const spaced = cleanOcrChoiceText(raw).replace(/\s+/g, " ");
+  const collapsed = raw.replace(/\s+/g, "");
+  if (GLUED_INEQUALITY_PAIR.test(spaced) || GLUED_INEQUALITY_PAIR.test(collapsed)) return true;
+  if (GLUED_INEQUALITY_DIGIT_VAR.test(spaced) || GLUED_INEQUALITY_DIGIT_VAR.test(collapsed)) {
+    return true;
+  }
+  const atoms = spaced.match(INEQUALITY_ATOM) ?? [];
+  if (atoms.length < 2) return false;
+  return !INEQUALITY_CONNECTOR.test(spaced) && !INEQUALITY_CONNECTOR.test(raw);
 }
 
 /** `42a(k+1)k`, `84ak2k`, `84a k` — slash dropped out of a fraction. */
@@ -456,6 +474,32 @@ export function looksStackedFractionDump(text: string | null | undefined): boole
     }
   }
   return false;
+}
+
+/**
+ * Live Q85: `model is 1` / `10 times the length` — a scale-factor fraction
+ * stacked as two lines with the bar dropped. Slash form `1/10 times` stays.
+ */
+export function looksSmashedStackedFraction(text: string | null | undefined): boolean {
+  const lines = (text ?? "").split("\n");
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const top = (lines[index] ?? "").trim();
+    const bottom = (lines[index + 1] ?? "").trim();
+    if (!top || !bottom) continue;
+    const topMatch = /(?:^|(?:\b(?:is|of|equals?|was|be)\s+))(\d{1,3})$/i.exec(top);
+    const bottomMatch = STACKED_SCALE_FRACTION_BOTTOM.exec(bottom);
+    if (!topMatch || !bottomMatch) continue;
+    const numerator = Number(topMatch[1]);
+    const denominator = Number(bottomMatch[1]);
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) continue;
+    if (numerator < 1 || numerator > 12 || denominator <= numerator) continue;
+    return true;
+  }
+  return false;
+}
+
+export function looksSmashedChartHeaders(text: string | null | undefined): boolean {
+  return SMASHED_CHART_HEADERS.test(text ?? "");
 }
 
 export function looksSmashedTableChoice(text: string | null | undefined): boolean {
@@ -652,6 +696,7 @@ function hasInlineNamedTableValues(text: string | null | undefined): boolean {
 }
 
 function hasUsableQuizTableData(text: string | null | undefined): boolean {
+  if (looksSmashedChartHeaders(text)) return false;
   if (looksIsolatedIGlyphs(text) || looksPipeBackslashOcr(text)) {
     return hasRecoveredQuizTable(text);
   }

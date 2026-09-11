@@ -521,7 +521,7 @@ test("rejects mangled coordinates, incomplete table crops, scrambled stems, and 
       questionType: "mcq",
       correctAnswer: "A",
     }),
-    true,
+    false,
   );
   assert.equal(
     isStudentUsableDiagnosticItem({
@@ -955,7 +955,7 @@ test("drops Oct 2 Q83–91 figure-only or wiped A–D items; keeps intact slash-
   );
 });
 
-test("drops Oct 2 Q92–98 OCR-garbage and wiped A–D items; keeps readable Q93 and Q98", () => {
+test("drops Oct 2 Q92–98 OCR-garbage and wiped A–D items; keeps readable Q93", () => {
   const letterChoices = (texts: string[]) =>
     ["A", "B", "C", "D"].map((label, index) => ({
       id: label.toLowerCase(),
@@ -1032,7 +1032,7 @@ test("drops Oct 2 Q92–98 OCR-garbage and wiped A–D items; keeps readable Q93
       questionType: "mcq",
       correctAnswer: "A",
     }),
-    true,
+    false,
   );
 });
 
@@ -1305,8 +1305,18 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q5"),
-    false,
-    "run-on inequality systems stay usable after spacing is fixed at render time",
+    true,
+    "run-on / stacked inequality systems are unreadable OCR, not salvageable at render time",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-rw-m1-q17"),
+    true,
+    "RW mycorrhizal chart with leftover headers and incomplete Corn/yes/15.1 salvage must drop",
+  );
+  assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt10-math-m1-q22"),
+    true,
+    "Q85 stacked 1/10 scale-factor fraction must drop",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q12"),

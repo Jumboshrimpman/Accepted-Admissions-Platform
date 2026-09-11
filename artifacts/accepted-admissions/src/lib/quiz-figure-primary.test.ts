@@ -36,6 +36,8 @@ import {
   looksMalformedFractionChoice,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
+  looksSmashedStackedFraction,
+  looksSmashedChartHeaders,
   looksSmashedYxToken,
   looksSmashedTrigToken,
   stemCitesMathDataTable,
@@ -261,7 +263,9 @@ test("rejects missing operators, pipe OCR, and ?-as-operator; keeps slash fracti
 
 test("formats run-on inequalities and rejects mangled coordinates, table crops, and orphan figures", () => {
   assert.equal(formatStudentChoiceText("x > 0 y > 0"), "x > 0\ny > 0");
-  assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), true);
+  assert.equal(isStudentReadableChoiceText("x > 0 y > 0"), false);
+  assert.equal(isStudentReadableChoiceText("x > 0\ny > 0"), false);
+  assert.equal(isStudentReadableChoiceText("x > 0 and y > 0"), true);
   assert.equal(
     formatStudentStemText("s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?"),
     "s + 7 = 27\nr = 3\nWhat is thesolution (r, s) tothegivensystemofequations?",
@@ -751,8 +755,60 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
   assert.equal(looksFlattenedFractionChoice("84ak2k"), true);
   assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
   assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
-  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), true);
   assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0\ny > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 and y > 0"), false);
+  assert.equal(
+    looksSmashedStackedFraction(
+      "of the ballroom, where the length of each side of the\nmodel is 1\n10 times the length of the corresponding",
+    ),
+    true,
+  );
+  assert.equal(looksSmashedStackedFraction("model is 1/10 times the length"), false);
+  assert.equal(
+    looksSmashedChartHeaders(
+      "Effects of Mycorrhizal Fungi on 3 Plant Species\nAverage mass of plants\ngrown in soil containing Average mass of plants",
+    ),
+    true,
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "Effects of Mycorrhizal Fungi on 3 Plant Species\nAverage mass of plants\ngrown in soil containing Average mass of plants\nWhich choice most effectively uses data from the table to complete the statement?",
+      stimulus: "Corn\tyes\t15.1\nMarigold\tyes\t10.2\nBroccoli\tno\t7.5",
+      choices: letters([
+        "broccoli grown in soil containing mycorrhizal fungi had a slightly higher average mass than broccoli grown in soil that had been treated to kill fungi.",
+        "corn grown in soil containing mycorrhizal fungi had a higher average mass than broccoli grown in soil containing mycorrhizal fungi.",
+        "marigolds grown in soil containing mycorrhizal fungi had a much higher average mass than marigolds grown in soil that had been treated to kill fungi.",
+        "corn had the highest average mass of all three species grown in soil that had been treated to kill fungi, while marigolds had the lowest.",
+      ]),
+      questionType: "mcq",
+    }),
+    false,
+    "served Q14 with leftover headers + Corn/yes/15.1 stimulus is unanswerable",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt:
+        "The floor of a ballroom has an area of 600 square meters. An architect creates a scale model of the floor of the ballroom, where the length of each side of the model is 1\n10 times the length of the corresponding side of the actual floor. What is the area, in square meters, of the scale model?",
+      stimulus: null,
+      choices: letters(["6", "10", "60", "150"]),
+      questionType: "mcq",
+    }),
+    false,
+    "Q85 stacked 1/10 scale factor is unanswerable",
+  );
+  assert.equal(
+    isStudentAnswerableQuizQuestion({
+      prompt: "The point (8, 2) in the x y-plane is a solution to which of the following systems of inequalities?",
+      stimulus: null,
+      choices: letters(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
+      questionType: "mcq",
+    }),
+    false,
+    "Q95 spaced/newline inequality systems are unanswerable",
+  );
   assert.equal(
     isStudentAnswerableQuizQuestion({
       prompt:
