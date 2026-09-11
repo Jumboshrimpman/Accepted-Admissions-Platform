@@ -128,13 +128,31 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.equal(preview.body.user.id, fixture.student.id);
     assert.equal(preview.body.user.displayName, fixture.student.displayName);
     assert.equal(preview.body.user.role, "student");
-    assert.deepEqual(preview.body.previewOffer, {
-      name: "Single SAT Session",
-      description:
-        "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
-      priceCents: 13000,
-      durationMinutes: 60,
-    });
+    assert.equal(preview.body.previewOffer.name, "Single SAT Session");
+    assert.equal(preview.body.previewOffer.priceCents, 13000);
+    assert.equal(preview.body.previewOffer.durationMinutes, 60);
+    assert.equal(Array.isArray(preview.body.previewOffers), true);
+    assert.equal(
+      preview.body.previewOffers.some(
+        (offer: { slug?: string; name: string }) =>
+          offer.slug === "single-sat-session" || offer.name === "Single SAT Session",
+      ),
+      true,
+    );
+    assert.equal(
+      preview.body.previewOffers.some(
+        (offer: { slug?: string; name: string }) =>
+          offer.slug === "ten-sat-session-package" ||
+          offer.name === "Ten SAT Session Package",
+      ),
+      true,
+    );
+    if (preview.body.previewBooking.availability) {
+      assert.equal(
+        preview.body.previewBooking.availability.tutor.name,
+        fixture.satTutor.displayName,
+      );
+    }
     assert.equal(preview.body.previewFinancials.readOnly, true);
     assert.equal(Array.isArray(preview.body.previewFinancials.payments), true);
     assert.equal(Array.isArray(preview.body.previewFinancials.invoices), true);

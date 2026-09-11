@@ -7,6 +7,7 @@ import {
   TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
   isAcceptedSatCatalogProduct,
   isRetiredSatTestProduct,
+  previewOffersFromCatalogProducts,
 } from "./sat-catalog.ts";
 
 test("SAT catalog lists only live hourly and package prices", () => {
@@ -79,4 +80,16 @@ test("checkout allowlist rejects the retired test SKU and price drift", () => {
     }),
     true,
   );
+});
+
+test("preview offers load both active catalog products", () => {
+  const offers = previewOffersFromCatalogProducts(
+    ACCEPTED_SAT_CATALOG.map((product) => ({ ...product, active: true })),
+  );
+  assert.deepEqual(
+    offers.map((offer) => offer.slug),
+    ["single-sat-session", "ten-sat-session-package"],
+  );
+  assert.equal(offers[0]?.priceCents, SINGLE_SAT_SESSION_PRICE_CENTS);
+  assert.equal(offers[1]?.priceCents, TEN_SAT_SESSION_PACKAGE_PRICE_CENTS);
 });

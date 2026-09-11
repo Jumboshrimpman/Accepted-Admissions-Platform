@@ -53,3 +53,37 @@ export function isAcceptedSatCatalogProduct(product: {
       Number(product.totalPriceCents) === expected.totalPriceCents,
   );
 }
+
+export type AdminClientPreviewOffer = {
+  slug: string;
+  name: string;
+  description: string;
+  priceCents: number;
+  durationHours: number;
+  durationMinutes: 60;
+};
+
+/** Map the live accepted SAT catalog into administrator client-preview purchase offers. */
+export function previewOffersFromCatalogProducts(
+  products: Array<{
+    slug: string;
+    name: string;
+    description: string;
+    active: boolean;
+    durationHours: number;
+    totalPriceCents: number;
+  }>,
+): AdminClientPreviewOffer[] {
+  return products
+    .filter((product) => isAcceptedSatCatalogProduct(product))
+    .slice()
+    .sort((left, right) => Number(left.durationHours) - Number(right.durationHours))
+    .map((product) => ({
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      priceCents: Number(product.totalPriceCents),
+      durationHours: Number(product.durationHours),
+      durationMinutes: 60,
+    }));
+}

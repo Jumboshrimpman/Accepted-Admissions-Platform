@@ -22,11 +22,13 @@ function statusLabel(status: string): string {
 export function FinancialCard({
   previewData,
   previewOffer,
+  previewOffers,
   adminPreview = false,
   offPlatformBilling = false,
 }: {
   previewData?: FinancialSummary;
   previewOffer?: AdminClientPreviewOffer;
+  previewOffers?: AdminClientPreviewOffer[];
   adminPreview?: boolean;
   offPlatformBilling?: boolean;
 }) {
@@ -132,15 +134,31 @@ export function FinancialCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {adminPreview && previewOffer && (
+        {adminPreview && (previewOffers?.length || previewOffer) && (
           <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">One-time offer</p>
-                <p className="mt-1 font-semibold">{previewOffer.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{previewOffer.description}</p>
-              </div>
-              <p className="text-lg font-semibold">${(previewOffer.priceCents / 100).toFixed(2)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              SAT purchase offers
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {(previewOffers?.length ? previewOffers : previewOffer ? [previewOffer] : []).map((offer) => {
+                const credits = Math.round(offer.durationHours ?? (offer.priceCents >= 130_000 ? 10 : 1));
+                return (
+                  <div
+                    key={offer.slug ?? offer.name}
+                    className="rounded-xl border bg-background/80 p-3"
+                    data-testid={`preview-sat-offer-${offer.slug ?? offer.name}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold">{offer.name}</p>
+                      <p className="text-lg font-semibold">${(offer.priceCents / 100).toFixed(2)}</p>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{offer.description}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {credits} prepaid hour{credits === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
               Checkout is unavailable in the administrator preview. A verified purchase provides prepaid session credits that students book on Xavier or Eunice’s calendar.

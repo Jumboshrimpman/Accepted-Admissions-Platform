@@ -677,7 +677,11 @@ export function ClientPreviewBookingCard({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <div className="flex items-start gap-2">
               <Link2 className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>This tutor&apos;s Google Calendar is disconnected, so no times can be displayed.</span>
+              <span>
+                {availability?.tutor.name
+                  ? `${availability.tutor.name}’s Google Calendar is disconnected, so no times can be displayed.`
+                  : "This tutor’s Google Calendar is disconnected, so no times can be displayed."}
+              </span>
             </div>
             <Button disabled variant="outline" className="mt-4 rounded-full">
               Booking disabled in preview
