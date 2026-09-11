@@ -26,8 +26,10 @@ import {
   looksSpacedDecimalChoice,
   looksExtractionMarkerBleed,
   normalizeLetterAnswer,
+  stemCitesDataTable,
   stemCitesMathDataTable,
   stemCitesVisual,
+  looksSmashedYxToken,
   stripChartHeaderFragments,
   stripSatBankFigureComments,
   type BankFigureLike,
@@ -156,11 +158,20 @@ function stemHaystack(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">
   return `${stripSatBankFigureComments(input.prompt)}\n${stripSatBankFigureComments(input.stimulus)}`;
 }
 
+function stemCitesAnyDataTable(input: Pick<DiagnosticQualityInput, "prompt" | "stimulus">): boolean {
+  const haystack = stemHaystack(input);
+  return stemCitesDataTable(haystack) || stemCitesMathDataTable(haystack);
+}
+
 function stemReferencesMissingVisual(input: DiagnosticQualityInput): boolean {
   const haystack = stemHaystack(input);
+  if (stemCitesAnyDataTable(input)) {
+    // A page PNG / full-question crop is not table values.
+    return !hasUsableTableData(haystack);
+  }
   if (!stemCitesVisual(haystack)) return false;
-  if (hasRecoveredDataTable(haystack) && /table/i.test(haystack)) return false;
-  return !hasRenderableFigures(input);
+  if (hasUsableTableData(haystack) && /table|histogram|chart|graph/i.test(haystack)) return false;
+  return !hasSolvableCitedVisual(input);
 }
 
 export function quizSectionFromBankMeta(input: {
@@ -203,10 +214,9 @@ function mathDependsOnVisual(input: DiagnosticQualityInput): boolean {
 
 function mathHasRequiredVisual(input: DiagnosticQualityInput): boolean {
   const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
-  // Cite-without-data is never solvable. Recovered table values or a real
-  // full-question / figure-primary crop only — not a page-neighbor PNG.
-  if (stemCitesMathDataTable(haystack) && !hasUsableTableData(haystack)) {
-    return hasFullQuestionCrop(input);
+  // Table cites need recovered values. A figure PNG is not the table.
+  if (stemCitesAnyDataTable(input) && !hasUsableTableData(haystack)) {
+    return false;
   }
   if (mathDependsOnVisual(input)) {
     return hasSolvableCitedVisual(input);
@@ -236,10 +246,12 @@ function looksUnsureMathPresentation(input: DiagnosticQualityInput): boolean {
 
 /**
  * Math-only bar: if a student cannot solve the item as shown, drop it.
- * A cited table/graph/figure needs recovered values or a real full-question
- * crop — never a generic page-neighbor PNG. Extraction-marker wrappers,
- * smashed trig/algebra, and unreadable choices never pass as text.
- * Hard OCR may ship only as figure-primary (official image + clean A–D).
+ * A cited table needs recovered values — a figure PNG is never the table.
+ * A cited graph/figure/histogram needs recovered values or a real
+ * full-question crop. Generic page-neighbor PNGs do not count.
+ * Extraction-marker wrappers, smashed trig/algebra, and unreadable
+ * choices never pass as text. Hard OCR may ship only as figure-primary
+ * (official image + clean A–D).
  */
 export function isStudentUsableMathQuizItem(input: DiagnosticQualityInput): boolean {
   return auditStudentQuizItem({ ...input, section: input.section ?? "math" }).ok;
@@ -257,10 +269,23 @@ function choiceFailureReasons(
     if (looksSpacedDecimalChoice(text)) reasons.add("spaced_decimals");
     if (looksFlattenedFractionChoice(text)) reasons.add("flattened_fractions");
     if (looksSmashedTableChoice(text)) reasons.add("flattened_xy_table");
-    if (looksSmashedAlgebraChoice(text) || looksSmashedAlgebraText(text)) reasons.add("smashed_algebra");
+    if (looksSmashedAlgebraChoice(text) || looksSmashedAlgebraText(text) || looksSmashedYxToken(text)) {
+      reasons.add("smashed_algebra");
+    }
     if (looksGluedInequalityChoice(text)) reasons.add("smashed_algebra");
   }
   return [...reasons];
+}
+
+function classifyVisualFailures(input: DiagnosticQualityInput): StudentUsableFailureReason[] {
+  const reasons: StudentUsableFailureReason[] = [];
+  const haystack = stemHaystack(input);
+  const tableCiteWithoutValues = stemCitesAnyDataTable(input) && !hasUsableTableData(haystack);
+  if (tableCiteWithoutValues) reasons.push("table_cite_without_values");
+  if (stemCitesVisual(haystack) && !mathHasRequiredVisual(input)) {
+    if (!tableCiteWithoutValues) reasons.push("cited_visual_without_solvable_figure");
+  }
+  return reasons;
 }
 
 function classifyMathFailures(input: DiagnosticQualityInput): StudentUsableFailureReason[] {
@@ -277,12 +302,7 @@ function classifyMathFailures(input: DiagnosticQualityInput): StudentUsableFailu
   }
   if (looksExtractionMarkerBleed(haystack)) reasons.push("extraction_marker_bleed");
 
-  const tableCiteWithoutValues =
-    stemCitesMathDataTable(haystack) && !hasUsableTableData(haystack) && !hasFullQuestionCrop(input);
-  if (tableCiteWithoutValues) reasons.push("table_cite_without_values");
-  if (mathDependsOnVisual(input) && !mathHasRequiredVisual(input)) {
-    if (!tableCiteWithoutValues) reasons.push("cited_visual_without_solvable_figure");
-  }
+  reasons.push(...classifyVisualFailures(input));
   if (mathDependsOnVisual(input) && looksExplodedOcrTable(haystack) && !hasFullQuestionCrop(input)) {
     reasons.push("exploded_ocr_table");
   }
@@ -327,16 +347,23 @@ function classifyRwFailures(input: DiagnosticQualityInput): StudentUsableFailure
   }
   if (looksExtractionMarkerBleed(stemHaystack(input))) reasons.push("extraction_marker_bleed");
   if (!hasReadableStudentStem(input)) reasons.push("unreadable_stem");
-  if (isCleanTextMcqItem(input)) return [...new Set(reasons)];
+  reasons.push(...classifyVisualFailures(input));
+  if (isCleanTextMcqItem(input) && reasons.length === 0) return [];
   if (isGarbledItem(input) || smashedExtract(input)) {
     reasons.push(isGarbledItem(input) ? "garbled_extract" : "smashed_extract");
   }
-  if (stemReferencesMissingVisual(input)) reasons.push("cited_visual_without_solvable_figure");
+  if (stemReferencesMissingVisual(input) && !reasons.includes("table_cite_without_values")) {
+    reasons.push("cited_visual_without_solvable_figure");
+  }
   if (
     !hasRenderableFigures(input) &&
     !hasRecoveredDataTable(`${input.prompt ?? ""}\n${input.stimulus ?? ""}`)
   ) {
-    if (!reasons.includes("cited_visual_without_solvable_figure") && !reasons.includes("unreadable_stem")) {
+    if (
+      !reasons.includes("cited_visual_without_solvable_figure") &&
+      !reasons.includes("table_cite_without_values") &&
+      !reasons.includes("unreadable_stem")
+    ) {
       reasons.push("unreadable_stem");
     }
   }

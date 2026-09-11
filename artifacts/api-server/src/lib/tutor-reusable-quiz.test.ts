@@ -119,8 +119,9 @@ test("rejects math items a student cannot solve as shown", () => {
           ...mathGraph,
           figures: [
             {
-              url: "https://app.acceptedadmissions.org/media/sat-bank/pack/graph.png",
-              alt: "Graph of y = f(x)",
+              url: "https://app.acceptedadmissions.org/media/sat-bank/pack/q-question.png",
+              alt: "Question region including choices A–D",
+              role: "question_region",
             },
           ],
         },

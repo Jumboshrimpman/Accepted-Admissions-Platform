@@ -43,6 +43,9 @@ import {
   looksGluedInequalityChoice,
   looksHardOcrMathRisk,
   looksSmashedTrigToken,
+  looksSmashedYxToken,
+  looksIsolatedIGlyphs,
+  stemCitesDataTable,
   stemCitesMathDataTable,
   looksAxisTickBleed,
   looksSpacedGeometryLabels,
@@ -702,6 +705,7 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   assert.equal(looksFlattenedFractionChoice("42a(k+1)/k"), false);
   assert.equal(looksGluedInequalityChoice("x>0y>0"), true);
   assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
   assert.equal(looksMalformedFractionChoice("51/904,"), true);
   assert.equal(
     stemCitesMathDataTable(
@@ -713,6 +717,21 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
     stemCitesMathDataTable("Which choice most effectively uses data from the table to complete the text?"),
     false,
   );
+  assert.equal(
+    stemCitesDataTable("Which choice most effectively uses data from the table to complete the text?"),
+    true,
+  );
+  assert.equal(
+    stemCitesDataTable(
+      "Effects of Mycorrhizal Fungi on 3 Plant Species\nAverage mass of plants grown in soil containing",
+    ),
+    true,
+  );
+  assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
+  assert.equal(looksSmashedYxToken("3 = 4 + 17yx"), true);
+  assert.equal(looksIsolatedIGlyphs("Angel Cruz 483 I I\nTerry Smith 320"), true);
+  assert.equal(looksStrippedRadicalChoice("20 20 2"), true);
+  assert.equal(stemCitesVisual("The histogram summarizes data set A."), true);
   assert.equal(isStudentReadableChoiceText("y = 57"), true);
   assert.equal(isStudentReadableChoiceText("V(x) = x(x + 9)(x + 7)"), true);
   assert.equal(looksIncompleteMathParens("x 16( + 15) ? Which expression is equivalent to"), true);

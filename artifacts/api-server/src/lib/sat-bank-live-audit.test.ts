@@ -10,6 +10,7 @@ import {
   isStudentUsableMathQuizItem,
   isStudentUsableQuizItem,
   isStudentUsableServedQuestion,
+  summarizeDiagnosticComposition,
 } from "./sat-bank-diagnostic-quality.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
@@ -27,9 +28,13 @@ import {
   looksSmashedRadicalText,
   looksSmashedTableChoice,
   looksSmashedTrigToken,
+  looksSmashedYxToken,
+  looksIsolatedIGlyphs,
+  looksStrippedRadicalChoice,
   looksSpacedDecimalChoice,
   looksSpacedGeometryLabels,
   looksStackedFractionDump,
+  stemCitesDataTable,
   stemCitesMathDataTable,
   stemCitesVisual,
 } from "./sat-bank-figure-primary.ts";
@@ -626,6 +631,198 @@ test("live audit: fail-closed cannot assign a diagnostic built only from dirty m
   assert.equal(composition.usable, false);
   assert.ok(composition.shortfall.mathCount > 0);
   assert.equal(canAssignDiagnostic(composition, selected), false);
+});
+
+test("live audit after #74 rematerialize: RW missing table, 0y, 17yx, histogram still drop", () => {
+  const pageCrop = [
+    {
+      url: "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/p12-q17-left.png",
+      alt: "Question figure region page 12",
+    },
+  ];
+  const fullCrop = [
+    {
+      url: "https://app.acceptedadmissions.org/media/sat-bank/pack/q-question.png",
+      alt: "Question region including choices A–D",
+      role: "question_region",
+    },
+  ];
+
+  const q14Prompt = `Effects of Mycorrhizal Fungi on 3 Plant Species
+Average mass of plants grown in soil containing
+Average mass of plants grown in soil that had been treated to kill fungi
+Mycorrhizal fungi in soil benefits many plants, substantially increasing the mass of some. After several weeks, the student measured the plants’ average mass and was surprised to discover that ______
+Which choice most effectively uses data from the table to complete the statement?`;
+  assert.equal(stemCitesDataTable(q14Prompt), true, "RW Q14 chart/table cite must fire without the word table in the title");
+  assert.equal(isMathQuizItem({ prompt: q14Prompt, section: "rw" }), false);
+  const q14 = {
+    id: "q14-rw",
+    prompt: q14Prompt,
+    section: "rw" as const,
+    choices: letterChoices([
+      "broccoli grown in soil containing mycorrhizal fungi had a slightly higher average mass than broccoli grown in soil that had been treated to kill fungi.",
+      "corn grown in soil containing mycorrhizal fungi had a higher average mass than broccoli grown in soil containing mycorrhizal fungi.",
+      "marigolds grown in soil containing mycorrhizal fungi had a much higher average mass than marigolds grown in soil that had been treated to kill fungi.",
+      "corn had the highest average mass of all three species grown in soil that had been treated to kill fungi, while marigolds had the lowest.",
+    ]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: pageCrop,
+  };
+  const q14Audit = auditStudentQuizItem(q14);
+  assert.equal(q14Audit.ok, false, "RW Q14 table/chart cite without recovered values must drop");
+  assert.ok(q14Audit.reasons.includes("table_cite_without_values"));
+  assert.equal(isStudentUsableQuizItem(q14), false);
+  assert.equal(
+    isStudentUsableQuizItem({ ...q14, figures: fullCrop }),
+    false,
+    "a full-question crop is not table values",
+  );
+
+  const q68Prompt =
+    "For the linear function f, the table shows three values of x and their corresponding values of f(x). Which equation defines f(x)?";
+  const q68 = {
+    id: "q68-math",
+    prompt: q68Prompt,
+    section: "math" as const,
+    choices: letterChoices(["f(x)=3x+29", "f(x)=29x+32", "f(x)=35x+29", "f(x)=32x+35"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: fullCrop,
+  };
+  assert.ok(auditStudentQuizItem(q68).reasons.includes("table_cite_without_values"));
+  assert.equal(
+    isStudentUsableMathQuizItem(q68),
+    false,
+    "Q68 table cite without values must drop even with a full-question crop",
+  );
+
+  const q93Prompt = `Poll Results
+Angel Cruz 483 I I
+Terry Smith 320
+The table shows the results of a poll. A total of 803 voters selected at random were asked which candidate they would vote for. According to the poll, if 6,424 people vote in the election, by how many votes would Angel Cruz be expected to win?`;
+  assert.equal(looksIsolatedIGlyphs(q93Prompt), true);
+  assert.equal(stemCitesMathDataTable(q93Prompt), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: q93Prompt,
+      section: "math",
+      choices: letterChoices(["163", "1,304", "3,864", "5,621"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: pageCrop,
+    }),
+    false,
+    "Q93 named-pair salvage cannot hide I I extraction junk",
+  );
+
+  assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
+  assert.equal(looksGluedInequalityChoice("x > 0 y > 0"), false);
+  const q95 = {
+    id: "q95-math",
+    prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
+    section: "math" as const,
+    choices: letterChoices(["x > 0y > 0", "x > 0y < 0", "x < 0y > 0", "x < 0y < 0"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q95), false, "Q95 0y glued inequalities must drop");
+  assert.ok(auditStudentQuizItem(q95).reasons.includes("smashed_algebra"));
+
+  assert.equal(looksSmashedYxToken("3 = 4 + 17yx"), true);
+  assert.equal(looksSmashedYxToken("3 = 4 + 17 y x"), true);
+  const q112Prompt = `3 = 4 + 17yx
+−3 = 9 − 23yx
+The solution to the given system of equations is , 39 ( ). What is the value of x?`;
+  const q112 = {
+    id: "q112-math",
+    prompt: q112Prompt,
+    section: "math" as const,
+    choices: letterChoices(["−18", "−6", "6", "18"]),
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  assert.equal(isStudentUsableMathQuizItem(q112), false, "Q112 17yx system smash must drop");
+  assert.ok(auditStudentQuizItem(q112).reasons.length > 0);
+
+  assert.equal(looksStrippedRadicalChoice("20 20 2"), true);
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt:
+        "A square is inscribed in a circle. The radius of the circle is 20 2 inches. What is the side length, in 2 inches, of the square?",
+      section: "math",
+      choices: letterChoices(["20 20 2", "2", "2/20", "40"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    }),
+    false,
+    "Q115 stripped-radical extraction smash must drop",
+  );
+
+  const q116Prompt = `The histogram summarizes data set A, which represents the number of points per player earned by 50 players of a game. A new player earns 18 points playing the game, and this number of points is added to data set A to create data set B with 51 values.
+Which of the following must be true?
+I. The median number of points per player for data set B is less than the median for data set A.
+II. The mean number of points per player for data set B is less than the mean for data set A.`;
+  assert.equal(stemCitesVisual(q116Prompt), true, "histogram is a cited visual");
+  assert.equal(
+    isStudentUsableMathQuizItem({
+      prompt: q116Prompt,
+      section: "math",
+      choices: letterChoices(["I only", "II only", "I and II", "Neither I nor II"]),
+      questionType: "mcq",
+      correctAnswer: "B",
+      figures: pageCrop,
+    }),
+    false,
+    "Q116 histogram cite without recovered values or a real full-question crop must drop",
+  );
+
+  const cleanRw = {
+    id: "clean-rw",
+    sourceKey: "clean-rw",
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 1,
+    position: 1,
+    prompt:
+      "Particle physicists spend much of their time ______ what is invisible.\nWhich choice completes the text with the most logical and precise word or phrase?",
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "B",
+  };
+  const cleanMath = {
+    id: "clean-math",
+    sourceKey: "clean-math",
+    collectionSlug: "sat-practice-test-4-digital",
+    examFamily: "sat",
+    section: "math" as const,
+    module: 1,
+    questionNumber: 1,
+    position: 20,
+    prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+    choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const junk = [
+    { ...q14, sourceKey: "q14-rw", collectionSlug: "sat-practice-test-4-digital", examFamily: "sat", module: 1, questionNumber: 14, position: 14 },
+    { ...q68, sourceKey: "q68-math", collectionSlug: "sat-practice-test-4-digital", examFamily: "sat", module: 1, questionNumber: 8, position: 68 },
+    { ...q95, sourceKey: "q95-math", collectionSlug: "sat-practice-test-4-digital", examFamily: "sat", module: 2, questionNumber: 5, position: 95 },
+    { ...q112, sourceKey: "q112-math", collectionSlug: "sat-practice-test-4-digital", examFamily: "sat", module: 2, questionNumber: 18, position: 112 },
+  ];
+  const composed = composeDiagnosticItems([cleanRw, cleanMath, ...junk], {
+    preferredCollectionSlug: "sat-practice-test-4-digital",
+  });
+  assert.equal(composed.selected.some((item) => item.id === "q14-rw"), false);
+  assert.equal(composed.selected.some((item) => item.id === "q68-math"), false);
+  assert.equal(composed.selected.some((item) => item.id === "q95-math"), false);
+  assert.equal(composed.selected.some((item) => item.id === "q112-math"), false);
+
+  const leaked = summarizeDiagnosticComposition([cleanRw, cleanMath, ...junk]);
+  assert.ok(leaked.residualJunk >= 4, "served junk in a composed set cannot report residualJunk===0");
+  assert.equal(canAssignDiagnostic(leaked, [cleanRw, cleanMath, ...junk]), false);
 });
 
 test("live audit: readable controls still stay", () => {
