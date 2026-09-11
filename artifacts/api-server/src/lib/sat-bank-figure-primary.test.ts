@@ -45,6 +45,7 @@ import {
   looksMalformedFractionChoice,
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
+  looksGluedMinusSpacing,
   looksHardOcrMathRisk,
   looksSmashedTrigToken,
   looksSmashedYxToken,
@@ -628,6 +629,25 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
     looksBrokenMathOcr("2 - 4x - 7x = -36\nWhat is the positive solution to the given equation?"),
     false,
   );
+  assert.equal(looksGluedMinusSpacing("y-5x=6"), true);
+  assert.equal(looksGluedMinusSpacing("y −5x = 6"), true);
+  assert.equal(looksGluedMinusSpacing("V(x)=9x(x-7)"), true);
+  assert.equal(looksGluedMinusSpacing("V(x) = 9x(x −7)"), true);
+  assert.equal(looksGluedMinusSpacing("y=4x-6"), true);
+  assert.equal(looksGluedMinusSpacing("y = 4x −6"), true);
+  assert.equal(looksGluedMinusSpacing("2 - 4x"), false);
+  assert.equal(looksGluedMinusSpacing("y - 5x = 6"), false);
+  assert.equal(looksGluedMinusSpacing("V(x) = 9x(x - 7)"), false);
+  assert.equal(looksGluedMinusSpacing("y = 4x - 6"), false);
+  assert.equal(looksGluedMinusSpacing("y = −6x + 4"), false);
+  assert.equal(looksGluedMinusSpacing("(-7)"), false);
+  assert.equal(looksGluedMinusSpacing("the xy-plane"), false);
+  assert.equal(looksBrokenMathOcr("y-5x=6\nWhat is the best interpretation of 6?"), true);
+  assert.equal(looksBrokenMathOcr("The equation y - 5x = 6 represents the relationship."), false);
+  assert.equal(isStudentReadableChoiceText("V(x)=9x(x-7)"), false);
+  assert.equal(isStudentReadableChoiceText("V(x) = 9x(x - 7)"), true);
+  assert.equal(isStudentReadableChoiceText("y=4x-6"), false);
+  assert.equal(isStudentReadableChoiceText("y = 4x - 6"), true);
   assert.equal(isStudentReadableChoiceText("7/4"), true);
   assert.equal(
     looksLeakedNextQuestionChoice(

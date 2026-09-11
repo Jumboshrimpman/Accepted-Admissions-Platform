@@ -73,6 +73,12 @@ const SMASHED_IF_SEGMENT = /\bIf\s+[A-Z]{2}\s+\d+(?:\s+what\b|\s*$)/i;
 const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
 /** Glued compact poly OCR: `2-4x-7x=` / `2 –4x –7x =`. Spaced `2 - 4x - 7x =` stays. */
 const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+\s*[+\-−–]\d+[A-Za-z]\s*[+\-−–]\d+[A-Za-z]\s*=/;
+/** `4x-6` / `4x −6` — coefficient+var glued to the following number. */
+const GLUED_MINUS_COEFF_VAR = /\d[A-Za-z]\s*[−–-]\d/;
+/** `2-4x` / `2 −4x` — leading number glued onto the next coeff+var. */
+const GLUED_MINUS_LEADING_NUM = /\d\s*[−–-]\d+[A-Za-z]/;
+/** Isolated var: `y-5`, `x −7`. Not `COVID-19` (letter before the var). */
+const GLUED_MINUS_ISOLATED_VAR = /(?<![A-Za-z])[A-Za-z]\s*[−–-]\d/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
 /** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
@@ -223,6 +229,7 @@ export function looksSmashedAlgebraText(text: string | null | undefined): boolea
   if (SIN_COS_OCR.test(raw)) return true;
   if (looksSmashedTrigToken(raw)) return true;
   if (COMPACT_POLY_EQ.test(raw)) return true;
+  if (looksGluedMinusSpacing(raw)) return true;
   if (MISSING_CARET_GROWTH_SUM.test(raw) && !/\^/.test(raw)) return true;
   if (LEADING_EQ_SPLIT_NUM.test(raw)) return true;
   if (SPACED_FT_EQUALS.test(raw)) return true;
@@ -245,7 +252,26 @@ export function looksSmashedAlgebraChoice(text: string | null | undefined): bool
   if (DUPLICATED_MATH_IDENT.test(value) && /=/.test(value)) return true;
   if (looksOperatorStarvedEquation(value) && value.length <= 64) return true;
   if (REPEATED_ISOLATED_VAR.test(value) && /=/.test(value)) return true;
+  if (looksGluedMinusSpacing(value)) return true;
   return false;
+}
+
+/**
+ * Binary minus glued to the following term. COMPACT_POLY only saw
+ * `2-4x-7x=` (digit ± coeff ± coeff =). Live Q82/Q85/Q93 are
+ * `y-5x=6`, `(x-7)`, `4x-6` / official `y −5x`, `(x −7)`, `4x −6`.
+ * Spaced `2 - 4x` / `y - 5x` stay. Unary `−6x`, `= −6`, `(-7)` stay.
+ * Hyphenated `xy-plane` / `COVID-19` stay.
+ */
+export function looksGluedMinusSpacing(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (GLUED_MINUS_COEFF_VAR.test(raw)) return true;
+  if (GLUED_MINUS_LEADING_NUM.test(raw)) return true;
+  if (!GLUED_MINUS_ISOLATED_VAR.test(raw)) return false;
+  if (raw.length <= 64) return true;
+  if (/=/.test(raw)) return true;
+  return /\([^)]*[A-Za-z]\s*[−–-]\d/.test(raw);
 }
 
 export function looksFailedMathLayoutDump(text: string | null | undefined): boolean {
@@ -663,6 +689,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(cleaned)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(cleaned)) return false;
   if (looksSmashedAlgebraChoice(raw) || looksSmashedAlgebraChoice(cleaned)) return false;
+  if (looksGluedMinusSpacing(raw) || looksGluedMinusSpacing(cleaned)) return false;
   if (looksSmashedYxToken(raw) || looksSmashedYxToken(cleaned)) return false;
   if (looksBrokenMathOcr(cleaned) && cleaned.length <= 96) return false;
   return true;
