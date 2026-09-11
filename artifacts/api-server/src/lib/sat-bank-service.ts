@@ -627,6 +627,8 @@ export async function rematerializeAssignmentLinkedQuestions(
   let errors = 0;
   let skippedForks = 0;
   let skippedUnlinked = 0;
+  // `updated` is bank.linkedQuestionId rewrites only — not items audited.
+  // dropUnusableAssignmentQuestions still runs on every linked quiz row.
   for (const question of questions) {
     if (isSessionLocalQuestionFork(question)) {
       skippedForks += 1;

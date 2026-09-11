@@ -162,9 +162,47 @@ const mocks = vi.hoisted(() => ({
             { id: "b", label: "B", text: "Provide an example" },
           ],
         },
+        {
+          id: "question-sat-85",
+          prompt:
+            "For x> 0, the function f is defined as follows:\nf(x) equals 201% of x\nWhich of the following could describe this function?",
+          skill: "SAT Math",
+          choices: [
+            { id: "a", label: "A", text: "Decreasing exponential" },
+            { id: "b", label: "B", text: "Decreasing linear" },
+            { id: "c", label: "C", text: "Increasing exponential" },
+            { id: "d", label: "D", text: "Increasing linear" },
+          ],
+          correctAnswer: "d",
+          explanation: "201% of x is 2.01x, an increasing linear function.",
+        },
+        {
+          id: "question-unkeyed",
+          prompt: "An official item with no stored letter key",
+          skill: "SAT Math",
+          choices: [
+            { id: "a", label: "A", text: "One" },
+            { id: "b", label: "B", text: "Two" },
+            { id: "c", label: "C", text: "Three" },
+            { id: "d", label: "D", text: "Four" },
+          ],
+        },
       ],
     },
-  } as Record<string, { id: string; questions: Array<{ id: string; prompt: string; skill: string; choices: Array<{ id: string; label: string; text: string }> }> }>,
+  } as Record<
+    string,
+    {
+      id: string;
+      questions: Array<{
+        id: string;
+        prompt: string;
+        skill: string;
+        choices: Array<{ id: string; label: string; text: string }>;
+        correctAnswer?: string;
+        explanation?: string;
+      }>;
+    }
+  >,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -582,6 +620,27 @@ describe("curriculum bank IA", () => {
     expect(screen.getByTestId("quiz-question-editor-question-1")).toBeTruthy();
     expect((screen.getByLabelText("Question 1 prompt") as HTMLTextAreaElement).value).toContain(
       "Which choice best supports the claim?",
+    );
+  });
+
+  test("SAT diagnostic keys come from the assignment payload — never a silent A default", () => {
+    mocks.location = "/admin/curriculum?section=curriculum&tab=quizzes&quiz=quiz-1";
+    render(<AdminCurriculum />);
+    const keyed = screen.getByTestId("quiz-question-correct-question-sat-85") as HTMLSelectElement;
+    expect(keyed.value).toBe("d");
+    expect(keyed.value).not.toBe("a");
+    const unkeyed = screen.getByTestId("quiz-question-correct-question-unkeyed") as HTMLSelectElement;
+    expect(unkeyed.value).toBe("");
+    expect(unkeyed.textContent).toMatch(/Select correct answer/i);
+    const unkeyedCard = screen.getByTestId("quiz-question-editor-question-unkeyed");
+    expect(within(unkeyedCard).getByRole("button", { name: "Save question" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    const keyedCard = screen.getByTestId("quiz-question-editor-question-sat-85");
+    expect(within(keyedCard).getByRole("button", { name: "Save question" })).toHaveProperty(
+      "disabled",
+      false,
     );
   });
 

@@ -304,7 +304,9 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
     ),
     true,
   );
-  assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), false);
+  assert.equal(looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution?"), true);
+  assert.equal(looksBrokenMathOcr("2 –4x –7x = –36\nWhat is the positive solution?"), true);
+  assert.equal(looksBrokenMathOcr("2 - 4x - 7x = -36\nWhat is the positive solution?"), false);
   assert.equal(
     isStudentAnswerableQuizQuestion({
       prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
@@ -317,7 +319,7 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
       ],
       questionType: "mcq",
     }),
-    true,
+    false,
   );
   assert.equal(
     hasCompleteLetterChoiceText([

@@ -408,13 +408,14 @@ describe("student attempt UI", () => {
 
   test("stimulus panel allows wide tables to scroll instead of clipping", () => {
     mocks.questions[0]!.stimulus =
-      "Effects of Mycorrhizal Fungi on 3 Plant Species\nPlant species  Mycorrhizal host  Average mass\nCorn  yes  15.1";
+      "Species\tTreated\tUntreated\tMass treated (g)\tMass untreated (g)\nCorn\tyes\tno\t15.1\t10.2\nMarigold\tyes\tno\t12.0\t8.5\nBroccoli\tyes\tno\t9.0\t7.5";
     mocks.questions[0]!.choices = [
       { id: "a", label: "A", text: "broccoli grown in soil containing mycorrhizal fungi had a slightly lower mass" },
       { id: "b", label: "B", text: "corn grown in soil containing mycorrhizal fungi had a higher mass" },
       { id: "c", label: "C", text: "marigolds grown in soil containing mycorrhizal fungi had a moderate mass" },
       { id: "d", label: "D", text: "corn had the highest average mass of all three species grown" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     const panel = screen.getByTestId("quiz-stimulus-panel");
     expect(panel.className).toMatch(/overflow-visible/);
@@ -661,12 +662,13 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "x < 0 y > 0" },
       { id: "d", label: "D", text: "x < 0 y < 0" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
     expect(screen.queryByTestId("quiz-answer-choice")).toBeNull();
     expect(screen.queryByTestId("answer-choices")).toBeNull();
   });
 
-  test("slash-fraction quadratic choices stay visible", () => {
+  test("smashed 2 –4x –7x quadratic OCR is not student-usable", () => {
     mocks.questions[0]!.prompt = "2 −4x −7x = −36\nWhat is the positive solution to the given equation?";
     mocks.questions[0]!.stimulus = null;
     mocks.questions[0]!.choices = [
@@ -675,10 +677,10 @@ describe("student attempt UI", () => {
       { id: "c", label: "C", text: "4" },
       { id: "d", label: "D", text: "7" },
     ];
+    keepOnlyFirstQuestion();
     render(<PortalAssignment />);
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/7\/4/);
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
-    expect(screen.queryByTestId("quiz-answer-unavailable")).toBeNull();
+    expect(screen.queryByTestId("quiz-answer-choice")).toBeNull();
+    expect(screen.queryByTestId("answer-choices")).toBeNull();
   });
 
   test("mangled ( , x y ) stems are not student-usable", () => {
@@ -1210,7 +1212,7 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("answer-choices").textContent).toMatch(/\(6,3\)/);
   });
 
-  test("Oct 2 Q99–106 drop scrambled or incomplete A–D items and keep slash-fraction Q103 and 21px Q105", () => {
+  test("Oct 2 Q99–106 drop scrambled, incomplete, and smashed 2 –4x –7x items and keep 21px Q105", () => {
     mocks.questions = [
       {
         ...mocks.questions[0]!,
@@ -1280,10 +1282,9 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/WhatThe function/)).toBeNull();
     expect(screen.queryByText(/library/)).toBeNull();
     expect(screen.queryByText(/\(x −10\)\(x \+13\) f\(x\)/)).toBeNull();
-    expect(screen.getByText("Question 1 of 2")).toBeTruthy();
-    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/−36/);
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/7\/4/);
-    expect(screen.getByTestId("answer-choices").textContent).toMatch(/9\/4/);
+    expect(screen.getByText("Question 1 of 1")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/21px/);
+    expect(screen.getByTestId("answer-choices").textContent).toMatch(/1\/7/);
   });
 
   test("Oct 2 Q107–114 drop exploded OCR, missing figures, and character-spaced garbage", () => {

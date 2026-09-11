@@ -203,6 +203,11 @@ const FLAGGED_DROPS: Array<{
     prompt: "The point (8, 2) in the xy-plane is a solution to which of the following systems of inequalities?",
     choices: letters(["x > 0 y > 0", "x > 0 y < 0", "x < 0 y > 0", "x < 0 y < 0"]),
   },
+  {
+    id: "Q97",
+    prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
+    choices: letters(["7/4", "9/4", "4", "7"]),
+  },
 ];
 
 const FLAGGED_KEEPS: Array<{
@@ -219,11 +224,6 @@ const FLAGGED_KEEPS: Array<{
     id: "Q93",
     prompt: "s + 7 = 27 r = 3What is thesolution (r, s) tothegivensystemofequations?",
     choices: letters(["(6,3)", "(3,6)", "(3,27)", "(27,3)"]),
-  },
-  {
-    id: "Q103",
-    prompt: "2 −4x −7x = −36Whatisthepositivesolutiontothegivenequation?",
-    choices: letters(["7/4", "9/4", "4", "7"]),
   },
   {
     id: "Q105",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -24,6 +24,10 @@ import { GenerateQuestionsCard } from "@/components/generate-questions-card";
 import { GenerateDraftsCard, apiErrorText } from "@/components/question-bank-authoring";
 import { isReusableBankQuiz } from "@/lib/assignable-bank-quizzes";
 import { editableQuizItems } from "@/lib/quiz-repository";
+import {
+  quizEditorChoiceValue,
+  resolveQuizEditorAnswerKey,
+} from "@/lib/quiz-editor-answer-key";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -479,6 +483,7 @@ function QuizQuestionEditor({
         <ol className="space-y-3" data-testid={`quiz-question-list-${quiz.id}`}>
           {(data?.questions ?? []).map((question, index) => {
             const bankItem = bank.find((item) => item.id === question.id);
+            const choices = question.choices?.length ? question.choices : bankItem?.choices ?? [];
             return (
               <li key={question.id}>
                 <QuizQuestionEditorCard
@@ -486,9 +491,13 @@ function QuizQuestionEditor({
                   questionId={question.id}
                   prompt={question.prompt}
                   skill={question.skill}
-                  choices={question.choices?.length ? question.choices : bankItem?.choices ?? []}
-                  explanation={bankItem?.explanation ?? ""}
-                  correctAnswer={bankItem?.correctAnswer ?? "a"}
+                  choices={choices}
+                  explanation={question.explanation ?? bankItem?.explanation ?? ""}
+                  correctAnswer={resolveQuizEditorAnswerKey({
+                    assignmentAnswer: question.correctAnswer,
+                    bankAnswer: bankItem?.correctAnswer,
+                    choices,
+                  })}
                   pending={updateQuestion.isPending || removeQuestion.isPending}
                   onSave={(payload) =>
                     updateQuestion.mutate(
@@ -626,6 +635,10 @@ function QuizQuestionEditorCard({
   const [draftExplanation, setDraftExplanation] = useState(explanation);
   const [draftChoices, setDraftChoices] = useState(choices);
   const [draftAnswer, setDraftAnswer] = useState(correctAnswer);
+  useEffect(() => {
+    setDraftAnswer(correctAnswer);
+  }, [correctAnswer]);
+  const canSave = !pending && draftPrompt.trim().length >= 2 && Boolean(draftAnswer);
   return (
     <div className="rounded-xl border bg-background p-4" data-testid={`quiz-question-editor-${questionId}`}>
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Question {index}</p>
@@ -668,12 +681,17 @@ function QuizQuestionEditorCard({
             <Label>Correct answer</Label>
             <select
               aria-label={`Question ${index} correct answer`}
+              data-testid={`quiz-question-correct-${questionId}`}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
               value={draftAnswer}
               onChange={(event) => setDraftAnswer(event.target.value)}
             >
-              {(draftChoices.length ? draftChoices : [{ id: "a", label: "A", text: "" }]).map((choice) => (
-                <option key={choice.id || choice.label} value={(choice.id || choice.label || "a").toLowerCase()}>
+              <option value="">Select correct answer</option>
+              {draftChoices.map((choice, choiceIndex) => (
+                <option
+                  key={choice.id || choice.label || choiceIndex}
+                  value={quizEditorChoiceValue(choice, choiceIndex)}
+                >
                   {choice.label || choice.id}
                 </option>
               ))}
@@ -691,7 +709,7 @@ function QuizQuestionEditorCard({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            disabled={pending || draftPrompt.trim().length < 2}
+            disabled={!canSave}
             onClick={() =>
               onSave({
                 prompt: draftPrompt,

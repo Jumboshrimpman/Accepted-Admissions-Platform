@@ -107,7 +107,8 @@ const INCOMPLETE_TRAILING_ASK =
 const MISSING_SEGMENT_MEASURE = /\b[A-Z]{2}\s+\d+\s+units\b/;
 const SMASHED_IF_SEGMENT = /\bIf\s+[A-Z]{2}\s+\d+(?:\s+what\b|\s*$)/i;
 const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
-const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+[+\-]\d+[A-Za-z][+\-]\d+[A-Za-z]\s*=/;
+/** Glued compact poly OCR: `2-4x-7x=` / `2 –4x –7x =`. Spaced `2 - 4x - 7x =` stays. */
+const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+\s*[+\-−–]\d+[A-Za-z]\s*[+\-−–]\d+[A-Za-z]\s*=/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
 /** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
@@ -353,6 +354,20 @@ export function normalizeLetterAnswer(answer: string | null | undefined): string
   const raw = answer ?? "";
   if (!isLetterAnswer(raw)) return raw;
   return primaryAnswerToken(raw).toLowerCase();
+}
+
+/** Letter key must be a–d and match a choice id or label. Never treat a missing key as A. */
+export function letterAnswerMatchesChoices(
+  answer: string | null | undefined,
+  choices: Array<{ id?: string | null; label?: string | null }> | null | undefined,
+): boolean {
+  if (!isLetterAnswer(answer)) return false;
+  const letter = normalizeLetterAnswer(answer);
+  return (choices ?? []).some((choice) => {
+    const id = String(choice.id ?? "").trim().toLowerCase();
+    const label = String(choice.label ?? "").trim().toLowerCase();
+    return id === letter || label === letter;
+  });
 }
 
 export function hasMarkdownOrMediaImage(text: string | null | undefined): boolean {

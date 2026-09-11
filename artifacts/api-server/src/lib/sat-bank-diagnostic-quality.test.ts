@@ -495,7 +495,7 @@ test("rejects unlabeled-choice crops, missing operators, clipped OCR, and ?-as-o
   );
 });
 
-test("rejects mangled coordinates, incomplete table crops, scrambled stems, and orphan geometry; keeps slash-fraction quadratics and formats inequalities", () => {
+test("rejects mangled coordinates, incomplete table crops, scrambled stems, and glued 2 −4x −7x OCR; formats inequalities", () => {
   const letterChoices = (texts: string[]) =>
     ["A", "B", "C", "D"].map((label, index) => ({
       id: label.toLowerCase(),
@@ -558,7 +558,7 @@ test("rejects mangled coordinates, incomplete table crops, scrambled stems, and 
       questionType: "mcq",
       correctAnswer: "B",
     }),
-    true,
+    false,
   );
   assert.equal(
     isStudentUsableDiagnosticItem({
@@ -1036,7 +1036,7 @@ test("drops Oct 2 Q92–98 OCR-garbage and wiped A–D items; keeps readable Q93
   );
 });
 
-test("drops Oct 2 Q99–106 scrambled or incomplete A–D items; keeps slash-fraction Q103 and 21px Q105", () => {
+test("drops Oct 2 Q99–106 scrambled or incomplete A–D items and smashed 2 –4x –7x; keeps 21px Q105", () => {
   const letterChoices = (texts: string[]) =>
     ["A", "B", "C", "D"].map((label, index) => ({
       id: label.toLowerCase(),
@@ -1070,7 +1070,7 @@ test("drops Oct 2 Q99–106 scrambled or incomplete A–D items; keeps slash-fra
       questionType: "mcq",
       correctAnswer: "B",
     }),
-    true,
+    false,
   );
   assert.equal(
     hasCompleteLetterChoiceText([
@@ -1320,8 +1320,8 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q12"),
-    false,
-    "slash-fraction quadratic item must stay usable",
+    true,
+    "glued 2 −4x −7x compact poly OCR must drop",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q17"),

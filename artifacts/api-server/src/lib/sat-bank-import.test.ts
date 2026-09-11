@@ -7,6 +7,7 @@ import {
   STAGED_COLLECTION_STUBS,
   isMultipleChoiceQuizItem,
   isOfficialExtractFile,
+  isAssignableBankItem,
   listOfficialExtractFiles,
   parseCollegeBoardManifest,
   parseCollegeBoardPayload,
@@ -98,6 +99,42 @@ test("quiz composition excludes true SPR unless the key is A–D", () => {
       correctAnswer: "a",
     }),
     true,
+  );
+});
+
+test("MCQ bank items are not assignable without a letter key — never default to A", () => {
+  const choices = [
+    { id: "a", label: "A", text: "Decreasing exponential" },
+    { id: "b", label: "B", text: "Decreasing linear" },
+    { id: "c", label: "C", text: "Increasing exponential" },
+    { id: "d", label: "D", text: "Increasing linear" },
+  ];
+  assert.equal(
+    isAssignableBankItem({
+      prompt: "For x > 0, f(x) equals 201% of x. Which could describe this function?",
+      questionType: "mcq",
+      choices,
+      correctAnswer: "d",
+    }),
+    true,
+  );
+  assert.equal(
+    isAssignableBankItem({
+      prompt: "For x > 0, f(x) equals 201% of x. Which could describe this function?",
+      questionType: "mcq",
+      choices,
+      correctAnswer: "",
+    }),
+    false,
+  );
+  assert.equal(
+    isAssignableBankItem({
+      prompt: "For x > 0, f(x) equals 201% of x. Which could describe this function?",
+      questionType: "mcq",
+      choices,
+      correctAnswer: "9; 9.0",
+    }),
+    false,
   );
 });
 
