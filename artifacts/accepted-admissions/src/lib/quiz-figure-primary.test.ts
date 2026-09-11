@@ -310,6 +310,7 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
   assert.equal(looksBrokenMathOcr("2 - 4x - 7x = -36\nWhat is the positive solution?"), false);
   assert.equal(looksGluedMinusSpacing("y-5x=6"), true);
   assert.equal(looksGluedMinusSpacing("y −5x = 6"), true);
+  assert.equal(looksGluedMinusSpacing("bytheequationy-5x=6"), true);
   assert.equal(looksGluedMinusSpacing("V(x)=9x(x-7)"), true);
   assert.equal(looksGluedMinusSpacing("y=4x-6"), true);
   assert.equal(looksGluedMinusSpacing("2 - 4x"), false);

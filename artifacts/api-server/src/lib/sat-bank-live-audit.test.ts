@@ -1143,6 +1143,7 @@ test("live audit after #78 rematerialize: Q82/Q85/Q93 glued-minus OCR drops", ()
 
   assert.equal(looksGluedMinusSpacing("y −5x = 6"), true);
   assert.equal(looksGluedMinusSpacing("y-5x=6"), true);
+  assert.equal(looksGluedMinusSpacing("bytheequationy-5x=6"), true);
   assert.equal(looksSmashedAlgebraText(q82OfficialPrompt), true);
   assert.equal(looksSmashedAlgebraText(q82LivePrompt), true);
   assert.equal(looksGluedMinusSpacing("V(x) = 9x(x −7)"), true);

@@ -79,6 +79,8 @@ const GLUED_MINUS_COEFF_VAR = /\d[A-Za-z]\s*[−–-]\d/;
 const GLUED_MINUS_LEADING_NUM = /\d\s*[−–-]\d+[A-Za-z]/;
 /** Isolated var: `y-5`, `x −7`. Not `COVID-19` (letter before the var). */
 const GLUED_MINUS_ISOLATED_VAR = /(?<![A-Za-z])[A-Za-z]\s*[−–-]\d/;
+/** `y-5x` / smashed `equationy-5x`. Not `COVID-19` (no letter after the digits). */
+const GLUED_MINUS_VAR_TERM = /[A-Za-z]\s*[−–-]\d+[A-Za-z]/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
 /** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
@@ -268,6 +270,7 @@ export function looksGluedMinusSpacing(text: string | null | undefined): boolean
   if (!raw.trim()) return false;
   if (GLUED_MINUS_COEFF_VAR.test(raw)) return true;
   if (GLUED_MINUS_LEADING_NUM.test(raw)) return true;
+  if (GLUED_MINUS_VAR_TERM.test(raw)) return true;
   if (!GLUED_MINUS_ISOLATED_VAR.test(raw)) return false;
   if (raw.length <= 64) return true;
   if (/=/.test(raw)) return true;
