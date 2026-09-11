@@ -23,6 +23,7 @@ import {
   looksSmashedOrTruncatedExtract,
   looksTruncatedChoiceText,
   normalizeLetterAnswer,
+  letterAnswerMatchesChoices,
   looksBrokenMathOcr,
   looksIncompleteMathParens,
   looksCorruptStemOcr,
@@ -199,6 +200,19 @@ test("letter keys normalize to a lowercase a–d id for grading", () => {
   assert.equal(normalizeLetterAnswer("B"), "b");
   assert.equal(normalizeLetterAnswer("c"), "c");
   assert.equal(normalizeLetterAnswer("9; 9.0"), "9; 9.0");
+  assert.equal(
+    letterAnswerMatchesChoices("D", [
+      { id: "a", label: "A" },
+      { id: "b", label: "B" },
+      { id: "c", label: "C" },
+      { id: "d", label: "D" },
+    ]),
+    true,
+  );
+  assert.equal(letterAnswerMatchesChoices("", [{ id: "a", label: "A" }]), false);
+  assert.equal(letterAnswerMatchesChoices("a", [{ id: "a", label: "A" }, { id: "b", label: "B" }]), true);
+  assert.equal(letterAnswerMatchesChoices("c", [{ id: "a", label: "A" }, { id: "b", label: "B" }]), false);
+  assert.equal(letterAnswerMatchesChoices("9; 9.0", [{ id: "a", label: "A" }]), false);
 });
 
 test("keeps genuine numeric SPR items as SPR", () => {
@@ -604,6 +618,14 @@ test("rejects mangled coordinates, scrambled function stems, smashed tables, and
   );
   assert.equal(
     looksBrokenMathOcr("2 −4x −7x = −36\nWhat is the positive solution to the given equation?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("2 –4x –7x = –36\nWhat is the positive solution to the given equation?"),
+    true,
+  );
+  assert.equal(
+    looksBrokenMathOcr("2 - 4x - 7x = -36\nWhat is the positive solution to the given equation?"),
     false,
   );
   assert.equal(isStudentReadableChoiceText("7/4"), true);

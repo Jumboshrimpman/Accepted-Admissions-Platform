@@ -1020,6 +1020,92 @@ area, in square meters, of the scale model?`;
   assert.equal(canAssignDiagnostic(leaked, [cleanRw, cleanMath, ...junk]), false);
 });
 
+test("live audit after #77 rematerialize: Q97 smashed 2 –4x –7x drops; missing letter keys drop", () => {
+  const q97Choices = letterChoices(["7/4", "9/4", "4", "7"]);
+  const q97Unicode = {
+    id: "q97-unicode",
+    prompt: "2 −4x −7x = −36\nWhat is the positive solution to the given equation?",
+    section: "math" as const,
+    choices: q97Choices,
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const q97EnDash = {
+    ...q97Unicode,
+    id: "q97-endash",
+    prompt: "2 –4x –7x = –36\nWhat is the positive solution to the given equation?",
+  };
+  assert.equal(looksSmashedAlgebraText(q97Unicode.prompt), true);
+  assert.equal(isStudentUsableMathQuizItem(q97Unicode), false, "unicode-minus Q97 must drop");
+  assert.equal(isStudentUsableMathQuizItem(q97EnDash), false, "admin screenshot en-dash Q97 must drop");
+  const q97Reasons = auditStudentQuizItem(q97Unicode).reasons;
+  assert.ok(
+    q97Reasons.includes("unsure_math_presentation") || q97Reasons.includes("smashed_algebra"),
+  );
+
+  const unkeyed = {
+    id: "unkeyed-mcq",
+    prompt:
+      "For x > 0, the function f is defined as follows: f(x) equals 201% of x. Which of the following could describe this function?",
+    section: "math" as const,
+    choices: letterChoices([
+      "Decreasing exponential",
+      "Decreasing linear",
+      "Increasing exponential",
+      "Increasing linear",
+    ]),
+    questionType: "mcq",
+    correctAnswer: "",
+  };
+  const missingAudit = auditStudentQuizItem(unkeyed);
+  assert.equal(missingAudit.ok, false);
+  assert.ok(missingAudit.reasons.includes("missing_letter_key"));
+  assert.equal(isStudentUsableMathQuizItem(unkeyed), false);
+
+  const mismatched = {
+    ...unkeyed,
+    id: "mismatched-key",
+    correctAnswer: "c",
+    choices: letterChoices(["Decreasing exponential", "Decreasing linear"]).slice(0, 2),
+  };
+  const mismatchAudit = auditStudentQuizItem(mismatched);
+  assert.equal(mismatchAudit.ok, false);
+  assert.ok(mismatchAudit.reasons.includes("missing_letter_key"));
+
+  const keyed = {
+    ...unkeyed,
+    id: "keyed-201",
+    correctAnswer: "D",
+  };
+  assert.equal(isStudentUsableMathQuizItem(keyed), true);
+
+  const composed = composeDiagnosticItems([
+    {
+      id: "rw-clean",
+      prompt: "Which choice completes the text with the most logical transition?",
+      section: "rw" as const,
+      module: 1,
+      questionNumber: 1,
+      position: 1,
+      choices: letterChoices(["However", "Therefore", "Meanwhile", "Similarly"]),
+      questionType: "mcq",
+      correctAnswer: "A",
+    },
+    keyed,
+    q97EnDash,
+    unkeyed,
+  ]);
+  assert.equal(
+    composed.selected.some((item) => item.id === "q97-endash"),
+    false,
+  );
+  assert.equal(
+    composed.selected.some((item) => item.id === "unkeyed-mcq"),
+    false,
+  );
+  assert.ok((composed.composition.shortfall.reasons.missing_letter_key ?? 0) >= 1);
+});
+
 test("live audit: readable controls still stay", () => {
   assert.equal(
     isStudentUsableMathQuizItem({

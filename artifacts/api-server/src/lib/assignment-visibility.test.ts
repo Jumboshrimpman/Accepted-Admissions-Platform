@@ -77,6 +77,26 @@ test("full-length SAT bank questions coerce onto the assignment API schema", () 
   );
   assert.equal(keyed.correctAnswer, "a");
   assert.equal(keyed.explanation, "However signals contrast.");
+  const emptyKey = assignmentQuestionShape(
+    {
+      id: "q-diag-empty",
+      subject: "SAT",
+      questionType: "multiple_choice",
+      prompt: "Which choice completes the text?",
+      stimulus: null,
+      choices: [
+        { id: "a", label: "A", text: "however" },
+        { id: "b", label: "B", text: "therefore" },
+      ],
+      skill: "Transitions",
+      difficulty: "medium",
+      correctAnswer: "   ",
+      explanation: "",
+    },
+    { position: 0, predictionFirst: false },
+    { includeKeys: true },
+  );
+  assert.equal(emptyKey.correctAnswer, "");
 });
 
 test("assignment questions hide extract skill placeholders behind the section label", () => {

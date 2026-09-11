@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  answersMatch,
   decideRetrySource,
   firstPresentText,
   lessonRetryReveal,
@@ -175,5 +176,21 @@ test("accepts semicolon-separated SPR forms without requiring A–D", () => {
   assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "8", correctAnswer: "9; 9.0" }), {
     correct: false,
     outcome: "still_struggling",
+  });
+});
+
+test("students are scored against the stored letter key, never a missing key coerced to A", () => {
+  assert.equal(answersMatch("a", ""), false);
+  assert.equal(answersMatch("a", "   "), false);
+  assert.equal(answersMatch("d", "D"), true);
+  assert.equal(answersMatch("a", "d"), false);
+  assert.equal(answersMatch("a", "A"), true);
+  assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "a", correctAnswer: "d" }), {
+    correct: false,
+    outcome: "still_struggling",
+  });
+  assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "d", correctAnswer: "D" }), {
+    correct: true,
+    outcome: "mastered",
   });
 });

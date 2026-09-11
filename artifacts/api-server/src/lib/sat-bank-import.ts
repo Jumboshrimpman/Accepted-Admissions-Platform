@@ -159,6 +159,7 @@ export function isAssignableBankItem(input: {
   if (input.extractGaps?.figurePrimary && isLetterAnswer(input.correctAnswer)) return true;
   if (!input.prompt.trim() || input.extractGaps?.missingPrompt) return false;
   if (input.questionType === "spr") return true;
+  if (!isLetterAnswer(input.correctAnswer)) return false;
   return input.choices.length >= 2 && !input.extractGaps?.missingChoices;
 }
 

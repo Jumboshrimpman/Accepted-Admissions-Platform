@@ -20,6 +20,7 @@ import {
   sessionQuestionUpdateBody,
   type SessionQuestionDraft,
 } from "@/lib/session-quiz-edit";
+import { quizEditorChoiceValue } from "@/lib/quiz-editor-answer-key";
 
 function createSessionAssignmentQuestion(
   assignmentId: string,
@@ -207,8 +208,9 @@ export function TutorSessionQuizEditor({
                           value={draft.correctAnswer}
                           onChange={(event) => setDraft({ ...draft, correctAnswer: event.target.value })}
                         >
-                          {draft.choices.map((choice) => (
-                            <option key={choice.id} value={choice.id}>
+                          <option value="">Select correct answer</option>
+                          {draft.choices.map((choice, choiceIndex) => (
+                            <option key={choice.id} value={quizEditorChoiceValue(choice, choiceIndex)}>
                               {choice.label}
                             </option>
                           ))}
@@ -227,7 +229,7 @@ export function TutorSessionQuizEditor({
                         <Button
                           size="sm"
                           data-testid={`tutor-session-question-save-${question.id}`}
-                          disabled={updateQuestion.isPending}
+                          disabled={updateQuestion.isPending || !draft.correctAnswer}
                           onClick={saveEdit}
                         >
                           <Save className="mr-2 h-4 w-4" />

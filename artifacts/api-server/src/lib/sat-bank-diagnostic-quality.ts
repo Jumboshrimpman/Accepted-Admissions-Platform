@@ -8,6 +8,7 @@ import {
   hasUsableTableData,
   hasRenderableFigures,
   isLetterAnswer,
+  letterAnswerMatchesChoices,
   looksBrokenMathOcr,
   looksExplodedOcrTable,
   looksFlattenedFractionChoice,
@@ -35,7 +36,7 @@ import {
   type BankFigureLike,
 } from "./sat-bank-figure-primary.ts";
 
-export { normalizeLetterAnswer };
+export { letterAnswerMatchesChoices, normalizeLetterAnswer };
 import { LINEAR_SAT_MATH_MAX, LINEAR_SAT_RW_MAX } from "./sat-scoring-guide.ts";
 
 export const DIAGNOSTIC_MODULE_ORDER = ["rw-1", "rw-2", "math-1", "math-2"] as const;
@@ -226,7 +227,7 @@ function mathHasRequiredVisual(input: DiagnosticQualityInput): boolean {
 
 function mathFigurePrimarySalvage(input: DiagnosticQualityInput): boolean {
   return (
-    isLetterAnswer(input.correctAnswer) &&
+    letterAnswerMatchesChoices(input.correctAnswer, input.choices) &&
     hasCompleteLetterChoiceText(input.choices) &&
     !hasMergedOrLeakedChoices(input.choices) &&
     hasFullQuestionCrop(input)
@@ -291,7 +292,7 @@ function classifyVisualFailures(input: DiagnosticQualityInput): StudentUsableFai
 function classifyMathFailures(input: DiagnosticQualityInput): StudentUsableFailureReason[] {
   const reasons: StudentUsableFailureReason[] = [];
   const haystack = stemHaystack(input);
-  if (!isLetterAnswer(input.correctAnswer)) reasons.push("missing_letter_key");
+  if (!letterAnswerMatchesChoices(input.correctAnswer, input.choices)) reasons.push("missing_letter_key");
   if (isTrueSprQuizItem(input)) reasons.push("true_spr");
   if (hasMergedOrLeakedChoices(input.choices)) reasons.push("leaked_or_merged_choices");
   if (!hasCompleteLetterChoiceText(input.choices)) {
@@ -338,7 +339,7 @@ function classifyMathFailures(input: DiagnosticQualityInput): StudentUsableFailu
 
 function classifyRwFailures(input: DiagnosticQualityInput): StudentUsableFailureReason[] {
   const reasons: StudentUsableFailureReason[] = [];
-  if (!isLetterAnswer(input.correctAnswer)) reasons.push("missing_letter_key");
+  if (!letterAnswerMatchesChoices(input.correctAnswer, input.choices)) reasons.push("missing_letter_key");
   if (isTrueSprQuizItem(input)) reasons.push("true_spr");
   if (hasMergedOrLeakedChoices(input.choices)) reasons.push("leaked_or_merged_choices");
   if (!hasCompleteLetterChoiceText(input.choices)) {
@@ -445,7 +446,7 @@ export function diagnosticShortfallFromSelection(
 
 /** Clean readable A–D item a student can answer from text (plus a figure if cited). */
 export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
-  if (!isLetterAnswer(input.correctAnswer)) return false;
+  if (!letterAnswerMatchesChoices(input.correctAnswer, input.choices)) return false;
   if (!hasCompleteLetterChoiceText(input.choices)) return false;
   if (!readableStudentText(input)) return false;
   if (isGarbledItem(input)) return false;

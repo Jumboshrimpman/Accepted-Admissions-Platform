@@ -1,3 +1,5 @@
+import { resolveQuizEditorAnswerKey } from "./quiz-editor-answer-key.ts";
+
 export type AssignmentQuestionDraftSource = {
   prompt: string;
   choices?: Array<{ id: string; label: string; text: string }>;
@@ -38,7 +40,10 @@ export function draftFromAssignmentQuestion(
   return {
     prompt: question.prompt,
     choices,
-    correctAnswer: question.correctAnswer || choices[0]?.id || "a",
+    correctAnswer: resolveQuizEditorAnswerKey({
+      assignmentAnswer: question.correctAnswer,
+      choices,
+    }),
     explanation: question.explanation || "",
   };
 }
