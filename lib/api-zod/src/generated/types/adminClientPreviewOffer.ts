@@ -8,8 +8,10 @@
 import type { AdminClientPreviewOfferDurationMinutes } from './adminClientPreviewOfferDurationMinutes';
 
 export interface AdminClientPreviewOffer {
+  slug?: string;
   name: string;
   description: string;
   priceCents: number;
+  durationHours?: number;
   durationMinutes: AdminClientPreviewOfferDurationMinutes;
 }

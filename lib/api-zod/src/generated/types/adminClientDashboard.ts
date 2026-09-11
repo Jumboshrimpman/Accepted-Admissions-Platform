@@ -13,6 +13,7 @@ import type { FinancialSummary } from './financialSummary';
 export type AdminClientDashboard = Dashboard & {
   adminPreview: true;
   previewOffer: AdminClientPreviewOffer;
+  previewOffers: AdminClientPreviewOffer[];
   previewFinancials: FinancialSummary;
   previewBooking: AdminClientPreviewBooking;
 };

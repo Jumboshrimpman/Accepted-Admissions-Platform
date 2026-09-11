@@ -3001,19 +3001,24 @@ components:
       allOf:
         - $ref: "#/components/schemas/Dashboard"
         - type: object
-          required: [adminPreview, previewOffer, previewFinancials, previewBooking]
+          required: [adminPreview, previewOffer, previewOffers, previewFinancials, previewBooking]
           properties:
             adminPreview: { type: boolean, const: true }
             previewOffer: { $ref: "#/components/schemas/AdminClientPreviewOffer" }
+            previewOffers:
+              type: array
+              items: { $ref: "#/components/schemas/AdminClientPreviewOffer" }
             previewFinancials: { $ref: "#/components/schemas/FinancialSummary" }
             previewBooking: { $ref: "#/components/schemas/AdminClientPreviewBooking" }
     AdminClientPreviewOffer:
       type: object
       required: [name, description, priceCents, durationMinutes]
       properties:
+        slug: { type: string }
         name: { type: string }
         description: { type: string }
         priceCents: { type: number }
+        durationHours: { type: number }
         durationMinutes: { type: number, enum: [60] }
     AdminClientPreviewBooking:
       type: object

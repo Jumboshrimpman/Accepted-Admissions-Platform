@@ -622,6 +622,105 @@ describe("administrator client preview", () => {
     expect(screen.getByTestId("prepaid-booked-sessions-show-more").textContent).toContain("Show more");
   });
 
+  test("preview purchase offers list the active SAT catalog and assigned tutor calendar", () => {
+    mocks.preview = {
+      user: {
+        id: "student-michelle",
+        displayName: "Michelle Makarem",
+        email: "michaelmakarem@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      welcomeMessage: "Welcome back.",
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      progress: {
+        totalSessions: 0,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        slug: "single-sat-session",
+        name: "Single SAT Session",
+        description: "One prepaid 60-minute SAT tutoring credit.",
+        priceCents: 13000,
+        durationHours: 1,
+        durationMinutes: 60,
+      },
+      previewOffers: [
+        {
+          slug: "single-sat-session",
+          name: "Single SAT Session",
+          description: "One prepaid 60-minute SAT tutoring credit.",
+          priceCents: 13000,
+          durationHours: 1,
+          durationMinutes: 60,
+        },
+        {
+          slug: "ten-sat-session-package",
+          name: "Ten SAT Session Package",
+          description: "Ten prepaid 60-minute SAT tutoring credits at $130/hour.",
+          priceCents: 130000,
+          durationHours: 10,
+          durationMinutes: 60,
+        },
+      ],
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: {
+        calendarStatus: "connected",
+        availability: {
+          tutor: {
+            id: "xavier-profile",
+            name: "Xavier Morales",
+            title: "SAT Tutor",
+            timezone: "America/New_York",
+          },
+          providerStatus: "connected",
+          slots: ["2026-09-14T15:00:00.000Z"],
+        },
+        sessions: [],
+      },
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.getByText("Single SAT Session")).toBeTruthy();
+    expect(screen.getByText("Ten SAT Session Package")).toBeTruthy();
+    expect(screen.getByText("$130.00")).toBeTruthy();
+    expect(screen.getByText("$1300.00")).toBeTruthy();
+    expect(screen.getByText("Available times with Xavier Morales")).toBeTruthy();
+    expect(screen.getByText("Calendar connected")).toBeTruthy();
+    expect(screen.queryByText("Eunice Chon")).toBeNull();
+    expectPaymentReceiptsLast();
+  });
+
   test("self-serve clients still see calendar-disconnect copy when no sessions exist", () => {
     mocks.preview = {
       user: {
@@ -675,13 +774,23 @@ describe("administrator client preview", () => {
       },
       previewBooking: {
         calendarStatus: "disconnected",
-        availability: null,
+        availability: {
+          tutor: {
+            id: "xavier-profile",
+            name: "Xavier Morales",
+            title: "SAT Tutor",
+            timezone: "America/New_York",
+          },
+          providerStatus: "disconnected",
+          slots: [],
+        },
         sessions: [],
       },
     };
 
     render(<AdminClientPreview />);
 
+    expect(screen.getByText(/Xavier Morales/)).toBeTruthy();
     expect(screen.getByText(/Google Calendar is disconnected/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Booking disabled in preview" }).hasAttribute("disabled")).toBe(true);
     expect(screen.queryByTestId("financial-card-collapsed")).toBeNull();

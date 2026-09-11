@@ -1643,9 +1643,11 @@ export const AdminClientPreviewOfferDurationMinutes = {
 } as const;
 
 export interface AdminClientPreviewOffer {
+  slug?: string;
   name: string;
   description: string;
   priceCents: number;
+  durationHours?: number;
   durationMinutes: AdminClientPreviewOfferDurationMinutes;
 }
 
@@ -1667,6 +1669,7 @@ export interface AdminClientPreviewBooking {
 export type AdminClientDashboard = Dashboard & {
   adminPreview: true;
   previewOffer: AdminClientPreviewOffer;
+  previewOffers: AdminClientPreviewOffer[];
   previewFinancials: FinancialSummary;
   previewBooking: AdminClientPreviewBooking;
 };

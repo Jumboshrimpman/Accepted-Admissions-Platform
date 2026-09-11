@@ -70,6 +70,7 @@ export default function AdminClientPreview() {
           adminPreview
           previewFinancials={preview.data.previewFinancials}
           previewOffer={preview.data.previewOffer}
+          previewOffers={preview.data.previewOffers}
           previewBooking={preview.data.previewBooking}
         />
       </div>

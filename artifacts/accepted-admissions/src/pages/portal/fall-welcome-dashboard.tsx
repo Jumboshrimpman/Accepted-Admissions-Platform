@@ -122,12 +122,14 @@ export function ClientDashboardView({
   adminPreview = false,
   previewFinancials,
   previewOffer,
+  previewOffers,
   previewBooking,
 }: {
   dashboard: Dashboard;
   adminPreview?: boolean;
   previewFinancials?: FinancialSummary;
   previewOffer?: AdminClientPreviewOffer;
+  previewOffers?: AdminClientPreviewOffer[];
   previewBooking?: AdminClientPreviewBooking;
 }) {
   const viewer = dashboard.user.role === "viewer" || adminPreview;
@@ -578,6 +580,7 @@ export function ClientDashboardView({
           <FinancialCard
             previewData={previewFinancials}
             previewOffer={previewOffer}
+            previewOffers={previewOffers}
             adminPreview
             offPlatformBilling={offPlatformBilling}
           />

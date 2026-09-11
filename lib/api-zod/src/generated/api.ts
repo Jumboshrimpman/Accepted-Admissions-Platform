@@ -715,11 +715,21 @@ export const GetAdminClientDashboardResponse = zod.object({
 }).and(zod.object({
   "adminPreview": zod.literal(true),
   "previewOffer": zod.object({
+  "slug": zod.string().optional(),
   "name": zod.string(),
   "description": zod.string(),
   "priceCents": zod.number(),
+  "durationHours": zod.number().optional(),
   "durationMinutes": zod.literal(60)
 }),
+  "previewOffers": zod.array(zod.object({
+  "slug": zod.string().optional(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "priceCents": zod.number(),
+  "durationHours": zod.number().optional(),
+  "durationMinutes": zod.literal(60)
+})),
   "previewFinancials": zod.object({
   "readOnly": zod.boolean(),
   "providerStatus": zod.string(),

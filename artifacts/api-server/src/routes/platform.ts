@@ -139,14 +139,16 @@ import {
 } from "../lib/tutor-assignment-reconciliation";
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
+  ACCEPTED_SAT_CATALOG,
   ACCEPTED_SAT_CATALOG_SLUGS,
   RETIRED_TEST_SAT_HOUR_SLUG,
-  SINGLE_SAT_SESSION_PRICE_CENTS,
   SINGLE_SAT_SESSION_SLUG,
   TEN_SAT_SESSION_PACKAGE_SLUG,
   isAcceptedSatCatalogProduct,
   isRetiredSatTestProduct,
+  previewOffersFromCatalogProducts,
 } from "../lib/sat-catalog";
+import { selectAssignedPreviewBookingTutor } from "../lib/admin-client-preview";
 import {
   isLibraryAssetKind,
   libraryAssetBlockKind,
@@ -3865,6 +3867,21 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
+async function listActiveAcceptedSatCatalogProducts() {
+  await ensurePublicPlatformData();
+  const products = await db
+    .select()
+    .from(satProductsTable)
+    .where(
+      and(
+        eq(satProductsTable.active, true),
+        inArray(satProductsTable.slug, [...ACCEPTED_SAT_CATALOG_SLUGS]),
+      ),
+    )
+    .orderBy(asc(satProductsTable.durationHours));
+  return products.filter((product) => isAcceptedSatCatalogProduct(product));
+}
+
 
 const tutorProfileSelect = {
   id: tutorProfilesTable.id,
@@ -4572,24 +4589,9 @@ router.get(
 );
 
 router.get("/public/products", requireAppUser, async (_req: AuthedRequest, res): Promise<void> => {
-  await ensurePublicPlatformData();
-  const products = await db
-    .select()
-    .from(satProductsTable)
-    .where(
-      and(
-        eq(satProductsTable.active, true),
-        inArray(
-          satProductsTable.slug,
-          [...ACCEPTED_SAT_CATALOG_SLUGS],
-        ),
-      ),
-    )
-    .orderBy(asc(satProductsTable.durationHours));
+  const products = await listActiveAcceptedSatCatalogProducts();
   res.json(
-    products
-      .filter((product) => isAcceptedSatCatalogProduct(product))
-      .map((product) => ({
+    products.map((product) => ({
       id: product.id,
       slug: product.slug,
       name: product.name,
@@ -9518,36 +9520,47 @@ router.get(
       return;
     }
     const dashboard = await dashboardDataForUser(client);
-    const eligibleTutors = await db
-      .select({
-        id: tutorProfilesTable.id,
-        name: tutorProfilesTable.name,
-        title: tutorProfilesTable.title,
-        photoUrl: tutorProfilesTable.photoUrl,
-        biography: tutorProfilesTable.biography,
-        subjects: tutorProfilesTable.subjects,
-        active: tutorProfilesTable.active,
-        bookingEligible: tutorProfilesTable.bookingEligible,
-        calendarStatus: tutorProfilesTable.calendarStatus,
-      })
-      .from(tutorProfilesTable)
-      .where(
-        and(
-          eq(tutorProfilesTable.active, true),
-          eq(tutorProfilesTable.bookingEligible, true),
-        ),
-      )
-      .orderBy(asc(tutorProfilesTable.name));
-    const previewTutor = eligibleTutors[0];
-    const [bookingSessions, financials] = await Promise.all([
-      db
-        .select()
-        .from(sessionsTable)
-        .where(eq(sessionsTable.clientUserId, client.id))
-        .orderBy(asc(sessionsTable.dateTime))
-        .then((rows) => liveClientBookingSessions(rows)),
-      financialSummary(client.id),
-    ]);
+    const [assignedSatLinks, tutorProfiles, catalogProducts, bookingSessions, financials] =
+      await Promise.all([
+        db
+          .select({
+            tutorUserId: tutorAssignmentsTable.tutorUserId,
+            subject: tutorAssignmentsTable.subject,
+          })
+          .from(tutorAssignmentsTable)
+          .where(eq(tutorAssignmentsTable.studentUserId, client.id)),
+        db
+          .select({
+            id: tutorProfilesTable.id,
+            userId: tutorProfilesTable.userId,
+            name: tutorProfilesTable.name,
+            title: tutorProfilesTable.title,
+            subjects: tutorProfilesTable.subjects,
+            active: tutorProfilesTable.active,
+            calendarStatus: tutorProfilesTable.calendarStatus,
+          })
+          .from(tutorProfilesTable),
+        listActiveAcceptedSatCatalogProducts(),
+        db
+          .select()
+          .from(sessionsTable)
+          .where(eq(sessionsTable.clientUserId, client.id))
+          .orderBy(asc(sessionsTable.dateTime))
+          .then((rows) => liveClientBookingSessions(rows)),
+        financialSummary(client.id),
+      ]);
+    const previewTutor = selectAssignedPreviewBookingTutor(
+      assignedSatLinks,
+      tutorProfiles,
+    );
+    const catalogOffers = previewOffersFromCatalogProducts(catalogProducts);
+    const previewOffers =
+      catalogOffers.length > 0
+        ? catalogOffers
+        : previewOffersFromCatalogProducts(
+            ACCEPTED_SAT_CATALOG.map((product) => ({ ...product, active: true })),
+          );
+    const previewOffer = previewOffers[0]!;
     let previewBooking: {
       calendarStatus: "connected" | "disconnected" | "unavailable";
       availability: {
@@ -9562,11 +9575,22 @@ router.get(
       } | null;
       sessions: Awaited<ReturnType<typeof bookingSessionShape>>[];
     };
-    if (!previewTutor) {
+    const previewSessions = await Promise.all(
+      bookingSessions.map((session) => bookingSessionShape(session)),
+    );
+    const previewTutorShape = previewTutor
+      ? {
+          id: previewTutor.id,
+          name: previewTutor.name,
+          title: previewTutor.title,
+          timezone: SAT_BOOKING_TIMEZONE,
+        }
+      : null;
+    if (!previewTutor || !previewTutorShape) {
       previewBooking = {
         calendarStatus: "unavailable",
         availability: null,
-        sessions: await Promise.all(bookingSessions.map((session) => bookingSessionShape(session))),
+        sessions: previewSessions,
       };
     } else {
       const from = new Date();
@@ -9577,6 +9601,8 @@ router.get(
           from,
           to,
           60,
+          undefined,
+          true,
         );
         previewBooking = {
           calendarStatus: availability.access ? "connected" : "disconnected",
@@ -9590,13 +9616,18 @@ router.get(
             providerStatus: availability.access ? "connected" : "disconnected",
             slots: availability.slots,
           },
-          sessions: await Promise.all(bookingSessions.map((session) => bookingSessionShape(session))),
+          sessions: previewSessions,
         };
       } catch {
         previewBooking = {
-          calendarStatus: "unavailable",
-          availability: null,
-          sessions: await Promise.all(bookingSessions.map((session) => bookingSessionShape(session))),
+          calendarStatus:
+            previewTutor.calendarStatus === "connected" ? "unavailable" : "disconnected",
+          availability: {
+            tutor: previewTutorShape,
+            providerStatus: "disconnected",
+            slots: [],
+          },
+          sessions: previewSessions,
         };
       }
     }
@@ -9604,13 +9635,8 @@ router.get(
       GetAdminClientDashboardResponse.parse({
         ...dashboard,
         adminPreview: true,
-        previewOffer: {
-          name: "Single SAT Session",
-          description:
-            "One prepaid 60-minute SAT tutoring credit. Book any open hour with our SAT tutors.",
-          priceCents: SINGLE_SAT_SESSION_PRICE_CENTS,
-          durationMinutes: 60,
-        },
+        previewOffer,
+        previewOffers,
         previewFinancials: {
           ...financials,
           readOnly: true,
