@@ -1298,8 +1298,6 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt5-math-m2-q19",
     "sat-pt9-math-m2-q22",
     "sat-pt5-math-m1-q18",
-    "sat-pt5-math-m1-q23",
-    "sat-pt5-math-m2-q8",
   ];
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt11-math-m1-q2"),
@@ -1329,17 +1327,17 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt5-math-m1-q18"),
     true,
-    "Q82 official y −5x glued minus must drop",
+    "Q82 official y −5x glued-to-coeff smash must drop",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt5-math-m1-q23"),
-    true,
-    "Q85 official (x −7) glued minus must drop",
+    false,
+    "Q85 compact (x-7) / x+7 volume choices are SAT notation, not smash",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt5-math-m2-q8"),
-    true,
-    "Q93 official 4x −6 glued minus must drop",
+    false,
+    "Q93 compact 4x-6 line choices are SAT notation, not smash",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q17"),
@@ -1475,8 +1473,6 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt5-math-m2-q19",
     "sat-pt9-math-m2-q22",
     "sat-pt5-math-m1-q18",
-    "sat-pt5-math-m1-q23",
-    "sat-pt5-math-m2-q8",
   ]) {
     assert.equal(selected.some((row) => row.sourceKey === key), false, key);
   }

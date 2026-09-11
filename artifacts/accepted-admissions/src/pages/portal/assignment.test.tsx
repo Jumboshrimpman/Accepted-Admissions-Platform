@@ -668,7 +668,7 @@ describe("student attempt UI", () => {
     expect(screen.queryByTestId("answer-choices")).toBeNull();
   });
 
-  test("glued-minus Q82/Q85/Q93 live stems are not student-usable", () => {
+  test("Q82 y −5x glued-coeff smash is not student-usable", () => {
     mocks.questions[0]!.prompt =
       "andthe totallengthof fabric that shepurchasedy,in\nyards,isrepresented bytheequationy-5x=6.\nWhatisthebestinterpretationof6inthiscontext?";
     mocks.questions[0]!.stimulus = null;

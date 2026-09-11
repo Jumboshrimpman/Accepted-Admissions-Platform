@@ -311,15 +311,16 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
   assert.equal(looksGluedMinusSpacing("y-5x=6"), true);
   assert.equal(looksGluedMinusSpacing("y −5x = 6"), true);
   assert.equal(looksGluedMinusSpacing("bytheequationy-5x=6"), true);
-  assert.equal(looksGluedMinusSpacing("V(x)=9x(x-7)"), true);
-  assert.equal(looksGluedMinusSpacing("y=4x-6"), true);
+  assert.equal(looksGluedMinusSpacing("V(x)=9x(x-7)"), false);
+  assert.equal(looksGluedMinusSpacing("V(x) = x(x+9)(x-7)"), false);
+  assert.equal(looksGluedMinusSpacing("x+7"), false);
+  assert.equal(looksGluedMinusSpacing("21px"), false);
+  assert.equal(looksGluedMinusSpacing("y=4x-6"), false);
   assert.equal(looksGluedMinusSpacing("2 - 4x"), false);
   assert.equal(looksGluedMinusSpacing("y - 5x = 6"), false);
-  assert.equal(looksGluedMinusSpacing("V(x) = 9x(x - 7)"), false);
-  assert.equal(looksGluedMinusSpacing("y = 4x - 6"), false);
   assert.equal(looksBrokenMathOcr("y-5x=6\nWhat is the best interpretation of 6?"), true);
-  assert.equal(isStudentReadableChoiceText("V(x)=9x(x-7)"), false);
-  assert.equal(isStudentReadableChoiceText("y=4x-6"), false);
+  assert.equal(isStudentReadableChoiceText("V(x)=9x(x-7)"), true);
+  assert.equal(isStudentReadableChoiceText("y=4x-6"), true);
   assert.equal(isStudentReadableChoiceText("y = 4x - 6"), true);
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -335,7 +336,7 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
       questionType: "mcq",
     }),
     false,
-    "live Q82 y-5x=6 must drop",
+    "Q82 y-5x / y −5x smash must drop",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
@@ -350,13 +351,12 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
       ],
       questionType: "mcq",
     }),
-    false,
-    "live Q85 (x-7) choices must drop",
+    true,
+    "Q85 compact (x-7) / x+7 choices stay",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({
-      prompt:
-        "Linerinthexy-planehasaslopeof4andpasses\nthroughthepoint(0,6).Whichequationdefines\nlinea?",
+      prompt: "Line r in the xy-plane has a slope of 4 and passes through the point (0, 6). Which equation defines line r ?",
       stimulus: null,
       choices: [
         { id: "a", label: "A", text: "y=-6x+4" },
@@ -366,8 +366,8 @@ test("formats run-on inequalities and rejects mangled coordinates, table crops, 
       ],
       questionType: "mcq",
     }),
-    false,
-    "live Q93 4x-6 must drop",
+    true,
+    "Q93 compact 4x-6 choices stay",
   );
   assert.equal(
     isStudentAnswerableQuizQuestion({

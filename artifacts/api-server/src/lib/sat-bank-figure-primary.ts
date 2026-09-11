@@ -109,14 +109,11 @@ const SMASHED_IF_SEGMENT = /\bIf\s+[A-Z]{2}\s+\d+(?:\s+what\b|\s*$)/i;
 const STRAY_COMPARISON_IN_PROSE = /\bexpression\s+[<>≤≥]\s+\w+/i;
 /** Glued compact poly OCR: `2-4x-7x=` / `2 –4x –7x =`. Spaced `2 - 4x - 7x =` stays. */
 const COMPACT_POLY_EQ = /(?:^|\n)\s*\d+\s*[+\-−–]\d+[A-Za-z]\s*[+\-−–]\d+[A-Za-z]\s*=/;
-/** `4x-6` / `4x −6` — coefficient+var glued to the following number. */
-const GLUED_MINUS_COEFF_VAR = /\d[A-Za-z]\s*[−–-]\d/;
-/** `2-4x` / `2 −4x` — leading number glued onto the next coeff+var. */
-const GLUED_MINUS_LEADING_NUM = /\d\s*[−–-]\d+[A-Za-z]/;
-/** Isolated var: `y-5`, `x −7`. Not `COVID-19` (letter before the var). */
-const GLUED_MINUS_ISOLATED_VAR = /(?<![A-Za-z])[A-Za-z]\s*[−–-]\d/;
-/** `y-5x` / smashed `equationy-5x`. Not `COVID-19` (no letter after the digits). */
-const GLUED_MINUS_VAR_TERM = /[A-Za-z]\s*[−–-]\d+[A-Za-z]/;
+/**
+ * Minus glued onto a coefficient×variable: `y −5x`, `y-5x`, `2 −4x`.
+ * Compact SAT `x-7` / `4x-6` / `(x-7)` stays — those are not OCR smash.
+ */
+const GLUED_MINUS_ONTO_COEFF_VAR = /[A-Za-z0-9)\]]\s*[−–-]\d+[A-Za-z]/;
 const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
 /** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
@@ -341,22 +338,15 @@ export function looksSmashedAlgebraChoice(text: string | null | undefined): bool
 }
 
 /**
- * Binary minus glued to the following term. COMPACT_POLY only saw
- * `2-4x-7x=` (digit ± coeff ± coeff =). Live Q82/Q85/Q93 are
- * `y-5x=6`, `(x-7)`, `4x-6` / official `y −5x`, `(x −7)`, `4x −6`.
+ * Minus glued onto the next coefficient×variable (`5x`, `4x`).
+ * COMPACT_POLY only saw two-term `2-4x-7x=`. Q82 `y −5x = 6` is one term.
+ * Compact SAT juxtaposition stays: `x-7`, `4x-6`, `V(x)=x(x+9)(x-7)`, `x+7`, `21px`.
  * Spaced `2 - 4x` / `y - 5x` stay. Unary `−6x`, `= −6`, `(-7)` stay.
- * Hyphenated `xy-plane` / `COVID-19` stay.
  */
 export function looksGluedMinusSpacing(text: string | null | undefined): boolean {
   const raw = text ?? "";
   if (!raw.trim()) return false;
-  if (GLUED_MINUS_COEFF_VAR.test(raw)) return true;
-  if (GLUED_MINUS_LEADING_NUM.test(raw)) return true;
-  if (GLUED_MINUS_VAR_TERM.test(raw)) return true;
-  if (!GLUED_MINUS_ISOLATED_VAR.test(raw)) return false;
-  if (raw.length <= 64) return true;
-  if (/=/.test(raw)) return true;
-  return /\([^)]*[A-Za-z]\s*[−–-]\d/.test(raw);
+  return GLUED_MINUS_ONTO_COEFF_VAR.test(raw);
 }
 
 export function readFigurePrimarySrc(input: FigurePrimaryInput): string | null {
