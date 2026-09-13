@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   HealthCheckResponse,
   ListAdminQuestionReportsResponse,
-} from "@workspace/api-zod";
+} from "../../../../lib/api-zod/src/generated/api.ts";
 
 const generatedApiPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
