@@ -132,6 +132,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useListAdminAccessGrants: () => ({ data: { grants: [] }, isLoading: false, error: null }),
   useCreateAdminAccessGrant: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAdminAccessGrant: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateAdminUser: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminTutorAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteAdminTutorAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateAdminAssignment: () => ({ mutate: vi.fn(), isPending: false }),

@@ -94,7 +94,7 @@ afterEach(() => {
   mocks.remainingHours = 0;
   mocks.currentUser.data = { role: "student" };
   mocks.currentUser.isLoading = false;
-  mocks.dashboard.data.user.role = "student";
+  mocks.dashboard.data.user = { role: "student", id: "student-1", displayName: "Michelle" };
   vi.unstubAllGlobals();
 });
 
@@ -152,12 +152,28 @@ describe("portal SAT book/pay", () => {
     expect(screen.queryByText(/^test$/)).toBeNull();
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
-    expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toMatch(/12:00–1:00 PM America\/New_York/);
+    expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toMatch(/12:00–1:00 PM ET/);
     expect(screen.getByTestId("portal-sat-upcoming-sat-tokyo").textContent).toMatch(/9:00–10:00 PM JST/);
     expect(screen.queryByTestId("portal-sat-upcoming-sat-cancelled")).toBeNull();
     expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
     expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
     expect(screen.queryByText(/Finance/i)).toBeNull();
+  });
+
+  test("shows upcoming SAT times in the client's Asia/Dubai timezone", async () => {
+    mocks.currentUser.data = {
+      role: "student",
+      timezone: "Asia/Dubai",
+    };
+    mocks.dashboard.data.user = {
+      ...mocks.dashboard.data.user,
+      timezone: "Asia/Dubai",
+    };
+
+    render(<PortalSat />);
+    expect(await screen.findByTestId("portal-sat-upcoming-sat-1")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toMatch(/8:00–9:00 PM GST/);
+    expect(screen.getByTestId("portal-sat-upcoming-sat-tokyo").textContent).toMatch(/4:00–5:00 PM GST/);
   });
 
   test("hides checkout when a tutor opens /portal/sat directly", () => {

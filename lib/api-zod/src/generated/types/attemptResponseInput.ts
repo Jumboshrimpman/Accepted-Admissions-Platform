@@ -22,14 +22,11 @@ export interface AttemptResponseInput {
   flagged?: boolean;
   /** @minimum 0 */
   timeSpentSeconds?: number;
-  /**
-   * Grade this item immediately. Only allowed for during_session practice.
-   * Timed pre-work and diagnostics stay hidden until final submit.
-   */
+  /** Grade this item immediately. Only allowed for during_session practice. Timed pre-work and diagnostics stay hidden until final submit. */
   checkAnswer?: boolean;
   /**
-   * Zero-based question index to restore on resume or refresh.
-   * @minimum 0
-   */
+     * Zero-based question index to restore on resume or refresh.
+     * @minimum 0
+     */
   currentQuestionIndex?: number;
 }

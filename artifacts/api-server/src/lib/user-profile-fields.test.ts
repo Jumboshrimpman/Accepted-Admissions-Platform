@@ -53,6 +53,16 @@ test("rejects unsafe photos and empty updates", () => {
   );
   assert.equal(
     parseUserProfileEditableFields({}).error,
-    "Provide a display name, title, or photo to update.",
+    "Provide a display name, title, photo, or timezone to update.",
+  );
+});
+
+test("parses a valid IANA timezone and rejects invented zones", () => {
+  const result = parseUserProfileEditableFields({ timezone: "  Asia/Dubai  " });
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.updates, { timezone: "Asia/Dubai" });
+  assert.equal(
+    parseUserProfileEditableFields({ timezone: "Dubai" }).error,
+    "A valid IANA timezone is required.",
   );
 });

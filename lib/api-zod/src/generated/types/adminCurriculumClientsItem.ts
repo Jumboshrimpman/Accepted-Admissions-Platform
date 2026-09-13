@@ -11,5 +11,6 @@ export type AdminCurriculumClientsItem = {
   id: string;
   name: string;
   email: string;
+  timezone: string;
   assignedTutors: AdminRelationship[];
 };

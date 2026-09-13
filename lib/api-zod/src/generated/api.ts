@@ -26,17 +26,28 @@ export const GetCurrentUserResponse = zod.object({
   "email": zod.string(),
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "title": zod.string().nullish(),
-  "avatarUrl": zod.string().nullish()
+  "avatarUrl": zod.string().nullish(),
+  "timezone": zod.string(),
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
 })
 
 
 /**
- * @summary Update the signed-in user's name, title, or profile picture
+ * @summary Update the signed-in user's name, title, profile picture, or timezone
  */
+export const updateCurrentUserBodyDisplayNameMax = 200;
+
+export const updateCurrentUserBodyTitleMax = 120;
+
+export const updateCurrentUserBodyTimezoneMax = 100;
+
+
+
 export const UpdateCurrentUserBody = zod.object({
-  "displayName": zod.string().min(1).max(200).optional(),
-  "title": zod.string().max(120).nullish(),
-  "avatarUrl": zod.string().nullish()
+  "displayName": zod.string().min(1).max(updateCurrentUserBodyDisplayNameMax).optional(),
+  "title": zod.string().max(updateCurrentUserBodyTitleMax).nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "timezone": zod.string().min(1).max(updateCurrentUserBodyTimezoneMax).optional()
 })
 
 export const UpdateCurrentUserResponse = zod.object({
@@ -45,7 +56,9 @@ export const UpdateCurrentUserResponse = zod.object({
   "email": zod.string(),
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
   "title": zod.string().nullish(),
-  "avatarUrl": zod.string().nullish()
+  "avatarUrl": zod.string().nullish(),
+  "timezone": zod.string(),
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
 })
 
 
@@ -346,6 +359,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "email": zod.string(),
+  "timezone": zod.string(),
   "assignedTutors": zod.array(zod.object({
   "id": zod.string(),
   "assignmentId": zod.string(),
@@ -503,6 +517,34 @@ export const DeleteAdminTutorAssignmentResponse = zod.void()
 
 
 /**
+ * Sets a durable IANA timezone for a client (or other person) from People. Client portal booking and upcoming-session times use this zone. Does not send Clerk invitations or change calendar freebusy.
+ * @summary Update a provisioned person's timezone
+ */
+export const UpdateAdminUserParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const updateAdminUserBodyTimezoneMax = 100;
+
+
+
+export const UpdateAdminUserBody = zod.object({
+  "timezone": zod.string().min(1).max(updateAdminUserBodyTimezoneMax)
+})
+
+export const UpdateAdminUserResponse = zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
+  "title": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "timezone": zod.string(),
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
+})
+
+
+/**
  * @summary Get an administrator-authorized read-only client dashboard preview
  */
 export const GetAdminClientDashboardParams = zod.object({
@@ -515,7 +557,10 @@ export const GetAdminClientDashboardResponse = zod.object({
   "displayName": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
-  "avatarUrl": zod.string().nullish()
+  "title": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "timezone": zod.string(),
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
 }),
   "welcomeMessage": zod.string().optional(),
   "courses": zod.array(zod.object({
@@ -556,7 +601,7 @@ export const GetAdminClientDashboardResponse = zod.object({
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional(),
-  "bookingStatus": zod.string().optional()
+  "bookingStatus": zod.string()
 })),
   "curriculumSessions": zod.array(zod.object({
   "id": zod.string(),
@@ -581,7 +626,7 @@ export const GetAdminClientDashboardResponse = zod.object({
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional(),
-  "bookingStatus": zod.string().optional()
+  "bookingStatus": zod.string()
 }).and(zod.object({
   "readiness": zod.enum(['not_started', 'in_progress', 'ready', 'complete', 'unavailable']),
   "nextAction": zod.string(),
@@ -662,7 +707,7 @@ export const GetAdminClientDashboardResponse = zod.object({
   "remainingHours": zod.number(),
   "readOnly": zod.boolean(),
   "selfServeSatBooking": zod.boolean(),
-  "twelveSessionPlan": zod.boolean()
+  "twelveSessionPlan": zod.boolean().describe('True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan \/ twelve focused meetings” copy.\n')
 }),
   "progress": zod.object({
   "totalSessions": zod.number(),
@@ -977,7 +1022,7 @@ export const UpdateAdminAssignmentResponse = zod.object({
 
 /**
  * Creates a new session-specific assignment and copies question ordering and configuration. The source assignment, its session association, and all student attempts remain unchanged.
- * @summary Clone a reusable quiz onto a session without moving the original
+ * @summary Clone a reusable quiz onto a session without moving the original (administrators and session tutors)
  */
 export const CloneAdminAssignmentToSessionParams = zod.object({
   "assignmentId": zod.coerce.string()
@@ -1191,7 +1236,7 @@ export const UpdateAdminSessionResponse = zod.object({
 
 
 /**
- * Idempotent by source key (exam + test/form + module + question number). Does not invent official College Board wording. Official explanations stay separate from AI annotations.
+ * Idempotent by source key (exam + test/form + module + question number). Does not invent official College Board wording. Official explanations stay separate from AI annotations. After upsert, rematerializes already-linked quiz rows so figure URLs in bank.figures appear on live student quizzes.
  * @summary Import College Board JSON/JSONL extracts into the SAT/PSAT bank
  */
 export const importSatBankBodyRootDirMax = 400;
@@ -1217,7 +1262,260 @@ export const ImportSatBankResponse = zod.object({
 
 
 /**
- * @summary List SAT/PSAT source collections in original-test order
+ * Walks every SAT/PSAT bank row and re-runs the live student-usable audit (same gates as rematerialize and composition). Writes extractGaps.studentUsable and studentUsableReasons. Does not import JSONL or rematerialize linked quizzes. Use this when import 502s so skipping import stays safe.
+ * @summary Re-score student-usable flags on bank rows without re-parsing JSONL
+ */
+export const RescoreSatBankUsableFlagsResponse = zod.object({
+  "scored": zod.number(),
+  "usable": zod.number(),
+  "unusable": zod.number(),
+  "reasons": zod.record(zod.string(), zod.number())
+})
+
+
+/**
+ * Updates each questions row pointed to by bank_questions.linkedQuestionId with current prompt, figure-enriched stimulus, choices, answers, and official explanation. Administrator only. Import already runs this automatically.
+ * @summary Rematerialize linked quiz questions from the current SAT/PSAT bank
+ */
+export const RefreshSatBankLinkedQuestionsResponse = zod.object({
+  "updated": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.number()
+})
+
+
+/**
+ * Tutors see only programs they belong to, students they are linked to, and sessions they are assigned on. Shared quizzes, library assets, and SAT/PSAT collections are readable so tutors can attach work without an administrator. Administrators see the full bank. Viewers are denied.
+ * @summary List the curriculum bank and sessions the signed-in tutor may author
+ */
+export const GetTutorCurriculumResponse = zod.object({
+  "programs": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "term": zod.string(),
+  "status": zod.enum(['draft', 'active', 'completed', 'archived']),
+  "goalSummary": zod.string().nullable(),
+  "meetUrl": zod.string().nullable(),
+  "driveUrl": zod.string().nullable(),
+  "sessionCount": zod.number(),
+  "completedSessionCount": zod.number()
+})),
+  "students": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "courseId": zod.string(),
+  "courseTitle": zod.string(),
+  "subject": zod.string()
+})),
+  "sessions": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "programTitle": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.string(),
+  "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
+  "student": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string()
+}).nullable(),
+  "tutor": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "hasHomework": zod.boolean(),
+  "hasReport": zod.boolean(),
+  "conflict": zod.boolean(),
+  "conflictWith": zod.array(zod.string())
+})),
+  "quizzes": zod.array(zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "programTitle": zod.string(),
+  "sessionTitle": zod.string().nullable(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "instructions": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullable(),
+  "timeLimitMinutes": zod.number(),
+  "maxAttempts": zod.number(),
+  "questionCount": zod.number(),
+  "submissionCount": zod.number()
+})),
+  "libraryAssets": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "kind": zod.enum(['practice_test', 'mini_section', 'resource']),
+  "description": zod.string().nullable(),
+  "resourceUrl": zod.string().nullable(),
+  "body": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "satBankCollections": zod.array(zod.object({
+  "id": zod.string(),
+  "examFamily": zod.string(),
+  "examVariant": zod.string().nullish(),
+  "practiceTestNumber": zod.number().nullish(),
+  "formCode": zod.string().nullish(),
+  "title": zod.string(),
+  "slug": zod.string(),
+  "notes": zod.string().nullish(),
+  "extractStatus": zod.string(),
+  "questionCount": zod.number(),
+  "officialExplanationCount": zod.number(),
+  "assets": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "resourceUrl": zod.string().nullable()
+}))
+}))
+})
+
+
+/**
+ * Tutors may only create sessions where they are the tutor and the client is a linked student for that course and subject. Reuses administrator conflict detection and generated titles. No Clerk invitation is sent.
+ * @summary Create a session for a student the tutor is linked to
+ */
+export const createTutorSessionBodyTimezoneMax = 100;
+
+export const createTutorSessionBodySubjectMax = 100;
+
+export const createTutorSessionBodyDurationMinutesMin = 15;
+export const createTutorSessionBodyDurationMinutesMax = 480;
+
+
+
+export const CreateTutorSessionBody = zod.object({
+  "courseId": zod.string(),
+  "clientUserId": zod.string().nullish(),
+  "tutorUserId": zod.string().nullish(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string().min(1).max(createTutorSessionBodyTimezoneMax),
+  "subject": zod.string().min(1).max(createTutorSessionBodySubjectMax),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
+  "durationMinutes": zod.number().min(createTutorSessionBodyDurationMinutesMin).max(createTutorSessionBodyDurationMinutesMax),
+  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()
+})
+
+export const CreateTutorSessionResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "programTitle": zod.string(),
+  "dateTime": zod.coerce.date(),
+  "timezone": zod.string(),
+  "subject": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "durationMinutes": zod.number(),
+  "bookingStatus": zod.string(),
+  "meetingUrl": zod.string().nullable(),
+  "calendarEventUrl": zod.string().nullish(),
+  "student": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string()
+}).nullable(),
+  "tutor": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullable(),
+  "hasHomework": zod.boolean(),
+  "hasReport": zod.boolean(),
+  "conflict": zod.boolean(),
+  "conflictWith": zod.array(zod.string())
+})
+
+
+/**
+ * Tutors and administrators assemble a named reusable quiz from multiple-choice official bank questions. The quiz is stored as a session-less assignment so it can be assigned like other reusable quizzes. Student-produced response items are rejected. Students cannot create quizzes or browse keyed bank items. No Clerk invite is sent.
+ * @summary Create a reusable quiz from official SAT/PSAT bank questions
+ */
+export const createTutorReusableQuizBodyTitleMin = 2;
+export const createTutorReusableQuizBodyTitleMax = 200;
+
+export const createTutorReusableQuizBodySubjectMax = 100;
+
+export const createTutorReusableQuizBodyBankQuestionIdsMax = 80;
+
+
+
+export const CreateTutorReusableQuizBody = zod.object({
+  "courseId": zod.string(),
+  "title": zod.string().min(createTutorReusableQuizBodyTitleMin).max(createTutorReusableQuizBodyTitleMax),
+  "subject": zod.string().min(1).max(createTutorReusableQuizBodySubjectMax).optional(),
+  "bankQuestionIds": zod.array(zod.string()).min(1).max(createTutorReusableQuizBodyBankQuestionIdsMax)
+})
+
+export const CreateTutorReusableQuizResponse = zod.object({
+  "id": zod.string(),
+  "courseId": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "programTitle": zod.string(),
+  "sessionTitle": zod.string().nullable(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session']),
+  "title": zod.string(),
+  "subject": zod.string(),
+  "instructions": zod.string(),
+  "status": zod.enum(['draft', 'published', 'completed', 'archived']),
+  "deadline": zod.coerce.date().nullable(),
+  "timeLimitMinutes": zod.number(),
+  "maxAttempts": zod.number(),
+  "questionCount": zod.number(),
+  "submissionCount": zod.number()
+})
+
+
+/**
+ * Tutors and administrators add a blank MCQ to a session-attached quiz copy. The new row is not linked to bank_questions. Students are denied. Shared session-less bank quizzes cannot be edited here.
+ * @summary Add a session-local multiple-choice question
+ */
+export const CreateTutorSessionQuestionParams = zod.object({
+  "assignmentId": zod.coerce.string()
+})
+
+export const CreateTutorSessionQuestionBody = zod.object({
+  "prompt": zod.string().optional(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional()
+})
+
+export const CreateTutorSessionQuestionResponse = zod.object({
+  "id": zod.string(),
+  "position": zod.number(),
+  "subject": zod.string(),
+  "questionType": zod.string(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "skill": zod.string(),
+  "difficulty": zod.enum(['foundational', 'medium', 'hard']),
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string().optional(),
+  "explanation": zod.string().optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
+})
+
+
+/**
+ * @summary List SAT/PSAT source collections in original-test order (administrators and tutors)
  */
 export const ListSatBankCollectionsResponseItem = zod.object({
   "id": zod.string(),
@@ -1295,12 +1593,20 @@ export const GetSatBankCollectionResponse = zod.object({
   "extractGaps": zod.record(zod.string(), zod.unknown()).optional(),
   "assignable": zod.boolean().optional(),
   "hasOfficialExplanation": zod.boolean(),
-  "linkedQuestionId": zod.string().nullish()
+  "linkedQuestionId": zod.string().nullish(),
+  "correctAnswer": zod.string().optional(),
+  "officialExplanation": zod.string().optional(),
+  "figures": zod.array(zod.object({
+  "url": zod.string().nullish(),
+  "path": zod.string().nullish(),
+  "alt": zod.string().nullish()
+})).optional()
 }))
 }))
 
 
 /**
+ * Administrators and tutors only. Pass includeKeys=true to include the correct answer, official explanation, and compact figures for quiz assembly. Students are denied. Prefer questionType=mcq when building tutor quizzes; SPR items are not assignable in that flow.
  * @summary Browse canonical SAT/PSAT bank questions
  */
 export const ListSatBankQuestionsQueryParams = zod.object({
@@ -1344,16 +1650,45 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "correctAnswer": zod.string().optional(),
   "officialExplanation": zod.string().optional(),
   "figures": zod.array(zod.object({
-    "url": zod.string().nullish(),
-    "path": zod.string().nullish(),
-    "alt": zod.string().nullish()
-  })).optional()
+  "url": zod.string().nullish(),
+  "path": zod.string().nullish(),
+  "alt": zod.string().nullish()
+})).optional()
 })
 export const ListSatBankQuestionsResponse = zod.array(ListSatBankQuestionsResponseItem)
 
 
 /**
- * @summary Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session
+ * Deletes only that session's before_session attempts and dependents (responses, timer events, review queue, adaptive recs, weakness groups, remediations), archives the old pre-work, and by default assigns a full-length SAT diagnostic. Does not wipe the College Board bank.
+ * @summary Reset October 2 Taito SAT pre-work attempts and re-attach the full diagnostic
+ */
+export const resetFirstSatPreworkBodyReassignDiagnosticDefault = true;
+
+export const ResetFirstSatPreworkBody = zod.object({
+  "reassignDiagnostic": zod.boolean().default(resetFirstSatPreworkBodyReassignDiagnosticDefault)
+})
+
+export const ResetFirstSatPreworkResponse = zod.void()
+
+
+/**
+ * @summary Reset one session's pre-work attempts without wiping the bank
+ */
+export const ResetSessionPreworkParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const resetSessionPreworkBodyReassignDiagnosticDefault = true;
+
+export const ResetSessionPreworkBody = zod.object({
+  "reassignDiagnostic": zod.boolean().default(resetSessionPreworkBodyReassignDiagnosticDefault)
+})
+
+export const ResetSessionPreworkResponse = zod.void()
+
+
+/**
+ * @summary Assign a ~60 minute SAT/PSAT pre-work set from the bank to a session (administrators and session tutors)
  */
 export const AssignSatBankPreworkParams = zod.object({
   "sessionId": zod.coerce.string()
@@ -1916,7 +2251,10 @@ export const GetDashboardResponse = zod.object({
   "displayName": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['administrator', 'tutor', 'student', 'viewer']),
-  "avatarUrl": zod.string().nullish()
+  "title": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "timezone": zod.string(),
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
 }),
   "welcomeMessage": zod.string().optional(),
   "courses": zod.array(zod.object({
@@ -1957,7 +2295,7 @@ export const GetDashboardResponse = zod.object({
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional(),
-  "bookingStatus": zod.string().optional()
+  "bookingStatus": zod.string()
 })),
   "curriculumSessions": zod.array(zod.object({
   "id": zod.string(),
@@ -1982,7 +2320,7 @@ export const GetDashboardResponse = zod.object({
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional(),
-  "bookingStatus": zod.string().optional()
+  "bookingStatus": zod.string()
 }).and(zod.object({
   "readiness": zod.enum(['not_started', 'in_progress', 'ready', 'complete', 'unavailable']),
   "nextAction": zod.string(),
@@ -2063,7 +2401,7 @@ export const GetDashboardResponse = zod.object({
   "remainingHours": zod.number(),
   "readOnly": zod.boolean(),
   "selfServeSatBooking": zod.boolean(),
-  "twelveSessionPlan": zod.boolean()
+  "twelveSessionPlan": zod.boolean().describe('True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan \/ twelve focused meetings” copy.\n')
 }),
   "progress": zod.object({
   "totalSessions": zod.number(),
@@ -2370,7 +2708,7 @@ export const GetCourseResponse = zod.object({
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional(),
-  "bookingStatus": zod.string().optional()
+  "bookingStatus": zod.string()
 }))
 }))
 
@@ -2405,7 +2743,7 @@ export const GetSessionResponse = zod.object({
 }),zod.null()]).optional(),
   "hasHomework": zod.boolean().optional(),
   "hasReport": zod.boolean().optional(),
-  "bookingStatus": zod.string().optional()
+  "bookingStatus": zod.string()
 }).and(zod.object({
   "blocks": zod.array(zod.object({
   "id": zod.string(),
@@ -2473,6 +2811,22 @@ export const GetSessionResponse = zod.object({
 }),zod.null()])
 })).optional()
 }))
+
+
+/**
+ * Tutor of that session or an administrator can delete the student's before_session attempt state (responses, timer events, result), including empty or glitched submits. The same assignment, questions, and pre-work plan stay attached so the student can start a fresh attempt. Does not wipe the College Board bank or during-session collaborative practice.
+ * @summary Clear before-session homework attempts so the student can redo
+ */
+export const ClearSessionHomeworkParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const ClearSessionHomeworkResponse = zod.object({
+  "sessionId": zod.string(),
+  "assignmentIds": zod.array(zod.string()),
+  "deletedAttempts": zod.number(),
+  "keptAssignments": zod.number()
+})
 
 
 /**
@@ -2585,7 +2939,10 @@ export const GetAdaptiveCurriculumResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 }).and(zod.object({
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -2607,7 +2964,10 @@ export const GetAdaptiveCurriculumResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 }).and(zod.object({
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -2690,7 +3050,10 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 }).and(zod.object({
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -2712,7 +3075,10 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 }).and(zod.object({
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -2779,7 +3145,10 @@ export const UpdateAdaptiveRecommendationResponse = zod.object({
 })).optional(),
   "skill": zod.string(),
   "difficulty": zod.enum(['foundational', 'medium', 'hard']),
-  "predictionFirst": zod.boolean()
+  "predictionFirst": zod.boolean(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
 }).and(zod.object({
   "correctAnswer": zod.string(),
   "explanation": zod.string(),
@@ -2900,6 +3269,10 @@ export const StartAttemptParams = zod.object({
   "assignmentId": zod.coerce.string()
 })
 
+export const startAttemptResponseCurrentQuestionIndexMin = 0;
+
+
+
 export const StartAttemptResponse = zod.object({
   "id": zod.string(),
   "assignmentId": zod.string(),
@@ -2909,7 +3282,7 @@ export const StartAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
-  "currentQuestionIndex": zod.number().min(0),
+  "currentQuestionIndex": zod.number().min(startAttemptResponseCurrentQuestionIndexMin),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3000,13 +3373,13 @@ export const StartAttemptResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
 }).nullish()
 })
@@ -3019,6 +3392,10 @@ export const GetAttemptParams = zod.object({
   "attemptId": zod.coerce.string()
 })
 
+export const getAttemptResponseCurrentQuestionIndexMin = 0;
+
+
+
 export const GetAttemptResponse = zod.object({
   "id": zod.string(),
   "assignmentId": zod.string(),
@@ -3028,7 +3405,7 @@ export const GetAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
-  "currentQuestionIndex": zod.number().min(0),
+  "currentQuestionIndex": zod.number().min(getAttemptResponseCurrentQuestionIndexMin),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3119,13 +3496,13 @@ export const GetAttemptResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
 }).nullish()
 })
@@ -3136,6 +3513,10 @@ export const GetAttemptResponse = zod.object({
  */
 export const GetAttemptResultParams = zod.object({
   "attemptId": zod.coerce.string()
+})
+
+export const GetAttemptResultQueryParams = zod.object({
+  "wrongAnswersOnly": zod.coerce.boolean().optional().describe('When true, items contains only misses from this homework attempt')
 })
 
 export const GetAttemptResultResponse = zod.object({
@@ -3212,14 +3593,53 @@ export const GetAttemptResultResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
+})
+
+
+/**
+ * Returns only missed items from a submitted homework or diagnostic attempt so tutors can filter and practice those misses.
+ * @summary Wrong answers only from a homework attempt
+ */
+export const GetAttemptWrongAnswersParams = zod.object({
+  "attemptId": zod.coerce.string()
+})
+
+export const GetAttemptWrongAnswersResponse = zod.object({
+  "attemptId": zod.string(),
+  "assignmentId": zod.string(),
+  "assignmentTitle": zod.string(),
+  "sessionId": zod.string().nullable(),
+  "totalCount": zod.number(),
+  "wrongCount": zod.number(),
+  "items": zod.array(zod.object({
+  "questionId": zod.string(),
+  "correct": zod.boolean(),
+  "prediction": zod.string().nullish(),
+  "finalAnswer": zod.string().nullable(),
+  "correctAnswer": zod.string(),
+  "explanation": zod.string(),
+  "skill": zod.string(),
+  "questionType": zod.string().optional(),
+  "difficulty": zod.string().optional(),
+  "timeSpentSeconds": zod.number().optional(),
+  "flagged": zod.boolean(),
+  "prompt": zod.string(),
+  "stimulus": zod.string().nullish(),
+  "choices": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "text": zod.string()
+})).optional(),
+  "presentation": zod.enum(['text', 'figure_primary']).optional()
+}))
 })
 
 
@@ -3313,19 +3733,19 @@ export const UpdateAttemptReviewResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
 })
 
 
 /**
- * @summary Autosave a response or Prediction First prediction
+ * @summary Autosave a response, or check one in-session practice item
  */
 export const SaveAttemptResponseParams = zod.object({
   "attemptId": zod.coerce.string()
@@ -3337,6 +3757,8 @@ export const saveAttemptResponseBodyFinalAnswerMax = 2000;
 
 export const saveAttemptResponseBodyTimeSpentSecondsMin = 0;
 
+export const saveAttemptResponseBodyCurrentQuestionIndexMin = 0;
+
 
 
 export const SaveAttemptResponseBody = zod.object({
@@ -3346,8 +3768,8 @@ export const SaveAttemptResponseBody = zod.object({
   "finalAnswer": zod.string().max(saveAttemptResponseBodyFinalAnswerMax).nullish(),
   "flagged": zod.boolean().optional(),
   "timeSpentSeconds": zod.number().min(saveAttemptResponseBodyTimeSpentSecondsMin).optional(),
-  "checkAnswer": zod.boolean().optional(),
-  "currentQuestionIndex": zod.number().min(0).optional()
+  "checkAnswer": zod.boolean().optional().describe('Grade this item immediately. Only allowed for during_session practice. Timed pre-work and diagnostics stay hidden until final submit.\n'),
+  "currentQuestionIndex": zod.number().min(saveAttemptResponseBodyCurrentQuestionIndexMin).optional().describe('Zero-based question index to restore on resume or refresh.')
 })
 
 export const SaveAttemptResponseResponse = zod.object({
@@ -3365,15 +3787,24 @@ export const SaveAttemptResponseResponse = zod.object({
 
 
 /**
+ * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item after Save for later.
  * @summary Pause an active attempt
  */
 export const PauseAttemptParams = zod.object({
   "attemptId": zod.coerce.string()
 })
 
+export const pauseAttemptBodyCurrentQuestionIndexMin = 0;
+
+
+
 export const PauseAttemptBody = zod.object({
-  "currentQuestionIndex": zod.number().min(0).optional()
+  "currentQuestionIndex": zod.number().min(pauseAttemptBodyCurrentQuestionIndexMin).optional().describe('Zero-based question index to restore when the student resumes.')
 })
+
+export const pauseAttemptResponseCurrentQuestionIndexMin = 0;
+
+
 
 export const PauseAttemptResponse = zod.object({
   "id": zod.string(),
@@ -3384,7 +3815,7 @@ export const PauseAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
-  "currentQuestionIndex": zod.number().min(0),
+  "currentQuestionIndex": zod.number().min(pauseAttemptResponseCurrentQuestionIndexMin),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3475,13 +3906,13 @@ export const PauseAttemptResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
 }).nullish()
 })
@@ -3494,6 +3925,10 @@ export const ResumeAttemptParams = zod.object({
   "attemptId": zod.coerce.string()
 })
 
+export const resumeAttemptResponseCurrentQuestionIndexMin = 0;
+
+
+
 export const ResumeAttemptResponse = zod.object({
   "id": zod.string(),
   "assignmentId": zod.string(),
@@ -3503,7 +3938,7 @@ export const ResumeAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
-  "currentQuestionIndex": zod.number().min(0),
+  "currentQuestionIndex": zod.number().min(resumeAttemptResponseCurrentQuestionIndexMin),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),
   "prediction": zod.string().nullable(),
@@ -3594,15 +4029,76 @@ export const ResumeAttemptResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
 }).nullish()
+})
+
+
+/**
+ * Students can report a broken or incorrect item and continue the quiz. Creates an admin queue row and emails admin@acceptedadmissions.org. Reported questions are excluded from scoring along with flagged items.
+ * @summary Report the current question as incorrect or a bug
+ */
+export const ReportAttemptQuestionParams = zod.object({
+  "attemptId": zod.coerce.string()
+})
+
+export const ReportAttemptQuestionBody = zod.object({
+  "questionId": zod.string(),
+  "reason": zod.enum(['incorrect', 'bug', 'other']),
+  "note": zod.string().optional()
+})
+
+export const ReportAttemptQuestionResponse = zod.object({
+  "id": zod.string().optional(),
+  "attemptId": zod.string().optional(),
+  "assignmentId": zod.string().optional(),
+  "questionId": zod.string().optional(),
+  "questionIndex": zod.number().optional(),
+  "reason": zod.string().optional(),
+  "note": zod.string().nullish(),
+  "stemSnippet": zod.string().optional(),
+  "status": zod.string().optional(),
+  "emailDelivery": zod.object({
+  "status": zod.string().optional()
+}).optional()
+})
+
+
+/**
+ * @summary List student question reports for the admin queue
+ */
+export const ListAdminQuestionReportsQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListAdminQuestionReportsResponse = zod.object({
+  "reports": zod.array(zod.looseObject({
+
+})).optional()
+})
+
+
+/**
+ * @summary Resolve or dismiss a student question report
+ */
+export const UpdateAdminQuestionReportParams = zod.object({
+  "reportId": zod.coerce.string()
+})
+
+export const UpdateAdminQuestionReportBody = zod.object({
+  "status": zod.enum(['open', 'resolved', 'dismissed'])
+})
+
+export const UpdateAdminQuestionReportResponse = zod.object({
+  "id": zod.string().optional(),
+  "status": zod.string().optional()
 })
 
 
@@ -3691,13 +4187,13 @@ export const SubmitAttemptResponse = zod.object({
   "homeworkKind": zod.string().nullish(),
   "scoreReporting": zod.enum(['none', 'estimated_diagnostic']).optional(),
   "estimatedSatScore": zod.object({
-  "total": zod.number().nullable(),
-  "rangeLow": zod.number().nullable(),
-  "rangeHigh": zod.number().nullable(),
-  "readingWriting": zod.number().nullable(),
-  "math": zod.number().nullable(),
-  "label": zod.string(),
-  "methodology": zod.string()
+  "total": zod.number().nullish(),
+  "rangeLow": zod.number().nullish(),
+  "rangeHigh": zod.number().nullish(),
+  "readingWriting": zod.number().nullish(),
+  "math": zod.number().nullish(),
+  "label": zod.string().optional(),
+  "methodology": zod.string().optional()
 }).nullish()
 })
 
@@ -4166,7 +4662,7 @@ export const UpsertSessionArtifactResponse = zod.object({
 
 
 /**
- * @summary Tutor lesson dashboard grouped by homework weakness
+ * @summary Session lesson dashboard for tutor + student collaborative practice
  */
 export const GetSessionLessonParams = zod.object({
   "sessionId": zod.coerce.string()
@@ -4299,65 +4795,5 @@ export const RecordRetryOutcomeResponse = zod.object({
   "correctAnswer": zod.string().nullish(),
   "explanation": zod.string().nullish()
 })
-
-/**
- * @summary List the curriculum bank and sessions the signed-in tutor may author
- */
-export const GetTutorCurriculumResponse = zod.object({
-  "programs": GetAdminCurriculumResponse.shape.programs,
-  "students": zod.array(zod.object({
-    "id": zod.string(),
-    "name": zod.string(),
-    "courseId": zod.string(),
-    "courseTitle": zod.string(),
-    "subject": zod.string()
-  })),
-  "sessions": GetAdminCurriculumResponse.shape.sessions,
-  "quizzes": GetAdminCurriculumResponse.shape.assignments,
-  "libraryAssets": GetAdminCurriculumResponse.shape.libraryAssets,
-  "satBankCollections": ListSatBankCollectionsResponse
-})
-
-/**
- * @summary Create a session for a student the tutor is linked to
- */
-export const CreateTutorSessionBody = CreateAdminSessionBody
-export const CreateTutorSessionResponse = CreateAdminSessionResponse
-
-/**
- * @summary Create a reusable quiz from official SAT/PSAT bank questions
- */
-export const createTutorReusableQuizBodyTitleMin = 2;
-export const createTutorReusableQuizBodyTitleMax = 200;
-export const createTutorReusableQuizBodySubjectMin = 1;
-export const createTutorReusableQuizBodySubjectMax = 100;
-export const createTutorReusableQuizBodyBankQuestionIdsMin = 1;
-export const createTutorReusableQuizBodyBankQuestionIdsMax = 80;
-
-export const CreateTutorReusableQuizBody = zod.object({
-  "courseId": zod.string().min(1),
-  "title": zod.string().min(createTutorReusableQuizBodyTitleMin).max(createTutorReusableQuizBodyTitleMax),
-  "subject": zod.string().min(createTutorReusableQuizBodySubjectMin).max(createTutorReusableQuizBodySubjectMax).optional(),
-  "bankQuestionIds": zod.array(zod.string()).min(createTutorReusableQuizBodyBankQuestionIdsMin).max(createTutorReusableQuizBodyBankQuestionIdsMax)
-})
-
-export const CreateTutorReusableQuizResponse = CreateAdminAssignmentResponse
-
-export const CreateTutorSessionQuestionParams = zod.object({
-  "assignmentId": zod.coerce.string()
-})
-
-export const CreateTutorSessionQuestionBody = zod.object({
-  "prompt": zod.string().optional(),
-  "choices": zod.array(zod.object({
-  "id": zod.string(),
-  "label": zod.string(),
-  "text": zod.string()
-})).optional(),
-  "correctAnswer": zod.string().optional(),
-  "explanation": zod.string().optional()
-})
-
-export const CreateTutorSessionQuestionResponse = UpdateAssignmentQuestionResponse
 
 

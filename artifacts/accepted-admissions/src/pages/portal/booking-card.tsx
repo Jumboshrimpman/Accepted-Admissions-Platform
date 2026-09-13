@@ -17,6 +17,7 @@ import {
   useCreateBookingSession,
   useGetBookingAvailability,
   useListBookingSessions,
+  useGetCurrentUser,
   useListBookingTutors,
   useRescheduleBookingSession,
   type AdminClientPreviewBooking,
@@ -30,11 +31,16 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
+  bookingSlotDayKey,
   canCancelOrRescheduleSession,
+  clientTimezoneCaption,
   collapsedListedSessions,
+  formatBookingSlotTime,
   formatSessionDateTime,
+  resolveClientDisplayTimezone,
   sessionScheduleChangeMessage,
   uniqueListedSessions,
+  withDisplayTimezone,
 } from "@/lib/session-display";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -50,28 +56,8 @@ function errorMessage(error: unknown): string {
   return data?.error ?? "The booking could not be completed. Please try again.";
 }
 
-function dayKeyInTimeZone(value: string, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(parseISO(value));
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((candidate) => candidate.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
 function dateFromDayKey(dayKey: string): Date {
   return parseISO(`${dayKey}T12:00:00`);
-}
-
-function timeInTimeZone(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(parseISO(value));
 }
 
 function truncateBio(value: string | null | undefined, max = 180): string {
@@ -83,6 +69,8 @@ function truncateBio(value: string | null | undefined, max = 180): string {
 
 export function BookingCard() {
   const queryClient = useQueryClient();
+  const { data: currentUser } = useGetCurrentUser();
+  const displayTimezone = resolveClientDisplayTimezone(currentUser?.timezone);
   const [selectedTutorId, setSelectedTutorId] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [selectedDateKey, setSelectedDateKey] = useState("");
@@ -253,26 +241,25 @@ export function BookingCard() {
 
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
   const availableSlots = availabilityQuery.data?.slots ?? [];
-  const tutorTimezone = availabilityQuery.data?.tutor.timezone ?? "UTC";
   const availableDateKeys = useMemo(
-    () => new Set(availableSlots.map((slot) => dayKeyInTimeZone(slot, tutorTimezone))),
-    [availableSlots, tutorTimezone],
+    () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
+    [availableSlots, displayTimezone],
   );
   const selectedDateSlots = availableSlots.filter(
-    (slot) => dayKeyInTimeZone(slot, tutorTimezone) === selectedDateKey,
+    (slot) => bookingSlotDayKey(slot, displayTimezone) === selectedDateKey,
   );
   const selectedDate = selectedDateKey ? dateFromDayKey(selectedDateKey) : undefined;
-  const rangeStart = startOfDay(dateFromDayKey(dayKeyInTimeZone(range.from, tutorTimezone)));
-  const rangeEnd = endOfDay(dateFromDayKey(dayKeyInTimeZone(range.to, tutorTimezone)));
+  const rangeStart = startOfDay(dateFromDayKey(bookingSlotDayKey(range.from, displayTimezone)));
+  const rangeEnd = endOfDay(dateFromDayKey(bookingSlotDayKey(range.to, displayTimezone)));
 
   useEffect(() => {
     if (!selectedDateKey || !availableDateKeys.has(selectedDateKey)) {
       const firstAvailableSlot = availableSlots[0];
       setSelectedDateKey(
-        firstAvailableSlot ? dayKeyInTimeZone(firstAvailableSlot, tutorTimezone) : "",
+        firstAvailableSlot ? bookingSlotDayKey(firstAvailableSlot, displayTimezone) : "",
       );
     }
-  }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
+  }, [availableDateKeys, availableSlots, selectedDateKey, displayTimezone]);
 
   return (
     <Card id="booking-schedule" className="border-primary/15 shadow-lg shadow-primary/5 scroll-mt-24">
@@ -401,7 +388,7 @@ export function BookingCard() {
                      {reschedulingSessionId ? `Choose a new time with ${selectedTutor.name}` : `Available times with ${selectedTutor.name}`}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Showing the next 14 days in {availabilityQuery.data?.tutor.timezone ?? "the tutor’s timezone"}.
+                      Showing the next 14 days in {clientTimezoneCaption(displayTimezone)}.
                     </p>
                   </div>
                   {availabilityQuery.data?.providerStatus === "disconnected" && (
@@ -455,7 +442,7 @@ export function BookingCard() {
                         </p>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Available times are shown in the tutor’s timezone.
+                        Available times are shown in your local timezone ({clientTimezoneCaption(displayTimezone)}).
                       </p>
                       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
                         {selectedDateSlots.map((slot) => (
@@ -469,7 +456,7 @@ export function BookingCard() {
                                 : "bg-background hover:border-primary/50"
                             }`}
                           >
-                            <span className="font-medium">{timeInTimeZone(slot, tutorTimezone)}</span>
+                            <span className="font-medium">{formatBookingSlotTime(slot, displayTimezone)}</span>
                             <span className="mt-1 block text-xs opacity-70">60-minute session</span>
                           </button>
                         ))}
@@ -514,7 +501,7 @@ export function BookingCard() {
                     <div>
                       <p className="font-medium">{session.title}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {formatSessionDateTime(session)}
+                        {formatSessionDateTime(withDisplayTimezone(session, displayTimezone))}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {session.bookingStatus === "rescheduled" ? "Rescheduled" : "Confirmed"}
@@ -581,24 +568,26 @@ export function ClientPreviewBookingCard({
   hasVerifiedPayment,
   offPlatformBilling = false,
   hasAssignedProgramSessions = false,
+  clientTimezone,
 }: {
   previewBooking: AdminClientPreviewBooking;
   remainingHours: number;
   hasVerifiedPayment: boolean;
   offPlatformBilling?: boolean;
   hasAssignedProgramSessions?: boolean;
+  clientTimezone?: string | null;
 }) {
   const [selectedDateKey, setSelectedDateKey] = useState("");
   const [showAllBooked, setShowAllBooked] = useState(false);
   const availability = previewBooking.availability;
   const availableSlots = availability?.slots ?? [];
-  const tutorTimezone = availability?.tutor.timezone ?? "UTC";
+  const displayTimezone = resolveClientDisplayTimezone(clientTimezone);
   const availableDateKeys = useMemo(
-    () => new Set(availableSlots.map((slot) => dayKeyInTimeZone(slot, tutorTimezone))),
-    [availableSlots, tutorTimezone],
+    () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
+    [availableSlots, displayTimezone],
   );
   const selectedDateSlots = availableSlots.filter(
-    (slot) => dayKeyInTimeZone(slot, tutorTimezone) === selectedDateKey,
+    (slot) => bookingSlotDayKey(slot, displayTimezone) === selectedDateKey,
   );
   const selectedDate = selectedDateKey ? dateFromDayKey(selectedDateKey) : undefined;
   const rangeStart = startOfDay(new Date());
@@ -608,10 +597,10 @@ export function ClientPreviewBookingCard({
     if (!selectedDateKey || !availableDateKeys.has(selectedDateKey)) {
       const firstAvailableSlot = availableSlots[0];
       setSelectedDateKey(
-        firstAvailableSlot ? dayKeyInTimeZone(firstAvailableSlot, tutorTimezone) : "",
+        firstAvailableSlot ? bookingSlotDayKey(firstAvailableSlot, displayTimezone) : "",
       );
     }
-  }, [availableDateKeys, availableSlots, selectedDateKey, tutorTimezone]);
+  }, [availableDateKeys, availableSlots, selectedDateKey, displayTimezone]);
 
   const previewSessions = uniqueListedSessions(
     previewBooking.sessions.filter(isLiveListedSession),
@@ -697,7 +686,7 @@ export function ClientPreviewBookingCard({
               <div>
                 <p className="font-semibold">Available times with {availability?.tutor.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  Showing the next 14 days in {tutorTimezone}.
+                  Showing the next 14 days in {clientTimezoneCaption(displayTimezone)}.
                 </p>
               </div>
               <Badge variant="outline">Calendar connected</Badge>
@@ -736,12 +725,12 @@ export function ClientPreviewBookingCard({
                   </p>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Available times are shown in Xavier&apos;s timezone.
+                  Available times are shown in the client&apos;s timezone ({clientTimezoneCaption(displayTimezone)}).
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
                   {selectedDateSlots.map((slot) => (
                     <div key={slot} className="rounded-xl border bg-muted/20 px-3 py-3 text-sm">
-                      <span className="font-medium">{timeInTimeZone(slot, tutorTimezone)}</span>
+                      <span className="font-medium">{formatBookingSlotTime(slot, displayTimezone)}</span>
                       <span className="mt-1 block text-xs text-muted-foreground">60-minute session</span>
                     </div>
                   ))}
@@ -766,7 +755,7 @@ export function ClientPreviewBookingCard({
                     <div>
                       <p className="font-medium">{session.title}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {formatSessionDateTime(session)}
+                        {formatSessionDateTime(withDisplayTimezone(session, displayTimezone))}
                       </p>
                     </div>
                     <Badge variant={session.bookingStatus === "cancelled" ? "outline" : "secondary"}>

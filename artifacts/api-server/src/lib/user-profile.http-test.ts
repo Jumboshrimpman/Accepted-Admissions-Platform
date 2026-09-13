@@ -173,11 +173,97 @@ test("PATCH /me persists title and picture for the signed-in user only", async (
     assert.equal(reloaded.body.displayName, "Michelle Chen");
     assert.equal(reloaded.body.title, "SAT Student");
     assert.equal(reloaded.body.avatarUrl, "https://example.com/michelle.jpg");
+    assert.equal(reloaded.body.timezone, "America/New_York");
+    assert.equal(reloaded.body.timezoneSource, "default");
   } finally {
     if (previousStudentIds === undefined) delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
     else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudentIds;
     await studentServer?.close();
     await otherServer?.close();
     await reloadedServer?.close();
+  }
+});
+
+test("PATCH /me persists a browser timezone only while the source is still default", async () => {
+  const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+  const student = await createStudent("Michelle Makarem");
+  process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = student.clerkUserId;
+  let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  try {
+    server = await startServer(student);
+    const detected = await patchJson(server.baseUrl, "/api/me", {
+      timezone: "Asia/Dubai",
+    });
+    assert.equal(detected.response.status, 200);
+    assert.equal(detected.body.timezone, "Asia/Dubai");
+    assert.equal(detected.body.timezoneSource, "browser");
+
+    await db
+      .update(usersTable)
+      .set({ timezone: "America/New_York", timezoneSource: "admin", updatedAt: new Date() })
+      .where(eq(usersTable.id, student.id));
+
+    const lockedServer = await startServer({
+      ...student,
+      timezone: "America/New_York",
+      timezoneSource: "admin",
+    });
+    try {
+      const ignored = await patchJson(lockedServer.baseUrl, "/api/me", {
+        timezone: "Asia/Tokyo",
+      });
+      assert.equal(ignored.response.status, 200);
+      assert.equal(ignored.body.timezone, "America/New_York");
+      assert.equal(ignored.body.timezoneSource, "admin");
+    } finally {
+      await lockedServer.close();
+    }
+  } finally {
+    if (previousStudentIds === undefined) delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+    else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudentIds;
+    await server?.close();
+  }
+});
+
+test("admin can set a client timezone from People without changing other profile fields", async () => {
+  const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+  const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+  const admin = await createStudent("Sama Admin");
+  await db
+    .update(usersTable)
+    .set({ role: "administrator", updatedAt: new Date() })
+    .where(eq(usersTable.id, admin.id));
+  const client = await createStudent("Michelle Makarem");
+  process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = admin.clerkUserId;
+  process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = client.clerkUserId;
+  let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  try {
+    server = await startServer({ ...admin, role: "administrator" });
+    const rejected = await patchJson(server.baseUrl, `/api/admin/users/${client.id}`, {
+      timezone: "Dubai",
+    });
+    assert.equal(rejected.response.status, 400);
+
+    const updated = await patchJson(server.baseUrl, `/api/admin/users/${client.id}`, {
+      timezone: "Asia/Dubai",
+    });
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.body.timezone, "Asia/Dubai");
+    assert.equal(updated.body.timezoneSource, "admin");
+    assert.equal(updated.body.displayName, "Michelle Makarem");
+
+    const [persisted] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, client.id))
+      .limit(1);
+    assert.equal(persisted?.timezone, "Asia/Dubai");
+    assert.equal(persisted?.timezoneSource, "admin");
+  } finally {
+    if (previousAdminIds === undefined) delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+    else process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdminIds;
+    if (previousStudentIds === undefined) delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+    else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudentIds;
+    await server?.close();
   }
 });

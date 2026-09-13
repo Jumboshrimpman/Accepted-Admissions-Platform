@@ -22,9 +22,14 @@ import {
   sessionScheduleChangeMessage,
   sessionStartTimeFieldLabel,
   sessionSubjectLabel,
+  sessionTimezoneLabel,
   shouldApplyTaitoTimezone,
   taitoCreateSessionSchedule,
   utcIsoFromSessionLocalValue,
+  withDisplayTimezone,
+  formatBookingSlotTime,
+  bookingSlotDayKey,
+  clientTimezoneCaption,
 } from "./session-display.ts";
 
 const FALL_DATES = [
@@ -94,8 +99,36 @@ test("formats every approved Fall meeting in its declared timezone", () => {
 
 test("labels the start-time field with the session timezone, not browser local", () => {
   assert.equal(sessionStartTimeFieldLabel("Asia/Tokyo"), "Start time (JST)");
-  assert.equal(sessionStartTimeFieldLabel("America/New_York"), "Start time (America/New_York)");
+  assert.equal(sessionStartTimeFieldLabel("America/New_York"), "Start time (ET)");
+  assert.equal(sessionStartTimeFieldLabel("Asia/Dubai"), "Start time (GST)");
   assert.equal(sessionStartTimeFieldLabel("  "), "Start time (session timezone)");
+});
+
+test("formats the same UTC booking slot in Asia/Dubai vs America/New_York", () => {
+  const slot = "2026-03-09T13:00:00.000Z";
+  assert.equal(formatBookingSlotTime(slot, "Asia/Dubai"), "5:00 PM");
+  assert.equal(formatBookingSlotTime(slot, "America/New_York"), "9:00 AM");
+  assert.equal(bookingSlotDayKey(slot, "Asia/Dubai"), "2026-03-09");
+  assert.equal(bookingSlotDayKey(slot, "America/New_York"), "2026-03-09");
+  assert.equal(sessionTimezoneLabel("Asia/Dubai"), "GST");
+  assert.equal(clientTimezoneCaption("Asia/Dubai"), "GST (Asia/Dubai)");
+  assert.equal(clientTimezoneCaption("America/New_York"), "ET (America/New_York)");
+
+  const session = {
+    dateTime: slot,
+    timezone: "America/New_York",
+    durationMinutes: 60,
+  };
+  assert.equal(formatSessionTimeRange(session), "9:00–10:00 AM ET");
+  assert.equal(
+    formatSessionTimeRange(withDisplayTimezone(session, "Asia/Dubai")),
+    "5:00–6:00 PM GST",
+  );
+  assert.match(
+    formatSessionDateTime(withDisplayTimezone(session, "Asia/Dubai")),
+    /Monday, March 9, 2026 · 5:00–6:00 PM GST/,
+  );
+  assert.match(formatSessionDateTime(session), /9:00–10:00 AM ET/);
 });
 
 test("formats an optional admin browser-local readout for the same instant", () => {

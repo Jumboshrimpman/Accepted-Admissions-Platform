@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
 import { ProvisioningReference } from "@/components/provisioning-reference";
@@ -24,7 +24,9 @@ import {
 import {
   getGetCurrentUserQueryKey,
   useGetCurrentUser,
+  useUpdateCurrentUser,
 } from "@workspace/api-client-react";
+import { isValidIanaTimeZone } from "@/lib/session-display";
 import { PortalProfileEditor } from "@/components/portal-profile-editor";
 import { portalAvatarUrl, portalDisplayName } from "@/lib/portal-profile";
 import {
@@ -46,6 +48,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { data: apiUser, isLoading, error, refetch } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
   });
+  const updateCurrentUser = useUpdateCurrentUser();
+  const persistTimezoneForUserId = useRef<string | null>(null);
 
   // Close the mobile menu on navigation. Must stay above any early returns so
   // hook order stays stable while useGetCurrentUser goes from loading to ready
@@ -53,6 +57,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMenuOpen(false);
   }, [location]);
+
+  useEffect(() => {
+    if (!apiUser || apiUser.role !== "student") return;
+    if ((apiUser.timezoneSource ?? "default") !== "default") return;
+    if (persistTimezoneForUserId.current === apiUser.id) return;
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!detected || !isValidIanaTimeZone(detected)) return;
+    persistTimezoneForUserId.current = apiUser.id;
+    updateCurrentUser.mutate(
+      { data: { timezone: detected } },
+      {
+        onSuccess: () => {
+          void refetch();
+        },
+      },
+    );
+  }, [apiUser, refetch, updateCurrentUser]);
 
   if (isLoading) {
     return (

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttemptAnalysis } from './attemptAnalysis';
+import type { AttemptResultEstimatedSatScore } from './attemptResultEstimatedSatScore';
 import type { AttemptResultItem } from './attemptResultItem';
 import type { AttemptResultReviewStatus } from './attemptResultReviewStatus';
 import type { AttemptResultScoreReporting } from './attemptResultScoreReporting';
@@ -40,14 +41,5 @@ export interface AttemptResult {
   /** @nullable */
   homeworkKind?: string | null;
   scoreReporting?: AttemptResultScoreReporting;
-  /** @nullable */
-  estimatedSatScore?: {
-    total: number | null;
-    rangeLow: number | null;
-    rangeHigh: number | null;
-    readingWriting: number | null;
-    math: number | null;
-    label: string;
-    methodology: string;
-  } | null;
+  estimatedSatScore?: AttemptResultEstimatedSatScore;
 }

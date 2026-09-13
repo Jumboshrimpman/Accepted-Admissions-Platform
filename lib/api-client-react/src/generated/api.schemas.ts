@@ -569,6 +569,15 @@ export interface AdminAccessGrantUpdate {
   active?: boolean;
 }
 
+export type CurrentUserTimezoneSource = typeof CurrentUserTimezoneSource[keyof typeof CurrentUserTimezoneSource];
+
+
+export const CurrentUserTimezoneSource = {
+  default: 'default',
+  admin: 'admin',
+  browser: 'browser',
+} as const;
+
 export interface CurrentUser {
   id: string;
   displayName: string;
@@ -578,21 +587,36 @@ export interface CurrentUser {
   title?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  timezone: string;
+  timezoneSource?: CurrentUserTimezoneSource;
 }
 
 export interface CurrentUserUpdate {
   /**
-   * @minLength 1
-   * @maxLength 200
-   */
+     * @minLength 1
+     * @maxLength 200
+     */
   displayName?: string;
   /**
-   * @maxLength 120
-   * @nullable
-   */
+     * @maxLength 120
+     * @nullable
+     */
   title?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  timezone?: string;
+}
+
+export interface AdminUserUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  timezone: string;
 }
 
 export type AdminOverviewUsersItem = {
@@ -1232,6 +1256,7 @@ export type AdminCurriculumClientsItem = {
   id: string;
   name: string;
   email: string;
+  timezone: string;
   assignedTutors: AdminRelationship[];
 };
 
@@ -1327,6 +1352,50 @@ export interface AdminCurriculum {
   clients: AdminCurriculumClientsItem[];
 }
 
+export interface DashboardStudent {
+  id: string;
+  name: string;
+  courseId: string;
+  courseTitle: string;
+  subject: string;
+}
+
+export interface SatBankAsset {
+  id: string;
+  kind: string;
+  title: string;
+  /** @nullable */
+  resourceUrl: string | null;
+}
+
+export interface SatBankCollection {
+  id: string;
+  examFamily: string;
+  /** @nullable */
+  examVariant?: string | null;
+  /** @nullable */
+  practiceTestNumber?: number | null;
+  /** @nullable */
+  formCode?: string | null;
+  title: string;
+  slug: string;
+  /** @nullable */
+  notes?: string | null;
+  extractStatus: string;
+  questionCount: number;
+  officialExplanationCount: number;
+  assets: SatBankAsset[];
+}
+
+export interface TutorCurriculum {
+  programs: AdminProgram[];
+  students: DashboardStudent[];
+  sessions: AdminSession[];
+  quizzes: AdminAssignment[];
+  libraryAssets: CurriculumLibraryAsset[];
+  satBankCollections: SatBankCollection[];
+}
+
 export interface AdminTutorAssignmentInput {
   /** @minLength 1 */
   tutorUserId: string;
@@ -1411,7 +1480,7 @@ export interface Session {
   student?: SessionStudent | null;
   hasHomework?: boolean;
   hasReport?: boolean;
-  bookingStatus?: string;
+  bookingStatus: string;
 }
 
 export type CurriculumSessionReadiness = typeof CurriculumSessionReadiness[keyof typeof CurriculumSessionReadiness];
@@ -1494,6 +1563,41 @@ export const AttemptAnalysisSource = {
   provider: 'provider',
 } as const;
 
+export type AnalysisSectionBreakdownSection = typeof AnalysisSectionBreakdownSection[keyof typeof AnalysisSectionBreakdownSection];
+
+
+export const AnalysisSectionBreakdownSection = {
+  rw: 'rw',
+  math: 'math',
+  other: 'other',
+} as const;
+
+export interface AnalysisSectionBreakdown {
+  section?: AnalysisSectionBreakdownSection;
+  label: string;
+  accuracy: number;
+  correct?: number;
+  total: number;
+  missCount: number;
+}
+
+export type AnalysisMissClusterKind = typeof AnalysisMissClusterKind[keyof typeof AnalysisMissClusterKind];
+
+
+export const AnalysisMissClusterKind = {
+  skill: 'skill',
+  domain: 'domain',
+  section: 'section',
+  prompt: 'prompt',
+} as const;
+
+export interface AnalysisMissCluster {
+  label: string;
+  kind?: AnalysisMissClusterKind;
+  missCount: number;
+  examples?: string[];
+}
+
 export interface AttemptAnalysis {
   source: AttemptAnalysisSource;
   label: string;
@@ -1506,24 +1610,8 @@ export interface AttemptAnalysis {
   feedback: string;
   sessionOpener?: string;
   skipRehash?: string[];
-  sectionBreakdown?: AttemptAnalysisSectionBreakdown[];
-  missClusters?: AttemptAnalysisMissCluster[];
-}
-
-export interface AttemptAnalysisSectionBreakdown {
-  section?: 'rw' | 'math' | 'other';
-  label: string;
-  accuracy: number;
-  correct?: number;
-  total: number;
-  missCount: number;
-}
-
-export interface AttemptAnalysisMissCluster {
-  label: string;
-  kind?: 'skill' | 'domain' | 'section' | 'prompt';
-  missCount: number;
-  examples?: string[];
+  sectionBreakdown?: AnalysisSectionBreakdown[];
+  missClusters?: AnalysisMissCluster[];
 }
 
 export type CurriculumSessionLatestResult = {
@@ -1549,6 +1637,7 @@ export interface DashboardCredits {
   remainingHours: number;
   readOnly: boolean;
   selfServeSatBooking: boolean;
+  /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }
 
@@ -1559,14 +1648,6 @@ export interface DashboardProgress {
   averageScore: number | null;
   strengths: string[];
   weaknesses: string[];
-}
-
-export interface DashboardStudent {
-  id: string;
-  name: string;
-  courseId: string;
-  courseTitle: string;
-  subject: string;
 }
 
 export type ReviewSubmissionStatus = typeof ReviewSubmissionStatus[keyof typeof ReviewSubmissionStatus];
@@ -1609,8 +1690,8 @@ export interface ReviewSubmission {
   /** @nullable */
   sessionOpener?: string | null;
   skipRehash?: string[];
-  sectionBreakdown?: AttemptAnalysisSectionBreakdown[];
-  missClusters?: AttemptAnalysisMissCluster[];
+  sectionBreakdown?: AnalysisSectionBreakdown[];
+  missClusters?: AnalysisMissCluster[];
 }
 
 export type DashboardRecentScoresItem = {
@@ -1905,6 +1986,13 @@ export type SessionDetail = Session & ({
   homework?: SessionHomework[];
 });
 
+export interface ClearSessionHomeworkResult {
+  sessionId: string;
+  assignmentIds: string[];
+  deletedAttempts: number;
+  keptAssignments: number;
+}
+
 export type AssignmentQuestionDifficulty = typeof AssignmentQuestionDifficulty[keyof typeof AssignmentQuestionDifficulty];
 
 
@@ -1912,6 +2000,14 @@ export const AssignmentQuestionDifficulty = {
   foundational: 'foundational',
   medium: 'medium',
   hard: 'hard',
+} as const;
+
+export type AssignmentQuestionPresentation = typeof AssignmentQuestionPresentation[keyof typeof AssignmentQuestionPresentation];
+
+
+export const AssignmentQuestionPresentation = {
+  text: 'text',
+  figure_primary: 'figure_primary',
 } as const;
 
 export type AssignmentQuestionChoicesItem = {
@@ -1934,7 +2030,7 @@ export interface AssignmentQuestion {
   predictionFirst: boolean;
   correctAnswer?: string;
   explanation?: string;
-  presentation?: 'text' | 'figure_primary';
+  presentation?: AssignmentQuestionPresentation;
 }
 
 export type AdaptiveQuestion = AssignmentQuestion & {
@@ -2023,19 +2119,18 @@ export interface AdaptiveRecommendationUpdate {
   position?: number;
 }
 
+export type AssignmentQuestionUpdateChoicesItem = {
+  id: string;
+  label: string;
+  text: string;
+};
+
 export interface AssignmentQuestionUpdate {
   /** @minimum 0 */
   position?: number;
   predictionFirst?: boolean;
   prompt?: string;
-  choices?: AssignmentQuestionChoicesItem[];
-  correctAnswer?: string;
-  explanation?: string;
-}
-
-export interface TutorSessionQuestionInput {
-  prompt?: string;
-  choices?: AssignmentQuestionChoicesItem[];
+  choices?: AssignmentQuestionUpdateChoicesItem[];
   correctAnswer?: string;
   explanation?: string;
 }
@@ -2079,15 +2174,12 @@ export interface AttemptResponseInput {
   flagged?: boolean;
   /** @minimum 0 */
   timeSpentSeconds?: number;
-  /**
-   * Grade this item immediately. Only allowed for during_session practice.
-   * Timed pre-work and diagnostics stay hidden until final submit.
-   */
+  /** Grade this item immediately. Only allowed for during_session practice. Timed pre-work and diagnostics stay hidden until final submit. */
   checkAnswer?: boolean;
   /**
-   * Zero-based question index to restore on resume or refresh.
-   * @minimum 0
-   */
+     * Zero-based question index to restore on resume or refresh.
+     * @minimum 0
+     */
   currentQuestionIndex?: number;
 }
 
@@ -2104,6 +2196,14 @@ export const TimerEventType = {
 export interface TimerEvent {
   type: TimerEventType;
   at: string;
+}
+
+export interface AttemptProgressInput {
+  /**
+     * Zero-based question index to restore when the student resumes.
+     * @minimum 0
+     */
+  currentQuestionIndex?: number;
 }
 
 export type AttemptStatus = typeof AttemptStatus[keyof typeof AttemptStatus];
@@ -2131,6 +2231,14 @@ export interface ScoreBreakdown {
   accuracy?: number;
 }
 
+export type AttemptResultItemPresentation = typeof AttemptResultItemPresentation[keyof typeof AttemptResultItemPresentation];
+
+
+export const AttemptResultItemPresentation = {
+  text: 'text',
+  figure_primary: 'figure_primary',
+} as const;
+
 export type AttemptResultItemChoicesItem = {
   id: string;
   label: string;
@@ -2155,7 +2263,7 @@ export interface AttemptResultItem {
   /** @nullable */
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
-  presentation?: 'text' | 'figure_primary';
+  presentation?: AttemptResultItemPresentation;
 }
 
 export type AttemptResultReviewStatus = typeof AttemptResultReviewStatus[keyof typeof AttemptResultReviewStatus];
@@ -2174,6 +2282,21 @@ export const AttemptResultScoreReporting = {
   none: 'none',
   estimated_diagnostic: 'estimated_diagnostic',
 } as const;
+
+export type AttemptResultEstimatedSatScore = {
+  /** @nullable */
+  total?: number | null;
+  /** @nullable */
+  rangeLow?: number | null;
+  /** @nullable */
+  rangeHigh?: number | null;
+  /** @nullable */
+  readingWriting?: number | null;
+  /** @nullable */
+  math?: number | null;
+  label?: string;
+  methodology?: string;
+} | null;
 
 export interface AttemptResult {
   attemptId: string;
@@ -2203,16 +2326,7 @@ export interface AttemptResult {
   /** @nullable */
   homeworkKind?: string | null;
   scoreReporting?: AttemptResultScoreReporting;
-  /** @nullable */
-  estimatedSatScore?: {
-    total: number | null;
-    rangeLow: number | null;
-    rangeHigh: number | null;
-    readingWriting: number | null;
-    math: number | null;
-    label: string;
-    methodology: string;
-  } | null;
+  estimatedSatScore?: AttemptResultEstimatedSatScore;
 }
 
 export interface Attempt {
@@ -2224,22 +2338,26 @@ export interface Attempt {
   pausedSeconds: number;
   pauseCount: number;
   remainingSeconds: number;
+  /** @minimum 0 */
   currentQuestionIndex: number;
   responses: AttemptResponse[];
   timerEvents?: TimerEvent[];
   result?: AttemptResult | null;
 }
 
-export interface AttemptProgressInput {
-  /**
-   * Zero-based question index to restore when the student resumes.
-   * @minimum 0
-   */
-  currentQuestionIndex?: number;
-}
-
 export interface AttemptSubmission {
   confirm: boolean;
+}
+
+export interface AttemptWrongAnswers {
+  attemptId: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  /** @nullable */
+  sessionId: string | null;
+  totalCount: number;
+  wrongCount: number;
+  items: AttemptResultItem[];
 }
 
 export type AttemptReviewUpdateReviewStatus = typeof AttemptReviewUpdateReviewStatus[keyof typeof AttemptReviewUpdateReviewStatus];
@@ -2620,14 +2738,6 @@ export interface SatBankImportResult {
   collectionsEnsured: number;
 }
 
-export interface SatBankAsset {
-  id: string;
-  kind: string;
-  title: string;
-  /** @nullable */
-  resourceUrl: string | null;
-}
-
 export type SatBankQuestionSection = typeof SatBankQuestionSection[keyof typeof SatBankQuestionSection];
 
 
@@ -2643,6 +2753,15 @@ export type SatBankQuestionChoicesItem = {
 };
 
 export type SatBankQuestionExtractGaps = { [key: string]: unknown };
+
+export type SatBankQuestionFiguresItem = {
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  path?: string | null;
+  /** @nullable */
+  alt?: string | null;
+};
 
 export interface SatBankQuestion {
   id: string;
@@ -2682,39 +2801,36 @@ export interface SatBankQuestion {
   figures?: SatBankQuestionFiguresItem[];
 }
 
-export type SatBankQuestionFiguresItem = {
-  /** @nullable */
-  url?: string | null;
-  /** @nullable */
-  path?: string | null;
-  /** @nullable */
-  alt?: string | null;
-};
-
-export type TutorReusableQuizInput = {
-  courseId: string;
-  title: string;
-  subject?: string;
-  bankQuestionIds: string[];
-};
-
-export interface SatBankCollection {
+export type TutorSessionQuestionInputChoicesItem = {
   id: string;
-  examFamily: string;
-  /** @nullable */
-  examVariant?: string | null;
-  /** @nullable */
-  practiceTestNumber?: number | null;
-  /** @nullable */
-  formCode?: string | null;
+  label: string;
+  text: string;
+};
+
+export interface TutorSessionQuestionInput {
+  prompt?: string;
+  choices?: TutorSessionQuestionInputChoicesItem[];
+  correctAnswer?: string;
+  explanation?: string;
+}
+
+export interface TutorReusableQuizInput {
+  courseId: string;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
   title: string;
-  slug: string;
-  /** @nullable */
-  notes?: string | null;
-  extractStatus: string;
-  questionCount: number;
-  officialExplanationCount: number;
-  assets: SatBankAsset[];
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  subject?: string;
+  /**
+     * @minItems 1
+     * @maxItems 80
+     */
+  bankQuestionIds: string[];
 }
 
 export type SatBankCollectionDetail = SatBankCollection & {
@@ -3006,6 +3122,21 @@ export type CloneAdminAssignmentToSessionBody = {
   allowDuplicate?: boolean;
 };
 
+export type RescoreSatBankUsableFlags200Reasons = {[key: string]: number};
+
+export type RescoreSatBankUsableFlags200 = {
+  scored: number;
+  usable: number;
+  unusable: number;
+  reasons: RescoreSatBankUsableFlags200Reasons;
+};
+
+export type RefreshSatBankLinkedQuestions200 = {
+  updated: number;
+  skipped: number;
+  errors: number;
+};
+
 export type ListSatBankQuestionsParams = {
 examFamily?: ListSatBankQuestionsExamFamily;
 collectionId?: string;
@@ -3014,20 +3145,6 @@ skill?: string;
 questionType?: ListSatBankQuestionsQuestionType;
 includeKeys?: ListSatBankQuestionsIncludeKeys;
 };
-
-export type ListSatBankQuestionsQuestionType = typeof ListSatBankQuestionsQuestionType[keyof typeof ListSatBankQuestionsQuestionType];
-
-export const ListSatBankQuestionsQuestionType = {
-  mcq: 'mcq',
-  spr: 'spr',
-} as const;
-
-export type ListSatBankQuestionsIncludeKeys = typeof ListSatBankQuestionsIncludeKeys[keyof typeof ListSatBankQuestionsIncludeKeys];
-
-export const ListSatBankQuestionsIncludeKeys = {
-  true: 'true',
-  false: 'false',
-} as const;
 
 export type ListSatBankQuestionsExamFamily = typeof ListSatBankQuestionsExamFamily[keyof typeof ListSatBankQuestionsExamFamily];
 
@@ -3044,6 +3161,30 @@ export const ListSatBankQuestionsSection = {
   rw: 'rw',
   math: 'math',
 } as const;
+
+export type ListSatBankQuestionsQuestionType = typeof ListSatBankQuestionsQuestionType[keyof typeof ListSatBankQuestionsQuestionType];
+
+
+export const ListSatBankQuestionsQuestionType = {
+  mcq: 'mcq',
+  spr: 'spr',
+} as const;
+
+export type ListSatBankQuestionsIncludeKeys = typeof ListSatBankQuestionsIncludeKeys[keyof typeof ListSatBankQuestionsIncludeKeys];
+
+
+export const ListSatBankQuestionsIncludeKeys = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ResetFirstSatPreworkBody = {
+  reassignDiagnostic?: boolean;
+};
+
+export type ResetSessionPreworkBody = {
+  reassignDiagnostic?: boolean;
+};
 
 export type GetBookingAvailabilityParams = {
 tutorProfileId: string;
@@ -3078,6 +3219,73 @@ export const ListAssignmentsStatus = {
   completed: 'completed',
   archived: 'archived',
 } as const;
+
+export type GetAttemptResultParams = {
+/**
+ * When true, items contains only misses from this homework attempt
+ */
+wrongAnswersOnly?: boolean;
+};
+
+export type ReportAttemptQuestionBodyReason = typeof ReportAttemptQuestionBodyReason[keyof typeof ReportAttemptQuestionBodyReason];
+
+
+export const ReportAttemptQuestionBodyReason = {
+  incorrect: 'incorrect',
+  bug: 'bug',
+  other: 'other',
+} as const;
+
+export type ReportAttemptQuestionBody = {
+  questionId: string;
+  reason: ReportAttemptQuestionBodyReason;
+  note?: string;
+};
+
+export type ReportAttemptQuestion201EmailDelivery = {
+  status?: string;
+};
+
+export type ReportAttemptQuestion201 = {
+  id?: string;
+  attemptId?: string;
+  assignmentId?: string;
+  questionId?: string;
+  questionIndex?: number;
+  reason?: string;
+  note?: string | null;
+  stemSnippet?: string;
+  status?: string;
+  emailDelivery?: ReportAttemptQuestion201EmailDelivery;
+};
+
+export type ListAdminQuestionReportsParams = {
+status?: string;
+};
+
+export type ListAdminQuestionReports200ReportsItem = { [key: string]: unknown };
+
+export type ListAdminQuestionReports200 = {
+  reports?: ListAdminQuestionReports200ReportsItem[];
+};
+
+export type UpdateAdminQuestionReportBodyStatus = typeof UpdateAdminQuestionReportBodyStatus[keyof typeof UpdateAdminQuestionReportBodyStatus];
+
+
+export const UpdateAdminQuestionReportBodyStatus = {
+  open: 'open',
+  resolved: 'resolved',
+  dismissed: 'dismissed',
+} as const;
+
+export type UpdateAdminQuestionReportBody = {
+  status: UpdateAdminQuestionReportBodyStatus;
+};
+
+export type UpdateAdminQuestionReport200 = {
+  id?: string;
+  status?: string;
+};
 
 export type ListContentSourcesParams = {
 courseId: string;

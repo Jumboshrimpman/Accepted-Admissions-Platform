@@ -124,6 +124,7 @@ const mocks = vi.hoisted(() => ({
       id: string;
       name: string;
       email: string;
+      timezone: string;
       assignedTutors: Array<{
         id: string;
         assignmentId: string;
@@ -159,6 +160,10 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
   }),
   useUpdateAdminAccessGrant: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useUpdateAdminUser: () => ({
     mutate: vi.fn(),
     isPending: false,
   }),
@@ -472,6 +477,7 @@ describe("administrator overview", () => {
         id: "student-1",
         name: "Taito Goto",
         email: "taito@example.invalid",
+        timezone: "Asia/Tokyo",
         assignedTutors: [],
       },
     ];
@@ -515,6 +521,7 @@ describe("administrator overview", () => {
         id: "student-1",
         name: "Taito Goto",
         email: "taito@example.invalid",
+        timezone: "Asia/Tokyo",
         assignedTutors: [
           {
             id: "tutor-1",
@@ -536,6 +543,10 @@ describe("administrator overview", () => {
     const previewLink = screen.getByRole("link", { name: /Preview client portal/i });
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
     expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/michaelmakarem@gmail.com/);
+    expect(screen.getByLabelText("Timezone for Taito Goto")).toBeTruthy();
+    expect((screen.getByTestId("client-timezone-student-1") as HTMLSelectElement).value).toBe(
+      "Asia/Tokyo",
+    );
     expect(screen.getByText("Nika Raiffe · English")).toBeTruthy();
     expect(screen.getByTestId("card-student-portals").textContent).toMatch(
       /Preview cannot create or remove tutor–student links/,
@@ -575,6 +586,7 @@ describe("administrator overview", () => {
         id: "student-1",
         name: "Taito Goto",
         email: "taito@example.invalid",
+        timezone: "Asia/Tokyo",
         assignedTutors: [
           {
             id: "tutor-1",

@@ -22,9 +22,11 @@ import {
   formatSessionDate,
   formatSessionTimeRange,
   isSessionWorkComplete,
+  optionalClientTimezone,
   sessionDateKey,
   sessionSubjectLabel,
   uniqueListedSessions,
+  withDisplayTimezone,
 } from "@/lib/session-display";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-card";
@@ -168,6 +170,7 @@ export function ClientDashboardView({
   const offPlatformBilling = isOffPlatformProgramClient(dashboard.credits);
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
   const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
+  const clientTimezone = optionalClientTimezone(dashboard.user.timezone);
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
@@ -355,6 +358,7 @@ export function ClientDashboardView({
       {adminPreview && showSelfServeBooking && previewBooking ? (
         <ClientPreviewBookingCard
           previewBooking={previewBooking}
+          clientTimezone={clientTimezone}
           remainingHours={previewFinancials?.remainingHours ?? dashboard.credits.remainingHours}
           hasVerifiedPayment={
             previewFinancials?.payments.some(
@@ -406,10 +410,10 @@ export function ClientDashboardView({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>{sessionSubjectLabel(nextSession.subject)}</Badge>
-                <span className="text-sm text-muted-foreground">Next meeting · {formatSessionDate(nextSession)}</span>
+                <span className="text-sm text-muted-foreground">Next meeting · {formatSessionDate(withDisplayTimezone(nextSession, clientTimezone))}</span>
               </div>
               <h2 className="mt-3 text-2xl font-semibold">{displaySessionTitle(nextSession.title, nextSession.subject)}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{formatSessionTimeRange(nextSession)}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{formatSessionTimeRange(withDisplayTimezone(nextSession, clientTimezone))}</p>
             </div>
             <div className="rounded-xl bg-muted/40 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
@@ -524,8 +528,8 @@ export function ClientDashboardView({
                   <div className="grid gap-4 px-5 py-4 sm:px-6 lg:grid-cols-[3rem_12rem_1fr_10rem_auto] lg:items-center">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">{index + 1}</div>
                     <div>
-                      <p className="font-semibold">{formatSessionDate(session)}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatSessionTimeRange(session)}</p>
+                      <p className="font-semibold">{formatSessionDate(withDisplayTimezone(session, clientTimezone))}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{formatSessionTimeRange(withDisplayTimezone(session, clientTimezone))}</p>
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">

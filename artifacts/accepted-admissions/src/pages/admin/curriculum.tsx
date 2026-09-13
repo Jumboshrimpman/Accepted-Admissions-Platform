@@ -737,7 +737,10 @@ function SessionsSection({
     return true;
   });
   const conflictCount = matched.filter((item) => item.conflict).length;
-  const students = mergeSessionPeople(data.clients, overviewUsers, "student", { assignedTutors: [] });
+  const students = mergeSessionPeople(data.clients, overviewUsers, "student", {
+    assignedTutors: [],
+    timezone: "America/New_York",
+  });
   const tutors = mergeSessionPeople(data.tutors, overviewUsers, "tutor", {
     subjects: [] as string[],
     active: true,

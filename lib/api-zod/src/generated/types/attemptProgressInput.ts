@@ -8,8 +8,8 @@
 
 export interface AttemptProgressInput {
   /**
-   * Zero-based question index to restore when the student resumes.
-   * @minimum 0
-   */
+     * Zero-based question index to restore when the student resumes.
+     * @minimum 0
+     */
   currentQuestionIndex?: number;
 }

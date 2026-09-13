@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { CurrentUserTimezoneSource } from './currentUserTimezoneSource';
 import type { Role } from './role';
 
 export interface CurrentUser {
@@ -16,4 +17,6 @@ export interface CurrentUser {
   title?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  timezone: string;
+  timezoneSource?: CurrentUserTimezoneSource;
 }

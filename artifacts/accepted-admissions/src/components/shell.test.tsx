@@ -37,6 +37,10 @@ vi.mock("wouter", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   getGetCurrentUserQueryKey: () => ["/api/me"],
   useGetCurrentUser: () => currentUser,
+  useUpdateCurrentUser: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 import { Shell } from "./shell";
