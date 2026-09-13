@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "codegen": "orval --config ./orval.config.ts && node ./patch-generated-zod3.mjs && pnpm -w run typecheck:libs",
-    "test": "node --test ./patch-generated-zod3.test.mjs"
+    "codegen": "orval --config ./orval.config.ts && node ./patch-generated-zod3.mjs && node ./check-zod3-compat.mjs && pnpm -w run typecheck:libs",
+    "test": "node --test ./patch-generated-zod3.test.mjs && node ./check-zod3-compat.mjs"
   },
   "devDependencies": {
     "orval": "^8.23.0"

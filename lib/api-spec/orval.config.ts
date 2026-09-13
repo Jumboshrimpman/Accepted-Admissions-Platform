@@ -57,6 +57,9 @@ export default defineConfig({
       prettier: true,
       override: {
         zod: {
+          // Catalog is Zod 3. Orval 8 'auto' falls back to Zod 4 (looseObject,
+          // int, uuid, …) when it cannot resolve `catalog:`.
+          version: 3,
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],
