@@ -3,8 +3,8 @@ name: OpenAPI and Zod generator compatibility
 description: Compatibility rule for this workspace's Orval-generated validation schemas.
 ---
 
-Keep OpenAPI numeric fields as `type: number` and formatted values such as URLs or UUIDs as plain strings while the workspace catalog remains on Zod 3. Verify that generated object validators enforce every contract constraint.
+Keep OpenAPI numeric fields as `type: number` and formatted values such as URLs or UUIDs as plain strings while the workspace catalog remains on Zod 3. Verify that generated object validators enforce every contract constraint. Never ship generated `zod.looseObject` (or other Zod 4-only helpers) — `lib/api-spec/patch-generated-zod3.mjs` rewrites them after Orval.
 
-**Why:** Orval 8 emits Zod 4-only `int()`, `url()`, and `uuid()` calls for OpenAPI integer and formatted-string fields, but this workspace intentionally resolves generated validators against Zod 3. It also ignores some object constraints such as `minProperties`, so a successful generation can still produce weaker runtime validation than the contract declares.
+**Why:** Orval 8 emits Zod 4-only `int()`, `url()`, `uuid()`, and `looseObject()` calls (empty `type: object` items become `looseObject`). This workspace resolves generated validators against Zod 3, where those helpers are undefined and crash API process startup. It also ignores some object constraints such as `minProperties`, so a successful generation can still produce weaker runtime validation than the contract declares.
 
-**How to apply:** Until the catalog and all Zod consumers are upgraded together, avoid incompatible formats and enforce integer, URL, UUID, and minimum-update rules in domain handlers when they are security- or behavior-critical. Inspect generated validators after adding less-common OpenAPI constraints.
+**How to apply:** Until the catalog and all Zod consumers are upgraded together, avoid incompatible formats and enforce integer, URL, UUID, and minimum-update rules in domain handlers when they are security- or behavior-critical. Always run `@workspace/api-spec` codegen (which patches Zod 4 helpers) and inspect generated validators after adding less-common OpenAPI constraints.

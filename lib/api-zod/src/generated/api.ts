@@ -4079,9 +4079,9 @@ export const ListAdminQuestionReportsQueryParams = zod.object({
 })
 
 export const ListAdminQuestionReportsResponse = zod.object({
-  "reports": zod.array(zod.looseObject({
+  "reports": zod.array(zod.object({
 
-})).optional()
+}).passthrough()).optional()
 })
 
 
