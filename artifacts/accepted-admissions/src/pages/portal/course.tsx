@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
-import { useGetCourse, getGetCourseQueryKey } from "@workspace/api-client-react";
+import { useGetCourse, getGetCourseQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +12,9 @@ import {
   collapsedListedSessions,
   displaySessionTitle,
   formatSessionDateTime,
+  optionalClientTimezone,
   uniqueListedSessions,
+  withDisplayTimezone,
 } from "@/lib/session-display";
 import { SessionJoinActions } from "@/components/session-join-actions";
 
@@ -20,6 +22,11 @@ export default function PortalCourse() {
   const params = useParams();
   const courseId = params.courseId as string;
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const { data: currentUser } = useGetCurrentUser();
+  const clientTimezone =
+    currentUser?.role === "student" || currentUser?.role === "viewer"
+      ? optionalClientTimezone(currentUser.timezone)
+      : undefined;
   const { data: course, isLoading, error } = useGetCourse(courseId, { query: { enabled: !!courseId, queryKey: getGetCourseQueryKey(courseId) } });
 
   if (isLoading) {
@@ -111,7 +118,7 @@ export default function PortalCourse() {
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                             {formatSessionDateTime(session)}
+                             {formatSessionDateTime(withDisplayTimezone(session, clientTimezone))}
                           </span>
                           {session.tutor && (
                             <span>with {session.tutor.name}</span>

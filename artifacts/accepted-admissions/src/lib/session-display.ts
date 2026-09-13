@@ -109,8 +109,90 @@ function formatSessionTime(
   };
 }
 
+const TIMEZONE_SHORT_LABELS: Record<string, string> = {
+  "Asia/Dubai": "GST",
+  "Asia/Tokyo": "JST",
+  "America/New_York": "ET",
+  "America/Chicago": "CT",
+  "America/Denver": "MT",
+  "America/Los_Angeles": "PT",
+  "Europe/London": "UK",
+  UTC: "UTC",
+};
+
+export const CLIENT_TIMEZONE_OPTIONS = [
+  "Asia/Dubai",
+  "Asia/Tokyo",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Paris",
+  "Asia/Singapore",
+  "Asia/Hong_Kong",
+  "Asia/Kolkata",
+  "Australia/Sydney",
+  "UTC",
+] as const;
+
 export function sessionTimezoneLabel(timezone: string): string {
-  return timezone === "Asia/Tokyo" ? "JST" : timezone;
+  const trimmed = timezone.trim();
+  return TIMEZONE_SHORT_LABELS[trimmed] ?? trimmed;
+}
+
+export function clientTimezoneCaption(timezone: string): string {
+  const trimmed = timezone.trim();
+  if (!trimmed) return "your local timezone";
+  const short = sessionTimezoneLabel(trimmed);
+  return short === trimmed ? trimmed : `${short} (${trimmed})`;
+}
+
+export function isValidIanaTimeZone(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 100) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: trimmed }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function optionalClientTimezone(stored?: string | null): string | undefined {
+  const preferred = stored?.trim();
+  return preferred && isValidIanaTimeZone(preferred) ? preferred : undefined;
+}
+
+export function resolveClientDisplayTimezone(
+  stored?: string | null,
+  fallback?: string | null,
+): string {
+  return (
+    optionalClientTimezone(stored) ??
+    optionalClientTimezone(fallback) ??
+    "UTC"
+  );
+}
+
+export function withDisplayTimezone<T extends { timezone: string }>(
+  session: T,
+  timezone?: string | null,
+): T {
+  const zone = timezone?.trim();
+  return zone && isValidIanaTimeZone(zone) ? { ...session, timezone: zone } : session;
+}
+
+export function formatBookingSlotTime(value: string | Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(asDate(value));
+}
+
+export function bookingSlotDayKey(value: string | Date, timeZone: string): string {
+  return sessionDateKey({ dateTime: value, timezone: timeZone });
 }
 
 export function sessionStartTimeFieldLabel(timezone: string): string {

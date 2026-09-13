@@ -60,6 +60,16 @@ vi.mock("@workspace/api-client-react", () => ({
   useCancelBookingSession: () => mocks.cancelBooking,
   useCreateBookingSession: () => mocks.createBooking,
   useGetBookingAvailability: () => mocks.availabilityQuery,
+  useGetCurrentUser: () => ({
+    data: {
+      id: "student-1",
+      role: "student",
+      displayName: "Michelle Makarem",
+      email: "makaremmichelle7@gmail.com",
+      timezone: tutorTimezone,
+      timezoneSource: "admin",
+    },
+  }),
   useListBookingSessions: () => mocks.sessionsQuery,
   useListBookingTutors: () => mocks.tutorsQuery,
   useRescheduleBookingSession: () => mocks.rescheduleBooking,

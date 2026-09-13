@@ -5,9 +5,14 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AssignmentQuestionUpdateChoicesItem } from './assignmentQuestionUpdateChoicesItem';
 
 export interface AssignmentQuestionUpdate {
   /** @minimum 0 */
   position?: number;
   predictionFirst?: boolean;
+  prompt?: string;
+  choices?: AssignmentQuestionUpdateChoicesItem[];
+  correctAnswer?: string;
+  explanation?: string;
 }

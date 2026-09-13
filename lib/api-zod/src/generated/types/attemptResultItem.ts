@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AttemptResultItemChoicesItem } from './attemptResultItemChoicesItem';
+import type { AttemptResultItemPresentation } from './attemptResultItemPresentation';
 
 export interface AttemptResultItem {
   questionId: string;
@@ -25,5 +26,5 @@ export interface AttemptResultItem {
   /** @nullable */
   stimulus?: string | null;
   choices?: AttemptResultItemChoicesItem[];
-  presentation?: 'text' | 'figure_primary';
+  presentation?: AttemptResultItemPresentation;
 }

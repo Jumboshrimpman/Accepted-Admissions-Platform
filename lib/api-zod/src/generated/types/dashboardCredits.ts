@@ -12,5 +12,6 @@ export interface DashboardCredits {
   remainingHours: number;
   readOnly: boolean;
   selfServeSatBooking: boolean;
+  /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }

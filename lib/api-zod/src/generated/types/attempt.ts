@@ -19,6 +19,7 @@ export interface Attempt {
   pausedSeconds: number;
   pauseCount: number;
   remainingSeconds: number;
+  /** @minimum 0 */
   currentQuestionIndex: number;
   responses: AttemptResponse[];
   timerEvents?: TimerEvent[];

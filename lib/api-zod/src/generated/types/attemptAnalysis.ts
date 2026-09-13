@@ -5,6 +5,8 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AnalysisMissCluster } from './analysisMissCluster';
+import type { AnalysisSectionBreakdown } from './analysisSectionBreakdown';
 import type { AttemptAnalysisSource } from './attemptAnalysisSource';
 
 export interface AttemptAnalysis {
@@ -19,22 +21,6 @@ export interface AttemptAnalysis {
   feedback: string;
   sessionOpener?: string;
   skipRehash?: string[];
-  sectionBreakdown?: AttemptAnalysisSectionBreakdown[];
-  missClusters?: AttemptAnalysisMissCluster[];
-}
-
-export interface AttemptAnalysisSectionBreakdown {
-  section?: "rw" | "math" | "other";
-  label: string;
-  accuracy: number;
-  correct?: number;
-  total: number;
-  missCount: number;
-}
-
-export interface AttemptAnalysisMissCluster {
-  label: string;
-  kind?: "skill" | "domain" | "section" | "prompt";
-  missCount: number;
-  examples?: string[];
+  sectionBreakdown?: AnalysisSectionBreakdown[];
+  missClusters?: AnalysisMissCluster[];
 }

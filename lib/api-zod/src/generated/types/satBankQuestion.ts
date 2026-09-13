@@ -7,6 +7,7 @@
  */
 import type { SatBankQuestionChoicesItem } from './satBankQuestionChoicesItem';
 import type { SatBankQuestionExtractGaps } from './satBankQuestionExtractGaps';
+import type { SatBankQuestionFiguresItem } from './satBankQuestionFiguresItem';
 import type { SatBankQuestionSection } from './satBankQuestionSection';
 
 export interface SatBankQuestion {
@@ -46,12 +47,3 @@ export interface SatBankQuestion {
   officialExplanation?: string;
   figures?: SatBankQuestionFiguresItem[];
 }
-
-export type SatBankQuestionFiguresItem = {
-  /** @nullable */
-  url?: string | null;
-  /** @nullable */
-  path?: string | null;
-  /** @nullable */
-  alt?: string | null;
-};

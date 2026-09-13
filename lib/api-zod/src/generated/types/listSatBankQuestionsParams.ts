@@ -6,21 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ListSatBankQuestionsExamFamily } from './listSatBankQuestionsExamFamily';
+import type { ListSatBankQuestionsIncludeKeys } from './listSatBankQuestionsIncludeKeys';
+import type { ListSatBankQuestionsQuestionType } from './listSatBankQuestionsQuestionType';
 import type { ListSatBankQuestionsSection } from './listSatBankQuestionsSection';
-
-export type ListSatBankQuestionsQuestionType = typeof ListSatBankQuestionsQuestionType[keyof typeof ListSatBankQuestionsQuestionType];
-
-export const ListSatBankQuestionsQuestionType = {
-  mcq: 'mcq',
-  spr: 'spr',
-} as const;
-
-export type ListSatBankQuestionsIncludeKeys = typeof ListSatBankQuestionsIncludeKeys[keyof typeof ListSatBankQuestionsIncludeKeys];
-
-export const ListSatBankQuestionsIncludeKeys = {
-  true: 'true',
-  false: 'false',
-} as const;
 
 export type ListSatBankQuestionsParams = {
 examFamily?: ListSatBankQuestionsExamFamily;

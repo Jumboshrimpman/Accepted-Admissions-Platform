@@ -43,6 +43,7 @@ export const usersTable = pgTable(
   stripeCustomerId: text("stripe_customer_id"),
     role: roleEnum("role").notNull().default("student"),
     timezone: text("timezone").notNull().default("America/New_York"),
+    timezoneSource: text("timezone_source").notNull().default("default"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

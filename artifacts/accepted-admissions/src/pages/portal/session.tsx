@@ -18,7 +18,9 @@ import {
   displaySessionTitle,
   formatSessionDate,
   formatSessionTimeRange,
+  optionalClientTimezone,
   sessionSubjectLabel,
+  withDisplayTimezone,
 } from "@/lib/session-display";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { SessionJoinActions } from "@/components/session-join-actions";
@@ -39,6 +41,10 @@ export default function PortalSession() {
   const { courseId = "", sessionId = "" } = useParams<{ courseId: string; sessionId: string }>();
   const { data: currentUser } = useGetCurrentUser();
   const viewer = currentUser?.role === "viewer";
+  const clientTimezone =
+    currentUser?.role === "student" || currentUser?.role === "viewer"
+      ? optionalClientTimezone(currentUser.timezone)
+      : undefined;
   const { data: session, isLoading, error } = useGetSession(sessionId, {
     query: { enabled: Boolean(sessionId), queryKey: getGetSessionQueryKey(sessionId) },
   });
@@ -52,6 +58,7 @@ export default function PortalSession() {
   if (isLoading) return <div className="mx-auto max-w-4xl space-y-5"><Skeleton className="h-44 rounded-3xl" /><Skeleton className="h-80 rounded-2xl" /></div>;
   if (error || !session) return <Card className="mx-auto max-w-xl"><CardContent className="p-8 text-center"><h1 className="text-xl font-semibold">Session unavailable</h1><p className="mt-2 text-sm text-muted-foreground">This session is not visible to your account.</p></CardContent></Card>;
 
+  const displaySession = withDisplayTimezone(session, clientTimezone);
   const beforeAssignments = sessionStatusHomework(
     session.assignments.filter((item) => item.deliveryPhase !== "during_session"),
   );
@@ -66,7 +73,7 @@ export default function PortalSession() {
       <nav className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
         <Link href="/portal/curriculum" className="hover:text-primary">Curriculum</Link><ChevronRight className="h-4 w-4" />
         <Link href={`/portal/courses/${courseId}`} className="hover:text-primary">Fall plan</Link><ChevronRight className="h-4 w-4" />
-        <span className="text-foreground">{formatSessionDate(session)}</span>
+        <span className="text-foreground">{formatSessionDate(displaySession)}</span>
       </nav>
 
       <section className="rounded-3xl bg-brand-ink p-6 text-white shadow-xl sm:p-8">
@@ -75,8 +82,8 @@ export default function PortalSession() {
             <Badge className="border-0 bg-white/20 text-white">{sessionSubjectLabel(session.subject)}</Badge>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">{displaySessionTitle(session.title, session.subject)}</h1>
             <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/75">
-              <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatSessionDate(session)}</span>
-              <span className="flex items-center gap-2"><Clock className="h-4 w-4" />{formatSessionTimeRange(session)}</span>
+              <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatSessionDate(displaySession)}</span>
+              <span className="flex items-center gap-2"><Clock className="h-4 w-4" />{formatSessionTimeRange(displaySession)}</span>
             </div>
           </div>
             <SessionJoinActions meetingUrl={session.meetingUrl} calendarEventUrl={session.calendarEventUrl} size="lg" />

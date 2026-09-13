@@ -1,5 +1,7 @@
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { safePhotoSource } from "./tutor-profile-fields.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { normalizeIanaTimeZone } from "./client-timezone.ts";
 
 export const PLACEHOLDER_DISPLAY_NAME = /^accepted admissions user$/i;
 
@@ -7,6 +9,7 @@ export type UserProfileEditable = {
   displayName?: string;
   title?: string | null;
   avatarUrl?: string | null;
+  timezone?: string;
 };
 
 export function isPlaceholderDisplayName(name?: string | null): boolean {
@@ -85,8 +88,15 @@ export function parseUserProfileEditableFields(
       updates.avatarUrl = body.avatarUrl.trim();
     }
   }
+  if ("timezone" in body) {
+    const timezone = normalizeIanaTimeZone(body.timezone);
+    if (!timezone) {
+      return { updates, error: "A valid IANA timezone is required." };
+    }
+    updates.timezone = timezone;
+  }
   if (Object.keys(updates).length === 0) {
-    return { updates, error: "Provide a display name, title, or photo to update." };
+    return { updates, error: "Provide a display name, title, photo, or timezone to update." };
   }
   return { updates };
 }

@@ -31,7 +31,9 @@ import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
   collapsedListedSessions,
   formatSessionDateTime,
+  optionalClientTimezone,
   uniqueListedSessions,
+  withDisplayTimezone,
 } from "@/lib/session-display";
 
 type Product = {
@@ -303,7 +305,9 @@ export default function PortalSat() {
                 <div key={session.id} className="rounded-xl border p-3 text-sm" data-testid={`portal-sat-upcoming-${session.id}`}>
                   <p className="font-medium">{session.title}</p>
                   <p className="mt-1 text-muted-foreground">
-                    {formatSessionDateTime(session)}
+                    {formatSessionDateTime(
+                      withDisplayTimezone(session, optionalClientTimezone(currentUser?.timezone)),
+                    )}
                     {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
                   </p>
                 </div>

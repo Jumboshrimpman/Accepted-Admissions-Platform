@@ -215,6 +215,9 @@ import {
   UpdateAdminAccessGrantBody,
   UpdateAdminAccessGrantParams,
   UpdateAdminAccessGrantResponse,
+  UpdateAdminUserBody,
+  UpdateAdminUserParams,
+  UpdateAdminUserResponse,
   UpdateAdminNotificationBody,
   UpdateAdminNotificationParams,
   UpdateAdminNotificationResponse,
@@ -350,6 +353,12 @@ import {
   provisionedDisplayName,
   resolveDisplayName,
 } from "../lib/user-profile-fields";
+import {
+  DEFAULT_USER_TIMEZONE,
+  normalizeIanaTimeZone,
+  normalizeTimezoneSource,
+  shouldPersistDetectedTimezone,
+} from "../lib/client-timezone";
 import {
   ASSIGNMENT_HAS_ATTEMPTS_REPARENT_MESSAGE,
   evaluateAssignmentClone,
@@ -8130,6 +8139,58 @@ router.patch(
   },
 );
 
+router.patch(
+  "/admin/users/:userId",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const params = UpdateAdminUserParams.safeParse(req.params);
+    const body = UpdateAdminUserBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      adminMutationError(res, "A valid IANA timezone is required.");
+      return;
+    }
+    if (!UUID_PATTERN.test(params.data.userId)) {
+      res.status(400).json({ error: "Invalid user ID" });
+      return;
+    }
+    const timezone = normalizeIanaTimeZone(body.data.timezone);
+    if (!timezone) {
+      adminMutationError(res, "A valid IANA timezone is required.");
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, params.data.userId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Person not found" });
+      return;
+    }
+    const [updated] = await db
+      .update(usersTable)
+      .set({
+        timezone,
+        timezoneSource: "admin",
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, existing.id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Person not found" });
+      return;
+    }
+    await db.insert(auditLogsTable).values({
+      actorUserId: req.appUser!.id,
+      action: "profile.timezone.updated",
+      entityType: "user",
+      entityId: updated.id,
+      metadata: { timezone, previousTimezone: existing.timezone },
+    });
+    res.json(UpdateAdminUserResponse.parse(await currentUserPayload(updated)));
+  },
+);
+
 router.post(
   "/admin/tutor-assignments",
   ensureRole(["administrator"]),
@@ -8255,7 +8316,12 @@ router.get(
           .innerJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
           .orderBy(asc(tutorProfilesTable.name)),
         db
-          .select({ id: usersTable.id, name: usersTable.displayName, email: usersTable.email })
+          .select({
+            id: usersTable.id,
+            name: usersTable.displayName,
+            email: usersTable.email,
+            timezone: usersTable.timezone,
+          })
           .from(usersTable)
           .where(eq(usersTable.role, "student"))
           .orderBy(asc(usersTable.displayName)),
@@ -9028,6 +9094,8 @@ async function currentUserPayload(
     role: user.role,
     title,
     avatarUrl,
+    timezone: user.timezone?.trim() || DEFAULT_USER_TIMEZONE,
+    timezoneSource: normalizeTimezoneSource(user.timezoneSource),
   };
 }
 
@@ -9052,10 +9120,24 @@ router.patch("/me", async (req: AuthedRequest, res): Promise<void> => {
     res.status(400).json({ error: fields.error });
     return;
   }
+  const updates: typeof fields.updates & { timezoneSource?: "browser" } = {
+    ...fields.updates,
+  };
+  if (updates.timezone) {
+    if (!shouldPersistDetectedTimezone(user.timezoneSource)) {
+      delete updates.timezone;
+    } else {
+      updates.timezoneSource = "browser";
+    }
+  }
+  if (Object.keys(updates).length === 0) {
+    res.json(GetCurrentUserResponse.parse(await currentUserPayload(user)));
+    return;
+  }
   const [updated] = await db
     .update(usersTable)
     .set({
-      ...fields.updates,
+      ...updates,
       updatedAt: new Date(),
     })
     .where(eq(usersTable.id, user.id))
@@ -9431,6 +9513,8 @@ async function dashboardDataForUser(user: AppUser) {
         email: user.email,
         role: user.role,
         avatarUrl: null,
+        timezone: user.timezone?.trim() || DEFAULT_USER_TIMEZONE,
+        timezoneSource: normalizeTimezoneSource(user.timezoneSource),
       },
       welcomeMessage: twelveSessionPlanForEmail(billingUser?.email ?? user.email)
         ? "Your Fall program is ready. Keep building on each session."

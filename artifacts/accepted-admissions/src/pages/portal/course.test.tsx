@@ -59,6 +59,7 @@ const course = {
 vi.mock("@workspace/api-client-react", () => ({
   getGetCourseQueryKey: (id: string) => ["/api/courses", id],
   useGetCourse: () => ({ data: course, isLoading: false, error: null }),
+  useGetCurrentUser: () => ({ data: { role: "student" } }),
 }));
 
 vi.mock("wouter", () => ({

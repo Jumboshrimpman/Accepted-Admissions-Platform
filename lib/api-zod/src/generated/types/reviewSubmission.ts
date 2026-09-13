@@ -5,6 +5,8 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { AnalysisMissCluster } from './analysisMissCluster';
+import type { AnalysisSectionBreakdown } from './analysisSectionBreakdown';
 import type { ReviewSubmissionReviewStatus } from './reviewSubmissionReviewStatus';
 import type { ReviewSubmissionStatus } from './reviewSubmissionStatus';
 
@@ -31,22 +33,6 @@ export interface ReviewSubmission {
   /** @nullable */
   sessionOpener?: string | null;
   skipRehash?: string[];
-  sectionBreakdown?: ReviewSubmissionSectionBreakdown[];
-  missClusters?: ReviewSubmissionMissCluster[];
-}
-
-export interface ReviewSubmissionSectionBreakdown {
-  section?: "rw" | "math" | "other";
-  label: string;
-  accuracy: number;
-  correct?: number;
-  total: number;
-  missCount: number;
-}
-
-export interface ReviewSubmissionMissCluster {
-  label: string;
-  kind?: "skill" | "domain" | "section" | "prompt";
-  missCount: number;
-  examples?: string[];
+  sectionBreakdown?: AnalysisSectionBreakdown[];
+  missClusters?: AnalysisMissCluster[];
 }

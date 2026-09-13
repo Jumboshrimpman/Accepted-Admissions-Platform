@@ -1,16 +1,23 @@
 import { useState } from "react";
-import type {
-  AdminCurriculum,
-  AdminRelationship,
-  AdminTutorAssignmentInput,
+import {
+  getGetAdminCurriculumQueryKey,
+  useUpdateAdminUser,
+  type AdminCurriculum,
+  type AdminRelationship,
+  type AdminTutorAssignmentInput,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { GraduationCap, Link2, Users, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { assignmentSubjectOptions, personOptionLabel } from "@/lib/session-people";
-import { sessionSubjectLabel } from "@/lib/session-display";
+import {
+  CLIENT_TIMEZONE_OPTIONS,
+  clientTimezoneCaption,
+  sessionSubjectLabel,
+} from "@/lib/session-display";
 
 type Client = AdminCurriculum["clients"][number];
 type Tutor = AdminCurriculum["tutors"][number];
@@ -196,8 +203,27 @@ export function PeopleRelationshipLists({
   assignPending: boolean;
   unassignPending: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const updateUser = useUpdateAdminUser();
+  const [timezoneMessage, setTimezoneMessage] = useState("");
   const defaultCourseId = programs[0]?.id ?? "";
   const canAssign = programs.length > 0 && tutors.length > 0 && clients.length > 0;
+
+  const saveTimezone = (clientId: string, timezone: string, name: string) => {
+    updateUser.mutate(
+      { userId: clientId, data: { timezone } },
+      {
+        onSuccess: () => {
+          setTimezoneMessage(`${name} booking times will show in ${clientTimezoneCaption(timezone)}.`);
+          queryClient.invalidateQueries({ queryKey: getGetAdminCurriculumQueryKey() });
+        },
+        onError: (error) => {
+          const data = (error as { data?: { error?: string } } | null)?.data;
+          setTimezoneMessage(data?.error ?? "The timezone could not be saved.");
+        },
+      },
+    );
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -207,16 +233,43 @@ export function PeopleRelationshipLists({
             <Users className="h-5 w-5 text-primary" /> Clients / students
           </CardTitle>
           <CardDescription>
-            Current tutor links and assign/unassign. Client preview is read-only and shows these live links.
+            Current tutor links and assign/unassign. Set each client&apos;s IANA timezone so booking and upcoming sessions show in their local time. Preview is read-only.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
+          {timezoneMessage ? (
+            <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm" data-testid="people-timezone-status">
+              {timezoneMessage}
+            </p>
+          ) : null}
           {clients.map((client) => (
             <div key={client.id} className="rounded-xl border p-3" data-testid={`people-student-${client.id}`}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium">{client.name}</p>
                   <p className="text-sm text-muted-foreground">{client.email}</p>
+                  <div className="mt-2 max-w-xs space-y-1.5">
+                    <Label className="text-xs text-muted-foreground" htmlFor={`client-timezone-${client.id}`}>
+                      Booking timezone
+                    </Label>
+                    <select
+                      id={`client-timezone-${client.id}`}
+                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                      value={client.timezone}
+                      aria-label={`Timezone for ${client.name}`}
+                      data-testid={`client-timezone-${client.id}`}
+                      disabled={updateUser.isPending}
+                      onChange={(event) => saveTimezone(client.id, event.target.value, client.name)}
+                    >
+                      {[client.timezone, ...CLIENT_TIMEZONE_OPTIONS]
+                        .filter((zone, index, all) => all.indexOf(zone) === index)
+                        .map((zone) => (
+                          <option key={zone} value={zone}>
+                            {clientTimezoneCaption(zone)}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
                 <Badge variant="outline">Student</Badge>
               </div>
