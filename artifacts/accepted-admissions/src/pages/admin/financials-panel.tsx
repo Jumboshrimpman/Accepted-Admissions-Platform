@@ -41,10 +41,23 @@ type PaymentCreditMismatch = {
   reason: "missing_credit" | "product_missing";
 };
 
+type PendingStripeCheckout = {
+  paymentId: string;
+  clientName: string | null;
+  clientEmail: string | null;
+  productName?: string | null;
+  productSlug?: string | null;
+  expectedHours?: number | null;
+  amountCents: number;
+  status: string;
+  createdAt: string | Date;
+};
+
 type AdminFinancialsExtras = {
   expectedStripeWebhookUrl?: string;
   retiredStripeWebhookHosts?: string[];
   paymentCreditMismatches?: PaymentCreditMismatch[];
+  pendingStripeCheckouts?: PendingStripeCheckout[];
 };
 
 export function AdminFinancialsPanel() {
@@ -136,6 +149,7 @@ export function AdminFinancialsPanel() {
   }
   const data = financials.data as typeof financials.data & AdminFinancialsExtras;
   const mismatches = data.paymentCreditMismatches ?? [];
+  const pendingCheckouts = data.pendingStripeCheckouts ?? [];
   const expectedWebhookUrl =
     data.expectedStripeWebhookUrl ?? "https://app.acceptedadmissions.org/api/stripe/webhook";
   const catalogProducts = data.products.filter(
@@ -192,15 +206,39 @@ export function AdminFinancialsPanel() {
               before the payment is marked paid.
             </p>
           </div>
-          {mismatches.length === 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid="text-payment-credit-health-ok">
-              Recent paid catalog payments match the credit ledger.
-            </p>
+          {mismatches.length === 0 && pendingCheckouts.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground" data-testid="text-payment-credit-health-ok">
+                Recent paid catalog payments match the credit ledger, and there are no pending Checkout sessions waiting to be reconciled.
+              </p>
+              <Button
+                disabled={busy}
+                variant="outline"
+                data-testid="button-reconcile-stripe-checkouts"
+                onClick={() => {
+                  void customFetch("/api/admin/payments/backfill-credits", {
+                    method: "POST",
+                    body: JSON.stringify({}),
+                  })
+                    .then(() => complete("Stripe Checkout sessions were reconciled and missing purchase credits were granted."))
+                    .catch(fail);
+                }}
+              >
+                Reconcile Stripe Checkout
+              </Button>
+            </div>
           ) : (
             <div className="space-y-3" data-testid="list-payment-credit-mismatches">
-              <p className="text-sm text-destructive">
-                {mismatches.length} paid payment{mismatches.length === 1 ? "" : "s"} missing a purchase credit.
-              </p>
+              {mismatches.length > 0 ? (
+                <p className="text-sm text-destructive">
+                  {mismatches.length} paid payment{mismatches.length === 1 ? "" : "s"} missing a purchase credit.
+                </p>
+              ) : null}
+              {pendingCheckouts.length > 0 ? (
+                <p className="text-sm text-amber-800" data-testid="list-pending-stripe-checkouts">
+                  {pendingCheckouts.length} pending Checkout session{pendingCheckouts.length === 1 ? "" : "s"} can be reconciled against Stripe if the charge already succeeded.
+                </p>
+              ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px] text-left text-sm">
                   <thead className="border-b text-xs uppercase text-muted-foreground">
@@ -222,6 +260,15 @@ export function AdminFinancialsPanel() {
                         <td className="p-2 capitalize">{row.status.replaceAll("_", " ")}</td>
                       </tr>
                     ))}
+                    {pendingCheckouts.map((row) => (
+                      <tr key={`pending-${row.paymentId}`} className="border-b">
+                        <td className="p-2">{row.clientName ?? row.clientEmail ?? "Unknown client"}</td>
+                        <td className="p-2">{row.productName ?? row.productSlug ?? "Stripe Checkout"}</td>
+                        <td className="p-2">{row.expectedHours ?? "—"}</td>
+                        <td className="p-2">{money(row.amountCents)}</td>
+                        <td className="p-2">Pending Checkout</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -233,11 +280,11 @@ export function AdminFinancialsPanel() {
                     method: "POST",
                     body: JSON.stringify({}),
                   })
-                    .then(() => complete("Missing purchase credits were granted from paid payments."))
+                    .then(() => complete("Stripe Checkout sessions were reconciled and missing purchase credits were granted."))
                     .catch(fail);
                 }}
               >
-                Grant missing credits
+                Grant missing credits / reconcile Checkout
               </Button>
             </div>
           )}

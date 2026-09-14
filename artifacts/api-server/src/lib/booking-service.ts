@@ -75,8 +75,10 @@ export function remainingCreditHours(
   entries: Array<{ entryType: string; hours: number }>,
 ): number {
   return entries.reduce((total, entry) => {
+    const hours = Number(entry.hours);
+    const amount = Number.isFinite(hours) ? hours : 0;
     const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
-    return total + (positive ? entry.hours : -entry.hours);
+    return total + (positive ? amount : -amount);
   }, 0);
 }
 

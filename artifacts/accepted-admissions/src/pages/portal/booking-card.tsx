@@ -31,6 +31,7 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
+  bookingAvailabilityRange,
   bookingSlotDayKey,
   canCancelOrRescheduleSession,
   clientTimezoneCaption,
@@ -42,10 +43,11 @@ import {
   uniqueListedSessions,
   withDisplayTimezone,
 } from "@/lib/session-display";
+import { bookingCreditWallState, prepaidHoursBadgeLabel } from "@/lib/portal-sat-payment";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type CreditResponse = { remainingHours: number };
+type CreditResponse = { remainingHours: number; purchasedHours?: number; usedHours?: number };
 
 function apiPath(path: string): string {
   return `${basePath}${path}`;
@@ -76,6 +78,7 @@ export function BookingCard() {
   const [selectedDateKey, setSelectedDateKey] = useState("");
   const [reschedulingSessionId, setReschedulingSessionId] = useState<string | null>(null);
   const [remainingHours, setRemainingHours] = useState<number | null>(null);
+  const [purchasedHours, setPurchasedHours] = useState(0);
   const [creditError, setCreditError] = useState("");
   const [message, setMessage] = useState("");
   const [showAllBooked, setShowAllBooked] = useState(false);
@@ -102,12 +105,14 @@ export function BookingCard() {
           providerStatus: "connected" as const,
         }
       : undefined);
-  const durationMinutes = activeSession?.durationMinutes ?? 60;
-  const range = useMemo(() => {
-    const from = new Date();
-    const to = new Date(from.getTime() + 14 * 24 * 60 * 60 * 1000);
-    return { from: from.toISOString(), to: to.toISOString() };
-  }, []);
+  const durationMinutes = Number(activeSession?.durationMinutes) || 60;
+  const range = useMemo(
+    () =>
+      bookingAvailabilityRange({
+        rescheduleDateTime: activeSession?.dateTime ?? null,
+      }),
+    [activeSession?.dateTime],
+  );
   const availabilityQuery = useGetBookingAvailability(
     {
       tutorProfileId: selectedTutorId,
@@ -142,6 +147,7 @@ export function BookingCard() {
       })
       .then((data) => {
         setRemainingHours(data.remainingHours);
+        if (typeof data.purchasedHours === "number") setPurchasedHours(data.purchasedHours);
         setCreditError("");
       })
       .catch(() => setCreditError("Credit balance is temporarily unavailable."));
@@ -171,7 +177,10 @@ export function BookingCard() {
   };
 
   const beginReschedule = (sessionId: string, tutorId: string | null) => {
-    if (!tutorId) return;
+    if (!tutorId) {
+      setMessage("This session has no bookable tutor calendar, so the time cannot be changed here.");
+      return;
+    }
     const session = sessions.find((item) => item.id === sessionId);
     const blocked = session ? sessionScheduleChangeMessage("reschedule", session) : null;
     if (blocked) {
@@ -240,6 +249,12 @@ export function BookingCard() {
   };
 
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
+  const creditWall = bookingCreditWallState({
+    remainingHours,
+    purchasedHours,
+    hasLiveBookedSession: sessions.length > 0,
+    rescheduling: Boolean(reschedulingSessionId),
+  });
   const availableSlots = availabilityQuery.data?.slots ?? [];
   const availableDateKeys = useMemo(
     () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
@@ -277,7 +292,7 @@ export function BookingCard() {
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            {remainingHours === null ? "Checking balance…" : `${remainingHours} prepaid hour${remainingHours === 1 ? "" : "s"}`}
+            {prepaidHoursBadgeLabel(remainingHours, purchasedHours)}
           </Badge>
         </div>
       </CardHeader>
@@ -388,7 +403,7 @@ export function BookingCard() {
                      {reschedulingSessionId ? `Choose a new time with ${selectedTutor.name}` : `Available times with ${selectedTutor.name}`}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Showing the next 14 days in {clientTimezoneCaption(displayTimezone)}.
+                      Showing times through {format(rangeEnd, "MMM d")} in {clientTimezoneCaption(displayTimezone)}.
                     </p>
                   </div>
                   {availabilityQuery.data?.providerStatus === "disconnected" && (
@@ -464,7 +479,7 @@ export function BookingCard() {
                     </div>
                   </div>
                 )}
-                {remainingHours !== null && remainingHours <= 0 && !reschedulingSessionId && (
+                {creditWall === "unpaid" && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p>
                       You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here.
@@ -472,6 +487,16 @@ export function BookingCard() {
                     <Button asChild className="mt-3 rounded-full" size="sm">
                       <Link href="/portal/sat">Purchase SAT hours</Link>
                     </Button>
+                  </div>
+                )}
+                {creditWall === "reserved" && (
+                  <div
+                    className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+                    data-testid="booking-credit-reserved"
+                  >
+                    <p>
+                      Your prepaid hour is already reserved on the booked session below. Change the date or time there if the session has not started. Buy more hours only if you want an additional session.
+                    </p>
                   </div>
                 )}
                 {selectedSlot && (

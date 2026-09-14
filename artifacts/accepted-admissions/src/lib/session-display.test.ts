@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyTaitoStudentSchedule,
+  bookingAvailabilityRange,
   canCancelOrRescheduleSession,
   displaySessionTitle,
   collapsedListedSessions,
@@ -363,6 +364,15 @@ test("blocks cancel and reschedule once a session is past or already started", (
   );
   assert.equal(sessionScheduleChangeMessage("cancel", upcoming, now), null);
 });
+
+test("reschedule availability window includes a session beyond the next 14 days", () => {
+  const now = new Date("2026-09-14T12:00:00.000Z");
+  const session = "2026-10-02T16:00:00.000Z";
+  const range = bookingAvailabilityRange({ now, rescheduleDateTime: session });
+  assert.equal(range.from, now.toISOString());
+  assert.ok(new Date(range.to).getTime() >= new Date("2026-10-16T16:00:00.000Z").getTime());
+});
+
 
 test("treats submitted quiz work as completed progress even when readiness is still ready", () => {
   assert.equal(isSessionWorkComplete({ readiness: "ready", status: "published" }), false);

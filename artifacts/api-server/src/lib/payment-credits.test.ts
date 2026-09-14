@@ -4,7 +4,7 @@ import test, { after } from "node:test";
 import { and, eq } from "drizzle-orm";
 import Stripe from "stripe";
 // @ts-expect-error Native Node test execution requires the source extension.
-import { processStripeWebhook } from "./payment-service.ts";
+import { processStripeWebhook, reconcilePendingStripeCheckouts } from "./payment-service.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { backfillPaidUncreditedPayments, listPaidUncreditedPayments } from "./payment-fulfillment.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
@@ -103,6 +103,9 @@ async function cleanupFixture(fixture: {
   await fixture.db.db
     .delete(fixture.db.stripeWebhookEventsTable)
     .where(eq(fixture.db.stripeWebhookEventsTable.providerEventId, `evt_fail_${fixture.paymentId}`));
+  await fixture.db.db
+    .delete(fixture.db.stripeWebhookEventsTable)
+    .where(eq(fixture.db.stripeWebhookEventsTable.providerEventId, `evt_async_${fixture.paymentId}`));
   await fixture.db.db
     .delete(fixture.db.paymentsTable)
     .where(eq(fixture.db.paymentsTable.id, fixture.paymentId));
@@ -508,6 +511,72 @@ test("paid-but-uncredited backfill grants durationHours once", async () => {
     await cleanupFixture(fixture);
   }
 });
+
+test("pending paid Checkout session reconciles durationHours without a webhook", async () => {
+  const fixture = await createPurchaseFixture({
+    amountCents: SINGLE_PRICE_CENTS,
+    durationHours: 1,
+    slug: "single-sat-session",
+  });
+  try {
+    const result = await reconcilePendingStripeCheckouts({
+      paymentId: fixture.paymentId,
+      retrieveCheckoutSession: async () => ({
+        id: `cs_test_${fixture.suffix}`,
+        payment_status: "paid",
+        amount_total: SINGLE_PRICE_CENTS,
+        metadata: { payment_id: fixture.paymentId },
+      }),
+    });
+    assert.equal(
+      result.fulfilled.some((row) => row.paymentId === fixture.paymentId && row.inserted),
+      true,
+    );
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 1);
+    const again = await reconcilePendingStripeCheckouts({
+      paymentId: fixture.paymentId,
+      retrieveCheckoutSession: async () => ({
+        id: `cs_test_${fixture.suffix}`,
+        payment_status: "paid",
+        amount_total: SINGLE_PRICE_CENTS,
+        metadata: { payment_id: fixture.paymentId },
+      }),
+    });
+    assert.equal(again.fulfilled.length, 0);
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 1);
+  } finally {
+    await fixture.db.db
+      .delete(fixture.db.auditLogsTable)
+      .where(eq(fixture.db.auditLogsTable.entityId, fixture.paymentId));
+    await cleanupFixture(fixture);
+  }
+});
+
+test("async checkout success grants durationHours", async () => {
+  const fixture = await createPurchaseFixture({
+    amountCents: SINGLE_PRICE_CENTS,
+    durationHours: 1,
+    slug: "single-sat-session",
+  });
+  try {
+    await processStripeWebhook({
+      id: `evt_async_${fixture.paymentId}`,
+      type: "checkout.session.async_payment_succeeded",
+      data: {
+        object: {
+          id: `cs_test_${fixture.suffix}`,
+          payment_status: "paid",
+          amount_total: SINGLE_PRICE_CENTS,
+          metadata: { payment_id: fixture.paymentId },
+        },
+      },
+    });
+    assert.equal(await creditHoursFor(fixture.db, fixture.userId), 1);
+  } finally {
+    await cleanupFixture(fixture);
+  }
+});
+
 
 test("unauthorized manual grant is rejected by role gate", async () => {
   // Mirrors ensureRole(["administrator"]) used by POST /admin/credit-adjustments.

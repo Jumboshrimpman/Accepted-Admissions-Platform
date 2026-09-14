@@ -71,8 +71,12 @@ export default function PortalSat() {
   const [awaitingWebhook, setAwaitingWebhook] = useState(false);
   const [showPaymentCanceled, setShowPaymentCanceled] = useState(false);
   const [baselineHours, setBaselineHours] = useState<number | null>(null);
+  const [baselinePurchasedHours, setBaselinePurchasedHours] = useState<number | null>(null);
   const [ledgerHours, setLedgerHours] = useState<number | null>(null);
+  const [ledgerPurchasedHours, setLedgerPurchasedHours] = useState<number | null>(null);
+  const [ledgerUsedHours, setLedgerUsedHours] = useState<number | null>(null);
   const [creditPollTimedOut, setCreditPollTimedOut] = useState(false);
+  const [reconcilingPayment, setReconcilingPayment] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
 
   useEffect(() => {
@@ -122,29 +126,64 @@ export default function PortalSat() {
   useEffect(() => {
     if (!awaitingWebhook || dashboard.isLoading || !dashboard.data || baselineHours !== null) return;
     setBaselineHours(dashboard.data.credits.remainingHours);
+    setBaselinePurchasedHours(dashboard.data.credits.purchasedHours);
   }, [awaitingWebhook, baselineHours, dashboard.data, dashboard.isLoading]);
 
   useEffect(() => {
-    if (!awaitingWebhook || baselineHours === null || creditPollTimedOut) return;
+    if (!awaitingWebhook || baselineHours === null || baselinePurchasedHours === null || creditPollTimedOut) {
+      return;
+    }
     let cancelled = false;
     let timer = 0;
     const started = Date.now();
-    const tick = () => {
-      fetch(apiPath("/api/credits"))
-        .then((response) => {
-          if (!response.ok) throw new Error("credits");
-          return response.json() as Promise<{ remainingHours?: number }>;
-        })
+    const applyLedger = (data: {
+      remainingHours?: number;
+      purchasedHours?: number;
+      usedHours?: number;
+    }) => {
+      if (typeof data.remainingHours !== "number") return false;
+      setLedgerHours(data.remainingHours);
+      if (typeof data.purchasedHours === "number") setLedgerPurchasedHours(data.purchasedHours);
+      if (typeof data.usedHours === "number") setLedgerUsedHours(data.usedHours);
+      queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      return (
+        paymentCreditBannerState({
+          remainingHours: data.remainingHours,
+          baselineHours,
+          timedOut: false,
+          purchasedHours: data.purchasedHours,
+          baselinePurchasedHours,
+        }) === "granted"
+      );
+    };
+    const tick = (reconcileFirst = false) => {
+      const load = async () => {
+        if (reconcileFirst) {
+          await fetch(apiPath("/api/payments/reconcile-checkout"), { method: "POST" }).catch(
+            () => undefined,
+          );
+        }
+        const response = await fetch(apiPath("/api/credits"));
+        if (!response.ok) throw new Error("credits");
+        return response.json() as Promise<{
+          remainingHours?: number;
+          purchasedHours?: number;
+          usedHours?: number;
+        }>;
+      };
+      load()
         .then((data) => {
-          if (cancelled || typeof data.remainingHours !== "number") return;
-          setLedgerHours(data.remainingHours);
-          queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-          if (data.remainingHours > baselineHours) return;
+          if (cancelled) return;
+          if (applyLedger(data)) return;
           if (Date.now() - started >= CREDIT_POLL_TIMEOUT_MS) {
+            if (!reconcileFirst) {
+              tick(true);
+              return;
+            }
             setCreditPollTimedOut(true);
             return;
           }
-          timer = window.setTimeout(tick, CREDIT_POLL_MS);
+          timer = window.setTimeout(() => tick(false), CREDIT_POLL_MS);
         })
         .catch(() => {
           if (cancelled) return;
@@ -152,15 +191,15 @@ export default function PortalSat() {
             setCreditPollTimedOut(true);
             return;
           }
-          timer = window.setTimeout(tick, CREDIT_POLL_MS);
+          timer = window.setTimeout(() => tick(false), CREDIT_POLL_MS);
         });
     };
-    tick();
+    tick(false);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [awaitingWebhook, baselineHours, creditPollTimedOut, queryClient]);
+  }, [awaitingWebhook, baselineHours, baselinePurchasedHours, creditPollTimedOut, queryClient]);
 
   if (dashboard.isLoading || userLoading) {
     return (
@@ -208,19 +247,23 @@ export default function PortalSat() {
 
   const selfServe = dashboard.data?.credits.selfServeSatBooking ?? false;
   const remainingHours = ledgerHours ?? dashboard.data?.credits.remainingHours ?? 0;
+  const purchasedHours = ledgerPurchasedHours ?? dashboard.data?.credits.purchasedHours ?? 0;
+  const usedHours = ledgerUsedHours ?? dashboard.data?.credits.usedHours ?? 0;
   const canCheckout = currentUser?.role === "student" && selfServe;
   const paymentBannerState: PaymentCreditBanner | null =
-    awaitingWebhook && baselineHours !== null
+    awaitingWebhook && baselineHours !== null && baselinePurchasedHours !== null
       ? paymentCreditBannerState({
           remainingHours,
           baselineHours,
           timedOut: creditPollTimedOut,
+          purchasedHours,
+          baselinePurchasedHours,
         })
       : awaitingWebhook
         ? "confirming"
         : null;
   const paymentBanner = paymentBannerState
-    ? paymentCreditBannerCopy(paymentBannerState, remainingHours)
+    ? paymentCreditBannerCopy(paymentBannerState, remainingHours, { usedHours })
     : null;
   const upcomingSat = uniqueListedSessions(
     (dashboard.data?.upcomingSessions ?? []).filter((session) => {
@@ -282,6 +325,39 @@ export default function PortalSat() {
           <div>
             <p className="font-semibold">{paymentBanner.title}</p>
             <p className="mt-1">{paymentBanner.body}</p>
+            {paymentBannerState === "timeout" ? (
+              <Button
+                className="mt-3 rounded-full"
+                size="sm"
+                data-testid="button-refresh-payment-status"
+                disabled={reconcilingPayment}
+                onClick={() => {
+                  setReconcilingPayment(true);
+                  fetch(apiPath("/api/payments/reconcile-checkout"), { method: "POST" })
+                    .catch(() => undefined)
+                    .then(() => fetch(apiPath("/api/credits")))
+                    .then(async (response) => {
+                      if (!response || !response.ok) throw new Error("credits");
+                      return response.json() as Promise<{
+                        remainingHours?: number;
+                        purchasedHours?: number;
+                        usedHours?: number;
+                      }>;
+                    })
+                    .then((data) => {
+                      if (typeof data.remainingHours === "number") setLedgerHours(data.remainingHours);
+                      if (typeof data.purchasedHours === "number") {
+                        setLedgerPurchasedHours(data.purchasedHours);
+                      }
+                      if (typeof data.usedHours === "number") setLedgerUsedHours(data.usedHours);
+                      queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+                    })
+                    .finally(() => setReconcilingPayment(false));
+                }}
+              >
+                {reconcilingPayment ? "Refreshing payment status…" : "Refresh payment status"}
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -342,7 +418,13 @@ export default function PortalSat() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Remaining credits: <span className="font-semibold text-foreground">{remainingHours}</span>
+              <p className="text-sm text-muted-foreground">
+                Remaining credits:{" "}
+                <span className="font-semibold text-foreground">{remainingHours}</span>
+                {remainingHours <= 0 && purchasedHours > 0
+                  ? " — prepaid hour reserved on a booked session"
+                  : ""}
+              </p>
               </p>
               {loadingProducts ? <Skeleton className="h-40 rounded-xl" /> : null}
               {productError ? (

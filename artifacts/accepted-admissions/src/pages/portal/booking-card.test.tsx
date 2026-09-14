@@ -271,6 +271,42 @@ describe("client availability calendar", () => {
     vi.unstubAllGlobals();
   });
 
+  test("does not treat a reserved prepaid hour as an unpaid purchase", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const futureStart = new Date();
+    futureStart.setDate(futureStart.getDate() + 3);
+    mocks.sessionsQuery.data = [
+      {
+        id: "session-future",
+        title: "Upcoming SAT session",
+        dateTime: futureStart.toISOString(),
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-reserved")).toBeTruthy();
+    });
+    expect(
+      screen.queryByText(/You need a prepaid SAT credit before reserving/i),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: /Change time/i })).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
   test("lists the Oct 2 Tokyo meeting as 9:00 PM JST instead of 8:00 AM Tokyo", () => {
     mocks.sessionsQuery.data = [
       {

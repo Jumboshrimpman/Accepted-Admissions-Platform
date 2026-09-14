@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   location: "/portal/sat",
   setLocation: vi.fn(),
   remainingHours: 0,
+  purchasedHours: 0,
+  usedHours: 0,
   currentUser: {
     data: { role: "student" as "student" | "tutor" | "administrator" | "viewer" },
     isLoading: false,
@@ -89,9 +91,13 @@ afterEach(() => {
   cleanup();
   mocks.dashboard.data.credits.selfServeSatBooking = true;
   mocks.dashboard.data.credits.remainingHours = 0;
+  mocks.dashboard.data.credits.purchasedHours = 0;
+  mocks.dashboard.data.credits.usedHours = 0;
   mocks.dashboard.data.upcomingSessions = defaultUpcomingSessions;
   mocks.location = PORTAL_SAT_PURCHASE_HREF;
   mocks.remainingHours = 0;
+  mocks.purchasedHours = 0;
+  mocks.usedHours = 0;
   mocks.currentUser.data = { role: "student" };
   mocks.currentUser.isLoading = false;
   mocks.dashboard.data.user = { role: "student", id: "student-1", displayName: "Michelle" };
@@ -106,8 +112,15 @@ beforeEach(() => {
       if (url.includes("/api/credits")) {
         return {
           ok: true,
-          json: async () => ({ remainingHours: mocks.remainingHours }),
+          json: async () => ({
+            remainingHours: mocks.remainingHours,
+            purchasedHours: mocks.purchasedHours,
+            usedHours: mocks.usedHours,
+          }),
         };
+      }
+      if (url.includes("/api/payments/reconcile-checkout")) {
+        return { ok: true, json: async () => ({ checkout: { scanned: 0, fulfilled: [], skipped: [] } }) };
       }
       return {
         ok: true,
@@ -234,8 +247,15 @@ describe("portal SAT book/pay", () => {
         if (url.includes("/api/credits")) {
           return {
             ok: true,
-            json: async () => ({ remainingHours: mocks.remainingHours }),
+            json: async () => ({
+              remainingHours: mocks.remainingHours,
+              purchasedHours: mocks.purchasedHours,
+              usedHours: mocks.usedHours,
+            }),
           };
+        }
+        if (url.includes("/api/payments/reconcile-checkout")) {
+          return { ok: true, json: async () => ({ checkout: { scanned: 0, fulfilled: [], skipped: [] } }) };
         }
         return {
           ok: true,
@@ -300,6 +320,23 @@ describe("portal SAT book/pay", () => {
       expect(banner.getAttribute("data-credit-state")).toBe("granted");
       expect(banner.textContent).toContain(PAYMENT_GRANTED_TITLE);
       expect(banner.textContent).toMatch(/1 prepaid hour/);
+    });
+  });
+
+  test("treats a spent prepaid hour as granted instead of unpaid", async () => {
+    mocks.location = `${PORTAL_SAT_PURCHASE_HREF}?payment=success`;
+    mocks.dashboard.data.credits.remainingHours = 0;
+    mocks.dashboard.data.credits.purchasedHours = 0;
+    mocks.dashboard.data.credits.usedHours = 0;
+    mocks.remainingHours = 0;
+    mocks.purchasedHours = 1;
+    mocks.usedHours = 1;
+    render(<PortalSat />);
+    await waitFor(() => {
+      const banner = screen.getByTestId("portal-sat-payment-success");
+      expect(banner.getAttribute("data-credit-state")).toBe("granted");
+      expect(banner.textContent).toContain(PAYMENT_GRANTED_TITLE);
+      expect(banner.textContent).toMatch(/reserved on the booked session/i);
     });
   });
 });

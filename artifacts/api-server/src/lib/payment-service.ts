@@ -1,5 +1,6 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
+  auditLogsTable,
   creditLedgerTable,
   db,
   invoicesTable,
@@ -18,7 +19,7 @@ import { tutorShareForRefund } from "./payment-allocation.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { grantPaidPurchaseCredits } from "./payment-fulfillment.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
-import { paymentRequiresCatalogProduct } from "./payment-fulfillment-rules.ts";
+import { paymentRequiresCatalogProduct, isStripePaidSuccessEvent, stripeCheckoutObjectIsPaid } from "./payment-fulfillment-rules.ts";
 
 type StripeRecord = Record<string, unknown>;
 
@@ -462,6 +463,7 @@ export async function createCheckoutSession(args: {
       "metadata[invoice_id]": args.invoiceId,
       "metadata[product_id]": args.product.id,
       "metadata[client_user_id]": args.user.id,
+      client_reference_id: args.paymentId,
       "payment_intent_data[metadata][payment_id]": args.paymentId,
       "payment_intent_data[metadata][invoice_id]": args.invoiceId,
       "payment_intent_data[metadata][product_id]": args.product.id,
@@ -569,7 +571,8 @@ async function paymentForStripeObject(
   eventType: string,
 ) {
   const objectId = recordString(object, "id");
-  const paymentId = metadataString(object, "payment_id");
+  const paymentId =
+    metadataString(object, "payment_id") ?? recordString(object, "client_reference_id");
   const paymentIntentId =
     eventType.startsWith("payment_intent.")
       ? objectId
@@ -607,6 +610,95 @@ async function paymentForStripeObject(
   return row;
 }
 
+async function fulfillPaidPaymentInTx(
+  tx: any,
+  args: {
+    payment: typeof paymentsTable.$inferSelect;
+    product: typeof satProductsTable.$inferSelect | null | undefined;
+    object: StripeRecord;
+    eventType: string;
+    eventId?: string | null;
+  },
+): Promise<{ inserted: boolean; hours: number }> {
+  const { payment, object, eventType } = args;
+  const now = new Date();
+  const objectId = recordString(object, "id");
+  const paymentIntentId =
+    eventType.startsWith("payment_intent.")
+      ? objectId
+      : recordString(object, "payment_intent") ?? findObjectId(object, "payment_intent");
+  const receiptUrl = recordString(object, "receipt_url");
+  let chargeId =
+    eventType.startsWith("charge.") ? objectId : findObjectId(object, "latest_charge");
+  if (!chargeId && paymentIntentId) {
+    const intent = await stripeRequest<StripeRecord>(`/v1/payment_intents/${paymentIntentId}`);
+    chargeId = findObjectId(intent, "latest_charge");
+  }
+  const amount =
+    recordNumber(object, "amount_total") ??
+    recordNumber(object, "amount_paid") ??
+    recordNumber(object, "amount_received");
+  if (amount !== undefined && positiveMoney(amount) !== payment.amountCents) {
+    throw new Error(`Stripe amount mismatch for payment ${payment.id}`);
+  }
+  let hours = 0;
+  let inserted = false;
+  if (paymentRequiresCatalogProduct(payment)) {
+    const credit = await grantPaidPurchaseCredits(tx, {
+      payment,
+      product: args.product,
+    });
+    hours = credit.hours;
+    inserted = credit.inserted;
+  }
+  const retainedRefundStatus = ["refunded", "partially_refunded"].includes(payment.status)
+    ? payment.status
+    : "paid";
+  await tx
+    .update(paymentsTable)
+    .set({
+      status: retainedRefundStatus,
+      providerEventId: args.eventId ?? payment.providerEventId,
+      providerPaymentIntentId: paymentIntentId ?? payment.providerPaymentIntentId,
+      providerChargeId: chargeId ?? payment.providerChargeId,
+      providerCheckoutSessionId:
+        eventType.startsWith("checkout.")
+          ? objectId ?? payment.providerCheckoutSessionId
+          : payment.providerCheckoutSessionId,
+      paidAt: payment.paidAt ?? now,
+      verifiedAt: payment.verifiedAt ?? now,
+      receiptUrl: receiptUrl ?? payment.receiptUrl,
+      updatedAt: now,
+      failureReason: null,
+    })
+    .where(eq(paymentsTable.id, payment.id));
+  if (payment.invoiceId) {
+    await tx
+      .update(invoicesTable)
+      .set({
+        status: retainedRefundStatus,
+        paidAt: payment.paidAt ?? now,
+        receiptUrl: receiptUrl ?? undefined,
+        updatedAt: now,
+      })
+      .where(eq(invoicesTable.id, payment.invoiceId));
+  }
+  const settledPayment = {
+    ...payment,
+    status: retainedRefundStatus,
+    refundedAmountCents: payment.refundedAmountCents,
+    providerChargeId: chargeId ?? payment.providerChargeId,
+    tutorProfileId: payment.tutorProfileId,
+    tutorShareCents: payment.tutorShareCents,
+  };
+  try {
+    await settleTutorTransfer(tx, settledPayment);
+  } catch (error) {
+    await persistTutorTransferFailure(tx, settledPayment, error);
+  }
+  return { inserted, hours };
+}
+
 export async function processStripeWebhook(event: {
   id: string;
   type: string;
@@ -628,10 +720,7 @@ export async function processStripeWebhook(event: {
     const row = await paymentForStripeObject(object, event.type);
     if (!row) {
       if (
-        event.type === "checkout.session.completed" ||
-        event.type === "payment_intent.succeeded" ||
-        event.type === "invoice.paid" ||
-        event.type === "charge.succeeded" ||
+        isStripePaidSuccessEvent(event.type) ||
         event.type === "charge.refunded"
       ) {
         throw new Error(`Stripe event ${event.id} cannot be matched to a payment yet`);
@@ -662,13 +751,8 @@ export async function processStripeWebhook(event: {
         ? objectId
         : recordString(object, "payment_intent") ??
           findObjectId(object, "payment_intent");
-    const receiptUrl = recordString(object, "receipt_url");
     const needsChargeLookup =
-      event.type === "checkout.session.completed" ||
-      event.type === "payment_intent.succeeded" ||
-      event.type === "invoice.paid" ||
-      event.type === "charge.succeeded" ||
-      event.type === "charge.refunded";
+      isStripePaidSuccessEvent(event.type) || event.type === "charge.refunded";
     let chargeId =
       event.type.startsWith("charge.") ? objectId : findObjectId(object, "latest_charge");
     if (needsChargeLookup && !chargeId && paymentIntentId) {
@@ -676,71 +760,17 @@ export async function processStripeWebhook(event: {
       chargeId = findObjectId(intent, "latest_charge");
     }
 
-    if (
-      event.type === "checkout.session.completed" ||
-      event.type === "payment_intent.succeeded" ||
-      event.type === "invoice.paid" ||
-      event.type === "charge.succeeded"
-    ) {
-      if (
-        event.type === "checkout.session.completed" &&
-        recordString(object, "payment_status") !== "paid"
-      ) {
+    if (isStripePaidSuccessEvent(event.type)) {
+      if (!stripeCheckoutObjectIsPaid(event.type, recordString(object, "payment_status"))) {
         return;
       }
-      const amount =
-        recordNumber(object, "amount_total") ??
-        recordNumber(object, "amount_paid") ??
-        recordNumber(object, "amount_received");
-      if (amount !== undefined && positiveMoney(amount) !== payment.amountCents) {
-        throw new Error(`Stripe amount mismatch for payment ${payment.id}`);
-      }
-      const retainedRefundStatus = ["refunded", "partially_refunded"].includes(payment.status)
-        ? payment.status
-        : "paid";
-      if (paymentRequiresCatalogProduct(payment)) {
-        await grantPaidPurchaseCredits(tx, { payment, product });
-      }
-      await tx
-        .update(paymentsTable)
-        .set({
-          status: retainedRefundStatus,
-          providerEventId: event.id,
-          providerPaymentIntentId: paymentIntentId ?? payment.providerPaymentIntentId,
-          providerChargeId: chargeId ?? payment.providerChargeId,
-          providerCheckoutSessionId:
-            event.type.startsWith("checkout.") ? objectId : payment.providerCheckoutSessionId,
-          paidAt: payment.paidAt ?? now,
-          verifiedAt: payment.verifiedAt ?? now,
-          receiptUrl: receiptUrl ?? payment.receiptUrl,
-          updatedAt: now,
-          failureReason: null,
-        })
-        .where(eq(paymentsTable.id, payment.id));
-      if (invoiceId) {
-        await tx
-          .update(invoicesTable)
-          .set({
-            status: retainedRefundStatus,
-            paidAt: payment.paidAt ?? now,
-            receiptUrl: receiptUrl ?? undefined,
-            updatedAt: now,
-          })
-          .where(eq(invoicesTable.id, invoiceId));
-      }
-      const settledPayment = {
-        ...payment,
-        status: retainedRefundStatus,
-        refundedAmountCents: payment.refundedAmountCents,
-        providerChargeId: chargeId ?? payment.providerChargeId,
-        tutorProfileId: payment.tutorProfileId,
-        tutorShareCents: payment.tutorShareCents,
-      };
-      try {
-        await settleTutorTransfer(tx, settledPayment);
-      } catch (error) {
-        await persistTutorTransferFailure(tx, settledPayment, error);
-      }
+      await fulfillPaidPaymentInTx(tx, {
+        payment,
+        product,
+        object,
+        eventType: event.type,
+        eventId: event.id,
+      });
       return;
     }
 
@@ -856,6 +886,130 @@ export async function processStripeWebhook(event: {
       }
     }
   });
+}
+
+export type ReconcileCheckoutResult = {
+  scanned: number;
+  fulfilled: Array<{ paymentId: string; hours: number; inserted: boolean }>;
+  skipped: Array<{ paymentId: string; reason: string }>;
+};
+
+export async function reconcilePendingStripeCheckouts(options: {
+  clientUserId?: string;
+  paymentId?: string;
+  actorUserId?: string | null;
+  retrieveCheckoutSession?: (checkoutSessionId: string) => Promise<StripeRecord>;
+  limit?: number;
+} = {}): Promise<ReconcileCheckoutResult> {
+  const retrieve =
+    options.retrieveCheckoutSession ??
+    ((checkoutSessionId: string) =>
+      stripeRequest<StripeRecord>(`/v1/checkout/sessions/${checkoutSessionId}`));
+  const filters = [
+    eq(paymentsTable.method, "stripe_checkout"),
+    inArray(paymentsTable.status, ["pending"]),
+    isNotNull(paymentsTable.providerCheckoutSessionId),
+  ];
+  if (options.clientUserId) {
+    filters.push(eq(paymentsTable.clientUserId, options.clientUserId));
+  }
+  if (options.paymentId) {
+    filters.push(eq(paymentsTable.id, options.paymentId));
+  }
+  const pending = await db
+    .select({
+      payment: paymentsTable,
+      product: satProductsTable,
+    })
+    .from(paymentsTable)
+    .leftJoin(satProductsTable, eq(satProductsTable.id, paymentsTable.productId))
+    .where(and(...filters))
+    .limit(Math.max(1, Math.min(options.limit ?? 50, 100)));
+
+  const fulfilled: ReconcileCheckoutResult["fulfilled"] = [];
+  const skipped: ReconcileCheckoutResult["skipped"] = [];
+
+  if (options.paymentId && pending.length === 0) {
+    skipped.push({ paymentId: options.paymentId, reason: "not_a_pending_checkout_payment" });
+  }
+
+  for (const row of pending) {
+    const checkoutSessionId = row.payment.providerCheckoutSessionId;
+    if (!checkoutSessionId) {
+      skipped.push({ paymentId: row.payment.id, reason: "missing_checkout_session" });
+      continue;
+    }
+    let session: StripeRecord;
+    try {
+      session = await retrieve(checkoutSessionId);
+    } catch (error) {
+      skipped.push({
+        paymentId: row.payment.id,
+        reason: error instanceof Error ? error.message : "stripe_retrieve_failed",
+      });
+      continue;
+    }
+    if (!stripeCheckoutObjectIsPaid("checkout.session.completed", recordString(session, "payment_status"))) {
+      skipped.push({
+        paymentId: row.payment.id,
+        reason: `checkout_unpaid:${recordString(session, "payment_status") ?? "unknown"}`,
+      });
+      continue;
+    }
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from payments where id = ${row.payment.id} for update`);
+      const [payment] = await tx
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, row.payment.id))
+        .limit(1);
+      if (!payment) return { skipped: "payment_missing" as const };
+      if (payment.status === "paid" || payment.status === "partially_paid" || payment.status === "partially_refunded") {
+        return { skipped: "already_paid" as const };
+      }
+      let product = row.product;
+      if (payment.productId) {
+        const [freshProduct] = await tx
+          .select()
+          .from(satProductsTable)
+          .where(eq(satProductsTable.id, payment.productId))
+          .limit(1);
+        product = freshProduct ?? null;
+      }
+      const credit = await fulfillPaidPaymentInTx(tx, {
+        payment,
+        product,
+        object: session,
+        eventType: "checkout.session.completed",
+        eventId: payment.providerEventId ?? `reconcile:${checkoutSessionId}`,
+      });
+      if (credit.inserted && options.actorUserId) {
+        await tx.insert(auditLogsTable).values({
+          actorUserId: options.actorUserId,
+          action: "payment.checkout_reconciled",
+          entityType: "payment",
+          entityId: payment.id,
+          metadata: {
+            hours: credit.hours,
+            checkoutSessionId,
+            source: "stripe_checkout_reconcile",
+          },
+        });
+      }
+      return { fulfilled: { paymentId: payment.id, hours: credit.hours, inserted: credit.inserted } };
+    });
+    if ("skipped" in result && result.skipped) {
+      skipped.push({ paymentId: row.payment.id, reason: result.skipped });
+    } else if ("fulfilled" in result && result.fulfilled) {
+      fulfilled.push(result.fulfilled);
+    }
+  }
+
+  return {
+    scanned: pending.length,
+    fulfilled,
+    skipped,
+  };
 }
 
 export function stripeErrorMessage(error: unknown): string {

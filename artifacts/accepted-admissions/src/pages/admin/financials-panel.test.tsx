@@ -110,6 +110,7 @@ describe("administrator financials panel", () => {
 
     expect(screen.getByTestId("empty-financials-invoices")).toBeTruthy();
     expect(screen.getByTestId("text-payment-credit-health-ok")).toBeTruthy();
+    expect(screen.getByTestId("button-reconcile-stripe-checkouts")).toBeTruthy();
     expect(screen.getByText("https://app.acceptedadmissions.org/api/stripe/webhook")).toBeTruthy();
     expect(screen.queryByTestId("card-financials-unavailable")).toBeNull();
   });
@@ -143,6 +144,39 @@ describe("administrator financials panel", () => {
 
     expect(screen.getByTestId("list-payment-credit-mismatches")).toBeTruthy();
     expect(screen.getByText("Single SAT Session")).toBeTruthy();
+    expect(screen.getByTestId("button-backfill-paid-credits")).toBeTruthy();
+    expect(screen.queryByTestId("text-payment-credit-health-ok")).toBeNull();
+  });
+
+  test("lists pending Stripe Checkout sessions so they can be reconciled", () => {
+    mocks.financials.isError = false;
+    mocks.financials.data = {
+      clients: [],
+      products: [],
+      invoices: [],
+      credits: [],
+      expectedStripeWebhookUrl: "https://app.acceptedadmissions.org/api/stripe/webhook",
+      paymentCreditMismatches: [],
+      pendingStripeCheckouts: [
+        {
+          paymentId: "pay_pending",
+          clientName: "Michelle Makarem",
+          clientEmail: "makaremmichelle7@gmail.com",
+          productName: "Single SAT Session",
+          productSlug: "single-sat-session",
+          expectedHours: 1,
+          amountCents: 13000,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    render(<AdminFinancialsPanel />);
+
+    expect(screen.getByTestId("list-pending-stripe-checkouts")).toBeTruthy();
+    expect(screen.getByText("Michelle Makarem")).toBeTruthy();
+    expect(screen.getByText("Pending Checkout")).toBeTruthy();
     expect(screen.getByTestId("button-backfill-paid-credits")).toBeTruthy();
     expect(screen.queryByTestId("text-payment-credit-health-ok")).toBeNull();
   });
