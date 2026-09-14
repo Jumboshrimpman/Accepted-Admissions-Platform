@@ -7,6 +7,7 @@ import {
   PAYMENT_TIMEOUT_TITLE,
   asCreditHours,
   bookingCreditWallState,
+  clientSatCreditAction,
   paymentCreditBannerCopy,
   paymentCreditBannerState,
   prepaidHoursBadgeLabel,
@@ -90,6 +91,21 @@ test("zero remaining with a reserved session is not an unpaid purchase wall", ()
       rescheduling: true,
     }),
     "none",
+  );
+});
+
+test("remaining 0 with an upcoming reserved session is Change time, not purchase", () => {
+  assert.equal(
+    clientSatCreditAction({ remainingHours: 0, hasUpcomingReservedSession: true }),
+    "reschedule",
+  );
+  assert.equal(
+    clientSatCreditAction({ remainingHours: 1, hasUpcomingReservedSession: true }),
+    "book",
+  );
+  assert.equal(
+    clientSatCreditAction({ remainingHours: 0, hasUpcomingReservedSession: false }),
+    "purchase",
   );
 });
 

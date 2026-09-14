@@ -72,9 +72,22 @@ export function bookingCreditWallState(args: {
   if (args.rescheduling) return "none";
   if (args.remainingHours === null) return "none";
   if (args.remainingHours > 0) return "available";
+  // Remaining 0 with a live *upcoming* reserved session is paid — not an unpaid wall.
   if (args.hasLiveBookedSession) return "reserved";
   if (args.purchasedHours > 0) return "spent";
   return "unpaid";
+}
+
+export type ClientSatCreditAction = "book" | "reschedule" | "purchase";
+
+/** Dashboard / SAT CTAs: remaining 0 + upcoming reserved session is Change time, not buy. */
+export function clientSatCreditAction(args: {
+  remainingHours: number | null;
+  hasUpcomingReservedSession: boolean;
+}): ClientSatCreditAction {
+  if ((args.remainingHours ?? 0) > 0) return "book";
+  if (args.hasUpcomingReservedSession) return "reschedule";
+  return "purchase";
 }
 
 export function prepaidHoursBadgeLabel(

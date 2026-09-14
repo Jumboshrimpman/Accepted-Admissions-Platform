@@ -44,7 +44,9 @@ import {
   sessionScheduleChangeMessage,
   uniqueListedSessions,
   withDisplayTimezone,
+  type ListedSession,
 } from "@/lib/session-display";
+import { PORTAL_BEGIN_RESCHEDULE_EVENT } from "@/lib/portal-sat";
 import { bookingCreditWallState, prepaidHoursBadgeLabel, asCreditHours } from "@/lib/portal-sat-payment";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -71,12 +73,53 @@ function truncateBio(value: string | null | undefined, max = 180): string {
   return `${text.slice(0, max).trimEnd()}…`;
 }
 
+function asListedBookingSession(session: ListedSession) {
+  const bookingStatus =
+    session.bookingStatus === "rescheduled"
+      ? "rescheduled"
+      : session.bookingStatus === "cancelled"
+        ? "cancelled"
+        : "confirmed";
+  return {
+    id: session.id,
+    courseId: session.courseId ?? "",
+    tutorProfileId: session.tutorProfileId ?? session.tutor?.id ?? null,
+    tutorName: session.tutorName ?? session.tutor?.name ?? null,
+    dateTime:
+      typeof session.dateTime === "string"
+        ? session.dateTime
+        : new Date(session.dateTime).toISOString(),
+    timezone: session.timezone,
+    subject: session.subject ?? "SAT",
+    title: session.title ?? "SAT session",
+    durationMinutes: session.durationMinutes ?? 60,
+    bookingStatus,
+    meetingUrl: session.meetingUrl ?? null,
+    calendarEventUrl: session.calendarEventUrl ?? null,
+  };
+}
+
+export function resolveBookableTutorId(
+  session: { tutorProfileId?: string | null; tutorName?: string | null },
+  tutors: { id: string; name: string }[],
+): string | null {
+  if (session.tutorProfileId) return session.tutorProfileId;
+  const needle = session.tutorName?.trim().toLowerCase();
+  if (needle) {
+    const match = tutors.find((tutor) => tutor.name.trim().toLowerCase() === needle);
+    if (match) return match.id;
+  }
+  return tutors.length === 1 ? tutors[0]!.id : null;
+}
+
 export function BookingCard({
   initialRemainingHours,
   initialPurchasedHours,
+  fallbackSessions,
 }: {
   initialRemainingHours?: number | null;
   initialPurchasedHours?: number | null;
+  fallbackSessions?: ListedSession[] | null;
 } = {}) {
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
@@ -99,9 +142,20 @@ export function BookingCard({
   const tutorsQuery = useListBookingTutors();
   const sessionsQuery = useListBookingSessions();
   const tutors = tutorsQuery.data ?? [];
-  const sessions = uniqueListedSessions(
+  const queriedSessions = uniqueListedSessions(
     (sessionsQuery.data ?? []).filter(isLiveListedSession),
   );
+  const fallbackListed = uniqueListedSessions(
+    (fallbackSessions ?? [])
+      .filter(isLiveListedSession)
+      .map((session) => asListedBookingSession(session)),
+  );
+  const sessions = uniqueListedSessions([
+    ...queriedSessions,
+    ...fallbackListed.filter(
+      (session) => !queriedSessions.some((candidate) => candidate.id === session.id),
+    ),
+  ]);
   const bookedSessionList = collapsedListedSessions(sessions, showAllBooked);
   const activeSession = sessions.find((session) => session.id === reschedulingSessionId);
   const selectedTutor =
@@ -203,21 +257,38 @@ export function BookingCard({
     setMessage("");
   };
 
-  const beginReschedule = (sessionId: string, tutorId: string | null) => {
-    if (!tutorId) {
-      setMessage("This session has no bookable tutor calendar, so the time cannot be changed here.");
-      return;
-    }
+  const beginReschedule = (sessionId: string, tutorId?: string | null) => {
     const session = sessions.find((item) => item.id === sessionId);
     const blocked = session ? sessionScheduleChangeMessage("reschedule", session) : null;
     if (blocked) {
       setMessage(blocked);
       return;
     }
+    const resolvedTutorId = resolveBookableTutorId(
+      {
+        tutorProfileId: tutorId ?? session?.tutorProfileId,
+        tutorName: session?.tutorName,
+      },
+      tutors,
+    );
+    if (!resolvedTutorId) {
+      setMessage("This session has no bookable tutor calendar, so the time cannot be changed here.");
+      return;
+    }
     setReschedulingSessionId(sessionId);
-    chooseTutor(tutorId);
+    chooseTutor(resolvedTutorId);
     setMessage("Choose a new time. Your prepaid hour stays reserved while you reschedule.");
   };
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId;
+      if (!sessionId) return;
+      beginReschedule(sessionId);
+    };
+    window.addEventListener(PORTAL_BEGIN_RESCHEDULE_EVENT, handler);
+    return () => window.removeEventListener(PORTAL_BEGIN_RESCHEDULE_EVENT, handler);
+  });
 
   const submitBooking = () => {
     if (!selectedSlot) return;
@@ -276,12 +347,17 @@ export function BookingCard({
   };
 
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
+  const upcomingReserved = bookedSessionList.upcoming.filter((session) =>
+    canCancelOrRescheduleSession(session),
+  );
   const creditWall = bookingCreditWallState({
     remainingHours,
     purchasedHours,
-    hasLiveBookedSession: sessions.length > 0,
+    hasLiveBookedSession: upcomingReserved.length > 0,
     rescheduling: Boolean(reschedulingSessionId),
   });
+  const canConfirmSelectedSlot =
+    Boolean(reschedulingSessionId) || remainingHours === null || remainingHours > 0;
   const availableSlots = availabilityQuery.data?.slots ?? [];
   const availableDateKeys = useMemo(
     () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
@@ -319,7 +395,7 @@ export function BookingCard({
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            {prepaidHoursBadgeLabel(remainingHours, purchasedHours, sessions.length > 0)}
+            {prepaidHoursBadgeLabel(remainingHours, purchasedHours, upcomingReserved.length > 0)}
           </Badge>
         </div>
       </CardHeader>
@@ -535,6 +611,23 @@ export function BookingCard({
                     <p>
                       Your prepaid hour is already reserved on the booked session below. Change the date or time there if the session has not started. Buy more hours only if you want an additional session.
                     </p>
+                    {upcomingReserved[0] ? (
+                      <Button
+                        type="button"
+                        className="mt-3 rounded-full"
+                        size="sm"
+                        data-testid="button-change-reserved-session-time"
+                        onClick={() =>
+                          beginReschedule(
+                            upcomingReserved[0]!.id,
+                            upcomingReserved[0]!.tutorProfileId,
+                          )
+                        }
+                        disabled={busy}
+                      >
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Change time
+                      </Button>
+                    ) : null}
                   </div>
                 )}
                 {creditWall === "spent" && (
@@ -551,8 +644,8 @@ export function BookingCard({
                     </Button>
                   </div>
                 )}
-                {selectedSlot && (
-                  <Button className="mt-4 rounded-full" onClick={submitBooking} disabled={busy || (!reschedulingSessionId && remainingHours !== null && remainingHours <= 0)}>
+                {selectedSlot && canConfirmSelectedSlot && (
+                  <Button className="mt-4 rounded-full" onClick={submitBooking} disabled={busy}>
                     {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {reschedulingSessionId ? "Confirm new time" : "Reserve this hour"}
                   </Button>
@@ -604,6 +697,7 @@ export function BookingCard({
                             className="rounded-full"
                             onClick={() => beginReschedule(session.id, session.tutorProfileId)}
                             disabled={busy}
+                            data-testid={`button-change-session-time-${session.id}`}
                           >
                             <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Change time
                           </Button>
