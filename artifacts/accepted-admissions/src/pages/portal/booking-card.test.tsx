@@ -305,7 +305,52 @@ describe("client availability calendar", () => {
     expect(
       screen.queryByText(/You need a prepaid SAT credit before reserving/i),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: /Change time/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reserve this hour" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /Change time/i }).length).toBeGreaterThan(0);
+    vi.unstubAllGlobals();
+  });
+
+  test("remaining 0 with a reserved upcoming SAT session still confirms a new time", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.sessionsQuery.data = [
+      {
+        id: "session-michelle-sep19",
+        title: "Michelle’s SAT Session with Xavier",
+        dateTime: "2026-09-19T11:00:00.000Z",
+        timezone: "Asia/Dubai",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard initialRemainingHours={0} initialPurchasedHours={1} />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-reserved")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId("button-change-session-time-session-michelle-sep19"));
+    expect(screen.getByText(/prepaid hour stays reserved while you reschedule/i)).toBeTruthy();
+    expect(screen.queryByText(/You need a prepaid SAT credit before reserving/i)).toBeNull();
+    expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
+
+    fireEvent.click(screen.getByText("12:30 AM"));
+    const confirm = screen.getByRole("button", { name: "Confirm new time" });
+    expect(confirm.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(confirm);
+    expect(mocks.rescheduleBooking.mutate).toHaveBeenCalledWith(
+      { sessionId: "session-michelle-sep19", data: { startTime: firstSlot } },
+      expect.any(Object),
+    );
+    expect(mocks.createBooking.mutate).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 
@@ -366,6 +411,43 @@ describe("client availability calendar", () => {
     expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
     expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
     expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/No prepaid sessions reserved yet/i);
+    fireEvent.click(screen.getByText("12:30 AM"));
+    expect(screen.queryByRole("button", { name: "Reserve this hour" })).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  test("a past reserved session does not unlock Change time when remaining is 0", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pastStart = new Date();
+    pastStart.setHours(pastStart.getHours() - 3);
+    mocks.sessionsQuery.data = [
+      {
+        id: "session-past",
+        title: "Past SAT session",
+        dateTime: pastStart.toISOString(),
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard initialRemainingHours={0} initialPurchasedHours={1} />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByTestId("session-list-show-more"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-spent")).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
+    expect(screen.getByText("Past sessions cannot be cancelled or rescheduled.")).toBeTruthy();
     vi.unstubAllGlobals();
   });
 

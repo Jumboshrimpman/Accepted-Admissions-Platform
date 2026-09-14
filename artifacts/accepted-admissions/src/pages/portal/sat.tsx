@@ -8,13 +8,15 @@ import {
   useGetCurrentUser,
   useGetDashboard,
 } from "@workspace/api-client-react";
-import { CheckCircle2, WalletCards } from "lucide-react";
+import { CheckCircle2, RotateCcw, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingCard } from "@/pages/portal/booking-card";
 import {
+  PORTAL_BEGIN_RESCHEDULE_EVENT,
+  PORTAL_BOOKING_SECTION_ID,
   PORTAL_SAT_PURCHASE_HREF,
   PORTAL_SAT_TUTOR_DENIED_BODY,
   PORTAL_SAT_TUTOR_DENIED_TITLE,
@@ -30,6 +32,7 @@ import {
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
+  canCancelOrRescheduleSession,
   collapsedListedSessions,
   formatSessionDateTime,
   optionalClientTimezone,
@@ -386,13 +389,40 @@ export default function PortalSat() {
             <>
               {upcomingSatList.visible.map((session) => (
                 <div key={session.id} className="rounded-xl border p-3 text-sm" data-testid={`portal-sat-upcoming-${session.id}`}>
-                  <p className="font-medium">{session.title}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {formatSessionDateTime(
-                      withDisplayTimezone(session, optionalClientTimezone(currentUser?.timezone)),
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-medium">{session.title}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {formatSessionDateTime(
+                          withDisplayTimezone(session, optionalClientTimezone(currentUser?.timezone)),
+                        )}
+                        {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
+                      </p>
+                    </div>
+                    {canCancelOrRescheduleSession(session) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        data-testid={`button-portal-sat-change-time-${session.id}`}
+                        onClick={() => {
+                          window.dispatchEvent(
+                            new CustomEvent(PORTAL_BEGIN_RESCHEDULE_EVENT, {
+                              detail: { sessionId: session.id },
+                            }),
+                          );
+                          document
+                            .getElementById(PORTAL_BOOKING_SECTION_ID)
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                      >
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Change time
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Past sessions cannot be cancelled or rescheduled.</p>
                     )}
-                    {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
-                  </p>
+                  </div>
                 </div>
               ))}
               <SessionListDisclosure
@@ -475,6 +505,7 @@ export default function PortalSat() {
           <BookingCard
             initialRemainingHours={remainingHours}
             initialPurchasedHours={purchasedHours}
+            fallbackSessions={upcomingSat}
           />
         </>
       )}

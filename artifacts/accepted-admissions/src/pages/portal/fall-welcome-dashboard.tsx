@@ -18,6 +18,7 @@ import { portalTutorRosterKey, portalTutorsFromDashboard } from "@/lib/portal-tu
 import {
   collapsedItems,
   collapsedListedSessions,
+  canCancelOrRescheduleSession,
   displaySessionTitle,
   formatSessionDate,
   formatSessionTimeRange,
@@ -34,10 +35,13 @@ import { FinancialCard } from "@/pages/portal/financial-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
 import {
+  PORTAL_BEGIN_RESCHEDULE_EVENT,
   PORTAL_BOOKING_SECTION_ID,
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
 } from "@/lib/portal-sat";
+import { clientSatCreditAction } from "@/lib/portal-sat-payment";
+import { isLiveListedSession } from "@/lib/quiz-content";
 import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 const FALL_DATES = [
@@ -201,6 +205,16 @@ export function ClientDashboardView({
     ),
   );
   const sessionList = collapsedListedSessions(sessions, showAllSessions);
+  const hasUpcomingReservedSession = [
+    ...sessionList.upcoming,
+    ...(dashboard.upcomingSessions ?? []),
+  ].some(
+    (session) => isLiveListedSession(session) && canCancelOrRescheduleSession(session),
+  );
+  const creditAction = clientSatCreditAction({
+    remainingHours: dashboard.credits.remainingHours,
+    hasUpcomingReservedSession,
+  });
   const nextSession =
     sessionList.upcoming[0] ??
     sessions.find((session) => session.readiness !== "complete") ??
@@ -324,7 +338,11 @@ export function ClientDashboardView({
               <div className="rounded-xl border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
                 <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Available to book</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {creditAction === "reschedule"
+                    ? "Reserved on an upcoming session"
+                    : "Available to book"}
+                </p>
               </div>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
@@ -332,7 +350,7 @@ export function ClientDashboardView({
             </p>
             {studentSatCommerce && (
               <div className="mt-4 flex flex-wrap gap-2">
-                {dashboard.credits.remainingHours > 0 ? (
+                {creditAction === "book" ? (
                   <>
                     <Button
                       type="button"
@@ -342,6 +360,37 @@ export function ClientDashboardView({
                       }
                     >
                       Book a SAT session
+                    </Button>
+                    <Button asChild variant="outline" className="rounded-full">
+                      <Link href="/portal/sat" data-testid="link-portal-sat-pay">
+                        Buy more SAT credits
+                      </Link>
+                    </Button>
+                  </>
+                ) : creditAction === "reschedule" ? (
+                  <>
+                    <Button
+                      type="button"
+                      className="rounded-full"
+                      data-testid="button-dashboard-change-session-time"
+                      onClick={() => {
+                        const upcoming = sessionList.upcoming.find(
+                          (session) =>
+                            isLiveListedSession(session) && canCancelOrRescheduleSession(session),
+                        );
+                        if (upcoming) {
+                          window.dispatchEvent(
+                            new CustomEvent(PORTAL_BEGIN_RESCHEDULE_EVENT, {
+                              detail: { sessionId: upcoming.id },
+                            }),
+                          );
+                        }
+                        document
+                          .getElementById("booking-schedule")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                    >
+                      Change time
                     </Button>
                     <Button asChild variant="outline" className="rounded-full">
                       <Link href="/portal/sat" data-testid="link-portal-sat-pay">
@@ -384,6 +433,10 @@ export function ClientDashboardView({
         <BookingCard
           initialRemainingHours={dashboard.credits.remainingHours}
           initialPurchasedHours={dashboard.credits.purchasedHours}
+          fallbackSessions={[
+            ...(dashboard.upcomingSessions ?? []),
+            ...sessions,
+          ]}
         />
       ) : null}
       {adminPreview && showSelfServeBooking && previewBooking ? (

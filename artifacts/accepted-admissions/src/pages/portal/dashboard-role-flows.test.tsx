@@ -718,8 +718,8 @@ describe("authenticated role dashboard flows", () => {
         {
           id: "session-michelle-sat",
           courseId: "course-fall",
-          dateTime: "2026-09-15T16:00:00.000Z",
-          timezone: "America/New_York",
+          dateTime: "2026-09-19T11:00:00.000Z",
+          timezone: "Asia/Dubai",
           durationMinutes: 60,
           subject: "SAT",
           title: "Michelle’s SAT Session with Xavier",
@@ -740,16 +740,19 @@ describe("authenticated role dashboard flows", () => {
 
     expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
     expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Purchase session credits/i }).getAttribute("href")).toBe(
+    expect(screen.getByTestId("button-dashboard-change-session-time")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Change time/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /Buy more SAT credits/i }).getAttribute("href")).toBe(
       "/portal/sat",
     );
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
     expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
     expect(screen.queryByText("One plan. Twelve focused meetings.")).toBeNull();
     expect(screen.queryByText("Twelve-session roadmap")).toBeNull();
     expect(screen.queryByText(/twelve focused meetings/i)).toBeNull();
     expect(screen.getByText("Welcome back, Michelle.")).toBeTruthy();
     expect(screen.getByText("Session roadmap")).toBeTruthy();
-    expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
+    expect(screen.getAllByText("Michelle’s SAT Session with Xavier").length).toBeGreaterThan(0);
   });
 
   test("remaining credit after a restored cancellation makes booking the primary action", () => {
@@ -840,7 +843,7 @@ describe("authenticated role dashboard flows", () => {
     } as Dashboard;
     render(<FallWelcomeDashboard />);
     expect(screen.getByText("Session roadmap")).toBeTruthy();
-    expect(screen.getByText("Live SAT Session")).toBeTruthy();
+    expect(screen.getAllByText("Live SAT Session").length).toBeGreaterThan(0);
     expect(screen.queryByText("Cancelled SAT Session")).toBeNull();
     expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
     expect(screen.queryByText(/Sep 7/)).toBeNull();

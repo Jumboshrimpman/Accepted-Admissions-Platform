@@ -3,6 +3,8 @@ export const PORTAL_BOOKING_SECTION_ID = "booking-schedule";
 /** Client portal homepage booking calendar (same section as the public book-SAT flow). */
 export const PORTAL_SAT_HREF = `${PORTAL_HOME_HREF}#${PORTAL_BOOKING_SECTION_ID}`;
 export const PORTAL_SAT_PURCHASE_HREF = "/portal/sat";
+/** Client SAT pages use this to open Change time on the prepaid booking card. */
+export const PORTAL_BEGIN_RESCHEDULE_EVENT = "aa-portal-begin-reschedule";
 export const PORTAL_SAT_BOOK_LABEL = "Book SAT";
 export const PORTAL_SAT_PURCHASE_LABEL = "Purchase SAT hours";
 export const PORTAL_SAT_TUTOR_HREF = "/tutor";

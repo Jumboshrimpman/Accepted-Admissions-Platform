@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { PORTAL_SAT_PURCHASE_HREF } from "@/lib/portal-sat";
 import {
@@ -166,6 +166,7 @@ describe("portal SAT book/pay", () => {
     expect(screen.queryByText(/^test$/)).toBeNull();
     expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toContain("Michelle’s SAT Session with Xavier");
+    expect(screen.getByTestId("button-portal-sat-change-time-sat-1")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-sat-1").textContent).toMatch(/12:00–1:00 PM ET/);
     expect(screen.getByTestId("portal-sat-upcoming-sat-tokyo").textContent).toMatch(/9:00–10:00 PM JST/);
     expect(screen.queryByTestId("portal-sat-upcoming-sat-cancelled")).toBeNull();
@@ -234,7 +235,7 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-16")).toBeTruthy();
     expect(screen.queryByTestId("portal-sat-upcoming-eastern-2026-10-02")).toBeNull();
     expect(screen.queryByTestId("portal-sat-upcoming-tokyo-2026-10-23")).toBeNull();
-    fireEvent.click(screen.getByTestId("session-list-show-more"));
+    fireEvent.click(within(screen.getByTestId("portal-sat-upcoming")).getByTestId("session-list-show-more"));
     expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-23")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-upcoming-tokyo-2026-10-30")).toBeTruthy();
     expect(screen.queryByTestId("portal-sat-upcoming-eastern-2026-10-30")).toBeNull();
