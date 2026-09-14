@@ -60,6 +60,20 @@ test("fulfillment keys are unique per session lifecycle", () => {
   );
 });
 
+test("remaining hours coerce numeric ledger values so a used purchase is zero, not unpaid", () => {
+  assert.equal(
+    remainingCreditHours([
+      { entryType: "original", hours: "1" as unknown as number },
+      { entryType: "debit", hours: "1" as unknown as number },
+    ]),
+    0,
+  );
+  assert.equal(
+    remainingCreditHours([{ entryType: "original", hours: 1 }]),
+    1,
+  );
+});
+
 test("viewer and tutor roles cannot book using another client's credits", () => {
   assert.throws(
     () =>

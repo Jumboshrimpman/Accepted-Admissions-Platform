@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { asCreditHours } from "@/lib/portal-sat-payment";
 
 function money(cents: number): string {
   return (cents / 100).toLocaleString("en-US", {
@@ -54,7 +55,10 @@ export function FinancialCard({
     );
   }
 
-  const { invoices, payments, credits, remainingHours, purchasedHours, usedHours } = data;
+  const { invoices, payments, credits } = data;
+  const remainingHours = asCreditHours(data.remainingHours) ?? 0;
+  const purchasedHours = asCreditHours(data.purchasedHours) ?? 0;
+  const usedHours = asCreditHours(data.usedHours) ?? 0;
   const readOnly = adminPreview || data.readOnly;
   const hasVerifiedPayment = payments.some(
     (payment) => payment.verifiedAt || payment.status === "paid" || payment.status === "partially_paid",
@@ -126,12 +130,17 @@ export function FinancialCard({
           <div className="rounded-xl border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
             <p className="mt-1 text-lg font-semibold">{usedHours ?? 0}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Currently reserved or completed</p>
           </div>
           <div className="rounded-xl border bg-muted/30 p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
             <p className="mt-1 text-lg font-semibold">{remainingHours}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Available to book</p>
           </div>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Used + remaining equals purchased. Cancelling at least 24 hours ahead returns the hour to remaining.
+        </p>
       </CardHeader>
       <CardContent className="space-y-6">
         {adminPreview && (previewOffers?.length || previewOffer) && (
@@ -167,9 +176,20 @@ export function FinancialCard({
           </div>
         )}
         {!readOnly && !adminPreview && (
-          <Button asChild className="rounded-full">
-            <Link href="/portal/sat">Purchase SAT session credits</Link>
-          </Button>
+          remainingHours > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              <Button asChild className="rounded-full">
+                <Link href="/portal/sat#booking-schedule">Book a SAT session</Link>
+              </Button>
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/portal/sat">Buy more SAT credits</Link>
+              </Button>
+            </div>
+          ) : (
+            <Button asChild className="rounded-full">
+              <Link href="/portal/sat">Purchase SAT session credits</Link>
+            </Button>
+          )
         )}
         {adminPreview && hasVerifiedPayment && (
           <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">

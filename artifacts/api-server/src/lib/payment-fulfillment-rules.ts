@@ -4,6 +4,31 @@ export const PAID_STATUSES_NEEDING_PURCHASE_CREDIT = [
   "partially_refunded",
 ] as const;
 
+export const STRIPE_PAID_SUCCESS_EVENT_TYPES = [
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "payment_intent.succeeded",
+  "invoice.paid",
+  "charge.succeeded",
+] as const;
+
+export function isStripePaidSuccessEvent(type: string): boolean {
+  return (STRIPE_PAID_SUCCESS_EVENT_TYPES as readonly string[]).includes(type);
+}
+
+export function stripeCheckoutObjectIsPaid(
+  eventType: string,
+  paymentStatus: string | undefined,
+): boolean {
+  if (eventType === "checkout.session.completed") {
+    return paymentStatus === "paid";
+  }
+  if (eventType === "checkout.session.async_payment_succeeded") {
+    return paymentStatus === undefined || paymentStatus === "paid";
+  }
+  return true;
+}
+
 export type PaidStatusNeedingPurchaseCredit =
   (typeof PAID_STATUSES_NEEDING_PURCHASE_CREDIT)[number];
 

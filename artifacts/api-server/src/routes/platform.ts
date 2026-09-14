@@ -67,6 +67,7 @@ import {
   rollbackBookingAfterCalendarFailure,
   sessionScheduleChangeError,
 } from "../lib/booking-service";
+import { summarizeCreditHours } from "../lib/credit-hours";
 import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
 import {
   calendarEventPayload,
@@ -173,6 +174,7 @@ import {
 import {
   createCheckoutSession,
   createHostedInvoice,
+  reconcilePendingStripeCheckouts,
   stripeErrorMessage,
   voidHostedInvoice,
 } from "../lib/payment-service";
@@ -526,26 +528,9 @@ function publicAppOrigin(): string {
 }
 
 function creditHoursSummary(
-  entries: Array<{ entryType: string; hours: number }>,
+  entries: Array<{ entryType: string; hours: unknown }>,
 ): { purchasedHours: number; usedHours: number; remainingHours: number } {
-  let purchasedHours = 0;
-  let usedHours = 0;
-  let restoredHours = 0;
-  for (const entry of entries) {
-    if (entry.entryType === "original" || entry.entryType === "adjustment_credit") {
-      purchasedHours += entry.hours;
-    } else if (
-      entry.entryType === "debit" ||
-      entry.entryType === "adjustment_debit" ||
-      entry.entryType === "refund"
-    ) {
-      usedHours += entry.hours;
-    } else if (entry.entryType === "restored") {
-      restoredHours += entry.hours;
-    }
-  }
-  const remainingHours = purchasedHours - usedHours + restoredHours;
-  return { purchasedHours, usedHours, remainingHours };
+  return summarizeCreditHours(entries);
 }
 
 
@@ -4063,7 +4048,7 @@ function asDate(value: unknown): Date {
 }
 
 function durationFromBody(value: unknown): number {
-  const duration = value === undefined ? 60 : Number(value);
+  const duration = value === undefined ? 60 : Math.round(Number(value));
   if (!Number.isInteger(duration) || duration < 30 || duration > 180 || duration % 30 !== 0) {
     throw new BookingError(400, "INVALID_DURATION", "Duration must be a 30-minute increment between 30 and 180 minutes.");
   }
@@ -5746,7 +5731,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
       if (!requestedTutor || requestedTutor.userId !== existingSession.tutorUserId) {
         throw new BookingError(400, "INVALID_TUTOR", "The requested tutor does not match this existing session.");
       }
-      if (existingSession.durationMinutes !== durationMinutes) {
+      if (Number(existingSession.durationMinutes) !== durationMinutes) {
         throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
       }
     } else if (durationMinutes !== 60) {
@@ -6109,10 +6094,6 @@ async function financialSummary(clientUserId: string) {
       .where(eq(creditLedgerTable.clientUserId, clientUserId))
       .orderBy(desc(creditLedgerTable.createdAt)),
   ]);
-  const remainingHours = entries.reduce((total, entry) => {
-    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
-    return total + (positive ? entry.hours : -entry.hours);
-  }, 0);
   const creditSummary = creditHoursSummary(entries);
   return {
     ...creditSummary,
@@ -6260,6 +6241,23 @@ router.post(
       });
       res.status(502).json({ error: stripeErrorMessage(error) });
     }
+  },
+);
+
+router.post(
+  "/payments/reconcile-checkout",
+  ensureRole(["student"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const checkout = await reconcilePendingStripeCheckouts({
+      clientUserId: req.appUser!.id,
+      actorUserId: req.appUser!.id,
+    });
+    const ledger = await backfillPaidUncreditedPayments({
+      clientUserId: req.appUser!.id,
+      dryRun: false,
+      actorUserId: req.appUser!.id,
+    });
+    res.json({ checkout, ledger });
   },
 );
 
@@ -6520,6 +6518,32 @@ router.get(
         .orderBy(desc(stripeTransfersTable.createdAt)),
     ]);
     const paymentCreditMismatches = await listPaidUncreditedPayments(100);
+    const pendingStripeCheckouts = await db
+      .select({
+        paymentId: paymentsTable.id,
+        clientUserId: paymentsTable.clientUserId,
+        clientName: usersTable.displayName,
+        clientEmail: usersTable.email,
+        productName: satProductsTable.name,
+        productSlug: satProductsTable.slug,
+        expectedHours: satProductsTable.durationHours,
+        amountCents: paymentsTable.amountCents,
+        status: paymentsTable.status,
+        providerCheckoutSessionId: paymentsTable.providerCheckoutSessionId,
+        createdAt: paymentsTable.createdAt,
+      })
+      .from(paymentsTable)
+      .leftJoin(usersTable, eq(usersTable.id, paymentsTable.clientUserId))
+      .leftJoin(satProductsTable, eq(satProductsTable.id, paymentsTable.productId))
+      .where(
+        and(
+          eq(paymentsTable.method, "stripe_checkout"),
+          eq(paymentsTable.status, "pending"),
+          isNotNull(paymentsTable.providerCheckoutSessionId),
+        ),
+      )
+      .orderBy(desc(paymentsTable.createdAt))
+      .limit(100);
     res.json({
       clients,
       products,
@@ -6530,6 +6554,7 @@ router.get(
       expectedStripeWebhookUrl: PRODUCTION_STRIPE_WEBHOOK_URL,
       retiredStripeWebhookHosts: [RETIRED_REPLIT_STRIPE_WEBHOOK_HOST],
       paymentCreditMismatches,
+      pendingStripeCheckouts,
     });
   },
 );
@@ -6541,12 +6566,16 @@ router.post(
     const body = (req.body ?? {}) as Record<string, unknown>;
     const paymentId =
       typeof body.paymentId === "string" && body.paymentId.trim() ? body.paymentId.trim() : undefined;
-    const result = await backfillPaidUncreditedPayments({
+    const checkout = await reconcilePendingStripeCheckouts({
+      paymentId,
+      actorUserId: req.appUser!.id,
+    });
+    const ledger = await backfillPaidUncreditedPayments({
       paymentId,
       dryRun: false,
       actorUserId: req.appUser!.id,
     });
-    res.json(result);
+    res.json({ checkout, ledger });
   },
 );
 
@@ -7164,10 +7193,6 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, subjectUserId))
     .orderBy(desc(creditLedgerTable.createdAt));
-  const remainingHours = entries.reduce((total, entry) => {
-    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
-    return total + (positive ? entry.hours : -entry.hours);
-  }, 0);
   const creditSummary = creditHoursSummary(entries);
   res.json({
     readOnly: req.appUser!.role === "viewer",
@@ -9501,10 +9526,6 @@ async function dashboardDataForUser(user: AppUser) {
     })
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, subjectUserId));
-  const remainingHours = creditEntries.reduce((total, entry) => {
-    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
-    return total + (positive ? entry.hours : -entry.hours);
-  }, 0);
   const creditSummary = creditHoursSummary(creditEntries);
   return GetDashboardResponse.parse({
       user: {

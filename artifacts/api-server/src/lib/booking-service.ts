@@ -18,6 +18,10 @@ import {
   type SessionScheduleChange,
   type SessionScheduleInstant,
 } from "./session-schedule-guard.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { ledgerHours, remainingCreditHours } from "./credit-hours.ts";
+
+export { remainingCreditHours } from "./credit-hours.ts";
 
 export const BOOKING_CANCEL_RESTORE_NOTICE_MS = 24 * 60 * 60 * 1000;
 
@@ -71,14 +75,6 @@ export function sessionCalendarFailRestoreFulfillmentKey(sessionId: string): str
   return `session-calendar-fail-restore:${sessionId}`;
 }
 
-export function remainingCreditHours(
-  entries: Array<{ entryType: string; hours: number }>,
-): number {
-  return entries.reduce((total, entry) => {
-    const positive = ["original", "restored", "adjustment_credit"].includes(entry.entryType);
-    return total + (positive ? entry.hours : -entry.hours);
-  }, 0);
-}
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -253,7 +249,7 @@ export async function insertConfirmedBookingWithDebit(
     })
     .returning();
   if (!session) throw new BookingServiceError(500, "BOOKING_FAILED", "Session could not be created.");
-  const hours = args.durationMinutes / 60;
+  const hours = ledgerHours(args.durationMinutes) / 60;
   await tx.insert(creditLedgerTable).values({
     clientUserId: args.clientUserId,
     productId: null,
@@ -286,7 +282,7 @@ export async function rollbackBookingAfterCalendarFailure(
       updatedAt: new Date(),
     })
     .where(eq(sessionsTable.id, args.sessionId));
-  const hours = args.durationMinutes / 60;
+  const hours = ledgerHours(args.durationMinutes) / 60;
   await tx
     .insert(creditLedgerTable)
     .values({
@@ -354,7 +350,7 @@ export async function cancelBookingWithCreditPolicy(
     })
     .where(eq(sessionsTable.id, current.id))
     .returning();
-  const hours = current.durationMinutes / 60;
+  const hours = ledgerHours(current.durationMinutes) / 60;
   if (creditRestored && current.clientUserId) {
     await tx
       .insert(creditLedgerTable)

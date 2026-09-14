@@ -362,6 +362,20 @@ export function displaySessionTitle(title: string, subject: string): string {
 }
 
 export const DEFAULT_VISIBLE_UPCOMING_COUNT = 3;
+export const BOOKING_AVAILABILITY_DAYS = 14;
+
+export function bookingAvailabilityRange(args: {
+  now?: Date;
+  rescheduleDateTime?: string | Date | null;
+  windowDays?: number;
+}): { from: string; to: string } {
+  const now = args.now ?? new Date();
+  const days = args.windowDays ?? BOOKING_AVAILABILITY_DAYS;
+  const windowMs = days * 24 * 60 * 60 * 1000;
+  const session = args.rescheduleDateTime ? asDate(args.rescheduleDateTime) : now;
+  const toMs = Math.max(now.getTime() + windowMs, session.getTime() + windowMs);
+  return { from: now.toISOString(), to: new Date(toMs).toISOString() };
+}
 
 export function collapsedItems<T>(
   items: readonly T[],

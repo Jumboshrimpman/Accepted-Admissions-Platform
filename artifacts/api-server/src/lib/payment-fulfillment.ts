@@ -142,15 +142,18 @@ export type BackfillPaidCreditsResult = {
 
 export async function backfillPaidUncreditedPayments(options: {
   paymentId?: string;
+  clientUserId?: string;
   dryRun?: boolean;
   actorUserId?: string | null;
   limit?: number;
 } = {}): Promise<BackfillPaidCreditsResult> {
   const dryRun = options.dryRun !== false;
   const mismatches = await listPaidUncreditedPayments(options.limit ?? 100);
-  const selected = options.paymentId
-    ? mismatches.filter((row) => row.paymentId === options.paymentId)
-    : mismatches;
+  const selected = mismatches.filter((row) => {
+    if (options.paymentId && row.paymentId !== options.paymentId) return false;
+    if (options.clientUserId && row.clientUserId !== options.clientUserId) return false;
+    return true;
+  });
 
   const granted: BackfillPaidCreditsResult["granted"] = [];
   const skipped: BackfillPaidCreditsResult["skipped"] = [];

@@ -56,6 +56,8 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetBookingAvailabilityQueryKey: () => ["availability"],
+  getGetDashboardQueryKey: () => ["dashboard"],
+  getGetFinancialsQueryKey: () => ["financials"],
   getListBookingSessionsQueryKey: () => ["sessions"],
   useCancelBookingSession: () => mocks.cancelBooking,
   useCreateBookingSession: () => mocks.createBooking,
@@ -268,6 +270,102 @@ describe("client availability calendar", () => {
     });
     expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");
     expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
+  test("does not treat a reserved prepaid hour as an unpaid purchase", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const futureStart = new Date();
+    futureStart.setDate(futureStart.getDate() + 3);
+    mocks.sessionsQuery.data = [
+      {
+        id: "session-future",
+        title: "Upcoming SAT session",
+        dateTime: futureStart.toISOString(),
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Xavier Morales",
+        tutorProfileId: "tutor-xavier",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-reserved")).toBeTruthy();
+    });
+    expect(
+      screen.queryByText(/You need a prepaid SAT credit before reserving/i),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: /Change time/i })).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
+  test("remaining credit after cancel-restore unlocks booking instead of change-time copy", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 1, purchasedHours: 1, usedHours: 0 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.sessionsQuery.data = [];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-available")).toBeTruthy();
+    });
+    expect(screen.getAllByText(/1 prepaid hour/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/You need a prepaid SAT credit before reserving/i)).toBeNull();
+    expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
+    expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/remaining credit/i);
+    fireEvent.click(screen.getByText("12:30 AM"));
+    expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  test("dashboard remaining credit unlocks booking even if the credits fetch fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    mocks.sessionsQuery.data = [];
+
+    render(<BookingCard initialRemainingHours={1} initialPurchasedHours={1} />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-available")).toBeTruthy();
+    });
+    expect(screen.queryByText(/You need a prepaid SAT credit before reserving/i)).toBeNull();
+    fireEvent.click(screen.getByText("12:30 AM"));
+    expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  test("spent credit with no upcoming session does not tell the client to change time", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.sessionsQuery.data = [];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-spent")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
+    expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/No prepaid sessions reserved yet/i);
     vi.unstubAllGlobals();
   });
 
