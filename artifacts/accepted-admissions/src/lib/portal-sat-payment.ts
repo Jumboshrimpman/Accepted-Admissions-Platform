@@ -1,3 +1,9 @@
+export function asCreditHours(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const hours = Number(value);
+  return Number.isFinite(hours) ? hours : null;
+}
+
 export type PaymentCreditBanner = "confirming" | "granted" | "timeout";
 export type BookingCreditWall = "none" | "available" | "unpaid" | "reserved" | "spent";
 

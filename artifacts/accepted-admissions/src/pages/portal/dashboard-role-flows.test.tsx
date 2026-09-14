@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetDashboardQueryKey: () => ["dashboard"],
+  getGetFinancialsQueryKey: () => ["financials"],
   getListReviewQueueQueryKey: () => ["review-queue"],
   getGetBookingAvailabilityQueryKey: () => ["availability"],
   getListBookingSessionsQueryKey: () => ["sessions"],

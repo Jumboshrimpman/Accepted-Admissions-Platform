@@ -25,6 +25,7 @@ import {
   type PaymentCreditBanner,
   paymentCreditBannerCopy,
   paymentCreditBannerState,
+  asCreditHours,
 } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
@@ -125,8 +126,8 @@ export default function PortalSat() {
 
   useEffect(() => {
     if (!awaitingWebhook || dashboard.isLoading || !dashboard.data || baselineHours !== null) return;
-    setBaselineHours(dashboard.data.credits.remainingHours);
-    setBaselinePurchasedHours(dashboard.data.credits.purchasedHours);
+    setBaselineHours(asCreditHours(dashboard.data.credits.remainingHours));
+    setBaselinePurchasedHours(asCreditHours(dashboard.data.credits.purchasedHours));
   }, [awaitingWebhook, baselineHours, dashboard.data, dashboard.isLoading]);
 
   useEffect(() => {
@@ -137,21 +138,24 @@ export default function PortalSat() {
     let timer = 0;
     const started = Date.now();
     const applyLedger = (data: {
-      remainingHours?: number;
-      purchasedHours?: number;
-      usedHours?: number;
+      remainingHours?: number | string;
+      purchasedHours?: number | string;
+      usedHours?: number | string;
     }) => {
-      if (typeof data.remainingHours !== "number") return false;
-      setLedgerHours(data.remainingHours);
-      if (typeof data.purchasedHours === "number") setLedgerPurchasedHours(data.purchasedHours);
-      if (typeof data.usedHours === "number") setLedgerUsedHours(data.usedHours);
+      const remaining = asCreditHours(data.remainingHours);
+      if (remaining === null) return false;
+      setLedgerHours(remaining);
+      const purchased = asCreditHours(data.purchasedHours);
+      if (purchased !== null) setLedgerPurchasedHours(purchased);
+      const used = asCreditHours(data.usedHours);
+      if (used !== null) setLedgerUsedHours(used);
       queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
       return (
         paymentCreditBannerState({
-          remainingHours: data.remainingHours,
+          remainingHours: remaining,
           baselineHours,
           timedOut: false,
-          purchasedHours: data.purchasedHours,
+          purchasedHours: purchased ?? undefined,
           baselinePurchasedHours,
         }) === "granted"
       );
@@ -246,9 +250,11 @@ export default function PortalSat() {
   }
 
   const selfServe = dashboard.data?.credits.selfServeSatBooking ?? false;
-  const remainingHours = ledgerHours ?? dashboard.data?.credits.remainingHours ?? 0;
-  const purchasedHours = ledgerPurchasedHours ?? dashboard.data?.credits.purchasedHours ?? 0;
-  const usedHours = ledgerUsedHours ?? dashboard.data?.credits.usedHours ?? 0;
+  const remainingHours =
+    ledgerHours ?? asCreditHours(dashboard.data?.credits.remainingHours) ?? 0;
+  const purchasedHours =
+    ledgerPurchasedHours ?? asCreditHours(dashboard.data?.credits.purchasedHours) ?? 0;
+  const usedHours = ledgerUsedHours ?? asCreditHours(dashboard.data?.credits.usedHours) ?? 0;
   const canCheckout = currentUser?.role === "student" && selfServe;
   const paymentBannerState: PaymentCreditBanner | null =
     awaitingWebhook && baselineHours !== null && baselinePurchasedHours !== null
@@ -345,11 +351,12 @@ export default function PortalSat() {
                       }>;
                     })
                     .then((data) => {
-                      if (typeof data.remainingHours === "number") setLedgerHours(data.remainingHours);
-                      if (typeof data.purchasedHours === "number") {
-                        setLedgerPurchasedHours(data.purchasedHours);
-                      }
-                      if (typeof data.usedHours === "number") setLedgerUsedHours(data.usedHours);
+                      const remaining = asCreditHours(data.remainingHours);
+                      if (remaining !== null) setLedgerHours(remaining);
+                      const purchased = asCreditHours(data.purchasedHours);
+                      if (purchased !== null) setLedgerPurchasedHours(purchased);
+                      const used = asCreditHours(data.usedHours);
+                      if (used !== null) setLedgerUsedHours(used);
                       queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
                     })
                     .finally(() => setReconcilingPayment(false));
@@ -465,7 +472,10 @@ export default function PortalSat() {
               ) : null}
             </CardContent>
           </Card>
-          <BookingCard />
+          <BookingCard
+            initialRemainingHours={remainingHours}
+            initialPurchasedHours={purchasedHours}
+          />
         </>
       )}
     </div>

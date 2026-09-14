@@ -5,6 +5,7 @@ import {
   PAYMENT_CONFIRMING_TITLE,
   PAYMENT_GRANTED_TITLE,
   PAYMENT_TIMEOUT_TITLE,
+  asCreditHours,
   bookingCreditWallState,
   paymentCreditBannerCopy,
   paymentCreditBannerState,
@@ -134,5 +135,21 @@ test("zero remaining after a purchase is reserved copy only while a session is b
   assert.equal(
     remainingCreditsCaption({ remainingHours: 0, purchasedHours: 1, usedHours: 0 }),
     "Remaining credits: 0",
+  );
+});
+
+test("numeric credit strings still count as remaining hours, not unpaid", () => {
+  assert.equal(asCreditHours("1"), 1);
+  assert.equal(asCreditHours("0"), 0);
+  assert.equal(asCreditHours(1), 1);
+  assert.equal(asCreditHours(null), null);
+  assert.equal(asCreditHours(""), null);
+  assert.equal(
+    paymentCreditBannerState({
+      remainingHours: asCreditHours("1") ?? 0,
+      baselineHours: 0,
+      timedOut: false,
+    }),
+    "granted",
   );
 });

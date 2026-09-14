@@ -56,6 +56,8 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetBookingAvailabilityQueryKey: () => ["availability"],
+  getGetDashboardQueryKey: () => ["dashboard"],
+  getGetFinancialsQueryKey: () => ["financials"],
   getListBookingSessionsQueryKey: () => ["sessions"],
   useCancelBookingSession: () => mocks.cancelBooking,
   useCreateBookingSession: () => mocks.createBooking,
@@ -326,6 +328,22 @@ describe("client availability calendar", () => {
     expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
     expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
     expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/remaining credit/i);
+    fireEvent.click(screen.getByText("12:30 AM"));
+    expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  test("dashboard remaining credit unlocks booking even if the credits fetch fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    mocks.sessionsQuery.data = [];
+
+    render(<BookingCard initialRemainingHours={1} initialPurchasedHours={1} />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-available")).toBeTruthy();
+    });
+    expect(screen.queryByText(/You need a prepaid SAT credit before reserving/i)).toBeNull();
     fireEvent.click(screen.getByText("12:30 AM"));
     expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
     vi.unstubAllGlobals();

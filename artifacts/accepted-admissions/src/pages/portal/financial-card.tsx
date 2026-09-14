@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { asCreditHours } from "@/lib/portal-sat-payment";
 
 function money(cents: number): string {
   return (cents / 100).toLocaleString("en-US", {
@@ -54,7 +55,10 @@ export function FinancialCard({
     );
   }
 
-  const { invoices, payments, credits, remainingHours, purchasedHours, usedHours } = data;
+  const { invoices, payments, credits } = data;
+  const remainingHours = asCreditHours(data.remainingHours) ?? 0;
+  const purchasedHours = asCreditHours(data.purchasedHours) ?? 0;
+  const usedHours = asCreditHours(data.usedHours) ?? 0;
   const readOnly = adminPreview || data.readOnly;
   const hasVerifiedPayment = payments.some(
     (payment) => payment.verifiedAt || payment.status === "paid" || payment.status === "partially_paid",

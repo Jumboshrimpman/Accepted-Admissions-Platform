@@ -380,7 +380,12 @@ export function ClientDashboardView({
         </Card>
       )}
 
-      {studentSatCommerce && showSelfServeBooking ? <BookingCard /> : null}
+      {studentSatCommerce && showSelfServeBooking ? (
+        <BookingCard
+          initialRemainingHours={dashboard.credits.remainingHours}
+          initialPurchasedHours={dashboard.credits.purchasedHours}
+        />
+      ) : null}
       {adminPreview && showSelfServeBooking && previewBooking ? (
         <ClientPreviewBookingCard
           previewBooking={previewBooking}

@@ -9,9 +9,9 @@ import {
 const mocks = vi.hoisted(() => ({
   location: "/portal/sat",
   setLocation: vi.fn(),
-  remainingHours: 0,
-  purchasedHours: 0,
-  usedHours: 0,
+  remainingHours: 0 as number | string,
+  purchasedHours: 0 as number | string,
+  usedHours: 0 as number | string,
   currentUser: {
     data: { role: "student" as "student" | "tutor" | "administrator" | "viewer" },
     isLoading: false,
@@ -59,6 +59,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@workspace/api-client-react", () => ({
   getGetCurrentUserQueryKey: () => ["/api/me"],
   getGetDashboardQueryKey: () => ["/api/dashboard"],
+  getGetFinancialsQueryKey: () => ["/api/financials"],
   getGetBookingAvailabilityQueryKey: () => ["availability"],
   getListBookingSessionsQueryKey: () => ["sessions"],
   useGetCurrentUser: () => mocks.currentUser,
@@ -314,6 +315,19 @@ describe("portal SAT book/pay", () => {
     mocks.location = `${PORTAL_SAT_PURCHASE_HREF}?payment=success`;
     mocks.dashboard.data.credits.remainingHours = 0;
     mocks.remainingHours = 1;
+    render(<PortalSat />);
+    await waitFor(() => {
+      const banner = screen.getByTestId("portal-sat-payment-success");
+      expect(banner.getAttribute("data-credit-state")).toBe("granted");
+      expect(banner.textContent).toContain(PAYMENT_GRANTED_TITLE);
+      expect(banner.textContent).toMatch(/1 prepaid hour/);
+    });
+  });
+
+  test("treats a numeric remaining-hour string as granted after checkout", async () => {
+    mocks.location = `${PORTAL_SAT_PURCHASE_HREF}?payment=success`;
+    mocks.dashboard.data.credits.remainingHours = 0;
+    mocks.remainingHours = "1";
     render(<PortalSat />);
     await waitFor(() => {
       const banner = screen.getByTestId("portal-sat-payment-success");

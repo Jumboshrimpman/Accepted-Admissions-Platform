@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { endOfDay, format, parseISO, startOfDay } from "date-fns";
 import {
@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import {
   getGetBookingAvailabilityQueryKey,
+  getGetDashboardQueryKey,
+  getGetFinancialsQueryKey,
   getListBookingSessionsQueryKey,
   useCancelBookingSession,
   useCreateBookingSession,
@@ -43,7 +45,7 @@ import {
   uniqueListedSessions,
   withDisplayTimezone,
 } from "@/lib/session-display";
-import { bookingCreditWallState, prepaidHoursBadgeLabel } from "@/lib/portal-sat-payment";
+import { bookingCreditWallState, prepaidHoursBadgeLabel, asCreditHours } from "@/lib/portal-sat-payment";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -69,7 +71,13 @@ function truncateBio(value: string | null | undefined, max = 180): string {
   return `${text.slice(0, max).trimEnd()}…`;
 }
 
-export function BookingCard() {
+export function BookingCard({
+  initialRemainingHours,
+  initialPurchasedHours,
+}: {
+  initialRemainingHours?: number | null;
+  initialPurchasedHours?: number | null;
+} = {}) {
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
   const displayTimezone = resolveClientDisplayTimezone(currentUser?.timezone);
@@ -77,8 +85,13 @@ export function BookingCard() {
   const [selectedSlot, setSelectedSlot] = useState("");
   const [selectedDateKey, setSelectedDateKey] = useState("");
   const [reschedulingSessionId, setReschedulingSessionId] = useState<string | null>(null);
-  const [remainingHours, setRemainingHours] = useState<number | null>(null);
-  const [purchasedHours, setPurchasedHours] = useState(0);
+  const [remainingHours, setRemainingHours] = useState<number | null>(() =>
+    asCreditHours(initialRemainingHours),
+  );
+  const [purchasedHours, setPurchasedHours] = useState(
+    () => asCreditHours(initialPurchasedHours) ?? 0,
+  );
+  const creditsLoadedRef = useRef(false);
   const [creditError, setCreditError] = useState("");
   const [message, setMessage] = useState("");
   const [showAllBooked, setShowAllBooked] = useState(false);
@@ -146,12 +159,12 @@ export function BookingCard() {
         return response.json() as Promise<CreditResponse>;
       })
       .then((data) => {
-        const remaining = Number(data.remainingHours);
-        setRemainingHours(Number.isFinite(remaining) ? remaining : 0);
-        if (typeof data.purchasedHours === "number") {
-          const purchased = Number(data.purchasedHours);
-          setPurchasedHours(Number.isFinite(purchased) ? purchased : 0);
-        }
+        const remaining = asCreditHours(data.remainingHours);
+        if (remaining === null) throw new Error("Credits unavailable");
+        creditsLoadedRef.current = true;
+        setRemainingHours(remaining);
+        const purchased = asCreditHours(data.purchasedHours);
+        if (purchased !== null) setPurchasedHours(purchased);
         setCreditError("");
       })
       .catch(() => setCreditError("Credit balance is temporarily unavailable."));
@@ -162,6 +175,14 @@ export function BookingCard() {
   }, []);
 
   useEffect(() => {
+    if (creditsLoadedRef.current) return;
+    const remaining = asCreditHours(initialRemainingHours);
+    const purchased = asCreditHours(initialPurchasedHours);
+    if (remaining !== null) setRemainingHours(remaining);
+    if (purchased !== null) setPurchasedHours(purchased);
+  }, [initialRemainingHours, initialPurchasedHours]);
+
+  useEffect(() => {
     if (!selectedTutorId && tutors.length === 1) {
       setSelectedTutorId(tutors[0]!.id);
     }
@@ -170,6 +191,8 @@ export function BookingCard() {
   const invalidateBookingData = () => {
     queryClient.invalidateQueries({ queryKey: getListBookingSessionsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetBookingAvailabilityQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetFinancialsQueryKey() });
     refreshCredits();
   };
 
