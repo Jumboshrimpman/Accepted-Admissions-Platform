@@ -319,29 +319,55 @@ export function ClientDashboardView({
               <div className="rounded-xl border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
                 <p className="mt-1 text-2xl font-semibold">{dashboard.credits.usedHours}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Currently reserved or completed</p>
               </div>
               <div className="rounded-xl border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
                 <p className="mt-1 text-2xl font-semibold">{dashboard.credits.remainingHours}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Available to book</p>
               </div>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Used + remaining equals purchased. A cancelled session that restored credit returns to remaining, so you can book a new time.
+            </p>
             {studentSatCommerce && (
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button asChild className="rounded-full">
-                  <Link href="/portal/sat" data-testid="link-portal-sat-pay">
-                    {dashboard.credits.remainingHours <= 0 ? "Purchase session credits" : "Buy more SAT credits"}
-                  </Link>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-full"
-                  onClick={() =>
-                    document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
-                  }
-                >
-                  Book a SAT session
-                </Button>
+                {dashboard.credits.remainingHours > 0 ? (
+                  <>
+                    <Button
+                      type="button"
+                      className="rounded-full"
+                      onClick={() =>
+                        document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                    >
+                      Book a SAT session
+                    </Button>
+                    <Button asChild variant="outline" className="rounded-full">
+                      <Link href="/portal/sat" data-testid="link-portal-sat-pay">
+                        Buy more SAT credits
+                      </Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button asChild className="rounded-full">
+                      <Link href="/portal/sat" data-testid="link-portal-sat-pay">
+                        Purchase session credits
+                      </Link>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() =>
+                        document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                    >
+                      Book a SAT session
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </CardContent>

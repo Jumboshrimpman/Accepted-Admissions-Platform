@@ -92,16 +92,47 @@ test("zero remaining with a reserved session is not an unpaid purchase wall", ()
   );
 });
 
-test("zero remaining after a purchase is reserved copy, not unpaid", () => {
-  assert.equal(prepaidHoursBadgeLabel(0, 1), "Hour reserved");
-  assert.equal(prepaidHoursBadgeLabel(1, 1), "1 prepaid hour");
+test("a restored remaining hour is available to book, not reserved or unpaid", () => {
+  assert.equal(
+    bookingCreditWallState({
+      remainingHours: 1,
+      purchasedHours: 1,
+      hasLiveBookedSession: false,
+      rescheduling: false,
+    }),
+    "available",
+  );
+  assert.equal(
+    bookingCreditWallState({
+      remainingHours: 0,
+      purchasedHours: 1,
+      hasLiveBookedSession: false,
+      rescheduling: false,
+    }),
+    "spent",
+  );
+});
+
+test("zero remaining after a purchase is reserved copy only while a session is booked", () => {
+  assert.equal(prepaidHoursBadgeLabel(0, 1, true), "Hour reserved");
+  assert.equal(prepaidHoursBadgeLabel(1, 1, false), "1 prepaid hour");
+  assert.equal(prepaidHoursBadgeLabel(0, 1, false), "0 prepaid hours");
   assert.equal(prepaidHoursBadgeLabel(0, 0), "0 prepaid hours");
   assert.match(
-    remainingCreditsCaption({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    remainingCreditsCaption({
+      remainingHours: 0,
+      purchasedHours: 1,
+      usedHours: 1,
+      hasLiveBookedSession: true,
+    }),
     /reserved on a booked session/i,
   );
   assert.equal(
-    remainingCreditsCaption({ remainingHours: 0, purchasedHours: 0 }),
+    remainingCreditsCaption({ remainingHours: 1, purchasedHours: 1, usedHours: 0 }),
+    "Remaining credits: 1",
+  );
+  assert.equal(
+    remainingCreditsCaption({ remainingHours: 0, purchasedHours: 1, usedHours: 0 }),
     "Remaining credits: 0",
   );
 });

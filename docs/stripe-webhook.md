@@ -35,6 +35,8 @@ Hours come from `sat_products.durationHours`, not from the charge amount. The re
 
 A $130 / 1-hour purchase that is immediately booked will show **remaining 0**. That is a reserved hour, not an unpaid account. Remaining hours are the wrong signal for “payment verified.”
 
+After an eligible cancellation the restore ledger row returns the hour to **remaining**. Used is net of restores, so Purchased / Used / Remaining add up (1 / 0 / 1 after cancel-restore, not 1 / 1 / 1). There is then no upcoming session to reschedule; the client books a new time with remaining credit.
+
 ## If a webhook is missed again
 
 1. Student: SAT book-and-pay page → **Refresh payment status** (retrieves the Checkout Session from Stripe and fulfills if `payment_status=paid`).

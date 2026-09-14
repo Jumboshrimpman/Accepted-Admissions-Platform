@@ -146,8 +146,12 @@ export function BookingCard() {
         return response.json() as Promise<CreditResponse>;
       })
       .then((data) => {
-        setRemainingHours(data.remainingHours);
-        if (typeof data.purchasedHours === "number") setPurchasedHours(data.purchasedHours);
+        const remaining = Number(data.remainingHours);
+        setRemainingHours(Number.isFinite(remaining) ? remaining : 0);
+        if (typeof data.purchasedHours === "number") {
+          const purchased = Number(data.purchasedHours);
+          setPurchasedHours(Number.isFinite(purchased) ? purchased : 0);
+        }
         setCreditError("");
       })
       .catch(() => setCreditError("Credit balance is temporarily unavailable."));
@@ -292,7 +296,7 @@ export function BookingCard() {
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            {prepaidHoursBadgeLabel(remainingHours, purchasedHours)}
+            {prepaidHoursBadgeLabel(remainingHours, purchasedHours, sessions.length > 0)}
           </Badge>
         </div>
       </CardHeader>
@@ -479,6 +483,17 @@ export function BookingCard() {
                     </div>
                   </div>
                 )}
+                {creditWall === "available" && (
+                  <div
+                    className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+                    data-testid="booking-credit-available"
+                  >
+                    <p>
+                      You have {remainingHours} prepaid hour{remainingHours === 1 ? "" : "s"} ready to book.
+                      Pick a time above. After you reserve, you can change the date and time here until the session starts.
+                    </p>
+                  </div>
+                )}
                 {creditWall === "unpaid" && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p>
@@ -499,6 +514,20 @@ export function BookingCard() {
                     </p>
                   </div>
                 )}
+                {creditWall === "spent" && (
+                  <div
+                    className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                    data-testid="booking-credit-spent"
+                  >
+                    <p>
+                      You do not have a remaining prepaid hour, and there is no upcoming session to reschedule.
+                      Buy another hour to book a new time.
+                    </p>
+                    <Button asChild className="mt-3 rounded-full" size="sm">
+                      <Link href="/portal/sat">Purchase SAT hours</Link>
+                    </Button>
+                  </div>
+                )}
                 {selectedSlot && (
                   <Button className="mt-4 rounded-full" onClick={submitBooking} disabled={busy || (!reschedulingSessionId && remainingHours !== null && remainingHours <= 0)}>
                     {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -517,7 +546,11 @@ export function BookingCard() {
           {sessionsQuery.isLoading ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading sessions…</p>
           ) : sessions.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">No prepaid sessions reserved yet.</p>
+            <p className="mt-3 text-sm text-muted-foreground" data-testid="booking-empty-sessions">
+              {remainingHours !== null && remainingHours > 0
+                ? "No session is on the calendar yet. Use your remaining credit to book above. You can change the date and time here after a session is reserved."
+                : "No prepaid sessions reserved yet."}
+            </p>
           ) : (
             <div className="mt-3 space-y-3">
               {bookedSessionList.visible

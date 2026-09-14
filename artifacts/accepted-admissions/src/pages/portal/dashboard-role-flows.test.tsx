@@ -751,6 +751,38 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
   });
 
+  test("remaining credit after a restored cancellation makes booking the primary action", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "michelle-user",
+        displayName: "Michelle Makarem",
+        email: "makaremmichelle7@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 1,
+        usedHours: 0,
+        remainingHours: 1,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
+    expect(screen.getByText("Currently reserved or completed")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Book a SAT session" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Buy more SAT credits/i }).getAttribute("href")).toBe(
+      "/portal/sat",
+    );
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+  });
+
   test("client session roadmap hides cancelled meetings", () => {
     mocks.dashboard = {
       ...dashboardForRole("student"),

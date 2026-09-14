@@ -418,13 +418,13 @@ export default function PortalSat() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-              <p className="text-sm text-muted-foreground">
                 Remaining credits:{" "}
                 <span className="font-semibold text-foreground">{remainingHours}</span>
-                {remainingHours <= 0 && purchasedHours > 0
+                {remainingHours <= 0 && purchasedHours > 0 && upcomingSat.length > 0
                   ? " — prepaid hour reserved on a booked session"
-                  : ""}
-              </p>
+                  : remainingHours > 0
+                    ? " — ready to book below"
+                    : ""}
               </p>
               {loadingProducts ? <Skeleton className="h-40 rounded-xl" /> : null}
               {productError ? (

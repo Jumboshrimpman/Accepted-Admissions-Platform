@@ -67,6 +67,7 @@ import {
   rollbackBookingAfterCalendarFailure,
   sessionScheduleChangeError,
 } from "../lib/booking-service";
+import { summarizeCreditHours } from "../lib/credit-hours";
 import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
 import {
   calendarEventPayload,
@@ -526,33 +527,10 @@ function publicAppOrigin(): string {
   throw new Error("APP_ORIGIN must be configured for hosted payment redirects");
 }
 
-function ledgerHours(value: unknown): number {
-  const hours = Number(value);
-  return Number.isFinite(hours) ? hours : 0;
-}
-
 function creditHoursSummary(
-  entries: Array<{ entryType: string; hours: number }>,
+  entries: Array<{ entryType: string; hours: unknown }>,
 ): { purchasedHours: number; usedHours: number; remainingHours: number } {
-  let purchasedHours = 0;
-  let usedHours = 0;
-  let restoredHours = 0;
-  for (const entry of entries) {
-    const hours = ledgerHours(entry.hours);
-    if (entry.entryType === "original" || entry.entryType === "adjustment_credit") {
-      purchasedHours += hours;
-    } else if (
-      entry.entryType === "debit" ||
-      entry.entryType === "adjustment_debit" ||
-      entry.entryType === "refund"
-    ) {
-      usedHours += hours;
-    } else if (entry.entryType === "restored") {
-      restoredHours += hours;
-    }
-  }
-  const remainingHours = purchasedHours - usedHours + restoredHours;
-  return { purchasedHours, usedHours, remainingHours };
+  return summarizeCreditHours(entries);
 }
 
 

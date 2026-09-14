@@ -307,6 +307,50 @@ describe("client availability calendar", () => {
     vi.unstubAllGlobals();
   });
 
+  test("remaining credit after cancel-restore unlocks booking instead of change-time copy", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 1, purchasedHours: 1, usedHours: 0 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.sessionsQuery.data = [];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-available")).toBeTruthy();
+    });
+    expect(screen.getAllByText(/1 prepaid hour/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/You need a prepaid SAT credit before reserving/i)).toBeNull();
+    expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
+    expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/remaining credit/i);
+    fireEvent.click(screen.getByText("12:30 AM"));
+    expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  test("spent credit with no upcoming session does not tell the client to change time", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ remainingHours: 0, purchasedHours: 1, usedHours: 1 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mocks.sessionsQuery.data = [];
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("booking-credit-spent")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("booking-credit-reserved")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
+    expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/No prepaid sessions reserved yet/i);
+    vi.unstubAllGlobals();
+  });
+
   test("lists the Oct 2 Tokyo meeting as 9:00 PM JST instead of 8:00 AM Tokyo", () => {
     mocks.sessionsQuery.data = [
       {
