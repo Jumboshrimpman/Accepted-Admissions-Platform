@@ -129,7 +129,30 @@ POST /api/admin/sat-bank/reset-first-sat-prework
 
 If `assignBlocked` is true, the current assignment is still the live one (junk already unlinked). Do not force a 120. `--no-reassign` rematerializes/unlinks and stops.
 
-It does **not** move or edit homework on other sessions (Nika IELTS, later Eunice SATs, Xavier capability, session-local tutor forks).
+It does **not** move or edit homework on other sessions by itself. After this PR, **bank-wide refresh drops unusable items from every live assignment**, not Oct 2 only.
+
+### Every SAT quiz (successive Taito pre-work, Xavier, tutor-built)
+
+Offline JSONL audit (no `DATABASE_URL`, does not write):
+
+```bash
+cd artifacts/api-server
+node --experimental-strip-types src/scripts/audit-sat-quizzes.ts
+```
+
+**Required after merge (do not run from a cloud agent against prod):**
+
+1. Deploy the merged API.
+2. Optional: `POST /api/admin/sat-bank/import` if new JSONL/crops landed. Skip on 502.
+3. Optional: `POST /api/admin/sat-bank/rescore-usable`
+4. `POST /api/admin/sat-bank/refresh-linked`  
+   Rematerializes bank-linked question content **and unlinks live-audit failures from every non-archived assignment** (Oct 2, Oct 9+, Xavier, tutor-built, in-session). Session-local forks are not overwritten; junk forks are still unlinked.
+5. Or content-only unlink without rewriting stems: `POST /api/admin/sat-bank/drop-unusable-live`
+6. Oct 2 rebuild (short clean form, not a padded 120): `POST /api/admin/sat-bank/reset-first-sat-prework`
+7. Each later Taito SAT session / Xavier: `POST /api/admin/sessions/:sessionId/reset-prework`  
+   Now assigns **routine** 30–50 for non–Oct 2 SAT (not a second diagnostic). Body `reassignDiagnostic: false` rematerializes/archives without reassigning.
+
+Scoring also fail-closes: items that fail `isStudentUsableServedQuestion` are excluded from the denominator even if they were still linked.
 
 ### Verify
 

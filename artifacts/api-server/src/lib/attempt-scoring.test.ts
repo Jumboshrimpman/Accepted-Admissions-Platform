@@ -20,6 +20,19 @@ test("flagged and reported responses are excluded from scoring", () => {
   assert.equal(result.unscoredCount, 2);
 });
 
+test("unusable live-audit junk is excluded from scoring like flagged items", () => {
+  assert.equal(isUnscoredAttemptItem({ correct: false, unusable: true }), true);
+  const result = scoreAttemptItems([
+    { correct: true },
+    { correct: false, unusable: true },
+    { correct: true, flagged: true },
+  ]);
+  assert.equal(result.correctCount, 1);
+  assert.equal(result.totalCount, 1);
+  assert.equal(result.score, 100);
+  assert.equal(result.unscoredCount, 2);
+});
+
 test("an attempt of only flagged items scores 0 over an empty denominator", () => {
   const result = scoreAttemptItems([
     { correct: true, flagged: true },

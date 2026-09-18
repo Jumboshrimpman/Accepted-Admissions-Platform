@@ -12,11 +12,13 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   auditStudentQuizItem,
+  canAssignCleanStudentQuizSet,
   canAssignDiagnostic,
   composeDiagnosticItems,
   diagnosticAssignmentCopy,
   isCleanTextMcqItem,
   isMathQuizItem,
+  isOfficialSatExtract,
   isStudentUsableDiagnosticItem,
   isStudentUsableMathQuizItem,
   isStudentUsableQuizItem,
@@ -29,6 +31,8 @@ import {
 } from "./sat-bank-diagnostic-quality.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { hasCompleteLetterChoiceText } from "./sat-bank-figure-primary.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { selectQuestionsForCountBudget } from "./sat-bank-timing.ts";
 
 const figureUrl =
   "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/q7-question.png";
@@ -1707,4 +1711,91 @@ test("prefer figure-primary for smashed trig when a full-question crop and clean
     false,
     "text-only smash without a full-question crop must drop",
   );
+});
+
+test("official SAT extract helper excludes PSAT and non-extract rows", () => {
+  assert.equal(
+    isOfficialSatExtract({ examFamily: "sat", sourceKind: "official_extract" }),
+    true,
+  );
+  assert.equal(
+    isOfficialSatExtract({ examFamily: "psat", sourceKind: "official_extract" }),
+    false,
+  );
+  assert.equal(isOfficialSatExtract({ examFamily: "sat", sourceKind: "seed" }), false);
+});
+
+test("fail-closed student quiz set rejects junk, SPR, and one-section sets", () => {
+  const letterChoices = (texts: string[]) =>
+    ["A", "B", "C", "D"].map((label, index) => ({
+      id: label.toLowerCase(),
+      label,
+      text: texts[index] ?? "",
+    }));
+  const rw = {
+    id: "rw-1",
+    section: "rw",
+    prompt: "Which choice completes the text with the most logical and precise word or phrase?",
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const math = {
+    id: "math-1",
+    section: "math",
+    prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+    choices: letterChoices(["x/4 = 32", "x/4 = 5", "x/4 = 1", "x/4 = -32"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const junk = {
+    ...math,
+    id: "math-junk",
+    prompt: "2 –4x –7x = –36",
+  };
+  assert.equal(canAssignCleanStudentQuizSet([rw, math]), true);
+  assert.equal(canAssignCleanStudentQuizSet([rw, junk]), false, "residual junk cannot assign");
+  assert.equal(canAssignCleanStudentQuizSet([rw, rw]), false, "RW-only cannot assign");
+  assert.equal(canAssignCleanStudentQuizSet([math, math]), false, "Math-only cannot assign");
+  assert.equal(
+    canAssignCleanStudentQuizSet([
+      rw,
+      math,
+      { ...math, id: "spr", questionType: "spr", correctAnswer: "9; 9.0", choices: [] },
+    ]),
+    false,
+    "SPR cannot leak into a student set",
+  );
+});
+
+test("routine SAT pre-work from official SAT packs is a short clean mixed set", async () => {
+  const root = resolveCollegeBoardRoot(path.resolve(process.cwd(), "../../content/college-board"));
+  const files = (await listOfficialExtractFiles(root)).filter((file) =>
+    file.includes("sat-practice-test-"),
+  );
+  const records = [];
+  for (const file of files) {
+    const parsed = parseCollegeBoardPayload(await readFile(file, "utf8"), path.basename(file));
+    records.push(...parsed.records);
+  }
+  assert.ok(records.every((row) => isOfficialSatExtract(row) || row.examFamily === "sat"));
+  const usable = records.filter((row) => isStudentUsableQuizItem(row));
+  const selected = selectQuestionsForCountBudget(
+    usable.map((row) => ({
+      ...row,
+      estimatedSeconds: row.estimatedSeconds || 90,
+      skill: row.skill || row.section,
+    })),
+    { preferOriginalOrder: false },
+  ).selected;
+  assert.equal(selected.length, 40);
+  assert.equal(selected.every((row) => row.examFamily === "sat"), true);
+  assert.equal(selected.every((row) => isStudentUsableQuizItem(row)), true);
+  assert.equal(canAssignCleanStudentQuizSet(selected), true);
+  const composition = summarizeDiagnosticComposition(selected);
+  assert.equal(composition.residualJunk, 0);
+  assert.equal(composition.sprCount, 0);
+  assert.ok(composition.rwCount > 0);
+  assert.ok(composition.mathCount > 0);
+  assert.equal(composition.usable, false, "a 40-item set is not a usable 120");
 });

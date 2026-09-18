@@ -677,6 +677,38 @@ export function composeDiagnosticItems<T extends DiagnosticQualityInput>(
   };
 }
 
+/** Official digital SAT extracts only — PSAT packs stay in the bank, not autogen SAT quizzes. */
+export function isOfficialSatExtract(row: {
+  examFamily?: string | null;
+  sourceKind?: string | null;
+}): boolean {
+  return (
+    (row.examFamily ?? "").trim().toLowerCase() === "sat" &&
+    (row.sourceKind ?? "").trim() === "official_extract"
+  );
+}
+
+/**
+ * Same fail-closed assign bar for diagnostics and routine SAT pre-work:
+ * residual junk, leaked SPR, or an empty RW/Math section cannot ship.
+ */
+export function canAssignCleanStudentQuizSet(
+  selected: readonly DiagnosticQualityInput[],
+): boolean {
+  if (selected.length === 0) return false;
+  if (auditQuizItems(selected).residualJunk > 0) return false;
+  if (selected.some((item) => isTrueSprQuizItem(item) || !auditStudentQuizItem(item).ok)) {
+    return false;
+  }
+  let rwCount = 0;
+  let mathCount = 0;
+  for (const item of selected) {
+    if (isMathQuizItem(item)) mathCount += 1;
+    else rwCount += 1;
+  }
+  return rwCount > 0 && mathCount > 0;
+}
+
 /**
  * Fail-closed assign bar: ship a short clean diagnostic rather than pad to 120.
  * Block only when residual junk remains, SPR leaked in, or a section is empty.
@@ -686,10 +718,10 @@ export function canAssignDiagnostic(
   composition: DiagnosticComposition,
   selected: readonly DiagnosticQualityInput[] = [],
 ): boolean {
+  if (selected.length > 0) return canAssignCleanStudentQuizSet(selected);
   if (composition.residualJunk > 0) return false;
   if (composition.sprCount > 0) return false;
   if (composition.rwCount === 0 || composition.mathCount === 0) return false;
-  if (selected.length > 0 && selected.some((item) => !auditStudentQuizItem(item).ok)) return false;
   return composition.questionCount > 0;
 }
 
