@@ -3384,12 +3384,18 @@ async function finalizeAttemptResult(
       null,
   }));
   const reportedQuestionIds = await reportedQuestionIdsForAttempt(attempt.attempt.id);
-  const scoredItems: Array<{ correct: boolean; flagged: boolean; reported: boolean }> = [];
+  const scoredItems: Array<{
+    correct: boolean;
+    flagged: boolean;
+    reported: boolean;
+    unusable: boolean;
+  }> = [];
   for (const item of joined) {
     const correct = answersMatch(item.response?.finalAnswer, item.question.correctAnswer);
     const flagged = item.response?.flagged ?? false;
     const reported = reportedQuestionIds.has(item.question.id);
-    scoredItems.push({ correct, flagged, reported });
+    const unusable = !isStudentUsableServedQuestion(item.question);
+    scoredItems.push({ correct, flagged, reported, unusable });
     if (item.response) {
       await db
         .update(responsesTable)
@@ -3425,9 +3431,10 @@ async function finalizeAttemptResult(
     subject: question.subject,
     };
   });
-  const scoredForAnalysis = items.filter(
-    (item) => !item.flagged && !reportedQuestionIds.has(item.questionId),
-  );
+  const scoredForAnalysis = items.filter((item, index) => {
+    const scored = scoredItems[index];
+    return !item.flagged && !reportedQuestionIds.has(item.questionId) && !scored?.unusable;
+  });
   const breakdown = skillBreakdownFromItems(scoredForAnalysis);
   const homeworkKind = await homeworkKindForAssignment(attempt.assignment.id);
   const analysis = deterministicAnalysis(

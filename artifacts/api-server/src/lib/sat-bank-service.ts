@@ -37,9 +37,11 @@ import {
 } from "./sat-bank-import.ts";
 import {
   auditStudentQuizItem,
+  canAssignCleanStudentQuizSet,
   canAssignDiagnostic,
   diagnosticAssignmentCopy,
   composeDiagnosticItems,
+  isOfficialSatExtract,
   isStudentUsableQuizItem,
   quizItemFromServedQuestion,
   summarizeDiagnosticComposition,
@@ -79,6 +81,7 @@ import {
   asBankFigures,
   classifyLinkedRefresh,
   emptyLinkedRefreshCounts,
+  liveAssignmentsEligibleForUnusableDrop,
   materializedQuestionContent,
   recordLinkedRefresh,
   resolveBankFigureUrl,
@@ -423,7 +426,10 @@ export async function importCollegeBoardExtracts(input: {
   skipped: number;
   duplicatesInFile: number;
   collectionsEnsured: number;
-  linkedRefresh: LinkedRefreshCounts | null;
+  linkedRefresh: (LinkedRefreshCounts & {
+    droppedUnusable?: number;
+    assignmentsTouched?: number;
+  }) | null;
 }> {
   const collectionsEnsured = await ensureStagedCollections();
   const parsed = input.payloadText
@@ -746,7 +752,9 @@ export async function diagnosticCompositionForAssignment(
   return summarizeDiagnosticComposition(selected);
 }
 
-export async function refreshLinkedQuestionsFromBank(): Promise<LinkedRefreshCounts> {
+export async function refreshLinkedQuestionsFromBank(): Promise<
+  LinkedRefreshCounts & { droppedUnusable: number; assignmentsTouched: number }
+> {
   const rows = await db
     .select({
       id: bankQuestionsTable.id,
@@ -778,7 +786,27 @@ export async function refreshLinkedQuestionsFromBank(): Promise<LinkedRefreshCou
       counts = recordLinkedRefresh(counts, "error");
     }
   }
-  return counts;
+  const drop = await dropUnusableQuestionsFromLiveAssignments();
+  return {
+    ...counts,
+    droppedUnusable: drop.droppedUnusable,
+    assignmentsTouched: drop.assignmentsTouched,
+  };
+}
+
+export async function dropUnusableQuestionsFromLiveAssignments(): Promise<{
+  droppedUnusable: number;
+  assignmentsTouched: number;
+}> {
+  const assignments = await db
+    .select({ id: assignmentsTable.id, status: assignmentsTable.status })
+    .from(assignmentsTable);
+  const liveIds = liveAssignmentsEligibleForUnusableDrop(assignments);
+  let droppedUnusable = 0;
+  for (const assignmentId of liveIds) {
+    droppedUnusable += await dropUnusableAssignmentQuestions(assignmentId);
+  }
+  return { droppedUnusable, assignmentsTouched: liveIds.length };
 }
 
 async function archiveSessionPrework(sessionId: string) {
@@ -845,10 +873,11 @@ export async function assignPreworkFromBank(input: {
   if (explicitIds) {
     const allowed = new Set(input.bankQuestionIds);
     pool = pool.filter((row) => allowed.has(row.id));
-  } else if (homeworkKind === "diagnostic" && !explicitCollection) {
-    pool = pool.filter(
-      (row) => row.examFamily === "sat" && row.sourceKind === "official_extract",
-    );
+  } else if (
+    (homeworkKind === "diagnostic" || homeworkKind === "routine") &&
+    !explicitCollection
+  ) {
+    pool = pool.filter((row) => isOfficialSatExtract(row));
   } else if (collectionId) {
     pool = pool.filter((row) => row.collectionId === collectionId);
   }
@@ -918,6 +947,24 @@ export async function assignPreworkFromBank(input: {
             preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
           },
         ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
+  const routineItems = selected.map((row) => bankRowForDiagnostic(row));
+  const routineComposition =
+    homeworkKind === "routine" ? summarizeDiagnosticComposition(routineItems) : null;
+  if (homeworkKind === "routine" && !canAssignCleanStudentQuizSet(routineItems)) {
+    throw Object.assign(
+      new Error(
+        formatDiagnosticAssignBlock(routineComposition ?? summarizeDiagnosticComposition([])).replace(
+          "Diagnostic assign blocked",
+          "SAT pre-work assign blocked",
+        ),
+      ),
+      {
+        status: 409,
+        composition: routineComposition,
+        assignBlocked: true,
+      },
+    );
+  }
   const estimatedSeconds = selected.reduce(
     (sum, row) => sum + Math.max(0, row.estimatedSeconds),
     0,
@@ -1011,7 +1058,7 @@ export async function assignPreworkFromBank(input: {
         ? Boolean(composed?.composition.usable)
         : selected.length <= 50 && (selected.length >= 30 || selected.length === pool.length),
     extractIncomplete: selected.some((row) => !row.officialExplanation.trim()),
-    composition: composed?.composition ?? null,
+    composition: composed?.composition ?? routineComposition,
     assignBlocked: false,
   };
 }
@@ -1033,8 +1080,7 @@ export async function previewDiagnosticComposition(options: {
       .orderBy(asc(bankQuestionsTable.position), asc(bankQuestionsTable.questionNumber))
   ).filter(
     (row) =>
-      row.examFamily === "sat" &&
-      row.sourceKind === "official_extract" &&
+      isOfficialSatExtract(row) &&
       isMultipleChoiceQuizItem({
         questionType: row.questionType,
         choices: Array.isArray(row.choices) ? row.choices : [],

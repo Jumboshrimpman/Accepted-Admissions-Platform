@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   classifyLinkedRefresh,
   emptyLinkedRefreshCounts,
+  liveAssignmentsEligibleForUnusableDrop,
   enrichStimulusWithFigures,
   figureMarkdownLine,
   materializedQuestionContent,
@@ -107,6 +108,18 @@ test("linked refresh classifies update vs insert vs skip and tallies counts", ()
   counts = recordLinkedRefresh(counts, "insert");
   counts = recordLinkedRefresh(counts, "error");
   assert.deepEqual(counts, { updated: 2, skipped: 2, errors: 1 });
+});
+
+test("live assignment unusable-drop skips archived quizzes only", () => {
+  assert.deepEqual(
+    liveAssignmentsEligibleForUnusableDrop([
+      { id: "oct2", status: "published" },
+      { id: "oct9", status: "published" },
+      { id: "old", status: "archived" },
+      { id: "draft", status: "draft" },
+    ]),
+    ["oct2", "oct9", "draft"],
+  );
 });
 
 test("empty-choice figure crops do not materialize as letter-only A–D", () => {

@@ -2,10 +2,12 @@ export type ScoreableAttemptItem = {
   correct: boolean;
   flagged?: boolean | null;
   reported?: boolean | null;
+  /** Live-audit junk hidden from students must not count in the denominator. */
+  unusable?: boolean | null;
 };
 
 export function isUnscoredAttemptItem(item: ScoreableAttemptItem): boolean {
-  return Boolean(item.flagged || item.reported);
+  return Boolean(item.flagged || item.reported || item.unusable);
 }
 
 export function scoreAttemptItems(items: readonly ScoreableAttemptItem[]): {

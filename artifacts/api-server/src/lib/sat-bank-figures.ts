@@ -29,6 +29,14 @@ export type LinkedRefreshCounts = {
   errors: number;
 };
 
+export function liveAssignmentsEligibleForUnusableDrop(
+  rows: readonly { id: string; status?: string | null }[],
+): string[] {
+  return rows
+    .filter((row) => (row.status ?? "published") !== "archived")
+    .map((row) => row.id);
+}
+
 const ABSOLUTE_HTTPS = /^https:\/\//i;
 const ABSOLUTE_HTTP = /^http:\/\//i;
 
