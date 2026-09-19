@@ -10,7 +10,10 @@ import {
   isFullLengthDiagnosticAssignment,
   isLetterMultipleChoiceAnswer,
   isUnfinishedHomeworkClientCopy,
+  isXavierSatCapabilityCopy,
   pickDiagnosticKeeper,
+  studentCanListAssignment,
+  studentOwnsSessionAssignment,
   studentSafeAssignmentInstructions,
   stripBankFigureComments,
 } from "./assignment-visibility.ts";
@@ -264,4 +267,85 @@ test("dedupe keeps the published full-length diagnostic with work, not an empty 
     },
   ]);
   assert.equal(keeper?.id, "full-length");
+});
+
+test("students only list homework on their own sessions, never Xavier capability scaffolding for Taito", () => {
+  assert.equal(
+    isXavierSatCapabilityCopy("60-minute SAT pre-work — SAT capability test — Xavier"),
+    true,
+  );
+  assert.equal(
+    isXavierSatCapabilityCopy("SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice"),
+    false,
+  );
+  assert.equal(studentOwnsSessionAssignment("student-taito", "student-taito"), true);
+  assert.equal(studentOwnsSessionAssignment("student-sama", "student-taito"), false);
+  assert.equal(studentOwnsSessionAssignment(null, "student-taito"), false);
+
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-taito",
+      studentEmail: "taito0525@gmail.com",
+      sessionClientUserId: "student-taito",
+      sessionTitle: "Taito’s SAT Session with Eunice",
+      assignmentTitle: "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice",
+    }),
+    true,
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-taito",
+      studentEmail: "taito0525@gmail.com",
+      sessionClientUserId: "student-taito",
+      sessionTitle: "Taito’s SAT Session with Nika",
+      assignmentTitle: "English session homework",
+    }),
+    true,
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-taito",
+      studentEmail: "taito0525@gmail.com",
+      sessionClientUserId: "student-taito",
+      sessionTitle: "SAT capability test — Xavier",
+      assignmentTitle: "60-minute SAT pre-work — SAT capability test — Xavier",
+    }),
+    false,
+    "Taito must not see Xavier capability-test scaffolding even if still linked as client",
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-taito",
+      studentEmail: "taito0525@gmail.com",
+      sessionClientUserId: "student-sama",
+      sessionTitle: "SAT capability test — Xavier",
+      assignmentTitle: "60-minute SAT pre-work — SAT capability test — Xavier",
+    }),
+    false,
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-michelle",
+      studentEmail: "michelle@example.com",
+      sessionClientUserId: "student-michelle",
+      sessionTitle: "Michelle’s SAT Session with Xavier",
+      assignmentTitle: "SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier",
+    }),
+    true,
+    "Michelle's real Xavier homework stays visible",
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "administrator",
+      studentUserId: "admin",
+      sessionClientUserId: null,
+      assignmentTitle: "60-minute SAT pre-work — SAT capability test — Xavier",
+    }),
+    true,
+  );
 });

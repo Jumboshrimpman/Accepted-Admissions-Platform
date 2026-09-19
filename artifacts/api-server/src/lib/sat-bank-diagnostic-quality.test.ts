@@ -17,6 +17,7 @@ import {
   composeDiagnosticItems,
   diagnosticAssignmentCopy,
   isCleanTextMcqItem,
+  liveDiagnosticAssignmentTitle,
   isMathQuizItem,
   isOfficialSatExtract,
   isStudentUsableDiagnosticItem,
@@ -1557,6 +1558,82 @@ test("fail-closed: a short clean diagnostic is assignable and is not labeled usa
   assert.match(copy.title, /14 clean questions/);
   assert.equal(copy.title.includes("Full-length"), false);
   assert.match(copy.instructions, /could not fill a clean 120/);
+});
+
+test("short clean diagnostics use live question count and never say Full-length", () => {
+  assert.equal(
+    liveDiagnosticAssignmentTitle({
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      questionCount: 104,
+      homeworkKind: "diagnostic",
+    }),
+    "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice",
+  );
+  assert.equal(
+    liveDiagnosticAssignmentTitle({
+      title: "SAT diagnostic (105 clean questions) — Taito’s SAT Session with Eunice",
+      questionCount: 104,
+    }),
+    "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice",
+    "prefer live count over a stale 105 in the stored title",
+  );
+  assert.equal(
+    liveDiagnosticAssignmentTitle({
+      title: "Full-length SAT diagnostic",
+      questionCount: 105,
+    }),
+    "SAT diagnostic (105 clean questions)",
+  );
+  assert.equal(
+    liveDiagnosticAssignmentTitle({
+      title: "Full SAT Practice Diagnostic",
+      questionCount: 104,
+    }),
+    "SAT diagnostic (104 clean questions)",
+  );
+  assert.equal(
+    liveDiagnosticAssignmentTitle({
+      title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+      questionCount: 120,
+    }),
+    "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
+  );
+  assert.equal(
+    liveDiagnosticAssignmentTitle({
+      title: "60-minute SAT pre-work — SAT capability test — Xavier",
+      questionCount: 40,
+    }),
+    "60-minute SAT pre-work — SAT capability test — Xavier",
+  );
+  const shortCopy = diagnosticAssignmentCopy(
+    {
+      questionCount: 104,
+      rwCount: 60,
+      mathCount: 44,
+      cleanMcqCount: 104,
+      figurePrimaryCount: 0,
+      droppedUnusable: 16,
+      filledFromOtherPacks: 0,
+      modules: { "rw-1": 30, "rw-2": 30, "math-1": 22, "math-2": 22 },
+      duplicatePrompts: 0,
+      sprCount: 0,
+      residualJunk: 0,
+      shortfall: {
+        questionCount: 16,
+        rwCount: 6,
+        mathCount: 10,
+        modules: { "rw-1": 3, "rw-2": 3, "math-1": 5, "math-2": 5 },
+        reasons: {},
+      },
+      usable: false,
+    },
+    "Taito’s SAT Session with Eunice",
+  );
+  assert.equal(
+    shortCopy.title,
+    "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice",
+  );
+  assert.equal(shortCopy.title.includes("Full-length"), false);
 });
 
 test("fail-closed: cannot mark usable or assign when only dirty math remains", () => {

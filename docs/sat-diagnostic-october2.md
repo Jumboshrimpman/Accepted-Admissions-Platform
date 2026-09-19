@@ -99,6 +99,24 @@ The reusable bank still stores SPR and incomplete extracts. They are just not co
 
 Needs `DATABASE_URL` on the API host. No Clerk invites. Do not merge from this runbook.
 
+### Taito quiz list vs Xavier capability-test (titles only)
+
+Admin client preview of Taito should show **Eunice SAT + Nika English** homework only — not `60-minute SAT pre-work — SAT capability test — Xavier`. Code now:
+
+- never attaches the Xavier capability session to Taito (boot seed unassigns him if a leftover link exists)
+- lists student quizzes only for sessions whose `clientUserId` is that student
+- hides Xavier capability-test copy from Taito even if a leftover link remains
+- rewrites diagnostic labels from the **live** question count (`SAT diagnostic (N clean questions)` unless N is a clean 120)
+
+Optional one-time Cos cleanup (no bank rematerialize, no Clerk invites, does not touch Michelle/Xavier real session homework except retitling short diagnostics):
+
+```bash
+cd artifacts/api-server
+node --experimental-strip-types src/scripts/reconcile-client-quiz-labels.ts
+```
+
+Do **not** rematerialize whole banks for this mismatch. After deploy, Taito’s portal is already filtered even if the script has not run.
+
 ### In-place refresh (no rebuild)
 
 ```http
