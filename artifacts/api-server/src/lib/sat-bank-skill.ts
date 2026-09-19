@@ -5,7 +5,10 @@ export const MISSING_EXTRACT_SKILL_LABELS = [
   "skill not in pdf",
 ] as const;
 
-export function quizSubject(section: string): string {
+export function quizSubject(section: string, examFamily?: string | null): string {
+  if ((examFamily ?? "").trim().toLowerCase() === "ielts") {
+    return section === "writing" ? "IELTS Writing" : "IELTS Reading";
+  }
   return section === "math" ? "SAT Math" : "SAT Reading & Writing";
 }
 

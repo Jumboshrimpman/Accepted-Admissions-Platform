@@ -116,6 +116,7 @@ export function materializedQuestionContent(bank: {
   correctAnswer: string;
   officialExplanation?: string | null;
   subject?: string | null;
+  examFamily?: string | null;
   extractGaps?: Record<string, unknown> | null;
   tags?: string[] | null;
 }) {
@@ -146,8 +147,16 @@ export function materializedQuestionContent(bank: {
   );
   const cleanedChoices = letterMcqChoices(parsedChoices);
   return {
-    subject: quizSubject(bank.section),
-    domain: bank.domain || (bank.section === "math" ? "SAT Math" : "Reading and Writing"),
+    subject: quizSubject(bank.section, bank.examFamily),
+    domain:
+      bank.domain ||
+      (bank.examFamily === "ielts"
+        ? bank.section === "writing"
+          ? "IELTS Writing"
+          : "IELTS Reading"
+        : bank.section === "math"
+          ? "SAT Math"
+          : "Reading and Writing"),
     skill: skillLabelForBank({
       skill: bank.skill,
       section: bank.section,

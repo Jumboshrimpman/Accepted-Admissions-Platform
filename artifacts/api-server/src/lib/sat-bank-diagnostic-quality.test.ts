@@ -22,6 +22,7 @@ import {
   isOfficialSatExtract,
   isStudentUsableDiagnosticItem,
   isStudentUsableMathQuizItem,
+  isIeltsStyleQuizSubject,
   isStudentUsableQuizItem,
   isStudentUsableServedQuestion,
   isTrueSprQuizItem,
@@ -1875,4 +1876,14 @@ test("routine SAT pre-work from official SAT packs is a short clean mixed set", 
   assert.ok(composition.rwCount > 0);
   assert.ok(composition.mathCount > 0);
   assert.equal(composition.usable, false, "a 40-item set is not a usable 120");
+});
+
+test("IELTS subject uses the English gate; SAT Reading and Writing does not", () => {
+  assert.equal(isIeltsStyleQuizSubject({ subject: "IELTS Reading", section: "reading" }), true);
+  assert.equal(isIeltsStyleQuizSubject({ examFamily: "ielts", section: "rw" }), true);
+  assert.equal(
+    isIeltsStyleQuizSubject({ subject: "SAT Reading & Writing", section: "rw", examFamily: "sat" }),
+    false,
+  );
+  assert.equal(isIeltsStyleQuizSubject({ section: "rw", domain: "Information and Ideas" }), false);
 });

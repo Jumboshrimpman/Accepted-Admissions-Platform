@@ -12,4 +12,5 @@ export type ListSatBankQuestionsExamFamily = typeof ListSatBankQuestionsExamFami
 export const ListSatBankQuestionsExamFamily = {
   sat: 'sat',
   psat: 'psat',
+  ielts: 'ielts',
 } as const;

@@ -21,6 +21,8 @@ export function meetingUrlForTerm(
 }
 
 export const TAITO_FIRST_SAT_DATE_KEY = "2026-10-02";
+export const TAITO_FIRST_ENGLISH_DATE_KEY = "2026-10-23";
+export const TAITO_ENGLISH_DATE_KEYS = ["2026-10-23", "2026-11-13", "2026-12-04"] as const;
 
 export const TAITO_FALL_2026_SESSIONS = [
   { dateKey: TAITO_FIRST_SAT_DATE_KEY, subject: "SAT", tutorName: "Eunice Chon", tutorEmail: EUNICE_TUTOR_EMAIL },
@@ -74,6 +76,33 @@ export function isTaitoFirstSatSession(session: {
   return (
     normalizedSessionSubject(session.subject) === "SAT" &&
     matchesTaitoScheduledDate(session, TAITO_FIRST_SAT_DATE_KEY)
+  );
+}
+
+export function isEnglishSessionSubject(subject: string): boolean {
+  return normalizedSessionSubject(subject) === "English";
+}
+
+export function isTaitoFirstEnglishSession(session: {
+  dateTime: Date;
+  subject: string;
+  timezone?: string | null;
+}): boolean {
+  return (
+    isEnglishSessionSubject(session.subject) &&
+    matchesTaitoScheduledDate(session, TAITO_FIRST_ENGLISH_DATE_KEY)
+  );
+}
+
+/** 0 = Oct 23 diagnostic, 1 = Nov 13 routine, 2 = Dec 4 routine; -1 if not a Taito English date. */
+export function taitoEnglishSessionIndex(session: {
+  dateTime: Date;
+  subject: string;
+  timezone?: string | null;
+}): number {
+  if (!isEnglishSessionSubject(session.subject)) return -1;
+  return TAITO_ENGLISH_DATE_KEYS.findIndex((dateKey) =>
+    matchesTaitoScheduledDate(session, dateKey),
   );
 }
 

@@ -54,10 +54,12 @@ export async function generateQuestionsForQuiz(
 export function GenerateQuestionsCard({
   assignmentId,
   defaultSkill,
+  subject,
   onGenerated,
 }: {
   assignmentId: string;
   defaultSkill?: string;
+  subject?: string;
   onGenerated: () => void;
 }) {
   const [status, setStatus] = useState<QuestionGenerationStatus | null>(null);
@@ -87,7 +89,9 @@ export function GenerateQuestionsCard({
           </Badge>
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Create questions for this open quiz. Choose how many, optionally paste source material, then review and edit them on the quiz.
+          {subject && /^(ielts|english)/i.test(subject)
+            ? "Create original IELTS-style Reading questions for this quiz. The model must invent new passages — not official IELTS, Cambridge, British Council, or IDP items. Review every stem and A–D key before students see them."
+            : "Create questions for this open quiz. Choose how many, optionally paste source material, then review and edit them on the quiz."}
         </p>
       </CardHeader>
       <CardContent className="grid gap-4">

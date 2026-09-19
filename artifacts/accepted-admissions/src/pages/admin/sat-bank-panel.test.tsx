@@ -128,6 +128,30 @@ describe("SAT/PSAT bank panel", () => {
     expect(screen.getByRole("button", { name: /Reset this session pre-work/ })).toBeTruthy();
   });
 
+  test("offers IELTS-style assign copy on English sessions", () => {
+    render(
+      <AssignBankPreworkControl
+        sessionId="english-1"
+        sessionSubject="IELTS"
+        isFirstEnglishSession
+        collections={[
+          {
+            id: "ielts-1",
+            title: "IELTS-style original practice (not official IELTS)",
+            questionCount: 50,
+            examFamily: "ielts",
+          },
+        ]}
+        onChanged={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId("assign-bank-prework-english-1").textContent).toMatch(
+      /IELTS-style diagnostic reading/,
+    );
+    expect(screen.getByRole("button", { name: /Assign IELTS-style diagnostic/ })).toBeTruthy();
+    expect(screen.getByLabelText("IELTS-style bank collection for English pre-work")).toBeTruthy();
+  });
+
   test("offers a first-session diagnostic reset that does not wipe the bank", () => {
     resetFetch.mockResolvedValue({
       deletedAttempts: 1,

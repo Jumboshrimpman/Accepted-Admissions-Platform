@@ -543,6 +543,7 @@ function QuizQuestionEditor({
         <GenerateQuestionsCard
           assignmentId={quiz.id}
           defaultSkill={quiz.subject}
+          subject={quiz.subject}
           onGenerated={onChanged}
         />
         <div className="rounded-xl border bg-muted/20 p-3">
