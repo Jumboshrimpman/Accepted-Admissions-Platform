@@ -37,4 +37,21 @@ describe("Guidance request form", () => {
     expect(name.value).toBe("Jordan Parent");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("status-request-error")));
   });
+
+  it("shows an honest error when the API cannot email the admin inbox", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      error: "We could not send your request to Accepted Admissions because email delivery is unavailable. Please try again later, or email admin@acceptedadmissions.org directly.",
+      code: "EMAIL_DELIVERY_UNAVAILABLE",
+    }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    render(<ClientRequest />);
+    fireEvent.submit(screen.getByRole("button", { name: /submit guidance request/i }).closest("form")!);
+
+    const alert = await screen.findByTestId("status-request-error");
+    expect(alert.textContent).toMatch(/email delivery is unavailable/i);
+    expect(alert.textContent).toMatch(/admin@acceptedadmissions.org/i);
+  });
 });
