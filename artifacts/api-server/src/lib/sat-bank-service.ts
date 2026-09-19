@@ -76,6 +76,7 @@ import {
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
 import { isDuplicateSessionPrework } from "./session-homework.ts";
+import { reuseLivePreworkIfPresent } from "./session-prework-live.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import {
   asBankFigures,
@@ -876,8 +877,15 @@ export async function assignPreworkFromBank(input: {
       { status: 409 },
     );
   }
-  await ensureOfficialExtractsImported().catch(() => undefined);
   const homeworkKind = input.homeworkKind ?? "routine";
+  if (input.skipArchiveExisting) {
+    const reused = await reuseLivePreworkIfPresent({
+      sessionId: session.id,
+      plannedKind: homeworkKind,
+    });
+    if (reused) return reused;
+  }
+  await ensureOfficialExtractsImported().catch(() => undefined);
   const explicitCollection = Boolean(input.collectionId);
   const explicitIds = Boolean(input.bankQuestionIds?.length);
   const collections = await listBankCollections();

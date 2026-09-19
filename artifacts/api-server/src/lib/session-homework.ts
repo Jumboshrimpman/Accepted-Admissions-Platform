@@ -2,6 +2,12 @@ import {
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
+import {
+  inferSessionPreworkKind,
+  isSeededOrAutogenPreworkTitle,
+  pickLiveSessionPreworkKeeper,
+  sessionPreworkSubjectFamily,
+} from "./session-prework-dedupe.ts";
 
 export const IN_SESSION_HOMEWORK_COMPLETION_TITLE = "In-session homework completion";
 export const MAX_IN_SESSION_HOMEWORK_QUESTIONS = 15;
@@ -55,7 +61,17 @@ export function isDuplicateSessionPrework(
   if (keeperDiagnostic && candidateDiagnostic) return true;
   const keeperTitle = keeper.title?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
   const candidateTitle = candidate.title?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
-  return Boolean(keeperTitle) && keeperTitle === candidateTitle;
+  if (Boolean(keeperTitle) && keeperTitle === candidateTitle) return true;
+  if (
+    isSeededOrAutogenPreworkTitle(keeper.title) &&
+    isSeededOrAutogenPreworkTitle(candidate.title) &&
+    inferSessionPreworkKind(keeper) === inferSessionPreworkKind(candidate) &&
+    sessionPreworkSubjectFamily(keeper) === sessionPreworkSubjectFamily(candidate) &&
+    sessionPreworkSubjectFamily(keeper) !== "other"
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -81,24 +97,55 @@ export function selectStatusHomework<T extends StatusHomeworkCandidate>(
       questionCount: item.questionCount,
     }),
   );
-  if (diagnostics.length <= 1) return unique;
-  const keeper = pickDiagnosticKeeper(
-    diagnostics.map((item) => ({
-      id: statusHomeworkId(item)!,
-      status: item.status ?? "published",
-      questionCount: item.questionCount ?? 0,
-      attemptCount: item.attemptCount ?? 0,
-    })),
-  );
-  const keeperId = keeper?.id;
-  return unique.filter((item) => {
-    const isDiagnostic = isFullLengthDiagnosticAssignment({
-      title: item.title,
-      homeworkKind: item.homeworkKind,
-      questionCount: item.questionCount,
+  const afterDiagnostics = (() => {
+    if (diagnostics.length <= 1) return unique;
+    const keeper = pickDiagnosticKeeper(
+      diagnostics.map((item) => ({
+        id: statusHomeworkId(item)!,
+        status: item.status ?? "published",
+        questionCount: item.questionCount ?? 0,
+        attemptCount: item.attemptCount ?? 0,
+      })),
+    );
+    const keeperId = keeper?.id;
+    return unique.filter((item) => {
+      const isDiagnostic = isFullLengthDiagnosticAssignment({
+        title: item.title,
+        homeworkKind: item.homeworkKind,
+        questionCount: item.questionCount,
+      });
+      return !isDiagnostic || statusHomeworkId(item) === keeperId;
     });
-    return !isDiagnostic || statusHomeworkId(item) === keeperId;
-  });
+  })();
+  const kept: T[] = [];
+  for (const item of afterDiagnostics) {
+    const duplicateOf = kept.find((keeper) => isDuplicateSessionPrework(keeper, item));
+    if (!duplicateOf) {
+      kept.push(item);
+      continue;
+    }
+    const winner = pickLiveSessionPreworkKeeper([
+      {
+        id: statusHomeworkId(duplicateOf)!,
+        title: duplicateOf.title,
+        homeworkKind: duplicateOf.homeworkKind,
+        questionCount: duplicateOf.questionCount,
+        attemptCount: duplicateOf.attemptCount,
+      },
+      {
+        id: statusHomeworkId(item)!,
+        title: item.title,
+        homeworkKind: item.homeworkKind,
+        questionCount: item.questionCount,
+        attemptCount: item.attemptCount,
+      },
+    ]);
+    if (winner && winner.id === statusHomeworkId(item)) {
+      const index = kept.indexOf(duplicateOf);
+      kept.splice(index, 1, item);
+    }
+  }
+  return kept;
 }
 
 export type WrongAnswerCandidate = {

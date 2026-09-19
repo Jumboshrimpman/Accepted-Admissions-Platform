@@ -92,6 +92,39 @@ test("status homework hides archived leftovers and keeps one current diagnostic"
   );
 });
 
+test("status homework collapses same-title IELTS routines to the newest complete copy", () => {
+  const listed = selectStatusHomework([
+    {
+      id: "empty-copy",
+      title: "IELTS-style reading pre-work — Taito’s English Session with Nika",
+      status: "published",
+      homeworkKind: "routine",
+      questionCount: 0,
+      attemptCount: 0,
+    },
+    {
+      id: "complete-copy",
+      title: "IELTS-style reading pre-work — Taito’s English Session with Nika",
+      status: "published",
+      homeworkKind: "routine",
+      questionCount: 12,
+      attemptCount: 0,
+    },
+    {
+      id: "sat-grammar",
+      title: "SAT Homework — Grammar and Boundaries",
+      status: "published",
+      homeworkKind: "routine",
+      questionCount: 4,
+      attemptCount: 0,
+    },
+  ]);
+  assert.deepEqual(
+    listed.map((item) => item.id),
+    ["complete-copy", "sat-grammar"],
+  );
+});
+
 test("selectActivePrework ignores archived session copies left by replace/remove", () => {
   const archived = {
     id: "old-clone",
