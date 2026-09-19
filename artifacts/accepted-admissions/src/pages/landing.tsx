@@ -31,13 +31,13 @@ export function LandingContent({ content }: { content: HomeContent }) {
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="h-14 w-full rounded-md bg-primary px-7 text-base text-primary-foreground shadow-sm sm:w-auto">
-                <Link href="/sat" data-testid="link-home-sat">
-                  Explore the SAT session <ArrowRight className="ml-2 h-5 w-5" />
+                <Link href="/client-request" data-testid="link-home-guidance">
+                  Request Private Tutoring Now <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="h-14 w-full rounded-md border-primary/30 px-7 text-base sm:w-auto">
-                <Link href="/client-request" data-testid="link-home-guidance">
-                  Request broader guidance
+                <Link href="/sat" data-testid="link-home-sat">
+                  Explore the SAT session
                 </Link>
               </Button>
             </div>
