@@ -14,6 +14,7 @@ import {
   looksFlattenedFractionChoice,
   looksGarbledExtractText,
   looksGluedInequalityChoice,
+  looksGluedBlankOcr,
   looksHardOcrMathRisk,
   looksIncompleteMathParens,
   looksLeakedNextQuestionChoice,
@@ -63,6 +64,7 @@ export const STUDENT_USABLE_FAILURE_REASONS = [
   "incomplete_choices",
   "leaked_or_merged_choices",
   "extraction_marker_bleed",
+  "glued_blank_ocr",
   "unreadable_stem",
   "garbled_extract",
   "smashed_extract",
@@ -274,6 +276,7 @@ function choiceFailureReasons(
       reasons.add("smashed_algebra");
     }
     if (looksGluedInequalityChoice(text)) reasons.add("smashed_algebra");
+    if (looksGluedBlankOcr(text)) reasons.add("glued_blank_ocr");
   }
   return [...reasons];
 }
@@ -302,6 +305,9 @@ function classifyMathFailures(input: DiagnosticQualityInput): StudentUsableFailu
     reasons.push(...choiceFailureReasons(input.choices));
   }
   if (looksExtractionMarkerBleed(haystack)) reasons.push("extraction_marker_bleed");
+  if (looksGluedBlankOcr(haystack) || (input.choices ?? []).some((choice) => looksGluedBlankOcr(choice.text))) {
+    reasons.push("glued_blank_ocr");
+  }
 
   reasons.push(...classifyVisualFailures(input));
   if (mathDependsOnVisual(input) && looksExplodedOcrTable(haystack) && !hasFullQuestionCrop(input)) {
@@ -347,6 +353,12 @@ function classifyRwFailures(input: DiagnosticQualityInput): StudentUsableFailure
     reasons.push(...choiceFailureReasons(input.choices));
   }
   if (looksExtractionMarkerBleed(stemHaystack(input))) reasons.push("extraction_marker_bleed");
+  if (
+    looksGluedBlankOcr(stemHaystack(input)) ||
+    (input.choices ?? []).some((choice) => looksGluedBlankOcr(choice.text))
+  ) {
+    reasons.push("glued_blank_ocr");
+  }
   if (!hasReadableStudentStem(input)) reasons.push("unreadable_stem");
   reasons.push(...classifyVisualFailures(input));
   if (isCleanTextMcqItem(input) && reasons.length === 0) return [];

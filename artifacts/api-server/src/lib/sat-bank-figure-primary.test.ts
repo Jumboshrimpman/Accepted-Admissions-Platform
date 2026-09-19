@@ -46,6 +46,7 @@ import {
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
   looksGluedMinusSpacing,
+  looksGluedBlankOcr,
   looksHardOcrMathRisk,
   looksSmashedTrigToken,
   looksSmashedYxToken,
@@ -785,6 +786,32 @@ test("rejects scrambled f(x) stems and smashed vertex OCR; keeps 21px juxtaposit
   assert.equal(looksGluedInequalityChoice("x > 0y > 0"), true);
   assert.equal(looksGluedInequalityChoice("x > 0\ny > 0"), true);
   assert.equal(looksGluedInequalityChoice("x > 0 and y > 0"), false);
+  assert.equal(looksGluedBlankOcr("haveblank"), true);
+  assert.equal(looksGluedBlankOcr("moreblank"), true);
+  assert.equal(looksGluedBlankOcr("age and sex haveblank effect"), true);
+  assert.equal(looksGluedBlankOcr("moreblank environment"), true);
+  assert.equal(looksGluedBlankOcr("haveblankeffect"), true);
+  assert.equal(looksGluedBlankOcr("blankeffect"), true);
+  assert.equal(looksGluedBlankOcr("fill in the blank"), false);
+  assert.equal(looksGluedBlankOcr("a blank space"), false);
+  assert.equal(looksGluedBlankOcr("blankly"), false);
+  assert.equal(looksGarbledExtractText("age and sex haveblank effect on the toxicity"), true);
+  assert.equal(isStudentReadableChoiceText("moreblank option"), false);
+  assert.equal(isStudentReadableChoiceText("a substantial"), true);
+  assert.equal(
+    hasReadableStudentStem({
+      prompt:
+        "Kelp forests create a moreblank environment with calmer waters.\nWhich choice completes the text with the most logical and precise word or phrase?",
+    }),
+    false,
+  );
+  assert.equal(
+    hasReadableStudentStem({
+      prompt:
+        "The researcher left a blank space so editors could fill in the blank.\nWhich choice best describes the function of the underlined sentence?",
+    }),
+    true,
+  );
   assert.equal(looksMalformedFractionChoice("51/904,"), true);
   assert.equal(
     stemCitesMathDataTable(

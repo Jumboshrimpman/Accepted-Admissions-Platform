@@ -20,6 +20,7 @@ import {
   looksFlattenedFractionChoice,
   looksGluedInequalityChoice,
   looksGluedMinusSpacing,
+  looksGluedBlankOcr,
   looksLeakedNextQuestionChoice,
   looksMalformedFractionChoice,
   looksSmashedAlgebraChoice,
@@ -1218,6 +1219,153 @@ test("live audit after #78 rematerialize: Q82 y −5x is real smash; Q85/Q93 com
   const compactOnly = summarizeDiagnosticComposition([cleanRw, q85Official, q93Official]);
   assert.equal(compactOnly.residualJunk, 0, "Q85/Q93 compact minus must not count as residual junk");
   assert.equal(canAssignDiagnostic(compactOnly, [cleanRw, q85Official, q93Official]), true);
+});
+
+test("live audit: glued blank OCR in RW stems never passes", () => {
+  const stingray = `Mônica Lopes-Ferreira and others at Brazil’s
+Butantan Institute are studying the freshwater
+stingray species Potamotrygon rex to determine
+whether biological characteristics such as the rays’
+age and sex haveblank effect on the toxicity of
+their venom—that is, to see if differences in these
+traits are associated with considerable variations in
+venom potency.
+Which choice completes the text with the most
+logical and precise word or phrase?`;
+  const kelp = `Kelp forests grow underwater along the eastern
+Pacific Coast. These underwater forests are
+important to fish and other marine animals. Ocean
+currents can be powerful and rough, making it
+difficult for animals to find safe places to hide from
+predators. The underwater forests slow down the
+currents. This creates a moreblank environment
+with calmer waters where animals can take shelter.
+Which choice completes the text with the most
+logical and precise word or phrase?`;
+  assert.equal(looksGluedBlankOcr("haveblank"), true);
+  assert.equal(looksGluedBlankOcr("moreblank"), true);
+  assert.equal(looksGluedBlankOcr("age and sex haveblank effect"), true);
+  assert.equal(looksGluedBlankOcr("moreblank environment"), true);
+  assert.equal(looksGluedBlankOcr("haveblankeffect"), true);
+  assert.equal(looksGluedBlankOcr("blankeffect"), true);
+  assert.equal(looksGluedBlankOcr(stingray), true, "PT8 stingray haveblank must detect");
+  assert.equal(looksGluedBlankOcr(kelp), true, "PT8 kelp moreblank must detect");
+  assert.equal(looksGluedBlankOcr("fill in the blank"), false);
+  assert.equal(looksGluedBlankOcr("Which choice completes the text with the most logical word or phrase?"), false);
+  assert.equal(looksGluedBlankOcr("Leave a blank space for the missing word."), false);
+  assert.equal(looksGluedBlankOcr("Particle physicists spend much of their time ______ what is invisible."), false);
+  assert.equal(looksGluedBlankOcr("The answer was blankly obvious to the committee."), false);
+
+  const vocabChoices = letterChoices([
+    "a disconcerting",
+    "an acceptable",
+    "an imperceptible",
+    "a substantial",
+  ]);
+  const stingrayItem = {
+    id: "sat-pt8-rw-m1-q2",
+    prompt: stingray,
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 2,
+    position: 2,
+    choices: vocabChoices,
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  const kelpItem = {
+    id: "sat-pt8-rw-m1-q3",
+    prompt: kelp,
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 3,
+    position: 3,
+    choices: letterChoices(["tranquil", "dangerous", "imaginative", "surprising"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const stingrayAudit = auditStudentQuizItem(stingrayItem);
+  const kelpAudit = auditStudentQuizItem(kelpItem);
+  assert.equal(stingrayAudit.ok, false, "stingray haveblank must be unusable");
+  assert.ok(stingrayAudit.reasons.includes("glued_blank_ocr"), "stingray reason");
+  assert.equal(kelpAudit.ok, false, "kelp moreblank must be unusable");
+  assert.ok(kelpAudit.reasons.includes("glued_blank_ocr"), "kelp reason");
+  assert.equal(isStudentUsableQuizItem(stingrayItem), false);
+  assert.equal(isStudentUsableServedQuestion(stingrayItem), false);
+  assert.equal(isSafeToShowStudentQuizItem(kelpItem), false);
+
+  const fillInTheBlank = {
+    id: "rw-fill-in-the-blank",
+    prompt:
+      "Particle physicists spend much of their time ______ what is invisible.\nWhich choice completes the text with the most logical and precise word or phrase?",
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 1,
+    position: 1,
+    choices: letterChoices(["selecting", "inspecting", "creating", "deciding"]),
+    questionType: "mcq",
+    correctAnswer: "B",
+  };
+  const blankSpace = {
+    id: "rw-blank-space",
+    prompt:
+      "The researcher left a blank space in the draft so later editors could fill in the blank.\nWhich choice best describes the function of the underlined sentence?",
+    section: "rw" as const,
+    module: 1,
+    questionNumber: 4,
+    position: 4,
+    choices: letterChoices([
+      "It states a hypothesis.",
+      "It presents a generalization.",
+      "It offers an alternative.",
+      "It provides context.",
+    ]),
+    questionType: "mcq",
+    correctAnswer: "D",
+  };
+  assert.equal(isStudentUsableQuizItem(fillInTheBlank), true, "underscore SAT blank must stay");
+  assert.equal(isStudentUsableQuizItem(blankSpace), true, "normal fill-in-the-blank wording must stay");
+
+  const gluedChoice = {
+    id: "rw-glued-choice",
+    prompt:
+      "Which choice completes the text with the most logical and precise word or phrase?",
+    section: "rw" as const,
+    choices: letterChoices(["a substantial", "moreblank option", "an acceptable", "a disconcerting"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+  };
+  const choiceAudit = auditStudentQuizItem(gluedChoice);
+  assert.equal(choiceAudit.ok, false, "glued blank in a choice must drop");
+  assert.ok(choiceAudit.reasons.includes("glued_blank_ocr"));
+
+  const composed = composeDiagnosticItems([stingrayItem, kelpItem, fillInTheBlank, blankSpace, gluedChoice]);
+  assert.equal(composed.selected.some((item) => item.id === "sat-pt8-rw-m1-q2"), false);
+  assert.equal(composed.selected.some((item) => item.id === "sat-pt8-rw-m1-q3"), false);
+  assert.equal(composed.selected.some((item) => item.id === "rw-glued-choice"), false);
+  assert.equal(composed.selected.some((item) => item.id === "rw-fill-in-the-blank"), true);
+  assert.equal(composed.selected.some((item) => item.id === "rw-blank-space"), true);
+  assert.ok((composed.composition.shortfall.reasons.glued_blank_ocr ?? 0) >= 3);
+
+  const mathWithCrop = {
+    id: "math-haveblank-crop",
+    prompt:
+      "The model is y = haveblank x + 3.\nWhat is the best interpretation of 3 in this context?",
+    section: "math" as const,
+    choices: letterChoices(["the intercept", "the slope", "the mean", "the residual"]),
+    questionType: "mcq",
+    correctAnswer: "A",
+    figures: [
+      {
+        url: "https://app.acceptedadmissions.org/media/sat-bank/pack/q-question.png",
+        alt: "Question region including choices A–D",
+        role: "question_region",
+      },
+    ],
+  };
+  const mathAudit = auditStudentQuizItem(mathWithCrop);
+  assert.equal(mathAudit.ok, false, "glued blank cannot be salvaged by a full-question crop");
+  assert.ok(mathAudit.reasons.includes("glued_blank_ocr"));
 });
 
 test("live audit: readable controls still stay", () => {
