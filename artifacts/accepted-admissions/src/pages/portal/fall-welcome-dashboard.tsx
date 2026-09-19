@@ -39,6 +39,7 @@ import {
   PORTAL_BOOKING_SECTION_ID,
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
+  shouldShowSatPaymentReceipts,
 } from "@/lib/portal-sat";
 import { clientSatCreditAction } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
@@ -663,7 +664,7 @@ export function ClientDashboardView({
         </CardContent>
       </Card>
 
-      {adminPreview && previewFinancials ? (
+      {adminPreview && previewFinancials && shouldShowSatPaymentReceipts(dashboard.credits) ? (
         <div data-testid="portal-payment-receipts">
           <FinancialCard
             previewData={previewFinancials}

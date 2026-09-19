@@ -36,6 +36,14 @@ function expectPaymentReceiptsLast() {
   expect(screen.getByTestId("client-dashboard").lastElementChild).toBe(receipts);
 }
 
+function expectPaymentReceiptsHidden() {
+  expect(screen.queryByTestId("portal-payment-receipts")).toBeNull();
+  expect(screen.queryByTestId("financial-card-collapsed")).toBeNull();
+  expect(screen.queryByText("SAT session payment and receipts")).toBeNull();
+  expect(screen.queryByText("Your SAT session payment")).toBeNull();
+  expect(screen.queryByText("Show payment details")).toBeNull();
+}
+
 afterEach(() => cleanup());
 
 describe("administrator client preview", () => {
@@ -122,19 +130,16 @@ describe("administrator client preview", () => {
     expect(screen.getByText("Administrator client preview")).toBeTruthy();
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
     expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
-    expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
+    expectPaymentReceiptsHidden();
     expect(screen.getByText("Your tutors")).toBeTruthy();
     expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
-    expectPaymentReceiptsLast();
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
     expect(screen.queryByText("Single SAT Session")).toBeNull();
     expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Booking disabled in preview" })).toBeNull();
     expect(screen.queryByText(/Meetings for this program are already scheduled/i)).toBeNull();
-    fireEvent.click(screen.getByTestId("financial-card-show-more"));
-    expect(screen.getByText("Single SAT Session")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Checkout disabled in preview" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: "Checkout disabled in preview" })).toBeNull();
     expect(screen.queryByText("Cancelled")).toBeNull();
     expect(screen.queryByText("Taito’s SAT Session with Xavier")).toBeNull();
     expect(screen.queryByText("No prepaid sessions reserved yet.")).toBeNull();
@@ -211,8 +216,7 @@ describe("administrator client preview", () => {
     expect(screen.queryByText("Booking unavailable until payment is verified")).toBeNull();
     expect(screen.queryByText(/must complete an SAT purchase/i)).toBeNull();
     expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
-    expect(screen.getByTestId("financial-card-collapsed")).toBeTruthy();
-    expectPaymentReceiptsLast();
+    expectPaymentReceiptsHidden();
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
     expect(screen.queryByText(/Meetings for this program are already scheduled/i)).toBeNull();
     expect(screen.queryByText("A prepaid session is booked")).toBeNull();
@@ -386,7 +390,7 @@ describe("administrator client preview", () => {
     expect(screen.queryByText("Payment verified — ready to book")).toBeNull();
     expect(screen.queryByText(/Google Calendar is disconnected/)).toBeNull();
     expect(screen.queryByText(/Meetings for this program are already scheduled/i)).toBeNull();
-    expectPaymentReceiptsLast();
+    expectPaymentReceiptsHidden();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     const roster = screen.getByTestId("client-tutor-roster");
     expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);

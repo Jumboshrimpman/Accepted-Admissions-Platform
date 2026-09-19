@@ -331,6 +331,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getAllByRole("link", { name: /Join meeting/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByRole("link", { name: /Open calendar/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+    expect(screen.queryByTestId("portal-payment-receipts")).toBeNull();
+    expect(screen.queryByText("SAT session payment and receipts")).toBeNull();
+    expect(screen.queryByText("Your SAT session payment")).toBeNull();
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
     expect(screen.getByTestId("client-quizzes").textContent).toContain("Quizzes");
     expect(screen.getByText("In progress")).toBeTruthy();
