@@ -118,6 +118,15 @@ const MISSING_CARET_GROWTH_SUM = /\(1\s*\+\s*\d+(?:\.\d+)?\)[A-Za-z]\b/;
 const GLUED_INEQUALITY_PAIR = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?[xy]\s*[<>≤≥]/;
 /** `x > 0y > 0` / `0y` — digit glued onto the next variable. */
 const GLUED_INEQUALITY_DIGIT_VAR = /\d[xy](?:\s*[<>≤≥]|$)/;
+/**
+ * OCR glued the SAT underline token "blank" onto a neighboring word.
+ * Live PT8: `haveblank`, `moreblank`, `haveblankeffect`.
+ * Standalone English (`fill in the blank`, `a blank space`, `blankly`) stays.
+ */
+const GLUED_BLANK_BOTH_SIDES = /[a-z]blank[a-z]/i;
+const GLUED_BLANK_LEFT = /[a-z]blank\b/i;
+const GLUED_BLANK_RIGHT_TOKEN = /\bblank[a-z]+/gi;
+const BLANK_ENGLISH_DERIVED = /^(?:blank(?:ly|ness|er|est|ed|ing))$/i;
 /** Two inequality atoms in one choice (`x > 0 y > 0` / newline systems). */
 const INEQUALITY_ATOM = /[xy]\s*[<>≤≥]=?\s*-?\d+(?:\.\d+)?/gi;
 const INEQUALITY_CONNECTOR = /\b(?:and|or)\b|[{},;]/;
@@ -819,6 +828,20 @@ export function looksGluedInequalityChoice(text: string | null | undefined): boo
   return !INEQUALITY_CONNECTOR.test(spaced) && !INEQUALITY_CONNECTOR.test(raw);
 }
 
+/**
+ * Hard DROP for glued “blank” OCR artifacts in stems/choices.
+ * Catches `haveblank`, `moreblank`, `/[a-z]blank[a-z]/i`, and right-glued
+ * `blankeffect`. Does not flag `fill in the blank` or `blank space`.
+ */
+export function looksGluedBlankOcr(text: string | null | undefined): boolean {
+  const raw = text ?? "";
+  if (!raw.trim()) return false;
+  if (GLUED_BLANK_BOTH_SIDES.test(raw)) return true;
+  if (GLUED_BLANK_LEFT.test(raw)) return true;
+  const rightGlues = raw.match(GLUED_BLANK_RIGHT_TOKEN) ?? [];
+  return rightGlues.some((token) => !BLANK_ENGLISH_DERIVED.test(token));
+}
+
 /** `42a(k+1)k`, `84ak2k`, `84a k` — slash dropped out of a fraction. */
 export function looksFlattenedFractionChoice(text: string | null | undefined): boolean {
   const value = cleanOcrChoiceText(text);
@@ -1074,6 +1097,7 @@ export function hasReadableStudentStem(input: {
   if (/^note:\s*figures not drawn to scale\.?$/i.test(prose)) return false;
   if (looksBrokenStemPlaceholders(prose)) return false;
   const haystack = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  if (looksGluedBlankOcr(prose) || looksGluedBlankOcr(haystack)) return false;
   if (looksCharacterSpacedGarbage(prose) || looksCharacterSpacedGarbage(haystack)) return false;
   if (looksExplodedOcrTable(prose) || looksExplodedOcrTable(haystack)) return false;
   if (looksBrokenMathOcr(prose) || looksBrokenMathOcr(haystack)) {
@@ -1205,6 +1229,7 @@ export function looksGarbledExtractText(text: string | null | undefined): boolea
   if (/<!--\s*\/?sat-bank-figures\s*-->/i.test(text ?? "")) return true;
   const raw = stripSatBankFigureComments(text);
   if (looksExtractionMarkerBleed(raw) || looksExtractionMarkerBleed(text)) return true;
+  if (looksGluedBlankOcr(raw) || looksGluedBlankOcr(text)) return true;
   if (looksOcrFigureArt(raw) || looksOcrFigureArt(text)) return true;
   const value = prepareStudentExtractText(text);
   if (!value) return Boolean(raw);
@@ -1242,6 +1267,7 @@ export function isStudentReadableChoiceText(text: string | null | undefined): bo
   if (looksMalformedFractionChoice(raw) || looksMalformedFractionChoice(value)) return false;
   if (looksSmashedTrigToken(raw) || looksSmashedTrigToken(value)) return false;
   if (looksGluedInequalityChoice(raw) || looksGluedInequalityChoice(value)) return false;
+  if (looksGluedBlankOcr(raw) || looksGluedBlankOcr(value)) return false;
   if (looksFlattenedFractionChoice(raw) || looksFlattenedFractionChoice(value)) return false;
   if (looksModuleBoilerplateChoice(raw) || looksModuleBoilerplateChoice(value)) return false;
   if (looksCharacterSpacedGarbage(raw) || looksCharacterSpacedGarbage(value)) return false;
