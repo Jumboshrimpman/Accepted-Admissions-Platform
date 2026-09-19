@@ -857,7 +857,7 @@ function SessionCard({
   assignments: AdminAssignment[];
   submissions: AdminSubmission[];
   libraryAssets: CurriculumLibraryAsset[];
-  bankCollections: Array<{ id: string; title: string; questionCount: number }>;
+  bankCollections: Array<{ id: string; title: string; questionCount: number; examFamily?: string }>;
   onChanged: () => void;
   onEdit: () => void;
 }) {
@@ -1006,8 +1006,13 @@ function SessionCard({
             sessionId={session.id}
             collections={bankCollections}
             onChanged={onChanged}
+            sessionSubject={session.subject}
             isFirstSatSession={
               session.subject === "SAT" && sessionDateKey(session) === "2026-10-02"
+            }
+            isFirstEnglishSession={
+              (session.subject === "IELTS" || session.subject === "English") &&
+              sessionDateKey(session) === "2026-10-23"
             }
           />
         </div>

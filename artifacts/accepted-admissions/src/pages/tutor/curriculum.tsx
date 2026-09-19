@@ -46,7 +46,12 @@ export type TutorCurriculum = {
   sessions: AdminSession[];
   quizzes: AdminAssignment[];
   libraryAssets: CurriculumLibraryAsset[];
-  satBankCollections: Array<{ id: string; title: string; questionCount: number }>;
+  satBankCollections: Array<{
+    id: string;
+    title: string;
+    questionCount: number;
+    examFamily?: string;
+  }>;
 };
 
 export const TUTOR_CURRICULUM_QUERY_KEY = ["/api/tutor/curriculum"];
@@ -511,7 +516,7 @@ export default function TutorCurriculum() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tutor-bank-collection">SAT/PSAT collection</Label>
+              <Label htmlFor="tutor-bank-collection">Bank collection</Label>
               <select
                 id="tutor-bank-collection"
                 data-testid="tutor-assign-bank-collection"
@@ -519,8 +524,29 @@ export default function TutorCurriculum() {
                 value={bankCollectionId}
                 onChange={(event) => setBankCollectionId(event.target.value)}
               >
-                <option value="">Any matching official extract</option>
-                {collections.map((collection) => (
+                <option value="">
+                  {sessions.find((session) => session.id === bankSessionId)?.subject
+                    ?.toLowerCase()
+                    .startsWith("ielts") ||
+                  sessions.find((session) => session.id === bankSessionId)?.subject
+                    ?.toLowerCase()
+                    .startsWith("english")
+                    ? "Original IELTS-style reading set"
+                    : "Any matching official extract"}
+                </option>
+                {collections
+                  .filter((collection) => {
+                    const subject =
+                      sessions.find((session) => session.id === bankSessionId)?.subject ?? "";
+                    const english =
+                      subject.toLowerCase().startsWith("ielts") ||
+                      subject.toLowerCase().startsWith("english");
+                    if (!subject) return true;
+                    return english
+                      ? collection.examFamily === "ielts"
+                      : collection.examFamily !== "ielts";
+                  })
+                  .map((collection) => (
                   <option key={collection.id} value={collection.id}>
                     {collection.title} · {collection.questionCount} questions
                   </option>
@@ -542,7 +568,7 @@ export default function TutorCurriculum() {
                   },
                   {
                     onSuccess: (result) => {
-                      setMessage(`Assigned ${result.questionCount} SAT bank questions as homework.`);
+                      setMessage(`Assigned ${result.questionCount} bank questions as homework.`);
                       refresh();
                     },
                     onError: (error) => setMessage(errorText(error)),
@@ -550,7 +576,7 @@ export default function TutorCurriculum() {
                 )
               }
             >
-              Assign SAT homework
+              Assign bank homework
             </Button>
           </div>
         </CardContent>

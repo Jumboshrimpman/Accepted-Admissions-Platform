@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -22,6 +22,33 @@ function easternParts(date: Date) {
     zone: value("timeZoneName"),
   };
 }
+
+test("October 23 is the first Taito English session used for IELTS-style diagnostic pre-work", () => {
+  assert.equal(TAITO_FIRST_ENGLISH_DATE_KEY, "2026-10-23");
+  assert.deepEqual([...TAITO_ENGLISH_DATE_KEYS], ["2026-10-23", "2026-11-13", "2026-12-04"]);
+  assert.equal(
+    isTaitoFirstEnglishSession({
+      dateTime: taitoSessionDateTime(TAITO_FIRST_ENGLISH_DATE_KEY),
+      subject: "IELTS",
+    }),
+    true,
+  );
+  assert.equal(
+    isTaitoFirstEnglishSession({
+      dateTime: taitoSessionDateTime("2026-11-13"),
+      subject: "IELTS",
+    }),
+    false,
+  );
+  assert.equal(isEnglishSessionSubject("English conversation"), true);
+  assert.equal(
+    taitoEnglishSessionIndex({
+      dateTime: taitoSessionDateTime("2026-12-04"),
+      subject: "IELTS",
+    }),
+    2,
+  );
+});
 
 test("October 2 is the first Taito SAT session used for the full-length diagnostic", () => {
   assert.equal(TAITO_FIRST_SAT_DATE_KEY, "2026-10-02");

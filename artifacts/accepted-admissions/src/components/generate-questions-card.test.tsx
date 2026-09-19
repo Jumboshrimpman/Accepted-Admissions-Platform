@@ -8,6 +8,37 @@ afterEach(() => {
 });
 
 describe("Generate questions on an open quiz", () => {
+  test("tells Cos that IELTS generation must stay original", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          available: true,
+          provider: "openai",
+          model: "gpt-4o-mini",
+          requiredEnv: ["OPENAI_API_KEY"],
+          message: "OpenAI is configured.",
+        }),
+      })),
+    );
+    render(
+      <GenerateQuestionsCard
+        assignmentId="quiz-ielts"
+        subject="IELTS"
+        defaultSkill="Main idea"
+        onGenerated={() => undefined}
+      />,
+    );
+    expect(await screen.findByTestId("generate-questions-submit")).toBeTruthy();
+    expect(screen.getByTestId("generate-questions-card").textContent).toMatch(
+      /original IELTS-style Reading/,
+    );
+    expect(screen.getByTestId("generate-questions-card").textContent).toMatch(
+      /not official IELTS, Cambridge/,
+    );
+  });
+
   test("shows an honest blocked state when no provider is configured", async () => {
     vi.stubGlobal(
       "fetch",

@@ -704,13 +704,13 @@ paths:
       parameters:
         - name: examFamily
           in: query
-          schema: { type: string, enum: [sat, psat] }
+          schema: { type: string, enum: [sat, psat, ielts] }
         - name: collectionId
           in: query
           schema: { type: string }
         - name: section
           in: query
-          schema: { type: string, enum: [rw, math] }
+          schema: { type: string, enum: [rw, math, reading, writing] }
         - name: skill
           in: query
           schema: { type: string }
@@ -3948,7 +3948,7 @@ components:
         examVariant: { type: ["string", "null"] }
         practiceTestNumber: { type: ["number", "null"] }
         formCode: { type: ["string", "null"] }
-        section: { type: string, enum: [rw, math] }
+        section: { type: string, enum: [rw, math, reading, writing] }
         module: { type: number }
         questionNumber: { type: number }
         position: { type: number }

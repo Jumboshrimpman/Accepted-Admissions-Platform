@@ -166,7 +166,10 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
             subject: scheduled.subject,
             title,
             status: existing.status === "draft" ? "published" : existing.status,
-            hasHomework: scheduled.subject === "SAT" ? true : existing.hasHomework,
+            hasHomework:
+              scheduled.subject === "SAT" || scheduled.subject === "IELTS"
+                ? true
+                : existing.hasHomework,
             tutorUserId,
             clientUserId,
             updatedAt: new Date(),
@@ -198,7 +201,7 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
           title,
           status: "published",
           durationMinutes: 60,
-          hasHomework: scheduled.subject === "SAT",
+          hasHomework: scheduled.subject === "SAT" || scheduled.subject === "IELTS",
           tutorUserId,
           clientUserId,
           bookingStatus: "confirmed",

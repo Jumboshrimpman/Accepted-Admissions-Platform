@@ -12,4 +12,6 @@ export type ListSatBankQuestionsSection = typeof ListSatBankQuestionsSection[key
 export const ListSatBankQuestionsSection = {
   rw: 'rw',
   math: 'math',
+  reading: 'reading',
+  writing: 'writing',
 } as const;

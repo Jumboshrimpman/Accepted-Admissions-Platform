@@ -61,9 +61,11 @@ export function SatBankPanel({
             <Library className="h-5 w-5 text-primary" /> SAT/PSAT question bank
           </CardTitle>
           <CardDescription>
-            Canonical College Board source questions (SAT digital 4–11 + PSAT packs). Official
-            explanations stay separate from AI notes. Import JSON/JSONL from{" "}
-            <code>content/college-board/</code>. Skill/difficulty are null in these PDFs. Figure-heavy
+            Canonical College Board source questions (SAT digital 4–11 + PSAT packs) plus an
+            original IELTS-style Reading collection for English sessions. Official SAT explanations
+            stay separate from AI notes. IELTS-style items are in-repo originals — not Cambridge,
+            British Council, or IDP exams. Import SAT JSON/JSONL from{" "}
+            <code>content/college-board/</code>. Skill/difficulty are null in those PDFs. Figure-heavy
             or garbled math items use figure-primary mode (full question crop + A–D). Do not recreate
             official wording.
           </CardDescription>
@@ -128,7 +130,9 @@ export function SatBankPanel({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Source collections</CardTitle>
-            <CardDescription>Open a College Board test in original order.</CardDescription>
+            <CardDescription>
+              Open a College Board test in original order, or the original IELTS-style practice set.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {(collections.data ?? []).map((collection) => (
@@ -146,6 +150,7 @@ export function SatBankPanel({
                   <Badge variant="outline">{collection.extractStatus}</Badge>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
+                  {collection.examFamily === "ielts" ? "Original IELTS-style · " : ""}
                   {collection.questionCount} questions · {collection.officialExplanationCount} official
                   explanations · {collection.assets.length} linked files
                 </p>
@@ -185,7 +190,15 @@ export function SatBankPanel({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">Q{index + 1}</Badge>
-                  <Badge variant="outline">{question.section === "rw" ? "R&W" : "Math"}</Badge>
+                  <Badge variant="outline">
+                    {question.section === "reading"
+                      ? "IELTS Reading"
+                      : question.section === "writing"
+                        ? "IELTS Writing"
+                        : question.section === "rw"
+                          ? "R&W"
+                          : "Math"}
+                  </Badge>
                   <Badge variant="outline">
                     {question.skill ||
                       `${question.section === "math" ? "SAT Math" : "Reading and Writing"} · not in PDF`}
@@ -199,6 +212,9 @@ export function SatBankPanel({
                   ) : null}
                   {question.sourceKind === "seed" ? (
                     <Badge variant="outline">Seed fixture</Badge>
+                  ) : null}
+                  {question.sourceKind === "original" ? (
+                    <Badge variant="outline">Original IELTS-style</Badge>
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm">
@@ -233,38 +249,63 @@ export function SatBankPanel({
   );
 }
 
+function isEnglishSubject(subject?: string | null): boolean {
+  const lower = subject?.trim().toLowerCase() ?? "";
+  return lower.startsWith("ielts") || lower.startsWith("english");
+}
+
 export function AssignBankPreworkControl({
   sessionId,
   collections,
   onChanged,
   isFirstSatSession = false,
+  isFirstEnglishSession = false,
+  sessionSubject,
 }: {
   sessionId: string;
-  collections: Array<{ id: string; title: string; questionCount: number }>;
+  collections: Array<{ id: string; title: string; questionCount: number; examFamily?: string }>;
   onChanged: () => void;
   isFirstSatSession?: boolean;
+  isFirstEnglishSession?: boolean;
+  sessionSubject?: string | null;
 }) {
   const assign = useAssignSatBankPrework();
-  const [collectionId, setCollectionId] = useState(collections[0]?.id ?? "");
-  const [homeworkKind, setHomeworkKind] = useState<"routine" | "diagnostic">("routine");
+  const english = isEnglishSubject(sessionSubject);
+  const visibleCollections = collections.filter((collection) =>
+    english ? collection.examFamily === "ielts" : collection.examFamily !== "ielts",
+  );
+  const [collectionId, setCollectionId] = useState(visibleCollections[0]?.id ?? "");
+  const [homeworkKind, setHomeworkKind] = useState<"routine" | "diagnostic">(
+    isFirstEnglishSession || isFirstSatSession ? "diagnostic" : "routine",
+  );
   const [message, setMessage] = useState("");
   const [resetting, setResetting] = useState(false);
   return (
     <div className="mt-3 space-y-2" data-testid={`assign-bank-prework-${sessionId}`}>
       <p className="text-sm font-medium">
-        {homeworkKind === "diagnostic"
-          ? "SAT diagnostic pre-work (fail-closed; may be short of 120)"
-          : "30–50 question bank pre-work"}
+        {english
+          ? homeworkKind === "diagnostic"
+            ? "IELTS-style diagnostic reading (original practice, not official IELTS)"
+            : "IELTS-style reading pre-work (original practice, not official IELTS)"
+          : homeworkKind === "diagnostic"
+            ? "SAT diagnostic pre-work (fail-closed; may be short of 120)"
+            : "30–50 question bank pre-work"}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
-          aria-label="SAT bank collection for 30–50 question pre-work"
+          aria-label={
+            english
+              ? "IELTS-style bank collection for English pre-work"
+              : "SAT bank collection for 30–50 question pre-work"
+          }
           className="h-9 max-w-md rounded-md border bg-background px-2 text-xs"
           value={collectionId}
           onChange={(event) => setCollectionId(event.target.value)}
         >
-          <option value="">Mixed unused bank (30–50 questions)</option>
-          {collections.map((collection) => (
+          <option value="">
+            {english ? "Original IELTS-style reading set" : "Mixed unused bank (30–50 questions)"}
+          </option>
+          {visibleCollections.map((collection) => (
             <option key={collection.id} value={collection.id}>
               {collection.title}
               {collection.questionCount ? ` · ${collection.questionCount} Q` : " · extract pending"}
@@ -277,8 +318,10 @@ export function AssignBankPreworkControl({
           value={homeworkKind}
           onChange={(event) => setHomeworkKind(event.target.value as "routine" | "diagnostic")}
         >
-          <option value="routine">Routine (no SAT score)</option>
-          <option value="diagnostic">Diagnostic (estimated only)</option>
+          <option value="routine">{english ? "Routine reading" : "Routine (no SAT score)"}</option>
+          <option value="diagnostic">
+            {english ? "Diagnostic reading" : "Diagnostic (estimated only)"}
+          </option>
         </select>
         <Button
           size="sm"
@@ -296,9 +339,11 @@ export function AssignBankPreworkControl({
                 onSuccess: (result) => {
                   setMessage(
                     `Assigned ${result.questionCount} questions (~${Math.round(result.estimatedSeconds / 60)} min). ${
-                      result.extractIncomplete
-                        ? "Some official explanations are still pending."
-                        : "Official explanations stay on the bank records."
+                      english
+                        ? "Original IELTS-style practice — not an official IELTS score."
+                        : result.extractIncomplete
+                          ? "Some official explanations are still pending."
+                          : "Official explanations stay on the bank records."
                     }`,
                   );
                   onChanged();
@@ -312,8 +357,12 @@ export function AssignBankPreworkControl({
           {assign.isPending
             ? "Assigning…"
             : homeworkKind === "diagnostic"
-              ? "Assign diagnostic"
-              : "Assign 30–50 question pre-work"}
+              ? english
+                ? "Assign IELTS-style diagnostic"
+                : "Assign diagnostic"
+              : english
+                ? "Assign IELTS-style pre-work"
+                : "Assign 30–50 question pre-work"}
         </Button>
         <Button
           size="sm"

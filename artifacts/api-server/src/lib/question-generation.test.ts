@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   QUESTION_GENERATION_UNAVAILABLE_CODE,
   generateQuestionsWithProvider,
+  isIeltsStyleGenerationSubject,
   parseGeneratedQuestions,
+  questionGenerationPrompt,
   questionGenerationStatus,
 } from "./question-generation.ts";
 
@@ -45,6 +47,23 @@ test("parseGeneratedQuestions keeps only usable multiple-choice items", () => {
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0]?.choices[0]?.id, "a");
   assert.equal(parsed[0]?.correctAnswer, "a");
+});
+
+test("IELTS-style generation prompts refuse official exam copying", () => {
+  assert.equal(isIeltsStyleGenerationSubject("IELTS"), true);
+  assert.equal(isIeltsStyleGenerationSubject("English"), true);
+  assert.equal(isIeltsStyleGenerationSubject("SAT"), false);
+  const prompt = questionGenerationPrompt({
+    subject: "IELTS",
+    count: 3,
+    skill: "Main idea",
+    difficulty: "medium",
+    sourceText: "",
+  });
+  assert.match(prompt.system, /original IELTS-style/i);
+  assert.match(prompt.system, /Never copy or reconstruct official IELTS/i);
+  assert.match(prompt.user, /Do not mention official test brands/i);
+  assert.match(prompt.user, /original IELTS-style/i);
 });
 
 test("generateQuestionsWithProvider does not invent questions when the key is missing", async () => {

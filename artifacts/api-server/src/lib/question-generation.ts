@@ -118,6 +118,43 @@ function parseOneQuestion(row: unknown): GeneratedQuizQuestion | null {
   };
 }
 
+export function isIeltsStyleGenerationSubject(subject: string): boolean {
+  const lower = subject.trim().toLowerCase();
+  return lower.startsWith("ielts") || lower.startsWith("english");
+}
+
+export function questionGenerationPrompt(input: {
+  subject: string;
+  count: number;
+  skill: string;
+  difficulty: string;
+  sourceText: string;
+}): { system: string; user: string } {
+  const ielts = isIeltsStyleGenerationSubject(input.subject);
+  const source =
+    input.sourceText.trim() ||
+    (ielts
+      ? "No extra source text was pasted. Write an original short informational passage and Reading MCQs. Never copy or paraphrase official IELTS, Cambridge, British Council, or IDP items."
+      : "No extra source text was pasted. Write original SAT-style practice.");
+  return {
+    system: ielts
+      ? "You write original IELTS-style Academic Reading multiple-choice questions. Invent new passages. Never copy or reconstruct official IELTS / Cambridge / British Council / IDP wording. Each item needs a complete stem, four distinct A–D choices, a letter key, and a short explanation. Return JSON {\"questions\":[...]} only."
+      : "You write original multiple-choice tutoring questions. Never copy source wording. Return JSON {\"questions\":[...]} only.",
+    user: [
+      ielts
+        ? `Create ${input.count} original IELTS-style ${input.subject} Reading multiple-choice questions.`
+        : `Create ${input.count} ${input.subject} multiple-choice questions.`,
+      `Skill focus: ${input.skill}.`,
+      `Difficulty: ${input.difficulty}.`,
+      "Each question needs prompt, skill, domain, difficulty, four choices, correctAnswer (a-d), and explanation.",
+      ielts
+        ? "If you write a passage, keep it original and attach the same passage context in the prompt. Do not mention official test brands."
+        : "Source material (optional context, do not quote verbatim):",
+      source.slice(0, 8000),
+    ].join("\n"),
+  };
+}
+
 export async function generateQuestionsWithProvider(input: {
   subject: string;
   count: number;
@@ -138,8 +175,14 @@ export async function generateQuestionsWithProvider(input: {
     );
   }
   const count = Math.max(1, Math.min(input.count || 3, 10));
-  const source = input.sourceText?.trim() || "No extra source text was pasted. Write original SAT-style practice.";
   const skill = input.skill?.trim() || "Evidence and reasoning";
+  const messages = questionGenerationPrompt({
+    subject: input.subject,
+    count,
+    skill,
+    difficulty: input.difficulty ?? "medium",
+    sourceText: input.sourceText ?? "",
+  });
   const response = await (input.fetchImpl ?? fetch)("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -152,19 +195,11 @@ export async function generateQuestionsWithProvider(input: {
       messages: [
         {
           role: "system",
-          content:
-            "You write original multiple-choice tutoring questions. Never copy source wording. Return JSON {\"questions\":[...]} only.",
+          content: messages.system,
         },
         {
           role: "user",
-          content: [
-            `Create ${count} ${input.subject} multiple-choice questions.`,
-            `Skill focus: ${skill}.`,
-            `Difficulty: ${input.difficulty ?? "medium"}.`,
-            "Each question needs prompt, skill, domain, difficulty, four choices, correctAnswer (a-d), and explanation.",
-            "Source material (optional context, do not quote verbatim):",
-            source.slice(0, 8000),
-          ].join("\n"),
+          content: messages.user,
         },
       ],
     }),

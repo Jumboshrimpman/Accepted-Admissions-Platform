@@ -16,6 +16,8 @@ import {
 test("quizSubject matches the SAT course labels used on materialize", () => {
   assert.equal(quizSubject("math"), "SAT Math");
   assert.equal(quizSubject("rw"), "SAT Reading & Writing");
+  assert.equal(quizSubject("reading", "ielts"), "IELTS Reading");
+  assert.equal(quizSubject("writing", "ielts"), "IELTS Writing");
 });
 
 test("section skill fallback uses the existing domain labels", () => {

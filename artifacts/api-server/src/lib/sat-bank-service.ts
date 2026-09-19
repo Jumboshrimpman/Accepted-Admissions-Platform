@@ -68,7 +68,7 @@ import {
 
 export { shouldReplaceFirstSessionPrework };
 import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-weakness.ts";
-import { isTaitoFirstSatSession } from "./session-schedule.ts";
+import { isEnglishSessionSubject, isTaitoFirstSatSession } from "./session-schedule.ts";
 import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 import {
   assignmentChoices,
@@ -531,6 +531,7 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
     choices: bank.choices,
     correctAnswer: bank.correctAnswer,
     officialExplanation: bank.officialExplanation,
+    examFamily: bank.examFamily,
     extractGaps: (bank.extractGaps ?? {}) as Record<string, unknown>,
   });
   const figurePrimary = shouldUseFigurePrimary({
@@ -573,10 +574,19 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
     .insert(questionsTable)
     .values({
       ...content,
-      sourceType: bank.sourceKind === "seed" ? "seed" : "college_board",
+      sourceType:
+        bank.sourceKind === "seed"
+          ? "seed"
+          : bank.sourceKind === "original"
+            ? "original"
+            : "college_board",
       tags: bankTags,
       generationMethod:
-        bank.sourceKind === "seed" ? "seed-fixture" : "college-board-extract",
+        bank.sourceKind === "seed"
+          ? "seed-fixture"
+          : bank.sourceKind === "original"
+            ? "original-ielts-style"
+            : "college-board-extract",
     })
     .returning({ id: questionsTable.id });
   await db
@@ -856,6 +866,14 @@ export async function assignPreworkFromBank(input: {
     .limit(1);
   if (!session) {
     throw Object.assign(new Error("Session not found"), { status: 404 });
+  }
+  if (isEnglishSessionSubject(session.subject)) {
+    throw Object.assign(
+      new Error(
+        "SAT/PSAT official extracts cannot be assigned to English or IELTS sessions. Use the original IELTS-style practice collection.",
+      ),
+      { status: 409 },
+    );
   }
   await ensureOfficialExtractsImported().catch(() => undefined);
   const homeworkKind = input.homeworkKind ?? "routine";

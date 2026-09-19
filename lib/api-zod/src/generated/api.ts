@@ -1573,7 +1573,7 @@ export const GetSatBankCollectionResponse = zod.object({
   "examVariant": zod.string().nullish(),
   "practiceTestNumber": zod.number().nullish(),
   "formCode": zod.string().nullish(),
-  "section": zod.enum(['rw', 'math']),
+  "section": zod.enum(['rw', 'math', 'reading', 'writing']),
   "module": zod.number(),
   "questionNumber": zod.number(),
   "position": zod.number(),
@@ -1610,9 +1610,9 @@ export const GetSatBankCollectionResponse = zod.object({
  * @summary Browse canonical SAT/PSAT bank questions
  */
 export const ListSatBankQuestionsQueryParams = zod.object({
-  "examFamily": zod.enum(['sat', 'psat']).optional(),
+  "examFamily": zod.enum(['sat', 'psat', 'ielts']).optional(),
   "collectionId": zod.coerce.string().optional(),
-  "section": zod.enum(['rw', 'math']).optional(),
+  "section": zod.enum(['rw', 'math', 'reading', 'writing']).optional(),
   "skill": zod.coerce.string().optional(),
   "questionType": zod.enum(['mcq', 'spr']).optional(),
   "includeKeys": zod.enum(['true', 'false']).optional()
@@ -1626,7 +1626,7 @@ export const ListSatBankQuestionsResponseItem = zod.object({
   "examVariant": zod.string().nullish(),
   "practiceTestNumber": zod.number().nullish(),
   "formCode": zod.string().nullish(),
-  "section": zod.enum(['rw', 'math']),
+  "section": zod.enum(['rw', 'math', 'reading', 'writing']),
   "module": zod.number(),
   "questionNumber": zod.number(),
   "position": zod.number(),

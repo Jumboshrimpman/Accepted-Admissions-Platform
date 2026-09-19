@@ -12,4 +12,6 @@ export type SatBankQuestionSection = typeof SatBankQuestionSection[keyof typeof 
 export const SatBankQuestionSection = {
   rw: 'rw',
   math: 'math',
+  reading: 'reading',
+  writing: 'writing',
 } as const;
