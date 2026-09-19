@@ -76,8 +76,6 @@ export const DEFAULT_SAT_CONTENT: SatContent = {
   body: {
     heroLead:
       "One-on-one SAT tutoring with the Accepted Admissions team. Sign in to your client portal to view current pricing and purchase prepaid session credits.",
-    offersIntro:
-      "SAT booking and payment stay inside the signed-in client portal. Request broader guidance if you need a different service.",
     sections: [
       "Sign in to view SAT tutoring pricing and purchase prepaid session credits.",
       "After a verified Stripe payment, use credits to schedule with our SAT tutors in the client portal.",

@@ -74,9 +74,6 @@ export function LandingContent({ content }: { content: HomeContent }) {
                 <div>
                   <h2 className="font-semibold">{content.body.satPathTitle}</h2>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{content.body.satPathBlurb}</p>
-                  <Link href="/our-team" className="mt-2 inline-flex text-sm font-semibold text-primary hover:underline">
-                    Meet the team to learn about our tutors
-                  </Link>
                 </div>
               </div>
               <div className="flex gap-4">

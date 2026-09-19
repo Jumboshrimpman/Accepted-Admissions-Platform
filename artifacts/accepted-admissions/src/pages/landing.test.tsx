@@ -27,7 +27,7 @@ describe("Landing visitor paths", () => {
     expect(screen.queryByText(/\$130/)).toBeNull();
     expect(screen.queryByText(/\$1,300/)).toBeNull();
     expect(screen.getByText(/harvard students and recent graduates/i)).toBeTruthy();
-    expect(screen.getAllByText(/meet the team to learn about our tutors/i)).not.toHaveLength(0);
+    expect(screen.queryByRole("link", { name: /meet the team to learn about our tutors/i })).toBeNull();
     expect(screen.getByText(/our SAT tutors/i)).toBeTruthy();
     expect(screen.queryByText(/Xavier or Eunice/i)).toBeNull();
     expect(screen.queryByRole("heading", { name: /xavier/i })).toBeNull();

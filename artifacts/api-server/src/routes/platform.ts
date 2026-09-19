@@ -1787,8 +1787,6 @@ async function ensureUpgradeSeedData(): Promise<void> {
         body: {
           heroLead:
             "One-on-one SAT tutoring with the Accepted Admissions team. Sign in to your client portal to view current pricing and purchase prepaid session credits.",
-          offersIntro:
-            "SAT booking and payment stay inside the signed-in client portal. Request broader guidance if you need a different service.",
           sections: [
             "Sign in to view SAT tutoring pricing and purchase prepaid session credits.",
             "After a verified Stripe payment, use credits to schedule with our SAT tutors in the client portal.",
@@ -1918,10 +1916,14 @@ async function ensureUpgradeSeedData(): Promise<void> {
     satSeed?.seoDescription,
     ...satSections,
   ].some((value) => typeof value === "string" && /\$130|\$1,300|approved prices/i.test(value));
+  const satCopyMentionsBookingBlurb =
+    typeof satBody?.offersIntro === "string" &&
+    /SAT booking and payment stay inside the signed-in client portal/i.test(satBody.offersIntro);
   if (
     satSeed &&
     (satCopyMentionsNamedTutors ||
       satCopyMentionsPublicPrices ||
+      satCopyMentionsBookingBlurb ||
       satSections.some((section) => section.includes("single SAT tutoring session currently available")) ||
       (typeof satSeed.seoDescription === "string" &&
         satSeed.seoDescription.includes("current 60-minute SAT tutoring offer")))
@@ -1934,8 +1936,6 @@ async function ensureUpgradeSeedData(): Promise<void> {
         body: {
           heroLead:
             "One-on-one SAT tutoring with the Accepted Admissions team. Sign in to your client portal to view current pricing and purchase prepaid session credits.",
-          offersIntro:
-            "SAT booking and payment stay inside the signed-in client portal. Request broader guidance if you need a different service.",
           sections: [
             "Sign in to view SAT tutoring pricing and purchase prepaid session credits.",
             "After a verified Stripe payment, use credits to schedule with our SAT tutors in the client portal.",
