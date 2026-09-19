@@ -15,6 +15,52 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.acceptedadmissions.org"
+        }
+      ],
+      "destination": "https://app.acceptedadmissions.org/:path",
+      "permanent": false
+    },
+    {
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)/:rest*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.acceptedadmissions.org"
+        }
+      ],
+      "destination": "https://app.acceptedadmissions.org/:path/:rest*",
+      "permanent": false
+    },
+    {
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)",
+      "has": [
+        {
+          "type": "host",
+          "value": "acceptedadmissions.org"
+        }
+      ],
+      "destination": "https://app.acceptedadmissions.org/:path",
+      "permanent": false
+    },
+    {
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)/:rest*",
+      "has": [
+        {
+          "type": "host",
+          "value": "acceptedadmissions.org"
+        }
+      ],
+      "destination": "https://app.acceptedadmissions.org/:path/:rest*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

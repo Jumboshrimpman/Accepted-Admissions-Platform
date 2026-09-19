@@ -69,20 +69,111 @@ export function resolveClerkPublishableKey(
   return { ok: true, publishableKey: configured };
 }
 
-export function clerkLoadFailureCopy(configuredKey: string | undefined): {
+export type ClerkLoadFailureDetails = {
+  error?: unknown;
+  clerkPresent?: boolean;
+};
+
+export type ClerkLoadFailureKind =
+  | "script-missing"
+  | "load-rejected"
+  | "allowed-subdomain";
+
+export function clerkErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return "";
+}
+
+export function isClerkAllowedSubdomainError(error: unknown): boolean {
+  const message = clerkErrorMessage(error);
+  return (
+    /allowed subdomains/i.test(message) ||
+    /request origin subdomain/i.test(message)
+  );
+}
+
+function isLikelyScriptNetworkError(message: string): boolean {
+  return /failed to fetch|networkerror|load failed|err_name_not_resolved|err_connection/i.test(
+    message,
+  );
+}
+
+export function isClerkLoadRejection(error: unknown): boolean {
+  const message = clerkErrorMessage(error);
+  if (!message) return false;
+  if (isClerkAllowedSubdomainError(message)) return true;
+  return (
+    /\bclerk\b/i.test(message) &&
+    /load|origin|subdomain|frontend api|publishable/i.test(message)
+  );
+}
+
+export function clerkLoadFailureKind(
+  details: ClerkLoadFailureDetails = {},
+): ClerkLoadFailureKind {
+  const message = clerkErrorMessage(details.error);
+  if (isClerkAllowedSubdomainError(message)) return "allowed-subdomain";
+  if (details.clerkPresent) return "load-rejected";
+  if (message && !isLikelyScriptNetworkError(message)) return "load-rejected";
+  return "script-missing";
+}
+
+export function clerkGlobalPresent(
+  scope: { Clerk?: unknown } | null | undefined = typeof window === "undefined"
+    ? undefined
+    : (window as Window & { Clerk?: unknown }),
+): boolean {
+  return Boolean(scope?.Clerk);
+}
+
+export function clerkLoadFailureCopy(
+  configuredKey: string | undefined,
+  details: ClerkLoadFailureDetails = {},
+): {
   title: string;
   body: string;
   failedHost: string;
   scriptUrl: string;
+  kind: ClerkLoadFailureKind;
 } {
   const failedHost = frontendApiFromPublishableKey(configuredKey) ?? "";
   const scriptUrl = clerkJsScriptUrlFromKey(configuredKey);
   const hostLabel = failedHost || "the Frontend API encoded in the configured publishable key";
+  const kind = clerkLoadFailureKind(details);
+  const message = clerkErrorMessage(details.error);
+  const appLogin = "https://app.acceptedadmissions.org/login";
+
+  if (kind === "allowed-subdomain") {
+    return {
+      title: "Sign-in cannot start on this host",
+      body: `Clerk rejected this page’s origin because it is not on the allowed subdomains list${
+        message ? `: ${message}` : "."
+      } The Clerk browser script did load. Open ${appLogin} to sign in on the app host.`,
+      failedHost,
+      scriptUrl,
+      kind,
+    };
+  }
+
+  if (kind === "load-rejected") {
+    return {
+      title: "Sign-in could not start Clerk",
+      body: message
+        ? `The Clerk browser script loaded from ${hostLabel}, but Clerk.load() failed: ${message} This is not a missing-script failure. Try ${appLogin}, or contact the team if it continues.`
+        : `The Clerk browser script loaded from ${hostLabel}, but Clerk did not become ready. This is not a missing-script failure. Try ${appLogin}, or contact the team if it continues.`,
+      failedHost,
+      scriptUrl,
+      kind,
+    };
+  }
+
   return {
     title: "Sign-in could not load Clerk",
     body: `The Clerk browser script did not load from ${hostLabel}. That host comes from this site’s configured publishable key, not from the browser hostname. Return home and try again, or contact the team if it continues.`,
     failedHost,
     scriptUrl,
+    kind,
   };
 }
 

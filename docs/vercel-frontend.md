@@ -37,6 +37,8 @@ Do not set `VITE_API_URL`. The client uses `setBaseUrl` from Vite `BASE_URL` and
 
 ## `vercel.json` routing
 
+Host-conditioned **redirects** send `/login`, `/sign-in`, `/portal`, `/tutor`, `/admin`, `/t-g`, and `/sso-callback` from `www.acceptedadmissions.org` and apex `acceptedadmissions.org` to the same path on `https://app.acceptedadmissions.org`. Marketing pages stay on www. `app.acceptedadmissions.org` is not redirected. This is a 302 so sign-in works even when Clerk has not allowlisted the www origin.
+
 Rewrites are listed so `/api` is proxied **before** the SPA fallback:
 
 1. `/api/:path*` → `https://accepted-admissions-platform-production.up.railway.app/api/:path*`

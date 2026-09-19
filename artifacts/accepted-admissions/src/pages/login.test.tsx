@@ -29,6 +29,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   window.history.pushState({}, "", "/login");
+  Reflect.deleteProperty(window, "Clerk");
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
@@ -130,6 +131,9 @@ describe("login page", () => {
     expect(screen.getByTestId("status-login-error").textContent).toMatch(
       /could not load clerk/i,
     );
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /script did not load/i,
+    );
     expect(screen.getByTestId("text-login-failed-host").textContent).toBe(
       "clerk.acceptedadmissions.org",
     );
@@ -140,6 +144,79 @@ describe("login page", () => {
       "/",
     );
     vi.useRealTimers();
+  });
+
+  it("does not blame a missing script when Clerk already exists after the timeout", () => {
+    stubClerkScriptReachable();
+    vi.stubGlobal("Clerk", { loaded: false });
+    vi.useFakeTimers();
+    render(
+      <PortalAuthProvider
+        value={{
+          clerkAvailable: true,
+          isLoaded: false,
+          isSignedIn: false,
+          reason: null,
+        }}
+      >
+        <SignInPage />
+      </PortalAuthProvider>,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(CLERK_LOAD_TIMEOUT_MS);
+    });
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /could not start clerk/i,
+    );
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /script loaded/i,
+    );
+    expect(screen.getByTestId("status-login-error").textContent).not.toMatch(
+      /script did not load/i,
+    );
+    vi.useRealTimers();
+  });
+
+  it("surfaces a Clerk.load subdomain rejection instead of a missing-script diagnosis", () => {
+    stubClerkScriptReachable();
+    vi.stubGlobal("Clerk", { loaded: false });
+    render(
+      <PortalAuthProvider
+        value={{
+          clerkAvailable: true,
+          isLoaded: false,
+          isSignedIn: false,
+          reason: null,
+        }}
+      >
+        <SignInPage />
+      </PortalAuthProvider>,
+    );
+
+    const reason = new Error(
+      "The request origin subdomain is not in the allowed subdomains list for this instance.",
+    );
+    const promise = Promise.reject(reason);
+    promise.catch(() => undefined);
+    act(() => {
+      window.dispatchEvent(
+        new PromiseRejectionEvent("unhandledrejection", { reason, promise }),
+      );
+    });
+
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /cannot start on this host/i,
+    );
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /allowed subdomains/i,
+    );
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /app\.acceptedadmissions\.org\/login/i,
+    );
+    expect(screen.getByTestId("status-login-error").textContent).not.toMatch(
+      /script did not load/i,
+    );
   });
 
   it("shows the failed Clerk host when the browser script cannot be reached", async () => {
@@ -169,6 +246,37 @@ describe("login page", () => {
     expect(screen.getByTestId("status-login-error").textContent).not.toMatch(
       /clerk\.app\.acceptedadmissions\.org/i,
     );
+    expect(screen.getByTestId("status-login-error").textContent).toMatch(
+      /script did not load/i,
+    );
+  });
+
+  it("does not treat a no-cors probe failure as a missing script when Clerk already ran", async () => {
+    vi.stubGlobal("Clerk", { loaded: false });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    render(
+      <PortalAuthProvider
+        value={{
+          clerkAvailable: true,
+          isLoaded: false,
+          isSignedIn: false,
+          reason: null,
+        }}
+      >
+        <SignInPage />
+      </PortalAuthProvider>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("status-login-loading")).toBeTruthy();
+    expect(screen.queryByTestId("status-login-error")).toBeNull();
   });
 
   it("continues to the safe return path after an existing session is ready", () => {
