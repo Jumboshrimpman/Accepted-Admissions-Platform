@@ -4,7 +4,6 @@ import test from "node:test";
 import { ADMIN_INBOX_EMAIL } from "./transactional-email.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
-  GUIDANCE_REQUEST_EMAIL_USER_ERROR,
   guidanceRequestAdminInbox,
   guidanceRequestEmailSubject,
   guidanceRequestEmailText,
@@ -53,7 +52,7 @@ test("guidance email includes the submitted fields and not a student To-line", (
   assert.doesNotMatch(text, /To: jordan\.parent@example\.invalid/);
 });
 
-test("guidance notify fails closed when the transport is missing or skips", async () => {
+test("guidance notify is optional and does not fail closed when mail is missing or skipped", async () => {
   const missing = await sendGuidanceRequestAdminEmail(sample, async () => ({
     status: "failed",
     error: "RESEND_API_KEY is not configured",
@@ -67,8 +66,10 @@ test("guidance notify fails closed when the transport is missing or skips", asyn
     status: "skipped",
     reason: "RESEND_API_KEY is not configured",
   }));
-  assert.equal(skipped.status, "failed");
-  assert.match(GUIDANCE_REQUEST_EMAIL_USER_ERROR, /email delivery is unavailable/i);
+  assert.equal(skipped.status, "skipped");
+  if (skipped.status === "skipped") {
+    assert.match(skipped.reason, /RESEND_API_KEY/);
+  }
 });
 
 test("guidance notify sends only to the admin inbox through a mock transport", async () => {
@@ -80,7 +81,7 @@ test("guidance notify sends only to the admin inbox through a mock transport", a
   assert.deepEqual(result, { status: "sent", id: "email_guidance_1" });
   assert.equal(captured?.to, ADMIN_INBOX_EMAIL);
   assert.equal(captured?.replyTo, sample.email);
-  assert.equal(captured?.required, true);
+  assert.equal(captured?.required, false);
   assert.notEqual(captured?.to, sample.email);
   assert.match(captured?.text ?? "", /Alex Student/);
   assert.match(captured?.html ?? "", /Lincoln High/);

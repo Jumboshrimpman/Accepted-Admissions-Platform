@@ -665,6 +665,10 @@ describe("administrator overview", () => {
 
   test("shows an empty guidance request state and new total", () => {
     render(<AdminDashboard />);
+    const card = screen.getByTestId("card-guidance-requests");
+    expect(card.getAttribute("id")).toBe("guidance-requests");
+    expect(card.textContent).toMatch(/Get guidance \/ client-request/i);
+    expect(screen.getByRole("link", { name: /Guidance requests/i }).getAttribute("href")).toBe("/admin#guidance-requests");
     expect(screen.getByTestId("empty-guidance-requests")).toBeTruthy();
     expect(screen.getByTestId("count-guidance-requests").textContent).toBe("0 total");
     expect(screen.getByTestId("count-new-guidance-requests").textContent).toBe("0 new");

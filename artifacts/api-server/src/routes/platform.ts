@@ -437,10 +437,7 @@ import {
   reportedQuestionIdsForAttempt,
   updateQuestionReportStatus,
 } from "../lib/question-reports";
-import {
-  GUIDANCE_REQUEST_EMAIL_USER_ERROR,
-  sendGuidanceRequestAdminEmail,
-} from "../lib/guidance-request-email";
+import { sendGuidanceRequestAdminEmail } from "../lib/guidance-request-email";
 import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
@@ -5170,23 +5167,24 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
     privacyAcknowledged: true,
     sourcePage: stringField(body, "sourcePage") || "/client-request",
   };
-  const emailDelivery = await sendGuidanceRequestAdminEmail(lead);
-  if (emailDelivery.status !== "sent") {
-    res.status(503).json({
-      error: GUIDANCE_REQUEST_EMAIL_USER_ERROR,
-      code: "EMAIL_DELIVERY_UNAVAILABLE",
-    });
-    return;
-  }
   const [saved] = await db
     .insert(clientRequestsTable)
     .values(lead)
     .returning({ id: clientRequestsTable.id });
   requestRateLimit.set(ip, now);
+  try {
+    await sendGuidanceRequestAdminEmail(lead);
+  } catch (error) {
+    console.error({
+      event: "guidance_request.email_failed",
+      error: error instanceof Error ? error.message : error,
+      msg: "Guidance request email threw after the row was saved",
+    });
+  }
   res.status(201).json({
     id: saved!.id,
     status: "received",
-    message: "Thanks — your request has been received.",
+    message: "Thanks — we received your request.",
   });
 });
 
