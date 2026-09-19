@@ -18,7 +18,8 @@ test("home and SAT fallbacks do not name Xavier or Eunice", () => {
   const home = normalizeHomeContent({});
   const sat = normalizeSatContent({});
   assert.match(home.body.satPathBlurb ?? "", /our SAT tutors/);
-  assert.doesNotMatch(`${home.body.satPathBlurb} ${sat.body.heroLead} ${sat.body.offersIntro}`, /Xavier or Eunice/i);
+  assert.doesNotMatch(`${home.body.satPathBlurb} ${sat.body.heroLead} ${sat.body.offersIntro ?? ""}`, /Xavier or Eunice/i);
+  assert.doesNotMatch(sat.body.offersIntro ?? "", /SAT booking and payment stay inside the signed-in client portal/i);
 });
 
 test("public home and SAT fallbacks do not publish SAT prices", () => {

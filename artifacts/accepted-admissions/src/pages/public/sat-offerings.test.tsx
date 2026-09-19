@@ -65,9 +65,15 @@ describe("SAT public page does not publish prices", () => {
     expect(signIn.getAttribute("href")).toBe("/login?returnTo=%2Fportal%2Fsat");
     expect(signIn.textContent).toMatch(/sign in to view SAT pricing/i);
     expect(screen.getByTestId("button-sat-signin-for-pricing").textContent).toMatch(/sign in to view SAT pricing/i);
+    expect(screen.getByRole("heading", { name: /SAT pricing available to clients only/i })).toBeTruthy();
+    expect(screen.queryByText(/SAT pricing stays behind sign-in/i)).toBeNull();
+    expect(screen.queryByText(/SAT booking and payment stay inside the signed-in client portal/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Meet the team" })).toBeNull();
+    expect(screen.queryByText(/Private by design/i)).toBeNull();
+    expect(screen.queryByText(/Clear progress/i)).toBeNull();
+    expect(screen.queryByText(/Human scheduling/i)).toBeNull();
     expect(screen.getByRole("heading", { level: 1 }).textContent).not.toMatch(/Xavier/i);
     expect(screen.queryByText(/Xavier or Eunice/i)).toBeNull();
-    expect(screen.getByRole("link", { name: "Meet the team" }).getAttribute("href")).toBe("/our-team");
     expect(screen.getByText(/campus tours, college advising/i)).toBeTruthy();
     expect(screen.getByText(/financial aid for SAT tutoring is considered case by case/i)).toBeTruthy();
     expect(screen.queryByTestId("card-sat-offer-offer-1")).toBeNull();

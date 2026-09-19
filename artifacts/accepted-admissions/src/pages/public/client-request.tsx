@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, Send } from "lucide-react";
-import { Link } from "wouter";
+import { CheckCircle2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -87,9 +86,6 @@ export default function ClientRequest() {
             <p className="font-metadata text-accent">Get guidance</p>
             <h1 className="font-display mt-4 text-5xl tracking-tight md:text-6xl">Tell us what support you are looking for.</h1>
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">Use this form when your needs go beyond the listed SAT offer, when you want to learn about our tutors, or when you want to confirm whether Accepted Admissions is the right fit before taking another step.</p>
-            <Link href="/sat" data-testid="link-request-sat" className="mt-6 inline-flex items-center text-sm font-semibold text-primary hover:underline">
-              Looking for SAT tutoring? Start here <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
             <div className="mt-8 space-y-4 text-sm text-muted-foreground">
               <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Share contact information, student context, the support you are considering, and general availability.</span></div>
               <div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-accent" /><span>Your request is stored privately for follow-up by the administrator team.</span></div>

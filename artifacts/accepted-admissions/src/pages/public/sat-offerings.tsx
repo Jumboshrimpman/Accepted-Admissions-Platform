@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/components/portal-auth";
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
-import { ArrowRight, CalendarClock, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowRight, CalendarClock } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,6 @@ export function SatMarketingContent({ content }: { content: SatContent }) {
           <p className="font-metadata text-accent">SAT tutoring</p>
           <h1 className="font-display mt-4 text-5xl tracking-tight">{content.title}</h1>
           <p className="mt-6 text-lg leading-relaxed text-muted-foreground">{content.body.heroLead}</p>
-          <p className="mt-6 leading-relaxed text-muted-foreground">
-            {content.body.offersIntro} Visit{" "}
-            <Link href="/our-team" className="font-semibold text-primary hover:underline">
-              Meet the team
-            </Link>{" "}
-            to learn about our tutors.
-          </p>
         </div>
       </section>
     </main>
@@ -142,8 +135,7 @@ export default function SatOfferings() {
         <section className="container mx-auto scroll-mt-28 px-6 py-20">
           <div className="mb-10 max-w-2xl">
             <p className="font-metadata text-accent">Inside the portal</p>
-            <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">SAT pricing stays behind sign-in.</h2>
-            <p className="mt-3 text-muted-foreground">{content.body.offersIntro} Visit <Link href="/our-team" className="font-semibold text-primary hover:underline">Meet the team</Link> to learn about our tutors.</p>
+            <h2 className="font-display mt-3 text-4xl tracking-tight md:text-5xl">SAT pricing available to clients only</h2>
           </div>
           <Card className="max-w-2xl" data-testid="card-sat-signin-required">
             <CardHeader>
@@ -158,19 +150,6 @@ export default function SatOfferings() {
               </Button>
             </CardContent>
           </Card>
-        </section>
-
-        <section className="border-y bg-card">
-          <div className="container mx-auto grid gap-8 px-6 py-16 md:grid-cols-3">
-            {[
-              [ShieldCheck, "Private by design", "Student, tutor, payment, and calendar information stays behind the right account boundary."],
-              [CheckCircle2, "Clear progress", "The portal keeps assignments, sessions, credits, and next steps together."],
-              [CalendarClock, "Human scheduling", "Availability is checked again at booking time so a slot cannot quietly be double-booked."],
-            ].map(([Icon, title, body]) => {
-              const FeatureIcon = Icon as typeof ShieldCheck;
-              return <div key={title as string} className="flex gap-4"><FeatureIcon className="mt-1 h-5 w-5 shrink-0 text-accent" /><div><h3 className="font-semibold">{title as string}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body as string}</p></div></div>;
-            })}
-          </div>
         </section>
       </main>
     </PublicSiteShell>

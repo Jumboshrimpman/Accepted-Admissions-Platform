@@ -27,7 +27,9 @@ describe("Guidance request form", () => {
     render(<ClientRequest />);
 
     expect(screen.getByText(/needs go beyond the listed SAT offer/i)).toBeTruthy();
-    expect(screen.getByTestId("link-request-sat").getAttribute("href")).toBe("/sat");
+    expect(screen.queryByTestId("link-request-sat")).toBeNull();
+    expect(screen.queryByText(/Looking for SAT tutoring\? Start here/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /looking for SAT tutoring/i })).toBeNull();
 
     const name = screen.getByTestId("input-request-guardianName") as HTMLInputElement;
     fireEvent.change(name, { target: { value: "Jordan Parent" } });

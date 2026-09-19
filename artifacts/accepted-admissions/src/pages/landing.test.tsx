@@ -21,13 +21,20 @@ describe("Landing visitor paths", () => {
     render(<Landing />);
 
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("A clear next step");
-    expect(screen.getByTestId("link-home-sat").getAttribute("href")).toBe("/sat");
-    expect(screen.getByTestId("link-home-guidance").getAttribute("href")).toBe("/client-request");
+    const requestCta = screen.getByTestId("link-home-guidance");
+    const satCta = screen.getByTestId("link-home-sat");
+    expect(requestCta.getAttribute("href")).toBe("/client-request");
+    expect(requestCta.textContent).toMatch(/Request Private Tutoring Now/i);
+    expect(requestCta.className).toMatch(/bg-primary/);
+    expect(satCta.getAttribute("href")).toBe("/sat");
+    expect(satCta.textContent).toMatch(/Explore the SAT session/i);
+    expect(satCta.className).not.toMatch(/bg-primary/);
+    expect(requestCta.compareDocumentPosition(satCta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/sign in to your client portal to view SAT tutoring pricing/i)).toBeTruthy();
     expect(screen.queryByText(/\$130/)).toBeNull();
     expect(screen.queryByText(/\$1,300/)).toBeNull();
     expect(screen.getByText(/harvard students and recent graduates/i)).toBeTruthy();
-    expect(screen.getAllByText(/meet the team to learn about our tutors/i)).not.toHaveLength(0);
+    expect(screen.queryByRole("link", { name: /meet the team to learn about our tutors/i })).toBeNull();
     expect(screen.getByText(/our SAT tutors/i)).toBeTruthy();
     expect(screen.queryByText(/Xavier or Eunice/i)).toBeNull();
     expect(screen.queryByRole("heading", { name: /xavier/i })).toBeNull();
