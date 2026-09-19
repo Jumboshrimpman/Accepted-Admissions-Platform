@@ -8,6 +8,7 @@ import {
   isOffPlatformProgramClient,
   isPortalHomePath,
   portalPathname,
+  shouldShowSatPaymentReceipts,
 } from "./portal-sat.ts";
 
 test("only students can purchase or book SAT credits", () => {
@@ -30,6 +31,18 @@ test("off-platform program clients skip Stripe booking and purchase gates", () =
   assert.equal(isOffPlatformProgramClient({ selfServeSatBooking: true, twelveSessionPlan: false }), false);
   assert.equal(isOffPlatformProgramClient({ selfServeSatBooking: false, twelveSessionPlan: false }), true);
   assert.equal(isOffPlatformProgramClient({ selfServeSatBooking: true, twelveSessionPlan: true }), true);
+});
+
+test("SAT payment and receipts stay hidden for Taito and visible for self-serve clients", () => {
+  assert.equal(
+    shouldShowSatPaymentReceipts({ selfServeSatBooking: false, twelveSessionPlan: true }),
+    false,
+  );
+  assert.equal(
+    shouldShowSatPaymentReceipts({ selfServeSatBooking: true, twelveSessionPlan: false }),
+    true,
+  );
+  assert.equal(shouldShowSatPaymentReceipts(null), true);
 });
 
 test("Book SAT points at the homepage booking section", () => {

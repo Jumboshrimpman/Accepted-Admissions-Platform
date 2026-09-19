@@ -32,6 +32,14 @@ export function isOffPlatformProgramClient(credits?: {
   return credits.selfServeSatBooking === false || credits.twelveSessionPlan === true;
 }
 
+/** SAT payment/receipts chrome is for in-portal Stripe clients, not off-platform payers such as Taito. */
+export function shouldShowSatPaymentReceipts(credits?: {
+  selfServeSatBooking?: boolean | null;
+  twelveSessionPlan?: boolean | null;
+} | null): boolean {
+  return !isOffPlatformProgramClient(credits);
+}
+
 export function portalPathname(location: string): string {
   return location.split(/[?#]/)[0] || "/";
 }
