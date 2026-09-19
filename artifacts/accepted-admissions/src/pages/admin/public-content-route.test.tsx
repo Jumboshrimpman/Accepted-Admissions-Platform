@@ -23,6 +23,7 @@ vi.mock("@/lib/clerk-publishable-key", () => ({
     ok: true,
     publishableKey: "pk_test_public-content-route",
   }),
+  clerkGlobalPresent: () => false,
   clerkLoadFailureCopy: () => ({
     title: "Sign-in could not load Clerk",
     body: "Clerk script failed.",

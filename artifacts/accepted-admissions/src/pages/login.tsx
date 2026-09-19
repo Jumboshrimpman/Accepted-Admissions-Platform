@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
   clerkConfigErrorCopy,
+  clerkGlobalPresent,
   clerkJsScriptUrlFromKey,
   clerkLoadFailureCopy,
+  isClerkLoadRejection,
 } from "@/lib/clerk-publishable-key";
 import { safeReturnPath } from "@/lib/safe-return-path";
 
@@ -135,8 +137,12 @@ function toRouterPath(path: string): string {
 
 function clerkFailureState(
   configuredKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+  details: { error?: unknown; clerkPresent?: boolean } = {},
 ) {
-  const copy = clerkLoadFailureCopy(configuredKey);
+  const copy = clerkLoadFailureCopy(configuredKey, {
+    error: details.error,
+    clerkPresent: details.clerkPresent ?? clerkGlobalPresent(),
+  });
   return (
     <LoginErrorState
       title={copy.title}
@@ -147,27 +153,39 @@ function clerkFailureState(
   );
 }
 
-function LoginErrorFallback(_props: ErrorFallbackProps) {
-  return clerkFailureState();
-}
-
-function ClerkLoadTimeoutError() {
-  return clerkFailureState();
+function LoginErrorFallback({ error }: ErrorFallbackProps) {
+  return clerkFailureState(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY, {
+    error,
+    clerkPresent: clerkGlobalPresent(),
+  });
 }
 
 function ClerkSignInExperience({ returnTo }: { returnTo: string }) {
   const auth = usePortalAuth();
   const [timedOut, setTimedOut] = useState(false);
-  const [scriptFailed, setScriptFailed] = useState(false);
+  const [scriptMissing, setScriptMissing] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   useEffect(() => {
     if (auth.isLoaded) {
       setTimedOut(false);
-      setScriptFailed(false);
+      setScriptMissing(false);
+      setLoadError(null);
       return;
     }
     const timer = window.setTimeout(() => setTimedOut(true), CLERK_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
+  }, [auth.isLoaded]);
+
+  useEffect(() => {
+    if (auth.isLoaded) return;
+    const onReject = (event: PromiseRejectionEvent) => {
+      if (isClerkLoadRejection(event.reason)) {
+        setLoadError(event.reason);
+      }
+    };
+    window.addEventListener("unhandledrejection", onReject);
+    return () => window.removeEventListener("unhandledrejection", onReject);
   }, [auth.isLoaded]);
 
   useEffect(() => {
@@ -178,7 +196,8 @@ function ClerkSignInExperience({ returnTo }: { returnTo: string }) {
     if (!scriptUrl || typeof fetch !== "function") return;
     let cancelled = false;
     fetch(scriptUrl, { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => {
-      if (!cancelled) setScriptFailed(true);
+      // A network probe is not proof the script failed if clerk-js already ran.
+      if (!cancelled && !clerkGlobalPresent()) setScriptMissing(true);
     });
     return () => {
       cancelled = true;
@@ -194,8 +213,11 @@ function ClerkSignInExperience({ returnTo }: { returnTo: string }) {
     );
   }
 
-  if (!auth.isLoaded && (timedOut || scriptFailed)) {
-    return <ClerkLoadTimeoutError />;
+  if (!auth.isLoaded && (timedOut || scriptMissing || loadError)) {
+    return clerkFailureState(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY, {
+      error: loadError,
+      clerkPresent: clerkGlobalPresent() || Boolean(loadError),
+    });
   }
 
   if (!auth.isLoaded) {

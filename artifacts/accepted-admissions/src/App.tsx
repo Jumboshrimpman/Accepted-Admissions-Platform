@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef } from 'react';
+import { CanonicalAppHostGate } from '@/components/canonical-app-host-gate';
 import {
   QueryClient,
   QueryClientProvider,
@@ -23,6 +24,7 @@ import {
 } from '@/components/portal-auth';
 import SignInPage, { LoginErrorState } from '@/pages/login';
 import {
+  clerkGlobalPresent,
   clerkLoadFailureCopy,
   resolveClerkPublishableKey,
 } from '@/lib/clerk-publishable-key';
@@ -440,8 +442,11 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
-function ClerkBootFallback(_props: { error: Error; resetError: () => void }) {
-  const copy = clerkLoadFailureCopy(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+function ClerkBootFallback({ error }: { error: Error; resetError: () => void }) {
+  const copy = clerkLoadFailureCopy(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY, {
+    error,
+    clerkPresent: clerkGlobalPresent(),
+  });
   return (
     <div className="min-h-screen bg-background px-6 py-16">
       <div className="mx-auto max-w-lg">
@@ -513,7 +518,9 @@ function App() {
 function Root() {
   return (
     <WouterRouter base={basePath}>
-      <App />
+      <CanonicalAppHostGate>
+        <App />
+      </CanonicalAppHostGate>
     </WouterRouter>
   );
 }
