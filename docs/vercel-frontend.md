@@ -35,6 +35,8 @@ Optional: `VITE_CLERK_PROXY_URL` (for example `/api/__clerk`) if Clerk Frontend 
 
 Do not set `VITE_API_URL`. The client uses `setBaseUrl` from Vite `BASE_URL` and relative `/api/...` paths.
 
+Do **not** set `RESEND_API_KEY` or `RESEND_FROM_EMAIL` on Vercel. The Get guidance form is emailed by the Railway API. See `docs/transactional-email.md`.
+
 ## `vercel.json` routing
 
 Host-conditioned **redirects** send `/login`, `/sign-in`, `/portal`, `/tutor`, `/admin`, `/t-g`, and `/sso-callback` from `www.acceptedadmissions.org` and apex `acceptedadmissions.org` to the same path on `https://app.acceptedadmissions.org`. Marketing pages stay on www. `app.acceptedadmissions.org` is not redirected. This is a 302 so sign-in works even when Clerk has not allowlisted the www origin.
