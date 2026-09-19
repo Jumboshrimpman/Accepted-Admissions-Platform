@@ -24,8 +24,12 @@ import {
   IELTS_STYLE_WRITING_TASKS,
   ieltsStyleReadingItems,
 } from "./ielts-style-bank-content.ts";
-import { isStudentUsableQuizItem } from "./sat-bank-diagnostic-quality.ts";
-import { isTutorQuizMcq } from "./sat-bank-import.ts";
+import {
+  canAssignCleanEnglishQuizSet,
+  ieltsStyleSourceKey,
+  isIeltsStyleBankRow,
+  selectIeltsStylePreworkItems,
+} from "./ielts-style-bank-select.ts";
 import { materializeBankQuestion } from "./sat-bank-service.ts";
 import {
   isEnglishSessionSubject,
@@ -40,27 +44,14 @@ export {
   IELTS_STYLE_EXAM_FAMILY,
   IELTS_STYLE_SOURCE_KIND,
 };
-
-export const IELTS_STYLE_DIAGNOSTIC_COUNT = 24;
-export const IELTS_STYLE_ROUTINE_COUNT = 12;
-
-export function isIeltsStyleBankRow(row: {
-  examFamily?: string | null;
-  sourceKind?: string | null;
-}): boolean {
-  return (
-    (row.examFamily ?? "").trim().toLowerCase() === IELTS_STYLE_EXAM_FAMILY &&
-    (row.sourceKind ?? "").trim() === IELTS_STYLE_SOURCE_KIND
-  );
-}
-
-export function ieltsStyleSourceKey(input: {
-  section: "reading" | "writing";
-  module: number;
-  questionNumber: number;
-}): string {
-  return `ielts-style-original-${input.section}-m${input.module}-q${input.questionNumber}`;
-}
+export {
+  IELTS_STYLE_DIAGNOSTIC_COUNT,
+  IELTS_STYLE_ROUTINE_COUNT,
+  canAssignCleanEnglishQuizSet,
+  ieltsStyleSourceKey,
+  isIeltsStyleBankRow,
+  selectIeltsStylePreworkItems,
+} from "./ielts-style-bank-select.ts";
 
 function readingBankValues() {
   return ieltsStyleReadingItems().map((item, index) => {
@@ -222,29 +213,6 @@ function bankRowForQuality(row: typeof bankQuestionsTable.$inferSelect) {
     figures: [],
     extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
   };
-}
-
-export function canAssignCleanEnglishQuizSet(
-  selected: readonly ReturnType<typeof bankRowForQuality>[],
-): boolean {
-  if (selected.length === 0) return false;
-  return selected.every((item) => isStudentUsableQuizItem(item));
-}
-
-export function selectIeltsStylePreworkItems<
-  T extends { id: string; module: number; questionType: string; formCode?: string | null },
->(
-  pool: readonly T[],
-  input: { homeworkKind: "diagnostic" | "routine"; setIndex?: number },
-): T[] {
-  const mcq = pool.filter((row) => isTutorQuizMcq(row.questionType) && row.questionType !== "writing_task");
-  if (input.homeworkKind === "diagnostic") {
-    return mcq.filter((row) => row.module === 1).slice(0, IELTS_STYLE_DIAGNOSTIC_COUNT);
-  }
-  const routineModule = input.setIndex === 2 ? 3 : 2;
-  const preferred = mcq.filter((row) => row.module === routineModule);
-  if (preferred.length > 0) return preferred.slice(0, IELTS_STYLE_ROUTINE_COUNT);
-  return mcq.filter((row) => row.module !== 1).slice(0, IELTS_STYLE_ROUTINE_COUNT);
 }
 
 async function archiveSessionPrework(sessionId: string) {

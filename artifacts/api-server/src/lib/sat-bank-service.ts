@@ -198,6 +198,7 @@ function assignmentItemForLiveAudit(
     questionType: question.questionType,
     correctAnswer: question.correctAnswer,
     extractGaps: question.extractGaps ?? ((bank?.extractGaps ?? {}) as Record<string, unknown>),
+    examFamily: bank?.examFamily,
     section: bank?.section,
     subject: question.subject,
     domain: question.domain,

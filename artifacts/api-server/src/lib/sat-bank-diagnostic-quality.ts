@@ -102,6 +102,8 @@ export type DiagnosticQualityInput = {
   collectionId?: string | null;
   collectionSlug?: string | null;
   examFamily?: string | null;
+  subject?: string | null;
+  domain?: string | null;
   section?: string | null;
   module?: number | null;
   questionNumber?: number | null;
@@ -482,7 +484,51 @@ export function isCleanTextMcqItem(input: DiagnosticQualityInput): boolean {
  * or replace at materialize. RW may still keep a clean figure + recovered
  * table after a merely-readable stem.
  */
+export function isIeltsStyleQuizSubject(input: {
+  subject?: string | null;
+  section?: string | null;
+  domain?: string | null;
+  examFamily?: string | null;
+}): boolean {
+  const haystack =
+    `${input.subject ?? ""} ${input.domain ?? ""} ${input.section ?? ""} ${input.examFamily ?? ""}`.toLowerCase();
+  return (
+    haystack.includes("ielts") ||
+    input.section === "reading" ||
+    input.section === "writing"
+  );
+}
+
+/** Original English/IELTS items: complete A–D and a letter key. Skip SAT OCR smash gates. */
+export function isStudentUsableEnglishQuizItem(input: {
+  prompt?: string | null;
+  stimulus?: string | null;
+  choices?: DiagnosticQualityInput["choices"];
+  questionType?: string | null;
+  correctAnswer?: string | null;
+}): boolean {
+  if ((input.questionType ?? "").trim() === "writing_task") return false;
+  const prompt = input.prompt?.trim() ?? "";
+  if (prompt.length < 12) return false;
+  if (looksExtractionMarkerBleed(prompt) || looksExtractionMarkerBleed(input.stimulus)) {
+    return false;
+  }
+  const choices = input.choices ?? [];
+  const labels = new Set<string>();
+  for (const choice of choices) {
+    const text = choice.text?.trim() ?? "";
+    if (text.length < 8) return false;
+    const label = (choice.label ?? choice.id ?? "").toString().trim().toUpperCase();
+    if (/^[A-D]$/.test(label)) labels.add(label);
+  }
+  if (labels.size < 4) return false;
+  return letterAnswerMatchesChoices(input.correctAnswer, choices);
+}
+
 export function isStudentUsableQuizItem(input: DiagnosticQualityInput): boolean {
+  if (isIeltsStyleQuizSubject(input)) {
+    return isStudentUsableEnglishQuizItem(input);
+  }
   return auditStudentQuizItem(input).ok;
 }
 
@@ -497,6 +543,7 @@ export function quizItemFromServedQuestion(question: {
   questionType?: string | null;
   correctAnswer?: string | null;
   extractGaps?: Record<string, unknown> | null;
+  examFamily?: string | null;
   section?: string | null;
   subject?: string | null;
   domain?: string | null;
@@ -515,6 +562,9 @@ export function quizItemFromServedQuestion(question: {
         ];
       })
     : [];
+  const ielts = isIeltsStyleQuizSubject(question);
+  const remapped = quizSectionFromBankMeta(question);
+  const originalSection = question.section?.trim() || null;
   return {
     id: question.id,
     prompt: question.prompt,
@@ -524,7 +574,11 @@ export function quizItemFromServedQuestion(question: {
     questionType: question.questionType,
     correctAnswer: question.correctAnswer,
     extractGaps: question.extractGaps,
-    section: quizSectionFromBankMeta(question),
+    examFamily: question.examFamily,
+    subject: question.subject,
+    domain: question.domain,
+    // Keep reading/writing so the English usable gate still matches after SAT rw remap.
+    section: ielts ? originalSection || remapped : remapped,
   };
 }
 

@@ -37,6 +37,8 @@ Listening is not in this slice (no audio hosting). Prefer Reading first; Writing
 
 Fail-closed: only complete, readable Reading MCQs assign. No junk padding to hit a count. Short clean sets are acceptable. This is accuracy practice, not an official IELTS band score.
 
+Student GET uses an English usable gate (complete A–D + letter key). SAT OCR smash / missing-figure rules do not drop original prose that uses curly quotes or °C. SAT Reading & Writing items still use the SAT live-audit.
+
 ## Source of truth
 
 Fixtures live in `artifacts/api-server/src/lib/ielts-style-bank-content.ts`. Re-import is idempotent on `sourceKey`.
