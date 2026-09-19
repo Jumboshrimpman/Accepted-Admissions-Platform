@@ -433,6 +433,10 @@ import {
   updateQuestionReportStatus,
 } from "../lib/question-reports";
 import {
+  GUIDANCE_REQUEST_EMAIL_USER_ERROR,
+  sendGuidanceRequestAdminEmail,
+} from "../lib/guidance-request-email";
+import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
   countsTowardAttemptLimit,
@@ -5093,32 +5097,41 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Enter a valid email address and phone number." });
     return;
   }
-  const [lead] = await db
+  const lead = {
+    guardianName: stringField(body, "guardianName"),
+    studentName: stringField(body, "studentName"),
+    email,
+    phone,
+    gradeOrGraduationYear: stringField(body, "gradeOrGraduationYear"),
+    currentSchool: stringField(body, "currentSchool"),
+    serviceRequested: stringField(body, "serviceRequested"),
+    currentSatTotal: stringField(body, "currentSatTotal") || null,
+    currentReadingWriting: stringField(body, "currentReadingWriting") || null,
+    currentMath: stringField(body, "currentMath") || null,
+    targetSatScore: stringField(body, "targetSatScore") || null,
+    plannedTestDate: stringField(body, "plannedTestDate") || null,
+    goals: stringField(body, "goals"),
+    schedulingAvailability: stringField(body, "schedulingAvailability"),
+    referralSource: stringField(body, "referralSource"),
+    consentToContact: true,
+    privacyAcknowledged: true,
+    sourcePage: stringField(body, "sourcePage") || "/client-request",
+  };
+  const emailDelivery = await sendGuidanceRequestAdminEmail(lead);
+  if (emailDelivery.status !== "sent") {
+    res.status(503).json({
+      error: GUIDANCE_REQUEST_EMAIL_USER_ERROR,
+      code: "EMAIL_DELIVERY_UNAVAILABLE",
+    });
+    return;
+  }
+  const [saved] = await db
     .insert(clientRequestsTable)
-    .values({
-      guardianName: stringField(body, "guardianName"),
-      studentName: stringField(body, "studentName"),
-      email,
-      phone,
-      gradeOrGraduationYear: stringField(body, "gradeOrGraduationYear"),
-      currentSchool: stringField(body, "currentSchool"),
-      serviceRequested: stringField(body, "serviceRequested"),
-      currentSatTotal: stringField(body, "currentSatTotal") || null,
-      currentReadingWriting: stringField(body, "currentReadingWriting") || null,
-      currentMath: stringField(body, "currentMath") || null,
-      targetSatScore: stringField(body, "targetSatScore") || null,
-      plannedTestDate: stringField(body, "plannedTestDate") || null,
-      goals: stringField(body, "goals"),
-      schedulingAvailability: stringField(body, "schedulingAvailability"),
-      referralSource: stringField(body, "referralSource"),
-      consentToContact: true,
-      privacyAcknowledged: true,
-      sourcePage: stringField(body, "sourcePage") || "/client-request",
-    })
+    .values(lead)
     .returning({ id: clientRequestsTable.id });
   requestRateLimit.set(ip, now);
   res.status(201).json({
-    id: lead!.id,
+    id: saved!.id,
     status: "received",
     message: "Thanks — your request has been received.",
   });

@@ -121,3 +121,7 @@ Expected error states:
 ## Stripe webhook
 
 Production Stripe must deliver to `https://app.acceptedadmissions.org/api/stripe/webhook`. Do not use the retired Replit host. People provisioning still does not send Clerk invitations. See `docs/stripe-webhook.md`.
+
+## Public guidance form email
+
+The `/client-request` form emails **`admin@acceptedadmissions.org` only** (no Clerk invites, no submitter `To`). Set `RESEND_API_KEY` on the Railway API service. Missing key → honest `503`, not a fake success. See `docs/transactional-email.md`.
