@@ -310,7 +310,7 @@ test("remaps Xavier's duplicate Clerk id to the canonical Production id", async 
   }
 });
 
-test("falls back to Taito, then tutor-only, and never uses the duplicate Xavier Clerk user", async () => {
+test("does not fall back to Taito; tutor-only when Sama is missing, and never uses the duplicate Xavier Clerk user", async () => {
   const suffix = randomUUID();
   const title = `SAT capability test — Xavier fallback ${suffix}`;
   const course = await createCourse(suffix);
@@ -348,9 +348,10 @@ test("falls back to Taito, then tutor-only, and never uses the duplicate Xavier 
         taitoEmail: taito.email,
       },
     });
-    assert.equal(withTaito.studentSource, "taito");
-    assert.equal(withTaito.clientUserId, taito.id);
+    assert.equal(withTaito.studentSource, "none");
+    assert.equal(withTaito.clientUserId, null);
     assert.equal(withTaito.tutorUserId, xavier.id);
+    assert.notEqual(withTaito.clientUserId, taito.id);
 
     await db.delete(sessionsTable).where(eq(sessionsTable.id, withTaito.sessionId!));
     await db
@@ -386,6 +387,68 @@ test("falls back to Taito, then tutor-only, and never uses the duplicate Xavier 
     await db
       .delete(usersTable)
       .where(inArray(usersTable.id, [xavier.id, duplicate.id, taito.id]));
+  }
+});
+
+test("unassigns Taito from an existing Xavier capability session on reseed", async () => {
+  const suffix = randomUUID();
+  const title = `SAT capability test — Xavier ${suffix}`;
+  const course = await createCourse(suffix);
+  const xavier = await createUser({
+    email: `xavier-unassign-${suffix}@example.invalid`,
+    displayName: "Xavier Morales",
+    role: "tutor",
+    clerkUserId: `xavier-unassign:${suffix}`,
+  });
+  const taito = await createUser({
+    email: `taito-unassign-${suffix}@example.invalid`,
+    displayName: "Taito Goto",
+    role: "student",
+    clerkUserId: `taito-unassign:${suffix}`,
+  });
+  const [linked] = await db
+    .insert(sessionsTable)
+    .values({
+      courseId: course.id,
+      clientUserId: taito.id,
+      tutorUserId: xavier.id,
+      dateTime: new Date("2026-09-08T20:00:00.000Z"),
+      timezone: XAVIER_SAT_CAPABILITY_TIMEZONE,
+      subject: "SAT",
+      title,
+      status: "published",
+      bookingStatus: "confirmed",
+    })
+    .returning();
+
+  try {
+    const reseeds = await ensureXavierSatCapabilitySession({
+      now: new Date("2026-09-08T18:00:00.000Z"),
+      courseId: course.id,
+      attachPrework: false,
+      identities: {
+        title,
+        xavierEmail: xavier.email,
+        xavierClerkUserId: xavier.clerkUserId,
+        samaEmail: `missing-sama-unassign-${suffix}@example.invalid`,
+        samaClerkUserId: `missing-sama-unassign:${suffix}`,
+        taitoEmail: taito.email,
+      },
+    });
+    assert.equal(reseeds.sessionId, linked!.id);
+    assert.equal(reseeds.clientUserId, null);
+    const [updated] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, linked!.id));
+    assert.equal(updated?.clientUserId, null);
+    assert.equal(updated?.tutorUserId, xavier.id);
+  } finally {
+    await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course.id));
+    await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course.id));
+    await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.email, xavier.email));
+    await db.delete(coursesTable).where(eq(coursesTable.id, course.id));
+    await db.delete(usersTable).where(inArray(usersTable.id, [xavier.id, taito.id]));
   }
 });
 
@@ -473,7 +536,7 @@ test("does not rewrite Taito Oct 2 diagnostic homework or steal the session duri
       .where(eq(sessionsTable.id, seeded.sessionId!));
     assert.equal(capability?.tutorUserId, xavier.id);
     assert.equal(capability?.title, title);
-    assert.equal(capability?.clientUserId, taito.id);
+    assert.equal(capability?.clientUserId, null);
 
     const [stillDiagnostic] = await db
       .select()

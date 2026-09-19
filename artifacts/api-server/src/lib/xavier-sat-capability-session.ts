@@ -234,9 +234,6 @@ async function resolveStudent(options: XavierSatCapabilitySeedOptions): Promise<
   );
   const samaClerkId =
     options.identities?.samaClerkUserId ?? SAMA_TEST_CLIENT_CLERK_USER_ID;
-  const taitoEmail = normalizeProvisionedEmail(
-    options.identities?.taitoEmail ?? TAITO_STUDENT_EMAIL,
-  );
 
   const sama =
     (await findUserByClerkId(samaClerkId)) ?? (await findUserByEmail(samaEmail));
@@ -244,11 +241,8 @@ async function resolveStudent(options: XavierSatCapabilitySeedOptions): Promise<
     return { user: sama, source: "sama" };
   }
 
-  const taito = await findUserByEmail(taitoEmail);
-  if (taito && taito.role === "student") {
-    return { user: taito, source: "taito" };
-  }
-
+  // Never attach Xavier capability-test scaffolding to Taito. Taito's portal
+  // is Eunice SAT + Nika English only. Missing Sama → tutor-only session.
   return { user: null, source: "none" };
 }
 
@@ -362,15 +356,25 @@ export async function ensureXavierSatCapabilitySession(
     .limit(1);
 
   if (existing) {
+    const taitoEmail = normalizeProvisionedEmail(
+      options.identities?.taitoEmail ?? TAITO_STUDENT_EMAIL,
+    );
+    const taito = await findUserByEmail(taitoEmail);
+    const existingClientIsTaito = Boolean(
+      taito && existing.clientUserId === taito.id,
+    );
+    const nextClientUserId = existingClientIsTaito
+      ? student.user?.id ?? null
+      : student.user?.id ?? existing.clientUserId;
     const needsPeopleUpdate =
       existing.tutorUserId !== xavier.id ||
-      existing.clientUserId !== (student.user?.id ?? existing.clientUserId);
+      existing.clientUserId !== nextClientUserId;
     if (needsPeopleUpdate) {
       await db
         .update(sessionsTable)
         .set({
           tutorUserId: xavier.id,
-          clientUserId: student.user?.id ?? existing.clientUserId,
+          clientUserId: nextClientUserId,
           updatedAt: new Date(),
         })
         .where(eq(sessionsTable.id, existing.id));
@@ -384,7 +388,7 @@ export async function ensureXavierSatCapabilitySession(
       sessionId: existing.id,
       courseId: existing.courseId,
       tutorUserId: xavier.id,
-      clientUserId: student.user?.id ?? existing.clientUserId,
+      clientUserId: nextClientUserId,
       studentSource: student.source,
       preworkAttached,
     };

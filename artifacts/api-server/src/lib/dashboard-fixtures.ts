@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray, or } from "drizzle-orm";
 import {
   assignmentsTable,
+  auditLogsTable,
   courseMembershipsTable,
   coursesTable,
   db,
@@ -248,6 +249,9 @@ export async function createDashboardRoleFixture(): Promise<DashboardRoleFixture
       await db
         .delete(loginActivityTable)
         .where(inArray(loginActivityTable.userId, userIds));
+      await db
+        .delete(auditLogsTable)
+        .where(inArray(auditLogsTable.actorUserId, userIds));
       await db
         .delete(assignmentsTable)
         .where(inArray(assignmentsTable.id, [publishedAssignment!.id, draftAssignment!.id]));

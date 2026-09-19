@@ -3,6 +3,7 @@ import {
   studentFacingFigurePrimaryFields,
 } from "./sat-bank-figure-primary.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
+import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
 
 export function isAssignmentListedForRole(
   role: string | null | undefined,
@@ -175,6 +176,49 @@ export function isFullLengthDiagnosticAssignment(input: {
   if (title.includes("full-length sat diagnostic")) return true;
   if (title.includes("full sat practice diagnostic")) return true;
   return title.includes("diagnostic") && count >= 80;
+}
+
+/** Xavier capability-test scaffolding — session or "60-minute SAT pre-work — SAT capability test — Xavier". */
+export function isXavierSatCapabilityCopy(title?: string | null): boolean {
+  return (title ?? "").includes("SAT capability test — Xavier");
+}
+
+export function studentOwnsSessionAssignment(
+  sessionClientUserId: string | null | undefined,
+  studentUserId: string,
+): boolean {
+  return Boolean(sessionClientUserId) && sessionClientUserId === studentUserId;
+}
+
+function isTaitoStudentEmail(email?: string | null): boolean {
+  return (email ?? "").trim().toLowerCase() === TAITO_STUDENT_EMAIL;
+}
+
+/**
+ * Students/viewers only see homework on their own sessions.
+ * Taito never sees Xavier capability-test scaffolding, even if a leftover
+ * seed still lists him as the capability-session client.
+ */
+export function studentCanListAssignment(input: {
+  role?: string | null;
+  studentUserId: string;
+  studentEmail?: string | null;
+  sessionClientUserId?: string | null;
+  sessionTitle?: string | null;
+  assignmentTitle?: string | null;
+}): boolean {
+  const role = input.role ?? "";
+  if (role !== "student" && role !== "viewer") return true;
+  if (!studentOwnsSessionAssignment(input.sessionClientUserId, input.studentUserId)) {
+    return false;
+  }
+  const capability =
+    isXavierSatCapabilityCopy(input.sessionTitle) ||
+    isXavierSatCapabilityCopy(input.assignmentTitle);
+  if (capability && isTaitoStudentEmail(input.studentEmail)) {
+    return false;
+  }
+  return true;
 }
 
 export function pickDiagnosticKeeper<

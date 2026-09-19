@@ -416,6 +416,7 @@ import {
   courseIdsForAssignmentList,
   isAssignmentListedForRole,
   isUnfinishedHomeworkClientCopy,
+  studentCanListAssignment,
   studentSafeAssignmentInstructions,
 } from "../lib/assignment-visibility";
 import {
@@ -423,7 +424,10 @@ import {
   skillLabelForBank,
 } from "../lib/sat-bank-skill";
 import { answersMatch } from "../lib/sat-bank-retry";
-import { isStudentUsableServedQuestion } from "../lib/sat-bank-diagnostic-quality";
+import {
+  isStudentUsableServedQuestion,
+  liveDiagnosticAssignmentTitle,
+} from "../lib/sat-bank-diagnostic-quality";
 import { scoreAttemptItems } from "../lib/attempt-scoring";
 import {
   createQuestionReport,
@@ -2730,6 +2734,19 @@ async function dataSubjectUserId(user: AppUser): Promise<string> {
   return link?.studentUserId ?? user.id;
 }
 
+async function dataSubjectEmail(
+  user: AppUser,
+  subjectUserId: string,
+): Promise<string> {
+  if (subjectUserId === user.id) return user.email;
+  const [subject] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, subjectUserId))
+    .limit(1);
+  return subject?.email ?? user.email;
+}
+
 async function courseSubjectForUser(
   user: AppUser,
   courseId: string,
@@ -2783,6 +2800,39 @@ async function canAccessSession(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<boolean> {
   return canViewSession(user, session);
+}
+
+async function studentCanAccessListedAssignment(
+  user: AppUser,
+  assignment: Pick<typeof assignmentsTable.$inferSelect, "sessionId" | "title">,
+): Promise<boolean> {
+  const subjectUserId = await dataSubjectUserId(user);
+  const subjectEmail = await dataSubjectEmail(user, subjectUserId);
+  if (!assignment.sessionId) {
+    return studentCanListAssignment({
+      role: user.role,
+      studentUserId: subjectUserId,
+      studentEmail: subjectEmail,
+      sessionClientUserId: null,
+      assignmentTitle: assignment.title,
+    });
+  }
+  const [session] = await db
+    .select({
+      clientUserId: sessionsTable.clientUserId,
+      title: sessionsTable.title,
+    })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, assignment.sessionId))
+    .limit(1);
+  return studentCanListAssignment({
+    role: user.role,
+    studentUserId: subjectUserId,
+    studentEmail: subjectEmail,
+    sessionClientUserId: session?.clientUserId ?? null,
+    sessionTitle: session?.title ?? null,
+    assignmentTitle: assignment.title,
+  });
 }
 
 function libraryAssetResponse(
@@ -9935,25 +9985,50 @@ async function listAssignmentsForUser(
     ),
   ];
   const cancelledSessionIds = new Set<string>();
-  if (hideCancelled && sessionIds.length > 0) {
+  const sessionsById = new Map<
+    string,
+    { clientUserId: string | null; title: string; bookingStatus: string | null }
+  >();
+  if (sessionIds.length > 0) {
     const linkedSessions = await db
       .select({
         id: sessionsTable.id,
         bookingStatus: sessionsTable.bookingStatus,
+        clientUserId: sessionsTable.clientUserId,
+        title: sessionsTable.title,
       })
       .from(sessionsTable)
       .where(inArray(sessionsTable.id, sessionIds));
     for (const session of linkedSessions) {
-      if (isCancelledBooking(session)) cancelledSessionIds.add(session.id);
+      sessionsById.set(session.id, session);
+      if (hideCancelled && isCancelledBooking(session)) {
+        cancelledSessionIds.add(session.id);
+      }
     }
   }
   const subjectUserId = await dataSubjectUserId(user);
+  const subjectEmail = await dataSubjectEmail(user, subjectUserId);
   return Promise.all(
     scopedRows.map(async (assignment) => {
       if (!isAssignmentListedForRole(user.role, assignment.status)) {
         return null;
       }
       if (hideCancelled && assignmentTiedToCancelledSession(assignment, cancelledSessionIds)) {
+        return null;
+      }
+      const linkedSession = assignment.sessionId
+        ? sessionsById.get(assignment.sessionId)
+        : undefined;
+      if (
+        !studentCanListAssignment({
+          role: user.role,
+          studentUserId: subjectUserId,
+          studentEmail: subjectEmail,
+          sessionClientUserId: linkedSession?.clientUserId ?? null,
+          sessionTitle: linkedSession?.title ?? null,
+          assignmentTitle: assignment.title,
+        })
+      ) {
         return null;
       }
       const [{ count }] = await db
@@ -9977,7 +10052,10 @@ async function listAssignmentsForUser(
           assignment.deliveryPhase === "during_session"
             ? "during_session"
             : "before_session",
-        title: assignment.title,
+        title: liveDiagnosticAssignmentTitle({
+          title: assignment.title,
+          questionCount: Number(count),
+        }),
         subject: assignment.subject,
         status: assignment.status,
         deadline: assignment.deadline,
@@ -10435,6 +10513,13 @@ router.post(
         assignment.courseId,
         assignment.subject,
       ))
+    ) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    if (
+      (req.appUser!.role === "student" || req.appUser!.role === "viewer") &&
+      !(await studentCanAccessListedAssignment(req.appUser!, assignment))
     ) {
       res.status(404).json({ error: "Assignment not found" });
       return;

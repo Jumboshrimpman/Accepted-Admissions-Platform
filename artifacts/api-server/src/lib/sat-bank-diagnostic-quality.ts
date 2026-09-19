@@ -725,19 +725,61 @@ export function canAssignDiagnostic(
   return composition.questionCount > 0;
 }
 
+const DIAGNOSTIC_TITLE_RE =
+  /full-length sat diagnostic|full sat practice diagnostic|sat diagnostic/i;
+
+export function isDiagnosticAssignmentTitle(title?: string | null): boolean {
+  return DIAGNOSTIC_TITLE_RE.test(title ?? "");
+}
+
+/** Session suffix after the em dash, e.g. "Taito’s SAT Session with Eunice". */
+export function diagnosticTitleSessionSuffix(title: string): string {
+  const match = title.match(/\s+—\s+(.+)$/);
+  const suffix = match?.[1]?.trim() ?? "";
+  if (!suffix || /clean questions\)?$/i.test(suffix)) return "";
+  return suffix;
+}
+
+/**
+ * Client/admin labels after fail-closed short clean form.
+ * Never say "Full-length" unless the live quiz is a complete 120.
+ * Prefer the live question count over a stale N in the stored title.
+ */
+export function liveDiagnosticAssignmentTitle(input: {
+  title: string;
+  questionCount: number;
+  homeworkKind?: string | null;
+}): string {
+  const title = input.title.trim();
+  const isDiagnostic =
+    input.homeworkKind === "diagnostic" || isDiagnosticAssignmentTitle(title);
+  if (!isDiagnostic || input.questionCount <= 0) return title;
+  const suffix = diagnosticTitleSessionSuffix(title);
+  const suffixPart = suffix ? ` — ${suffix}` : "";
+  if (input.questionCount === FULL_DIAGNOSTIC_QUESTION_COUNT) {
+    return `Full-length SAT diagnostic${suffixPart}`;
+  }
+  return `SAT diagnostic (${input.questionCount} clean questions)${suffixPart}`;
+}
+
 export function diagnosticAssignmentCopy(
   composition: DiagnosticComposition,
   sessionTitle: string,
 ): { title: string; instructions: string } {
+  const title = liveDiagnosticAssignmentTitle({
+    title: `SAT diagnostic — ${sessionTitle}`,
+    questionCount: composition.questionCount,
+    homeworkKind: "diagnostic",
+  });
   if (composition.usable) {
     return {
-      title: `Full-length SAT diagnostic — ${sessionTitle}`,
+      title,
       instructions:
         "Complete this full-length College Board SAT practice test (linear paper/digital form, original module order). Your result is an estimated SAT score range based on the College Board scoring-guide method. It is not an official College Board adaptive digital score.",
     };
   }
   return {
-    title: `SAT diagnostic (${composition.questionCount} clean questions) — ${sessionTitle}`,
+    title,
     instructions:
       `Complete this SAT diagnostic from official College Board practice items. The bank could not fill a clean 120 (shortfall ${composition.shortfall.questionCount}: RW ${composition.shortfall.rwCount}, Math ${composition.shortfall.mathCount}), so only student-usable questions are included. Your result is an estimated SAT score range based on the questions shown. It is not an official College Board adaptive digital score.`,
   };
