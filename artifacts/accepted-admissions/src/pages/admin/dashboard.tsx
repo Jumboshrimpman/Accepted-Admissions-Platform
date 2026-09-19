@@ -32,6 +32,7 @@ import {
 } from "@/lib/session-display";
 
 const operationLinks = [
+  { href: "/admin#guidance-requests", title: "Guidance requests", detail: "Read Get guidance / client-request submissions from the public form.", icon: MessageSquareText },
   { href: "/admin/curriculum?section=people", title: "People & access", detail: "Provision students and tutors, assign them to each other, then preview a client portal.", icon: Users },
   { href: "/admin/curriculum?section=sessions", title: "Sessions & meetings", detail: "Assign bank quizzes as pre-work, Meet links, and conflicts.", icon: CalendarDays },
   { href: "/admin/curriculum?section=curriculum", title: "Quizzes", detail: "Open a quiz, add questions, assign it, review results.", icon: ClipboardList },
@@ -305,14 +306,16 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      <Card data-testid="card-guidance-requests">
+      <Card id="guidance-requests" data-testid="card-guidance-requests">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquareText className="h-5 w-5 text-primary" /> Guidance requests
               </CardTitle>
-              <CardDescription>Private submissions from the public form.</CardDescription>
+              <CardDescription>
+                Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable.
+              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary" data-testid="count-guidance-requests">{guidanceRequests.length} total</Badge>

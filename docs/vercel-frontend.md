@@ -35,7 +35,7 @@ Optional: `VITE_CLERK_PROXY_URL` (for example `/api/__clerk`) if Clerk Frontend 
 
 Do not set `VITE_API_URL`. The client uses `setBaseUrl` from Vite `BASE_URL` and relative `/api/...` paths.
 
-Do **not** set `RESEND_API_KEY` or `RESEND_FROM_EMAIL` on Vercel. The Get guidance form is emailed by the Railway API. See `docs/transactional-email.md`.
+Do **not** set `RESEND_API_KEY` or `RESEND_FROM_EMAIL` on Vercel. The Get guidance form is saved by the Railway API; inbox copies are optional. See `docs/transactional-email.md`.
 
 ## `vercel.json` routing
 

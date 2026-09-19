@@ -124,4 +124,4 @@ Production Stripe must deliver to `https://app.acceptedadmissions.org/api/stripe
 
 ## Public guidance form email
 
-The `/client-request` form emails **`admin@acceptedadmissions.org` only** (no Clerk invites, no submitter `To`). Set `RESEND_API_KEY` on the Railway API service. Missing key → honest `503`, not a fake success. See `docs/transactional-email.md`.
+The `/client-request` form always saves a row for the admin portal (**`/admin#guidance-requests`**). Email to **`admin@acceptedadmissions.org`** is optional best-effort (no Clerk invites, no submitter `To`). `RESEND_API_KEY` is not required for submit success. See `docs/transactional-email.md`.

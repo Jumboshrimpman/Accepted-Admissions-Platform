@@ -6,9 +6,6 @@ import {
   type TransactionalEmailResult,
 } from "./transactional-email.ts";
 
-export const GUIDANCE_REQUEST_EMAIL_USER_ERROR =
-  "We could not send your request to Accepted Admissions because email delivery is unavailable. Please try again later, or email admin@acceptedadmissions.org directly.";
-
 export type GuidanceRequestEmailFields = {
   guardianName: string;
   studentName: string;
@@ -126,7 +123,7 @@ export async function sendGuidanceRequestAdminEmail(
     subject: guidanceRequestEmailSubject(fields),
     text: guidanceRequestEmailText(fields),
     html: guidanceRequestEmailHtml(fields),
-    required: true,
+    required: false,
   };
   const result = await sendEmail(message);
   if (result.status !== "sent") {
@@ -135,9 +132,9 @@ export async function sendGuidanceRequestAdminEmail(
       event: "guidance_request.email_failed",
       reason,
       status: result.status,
-      msg: "Guidance request email was not sent",
+      msg: "Guidance request email was not sent; the request remains saved for the admin portal",
     });
-    return { status: "failed", error: reason };
+    return result;
   }
   console.info({
     event: "guidance_request.email_sent",

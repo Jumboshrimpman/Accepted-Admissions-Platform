@@ -67,7 +67,7 @@ export default function ClientRequest() {
       const data = await response.json() as { message?: string; error?: string };
       if (!response.ok) throw new Error(data.error || "Unable to send request");
       setStatus("success");
-      setMessage(data.message || "Thanks — your request has been received.");
+      setMessage(data.message || "Thanks — we received your request.");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Unable to send request");
