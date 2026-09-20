@@ -27,6 +27,22 @@ vi.mock("@workspace/api-client-react", () => ({
           correctAnswer: "b",
           explanation: "However signals contrast.",
         },
+        {
+          id: "q-math",
+          position: 1,
+          subject: "SAT Math",
+          questionType: "multiple_choice",
+          prompt: "x 45 48 + = What is the positive solution to the given equation?",
+          choices: [
+            { id: "a", label: "A", text: "3" },
+            { id: "b", label: "B", text: "93" },
+          ],
+          skill: "SAT Math",
+          difficulty: "medium",
+          predictionFirst: false,
+          correctAnswer: "a",
+          explanation: "Choice A is correct. x 45 48 + = yields x 3 =.",
+        },
       ],
     },
   }),
@@ -80,5 +96,33 @@ describe("tutor session quiz editor", () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  test("rebuilds smashed Michelle math in the session homework list and leaves Taito titles alone", () => {
+    render(
+      <TutorSessionQuizEditor
+        assignmentId="quiz-1"
+        heading="Session homework questions"
+        sessionTitle="Michelle’s SAT Session with Xavier"
+        clientName="Michelle Makarem"
+      />,
+    );
+    const mathCard = screen.getByTestId("tutor-session-question-q-math");
+    expect(mathCard.textContent).toMatch(/x \+ 45 = 48/);
+    expect(mathCard.textContent).toMatch(/x = 3/);
+    expect(mathCard.textContent).not.toMatch(/x 45 48 \+ =/);
+
+    cleanup();
+    render(
+      <TutorSessionQuizEditor
+        assignmentId="quiz-1"
+        heading="Session homework questions"
+        sessionTitle="Taito’s SAT Session with Eunice"
+        clientName="Taito Goto"
+      />,
+    );
+    const taitoCard = screen.getByTestId("tutor-session-question-q-math");
+    expect(taitoCard.textContent).toMatch(/x 45 48 \+ =/);
+    expect(taitoCard.textContent).not.toMatch(/x \+ 45 = 48/);
   });
 });

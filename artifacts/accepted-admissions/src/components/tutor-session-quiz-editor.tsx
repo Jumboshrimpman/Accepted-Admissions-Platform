@@ -21,6 +21,10 @@ import {
   type SessionQuestionDraft,
 } from "@/lib/session-quiz-edit";
 import { quizEditorChoiceValue } from "@/lib/quiz-editor-answer-key";
+import {
+  repairMichelleQuizMathText,
+  shouldRepairMichelleQuizMath,
+} from "@/lib/stacked-math-notation";
 
 function createSessionAssignmentQuestion(
   assignmentId: string,
@@ -41,11 +45,17 @@ export function TutorSessionQuizEditor({
   assignmentId,
   heading,
   emptyLabel = "No questions are on this session copy yet.",
+  sessionTitle,
+  clientName,
+  clientEmail,
   onChanged,
 }: {
   assignmentId: string;
   heading: string;
   emptyLabel?: string;
+  sessionTitle?: string | null;
+  clientName?: string | null;
+  clientEmail?: string | null;
   onChanged?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -70,6 +80,12 @@ export function TutorSessionQuizEditor({
   if (!assignmentId) return null;
 
   const questions = assignment?.questions ?? [];
+  const repairStackedMath = shouldRepairMichelleQuizMath({
+    clientEmail,
+    clientName,
+    sessionTitle,
+    assignmentTitle: assignment?.title,
+  });
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getGetAssignmentQueryKey(assignmentId) });
     onChanged?.();
@@ -242,11 +258,15 @@ export function TutorSessionQuizEditor({
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm">{question.prompt}</p>
+                      <p className="text-sm">
+                        {repairMichelleQuizMathText(question.prompt, repairStackedMath)}
+                      </p>
                       {mcq && question.correctAnswer ? (
                         <p className="mt-1 text-xs text-muted-foreground">
                           Correct: {question.correctAnswer.toUpperCase()}
-                          {question.explanation ? ` · ${question.explanation}` : ""}
+                          {question.explanation
+                            ? ` · ${repairMichelleQuizMathText(question.explanation, repairStackedMath)}`
+                            : ""}
                         </p>
                       ) : null}
                       {!mcq ? (

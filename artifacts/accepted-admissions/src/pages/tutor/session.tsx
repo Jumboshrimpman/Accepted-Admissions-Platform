@@ -517,6 +517,8 @@ export default function TutorSession() {
                       <TutorSessionQuizEditor
                         assignmentId={beforeAssignmentId}
                         heading="Homework questions for this session"
+                        sessionTitle={session.title}
+                        clientName={sessionStudentLabel(session)}
                         onChanged={refreshAdaptiveData}
                       />
                     </div>
@@ -687,6 +689,8 @@ export default function TutorSession() {
                       : "In-session practice questions"
                   }
                   emptyLabel="Add or accept recommended questions to build the live sequence."
+                  sessionTitle={session.title}
+                  clientName={sessionStudentLabel(session)}
                   onChanged={refreshAdaptiveData}
                 />
               ) : null}

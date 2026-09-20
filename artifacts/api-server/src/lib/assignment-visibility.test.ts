@@ -221,6 +221,35 @@ test("strips SAT bank figure comments and recovers A–D choices from a letter k
   assert.equal(spr.questionType, "spr");
 });
 
+test("Michelle stacked-math repair rebuilds smashed equations only when opted in", () => {
+  const smashed = {
+    id: "psat10-pt2-math-m1-q1",
+    subject: "SAT Math",
+    questionType: "multiple_choice",
+    prompt: "x 45 48 + =\nWhat is the positive solution to the given equation?",
+    stimulus: null,
+    choices: [
+      { id: "a", label: "A", text: "3" },
+      { id: "b", label: "B", text: "93" },
+    ],
+    skill: "SAT Math",
+    difficulty: "medium",
+    correctAnswer: "a",
+    explanation: "Choice A is correct. The given absolute value equation yields x 45 48 + = and x 3 =.",
+  };
+  const raw = assignmentQuestionShape(smashed, { position: 5 }, { includeKeys: true });
+  assert.match(raw.prompt, /x 45 48 \+ =/);
+  assert.match(raw.explanation, /x 45 48 \+ =/);
+  const repaired = assignmentQuestionShape(smashed, { position: 5 }, {
+    includeKeys: true,
+    repairStackedMath: true,
+  });
+  assert.match(repaired.prompt, /x \+ 45 = 48/);
+  assert.doesNotMatch(repaired.prompt, /x 45 48 \+ =/);
+  assert.match(repaired.explanation, /x \+ 45 = 48/);
+  assert.match(repaired.explanation, /x = 3/);
+});
+
 test("unfinished-homework copy is rewritten for students and kept detectable", () => {
   assert.equal(
     isUnfinishedHomeworkClientCopy(
