@@ -23,6 +23,10 @@ import {
   wantsWrongAnswersOnly,
   type AttemptWrongAnswers,
 } from "@/lib/wrong-answers";
+import {
+  repairMichelleQuizQuestionFields,
+  shouldRepairMichelleQuizMath,
+} from "@/lib/stacked-math-notation";
 
 function answerText(answer: string | null | undefined, choices: AttemptResult["items"][number]["choices"]) {
   if (!answer) return "Not answered";
@@ -46,12 +50,19 @@ export default function TutorAttempt() {
   const updateReview = useUpdateAttemptReview();
   const visibleItems = useMemo(() => {
     if (!result) return [];
-    if (!wrongOnly) return result.items;
-    if (wrongAnswersQuery.data?.items.length) {
-      const allowed = new Set(wrongAnswersQuery.data.items.map((item) => item.questionId));
-      return result.items.filter((item) => allowed.has(item.questionId));
-    }
-    return filterWrongAnswersOnly(result.items);
+    const repairStackedMath = shouldRepairMichelleQuizMath({
+      clientName: result.studentName,
+      assignmentTitle: result.assignmentTitle,
+    });
+    const source = (() => {
+      if (!wrongOnly) return result.items;
+      if (wrongAnswersQuery.data?.items.length) {
+        const allowed = new Set(wrongAnswersQuery.data.items.map((item) => item.questionId));
+        return result.items.filter((item) => allowed.has(item.questionId));
+      }
+      return filterWrongAnswersOnly(result.items);
+    })();
+    return source.map((item) => repairMichelleQuizQuestionFields(item, repairStackedMath));
   }, [result, wrongAnswersQuery.data, wrongOnly]);
 
   if (isLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;

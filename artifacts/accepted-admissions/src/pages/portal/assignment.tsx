@@ -70,6 +70,11 @@ import {
   shouldShowQuizChoices,
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
+import {
+  repairMichelleQuizMathText,
+  repairMichelleQuizQuestionFields,
+  shouldRepairMichelleQuizMath,
+} from "@/lib/stacked-math-notation";
 
 function QuizRichText({
   text,
@@ -155,6 +160,13 @@ function answerText(
 }
 
 function ResultView({ result }: { result: AttemptResult }) {
+  const repairStackedMath = shouldRepairMichelleQuizMath({
+    clientName: result.studentName,
+    assignmentTitle: result.assignmentTitle,
+  });
+  const reviewItems = result.items.map((item) =>
+    repairMichelleQuizQuestionFields(item, repairStackedMath),
+  );
   const correctPercent = result.totalCount
     ? Math.round((result.correctCount / result.totalCount) * 100)
     : 0;
@@ -275,7 +287,7 @@ function ResultView({ result }: { result: AttemptResult }) {
           <div>
             <h2 className="mb-3 text-xl font-bold">Question review</h2>
             <div className="space-y-3">
-              {result.items.map((item, index) => (
+              {reviewItems.map((item, index) => (
                 <Card key={item.questionId} className={item.correct ? "border-emerald-200" : "border-amber-200"}>
                   <CardContent className="space-y-3 p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -538,7 +550,14 @@ export default function PortalAssignment() {
     if (!attemptId && assignment?.latestAttemptId) setAttemptId(assignment.latestAttemptId);
   }, [assignment?.latestAttemptId, attemptId]);
 
-  const questions = (assignment?.questions ?? []).filter(isStudentAnswerableQuizQuestion);
+  const repairStackedMath = shouldRepairMichelleQuizMath({
+    clientEmail: currentUser?.email,
+    clientName: currentUser?.displayName,
+    assignmentTitle: assignment?.title,
+  });
+  const questions = (assignment?.questions ?? [])
+    .filter(isStudentAnswerableQuizQuestion)
+    .map((question) => repairMichelleQuizQuestionFields(question, repairStackedMath));
   const questionCount = questions.length;
   if (attempt?.id && questionCount > 0 && restoredAttemptId.current !== attempt.id) {
     restoredAttemptId.current = attempt.id;
@@ -1019,7 +1038,7 @@ export default function PortalAssignment() {
               correct={response.correct}
               studentAnswer={response.finalAnswer}
               correctAnswer={response.correctAnswer}
-              explanation={response.explanation}
+              explanation={repairMichelleQuizMathText(response.explanation, repairStackedMath)}
               choices={question.choices}
               tone="ink"
             />
@@ -1261,7 +1280,7 @@ export default function PortalAssignment() {
           correct={response.correct}
           studentAnswer={response.finalAnswer}
           correctAnswer={response.correctAnswer}
-          explanation={response.explanation}
+          explanation={repairMichelleQuizMathText(response.explanation, repairStackedMath)}
           choices={question.choices}
         />
       ) : null}

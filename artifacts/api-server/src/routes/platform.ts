@@ -429,6 +429,11 @@ import {
   studentSafeAssignmentInstructions,
 } from "../lib/assignment-visibility";
 import {
+  repairMichelleAttemptResultItems,
+  repairMichelleQuizMathText,
+  shouldRepairMichelleQuizMath,
+} from "../lib/stacked-math-notation";
+import {
   skillBreakdownFromItems,
   skillLabelForBank,
 } from "../lib/sat-bank-skill";
@@ -3138,12 +3143,51 @@ async function persistCurrentQuestionIndex(
     .where(eq(attemptsTable.id, attemptId));
 }
 
+async function michelleQuizMathRepairEnabled(input: {
+  assignmentTitle?: string | null;
+  sessionId?: string | null;
+  sessionTitle?: string | null;
+  clientEmail?: string | null;
+  clientName?: string | null;
+}): Promise<boolean> {
+  if (
+    shouldRepairMichelleQuizMath({
+      clientEmail: input.clientEmail,
+      clientName: input.clientName,
+      sessionTitle: input.sessionTitle,
+      assignmentTitle: input.assignmentTitle,
+    })
+  ) {
+    return true;
+  }
+  if (!input.sessionId) return false;
+  const [row] = await db
+    .select({
+      title: sessionsTable.title,
+      email: usersTable.email,
+      displayName: usersTable.displayName,
+    })
+    .from(sessionsTable)
+    .leftJoin(usersTable, eq(usersTable.id, sessionsTable.clientUserId))
+    .where(eq(sessionsTable.id, input.sessionId))
+    .limit(1);
+  if (!row) return false;
+  return shouldRepairMichelleQuizMath({
+    clientEmail: row.email,
+    clientName: row.displayName,
+    sessionTitle: row.title,
+    assignmentTitle: input.assignmentTitle,
+  });
+}
+
 async function attemptShape(attemptId: string) {
   const [record] = await db
     .select({
       attempt: attemptsTable,
       timeLimitMinutes: assignmentsTable.timeLimitMinutes,
       deliveryPhase: assignmentsTable.deliveryPhase,
+      assignmentTitle: assignmentsTable.title,
+      sessionId: assignmentsTable.sessionId,
     })
     .from(attemptsTable)
     .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
@@ -3151,6 +3195,10 @@ async function attemptShape(attemptId: string) {
     .limit(1);
   if (!record) return null;
   const attempt = record.attempt;
+  const repairStackedMath = await michelleQuizMathRepairEnabled({
+    assignmentTitle: record.assignmentTitle,
+    sessionId: record.sessionId,
+  });
   const timing = await timerSummary(attempt.id);
   const saved = await db
     .select()
@@ -3201,7 +3249,7 @@ async function attemptShape(attemptId: string) {
           storedCorrect: response.correct,
           studentAnswer: response.finalAnswer,
           correctAnswer: question?.correctAnswer,
-          explanation: question?.explanation,
+          explanation: repairMichelleQuizMathText(question?.explanation, repairStackedMath),
         }),
       });
     }),
@@ -3338,7 +3386,9 @@ async function storedAttemptResult(
       assignmentTitle: assignmentsTable.title,
       studentUserId: usersTable.id,
       studentName: usersTable.displayName,
+      studentEmail: usersTable.email,
       sessionId: sessionsTable.id,
+      sessionTitle: sessionsTable.title,
       sessionDateTime: sessionsTable.dateTime,
     })
     .from(attemptsTable)
@@ -3348,8 +3398,16 @@ async function storedAttemptResult(
     .where(eq(attemptsTable.id, attemptId))
     .limit(1);
   if (!attempt?.result) return null;
+  const display = withDisplaySkills(attempt.result as AttemptResultPayload, attempt.assignmentTitle);
+  const repairStackedMath = shouldRepairMichelleQuizMath({
+    clientEmail: attempt.studentEmail,
+    clientName: attempt.studentName,
+    sessionTitle: attempt.sessionTitle,
+    assignmentTitle: attempt.assignmentTitle,
+  });
   return {
-    ...withDisplaySkills(attempt.result as AttemptResultPayload, attempt.assignmentTitle),
+    ...display,
+    items: repairMichelleAttemptResultItems(display.items, repairStackedMath),
     assignmentId: attempt.assignmentId,
     assignmentTitle: attempt.assignmentTitle,
     studentUserId: attempt.studentUserId,
@@ -3508,15 +3566,21 @@ async function finalizeAttemptResult(
   }
   const { correctCount, totalCount, score } = scoreAttemptItems(scoredItems);
   const timing = await timerSummary(attempt.attempt.id);
+  const repairStackedMath = shouldRepairMichelleQuizMath({
+    clientEmail: attempt.student.email,
+    clientName: attempt.student.displayName,
+    sessionTitle: attempt.session?.title,
+    assignmentTitle: attempt.assignment.title,
+  });
   const items = joined.map(({ response, question }) => {
-    const facing = assignmentQuestionShape(question, { position: 0 });
+    const facing = assignmentQuestionShape(question, { position: 0 }, { repairStackedMath });
     return {
     questionId: question.id,
     correct: answersMatch(response?.finalAnswer, question.correctAnswer),
     prediction: response?.prediction ?? null,
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,
-    explanation: question.explanation,
+    explanation: repairMichelleQuizMathText(question.explanation, repairStackedMath),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -5646,6 +5710,10 @@ router.post(
         CreateTutorSessionQuestionResponse.parse(
           assignmentQuestionShape(question, link ?? { position: 0, predictionFirst: false }, {
             includeKeys: true,
+            repairStackedMath: shouldRepairMichelleQuizMath({
+              sessionTitle: session.title,
+              assignmentTitle: assignment.title,
+            }),
           }),
         ),
       );
@@ -10584,6 +10652,10 @@ router.get(
       res.status(404).json({ error: "Assignment not found" });
       return;
     }
+    const repairStackedMath = await michelleQuizMathRepairEnabled({
+      assignmentTitle: assignment.title,
+      sessionId: assignment.sessionId,
+    });
     res.json(
       GetAssignmentResponse.parse({
         ...summary,
@@ -10594,6 +10666,7 @@ router.get(
           assignmentQuestionShape(question, assignmentQuestion, {
             includeKeys:
               req.appUser!.role === "tutor" || req.appUser!.role === "administrator",
+            repairStackedMath,
           }),
         ),
       }),
@@ -10850,6 +10923,8 @@ router.put(
       .select({
         attempt: attemptsTable,
         deliveryPhase: assignmentsTable.deliveryPhase,
+        assignmentTitle: assignmentsTable.title,
+        sessionId: assignmentsTable.sessionId,
       })
       .from(attemptsTable)
       .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
@@ -10948,6 +11023,10 @@ router.put(
       })
       .returning();
     await persistCurrentQuestionIndex(attempt.id, body.data.currentQuestionIndex);
+    const repairStackedMath = await michelleQuizMathRepairEnabled({
+      assignmentTitle: record.assignmentTitle,
+      sessionId: record.sessionId,
+    });
     res.json(
       SaveAttemptResponseResponse.parse(
         attemptResponseFeedbackShape({
@@ -10963,7 +11042,10 @@ router.put(
             storedCorrect: saved.correct,
             studentAnswer: saved.finalAnswer,
             correctAnswer: belongsToAssignment.correctAnswer,
-            explanation: belongsToAssignment.explanation,
+            explanation: repairMichelleQuizMathText(
+              belongsToAssignment.explanation,
+              repairStackedMath,
+            ),
           }),
         }),
       ),
@@ -12218,6 +12300,10 @@ router.patch(
           UpdateAssignmentQuestionResponse.parse(
             assignmentQuestionShape(edited.question, updated ?? { position: 0, predictionFirst: false }, {
               includeKeys: true,
+              repairStackedMath: shouldRepairMichelleQuizMath({
+                sessionTitle: ownedSession.title,
+                assignmentTitle: record.assignment.title,
+              }),
             }),
           ),
         );

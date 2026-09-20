@@ -4,6 +4,7 @@ import {
 } from "./sat-bank-figure-primary.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
+import { repairMichelleQuizMathText } from "./stacked-math-notation.ts";
 
 export function isAssignmentListedForRole(
   role: string | null | undefined,
@@ -112,8 +113,10 @@ export function assignmentQuestionShape(
     extractGaps?: Record<string, unknown> | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
-  options?: { includeKeys?: boolean },
+  options?: { includeKeys?: boolean; repairStackedMath?: boolean },
 ) {
+  const repairMath = (text: string) =>
+    repairMichelleQuizMathText(text, Boolean(options?.repairStackedMath));
   const existingChoices = assignmentChoices(question.choices);
   const facing = studentFacingFigurePrimaryFields({
     prompt: question.prompt,
@@ -134,20 +137,23 @@ export function assignmentQuestionShape(
     : recoveredChoices && recoveredChoices.length > 0
       ? "multiple_choice"
       : facing.questionType || rawType;
+  const rawChoices = facing.choices ?? recoveredChoices;
   const shaped = {
     id: question.id,
     position: assignmentQuestion.position,
     subject: question.subject?.trim() || "SAT",
     questionType,
     prompt: figurePrimary
-      ? facing.prompt
-      : stripBankFigureComments(facing.prompt) || "Question prompt is unavailable.",
+      ? repairMath(facing.prompt)
+      : repairMath(stripBankFigureComments(facing.prompt) || "Question prompt is unavailable."),
     stimulus: figurePrimary
       ? facing.stimulus
+        ? repairMath(facing.stimulus)
+        : facing.stimulus
       : facing.stimulus
-        ? stripBankFigureComments(facing.stimulus)
+        ? repairMath(stripBankFigureComments(facing.stimulus))
         : null,
-    choices: facing.choices ?? recoveredChoices,
+    choices: rawChoices?.map((choice) => ({ ...choice, text: repairMath(choice.text) })),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -161,7 +167,7 @@ export function assignmentQuestionShape(
   return {
     ...shaped,
     correctAnswer: question.correctAnswer?.trim() || "",
-    explanation: question.explanation?.trim() || "",
+    explanation: repairMath(question.explanation?.trim() || ""),
   };
 }
 
