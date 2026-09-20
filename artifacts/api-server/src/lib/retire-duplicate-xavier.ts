@@ -10,6 +10,8 @@ import {
   tutorProfilesTable,
   usersTable,
 } from "@workspace/db";
+import { adoptGoogleCalendarConnection } from "./calendar-persistence";
+import { shouldAdoptLoserCalendarConnection } from "./calendar-connection-adopt";
 import {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
@@ -169,11 +171,26 @@ export async function retireDuplicateXavierIdentities(): Promise<void> {
 
     for (const profile of loserProfiles) {
       const [winnerConnection] = await db
-        .select({ id: calendarConnectionsTable.id })
+        .select({
+          id: calendarConnectionsTable.id,
+          status: calendarConnectionsTable.status,
+          encryptedRefreshToken: calendarConnectionsTable.encryptedRefreshToken,
+        })
         .from(calendarConnectionsTable)
         .where(eq(calendarConnectionsTable.tutorProfileId, winnerProfile.id))
         .limit(1);
-      if (!winnerConnection) {
+      const [loserConnection] = await db
+        .select({
+          id: calendarConnectionsTable.id,
+          status: calendarConnectionsTable.status,
+          encryptedRefreshToken: calendarConnectionsTable.encryptedRefreshToken,
+        })
+        .from(calendarConnectionsTable)
+        .where(eq(calendarConnectionsTable.tutorProfileId, profile.id))
+        .limit(1);
+      if (shouldAdoptLoserCalendarConnection(winnerConnection, loserConnection)) {
+        await adoptGoogleCalendarConnection(profile.id, winnerProfile.id);
+      } else if (!winnerConnection && loserConnection) {
         await db
           .update(calendarConnectionsTable)
           .set({ tutorProfileId: winnerProfile.id, updatedAt: new Date() })

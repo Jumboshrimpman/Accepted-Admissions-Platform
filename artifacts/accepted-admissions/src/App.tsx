@@ -60,6 +60,10 @@ import { LEGACY_PUBLIC_REDIRECTS } from '@/lib/legacy-public-routes';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
 import { ProvisioningReference } from '@/components/provisioning-reference';
+import {
+  applyClerkRouterNavigation,
+  clerkSignInUrl,
+} from '@/lib/clerk-session-urls';
 
 const clerkKeyResult = resolveClerkPublishableKey(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -71,12 +75,6 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 setBaseUrl(basePath || null);
 
 const queryClient = new QueryClient();
-
-function stripBase(path: string): string {
-  return basePath && path.startsWith(basePath)
-    ? path.slice(basePath.length) || '/'
-    : path;
-}
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -135,6 +133,24 @@ export function Router() {
 
         <Route path="/sign-in/*?">
           <Redirect to="/login" />
+        </Route>
+
+        <Route path="/account/*?">
+          <SignedIn>
+            <Redirect to="/portal" />
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login?returnTo=%2Fportal" />
+          </SignedOut>
+        </Route>
+
+        <Route path="/user/*?">
+          <SignedIn>
+            <Redirect to="/portal" />
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login?returnTo=%2Fportal" />
+          </SignedOut>
         </Route>
 
         <Route path="/t-g">
@@ -497,12 +513,19 @@ function App() {
       <ClerkProvider
         publishableKey={clerkPubKey}
         proxyUrl={clerkProxyUrl}
-        signInUrl={`${basePath}/login`}
+        signInUrl={clerkSignInUrl(basePath)}
+        signUpUrl={clerkSignInUrl(basePath)}
         // Cookie sessions use Clerk defaults. Session lifetime and inactivity
         // timeout must be configured in the Clerk Dashboard; this app does not
-        // extend them in client code.
-        routerPush={(to) => setLocation(stripBase(to))}
-        routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+        // extend them in client code. signInUrl must stay on the app host so
+        // Account Portal / "account" returns do not land on www or a Clerk
+        // accounts host without the session cookie.
+        routerPush={(to) =>
+          applyClerkRouterNavigation(to, basePath, setLocation)
+        }
+        routerReplace={(to) =>
+          applyClerkRouterNavigation(to, basePath, setLocation, { replace: true })
+        }
       >
         <AppProviders>
           <ClerkQueryClientCacheInvalidator />

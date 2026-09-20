@@ -182,6 +182,73 @@ export function calendarBusyFailureAction(
   return isGoogleCalendarAuthFailure(error) ? "disconnect" : "unavailable";
 }
 
+export function isGoogleTokenRefreshAuthFailure(error: unknown): boolean {
+  if (error instanceof CalendarOAuthError) {
+    return error.outcome === "expired" || error.outcome === "rejected";
+  }
+  if (error instanceof GoogleCalendarRequestError) {
+    return isGoogleCalendarAuthFailure(error);
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("invalid_grant") ||
+    message.includes("invalid_client") ||
+    message.includes("unauthorized_client") ||
+    /google token refresh failed \(40[13]\)/.test(message)
+  );
+}
+
+export function calendarCredentialFailureAction(
+  error: unknown,
+): "disconnect" | "unavailable" {
+  if (isGoogleTokenRefreshAuthFailure(error) || isGoogleCalendarAuthFailure(error)) {
+    return "disconnect";
+  }
+  return "unavailable";
+}
+
+export function classifyGoogleTokenRefreshFailure(
+  status: number,
+  body: string,
+): CalendarOAuthError {
+  let parsed: { error?: string; error_description?: string } = {};
+  try {
+    parsed = JSON.parse(body) as { error?: string; error_description?: string };
+  } catch {
+    parsed = {};
+  }
+  const haystack = `${parsed.error ?? ""} ${parsed.error_description ?? ""}`.toLowerCase();
+  const errorCode = parsed.error?.trim() || `http_${status}`;
+  if (haystack.includes("invalid_grant")) {
+    return new CalendarOAuthError(
+      "expired",
+      "Google revoked this calendar refresh token. Reconnect from the dashboard.",
+    );
+  }
+  if (haystack.includes("invalid_client") || haystack.includes("unauthorized_client")) {
+    return new CalendarOAuthError(
+      "rejected",
+      `Google rejected the stored calendar credentials (${errorCode}).`,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new CalendarOAuthError(
+      "rejected",
+      `Google rejected the stored calendar credentials (${errorCode}).`,
+    );
+  }
+  if (status >= 500) {
+    return new CalendarOAuthError(
+      "unavailable",
+      "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+    );
+  }
+  return new CalendarOAuthError(
+    "unavailable",
+    `Google Calendar token refresh failed (${errorCode}).`,
+  );
+}
+
 export function calendarConnectProbeFailure(error: unknown): CalendarOAuthError {
   if (isGoogleCalendarAuthFailure(error)) {
     return new CalendarOAuthError(
@@ -928,9 +995,16 @@ export async function refreshGoogleAccessToken(refreshToken: string): Promise<{
       grant_type: "refresh_token",
     }),
   });
-  if (!response.ok) throw new Error(`Google token refresh failed (${response.status})`);
+  if (!response.ok) {
+    throw classifyGoogleTokenRefreshFailure(response.status, await response.text());
+  }
   const data = (await response.json()) as { access_token?: string; expires_in?: number };
-  if (!data.access_token) throw new Error("Google refresh response did not include an access token");
+  if (!data.access_token) {
+    throw new CalendarOAuthError(
+      "unavailable",
+      "Google refresh response did not include an access token",
+    );
+  }
   return { accessToken: data.access_token, expiresIn: data.expires_in };
 }
 

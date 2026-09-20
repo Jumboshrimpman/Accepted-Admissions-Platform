@@ -11,7 +11,7 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { decryptCalendarToken } from "./google-calendar.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { disconnectGoogleCalendarConnection, markGoogleCalendarDisconnected, persistGoogleCalendarConnection, saveRefreshedGoogleAccessToken } from "./calendar-persistence.ts";
+import { adoptGoogleCalendarConnection, disconnectGoogleCalendarConnection, GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING, markGoogleCalendarDisconnected, persistGoogleCalendarConnection, saveRefreshedGoogleAccessToken } from "./calendar-persistence.ts";
 
 process.env.SESSION_SECRET ??= "calendar-persistence-test-secret";
 
@@ -144,6 +144,116 @@ test("Google Calendar credentials persist through reconnect, refresh, and discon
     await db
       .delete(tutorProfilesTable)
       .where(eq(tutorProfilesTable.id, profile!.id));
+    await db.delete(usersTable).where(eq(usersTable.id, user!.id));
+  }
+});
+
+test("first Google Calendar persist requires a refresh token", async () => {
+  const suffix = randomUUID();
+  const email = `calendar-missing-refresh-${suffix}@example.com`;
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId: `calendar-missing-refresh:${suffix}`,
+      email,
+      displayName: "Missing Refresh Token",
+      role: "tutor",
+    })
+    .returning();
+  const [profile] = await db
+    .insert(tutorProfilesTable)
+    .values({
+      userId: user!.id,
+      email,
+      name: "Missing Refresh Token",
+      title: "Test Tutor",
+      bookingEligible: false,
+    })
+    .returning();
+  try {
+    await assert.rejects(
+      persistGoogleCalendarConnection(profile!.id, {
+        accessToken: "access-only",
+        expiresIn: 3600,
+      }),
+      (error: unknown) =>
+        error instanceof Error && error.message === GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING,
+    );
+    const rows = await db
+      .select()
+      .from(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
+    assert.equal(rows.length, 0);
+  } finally {
+    await db
+      .delete(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
+    await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.id, profile!.id));
+    await db.delete(usersTable).where(eq(usersTable.id, user!.id));
+  }
+});
+
+test("identity remaps move a connected Google Calendar onto the surviving profile", async () => {
+  const suffix = randomUUID();
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId: `calendar-adopt:${suffix}`,
+      email: `calendar-adopt-${suffix}@example.com`,
+      displayName: "Calendar Adopt",
+      role: "tutor",
+    })
+    .returning();
+  const [fromProfile] = await db
+    .insert(tutorProfilesTable)
+    .values({
+      userId: user!.id,
+      email: `calendar-adopt-from-${suffix}@example.com`,
+      name: "Calendar Adopt From",
+      title: "Calendar account",
+      bookingEligible: false,
+    })
+    .returning();
+  const [toProfile] = await db
+    .insert(tutorProfilesTable)
+    .values({
+      userId: user!.id,
+      email: `calendar-adopt-to-${suffix}@example.com`,
+      name: "Calendar Adopt To",
+      title: "SAT Tutor",
+      bookingEligible: true,
+    })
+    .returning();
+  try {
+    await persistGoogleCalendarConnection(fromProfile!.id, {
+      accessToken: "adopt-access",
+      refreshToken: "adopt-refresh",
+      expiresIn: 3600,
+    });
+    const adopted = await adoptGoogleCalendarConnection(fromProfile!.id, toProfile!.id);
+    assert.equal(adopted?.tutorProfileId, toProfile!.id);
+    assert.equal(adopted?.status, "connected");
+    assert.equal(decryptCalendarToken(adopted!.encryptedRefreshToken!), "adopt-refresh");
+
+    const [fromRow] = await db
+      .select()
+      .from(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, fromProfile!.id));
+    assert.equal(fromRow?.encryptedRefreshToken ?? null, null);
+    const [toStatus] = await db
+      .select({ calendarStatus: tutorProfilesTable.calendarStatus })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.id, toProfile!.id));
+    assert.equal(toStatus!.calendarStatus, "connected");
+  } finally {
+    await db
+      .delete(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, fromProfile!.id));
+    await db
+      .delete(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, toProfile!.id));
+    await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.id, fromProfile!.id));
+    await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.id, toProfile!.id));
     await db.delete(usersTable).where(eq(usersTable.id, user!.id));
   }
 });

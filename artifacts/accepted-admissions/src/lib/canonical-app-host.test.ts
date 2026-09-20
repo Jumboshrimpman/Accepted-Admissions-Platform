@@ -32,6 +32,8 @@ test("matches portal and auth paths without colliding with lookalikes", () => {
   assert.equal(isAppHostAuthPath("/admin/content"), true);
   assert.equal(isAppHostAuthPath("/t-g"), true);
   assert.equal(isAppHostAuthPath("/sso-callback"), true);
+  assert.equal(isAppHostAuthPath("/account"), true);
+  assert.equal(isAppHostAuthPath("/user"), true);
   assert.equal(isAppHostAuthPath("/"), false);
   assert.equal(isAppHostAuthPath("/sat"), false);
   assert.equal(isAppHostAuthPath("/our-team"), false);

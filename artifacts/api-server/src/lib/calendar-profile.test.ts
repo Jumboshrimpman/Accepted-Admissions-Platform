@@ -78,3 +78,30 @@ test("retired or superseded tutor profiles are never selected for Calendar OAuth
   assert.equal(selected?.id, "profile-eunice");
   assert.ok(scoreCalendarProfile(winner, user) > scoreCalendarProfile(stub, user));
 });
+
+test("a connected calendar profile beats an otherwise stronger disconnected duplicate", () => {
+  const user = { id: "user-xavier", email: "xaver.rmz6@gmail.com" };
+  const official = {
+    id: "profile-official",
+    userId: user.id,
+    email: user.email,
+    name: "Xavier Morales",
+    title: "SAT & Math Tutor",
+    active: true,
+    bookingEligible: true,
+    publicApproved: true,
+    calendarStatus: "disconnected",
+  };
+  const connected = {
+    id: "profile-connected",
+    userId: user.id,
+    email: user.email,
+    name: "Xavier Morales",
+    title: "Calendar account",
+    active: true,
+    bookingEligible: false,
+    publicApproved: false,
+    calendarStatus: "connected",
+  };
+  assert.equal(selectBestCalendarProfile([official, connected], user)?.id, "profile-connected");
+});

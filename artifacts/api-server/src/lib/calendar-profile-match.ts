@@ -74,7 +74,7 @@ export function scoreCalendarProfile(
   if (profile.active) score += 20;
   if (profile.bookingEligible) score += 10;
   if (profile.publicApproved) score += 5;
-  if (profile.calendarStatus === "connected") score += 3;
+  if (profile.calendarStatus === "connected") score += 40;
   if (profile.title !== "Calendar account") score += 2;
   return score;
 }

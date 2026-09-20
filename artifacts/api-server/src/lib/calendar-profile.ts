@@ -22,6 +22,8 @@ export {
   selectBestCalendarProfile,
 };
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { adoptGoogleCalendarConnection } from "./calendar-persistence.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
@@ -66,7 +68,13 @@ export async function resolveCalendarProfileForUser(
   }
 
   const bestLinked = selectBestCalendarProfile(usableLinked, user);
-  if (bestLinked) return bestLinked;
+  if (bestLinked) {
+    await consolidateGoogleCalendarConnections(
+      usableLinked.map((profile) => profile.id),
+      bestLinked.id,
+    );
+    return bestLinked;
+  }
 
   const claimEmails = claimableEmailsForUser(user);
   if (claimEmails.length > 0) {
@@ -170,10 +178,23 @@ export async function resolveCalendarProfileForOAuthState(state: {
     .leftJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
     .where(eq(tutorProfilesTable.id, current.id))
     .limit(1);
+  if (current.id !== state.tutorProfileId) {
+    await adoptGoogleCalendarConnection(state.tutorProfileId, current.id);
+  }
   return {
     profile: joined,
     remapped: current.id !== state.tutorProfileId,
   };
+}
+
+export async function consolidateGoogleCalendarConnections(
+  profileIds: string[],
+  winnerProfileId: string,
+): Promise<void> {
+  for (const profileId of profileIds) {
+    if (profileId === winnerProfileId) continue;
+    await adoptGoogleCalendarConnection(profileId, winnerProfileId);
+  }
 }
 
 export async function xavierCalendarIdentityAlignment(): Promise<{
