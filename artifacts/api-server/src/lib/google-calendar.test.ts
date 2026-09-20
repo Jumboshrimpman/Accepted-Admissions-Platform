@@ -7,6 +7,9 @@ import * as googleCalendar from "./google-calendar.ts";
 const {
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
   calendarBusyFailureAction,
+  calendarCredentialFailureAction,
+  classifyGoogleTokenRefreshFailure,
+  isGoogleTokenRefreshAuthFailure,
   calendarConnectProbeFailure,
   calendarOAuthReturnHref,
   calendarOAuthStateFailureMessage,
@@ -440,6 +443,30 @@ test("freeBusy auth and scope errors disconnect; transient errors stay connected
   assert.equal(calendarBusyFailureAction(unavailable), "unavailable");
   assert.equal(calendarConnectProbeFailure(unavailable).outcome, "unavailable");
   assert.equal(calendarBusyFailureAction(new Error("network down")), "unavailable");
+});
+
+test("token refresh 5xx stays connected; invalid_grant disconnects", () => {
+  const unavailable = classifyGoogleTokenRefreshFailure(503, "{}");
+  assert.equal(unavailable.outcome, "unavailable");
+  assert.equal(calendarCredentialFailureAction(unavailable), "unavailable");
+  assert.equal(isGoogleTokenRefreshAuthFailure(unavailable), false);
+
+  const revoked = classifyGoogleTokenRefreshFailure(
+    400,
+    JSON.stringify({ error: "invalid_grant" }),
+  );
+  assert.equal(revoked.outcome, "expired");
+  assert.equal(calendarCredentialFailureAction(revoked), "disconnect");
+  assert.equal(isGoogleTokenRefreshAuthFailure(revoked), true);
+
+  assert.equal(
+    calendarCredentialFailureAction(new Error("Google token refresh failed (503)")),
+    "unavailable",
+  );
+  assert.equal(
+    calendarCredentialFailureAction(new Error("Google token refresh failed (401)")),
+    "disconnect",
+  );
 });
 
 test("missing Google Calendar events are treated as already cancelled", () => {

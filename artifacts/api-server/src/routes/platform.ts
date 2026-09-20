@@ -19,6 +19,7 @@ import {
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
   calendarBusyFailureAction,
   calendarConnectProbeFailure,
+  calendarCredentialFailureAction,
   calendarOAuthStateFailureMessage,
   classifyGoogleProviderError,
   createGoogleEvent,
@@ -43,6 +44,7 @@ import {
 } from "../lib/google-calendar";
 import {
   disconnectGoogleCalendarConnection,
+  GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING,
   markGoogleCalendarDisconnected,
   persistGoogleCalendarConnection,
   saveRefreshedGoogleAccessToken,
@@ -1245,20 +1247,18 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
 }
 
 async function ensureSeedData(): Promise<string> {
-  await retireDuplicateXavierIdentities();
   const [existing] = await db
     .select({ id: coursesTable.id })
     .from(coursesTable)
     .where(eq(coursesTable.title, "Fall 2026 SAT & IELTS"))
     .limit(1);
   if (existing) {
-    await reconcileTaitoSessions(existing.id);
-    await ensureTaitoEnglishSessionPrework(existing.id).catch(() => 0);
-    await ensureSatAssessmentSeed(existing.id);
-    await ensureXavierSatCapabilitySession({ courseId: existing.id });
-    await seedTaitoFallAgendas({ courseId: existing.id }).catch(() => undefined);
+    // Request-path seed must stay cheap. Identity retirement, Taito
+    // reconcile, capability quizzes, and agenda backfills run at boot and
+    // from admin/upgrade seed — not on every tutor /me or dashboard hit.
     return existing.id;
   }
+  await retireDuplicateXavierIdentities();
 
   const [course] = await db
     .insert(coursesTable)
@@ -2533,10 +2533,15 @@ async function requireAppUser(
       return;
     }
   }
+  const needsVerifiedTutorEmail =
+    Boolean(appUser) &&
+    appUser!.role === "tutor" &&
+    (appUser!.email.endsWith("@users.accepted.local") ||
+      !claimString(auth.sessionClaims, "email"));
   if (
     !identity &&
     (!appUser ||
-      appUser.role === "tutor" ||
+      needsVerifiedTutorEmail ||
       !claimString(auth.sessionClaims, "email"))
   ) {
     try {
@@ -4188,9 +4193,16 @@ async function calendarAccess(tutorProfileId: string) {
       );
     }
     return { connection, accessToken };
-  } catch {
-    await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
-    return null;
+  } catch (error) {
+    if (calendarCredentialFailureAction(error) === "disconnect") {
+      await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
+      return null;
+    }
+    throw new BookingError(
+      503,
+      "CALENDAR_UNAVAILABLE",
+      "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+    );
   }
 }
 
@@ -4645,7 +4657,20 @@ router.get(
       } catch (error) {
         throw calendarConnectProbeFailure(error);
       }
-      await persistGoogleCalendarConnection(profile.id, tokens);
+      try {
+        await persistGoogleCalendarConnection(profile.id, tokens);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING
+        ) {
+          throw new CalendarOAuthError(
+            "failed",
+            "Google did not return a refresh token, so this calendar connection would expire. Start Connect again and grant offline access.",
+          );
+        }
+        throw error;
+      }
       logCallback("info", "connected", {
         outcome: "connected",
         tutorProfileId: profile.id,
@@ -9463,6 +9488,30 @@ async function dashboardDataForUser(user: AppUser) {
     ]),
   );
   const scopedSessions = await dashboardSessionsForUser(user);
+  const studentShapeCache = new Map<string, Promise<{ id: string; name: string } | null>>();
+  const tutorShapeCache = new Map<
+    string,
+    ReturnType<typeof sessionTutorShape>
+  >();
+  const studentShapeCached = (studentUserId: string) => {
+    const cached = studentShapeCache.get(studentUserId);
+    if (cached) return cached;
+    const pending = studentShape(studentUserId);
+    studentShapeCache.set(studentUserId, pending);
+    return pending;
+  };
+  const sessionTutorShapeCached = (session: {
+    tutorUserId: string | null;
+    dateTime: Date;
+    title?: string | null;
+  }) => {
+    const key = `${session.tutorUserId ?? ""}:${session.dateTime.toISOString()}:${session.title ?? ""}`;
+    const cached = tutorShapeCache.get(key);
+    if (cached) return cached;
+    const pending = sessionTutorShape(session);
+    tutorShapeCache.set(key, pending);
+    return pending;
+  };
   const attempts = await db
     .select({
       id: attemptsTable.id,
@@ -9536,11 +9585,11 @@ async function dashboardDataForUser(user: AppUser) {
       return {
         ...dashboardSessionShape(
           session,
-          await sessionTutorShape(session),
+          await sessionTutorShapeCached(session),
           meetingUrls.get(session.courseId) ?? null,
           user.role === "tutor" || user.role === "administrator"
             ? session.clientUserId
-              ? await studentShape(session.clientUserId)
+              ? await studentShapeCached(session.clientUserId)
               : null
             : undefined,
         ),
@@ -9662,11 +9711,11 @@ async function dashboardDataForUser(user: AppUser) {
           .slice(0, 12)
           .map(async (session) => {
             const student = session.clientUserId
-              ? await studentShape(session.clientUserId)
+              ? await studentShapeCached(session.clientUserId)
               : null;
             return dashboardSessionShape(
               session,
-              await sessionTutorShape(session),
+              await sessionTutorShapeCached(session),
               meetingUrls.get(session.courseId) ?? null,
               user.role === "tutor" || user.role === "administrator"
                 ? student

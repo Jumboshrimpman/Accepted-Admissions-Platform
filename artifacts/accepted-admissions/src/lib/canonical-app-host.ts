@@ -19,6 +19,8 @@ export const APP_HOST_AUTH_PATH_PREFIXES = [
   "/admin",
   "/t-g",
   "/sso-callback",
+  "/account",
+  "/user",
 ] as const;
 
 export type LocationLike = {
@@ -80,8 +82,8 @@ export function vercelMarketingAuthRedirects(): Array<{
   has: Array<{ type: "host"; value: string }>;
 }> {
   const sources = [
-    { source: "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)", nested: false },
-    { source: "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)/:rest*", nested: true },
+    { source: "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)", nested: false },
+    { source: "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)/:rest*", nested: true },
   ] as const;
 
   return MARKETING_AUTH_REDIRECT_HOSTS.flatMap((host) =>

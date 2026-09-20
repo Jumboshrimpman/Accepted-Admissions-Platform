@@ -17,7 +17,7 @@
   ],
   "redirects": [
     {
-      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)",
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)",
       "has": [
         {
           "type": "host",
@@ -28,7 +28,7 @@
       "permanent": false
     },
     {
-      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)/:rest*",
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)/:rest*",
       "has": [
         {
           "type": "host",
@@ -39,7 +39,7 @@
       "permanent": false
     },
     {
-      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)",
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)",
       "has": [
         {
           "type": "host",
@@ -50,7 +50,7 @@
       "permanent": false
     },
     {
-      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback)/:rest*",
+      "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)/:rest*",
       "has": [
         {
           "type": "host",

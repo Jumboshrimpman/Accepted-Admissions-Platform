@@ -129,6 +129,17 @@ describe("tutor workspace routes", () => {
     expect(screen.getByTestId("wouter-match-/tutor/profile").textContent).toBe("true");
   });
 
+  test("signed-in /account returns to the role dashboard instead of forcing login", async () => {
+    currentUser.data.role = "tutor";
+    stubTutorApis();
+    renderRouter("/account");
+    expect(screen.queryByTestId("status-not-found")).toBeNull();
+    expect(screen.queryByText("Sign in required")).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByTestId("status-not-found")).toBeNull();
+    });
+  });
+
   test.each([
     { role: "tutor" as const, path: "/tutor/profile", page: "tutor-profile-page" },
     { role: "tutor" as const, path: "/tutor/curriculum", page: "tutor-curriculum-page" },
