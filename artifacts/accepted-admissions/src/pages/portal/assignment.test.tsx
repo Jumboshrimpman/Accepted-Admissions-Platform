@@ -1469,7 +1469,7 @@ describe("student attempt UI", () => {
     expect(setLocation).toHaveBeenCalledWith("/portal");
   });
 
-  test("Resume restores the saved question, answers, and flags", () => {
+  test("Resume restores the saved question and answers without a Flag control", () => {
     mocks.attempt.currentQuestionIndex = 1;
     mocks.attempt.responses = [
       { questionId: "q1", prediction: null, predictionLocked: false, finalAnswer: "a", flagged: true },
@@ -1480,15 +1480,18 @@ describe("student attempt UI", () => {
     expect(screen.getByText("Which word is most precise?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /attached/i }).className).toMatch(/border-primary/);
     expect(screen.getByRole("button", { name: /Submit assignment/i })).toHaveProperty("disabled", false);
+    expect(screen.queryByRole("button", { name: /^Flag(ged)?$/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Flagged/i })).toBeTruthy();
-    expect(screen.getByText(/Flagged and reported questions aren’t scored/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /However/i }).className).toMatch(/border-primary/);
+    expect(screen.queryByRole("button", { name: /^Flag(ged)?$/i })).toBeNull();
+    expect(screen.queryByText(/Flagged and reported questions aren’t scored/i)).toBeNull();
   });
 
   test("Report question sits next to Save for later and can be sent without leaving the quiz", async () => {
     render(<PortalAssignment />);
     expect(screen.getByTestId("report-question")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Flag(ged)?$/i })).toBeNull();
     expect(screen.getByTestId("save-for-later")).toBeTruthy();
     fireEvent.click(screen.getByTestId("report-question"));
     expect(screen.getByTestId("report-question-form")).toBeTruthy();
@@ -1497,8 +1500,31 @@ describe("student attempt UI", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send report" }));
     expect(await screen.findByTestId("report-question-status")).toBeTruthy();
+    expect(screen.getByTestId("report-question-status").textContent).toMatch(/isn’t scored/);
     expect(screen.getByTestId("report-question").textContent).toMatch(/Reported/);
     expect(screen.getByText(/Which transition is best/)).toBeTruthy();
+  });
+
+  test("Reported confirmation is only visible on the question that was reported", async () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByTestId("report-question"));
+    fireEvent.click(screen.getByRole("button", { name: "Send report" }));
+    expect((await screen.findByTestId("report-question-status")).textContent).toMatch(
+      /this question isn’t scored/,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Next$/i }));
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
+    expect(screen.queryByTestId("report-question-status")).toBeNull();
+    expect(screen.getByTestId("report-question").textContent).toMatch(/Report question/);
+    fireEvent.click(screen.getByTestId("report-question"));
+    expect(screen.getByTestId("report-question-form")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
+    expect(screen.queryByTestId("report-question-form")).toBeNull();
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(screen.getByTestId("report-question-status").textContent).toMatch(/this question isn’t scored/);
+    expect(screen.getByTestId("report-question").textContent).toMatch(/Reported/);
   });
 
   test("paused overlay offers Resume and Save for later, and ?resume=1 auto-resumes", () => {
