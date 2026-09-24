@@ -36,7 +36,7 @@ import {
   Play,
   Timer,
 } from "lucide-react";
-import { isUnfinishedHomeworkClientCopy } from "@/lib/quiz-content";
+import { isUnfinishedHomeworkClientCopy, studentFacingCopy } from "@/lib/quiz-content";
 import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
@@ -799,7 +799,7 @@ export default function PortalAssignment() {
           {collaborative ? (
             <CardHeader className="bg-brand-ink pb-6 text-white">
               <Badge className="mb-3 w-fit border-0 bg-white/20 text-white">Session practice</Badge>
-              <CardTitle className="text-3xl">{assignment.title}</CardTitle>
+              <CardTitle className="text-3xl">{studentFacingCopy(assignment.title)}</CardTitle>
               <p className="mt-3 text-sm text-white/75">{COLLABORATIVE_PRACTICE_COPY}</p>
             </CardHeader>
           ) : (
@@ -807,7 +807,7 @@ export default function PortalAssignment() {
               <Badge variant="outline" className="mb-3 w-fit">
                 {assignment.subject}
               </Badge>
-              <CardTitle className="text-3xl">{assignment.title}</CardTitle>
+              <CardTitle className="text-3xl">{studentFacingCopy(assignment.title)}</CardTitle>
               <div className="mt-3 flex gap-4 text-sm text-muted-foreground">
                 <span>
                   <Timer className="mr-1 inline h-4 w-4" />
@@ -818,8 +818,9 @@ export default function PortalAssignment() {
             </CardHeader>
           )}
           <CardContent className="space-y-4 p-6">
-            {isUnfinishedHomeworkClientCopy(assignment.instructions) ? null : (
-              <p className="text-muted-foreground">{assignment.instructions}</p>
+            {isUnfinishedHomeworkClientCopy(assignment.instructions) ||
+            !studentFacingCopy(assignment.instructions) ? null : (
+              <p className="text-muted-foreground">{studentFacingCopy(assignment.instructions)}</p>
             )}
             {collaborative ? (
               <p className="text-sm text-muted-foreground">

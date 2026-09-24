@@ -73,11 +73,56 @@ export function isUnfinishedHomeworkClientCopy(value: string | null | undefined)
   );
 }
 
+const CLEAN_QUESTION_PHRASE = /\bclean questions?\b/gi;
+const SHORT_CLEAN_DIAGNOSTIC_PHRASE = /\bshort clean diagnostic\b/gi;
+const CLEAN_BANK_SHORTFALL_SENTENCE =
+  /\s*The bank could not fill a clean 120 \([^)]*\), so only student-usable questions are included\./gi;
+
+/**
+ * Student and viewer copy must not use internal quality-gate wording.
+ * Counts stay ("104 clean questions" → "104 questions"). Admin and tutor
+ * responses keep the stored phrasing.
+ */
+export function studentFacingCopy(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .replace(/\((\d+)\s+clean questions?\)/gi, (_match, count: string) => {
+      const total = Number(count);
+      return `(${count} ${total === 1 ? "question" : "questions"})`;
+    })
+    .replace(CLEAN_QUESTION_PHRASE, (match) =>
+      /questions/i.test(match) ? "questions" : "question",
+    )
+    .replace(SHORT_CLEAN_DIAGNOSTIC_PHRASE, "diagnostic")
+    .replace(CLEAN_BANK_SHORTFALL_SENTENCE, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +\n/g, "\n");
+}
+
+export function studentFacingAssignmentTitle(value: string | null | undefined): string {
+  return studentFacingCopy(value).trim();
+}
+
+export function studentFacingJson<T>(value: T): T {
+  if (typeof value === "string") return studentFacingCopy(value) as T;
+  if (Array.isArray(value)) return value.map((item) => studentFacingJson(item)) as T;
+  if (value && typeof value === "object") {
+    const next: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      next[key] = studentFacingJson(item);
+    }
+    return next as T;
+  }
+  return value;
+}
+
 export function studentSafeAssignmentInstructions(
   value: string | null | undefined,
 ): string {
-  if (!isUnfinishedHomeworkClientCopy(value)) return value?.trim() || "";
-  return "Work up to 15 of these items together. You can submit for results without answering every question.";
+  if (isUnfinishedHomeworkClientCopy(value)) {
+    return "Work up to 15 of these items together. You can submit for results without answering every question.";
+  }
+  return studentFacingCopy(value).trim();
 }
 
 export function assignmentChoices(

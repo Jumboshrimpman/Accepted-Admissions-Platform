@@ -426,6 +426,8 @@ import {
   isAssignmentListedForRole,
   isUnfinishedHomeworkClientCopy,
   studentCanListAssignment,
+  studentFacingAssignmentTitle,
+  studentFacingJson,
   studentSafeAssignmentInstructions,
 } from "../lib/assignment-visibility";
 import {
@@ -3409,7 +3411,9 @@ async function storedAttemptResult(
     ...display,
     items: repairMichelleAttemptResultItems(display.items, repairStackedMath),
     assignmentId: attempt.assignmentId,
-    assignmentTitle: attempt.assignmentTitle,
+    assignmentTitle: includeTutorFields
+      ? attempt.assignmentTitle
+      : studentFacingAssignmentTitle(attempt.assignmentTitle),
     studentUserId: attempt.studentUserId,
     studentName: attempt.studentName,
     sessionId: attempt.sessionId,
@@ -10097,17 +10101,22 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : undefined,
       blocks:
         req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
-          ? blocks.filter((block) => {
-              if (block.status !== "published" || block.visibility === "tutor") {
-                return false;
-              }
-              const text = [
-                typeof block.config?.text === "string" ? block.config.text : "",
-                typeof block.config?.html === "string" ? block.config.html : "",
-                typeof block.config?.title === "string" ? block.config.title : "",
-              ].join(" ");
-              return !isUnfinishedHomeworkClientCopy(text);
-            })
+          ? blocks
+              .filter((block) => {
+                if (block.status !== "published" || block.visibility === "tutor") {
+                  return false;
+                }
+                const text = [
+                  typeof block.config?.text === "string" ? block.config.text : "",
+                  typeof block.config?.html === "string" ? block.config.html : "",
+                  typeof block.config?.title === "string" ? block.config.title : "",
+                ].join(" ");
+                return !isUnfinishedHomeworkClientCopy(text);
+              })
+              .map((block) => ({
+                ...block,
+                config: studentFacingJson(block.config),
+              }))
           : blocks,
       assignments,
       studentNotes: null,
@@ -10220,6 +10229,10 @@ async function listAssignmentsForUser(
           ),
         )
         .orderBy(desc(attemptsTable.startedAt));
+      const liveTitle = liveDiagnosticAssignmentTitle({
+        title: assignment.title,
+        questionCount: Number(count),
+      });
       return {
         id: assignment.id,
         sessionId: assignment.sessionId,
@@ -10227,10 +10240,7 @@ async function listAssignmentsForUser(
           assignment.deliveryPhase === "during_session"
             ? "during_session"
             : "before_session",
-        title: liveDiagnosticAssignmentTitle({
-          title: assignment.title,
-          questionCount: Number(count),
-        }),
+        title: studentFacing ? studentFacingAssignmentTitle(liveTitle) : liveTitle,
         subject: assignment.subject,
         status: assignment.status,
         deadline: assignment.deadline,
@@ -10455,15 +10465,20 @@ async function adaptiveCurriculumForSession(
     tutorNotes: isStaff ? notes?.content ?? null : null,
     publishedBlocks: isStaff
       ? blocks
-      : blocks.filter((block) => {
-          if (block.visibility === "tutor") return false;
-          const text = [
-            typeof block.config?.text === "string" ? block.config.text : "",
-            typeof block.config?.html === "string" ? block.config.html : "",
-            typeof block.config?.title === "string" ? block.config.title : "",
-          ].join(" ");
-          return !isUnfinishedHomeworkClientCopy(text);
-        }),
+      : blocks
+          .filter((block) => {
+            if (block.visibility === "tutor") return false;
+            const text = [
+              typeof block.config?.text === "string" ? block.config.text : "",
+              typeof block.config?.html === "string" ? block.config.html : "",
+              typeof block.config?.title === "string" ? block.config.title : "",
+            ].join(" ");
+            return !isUnfinishedHomeworkClientCopy(text);
+          })
+          .map((block) => ({
+            ...block,
+            config: studentFacingJson(block.config),
+          })),
     sessionPrep,
   };
 }

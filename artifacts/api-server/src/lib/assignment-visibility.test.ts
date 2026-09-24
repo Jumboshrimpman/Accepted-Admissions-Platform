@@ -14,6 +14,9 @@ import {
   pickDiagnosticKeeper,
   studentCanListAssignment,
   studentOwnsSessionAssignment,
+  studentFacingAssignmentTitle,
+  studentFacingCopy,
+  studentFacingJson,
   studentSafeAssignmentInstructions,
   stripBankFigureComments,
 } from "./assignment-visibility.ts";
@@ -264,6 +267,47 @@ test("unfinished-homework copy is rewritten for students and kept detectable", (
     "Work up to 15 of these items together. You can submit for results without answering every question.",
   );
   assert.equal(studentSafeAssignmentInstructions("Answer the questions."), "Answer the questions.");
+});
+
+test("student-facing copy drops clean-question quality language and keeps the count", () => {
+  assert.equal(
+    studentFacingAssignmentTitle(
+      "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice",
+    ),
+    "SAT diagnostic (104 questions) — Taito’s SAT Session with Eunice",
+  );
+  assert.equal(
+    studentFacingAssignmentTitle(
+      "SAT diagnostic (1 clean questions) — Taito’s SAT Session with Eunice",
+    ),
+    "SAT diagnostic (1 question) — Taito’s SAT Session with Eunice",
+  );
+  assert.equal(
+    studentFacingAssignmentTitle("SAT diagnostic (1 Clean Question)"),
+    "SAT diagnostic (1 question)",
+  );
+  assert.equal(
+    studentFacingCopy(
+      "Walk the largest miss clusters from the short clean diagnostic.",
+    ),
+    "Walk the largest miss clusters from the diagnostic.",
+  );
+  assert.equal(
+    studentSafeAssignmentInstructions(
+      "Complete this SAT diagnostic from official College Board practice items. The bank could not fill a clean 120 (shortfall 16: RW 6, Math 10), so only student-usable questions are included. Your result is an estimated SAT score range based on the questions shown.",
+    ),
+    "Complete this SAT diagnostic from official College Board practice items. Your result is an estimated SAT score range based on the questions shown.",
+  );
+  assert.deepEqual(
+    studentFacingJson({
+      title: "Session goals",
+      items: ["Walk the largest miss clusters from the short clean diagnostic."],
+    }),
+    {
+      title: "Session goals",
+      items: ["Walk the largest miss clusters from the diagnostic."],
+    },
+  );
 });
 
 test("dedupe keeps the published full-length diagnostic with work, not an empty extra", () => {

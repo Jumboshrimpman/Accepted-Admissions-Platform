@@ -135,8 +135,10 @@ test("GET /assignments/:id opens a full-length diagnostic for admin and student 
     assert.equal(student.body.id, diagnostic!.id);
     assert.equal(
       student.body.title,
-      "SAT diagnostic (1 clean questions) — Taito’s SAT Session with Eunice",
+      "SAT diagnostic (1 question) — Taito’s SAT Session with Eunice",
     );
+    assert.equal(/clean questions?/i.test(String(student.body.title)), false);
+    assert.equal(/clean questions?/i.test(String(student.body.instructions ?? "")), false);
     assert.equal(student.body.questions.length, 1);
     assert.equal("correctAnswer" in (student.body.questions[0] ?? {}), false);
     assert.equal("explanation" in (student.body.questions[0] ?? {}), false);
@@ -252,8 +254,9 @@ test("student and admin preview lists hide Xavier capability quizzes and rewrite
     assert.equal(live!.questionCount, 1);
     assert.equal(
       live!.title,
-      "SAT diagnostic (1 clean questions) — Student SAT session",
+      "SAT diagnostic (1 question) — Student SAT session",
     );
+    assert.equal(/clean questions?/i.test(live!.title), false);
     assert.equal(live!.title.includes("Full-length"), false);
 
     const hidden = await getJson(
@@ -277,7 +280,11 @@ test("student and admin preview lists hide Xavier capability quizzes and rewrite
     );
     assert.equal(
       dashboardAssignments.find((item) => item.id === diagnostic!.id)?.title,
-      "SAT diagnostic (1 clean questions) — Student SAT session",
+      "SAT diagnostic (1 question) — Student SAT session",
+    );
+    assert.equal(
+      dashboardAssignments.some((item) => /clean questions?/i.test(item.title)),
+      false,
     );
     const satSession = (
       studentDashboard.body.curriculumSessions as Array<{
@@ -288,7 +295,7 @@ test("student and admin preview lists hide Xavier capability quizzes and rewrite
     if (satSession?.preparation?.id === diagnostic!.id) {
       assert.equal(
         satSession.preparation.title,
-        "SAT diagnostic (1 clean questions) — Student SAT session",
+        "SAT diagnostic (1 question) — Student SAT session",
       );
     }
 
@@ -310,7 +317,7 @@ test("student and admin preview lists hide Xavier capability quizzes and rewrite
     );
     assert.equal(
       previewAssignments.find((item) => item.id === diagnostic!.id)?.title,
-      "SAT diagnostic (1 clean questions) — Student SAT session",
+      "SAT diagnostic (1 question) — Student SAT session",
     );
 
     const adminOpen = await getJson(
