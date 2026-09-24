@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
       latestAttemptStatus: null as string | null,
     },
   ],
+  blocks: [] as Array<{
+    id: string;
+    kind: string;
+    status: string;
+    visibility: string;
+    position: number;
+    config: { title?: string; items?: string[] };
+  }>,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -35,7 +43,7 @@ vi.mock("@workspace/api-client-react", () => ({
       calendarEventUrl: null,
       studentNotes: null,
       assignments: mocks.assignments,
-      blocks: [],
+      blocks: mocks.blocks,
       homework: [],
     },
     isLoading: false,
@@ -82,8 +90,10 @@ import PortalSession from "./session";
 
 afterEach(() => {
   cleanup();
+  mocks.assignments[0]!.title = "October pre-session mini-section";
   mocks.assignments[0]!.latestAttemptId = null;
   mocks.assignments[0]!.latestAttemptStatus = null;
+  mocks.blocks = [];
 });
 
 describe("student session quiz path", () => {
@@ -99,6 +109,30 @@ describe("student session quiz path", () => {
     );
     expect(screen.queryByTestId("opened-miss")).toBeNull();
     expect(screen.getByText(/Open a miss or similar problem and work it with your tutor/)).toBeTruthy();
+  });
+
+  test("hides clean-question wording on the student session", () => {
+    mocks.assignments[0]!.title =
+      "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice";
+    mocks.blocks = [
+      {
+        id: "goals",
+        kind: "objectives",
+        status: "published",
+        visibility: "both",
+        position: 0,
+        config: {
+          title: "Session goals",
+          items: ["Walk the largest miss clusters from the short clean diagnostic."],
+        },
+      },
+    ];
+    render(<PortalSession />);
+    expect(
+      screen.getByText("SAT diagnostic (104 questions) — Taito’s SAT Session with Eunice"),
+    ).toBeTruthy();
+    expect(screen.getByText("Walk the largest miss clusters from the diagnostic.")).toBeTruthy();
+    expect(screen.queryByText(/clean question/i)).toBeNull();
   });
 
   test("in-progress pre-work shows Resume and opens the quiz with resume=1", () => {

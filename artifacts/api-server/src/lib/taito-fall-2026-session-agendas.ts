@@ -150,7 +150,7 @@ export const TAITO_FALL_2026_SESSION_AGENDAS: readonly TaitoFallSessionAgenda[] 
     title: "Diagnostic debrief (first SAT)",
     objectives: [
       "Understand what the estimated range means (not an official SAT score).",
-      "Walk the largest miss clusters from the short clean diagnostic.",
+      "Walk the largest miss clusters from the diagnostic.",
       "Leave with one personal error pattern and the Oct 9 routine 40Q assigned.",
     ],
     callout: SAT_CALLOUT,

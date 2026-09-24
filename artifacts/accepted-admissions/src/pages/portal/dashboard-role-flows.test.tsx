@@ -353,6 +353,28 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
 
+  test("Taito’s client dashboard does not show clean-question wording", () => {
+    const dashboard = dashboardForRole("student");
+    dashboard.assignments = [
+      {
+        ...dashboard.assignments[0]!,
+        id: "diagnostic",
+        title: "SAT diagnostic (104 clean questions) — Taito’s SAT Session with Eunice",
+        latestAttemptId: null,
+        latestAttemptStatus: null,
+        attemptCount: 0,
+      },
+    ];
+    mocks.dashboard = dashboard;
+    render(<FallWelcomeDashboard />);
+    const quizzes = screen.getByTestId("client-quizzes");
+    expect(quizzes.textContent).toContain(
+      "SAT diagnostic (104 questions) — Taito’s SAT Session with Eunice",
+    );
+    expect(quizzes.textContent).not.toMatch(/clean questions?/i);
+    expect(document.body.textContent).not.toMatch(/clean questions?/i);
+  });
+
   test("Taito’s twelve-session roadmap dedupes meetings and collapses past the next three", () => {
     const fallDates = [
       "2026-10-02",

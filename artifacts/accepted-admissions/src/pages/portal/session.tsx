@@ -27,10 +27,11 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
 import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
+import { studentFacingCopy } from "@/lib/quiz-content";
 import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
-  return <CurriculumBlockView block={block} />;
+  return <CurriculumBlockView block={block} studentFacing />;
 }
 
 function assignmentAction(status?: string | null, duringSession = false): string {
@@ -101,7 +102,7 @@ export default function PortalSession() {
         <CardContent className="space-y-3">
           {beforeAssignments.length ? beforeAssignments.map((assignment) => (
             <div key={assignment.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="font-medium">{assignment.title}</p><p className="mt-1 text-sm text-muted-foreground">{assignment.questionCount} questions · {assignment.timeLimitMinutes} minutes{assignment.latestScore == null ? "" : ` · ${Math.round(assignment.latestScore)}%`}</p></div>
+              <div><p className="font-medium">{studentFacingCopy(assignment.title)}</p><p className="mt-1 text-sm text-muted-foreground">{assignment.questionCount} questions · {assignment.timeLimitMinutes} minutes{assignment.latestScore == null ? "" : ` · ${Math.round(assignment.latestScore)}%`}</p></div>
               <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{viewer && !assignment.latestAttemptId ? "Not started" : assignmentAction(assignment.latestAttemptStatus)}<ArrowIcon /></Link></Button>
             </div>
           )) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No preparation is required for this meeting.</p>}
@@ -121,7 +122,7 @@ export default function PortalSession() {
         <CardContent className="space-y-5">
           <SessionLessonDashboard sessionId={sessionId} audience="student" />
           {studentBlocks.length ? studentBlocks.map((block) => <div key={block.id} className="rounded-xl border p-4"><RenderBlock block={block} /></div>) : <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">The tutor has not published this sequence yet.</p>}
-          {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white"><div><p className="font-medium">{assignment.title}</p><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{assignmentAction(assignment.latestAttemptStatus, true)}</Link></Button></div>)}
+          {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white"><div><p className="font-medium">{studentFacingCopy(assignment.title)}</p><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{assignmentAction(assignment.latestAttemptStatus, true)}</Link></Button></div>)}
           {adaptiveLoading && <p className="text-sm text-muted-foreground">Loading the approved adaptive sequence…</p>}
           {adaptiveUnavailable && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground"><Sparkles className="mr-2 inline h-4 w-4" />Adaptive guidance is unavailable. The published tutor plan remains available.</p>}
           {adaptive && adaptive.publishedBlocks.length === 0 && adaptive.recommendations.length === 0 && <p className="text-xs text-muted-foreground">No adaptive additions have been published for this meeting.</p>}
@@ -131,8 +132,8 @@ export default function PortalSession() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-emerald-600" />After the session</CardTitle><CardDescription>Feedback and reports appear only after they are published.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
-          {session.studentNotes && <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Tutor feedback</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{session.studentNotes}</p></details>}
-          {reports.map((report) => <details key={report.id} className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Published session report</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{report.content}</p></details>)}
+          {session.studentNotes && <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Tutor feedback</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(session.studentNotes)}</p></details>}
+          {reports.map((report) => <details key={report.id} className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Published session report</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(report.content)}</p></details>)}
           {!session.studentNotes && reports.length === 0 && <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Feedback and the session report are not available yet.</p>}
         </CardContent>
       </Card>

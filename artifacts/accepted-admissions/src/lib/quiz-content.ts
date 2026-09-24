@@ -43,6 +43,29 @@ export function isUnfinishedHomeworkClientCopy(value: string | null | undefined)
   );
 }
 
+const CLEAN_QUESTION_PHRASE = /\bclean questions?\b/gi;
+const SHORT_CLEAN_DIAGNOSTIC_PHRASE = /\bshort clean diagnostic\b/gi;
+const CLEAN_BANK_SHORTFALL_SENTENCE =
+  /\s*The bank could not fill a clean 120 \([^)]*\), so only student-usable questions are included\./gi;
+
+/** Client portal copy. Keeps the question count and drops internal quality-gate wording. */
+export function studentFacingCopy(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .replace(/\((\d+)\s+clean questions?\)/gi, (_match, count: string) => {
+      const total = Number(count);
+      return `(${count} ${total === 1 ? "question" : "questions"})`;
+    })
+    .replace(CLEAN_QUESTION_PHRASE, (match) =>
+      /questions/i.test(match) ? "questions" : "question",
+    )
+    .replace(SHORT_CLEAN_DIAGNOSTIC_PHRASE, "diagnostic")
+    .replace(CLEAN_BANK_SHORTFALL_SENTENCE, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +\n/g, "\n")
+    .trim();
+}
+
 export function isLiveListedSession(session: {
   bookingStatus?: string | null;
   status?: string | null;

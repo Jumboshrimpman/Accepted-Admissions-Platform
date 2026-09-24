@@ -4,6 +4,7 @@ import {
   FIGURE_PRIMARY_PRESENTATION,
   isLiveListedSession,
   isUnfinishedHomeworkClientCopy,
+  studentFacingCopy,
   letterOnlyChoices,
   normalizeQuizProse,
   parseQuizContent,
@@ -84,4 +85,17 @@ test("hides unfinished-homework banners and cancelled session cards", () => {
   assert.equal(isLiveListedSession({ status: "archived" }), false);
   assert.equal(isLiveListedSession({ bookingStatus: "confirmed" }), true);
   assert.equal(isLiveListedSession({}), true);
+});
+
+test("client copy keeps question counts and drops clean-question wording", () => {
+  assert.equal(
+    studentFacingCopy("SAT diagnostic (104 Clean Questions) — Taito’s SAT Session with Eunice"),
+    "SAT diagnostic (104 questions) — Taito’s SAT Session with Eunice",
+  );
+  assert.equal(studentFacingCopy("1 clean question"), "1 question");
+  assert.equal(
+    studentFacingCopy("Walk the largest miss clusters from the short clean diagnostic."),
+    "Walk the largest miss clusters from the diagnostic.",
+  );
+  assert.equal(/clean questions?/i.test(studentFacingCopy("SAT diagnostic (40 clean questions)")), false);
 });

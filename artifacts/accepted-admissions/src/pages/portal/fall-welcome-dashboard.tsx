@@ -34,6 +34,7 @@ import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-ca
 import { FinancialCard } from "@/pages/portal/financial-card";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
+import { studentFacingCopy } from "@/lib/quiz-content";
 import {
   PORTAL_BEGIN_RESCHEDULE_EVENT,
   PORTAL_BOOKING_SECTION_ID,
@@ -504,7 +505,7 @@ export function ClientDashboardView({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
               <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {nextSession.preparation ? `${nextSession.preparation.title} · ${readinessLabel(nextSession)}` : "No required preparation."}
+                {nextSession.preparation ? `${studentFacingCopy(nextSession.preparation.title)} · ${readinessLabel(nextSession)}` : "No required preparation."}
               </p>
             </div>
             <div className="flex flex-col gap-2">
@@ -564,7 +565,7 @@ export function ClientDashboardView({
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">{assignment.title}</p>
+                      <p className="font-semibold">{studentFacingCopy(assignment.title)}</p>
                       <Badge variant="outline">{preparationStatus(assignment)}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{assignment.subject}</p>
@@ -622,7 +623,7 @@ export function ClientDashboardView({
                         <span className="truncate text-sm font-medium">{displaySessionFocus(session.currentFocus, session.latestResult?.analysis, "Open the session to review the focus.")}</span>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {session.preparation ? `Before: ${session.preparation.title}` : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
+                        {session.preparation ? `Before: ${studentFacingCopy(session.preparation.title)}` : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm">

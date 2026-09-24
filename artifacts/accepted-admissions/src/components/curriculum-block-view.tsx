@@ -1,18 +1,26 @@
 import type { CurriculumBlock } from "@workspace/api-client-react";
 import { BookOpen, ExternalLink, Target } from "lucide-react";
-import { isUnfinishedHomeworkClientCopy } from "@/lib/quiz-content";
+import { isUnfinishedHomeworkClientCopy, studentFacingCopy } from "@/lib/quiz-content";
 
-function textValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
+function textValue(value: unknown, studentFacing = false): string {
+  const text = typeof value === "string" ? value : "";
+  return studentFacing ? studentFacingCopy(text) : text;
 }
 
-export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
-  const { kind, config } = block;
+export function CurriculumBlockView({
+  block,
+  studentFacing = false,
+}: {
+  block: CurriculumBlock;
+  studentFacing?: boolean;
+}) {
+  const { kind } = block;
+  const config = block.config;
   const libraryKind = textValue(config.libraryKind);
-  const title = textValue(config.title || config.label);
+  const title = textValue(config.title || config.label, studentFacing);
   const url = textValue(config.url);
-  const description = textValue(config.text);
-  const html = textValue(config.html);
+  const description = textValue(config.text, studentFacing);
+  const html = textValue(config.html, studentFacing);
 
   if (libraryKind) {
     return (
@@ -43,9 +51,9 @@ export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
       </div>
     );
   }
-  if (kind === "heading") return <h3 className="text-lg font-semibold">{textValue(config.text)}</h3>;
+  if (kind === "heading") return <h3 className="text-lg font-semibold">{textValue(config.text, studentFacing)}</h3>;
   if (kind === "rich_text") {
-    const body = textValue(config.html || config.text);
+    const body = textValue(config.html || config.text, studentFacing);
     if (isUnfinishedHomeworkClientCopy(body)) return null;
     return (
       <div className="prose prose-slate max-w-none text-muted-foreground">
@@ -54,7 +62,7 @@ export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
     );
   }
   if (kind === "callout") {
-    const body = textValue(config.text);
+    const body = textValue(config.text, studentFacing);
     if (isUnfinishedHomeworkClientCopy(body)) return null;
     return (
       <div className="rounded-xl border border-accent/20 bg-accent/10 p-4">
@@ -70,7 +78,7 @@ export function CurriculumBlockView({ block }: { block: CurriculumBlock }) {
         {items.map((item, index) => (
           <li key={index} className="flex gap-2 text-sm">
             <Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            {String(item)}
+            {studentFacing ? studentFacingCopy(String(item)) : String(item)}
           </li>
         ))}
       </ul>
