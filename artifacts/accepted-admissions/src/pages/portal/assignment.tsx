@@ -31,7 +31,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
-  Flag,
   Pause,
   Play,
   Timer,
@@ -528,7 +527,7 @@ export default function PortalAssignment() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<"incorrect" | "bug" | "other">("bug");
   const [reportNote, setReportNote] = useState("");
-  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<{ questionId: string; message: string } | null>(null);
   const [reportPending, setReportPending] = useState(false);
   const [reportedQuestionIds, setReportedQuestionIds] = useState<Set<string>>(new Set());
   const expirySubmitted = useRef(false);
@@ -679,7 +678,7 @@ export default function PortalAssignment() {
 
   const updateResponse = (
     questionId: string,
-    updates: { prediction?: string; finalAnswer?: string; locked?: boolean; flagged?: boolean },
+    updates: { prediction?: string; finalAnswer?: string; locked?: boolean },
     options?: { checkAnswer?: boolean },
   ) => {
     const current = localResponses[questionId] ?? {};
@@ -746,6 +745,11 @@ export default function PortalAssignment() {
 
   const goToQuestion = (index: number) => {
     const next = normalizeQuestionIndex(index, assignment?.questions.length ?? 0);
+    if (next !== currentQuestionIndex) {
+      setReportOpen(false);
+      setReportNote("");
+      setReportError(null);
+    }
     setCurrentQuestionIndex(next);
     persistQuestionIndex(next);
   };
@@ -949,7 +953,7 @@ export default function PortalAssignment() {
         <h2 className="text-2xl font-bold">No answerable questions</h2>
         <p className="text-muted-foreground">
           This quiz has no complete A–D multiple-choice items, so it cannot be taken here.
-          Ask your tutor to replace the broken items. Flagged and reported questions aren’t scored.
+          Ask your tutor to replace the broken items.
         </p>
       </div>
     );
@@ -1102,17 +1106,6 @@ export default function PortalAssignment() {
           <span className="text-lg font-semibold">
             Question {currentQuestionIndex + 1} of {questions.length}
           </span>
-          <div className="space-y-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => updateResponse(question.id, { flagged: !response.flagged })}
-              className={response.flagged ? "bg-destructive/10 text-destructive" : "text-muted-foreground"}
-            >
-              <Flag className="mr-2 h-4 w-4" /> {response.flagged ? "Flagged" : "Flag"}
-            </Button>
-            <p className="text-xs text-muted-foreground">Flagged and reported questions aren’t scored.</p>
-          </div>
         </div>
         <div className="flex items-center gap-3">
           <div
@@ -1149,7 +1142,7 @@ export default function PortalAssignment() {
                 data-testid="report-question"
                 onClick={() => {
                   setReportOpen((open) => !open);
-                  setReportMessage(null);
+                  setReportError(null);
                 }}
                 disabled={reportPending || reportedQuestionIds.has(question.id)}
               >
@@ -1167,23 +1160,26 @@ export default function PortalAssignment() {
           onSubmit={async (event) => {
             event.preventDefault();
             setReportPending(true);
-            setReportMessage(null);
+            setReportError(null);
+            const reportedQuestionId = question.id;
             try {
               await customFetch(`/api/attempts/${attemptId}/question-reports`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
-                  questionId: question.id,
+                  questionId: reportedQuestionId,
                   reason: reportReason,
                   note: reportNote.trim() || undefined,
                 }),
               });
-              setReportedQuestionIds((current) => new Set(current).add(question.id));
+              setReportedQuestionIds((current) => new Set(current).add(reportedQuestionId));
               setReportOpen(false);
               setReportNote("");
-              setReportMessage("Reported. You can keep going — this question isn’t scored.");
             } catch (error) {
-              setReportMessage(error instanceof Error ? error.message : "Could not report this question.");
+              setReportError({
+                questionId: reportedQuestionId,
+                message: error instanceof Error ? error.message : "Could not report this question.",
+              });
             } finally {
               setReportPending(false);
             }
@@ -1224,9 +1220,13 @@ export default function PortalAssignment() {
           </div>
         </form>
       ) : null}
-      {reportMessage ? (
+      {reportedQuestionIds.has(question.id) ? (
         <p className="text-sm text-muted-foreground" data-testid="report-question-status">
-          {reportMessage}
+          Reported. You can keep going — this question isn’t scored.
+        </p>
+      ) : reportError?.questionId === question.id ? (
+        <p className="text-sm text-muted-foreground" role="alert" data-testid="report-question-status">
+          {reportError.message}
         </p>
       ) : null}
       <div
