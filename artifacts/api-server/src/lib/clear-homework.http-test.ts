@@ -15,6 +15,7 @@ import {
   portalAccessGrantsTable,
   questionsTable,
   responsesTable,
+  sessionArtifactsTable,
   sessionPreworkPlansTable,
   sessionsTable,
   timerEventsTable,
@@ -107,6 +108,14 @@ async function postJson(baseUrl: string, path: string, body?: unknown) {
     headers: { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  return {
+    response,
+    body: (await response.json()) as Record<string, any>,
+  };
+}
+
+async function getJson(baseUrl: string, path: string) {
+  const response = await fetch(`${baseUrl}${path}`);
   return {
     response,
     body: (await response.json()) as Record<string, any>,
@@ -391,6 +400,9 @@ async function createFixture() {
         .delete(courseMembershipsTable)
         .where(inArray(courseMembershipsTable.userId, userIds));
       await db.delete(viewerLinksTable).where(eq(viewerLinksTable.viewerUserId, viewer!.id));
+      await db
+        .delete(sessionArtifactsTable)
+        .where(inArray(sessionArtifactsTable.createdBy, userIds));
       await db.delete(loginActivityTable).where(inArray(loginActivityTable.userId, userIds));
       await db.delete(auditLogsTable).where(inArray(auditLogsTable.actorUserId, userIds));
       await db
@@ -452,6 +464,7 @@ test("tutor of the student and admin can clear homework; unrelated tutor, studen
     assert.equal(cleared.response.status, 200);
     assert.equal(cleared.body.deletedAttempts, 1);
     assert.equal(cleared.body.keptAssignments, 1);
+    assert.equal(cleared.body.deliveryPhase, "before_session");
     assert.deepEqual(cleared.body.assignmentIds, [fixture.homeworkId]);
 
     const [homework] = await db
@@ -542,6 +555,155 @@ test("admin can clear an empty glitched homework attempt so the student can star
     assert.equal(started.body.status, "active");
   } finally {
     await adminServer?.close();
+    await studentServer?.close();
+    setProductionClerkUsersClientForTests(null);
+    restoreEnv(previous);
+    await fixture.cleanup();
+  }
+});
+
+test("during_session clear removes in-session results and leaves the diagnostic attempt", async () => {
+  const fixture = await createFixture();
+  const previous = snapshotEnv();
+  fixture.applyAccessEnv();
+  installTestClerk([
+    fixture.administrator,
+    fixture.tutor,
+    fixture.unrelatedTutor,
+    fixture.student,
+    fixture.viewer,
+  ]);
+  let tutorServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  let studentServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  const misses = Array.from({ length: 17 }, (_, index) => ({
+    questionId: `miss-${index}`,
+    correct: false,
+  }));
+  try {
+    await db
+      .update(attemptsTable)
+      .set({
+        status: "submitted",
+        score: 0,
+        submittedAt: new Date(),
+        result: { correct: 0, total: 17, items: misses },
+      })
+      .where(eq(attemptsTable.id, fixture.duringAttemptId));
+    await db.insert(responsesTable).values({
+      attemptId: fixture.duringAttemptId,
+      questionId: fixture.questionId,
+      finalAnswer: "b",
+      correct: false,
+    });
+    await db.insert(timerEventsTable).values({
+      attemptId: fixture.duringAttemptId,
+      type: "submitted",
+    });
+    const [inProgress] = await db
+      .insert(attemptsTable)
+      .values({
+        assignmentId: fixture.duringId,
+        userId: fixture.student.id,
+        status: "active",
+        startedAt: new Date(Date.now() - 60_000),
+      })
+      .returning();
+
+    tutorServer = await startServer(fixture.tutor);
+    studentServer = await startServer(fixture.student);
+
+    const beforeClear = await getJson(
+      tutorServer.baseUrl,
+      `/api/sessions/${fixture.sessionId}`,
+    );
+    assert.equal(beforeClear.response.status, 200);
+    const beforeRow = (beforeClear.body.homework as Array<Record<string, unknown>>).find(
+      (item) => item.assignmentId === fixture.duringId,
+    );
+    assert.equal(beforeRow?.attemptStatus, "submitted");
+    assert.equal(beforeRow?.score, 0);
+    assert.equal(beforeRow?.mistakeCount, 17);
+
+    const mismatched = await postJson(
+      tutorServer.baseUrl,
+      `/api/sessions/${fixture.sessionId}/clear-prework`,
+      { assignmentId: fixture.homeworkId, deliveryPhase: "during_session" },
+    );
+    assert.equal(mismatched.response.status, 400);
+
+    const missing = await postJson(
+      tutorServer.baseUrl,
+      `/api/sessions/${fixture.sessionId}/clear-prework`,
+      { assignmentId: randomUUID() },
+    );
+    assert.equal(missing.response.status, 404);
+
+    const cleared = await postJson(
+      tutorServer.baseUrl,
+      `/api/sessions/${fixture.sessionId}/clear-prework`,
+      { deliveryPhase: "during_session" },
+    );
+    assert.equal(cleared.response.status, 200, JSON.stringify(cleared.body));
+    assert.equal(cleared.body.deliveryPhase, "during_session");
+    assert.equal(cleared.body.deletedAttempts, 2);
+    assert.equal(cleared.body.keptAssignments, 1);
+    assert.deepEqual(cleared.body.assignmentIds, [fixture.duringId]);
+
+    const duringLeft = await db
+      .select()
+      .from(attemptsTable)
+      .where(eq(attemptsTable.assignmentId, fixture.duringId));
+    assert.equal(duringLeft.length, 0);
+    const duringResponses = await db
+      .select()
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, fixture.duringAttemptId));
+    assert.equal(duringResponses.length, 0);
+    const [duringAssignment] = await db
+      .select()
+      .from(assignmentsTable)
+      .where(eq(assignmentsTable.id, fixture.duringId));
+    assert.equal(duringAssignment?.status, "published");
+    const duringQuestions = await db
+      .select()
+      .from(assignmentQuestionsTable)
+      .where(eq(assignmentQuestionsTable.assignmentId, fixture.duringId));
+    assert.equal(duringQuestions.length, 0);
+
+    const [preworkAttempt] = await db
+      .select()
+      .from(attemptsTable)
+      .where(eq(attemptsTable.id, fixture.attemptId));
+    assert.equal(preworkAttempt?.status, "submitted");
+    assert.equal(preworkAttempt?.score, 0);
+    const preworkResponses = await db
+      .select()
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, fixture.attemptId));
+    assert.equal(preworkResponses.length, 1);
+
+    const afterClear = await getJson(
+      tutorServer.baseUrl,
+      `/api/sessions/${fixture.sessionId}`,
+    );
+    const afterRow = (afterClear.body.homework as Array<Record<string, unknown>>).find(
+      (item) => item.assignmentId === fixture.duringId,
+    );
+    assert.equal(afterRow?.attemptId, null);
+    assert.equal(afterRow?.attemptStatus, null);
+    assert.equal(afterRow?.score, null);
+    assert.equal(afterRow?.mistakeCount, 0);
+
+    const started = await postJson(
+      studentServer.baseUrl,
+      `/api/assignments/${fixture.duringId}/attempts`,
+    );
+    assert.equal(started.response.status, 201, JSON.stringify(started.body));
+    assert.equal(started.body.status, "active");
+    assert.notEqual(started.body.id, fixture.duringAttemptId);
+    assert.notEqual(started.body.id, inProgress?.id);
+  } finally {
+    await tutorServer?.close();
     await studentServer?.close();
     setProductionClerkUsersClientForTests(null);
     restoreEnv(previous);

@@ -2814,18 +2814,24 @@ export const GetSessionResponse = zod.object({
 
 
 /**
- * Tutor of that session or an administrator can delete the student's before_session attempt state (responses, timer events, result), including empty or glitched submits. The same assignment, questions, and pre-work plan stay attached so the student can start a fresh attempt. Does not wipe the College Board bank or during-session collaborative practice.
- * @summary Clear before-session homework attempts so the student can redo
+ * Tutor of that session or an administrator can delete attempt state (responses, timer events, consolidated result). Omit the body to clear live before_session homework. Send deliveryPhase during_session to clear in-session homework on this session, or assignmentId to clear one assignment of either phase. Does not wipe the College Board bank.
+ * @summary Clear homework attempts so the student can redo
  */
 export const ClearSessionHomeworkParams = zod.object({
   "sessionId": zod.coerce.string()
 })
 
+export const ClearSessionHomeworkBody = zod.object({
+  "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
+  "assignmentId": zod.string().optional()
+}).optional()
+
 export const ClearSessionHomeworkResponse = zod.object({
   "sessionId": zod.string(),
   "assignmentIds": zod.array(zod.string()),
   "deletedAttempts": zod.number(),
-  "keptAssignments": zod.number()
+  "keptAssignments": zod.number(),
+  "deliveryPhase": zod.enum(['before_session', 'during_session'])
 })
 
 

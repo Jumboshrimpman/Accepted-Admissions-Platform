@@ -19,6 +19,7 @@ export type ClearHomeworkResult = {
   assignmentIds: string[];
   deletedAttempts: number;
   keptAssignments: number;
+  deliveryPhase?: "before_session" | "during_session";
 };
 
 function errorText(error: unknown): string {
@@ -30,20 +31,32 @@ export function ClearHomeworkButton({
   sessionId,
   onCleared,
   testId,
+  assignmentId,
+  deliveryPhase,
 }: {
   sessionId: string;
   onCleared?: (result: ClearHomeworkResult) => void;
   testId?: string;
+  assignmentId?: string;
+  deliveryPhase?: "before_session" | "during_session";
 }) {
   const [open, setOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [message, setMessage] = useState("");
+  const inSession = deliveryPhase === "during_session";
 
   const clear = () => {
     setClearing(true);
     setMessage("");
+    const payload: {
+      assignmentId?: string;
+      deliveryPhase?: "before_session" | "during_session";
+    } = {};
+    if (assignmentId) payload.assignmentId = assignmentId;
+    if (deliveryPhase) payload.deliveryPhase = deliveryPhase;
     customFetch<ClearHomeworkResult>(`/api/sessions/${sessionId}/clear-prework`, {
       method: "POST",
+      ...(Object.keys(payload).length > 0 ? { body: JSON.stringify(payload) } : {}),
     })
       .then((result: ClearHomeworkResult) => {
         setMessage(
@@ -74,9 +87,11 @@ export function ClearHomeworkButton({
           <AlertDialogHeader>
             <AlertDialogTitle>Clear homework and let the student start again?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the student’s current attempt — answers, timer, and result. The same
-              assignment and questions stay attached so they can redo it. The question bank is not
-              deleted.
+              {inSession
+                ? "This removes in-session homework attempts — answers, timer, and consolidated result. The same in-session assignment and questions stay attached. Before-session diagnostics are not changed, and the question bank is not deleted."
+                : assignmentId
+                  ? "This removes every attempt on this assignment — answers, timer, and consolidated result — so it shows Not started. The assignment and its questions stay attached. Other assignments, other sessions, and the question bank are not changed."
+                  : "This removes the student’s current attempt — answers, timer, and result. The same assignment and questions stay attached so they can redo it. The question bank is not deleted."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

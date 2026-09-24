@@ -145,7 +145,7 @@ test("selectActivePrework ignores archived session copies left by replace/remove
   assert.equal(selectActivePrework([archived, during]), null);
 });
 
-test("canShowClearHomework is only for live before_session attempts, including empty ones", () => {
+test("canShowClearHomework is for live before-session and in-session attempts, including empty ones", () => {
   assert.equal(
     canShowClearHomework({
       deliveryPhase: "before_session",
@@ -160,7 +160,7 @@ test("canShowClearHomework is only for live before_session attempts, including e
       assignmentStatus: "published",
       attemptId: "attempt-1",
     }),
-    false,
+    true,
   );
   assert.equal(
     canShowClearHomework({

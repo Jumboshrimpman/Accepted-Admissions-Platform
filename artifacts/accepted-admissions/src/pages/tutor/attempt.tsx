@@ -88,6 +88,7 @@ export default function TutorAttempt() {
           {result.sessionId ? (
             <ClearHomeworkButton
               sessionId={result.sessionId}
+              assignmentId={result.assignmentId}
               testId={`clear-homework-attempt-${attemptId}`}
               onCleared={() => {
                 queryClient.invalidateQueries({ queryKey: getGetAttemptResultQueryKey(attemptId) });

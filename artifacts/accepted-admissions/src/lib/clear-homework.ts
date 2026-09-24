@@ -11,7 +11,6 @@ export function canShowClearHomework(input: {
   assignmentStatus?: string | null;
   attemptId?: string | null;
 }): boolean {
-  if (input.deliveryPhase === "during_session") return false;
   if (input.assignmentStatus === "archived") return false;
   return Boolean(input.attemptId);
 }

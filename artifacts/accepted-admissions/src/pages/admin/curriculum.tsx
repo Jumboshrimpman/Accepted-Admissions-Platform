@@ -952,7 +952,7 @@ function SessionCard({
                         <span className="text-xs text-muted-foreground">No attempt yet</span>
                       )}
                       {reviews.some((item) => item.assignmentId === quiz.id) ? (
-                        <ClearHomeworkButton sessionId={session.id} testId={`clear-homework-${session.id}`} onCleared={onChanged} />
+                        <ClearHomeworkButton sessionId={session.id} assignmentId={quiz.id} testId={`clear-homework-${session.id}`} onCleared={onChanged} />
                       ) : null}
                       {quiz.status === "archived" ? (
                         <Button

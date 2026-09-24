@@ -1216,15 +1216,29 @@ paths:
     post:
       operationId: clearSessionHomework
       tags: [portal]
-      summary: Clear before-session homework attempts so the student can redo
+      summary: Clear homework attempts so the student can redo
       description: >
-        Tutor of that session or an administrator can delete the student's
-        before_session attempt state (responses, timer events, result), including
-        empty or glitched submits. The same assignment, questions, and pre-work
-        plan stay attached so the student can start a fresh attempt. Does not
-        wipe the College Board bank or during-session collaborative practice.
+        Tutor of that session or an administrator can delete attempt state
+        (responses, timer events, consolidated result), including empty or
+        glitched submits. The same assignment and questions stay attached.
+        Does not wipe the College Board bank or other sessions. Omit the body
+        to clear live before_session homework only. Send deliveryPhase
+        during_session to clear every in-session assignment on this session.
+        Send assignmentId to clear one assignment of either phase.
       parameters:
         - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deliveryPhase:
+                  type: string
+                  enum: [before_session, during_session]
+                assignmentId:
+                  type: string
       responses:
         "200":
           description: Cleared attempt state; assignment kept
@@ -3275,7 +3289,7 @@ components:
             - type: "null"
     ClearSessionHomeworkResult:
       type: object
-      required: [sessionId, assignmentIds, deletedAttempts, keptAssignments]
+      required: [sessionId, assignmentIds, deletedAttempts, keptAssignments, deliveryPhase]
       properties:
         sessionId: { type: string }
         assignmentIds:
@@ -3283,6 +3297,9 @@ components:
           items: { type: string }
         deletedAttempts: { type: number }
         keptAssignments: { type: number }
+        deliveryPhase:
+          type: string
+          enum: [before_session, during_session]
     AdaptiveQuestion:
       allOf:
         - $ref: "#/components/schemas/AssignmentQuestion"

@@ -11,4 +11,5 @@ export interface ClearSessionHomeworkResult {
   assignmentIds: string[];
   deletedAttempts: number;
   keptAssignments: number;
+  deliveryPhase: "before_session" | "during_session";
 }
