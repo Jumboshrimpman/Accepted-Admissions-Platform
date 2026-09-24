@@ -67,6 +67,46 @@ function ensureRole(
   };
 }
 
+function parseClearHomeworkScope(body: unknown):
+  | {
+      ok: true;
+      value: {
+        deliveryPhase?: "before_session" | "during_session";
+        assignmentId?: string;
+      };
+    }
+  | { ok: false; error: string } {
+  if (body == null || body === "") return { ok: true, value: {} };
+  if (typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, error: "Invalid clear homework request" };
+  }
+  const record = body as Record<string, unknown>;
+  const deliveryPhase = record.deliveryPhase;
+  const assignmentId = record.assignmentId;
+  if (
+    deliveryPhase !== undefined &&
+    deliveryPhase !== "before_session" &&
+    deliveryPhase !== "during_session"
+  ) {
+    return { ok: false, error: "deliveryPhase must be before_session or during_session" };
+  }
+  if (
+    assignmentId !== undefined &&
+    (typeof assignmentId !== "string" || assignmentId.trim() === "")
+  ) {
+    return { ok: false, error: "assignmentId must be a non-empty string" };
+  }
+  return {
+    ok: true,
+    value: {
+      ...(deliveryPhase === "before_session" || deliveryPhase === "during_session"
+        ? { deliveryPhase }
+        : {}),
+      ...(typeof assignmentId === "string" ? { assignmentId: assignmentId.trim() } : {}),
+    },
+  };
+}
+
 function serviceError(res: Response, error: unknown, fallback: string): void {
   const status = typeof (error as { status?: number }).status === "number"
     ? (error as { status: number }).status
@@ -349,8 +389,13 @@ router.post(
       res.status(403).json({ error: "Insufficient permission" });
       return;
     }
+    const scope = parseClearHomeworkScope(req.body);
+    if (!scope.ok) {
+      res.status(400).json({ error: scope.error });
+      return;
+    }
     try {
-      const result = await clearSessionHomeworkAttempts(session.id);
+      const result = await clearSessionHomeworkAttempts(session.id, scope.value);
       res.status(200).json(result);
     } catch (error) {
       serviceError(res, error, "Could not clear session homework");

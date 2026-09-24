@@ -377,6 +377,12 @@ export default function TutorSession() {
                         }) ? (
                           <ClearHomeworkButton
                             sessionId={sessionId}
+                            assignmentId={homework.assignmentId}
+                            deliveryPhase={
+                              isBeforeSessionHomework(session.assignments, homework.assignmentId)
+                                ? "before_session"
+                                : "during_session"
+                            }
                             testId={`clear-homework-${homework.assignmentId}`}
                             onCleared={() => {
                               queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
@@ -499,6 +505,7 @@ export default function TutorSession() {
                     {adaptive?.homework?.latestAttemptId ? (
                       <ClearHomeworkButton
                         sessionId={sessionId}
+                        deliveryPhase="before_session"
                         testId="clear-homework-before-session"
                         onCleared={() => {
                           queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });

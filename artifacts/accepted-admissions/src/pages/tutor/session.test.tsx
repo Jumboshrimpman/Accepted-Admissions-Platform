@@ -202,7 +202,7 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/not an official SAT score/);
     expect(screen.getByTestId("weakness-group-1").textContent).toMatch(/Transitions/);
     fireEvent.click(screen.getByTestId("clear-homework-quiz-1"));
-    expect(screen.getByText(/same assignment and questions stay attached/i)).toBeTruthy();
+    expect(screen.getByText(/questions stay attached/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(clearHomework).not.toHaveBeenCalled();
   });

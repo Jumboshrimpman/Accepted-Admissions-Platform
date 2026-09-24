@@ -204,13 +204,12 @@ export function selectActivePrework<T extends SessionHomeworkCandidate>(
   );
 }
 
-/** Show Clear & redo for live before_session homework that has any attempt, including empty/glitched. */
+/** Show Clear & redo for live homework that has any attempt, including empty/glitched in-session work. */
 export function canShowClearHomework(input: {
   deliveryPhase?: string | null;
   assignmentStatus?: string | null;
   attemptId?: string | null;
 }): boolean {
-  if (input.deliveryPhase === "during_session") return false;
   if (input.assignmentStatus === "archived") return false;
   return Boolean(input.attemptId);
 }

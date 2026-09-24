@@ -35,4 +35,35 @@ describe("ClearHomeworkButton", () => {
     );
     await vi.waitFor(() => expect(onCleared).toHaveBeenCalled());
   });
+
+  test("posts the in-session assignment when clearing that homework", async () => {
+    customFetch.mockResolvedValue({
+      sessionId: "session-1",
+      assignmentIds: ["during-1"],
+      deletedAttempts: 2,
+      keptAssignments: 1,
+      deliveryPhase: "during_session",
+    });
+    render(
+      <ClearHomeworkButton
+        sessionId="session-1"
+        assignmentId="during-1"
+        deliveryPhase="during_session"
+        testId="clear-in-session"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("clear-in-session"));
+    expect(screen.getByText(/before-session diagnostics are not changed/i)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("clear-in-session-confirm"));
+    expect(customFetch).toHaveBeenCalledWith(
+      "/api/sessions/session-1/clear-prework",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          assignmentId: "during-1",
+          deliveryPhase: "during_session",
+        }),
+      }),
+    );
+  });
 });

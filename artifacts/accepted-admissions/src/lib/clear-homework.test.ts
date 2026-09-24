@@ -14,7 +14,7 @@ test("isBeforeSessionHomework treats missing phase as pre-work and excludes duri
   assert.equal(isBeforeSessionHomework([{ id: "a1" }], "a1"), true);
 });
 
-test("canShowClearHomework requires a live before_session attempt", () => {
+test("canShowClearHomework allows a live in-session attempt as well as pre-work", () => {
   assert.equal(
     canShowClearHomework({
       deliveryPhase: "before_session",
@@ -29,7 +29,7 @@ test("canShowClearHomework requires a live before_session attempt", () => {
       assignmentStatus: "published",
       attemptId: "attempt-1",
     }),
-    false,
+    true,
   );
   assert.equal(
     canShowClearHomework({

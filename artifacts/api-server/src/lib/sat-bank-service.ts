@@ -1921,20 +1921,65 @@ async function beforeSessionAssignments(sessionId: string) {
     );
 }
 
+export type HomeworkDeliveryPhase = "before_session" | "during_session";
+
+export type ClearHomeworkScope = {
+  /** Defaults to before_session when assignmentId is omitted. */
+  deliveryPhase?: HomeworkDeliveryPhase;
+  /** Clear this session assignment only, including in-session homework. */
+  assignmentId?: string;
+};
+
+function homeworkPhase(deliveryPhase: string | null | undefined): HomeworkDeliveryPhase {
+  return deliveryPhase === "during_session" ? "during_session" : "before_session";
+}
+
 /**
- * Delete before_session attempt state (including empty/glitched submits) so the
- * student can start again. Keeps the same assignment, questions, and pre-work
- * plan. Does not archive homework or wipe the College Board bank.
+ * Delete attempt state (answers, timer, consolidated result) so the student
+ * can start again. Keeps the same assignment and questions. Does not archive
+ * homework or wipe the College Board bank.
+ *
+ * Default scope is live before_session homework. Pass deliveryPhase
+ * "during_session" to clear every in-session assignment on this session,
+ * including archived copies. Pass assignmentId to clear one assignment of
+ * either phase.
  */
-export async function clearSessionHomeworkAttempts(sessionId: string): Promise<{
+export async function clearSessionHomeworkAttempts(
+  sessionId: string,
+  scope: ClearHomeworkScope = {},
+): Promise<{
   sessionId: string;
   assignmentIds: string[];
   deletedAttempts: number;
   keptAssignments: number;
+  deliveryPhase: HomeworkDeliveryPhase;
 }> {
-  const assignments = (await beforeSessionAssignments(sessionId)).filter(
-    (row) => row.status !== "archived",
-  );
+  const rows = await db
+    .select()
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.sessionId, sessionId));
+  let phase: HomeworkDeliveryPhase = scope.deliveryPhase ?? "before_session";
+  let assignments = rows;
+  if (scope.assignmentId) {
+    const match = rows.find((row) => row.id === scope.assignmentId);
+    if (!match) {
+      throw Object.assign(new Error("Assignment is not on this session"), { status: 404 });
+    }
+    phase = homeworkPhase(match.deliveryPhase);
+    if (scope.deliveryPhase && phase !== scope.deliveryPhase) {
+      throw Object.assign(
+        new Error("Assignment does not match the requested delivery phase"),
+        { status: 400 },
+      );
+    }
+    assignments = [match];
+  } else if (phase === "during_session") {
+    assignments = rows.filter((row) => row.deliveryPhase === "during_session");
+  } else {
+    assignments = rows.filter(
+      (row) => row.deliveryPhase === "before_session" && row.status !== "archived",
+    );
+  }
   const assignmentIds = assignments.map((row) => row.id);
   const attempts =
     assignmentIds.length === 0
@@ -1944,7 +1989,7 @@ export async function clearSessionHomeworkAttempts(sessionId: string): Promise<{
           .from(attemptsTable)
           .where(inArray(attemptsTable.assignmentId, assignmentIds));
   const deletedAttempts = await deleteAttemptsByIds(attempts.map((row) => row.id));
-  if (assignments.length > 0) {
+  if (phase === "before_session" && assignments.some((row) => row.status !== "archived")) {
     await db
       .update(sessionsTable)
       .set({ hasHomework: true, updatedAt: new Date() })
@@ -1954,7 +1999,8 @@ export async function clearSessionHomeworkAttempts(sessionId: string): Promise<{
     sessionId,
     assignmentIds,
     deletedAttempts,
-    keptAssignments: assignments.length,
+    keptAssignments: assignments.filter((row) => row.status !== "archived").length,
+    deliveryPhase: phase,
   };
 }
 
