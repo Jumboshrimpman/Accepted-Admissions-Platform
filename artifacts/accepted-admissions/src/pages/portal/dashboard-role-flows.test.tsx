@@ -353,6 +353,140 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
 
+  test("past-session quizzes show Complete and stay collapsed under Quizzes", () => {
+    const now = Date.now();
+    const past = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const today = new Date(now).toISOString();
+    const future = new Date(now + 3 * 24 * 60 * 60 * 1000).toISOString();
+    const base = dashboardForRole("student");
+    const sessionFields = {
+      courseId: "course-fall",
+      durationMinutes: 60,
+      subject: "SAT",
+      status: "published" as const,
+      meetingUrl: "https://meet.google.com/sat-room",
+      calendarEventUrl: null,
+      tutor: { id: "eunice", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+      student: { id: "student-user", name: "Taito Goto" },
+      readiness: "not_started" as const,
+      nextAction: "Take quiz",
+      currentFocus: "SAT reasoning.",
+      latestResult: null,
+    };
+    mocks.dashboard = {
+      ...base,
+      user: { ...base.user, timezone: "Asia/Dubai" },
+      assignments: [
+        {
+          id: "past-prework",
+          sessionId: "past-session",
+          title: "Yesterday pre-work",
+          subject: "SAT",
+          status: "published",
+          deadline: null,
+          questionCount: 5,
+          timeLimitMinutes: 20,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+        {
+          id: "past-live",
+          sessionId: "past-session",
+          deliveryPhase: "during_session",
+          title: "Yesterday in-session work",
+          subject: "SAT",
+          status: "published",
+          deadline: null,
+          questionCount: 4,
+          timeLimitMinutes: 20,
+          attemptCount: 1,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: "attempt-live",
+          latestAttemptStatus: "active",
+        },
+        {
+          id: "today-quiz",
+          sessionId: "today-session",
+          title: "Today pre-work",
+          subject: "SAT",
+          status: "published",
+          deadline: null,
+          questionCount: 5,
+          timeLimitMinutes: 20,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+        {
+          id: "future-quiz",
+          sessionId: "future-session",
+          title: "Upcoming pre-work",
+          subject: "SAT",
+          status: "published",
+          deadline: "2099-10-01T00:00:00.000Z",
+          questionCount: 5,
+          timeLimitMinutes: 20,
+          attemptCount: 1,
+          maxAttempts: 2,
+          latestScore: null,
+          latestAttemptId: "attempt-future",
+          latestAttemptStatus: "paused",
+        },
+      ],
+      curriculumSessions: [
+        {
+          ...sessionFields,
+          id: "past-session",
+          dateTime: past,
+          timezone: "America/New_York",
+          title: "Past SAT session",
+          preparation: { id: "past-prework", title: "Yesterday pre-work", latestAttemptStatus: null },
+        },
+        {
+          ...sessionFields,
+          id: "today-session",
+          dateTime: today,
+          timezone: "America/New_York",
+          title: "Today SAT session",
+          preparation: { id: "today-quiz", title: "Today pre-work", latestAttemptStatus: null },
+        },
+        {
+          ...sessionFields,
+          id: "future-session",
+          dateTime: future,
+          timezone: "America/New_York",
+          title: "Future SAT session",
+          preparation: { id: "future-quiz", title: "Upcoming pre-work", latestAttemptStatus: "paused" },
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    const quizzes = screen.getByTestId("client-quizzes");
+    expect(within(quizzes).getByTestId("client-quiz-today-quiz").textContent).toContain("Not started");
+    expect(within(quizzes).getByTestId("client-quiz-today-quiz").textContent).not.toContain("Complete");
+    expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
+    expect(within(quizzes).queryByText("Yesterday pre-work")).toBeNull();
+    expect(within(quizzes).queryByText("Yesterday in-session work")).toBeNull();
+    expect(screen.queryByText("Yesterday pre-work")).toBeNull();
+
+    fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
+    const pastPrework = within(quizzes).getByTestId("client-quiz-past-prework");
+    const pastLive = within(quizzes).getByTestId("client-quiz-past-live");
+    expect(pastPrework.textContent).toContain("Yesterday pre-work");
+    expect(pastPrework.textContent).toContain("Complete");
+    expect(pastLive.textContent).toContain("Yesterday in-session work");
+    expect(pastLive.textContent).toContain("Complete");
+    expect(pastPrework.textContent).toContain("Review");
+    expect(pastPrework.textContent).not.toContain("Start pre-work");
+  });
+
   test("Taito’s client dashboard does not show clean-question wording", () => {
     const dashboard = dashboardForRole("student");
     dashboard.assignments = [

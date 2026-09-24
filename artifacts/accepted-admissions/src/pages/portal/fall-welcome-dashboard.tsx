@@ -16,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { portalTutorRosterKey, portalTutorsFromDashboard } from "@/lib/portal-tutors";
 import {
-  collapsedItems,
   collapsedListedSessions,
   canCancelOrRescheduleSession,
   displaySessionTitle,
@@ -29,6 +28,12 @@ import {
   uniqueListedSessions,
   withDisplayTimezone,
 } from "@/lib/session-display";
+import {
+  collapsedStudentQuizzes,
+  sessionCalendarDayIsPast,
+  studentQuizActionLabel,
+  type QuizSessionRef,
+} from "@/lib/student-quiz-list";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-card";
 import { FinancialCard } from "@/pages/portal/financial-card";
@@ -44,7 +49,7 @@ import {
 } from "@/lib/portal-sat";
 import { clientSatCreditAction } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
-import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
+import { studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -66,11 +71,15 @@ function fallbackCurriculumSessions(dashboard: Dashboard): CurriculumSession[] {
   }));
 }
 
+function sessionPlanHref(session: CurriculumSession): string {
+  return `/portal/courses/${session.courseId}/sessions/${session.id}`;
+}
+
 function primaryHref(session: CurriculumSession): string {
   if (session.preparation) {
     return studentAssignmentHref(session.preparation.id, session.preparation.latestAttemptStatus);
   }
-  return `/portal/courses/${session.courseId}/sessions/${session.id}`;
+  return sessionPlanHref(session);
 }
 
 function readinessLabel(session: CurriculumSession): string {
@@ -79,23 +88,6 @@ function readinessLabel(session: CurriculumSession): string {
   if (session.readiness === "not_started") return "Preparation due";
   if (session.readiness === "unavailable") return "Unavailable";
   return session.latestResult ? "Ready · result available" : "Ready";
-}
-
-function preparationStatus(assignment: Dashboard["assignments"][number]): string {
-  if (assignment.latestAttemptStatus === "active" || assignment.latestAttemptStatus === "paused") return "In progress";
-  if (assignment.latestAttemptStatus === "submitted" || assignment.latestAttemptStatus === "expired") {
-    return assignment.latestScore == null ? "Complete" : `${Math.round(assignment.latestScore)}%`;
-  }
-  if (assignment.deadline && new Date(assignment.deadline).getTime() < Date.now()) return "Past due";
-  return "Not started";
-}
-
-function quizUrgency(assignment: Dashboard["assignments"][number]): number {
-  const status = preparationStatus(assignment);
-  if (status === "Past due") return 0;
-  if (status === "In progress") return 1;
-  if (status === "Not started") return 2;
-  return 3;
 }
 
 export default function FallWelcomeDashboard() {
@@ -177,15 +169,21 @@ export function ClientDashboardView({
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
   const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
   const clientTimezone = optionalClientTimezone(dashboard.user.timezone);
+  const now = new Date();
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
-  const quizzes = [...dashboard.assignments].sort((left, right) => {
-    const urgency = quizUrgency(left) - quizUrgency(right);
-    if (urgency !== 0) return urgency;
-    return left.title.localeCompare(right.title);
+  const datedSessions: QuizSessionRef[] = [
+    ...(dashboard.curriculumSessions?.length
+      ? dashboard.curriculumSessions
+      : fallbackCurriculumSessions(dashboard)),
+    ...(dashboard.upcomingSessions ?? []),
+  ];
+  const quizList = collapsedStudentQuizzes(dashboard.assignments, datedSessions, {
+    expanded: showAllQuizzes,
+    now,
+    clientTimezone,
   });
-  const quizList = collapsedItems(quizzes, showAllQuizzes);
   const scopedSessions = sessionsForDashboardRole(
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
@@ -217,10 +215,14 @@ export function ClientDashboardView({
     remainingHours: dashboard.credits.remainingHours,
     hasUpcomingReservedSession,
   });
+  const calendarDayPast = (session: { dateTime: string | Date; timezone: string }) =>
+    sessionCalendarDayIsPast(session, now, clientTimezone);
   const nextSession =
     sessionList.upcoming[0] ??
-    sessions.find((session) => session.readiness !== "complete") ??
+    sessions.find((session) => session.readiness !== "complete" && !calendarDayPast(session)) ??
+    sessions.find((session) => !calendarDayPast(session)) ??
     sessions.at(-1);
+  const featuredQuizSettled = nextSession ? calendarDayPast(nextSession) : false;
   const analysis = nextSession?.latestResult?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
   const completed = sessions.filter(isSessionWorkComplete).length;
@@ -505,14 +507,20 @@ export function ClientDashboardView({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
               <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {nextSession.preparation ? `${studentFacingCopy(nextSession.preparation.title)} · ${readinessLabel(nextSession)}` : "No required preparation."}
+                {nextSession.preparation
+                  ? `${studentFacingCopy(nextSession.preparation.title)} · ${featuredQuizSettled ? "Complete" : readinessLabel(nextSession)}`
+                  : "No required preparation."}
               </p>
             </div>
             <div className="flex flex-col gap-2">
               {adminPreview ? <Button disabled size="lg">Read only</Button> : <>
                 <Button asChild size="lg" className="w-full lg:w-auto">
-                  <Link href={primaryHref(nextSession)}>
-                    {viewer && nextSession.preparation && !nextSession.latestResult ? "Review preparation" : nextSession.nextAction}
+                  <Link href={featuredQuizSettled ? sessionPlanHref(nextSession) : primaryHref(nextSession)}>
+                    {featuredQuizSettled
+                      ? "Open session plan"
+                      : viewer && nextSession.preparation && !nextSession.latestResult
+                        ? "Review preparation"
+                        : nextSession.nextAction}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -552,30 +560,31 @@ export function ClientDashboardView({
             Quizzes
           </CardTitle>
           <CardDescription>
-            Assigned practice and diagnostics for this account. Older items stay behind Show more.
+            Assigned practice and diagnostics for this account. Quizzes from a past session date are marked complete and stay behind Show more.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {quizzes.length > 0 ? (
+          {dashboard.assignments.length > 0 ? (
             <>
-              {quizList.visible.map((assignment) => (
+              {quizList.visible.map((quiz) => (
                 <div
-                  key={assignment.id}
+                  key={quiz.assignment.id}
                   className="flex flex-col gap-2 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                  data-testid={`client-quiz-${quiz.assignment.id}`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">{studentFacingCopy(assignment.title)}</p>
-                      <Badge variant="outline">{preparationStatus(assignment)}</Badge>
+                      <p className="font-semibold">{studentFacingCopy(quiz.assignment.title)}</p>
+                      <Badge variant="outline">{quiz.status}</Badge>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{assignment.subject}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>
                   </div>
                   {adminPreview ? (
                     <Button disabled variant="ghost" size="sm">Read only</Button>
                   ) : (
                     <Button asChild variant="ghost" size="sm">
-                      <Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>
-                        {viewer ? "Review" : studentAssignmentActionLabel(assignment.latestAttemptStatus)}
+                      <Link href={studentAssignmentHref(quiz.assignment.id, quiz.assignment.latestAttemptStatus)}>
+                        {studentQuizActionLabel(quiz, viewer)}
                         <ArrowRight className="ml-2 h-3.5 w-3.5" />
                       </Link>
                     </Button>
