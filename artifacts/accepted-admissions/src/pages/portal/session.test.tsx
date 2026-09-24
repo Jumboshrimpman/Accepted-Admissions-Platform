@@ -3,6 +3,8 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  dateTime: "2099-10-02T16:00:00.000Z",
+  timezone: "America/New_York",
   assignments: [
     {
       id: "quiz-1",
@@ -36,8 +38,8 @@ vi.mock("@workspace/api-client-react", () => ({
       courseId: "course-1",
       title: "Taito SAT with Eunice",
       subject: "SAT",
-      dateTime: "2026-10-02T16:00:00.000Z",
-      timezone: "America/New_York",
+      dateTime: mocks.dateTime,
+      timezone: mocks.timezone,
       durationMinutes: 60,
       meetingUrl: null,
       calendarEventUrl: null,
@@ -90,6 +92,8 @@ import PortalSession from "./session";
 
 afterEach(() => {
   cleanup();
+  mocks.dateTime = "2099-10-02T16:00:00.000Z";
+  mocks.timezone = "America/New_York";
   mocks.assignments[0]!.title = "October pre-session mini-section";
   mocks.assignments[0]!.latestAttemptId = null;
   mocks.assignments[0]!.latestAttemptStatus = null;
@@ -141,5 +145,16 @@ describe("student session quiz path", () => {
     render(<PortalSession />);
     const resume = screen.getByRole("link", { name: /^Resume$/i });
     expect(resume.getAttribute("href")).toBe("/portal/assignments/quiz-1?resume=1");
+  });
+
+  test("marks session homework complete after that session calendar day", () => {
+    mocks.dateTime = "2020-01-01T17:00:00.000Z";
+    mocks.timezone = "UTC";
+    mocks.assignments[0]!.title = "Yesterday pre-work";
+    render(<PortalSession />);
+    const card = screen.getByTestId("session-homework-quiz-1");
+    expect(card.textContent).toContain("Complete");
+    expect(card.textContent).toContain("Review");
+    expect(card.textContent).not.toContain("Start pre-work");
   });
 });
