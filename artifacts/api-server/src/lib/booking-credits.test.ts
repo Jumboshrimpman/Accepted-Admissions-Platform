@@ -95,9 +95,18 @@ test("viewer and tutor roles cannot book using another client's credits", () => 
   );
   assert.doesNotThrow(() =>
     requireStudentBooker({
-      id: "student",
       role: "student",
-    } as never),
+      email: "makaremmichelle7@gmail.com",
+    }),
+  );
+  assert.throws(
+    () =>
+      requireStudentBooker({
+        role: "student",
+        email: "taito0525@gmail.com",
+      }),
+    (error: unknown) =>
+      error instanceof BookingServiceError && error.code === "OFF_PLATFORM_BILLING",
   );
 });
 

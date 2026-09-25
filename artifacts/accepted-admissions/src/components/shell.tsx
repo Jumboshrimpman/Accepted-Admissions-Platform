@@ -23,7 +23,9 @@ import {
 } from "lucide-react";
 import {
   getGetCurrentUserQueryKey,
+  getGetDashboardQueryKey,
   useGetCurrentUser,
+  useGetDashboard,
   useUpdateCurrentUser,
 } from "@workspace/api-client-react";
 import { isValidIanaTimeZone } from "@/lib/session-display";
@@ -47,6 +49,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const { data: apiUser, isLoading, error, refetch } = useGetCurrentUser({
     query: { queryKey: getGetCurrentUserQueryKey(), retry: false },
+  });
+  const { data: dashboard } = useGetDashboard({
+    query: {
+      queryKey: getGetDashboardQueryKey(),
+      retry: false,
+      enabled: Boolean(apiUser),
+    },
   });
   const updateCurrentUser = useUpdateCurrentUser();
   const persistTimezoneForUserId = useRef<string | null>(null);
@@ -120,7 +129,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       default:
         return [
           { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
-          ...(canSeePortalSatNav(role)
+          ...(canSeePortalSatNav(role, dashboard?.credits)
             ? [{ href: PORTAL_SAT_HREF, label: PORTAL_SAT_BOOK_LABEL, icon: WalletCards }]
             : []),
         ];

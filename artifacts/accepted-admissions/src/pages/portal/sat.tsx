@@ -22,6 +22,8 @@ import {
   PORTAL_SAT_TUTOR_DENIED_TITLE,
   PORTAL_SAT_TUTOR_HREF,
   canPurchaseOrBookSatCredits,
+  isOffPlatformProgramClient,
+  showsSelfServeSatCommerce,
 } from "@/lib/portal-sat";
 import {
   type PaymentCreditBanner,
@@ -217,8 +219,15 @@ export default function PortalSat() {
     );
   }
 
-  if (!canPurchaseOrBookSatCredits(currentUser?.role)) {
+  const commerceCredits = dashboard.data?.credits;
+  const showSatCommerce = showsSelfServeSatCommerce(commerceCredits);
+  if (!canPurchaseOrBookSatCredits(currentUser?.role) || !showSatCommerce) {
     const tutorDenied = currentUser?.role === "tutor";
+    const offPlatformStudent =
+      currentUser?.role === "student" &&
+      (commerceCredits == null ||
+        isOffPlatformProgramClient(commerceCredits) ||
+        commerceCredits.selfServeSatBooking !== true);
     const workspaceHref = tutorDenied
       ? PORTAL_SAT_TUTOR_HREF
       : currentUser?.role === "administrator"
@@ -228,18 +237,24 @@ export default function PortalSat() {
       ? "Open tutor workspace"
       : currentUser?.role === "administrator"
         ? "Open administrator workspace"
-        : "Open client workspace";
+        : "Open curriculum";
     return (
       <div className="mx-auto max-w-xl" data-testid="portal-sat-access-denied">
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">
-              {tutorDenied ? PORTAL_SAT_TUTOR_DENIED_TITLE : "SAT book and pay is unavailable"}
+              {tutorDenied
+                ? PORTAL_SAT_TUTOR_DENIED_TITLE
+                : offPlatformStudent
+                  ? "SAT billing is handled off-platform"
+                  : "SAT book and pay is unavailable"}
             </CardTitle>
             <CardDescription>
               {tutorDenied
                 ? PORTAL_SAT_TUTOR_DENIED_BODY
-                : "Only a student account can purchase SAT hours or book prepaid SAT credits in the portal."}
+                : offPlatformStudent
+                  ? "This account does not purchase or book SAT credits in the portal. Join Google Meet from the curriculum dates."
+                  : "Only a student account can purchase SAT hours or book prepaid SAT credits in the portal."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -251,14 +266,12 @@ export default function PortalSat() {
       </div>
     );
   }
-
-  const selfServe = dashboard.data?.credits.selfServeSatBooking ?? false;
   const remainingHours =
     ledgerHours ?? asCreditHours(dashboard.data?.credits.remainingHours) ?? 0;
   const purchasedHours =
     ledgerPurchasedHours ?? asCreditHours(dashboard.data?.credits.purchasedHours) ?? 0;
   const usedHours = ledgerUsedHours ?? asCreditHours(dashboard.data?.credits.usedHours) ?? 0;
-  const canCheckout = currentUser?.role === "student" && selfServe;
+  const canCheckout = currentUser?.role === "student";
   const paymentBannerState: PaymentCreditBanner | null =
     awaitingWebhook && baselineHours !== null && baselinePurchasedHours !== null
       ? paymentCreditBannerState({
@@ -435,15 +448,6 @@ export default function PortalSat() {
         </CardContent>
       </Card>
 
-      {!selfServe ? (
-        <Card data-testid="portal-sat-off-platform">
-          <CardContent className="p-5 text-sm text-muted-foreground">
-            SAT billing for this account is handled off-platform. Join Meet from your curriculum dates. Public marketing stays on{" "}
-            <Link href="/sat" className="font-medium text-primary hover:underline">/sat</Link>.
-          </CardContent>
-        </Card>
-      ) : (
-        <>
           <Card data-testid="portal-sat-purchase">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -507,8 +511,6 @@ export default function PortalSat() {
             initialPurchasedHours={purchasedHours}
             fallbackSessions={upcomingSat}
           />
-        </>
-      )}
     </div>
   );
 }

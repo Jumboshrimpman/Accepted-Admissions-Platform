@@ -171,6 +171,8 @@ export function ClientDashboardView({
   const offPlatformBilling = isOffPlatformProgramClient(dashboard.credits);
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
   const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
+  // Viewers never get buy/book chrome. Admin preview of a self-serve client stays read-only.
+  const showPurchaseCard = showSelfServeBooking && (studentSatCommerce || adminPreview);
   const mirroredStudent = dashboard.user.viewingAs;
   const clientTimezone = optionalClientTimezone(
     mirroredStudent?.timezone ?? dashboard.user.timezone,
@@ -310,7 +312,7 @@ export function ClientDashboardView({
         </div>
       )}
 
-      {showPaymentSuccess && !viewer && (
+      {showPaymentSuccess && studentSatCommerce && showSelfServeBooking && (
         <div
           role="status"
           data-testid="payment-success-banner"
@@ -336,7 +338,7 @@ export function ClientDashboardView({
         </div>
       )}
 
-      {showSelfServeBooking && (studentSatCommerce || viewer) ? (
+      {showPurchaseCard ? (
         <Card data-testid="client-credit-balance">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">

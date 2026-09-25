@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, satCommerceEmailForAccount, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -151,7 +151,10 @@ test("Taito billing stays off-platform while Michelle can self-serve SAT booking
   assert.equal(selfServeSatBookingForEmail("taito0525@gmail.com"), false);
   assert.equal(selfServeSatBookingForEmail("TAITO0525@gmail.com"), false);
   assert.equal(selfServeSatBookingForEmail("michaelmakarem@gmail.com"), true);
+  assert.equal(selfServeSatBookingForEmail("makaremmichelle7@gmail.com"), true);
   assert.equal(selfServeSatBookingForEmail("xaver.rmz6@gmail.com"), true);
+  assert.equal(selfServeSatBookingForEmail(null), false);
+  assert.equal(selfServeSatBookingForEmail("  "), false);
   assert.equal(
     selfServeSatBookingForAccount({
       role: "student",
@@ -180,6 +183,79 @@ test("Taito billing stays off-platform while Michelle can self-serve SAT booking
       email: "michaelmakarem@gmail.com",
     }),
     true,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "viewer",
+      email: "taito0525@gmail.com",
+    }),
+    false,
+    "Ryo’s mirror uses Taito’s subject email and stays off-platform",
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "viewer",
+      email: satCommerceEmailForAccount({
+        role: "viewer",
+        email: "ryo@jaac.co.jp",
+        linkedStudentEmail: "taito0525@gmail.com",
+      }),
+    }),
+    false,
+  );
+  assert.equal(
+    satCommerceEmailForAccount({
+      role: "viewer",
+      email: "ryo@jaac.co.jp",
+      linkedStudentEmail: "taito0525@gmail.com",
+    }),
+    "taito0525@gmail.com",
+  );
+  assert.equal(
+    satCommerceEmailForAccount({
+      role: "viewer",
+      email: "ryo@jaac.co.jp",
+    }),
+    null,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "viewer",
+      email: satCommerceEmailForAccount({
+        role: "viewer",
+        email: "ryo@jaac.co.jp",
+      }),
+    }),
+    false,
+    "An unlinked parent viewer does not fall through to Michelle-style booking",
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "student",
+      email: "taito0525@gmail.com",
+    }),
+    false,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "student",
+      email: "makaremmichelle7@gmail.com",
+    }),
+    true,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "tutor",
+      email: "eunice_chon@berkeley.edu",
+    }),
+    false,
+  );
+  assert.equal(
+    selfServeSatBookingForAccount({
+      role: "tutor",
+      email: "nika.raiffe@gmail.com",
+    }),
+    false,
   );
   assert.equal(twelveSessionPlanForEmail("taito0525@gmail.com"), true);
   assert.equal(twelveSessionPlanForEmail("TAITO0525@gmail.com"), true);

@@ -19,8 +19,23 @@ export function canPurchaseOrBookSatCredits(
   return role === "student";
 }
 
-export function canSeePortalSatNav(role: string | null | undefined): boolean {
-  return role === "student";
+/** Stripe book/pay chrome. Missing credits fail closed so off-platform clients never flash a CTA. */
+export function showsSelfServeSatCommerce(credits?: {
+  selfServeSatBooking?: boolean | null;
+  twelveSessionPlan?: boolean | null;
+} | null): boolean {
+  if (!credits) return false;
+  return credits.selfServeSatBooking === true && !isOffPlatformProgramClient(credits);
+}
+
+export function canSeePortalSatNav(
+  role: string | null | undefined,
+  credits?: {
+    selfServeSatBooking?: boolean | null;
+    twelveSessionPlan?: boolean | null;
+  } | null,
+): boolean {
+  return canPurchaseOrBookSatCredits(role) && showsSelfServeSatCommerce(credits);
 }
 
 /** Taito and other program clients pay outside Stripe and already have scheduled meetings. */

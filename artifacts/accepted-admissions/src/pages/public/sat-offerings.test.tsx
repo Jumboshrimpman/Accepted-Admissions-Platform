@@ -8,13 +8,22 @@ const userState = vi.hoisted(() => ({
   error: null as unknown,
 }));
 
+const dashboardState = vi.hoisted(() => ({
+  data: {
+    credits: { selfServeSatBooking: true, twelveSessionPlan: false },
+  } as { credits: { selfServeSatBooking: boolean; twelveSessionPlan: boolean } } | undefined,
+  isLoading: false,
+}));
+
 vi.mock("@/components/portal-auth", () => ({
   usePortalAuth: () => authState,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetCurrentUserQueryKey: () => ["/api/me"],
+  getGetDashboardQueryKey: () => ["/api/dashboard"],
   useGetCurrentUser: () => userState,
+  useGetDashboard: () => dashboardState,
 }));
 
 vi.mock("wouter", () => ({
@@ -39,6 +48,10 @@ afterEach(() => {
   userState.data = undefined;
   userState.isLoading = false;
   userState.error = null;
+  dashboardState.data = {
+    credits: { selfServeSatBooking: true, twelveSessionPlan: false },
+  };
+  dashboardState.isLoading = false;
 });
 
 describe("SAT public page does not publish prices", () => {
@@ -118,6 +131,43 @@ describe("SAT public page does not publish prices", () => {
     expect(screen.getByTestId("link-sat-pricing-signin").textContent).toMatch(/open SAT book and pay/i);
     expect(screen.queryByText(/\$130/)).toBeNull();
     expect(screen.queryByRole("button", { name: /checkout/i })).toBeNull();
+  });
+
+  it("does not offer book or pay to an off-platform student such as Taito", async () => {
+    authState.isSignedIn = true;
+    userState.data = { role: "student" };
+    dashboardState.data = {
+      credits: { selfServeSatBooking: false, twelveSessionPlan: true },
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      title: "SAT tutoring",
+      body: { heroLead: "Sign in to view pricing.", offersIntro: "Payment stays in the portal." },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    render(<SatOfferings />);
+
+    expect(await screen.findByTestId("link-sat-pricing-signin")).toBeTruthy();
+    expect(screen.getByTestId("link-sat-pricing-signin").getAttribute("href")).toBe("/portal");
+    expect(screen.getByTestId("link-sat-pricing-signin").textContent).toMatch(/open your curriculum/i);
+    expect(screen.queryByTestId("link-sat-stay-in-portal")).toBeNull();
+    expect(screen.queryByText(/open SAT book and pay/i)).toBeNull();
+    expect(screen.queryByText(/book and pay inside your client portal/i)).toBeNull();
+  });
+
+  it("does not offer book or pay to signed-in tutors", async () => {
+    authState.isSignedIn = true;
+    userState.data = { role: "tutor" };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      title: "SAT tutoring",
+      body: { heroLead: "Sign in to view pricing.", offersIntro: "Payment stays in the portal." },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    render(<SatOfferings />);
+
+    expect(await screen.findByTestId("link-sat-pricing-signin")).toBeTruthy();
+    expect(screen.getByTestId("link-sat-pricing-signin").textContent).toMatch(/sign in to view SAT pricing/i);
+    expect(screen.queryByText(/open SAT book and pay/i)).toBeNull();
+    expect(screen.queryByTestId("link-sat-stay-in-portal")).toBeNull();
   });
 });
 
