@@ -7,6 +7,7 @@
  */
 import type { CurrentUserTimezoneSource } from './currentUserTimezoneSource';
 import type { Role } from './role';
+import type { ViewingAs } from './viewingAs';
 
 export interface CurrentUser {
   id: string;
@@ -19,4 +20,6 @@ export interface CurrentUser {
   avatarUrl?: string | null;
   timezone: string;
   timezoneSource?: CurrentUserTimezoneSource;
+  /** Student mirrored by a parent viewer. Null for every other role. */
+  viewingAs?: ViewingAs | null;
 }

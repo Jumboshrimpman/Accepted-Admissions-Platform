@@ -25,7 +25,7 @@ export default function PortalCourse() {
   const { data: currentUser } = useGetCurrentUser();
   const clientTimezone =
     currentUser?.role === "student" || currentUser?.role === "viewer"
-      ? optionalClientTimezone(currentUser.timezone)
+      ? optionalClientTimezone(currentUser.viewingAs?.timezone ?? currentUser.timezone)
       : undefined;
   const { data: course, isLoading, error } = useGetCourse(courseId, { query: { enabled: !!courseId, queryKey: getGetCourseQueryKey(courseId) } });
 

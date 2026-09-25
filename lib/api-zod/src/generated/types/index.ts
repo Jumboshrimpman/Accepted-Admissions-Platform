@@ -306,3 +306,4 @@ export * from './unauthorizedResponse';
 export * from './updateAdminQuestionReport200';
 export * from './updateAdminQuestionReportBody';
 export * from './updateAdminQuestionReportBodyStatus';
+export * from './viewingAs';

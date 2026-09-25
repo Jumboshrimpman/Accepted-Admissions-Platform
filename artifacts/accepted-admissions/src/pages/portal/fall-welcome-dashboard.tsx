@@ -168,9 +168,14 @@ export function ClientDashboardView({
   const offPlatformBilling = isOffPlatformProgramClient(dashboard.credits);
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
   const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
-  const clientTimezone = optionalClientTimezone(dashboard.user.timezone);
+  const mirroredStudent = dashboard.user.viewingAs;
+  const clientTimezone = optionalClientTimezone(
+    mirroredStudent?.timezone ?? dashboard.user.timezone,
+  );
   const now = new Date();
-  const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
+  const firstName = (mirroredStudent?.displayName ?? dashboard.user.displayName)
+    .trim()
+    .split(/\s+/)[0] || "there";
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const datedSessions: QuizSessionRef[] = [
@@ -188,7 +193,9 @@ export function ClientDashboardView({
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
       : fallbackCurriculumSessions(dashboard),
-    dashboard.user,
+    dashboard.user.role === "viewer" && mirroredStudent?.id
+      ? { id: mirroredStudent.id, role: "student" }
+      : dashboard.user,
   );
   const sessions = uniqueListedSessions(
     (
@@ -284,8 +291,18 @@ export function ClientDashboardView({
         <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
           <Eye className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
-            <p className="font-semibold">{adminPreview ? "Read-only client preview" : "Curriculum in view-only mode"}</p>
-            <p className="mt-1 text-amber-800">{adminPreview ? "You can review the student's curriculum without opening student actions." : "You can review the complete plan, preparation, and published results. Only the student can complete work."}</p>
+            <p className="font-semibold">
+              {adminPreview
+                ? "Read-only client preview"
+                : mirroredStudent
+                  ? `Viewing as ${mirroredStudent.displayName}`
+                  : "Parent view"}
+            </p>
+            <p className="mt-1 text-amber-800">
+              {adminPreview
+                ? "You can review the student's curriculum without opening student actions."
+                : "Parent view is read-only. You can review the plan, preparation, and published results. Only the student can complete work."}
+            </p>
           </div>
         </div>
       )}

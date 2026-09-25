@@ -23,12 +23,17 @@ export const ACCESS_ROLE_CATEGORIES = [
 
 export type AccessRoleCategory = (typeof ACCESS_ROLE_CATEGORIES)[number];
 
-/** Roles that administrators may provision from the portal UI. */
+/**
+ * Roles that administrators may provision from the portal UI.
+ * Administrator stays environment-only. Viewer is a read-only parent mirror
+ * of exactly one student.
+ */
 export const PROVISIONABLE_ROLE_CATEGORIES = [
   "sat_tutor",
   "english_tutor",
   "tutor",
   "student",
+  "viewer",
 ] as const;
 
 export type ProvisionableRoleCategory =
@@ -43,6 +48,8 @@ export type DatabaseAccessGrant = {
   clerkUserId: string | null;
   roleCategory: ProvisionableRoleCategory;
   active?: boolean;
+  /** Student this parent viewer mirrors. Required for viewer grants. */
+  linkedStudentEmail?: string | null;
 };
 
 function configuredSet(
@@ -109,12 +116,13 @@ export function subjectsForRoleCategory(
     case "tutor":
       return ["SAT", "IELTS", "English"];
     case "student":
+    case "viewer":
       return [];
   }
 }
 
 export function tutorTitleForRoleCategory(
-  roleCategory: Exclude<ProvisionableRoleCategory, "student">,
+  roleCategory: Exclude<ProvisionableRoleCategory, "student" | "viewer">,
 ): string {
   switch (roleCategory) {
     case "sat_tutor":
@@ -261,6 +269,24 @@ export function configuredAccess(
   return resolvePortalAccess(clerkUserId, email, { env });
 }
 
+/**
+ * Viewer grants mirror only the stored student. A viewer grant with no student
+ * email does not grant access. Environment viewers still use the Taito subject
+ * from `accessFromRoleCategory`.
+ */
+export function accessForDatabaseGrant(
+  grant: Pick<DatabaseAccessGrant, "roleCategory" | "linkedStudentEmail">,
+): ConfiguredAccess | null {
+  if (grant.roleCategory === "viewer") {
+    const studentEmail = grant.linkedStudentEmail
+      ? normalizeProvisionedEmail(grant.linkedStudentEmail)
+      : "";
+    if (!studentEmail.includes("@")) return null;
+    return { role: "viewer", subject: `student:${studentEmail}` };
+  }
+  return accessFromRoleCategory(grant.roleCategory);
+}
+
 export function databaseConfiguredAccess(
   clerkUserId: string,
   email: string | undefined,
@@ -276,7 +302,8 @@ export function databaseConfiguredAccess(
     const emailMatch =
       Boolean(normalizedEmail) && grantEmail === normalizedEmail;
     if (!clerkMatch && !emailMatch) continue;
-    matches.push(accessFromRoleCategory(grant.roleCategory));
+    const access = accessForDatabaseGrant(grant);
+    if (access) matches.push(access);
   }
   return decisionFromMatches(matches);
 }

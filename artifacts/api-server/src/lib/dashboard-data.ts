@@ -14,6 +14,8 @@ import { isStudentCurriculumSession, publicSessionShape, visibleSessionsForUser 
 import { isTaitoFallSession, sessionTitle, TAITO_STUDENT_DISPLAY_NAME, calendarEventUrlForSession } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { sessionDisplayTitle } from "./xavier-sat-capability-session.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { mirroredStudentIdForViewer } from "./parent-mirror.ts";
 
 async function visibleCourseIds(user: AppUser): Promise<string[]> {
   if (user.role === "administrator") {
@@ -54,17 +56,7 @@ async function visibleCourseIds(user: AppUser): Promise<string[]> {
 
 async function dataSubjectUserId(user: AppUser): Promise<string> {
   if (user.role !== "viewer") return user.id;
-  const [link] = await db
-    .select({ studentUserId: viewerLinksTable.studentUserId })
-    .from(viewerLinksTable)
-    .where(
-      and(
-        eq(viewerLinksTable.viewerUserId, user.id),
-        eq(viewerLinksTable.active, true),
-      ),
-    )
-    .limit(1);
-  return link?.studentUserId ?? user.id;
+  return (await mirroredStudentIdForViewer(user.id)) ?? user.id;
 }
 
 export async function dashboardSessionsForUser(user: AppUser) {

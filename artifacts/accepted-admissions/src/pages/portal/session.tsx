@@ -50,7 +50,7 @@ export default function PortalSession() {
   const viewer = currentUser?.role === "viewer";
   const clientTimezone =
     currentUser?.role === "student" || currentUser?.role === "viewer"
-      ? optionalClientTimezone(currentUser.timezone)
+      ? optionalClientTimezone(currentUser.viewingAs?.timezone ?? currentUser.timezone)
       : undefined;
   const { data: session, isLoading, error } = useGetSession(sessionId, {
     query: { enabled: Boolean(sessionId), queryKey: getGetSessionQueryKey(sessionId) },

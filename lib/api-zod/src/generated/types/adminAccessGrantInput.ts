@@ -24,6 +24,11 @@ export interface AdminAccessGrantInput {
      */
   clerkUserId?: string | null;
   /**
+     * Required when roleCategory is viewer. The one student whose portal this parent mirrors.
+     * @nullable
+     */
+  linkedStudentEmail?: string | null;
+  /**
      * @maxLength 500
      * @nullable
      */

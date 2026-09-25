@@ -264,7 +264,67 @@ test("honors student and tutor database grants without env allowlists", async ()
   );
 });
 
-test("keeps administrator and viewer env-only even when a student grant exists for someone else", async () => {
+test("honors a parent viewer database grant for exactly one student", async () => {
+  const { resolvePortalAccess } =
+    // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+    await import("./access-config.ts");
+
+  assert.deepEqual(
+    resolvePortalAccess("user_3IsvKcNhmcqPtcxFfGOYgtR4MAc", "ryo@jaac.co.jp", {
+      env: {},
+      databaseGrants: [
+        {
+          email: "ryo@jaac.co.jp",
+          clerkUserId: "user_3IsvKcNhmcqPtcxFfGOYgtR4MAc",
+          roleCategory: "viewer",
+          linkedStudentEmail: "taito0525@gmail.com",
+          active: true,
+        },
+      ],
+    }),
+    {
+      access: { role: "viewer", subject: "student:taito0525@gmail.com" },
+      conflict: false,
+    },
+  );
+
+  assert.deepEqual(
+    resolvePortalAccess("user_parent_other", "parent@example.com", {
+      env: {},
+      databaseGrants: [
+        {
+          email: "parent@example.com",
+          clerkUserId: "user_parent_other",
+          roleCategory: "viewer",
+          linkedStudentEmail: "other.student@example.com",
+          active: true,
+        },
+      ],
+    }),
+    {
+      access: { role: "viewer", subject: "student:other.student@example.com" },
+      conflict: false,
+    },
+  );
+
+  assert.deepEqual(
+    resolvePortalAccess("user_parent_unlinked", "unlinked@example.com", {
+      env: {},
+      databaseGrants: [
+        {
+          email: "unlinked@example.com",
+          clerkUserId: "user_parent_unlinked",
+          roleCategory: "viewer",
+          linkedStudentEmail: null,
+          active: true,
+        },
+      ],
+    }),
+    { access: null, conflict: false },
+  );
+});
+
+test("keeps administrator env-only even when a student grant exists for someone else", async () => {
   const { resolvePortalAccess } =
     // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
     await import("./access-config.ts");

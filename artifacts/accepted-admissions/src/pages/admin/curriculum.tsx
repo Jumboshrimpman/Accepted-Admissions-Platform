@@ -278,6 +278,8 @@ function PeopleSection({
         return "IELTS tutor";
       case "tutor":
         return "Tutor (all subjects)";
+      case "viewer":
+        return "Parent viewer";
     }
   };
 
@@ -287,6 +289,8 @@ function PeopleSection({
       displayName: draft.displayName.trim(),
       roleCategory: draft.roleCategory,
       clerkUserId: draft.clerkUserId?.trim() ? draft.clerkUserId.trim() : null,
+      linkedStudentEmail:
+        draft.roleCategory === "viewer" ? draft.linkedStudentEmail ?? null : null,
       notes: draft.notes?.trim() ? draft.notes.trim() : null,
     };
     createGrant.mutate(
@@ -303,6 +307,7 @@ function PeopleSection({
             displayName: "",
             roleCategory: "student",
             clerkUserId: null,
+            linkedStudentEmail: null,
             notes: null,
           });
           refreshPeople();
@@ -380,7 +385,7 @@ function PeopleSection({
             <UserPlus className="h-5 w-5 text-primary" /> Provision people
           </CardTitle>
           <CardDescription>
-            Grant portal access as a student or tutor. Production Clerk finds or creates the account from this email. No invitation email is sent, and Railway allowlists do not need to be updated.
+            Grant portal access as a student, tutor, or parent viewer. Production Clerk finds or creates the account from this email. No invitation email is sent, and Railway allowlists do not need to be updated. A parent viewer mirrors exactly one student and cannot change that student&apos;s work.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -419,6 +424,7 @@ function PeopleSection({
                 <option value="sat_tutor">SAT tutor</option>
                 <option value="english_tutor">IELTS tutor</option>
                 <option value="tutor">Tutor (all subjects)</option>
+                <option value="viewer">Parent viewer</option>
               </select>
             </Field>
             <Field label="Clerk user ID (optional, Production only)">
@@ -435,6 +441,28 @@ function PeopleSection({
               />
             </Field>
           </div>
+          {draft.roleCategory === "viewer" ? (
+            <Field label="Student to mirror">
+              <select
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                aria-label="Student to mirror"
+                value={draft.linkedStudentEmail ?? ""}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    linkedStudentEmail: event.target.value || null,
+                  })
+                }
+              >
+                <option value="">Select the student this parent can view</option>
+                {previewStudents.map((student) => (
+                  <option key={student.id} value={student.email}>
+                    {student.name} ({student.email})
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
           <Field label="Notes (optional)">
             <Input
               value={draft.notes ?? ""}
@@ -454,7 +482,8 @@ function PeopleSection({
                 createGrant.isPending ||
                 draft.displayName.trim().length < 1 ||
                 draft.email.trim().length < 3 ||
-                !draft.email.includes("@")
+                !draft.email.includes("@") ||
+                (draft.roleCategory === "viewer" && !draft.linkedStudentEmail)
               }
             >
               <Plus className="mr-2 h-4 w-4" /> Provision access
@@ -475,7 +504,7 @@ function PeopleSection({
             <Mail className="h-5 w-5 text-primary" /> Access grants
           </CardTitle>
           <CardDescription>
-            Database-backed portal grants for tutors and students. Revoking removes portal access unless the identity remains on an environment allowlist.
+            Database-backed portal grants for tutors, students, and parent viewers. Revoking removes portal access unless the identity remains on an environment allowlist. A parent viewer only sees the one linked student.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -498,6 +527,11 @@ function PeopleSection({
                   {grant.clerkUserId && (
                     <p className="mt-1 font-mono text-xs text-muted-foreground">{grant.clerkUserId}</p>
                   )}
+                  {grant.roleCategory === "viewer" && grant.linkedStudentEmail ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Mirrors {grant.linkedStudentEmail} (read-only)
+                    </p>
+                  ) : null}
                   {grant.notes && <p className="mt-2 text-sm text-muted-foreground">{grant.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2">

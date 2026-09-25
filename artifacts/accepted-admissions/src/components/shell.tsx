@@ -146,7 +146,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       administrator: "Administrator",
       tutor: "Tutor",
       student: "Student",
-      viewer: "Viewer",
+      viewer: apiUser.viewingAs ? "Parent" : "Viewer",
     }[role] ?? role);
   const avatarUrl = portalAvatarUrl(apiUser.avatarUrl, user?.imageUrl);
   const bookingHashActive =
@@ -241,16 +241,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    setProfileOpen(true);
-                  }}
-                >
-                  <UserRound className="w-4 h-4 mr-2" />
-                  Edit profile
-                </DropdownMenuItem>
+                {apiUser.role !== "viewer" ? (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setProfileOpen(true);
+                    }}
+                  >
+                    <UserRound className="w-4 h-4 mr-2" />
+                    Edit profile
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem onClick={() => signOut()} className="text-destructive cursor-pointer">
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
@@ -300,6 +302,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
       </header>
       <main className="flex-1 container mx-auto px-4 py-8">
+        {apiUser.viewingAs ? (
+          <div
+            role="status"
+            data-testid="parent-view-banner"
+            className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+          >
+            <div>
+              <p className="font-semibold">
+                Parent view · Viewing as {apiUser.viewingAs.displayName}
+              </p>
+              <p className="mt-1 text-amber-800">
+                Read-only. You are signed in as {displayName}. This mirror shows only{" "}
+                {apiUser.viewingAs.displayName}&apos;s sessions, quizzes, progress, and homework.
+              </p>
+            </div>
+          </div>
+        ) : null}
         {children}
       </main>
     </div>

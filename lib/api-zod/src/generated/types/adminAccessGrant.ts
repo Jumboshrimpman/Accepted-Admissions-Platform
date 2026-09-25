@@ -17,6 +17,11 @@ export interface AdminAccessGrant {
   roleCategory: ProvisionableRoleCategory;
   role: AdminAccessGrantRole;
   subject: string;
+  /**
+     * Student email this parent viewer mirrors. Null for tutors and students.
+     * @nullable
+     */
+  linkedStudentEmail: string | null;
   active: boolean;
   /** @nullable */
   notes: string | null;
