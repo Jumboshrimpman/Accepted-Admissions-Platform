@@ -31,12 +31,15 @@ import {
 import {
   collapsedStudentQuizzes,
   sessionCalendarDayIsPast,
+  sessionForStudentQuiz,
   studentQuizActionLabel,
   type QuizSessionRef,
 } from "@/lib/student-quiz-list";
+import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-card";
 import { FinancialCard } from "@/pages/portal/financial-card";
+import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
 import { studentFacingCopy } from "@/lib/quiz-content";
@@ -528,6 +531,19 @@ export function ClientDashboardView({
                   ? `${studentFacingCopy(nextSession.preparation.title)} · ${featuredQuizSettled ? "Complete" : readinessLabel(nextSession)}`
                   : "No required preparation."}
               </p>
+              <PreworkDeadlineNote
+                label={
+                  nextSession.preparation
+                    ? studentPreworkDeadlineCopy({
+                        assignment: nextSession.preparation,
+                        session: nextSession,
+                        pastSessionDay: featuredQuizSettled,
+                        clientTimezone,
+                      })
+                    : null
+                }
+                testId="featured-prework-deadline"
+              />
             </div>
             <div className="flex flex-col gap-2">
               {adminPreview ? <Button disabled size="lg">Read only</Button> : <>
@@ -577,7 +593,7 @@ export function ClientDashboardView({
             Quizzes
           </CardTitle>
           <CardDescription>
-            Assigned practice and diagnostics for this account. Quizzes from a past session date are marked complete and stay behind Show more.
+            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Quizzes from a past session date are marked complete and stay behind Show more.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -595,6 +611,15 @@ export function ClientDashboardView({
                       <Badge variant="outline">{quiz.status}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>
+                    <PreworkDeadlineNote
+                      label={studentPreworkDeadlineCopy({
+                        assignment: quiz.assignment,
+                        session: sessionForStudentQuiz(quiz.assignment, datedSessions),
+                        pastSessionDay: quiz.pastSessionDay,
+                        clientTimezone,
+                      })}
+                      testId={`prework-deadline-${quiz.assignment.id}`}
+                    />
                   </div>
                   {adminPreview ? (
                     <Button disabled variant="ghost" size="sm">Read only</Button>
@@ -651,6 +676,19 @@ export function ClientDashboardView({
                       <p className="mt-1 text-xs text-muted-foreground">
                         {session.preparation ? `Before: ${studentFacingCopy(session.preparation.title)}` : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
                       </p>
+                      <PreworkDeadlineNote
+                        label={
+                          session.preparation
+                            ? studentPreworkDeadlineCopy({
+                                assignment: session.preparation,
+                                session,
+                                pastSessionDay: calendarDayPast(session),
+                                clientTimezone,
+                              })
+                            : null
+                        }
+                        testId={`roadmap-prework-deadline-${session.id}`}
+                      />
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       {session.readiness === "complete" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : session.readiness === "not_started" ? <Target className="h-4 w-4 text-amber-600" /> : <BookOpenCheck className="h-4 w-4 text-primary" />}

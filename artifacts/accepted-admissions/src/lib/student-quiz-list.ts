@@ -68,7 +68,7 @@ function quizUrgency(status: string): number {
   return 3;
 }
 
-function sessionForQuiz<T extends QuizAttempt>(
+export function sessionForStudentQuiz<T extends QuizAttempt>(
   assignment: T,
   sessions: readonly QuizSessionRef[],
 ): QuizSessionRef | undefined {
@@ -92,7 +92,7 @@ export function classifyStudentQuizzes<T extends QuizAttempt>(
   const open: ClassifiedStudentQuiz<T>[] = [];
   const archived: ClassifiedStudentQuiz<T>[] = [];
   for (const assignment of assignments) {
-    const session = sessionForQuiz(assignment, sessions);
+    const session = sessionForStudentQuiz(assignment, sessions);
     const pastSessionDay = session
       ? sessionCalendarDayIsPast(session, now, options?.clientTimezone)
       : false;
