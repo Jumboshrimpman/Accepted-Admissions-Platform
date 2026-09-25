@@ -71,6 +71,13 @@ const mocks = vi.hoisted(() => ({
   resultError: false,
   assignmentError: false,
   assignmentMissing: false,
+  sessionId: null as string | null,
+  deadline: null as string | null,
+  latestAttemptId: "attempt-1" as string | null,
+  latestAttemptStatus: "active" as string | null,
+  timezone: "Asia/Tokyo",
+  linkedSession: null as null | { id: string; dateTime: string; timezone: string; durationMinutes: number },
+  linkedSessionFetched: true,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -78,7 +85,13 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getGetAttemptQueryKey: (id: string) => ["/api/attempts", id],
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
-  useGetCurrentUser: () => ({ data: { role: "student" } }),
+  useGetCurrentUser: () => ({ data: { role: "student", timezone: mocks.timezone } }),
+  getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
+  useGetSession: () => ({
+    data: mocks.linkedSession ?? undefined,
+    isLoading: false,
+    isFetched: mocks.linkedSessionFetched,
+  }),
   useGetAssignment: () => ({
     data: mocks.assignmentError || mocks.assignmentMissing
       ? undefined
@@ -88,9 +101,12 @@ vi.mock("@workspace/api-client-react", () => ({
           subject: "SAT",
           instructions: "Answer the questions.",
           deliveryPhase: mocks.deliveryPhase,
+          sessionId: mocks.sessionId,
+          deadline: mocks.deadline,
+          latestAttemptStatus: mocks.latestAttemptStatus,
           questionCount: mocks.questions.length,
           timeLimitMinutes: 60,
-          latestAttemptId: "attempt-1",
+          latestAttemptId: mocks.latestAttemptId,
           questions: mocks.questions,
         },
     isLoading: false,
@@ -151,6 +167,13 @@ afterEach(() => {
   mocks.resultError = false;
   mocks.assignmentError = false;
   mocks.assignmentMissing = false;
+  mocks.sessionId = null;
+  mocks.deadline = null;
+  mocks.latestAttemptId = "attempt-1";
+  mocks.latestAttemptStatus = "active";
+  mocks.timezone = "Asia/Tokyo";
+  mocks.linkedSession = null;
+  mocks.linkedSessionFetched = true;
   mocks.questions[0]!.stimulus = null;
   mocks.questions[0]!.prompt = "Which transition is best?";
   mocks.questions[0]!.questionType = "multiple_choice";
@@ -164,6 +187,24 @@ afterEach(() => {
 });
 
 describe("student attempt UI", () => {
+  test("the start screen states the pre-work deadline before the linked session", () => {
+    mocks.latestAttemptId = null;
+    mocks.latestAttemptStatus = null;
+    mocks.sessionId = "session-1";
+    mocks.deadline = null;
+    mocks.linkedSession = {
+      id: "session-1",
+      dateTime: "2026-10-02T12:00:00.000Z",
+      timezone: "America/New_York",
+      durationMinutes: 60,
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("prework-deadline-asg-1").textContent).toBe(
+      "Due before your session: Friday, October 2, 2026 at 9:00 PM JST",
+    );
+    expect(screen.getByRole("button", { name: "Start quiz" })).toBeTruthy();
+  });
+
   test("prediction cannot hide choices or auto-advance to submit without answers", () => {
     render(<PortalAssignment />);
     expect(screen.queryByText("Prediction first")).toBeNull();

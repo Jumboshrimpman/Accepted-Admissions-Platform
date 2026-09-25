@@ -107,6 +107,9 @@ describe("student session quiz path", () => {
     expect(screen.getByText("Complete the assigned pre-work, then review right and wrong answers with your tutor.")).toBeTruthy();
     const takeQuiz = screen.getByRole("link", { name: /Start pre-work/i });
     expect(takeQuiz.getAttribute("href")).toBe("/portal/assignments/quiz-1");
+    expect(screen.getByTestId("prework-deadline-quiz-1").textContent).toMatch(
+      /Due before your session: .+ ET/,
+    );
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/Practice together from pre-work/);
     expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(
       /Open a wrong answer to review with correct explanation/,
@@ -156,5 +159,6 @@ describe("student session quiz path", () => {
     expect(card.textContent).toContain("Complete");
     expect(card.textContent).toContain("Review");
     expect(card.textContent).not.toContain("Start pre-work");
+    expect(card.textContent).not.toContain("Due before");
   });
 });

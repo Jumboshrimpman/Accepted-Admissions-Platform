@@ -23,11 +23,13 @@ import {
   withDisplayTimezone,
 } from "@/lib/session-display";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
+import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
 import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
 import { studentFacingCopy } from "@/lib/quiz-content";
+import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 import { sessionCalendarDayIsPast } from "@/lib/student-quiz-list";
 import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
 
@@ -115,6 +117,15 @@ export default function PortalSession() {
                   {pastSessionDay ? <Badge variant="outline">Complete</Badge> : null}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{assignment.questionCount} questions · {assignment.timeLimitMinutes} minutes{assignment.latestScore == null ? "" : ` · ${Math.round(assignment.latestScore)}%`}</p>
+                <PreworkDeadlineNote
+                  label={studentPreworkDeadlineCopy({
+                    assignment,
+                    session: displaySession,
+                    pastSessionDay,
+                    clientTimezone,
+                  })}
+                  testId={`prework-deadline-${assignment.id}`}
+                />
               </div>
               <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{viewer && !assignment.latestAttemptId && !pastSessionDay ? "Not started" : assignmentAction(assignment.latestAttemptStatus, false, pastSessionDay)}<ArrowIcon /></Link></Button>
             </div>

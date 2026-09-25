@@ -4,10 +4,12 @@ import {
   getGetAssignmentQueryKey,
   getGetAttemptQueryKey,
   getGetAttemptResultQueryKey,
+  getGetSessionQueryKey,
   useGetAssignment,
   useGetAttempt,
   useGetAttemptResult,
   useGetCurrentUser,
+  useGetSession,
   usePauseAttempt,
   useResumeAttempt,
   useSaveAttemptResponse,
@@ -19,6 +21,7 @@ import {
   type AttemptResult,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +39,9 @@ import {
   Timer,
 } from "lucide-react";
 import { isUnfinishedHomeworkClientCopy, studentFacingCopy } from "@/lib/quiz-content";
+import { optionalClientTimezone } from "@/lib/session-display";
+import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
+import { sessionCalendarDayIsPast } from "@/lib/student-quiz-list";
 import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
@@ -486,6 +492,29 @@ export default function PortalAssignment() {
   const { data: assignment, isLoading: loadingAssignment, isError: assignmentError } = useGetAssignment(assignmentId, {
     query: { enabled: Boolean(assignmentId), queryKey: getGetAssignmentQueryKey(assignmentId) },
   });
+  const clientTimezone = optionalClientTimezone(
+    currentUser?.viewingAs?.timezone ?? currentUser?.timezone,
+  );
+  const preworkSessionId =
+    assignment?.deliveryPhase === "during_session" ? "" : (assignment?.sessionId ?? "");
+  const linkedSessionQuery = useGetSession(preworkSessionId, {
+    query: {
+      enabled: preworkSessionId.length > 0,
+      queryKey: getGetSessionQueryKey(preworkSessionId || "none"),
+    },
+  });
+  const deadlineReady = preworkSessionId.length === 0 || linkedSessionQuery.isFetched;
+  const preworkDeadline =
+    assignment && deadlineReady
+      ? studentPreworkDeadlineCopy({
+          assignment,
+          session: linkedSessionQuery.data,
+          pastSessionDay: linkedSessionQuery.data
+            ? sessionCalendarDayIsPast(linkedSessionQuery.data, new Date(), clientTimezone)
+            : false,
+          clientTimezone,
+        })
+      : null;
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const { data: attempt, isLoading: loadingAttempt } = useGetAttempt(attemptId ?? "", {
     query: {
@@ -819,6 +848,10 @@ export default function PortalAssignment() {
                 </span>
                 <span>{assignment.questionCount} questions</span>
               </div>
+              <PreworkDeadlineNote
+                label={preworkDeadline}
+                testId={`prework-deadline-${assignment.id}`}
+              />
             </CardHeader>
           )}
           <CardContent className="space-y-4 p-6">

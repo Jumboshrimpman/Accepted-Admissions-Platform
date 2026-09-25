@@ -348,10 +348,14 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByTestId("client-quizzes").textContent).toContain("Quizzes");
     expect(screen.getByText("In progress")).toBeTruthy();
     expect(screen.getByText("Past due")).toBeTruthy();
+    expect(screen.getByTestId("prework-deadline-assignment-active").textContent).toMatch(/Due before/);
+    expect(screen.getByTestId("prework-deadline-assignment-past-due").textContent).toMatch(/Due before/);
     expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
     fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
     expect(screen.getByText("85%")).toBeTruthy();
     expect(screen.getByText("Complete")).toBeTruthy();
+    expect(screen.queryByTestId("prework-deadline-assignment-score")).toBeNull();
+    expect(screen.queryByTestId("prework-deadline-assignment-complete")).toBeNull();
     expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
     expect(screen.getByText("Your tutors")).toBeTruthy();
     const roster = screen.getByTestId("client-tutor-roster");
@@ -481,7 +485,13 @@ describe("authenticated role dashboard flows", () => {
     const quizzes = screen.getByTestId("client-quizzes");
     expect(within(quizzes).getByTestId("client-quiz-today-quiz").textContent).toContain("Not started");
     expect(within(quizzes).getByTestId("client-quiz-today-quiz").textContent).not.toContain("Complete");
+    expect(within(quizzes).getByTestId("prework-deadline-today-quiz").textContent).toMatch(
+      /Due before your session: .+ GST/,
+    );
     expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
+    expect(within(quizzes).getByTestId("prework-deadline-future-quiz").textContent).toMatch(
+      /Due before your session/,
+    );
     expect(within(quizzes).queryByText("Yesterday pre-work")).toBeNull();
     expect(within(quizzes).queryByText("Yesterday in-session work")).toBeNull();
     expect(screen.queryByText("Yesterday pre-work")).toBeNull();
@@ -495,6 +505,8 @@ describe("authenticated role dashboard flows", () => {
     expect(pastLive.textContent).toContain("Complete");
     expect(pastPrework.textContent).toContain("Review");
     expect(pastPrework.textContent).not.toContain("Start pre-work");
+    expect(pastPrework.textContent).not.toContain("Due before");
+    expect(pastLive.textContent).not.toContain("Due before");
   });
 
   test("Taito’s client dashboard does not show clean-question wording", () => {
