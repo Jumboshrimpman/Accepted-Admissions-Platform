@@ -111,6 +111,23 @@ test("finished, in-session, and past-session work does not get a deadline label"
   );
 });
 
+test("Geometry SAT Questions does not inherit a past session due time", () => {
+  assert.equal(
+    studentPreworkDeadlineCopy({
+      assignment: {
+        title: "Geometry SAT Questions",
+        deliveryPhase: "before_session",
+        deadline: null,
+        latestAttemptStatus: null,
+      },
+      session,
+      pastSessionDay: false,
+      clientTimezone: "Asia/Dubai",
+    }),
+    null,
+  );
+});
+
 test("a standalone quiz uses its stored deadline in the student timezone", () => {
   assert.equal(
     studentPreworkDeadlineCopy({

@@ -22,6 +22,7 @@ import { ClearHomeworkButton } from "@/components/clear-homework-button";
 import { TutorAnalysisBrief } from "@/components/tutor-analysis-brief";
 import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homework";
+import { isPostSessionFollowUpQuiz } from "@/lib/student-quiz-list";
 import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
   BookOpenCheck,
@@ -318,6 +319,9 @@ export default function TutorSession() {
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <p className="font-medium">{homework.title}</p>
+                          {isPostSessionFollowUpQuiz(homework) ? (
+                            <p className="mt-1 text-xs font-medium text-primary">Follow-up after this session</p>
+                          ) : null}
                           <p className="mt-1 text-xs text-muted-foreground">
                             {homework.deadline ? `Due ${format(parseISO(homework.deadline), "MMM d, yyyy")}` : "No due date"}
                           </p>

@@ -4,6 +4,7 @@ import { xavierCalendarIdentityAlignment } from "./lib/calendar-profile";
 import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
+import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-up";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 
 const rawPort = process.env["PORT"];
@@ -37,6 +38,8 @@ void ensureRyoTaitoParentMirror()
         .then(() => retireDuplicateXavierIdentities())
         .then(() => ensureXavierSatCapabilitySession())
         .then((result) => logger.info(result, "Xavier SAT capability session ready"))
+        .then(() => ensureMichelleGeometryFollowUp())
+        .then((result) => logger.info(result, "Michelle geometry follow-up ready"))
         .then(() => xavierCalendarIdentityAlignment())
         .then((alignment) =>
           logger.info(

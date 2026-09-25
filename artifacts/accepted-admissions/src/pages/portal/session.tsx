@@ -30,7 +30,11 @@ import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
 import { studentFacingCopy } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
-import { sessionCalendarDayIsPast } from "@/lib/student-quiz-list";
+import {
+  isPostSessionFollowUpQuiz,
+  sessionCalendarDayIsPast,
+  studentQuizActionLabel,
+} from "@/lib/student-quiz-list";
 import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
@@ -70,7 +74,13 @@ export default function PortalSession() {
   const displaySession = withDisplayTimezone(session, clientTimezone);
   const pastSessionDay = sessionCalendarDayIsPast(displaySession, new Date(), clientTimezone);
   const beforeAssignments = sessionStatusHomework(
-    session.assignments.filter((item) => item.deliveryPhase !== "during_session"),
+    session.assignments.filter(
+      (item) =>
+        item.deliveryPhase !== "during_session" && !isPostSessionFollowUpQuiz(item),
+    ),
+  );
+  const followUpAssignments = sessionStatusHomework(
+    session.assignments.filter((item) => isPostSessionFollowUpQuiz(item)),
   );
   const duringAssignments = session.assignments.filter((item) => item.deliveryPhase === "during_session");
   const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
@@ -156,9 +166,21 @@ export default function PortalSession() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-emerald-600" />After the session</CardTitle><CardDescription>Feedback and reports appear only after they are published.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
+          {followUpAssignments.map((assignment) => (
+            <div key={assignment.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between" data-testid={`session-homework-${assignment.id}`}>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{studentFacingCopy(assignment.title)}</p>
+                  <Badge variant="outline">Follow-up</Badge>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{assignment.questionCount} questions · {assignment.timeLimitMinutes} minutes{assignment.latestScore == null ? "" : ` · ${Math.round(assignment.latestScore)}%`}</p>
+              </div>
+              <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{viewer && !assignment.latestAttemptId ? "Not started" : studentQuizActionLabel({ assignment, pastSessionDay: false }, viewer)}<ArrowIcon /></Link></Button>
+            </div>
+          ))}
           {session.studentNotes && <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Tutor feedback</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(session.studentNotes)}</p></details>}
           {reports.map((report) => <details key={report.id} className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Published session report</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(report.content)}</p></details>)}
-          {!session.studentNotes && reports.length === 0 && <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Feedback and the session report are not available yet.</p>}
+          {!session.studentNotes && reports.length === 0 && followUpAssignments.length === 0 && <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Feedback and the session report are not available yet.</p>}
         </CardContent>
       </Card>
     </div>
