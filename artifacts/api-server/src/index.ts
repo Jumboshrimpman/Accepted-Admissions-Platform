@@ -4,6 +4,7 @@ import { xavierCalendarIdentityAlignment } from "./lib/calendar-profile";
 import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
+import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 
 const rawPort = process.env["PORT"];
 
@@ -19,27 +20,32 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+void ensureRyoTaitoParentMirror()
+  .then((result) => logger.info(result, "Ryo parent mirror ready"))
+  .catch((err) => logger.warn({ err }, "Ryo parent mirror upsert skipped"))
+  .then(() => {
+    app.listen(port, (err) => {
+      if (err) {
+        logger.error({ err }, "Error listening on port");
+        process.exit(1);
+      }
 
-  logger.info({ port }, "Server listening");
-  void ensureOfficialExtractsImported()
-    .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
-    .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
-    .then(() => retireDuplicateXavierIdentities())
-    .then(() => ensureXavierSatCapabilitySession())
-    .then((result) => logger.info(result, "Xavier SAT capability session ready"))
-    .then(() => xavierCalendarIdentityAlignment())
-    .then((alignment) =>
-      logger.info(
-        { event: "calendar.xavier_identity_alignment", ...alignment },
-        "Xavier calendar identity alignment",
-      ),
-    )
-    .catch((err) =>
-      logger.warn({ err }, "Xavier SAT capability session seed skipped"),
-    );
-});
+      logger.info({ port }, "Server listening");
+      void ensureOfficialExtractsImported()
+        .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
+        .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
+        .then(() => retireDuplicateXavierIdentities())
+        .then(() => ensureXavierSatCapabilitySession())
+        .then((result) => logger.info(result, "Xavier SAT capability session ready"))
+        .then(() => xavierCalendarIdentityAlignment())
+        .then((alignment) =>
+          logger.info(
+            { event: "calendar.xavier_identity_alignment", ...alignment },
+            "Xavier calendar identity alignment",
+          ),
+        )
+        .catch((err) =>
+          logger.warn({ err }, "Xavier SAT capability session seed skipped"),
+        );
+    });
+  });

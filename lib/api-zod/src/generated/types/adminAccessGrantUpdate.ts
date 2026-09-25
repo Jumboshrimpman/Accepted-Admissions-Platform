@@ -21,6 +21,11 @@ export interface AdminAccessGrantUpdate {
      */
   clerkUserId?: string | null;
   /**
+     * Required when roleCategory is viewer.
+     * @nullable
+     */
+  linkedStudentEmail?: string | null;
+  /**
      * @maxLength 500
      * @nullable
      */

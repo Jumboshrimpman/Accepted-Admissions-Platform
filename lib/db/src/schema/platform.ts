@@ -760,10 +760,10 @@ export const meetingRecordsTable = pgTable("meeting_records", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Admin-provisionable portal roles only — never administrator or viewer. */
+/** Admin-provisionable portal roles. Administrator stays environment-only. */
 export const provisionableRoleCategoryEnum = pgEnum(
   "provisionable_role_category",
-  ["sat_tutor", "english_tutor", "tutor", "student"],
+  ["sat_tutor", "english_tutor", "tutor", "student", "viewer"],
 );
 
 export const portalAccessGrantsTable = pgTable(
@@ -774,6 +774,8 @@ export const portalAccessGrantsTable = pgTable(
     clerkUserId: text("clerk_user_id"),
     displayName: text("display_name").notNull(),
     roleCategory: provisionableRoleCategoryEnum("role_category").notNull(),
+    /** Student email a parent viewer mirrors. Null for tutors and students. */
+    linkedStudentEmail: text("linked_student_email"),
     active: boolean("active").notNull().default(true),
     notes: text("notes"),
     provisionedByUserId: uuid("provisioned_by_user_id").references(

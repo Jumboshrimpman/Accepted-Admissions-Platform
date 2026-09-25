@@ -70,7 +70,7 @@ Migration `0025_curriculum_library_assets` adds `curriculum_library_assets` and 
 | Michelle books Xavier or Eunice; $130 or 10-credit package | **Done in code** (live slots still need Google consent) |
 | Hide Taito billing; keep Michelle prepaid path | **Done in code** |
 | Keep Xavier payout tracking out | **Done** |
-| Clerk invites + `ACCEPTED_*_CLERK_USER_IDS` | **Owner-only for admin/viewer.** Tutors/students provisioned under People do not need Railway allowlist updates. |
+| Clerk invites + `ACCEPTED_*_CLERK_USER_IDS` | **Owner-only for administrators.** Tutors, students, and parent viewers provisioned under People do not need Railway allowlist updates. |
 | `STRIPE_WEBHOOK_SECRET` on the deployment host (not Replit) | **Owner-only** |
 | Google Calendar consent: Xavier `xaver.rmz6@gmail.com`, Eunice `eunice_chon@berkeley.edu` from `/tutor` | **Owner-only** |
 | Policy copy (cancel / refund / privacy / financial aid) | **Owner-only** |
@@ -87,7 +87,7 @@ Do not invent or commit secrets.
 
 ## Owner input still required
 
-1. **Clerk access** — keep public sign-up disabled. Administrators and viewers still use `ACCEPTED_ADMIN_*` / `ACCEPTED_VIEWER_*`. Tutors and students should be provisioned from `/admin/curriculum?section=people`; that creates or links the Production Clerk user without an invitation email and does not require a Railway allowlist change.
+1. **Clerk access** — keep public sign-up disabled. Administrators still use `ACCEPTED_ADMIN_*`. Tutors, students, and parent viewers should be provisioned from `/admin/curriculum?section=people`; that creates or links the Production Clerk user without an invitation email and does not require a Railway allowlist change. Ryo (`ryo@jaac.co.jp`) is the read-only parent mirror of Taito (`taito0525@gmail.com`): migrations `0041`/`0042` plus the API startup grant upsert. `ACCEPTED_VIEWER_*` is only a legacy fallback.
 2. **Stripe webhook** — Dashboard URL must be `https://app.acceptedadmissions.org/api/stripe/webhook` (not Replit). Set `STRIPE_WEBHOOK_SECRET` on Railway. Credits grant `product.durationHours` only after the signed paid event. If a paid payment has no ledger row, run the paid-uncredited backfill in `docs/stripe-webhook.md`.
 3. **Google Calendar consent** — Xavier must sign in at `/tutor` with **`xaver.rmz6@gmail.com`** (not `xsfam6@gmail.com`) and complete Google Calendar OAuth. Eunice (`eunice_chon@berkeley.edu`) also needs `/tutor` Google consent before Michelle can see live availability. After migration `0036_sat_booking_hours_7_to_21`, Xavier’s bookable times are **every day including Saturday and Sunday, 07:00–21:00 America/New_York**; Eunice stays Mon–Fri **07:00–21:00**. Existing Google connections are marked disconnected so tutors reconsent for `calendar.freebusy` + `calendar.events`. Eunice’s Clerk invitation/allowlisting is still an owner action if not already done. Taito’s Meet room is the shared Fall URL; calendar **event** links fill in when Google `htmlLink` is stored on the session. Booking and availability reject any slot that would put two sessions on that shared Meet at the same time.
 4. **Policy copy** — final cancellation, credit-restoration, invoice, refund, privacy-policy, and financial-aid rules. The public form has a short storage notice only; do not treat that as a legal privacy policy.

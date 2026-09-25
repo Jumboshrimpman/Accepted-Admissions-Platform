@@ -70,6 +70,7 @@ import type {
   CancelBookingInput,
   CheckoutInput,
   CheckoutSession,
+  ClearSessionHomeworkBody,
   ClearSessionHomeworkResult,
   CloneAdminAssignmentToSessionBody,
   ConflictResponse,
@@ -715,7 +716,7 @@ export const getListAdminAccessGrantsUrl = () => {
 }
 
 /**
- * @summary List portal access grants for tutors and students
+ * @summary List portal access grants for tutors, students, and parent viewers
  */
 export const listAdminAccessGrants = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrantList> => {
 
@@ -762,7 +763,7 @@ export type ListAdminAccessGrantsQueryError = ErrorType<UnauthorizedResponse | F
 
 
 /**
- * @summary List portal access grants for tutors and students
+ * @summary List portal access grants for tutors, students, and parent viewers
  */
 
 export function useListAdminAccessGrants<TData = Awaited<ReturnType<typeof listAdminAccessGrants>>, TError = ErrorType<UnauthorizedResponse | ForbiddenResponse>>(
@@ -792,8 +793,8 @@ export const getCreateAdminAccessGrantUrl = () => {
 }
 
 /**
- * Creates or reactivates a database access grant for a tutor or student. Resolves the Production Clerk user by email (find or create, no invitation). A pasted clerkUserId is used only if it exists in Production for this email; otherwise it is replaced and a warning is returned. Administrator and viewer roles cannot be provisioned from this endpoint.
- * @summary Provision a tutor or student for portal access
+ * Creates or reactivates a database access grant for a tutor, student, or parent viewer. Resolves the Production Clerk user by email (find or create, no invitation). A pasted clerkUserId is used only if it exists in Production for this email; otherwise it is replaced and a warning is returned. Administrator roles cannot be provisioned from this endpoint. A parent viewer must include linkedStudentEmail and can mirror only that one student.
+ * @summary Provision a tutor, student, or parent viewer for portal access
  */
 export const createAdminAccessGrant = async (adminAccessGrantInput: AdminAccessGrantInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrant> => {
 
@@ -842,7 +843,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateAdminAccessGrantMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>
 
     /**
- * @summary Provision a tutor or student for portal access
+ * @summary Provision a tutor, student, or parent viewer for portal access
  */
 export const useCreateAdminAccessGrant = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminAccessGrant>>, TError,{data: BodyType<AdminAccessGrantInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -864,7 +865,7 @@ export const getUpdateAdminAccessGrantUrl = (grantId: string,) => {
 }
 
 /**
- * @summary Update or revoke a tutor or student access grant
+ * @summary Update or revoke a tutor, student, or parent viewer access grant
  */
 export const updateAdminAccessGrant = async (grantId: string,
     adminAccessGrantUpdate: AdminAccessGrantUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccessGrant> => {
@@ -914,7 +915,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateAdminAccessGrantMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>
 
     /**
- * @summary Update or revoke a tutor or student access grant
+ * @summary Update or revoke a tutor, student, or parent viewer access grant
  */
 export const useUpdateAdminAccessGrant = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse | ConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminAccessGrant>>, TError,{grantId: string;data: BodyType<AdminAccessGrantUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -4493,17 +4494,18 @@ export const getClearSessionHomeworkUrl = (sessionId: string,) => {
 }
 
 /**
- * Tutor of that session or an administrator can delete attempt state (responses, timer events, consolidated result). Omit the body to clear live before_session homework. Send deliveryPhase during_session to clear in-session homework on this session, or assignmentId to clear one assignment of either phase. Does not wipe the College Board bank.
+ * Tutor of that session or an administrator can delete attempt state (responses, timer events, consolidated result), including empty or glitched submits. The same assignment and questions stay attached. Does not wipe the College Board bank or other sessions. Omit the body to clear live before_session homework only. Send deliveryPhase during_session to clear every in-session assignment on this session. Send assignmentId to clear one assignment of either phase.
  * @summary Clear homework attempts so the student can redo
  */
-export const clearSessionHomework = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<ClearSessionHomeworkResult> => {
+export const clearSessionHomework = async (sessionId: string,
+    clearSessionHomeworkBody?: ClearSessionHomeworkBody, options?: Parameters<typeof customFetch>[1]): Promise<ClearSessionHomeworkResult> => {
 
   return customFetch<ClearSessionHomeworkResult>(getClearSessionHomeworkUrl(sessionId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(clearSessionHomeworkBody)
   }
 );}
 
@@ -4512,8 +4514,8 @@ export const clearSessionHomework = async (sessionId: string, options?: Paramete
 
 
 export const getClearSessionHomeworkMutationOptions = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSessionHomework>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof clearSessionHomework>>, TError,{sessionId: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSessionHomework>>, TError,{sessionId: string;data?: BodyType<ClearSessionHomeworkBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearSessionHomework>>, TError,{sessionId: string;data?: BodyType<ClearSessionHomeworkBody>}, TContext> => {
 
 const mutationKey = ['clearSessionHomework'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -4525,10 +4527,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearSessionHomework>>, {sessionId: string}> = (props) => {
-          const {sessionId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearSessionHomework>>, {sessionId: string;data?: BodyType<ClearSessionHomeworkBody>}> = (props) => {
+          const {sessionId,data} = props ?? {};
 
-          return  clearSessionHomework(sessionId,requestOptions)
+          return  clearSessionHomework(sessionId,data,requestOptions)
         }
 
 
@@ -4539,18 +4541,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ClearSessionHomeworkMutationResult = NonNullable<Awaited<ReturnType<typeof clearSessionHomework>>>
-
+    export type ClearSessionHomeworkMutationBody = BodyType<ClearSessionHomeworkBody> | undefined
     export type ClearSessionHomeworkMutationError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
 
     /**
- * @summary Clear before-session homework attempts so the student can redo
+ * @summary Clear homework attempts so the student can redo
  */
 export const useClearSessionHomework = <TError = ErrorType<UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSessionHomework>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearSessionHomework>>, TError,{sessionId: string;data?: BodyType<ClearSessionHomeworkBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof clearSessionHomework>>,
         TError,
-        {sessionId: string},
+        {sessionId: string;data?: BodyType<ClearSessionHomeworkBody>},
         TContext
       > => {
       return useMutation(getClearSessionHomeworkMutationOptions(options));

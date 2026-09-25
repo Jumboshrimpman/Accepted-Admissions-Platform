@@ -7,7 +7,7 @@
  */
 
 /**
- * Roles that administrators may provision from the portal (never administrator or viewer).
+ * Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.
  */
 export type ProvisionableRoleCategory = typeof ProvisionableRoleCategory[keyof typeof ProvisionableRoleCategory];
 
@@ -17,4 +17,5 @@ export const ProvisionableRoleCategory = {
   english_tutor: 'english_tutor',
   tutor: 'tutor',
   student: 'student',
+  viewer: 'viewer',
 } as const;

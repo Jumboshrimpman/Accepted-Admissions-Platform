@@ -10,6 +10,8 @@ import {
   type AppUser,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { mirroredStudentIdForViewer } from "./parent-mirror.ts";
 import {
   EUNICE_TUTOR_EMAIL,
   NIKA_TUTOR_EMAIL,
@@ -355,17 +357,8 @@ export async function canViewSession(
   if (user.role === "student") return session.clientUserId === user.id;
   if (user.role === "tutor") return session.tutorUserId === user.id;
   if (user.role === "viewer") {
-    const [link] = await db
-      .select({ studentUserId: viewerLinksTable.studentUserId })
-      .from(viewerLinksTable)
-      .where(
-        and(
-          eq(viewerLinksTable.viewerUserId, user.id),
-          eq(viewerLinksTable.active, true),
-        ),
-      )
-      .limit(1);
-    return Boolean(link && session.clientUserId === link.studentUserId);
+    const studentUserId = await mirroredStudentIdForViewer(user.id);
+    return Boolean(studentUserId && session.clientUserId === studentUserId);
   }
   return false;
 }

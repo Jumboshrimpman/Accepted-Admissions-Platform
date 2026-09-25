@@ -476,7 +476,17 @@ export const Role = {
 } as const;
 
 /**
- * Roles that administrators may provision from the portal (never administrator or viewer).
+ * The one student a parent viewer is mirroring.
+ */
+export interface ViewingAs {
+  id: string;
+  displayName: string;
+  email: string;
+  timezone: string;
+}
+
+/**
+ * Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.
  */
 export type ProvisionableRoleCategory = typeof ProvisionableRoleCategory[keyof typeof ProvisionableRoleCategory];
 
@@ -486,6 +496,7 @@ export const ProvisionableRoleCategory = {
   english_tutor: 'english_tutor',
   tutor: 'tutor',
   student: 'student',
+  viewer: 'viewer',
 } as const;
 
 export type AdminAccessGrantRole = typeof AdminAccessGrantRole[keyof typeof AdminAccessGrantRole];
@@ -494,6 +505,7 @@ export type AdminAccessGrantRole = typeof AdminAccessGrantRole[keyof typeof Admi
 export const AdminAccessGrantRole = {
   tutor: 'tutor',
   student: 'student',
+  viewer: 'viewer',
 } as const;
 
 export interface AdminAccessGrant {
@@ -505,6 +517,11 @@ export interface AdminAccessGrant {
   roleCategory: ProvisionableRoleCategory;
   role: AdminAccessGrantRole;
   subject: string;
+  /**
+     * Student email this parent viewer mirrors. Null for tutors and students.
+     * @nullable
+     */
+  linkedStudentEmail: string | null;
   active: boolean;
   /** @nullable */
   notes: string | null;
@@ -542,6 +559,11 @@ export interface AdminAccessGrantInput {
      */
   clerkUserId?: string | null;
   /**
+     * Required when roleCategory is viewer. The one student whose portal this parent mirrors.
+     * @nullable
+     */
+  linkedStudentEmail?: string | null;
+  /**
      * @maxLength 500
      * @nullable
      */
@@ -561,6 +583,11 @@ export interface AdminAccessGrantUpdate {
      * @nullable
      */
   clerkUserId?: string | null;
+  /**
+     * Required when roleCategory is viewer.
+     * @nullable
+     */
+  linkedStudentEmail?: string | null;
   /**
      * @maxLength 500
      * @nullable
@@ -589,6 +616,8 @@ export interface CurrentUser {
   avatarUrl?: string | null;
   timezone: string;
   timezoneSource?: CurrentUserTimezoneSource;
+  /** Student mirrored by a parent viewer. Null for every other role. */
+  viewingAs?: ViewingAs | null;
 }
 
 export interface CurrentUserUpdate {
@@ -1986,12 +2015,20 @@ export type SessionDetail = Session & ({
   homework?: SessionHomework[];
 });
 
+export type ClearSessionHomeworkResultDeliveryPhase = typeof ClearSessionHomeworkResultDeliveryPhase[keyof typeof ClearSessionHomeworkResultDeliveryPhase];
+
+
+export const ClearSessionHomeworkResultDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
 export interface ClearSessionHomeworkResult {
   sessionId: string;
   assignmentIds: string[];
   deletedAttempts: number;
   keptAssignments: number;
-  deliveryPhase: "before_session" | "during_session";
+  deliveryPhase: ClearSessionHomeworkResultDeliveryPhase;
 }
 
 export type AssignmentQuestionDifficulty = typeof AssignmentQuestionDifficulty[keyof typeof AssignmentQuestionDifficulty];
@@ -2745,6 +2782,8 @@ export type SatBankQuestionSection = typeof SatBankQuestionSection[keyof typeof 
 export const SatBankQuestionSection = {
   rw: 'rw',
   math: 'math',
+  reading: 'reading',
+  writing: 'writing',
 } as const;
 
 export type SatBankQuestionChoicesItem = {
@@ -3153,6 +3192,7 @@ export type ListSatBankQuestionsExamFamily = typeof ListSatBankQuestionsExamFami
 export const ListSatBankQuestionsExamFamily = {
   sat: 'sat',
   psat: 'psat',
+  ielts: 'ielts',
 } as const;
 
 export type ListSatBankQuestionsSection = typeof ListSatBankQuestionsSection[keyof typeof ListSatBankQuestionsSection];
@@ -3161,6 +3201,8 @@ export type ListSatBankQuestionsSection = typeof ListSatBankQuestionsSection[key
 export const ListSatBankQuestionsSection = {
   rw: 'rw',
   math: 'math',
+  reading: 'reading',
+  writing: 'writing',
 } as const;
 
 export type ListSatBankQuestionsQuestionType = typeof ListSatBankQuestionsQuestionType[keyof typeof ListSatBankQuestionsQuestionType];
@@ -3204,6 +3246,19 @@ tutorProfileId?: string;
 
 export type GetCalendarConnectUrl200 = {
   authorizationUrl: string;
+};
+
+export type ClearSessionHomeworkBodyDeliveryPhase = typeof ClearSessionHomeworkBodyDeliveryPhase[keyof typeof ClearSessionHomeworkBodyDeliveryPhase];
+
+
+export const ClearSessionHomeworkBodyDeliveryPhase = {
+  before_session: 'before_session',
+  during_session: 'during_session',
+} as const;
+
+export type ClearSessionHomeworkBody = {
+  deliveryPhase?: ClearSessionHomeworkBodyDeliveryPhase;
+  assignmentId?: string;
 };
 
 export type ListAssignmentsParams = {

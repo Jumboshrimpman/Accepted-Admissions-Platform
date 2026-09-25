@@ -1,6 +1,6 @@
 # Accepted Admissions production provisioning
 
-The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is never opened by public self-enrollment. Administrators provision **tutors** and **students** from `/admin/curriculum?section=people`. That path is the source of truth for those roles: the API finds or creates the user in **Production Clerk** (`CLERK_SECRET_KEY`), marks the email verified when the API allows, and stores the real Production `clerkUserId` on `portal_access_grants`. **Do not update Railway `ACCEPTED_*_CLERK_USER_IDS` / `ACCEPTED_*_EMAILS` for People-provisioned tutors or students.** Administrator and viewer roles remain environment-only. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
+The API applies committed Drizzle migrations before it starts. Portal access is deny-by-default and is never opened by public self-enrollment. Administrators provision **tutors**, **students**, and **parent viewers** from `/admin/curriculum?section=people`. That path is the source of truth for those roles: the API finds or creates the user in **Production Clerk** (`CLERK_SECRET_KEY`), marks the email verified when the API allows, and stores the real Production `clerkUserId` on `portal_access_grants`. **Do not update Railway `ACCEPTED_*_CLERK_USER_IDS` / `ACCEPTED_*_EMAILS` for People-provisioned tutors, students, or parent viewers.** Administrator identities remain environment-only. The browser keeps the Clerk session in Clerk-managed secure cookies; the app does not persist bearer tokens in `localStorage`.
 
 Set the following environment variables as comma-separated Clerk user IDs via
 host Secrets or a local `.env` (see `.env.example`). Do not commit allowlist
@@ -13,7 +13,7 @@ roster below is operator documentation, not committed runtime configuration.
 - `ACCEPTED_ENGLISH_TUTOR_CLERK_USER_IDS`: optional legacy English/IELTS tutor override. New IELTS tutors should be provisioned under People instead.
 - `ACCEPTED_TUTOR_CLERK_USER_IDS`: optional legacy tutor allowlist for a tutor who is intentionally assigned to all subjects.
 - `ACCEPTED_STUDENT_CLERK_USER_IDS`: optional legacy student override. New students should be provisioned under People instead.
-- `ACCEPTED_VIEWER_CLERK_USER_IDS`: read-only viewers; the current viewer policy links to Taito’s student record when it exists. Administrator and viewer identities are never created from the People UI.
+- `ACCEPTED_VIEWER_CLERK_USER_IDS`: optional legacy viewer override. New parent viewers should be provisioned under People and linked to exactly one student. If this fallback is still set, it still mirrors Taito (`taito0525@gmail.com`). Prefer the database grant.
 
 The approved shared/development email roster is:
 
@@ -24,13 +24,13 @@ The approved shared/development email roster is:
 | `eunice_chon@berkeley.edu` | SAT tutor | SAT |
 | `taito0525@gmail.com` | student/client | Fall 2026 student course and sessions |
 | `nika.raiffe@gmail.com` | English/IELTS tutor | IELTS/English |
-| `ryo@jaac.co.jp` | viewer | read-only mirror of Taito’s client account |
+| `ryo@jaac.co.jp` | parent viewer | read-only mirror of Taito’s client account |
 
-Ryo's viewer link uses the relationship **“view only mirror of Taito’s client
-account”** and is the only permitted active link for that viewer. The link is
-reconciled on either account's first authorized request, so it does not depend
-on whether Ryo or Taito signs in first. Viewer writes are rejected with
-`VIEW_ONLY`.
+Ryo (`ryo@jaac.co.jp`, Production Clerk `user_3IsvKcNhmcqPtcxFfGOYgtR4MAc`) is a parent viewer of Taito Goto (`taito0525@gmail.com`, Production Clerk `user_3IsvKdTAnOmfXNTiOlOvupgfjZl`). Migration `0041_viewer_role_category` adds the `viewer` grant role and `linked_student_email`. Migration `0042_ryo_taito_parent_mirror` activates the `viewer_links` row when both app users already exist. Before the API listens, startup upserts the `portal_access_grants` row (`role_category = viewer`, `linked_student_email = taito0525@gmail.com`, Clerk id `user_3IsvKcNhmcqPtcxFfGOYgtR4MAc`) and sets Ryo’s app role to `viewer` when his user row exists. No Clerk invitation is sent. Ryo signs in with his own account. He does not use Taito’s password. No People click is required for this pair.
+
+The viewer link uses the relationship **“view only mirror of Taito’s client account”** and is the only permitted active link for Ryo. Other students are not visible. Taito’s own student login is unchanged, including off-platform SAT billing (no self-serve purchase or receipts). Parent writes are rejected with `VIEW_ONLY`. The portal shows a **Parent view · Viewing as {student}** banner.
+
+To attach another parent later, use **Provision people**, choose **Parent viewer**, and select that one student. Revoking the grant turns the mirror off.
 
 People provisioning does **not** send Clerk invitation emails. Sign-in uses the Production Clerk account created or linked from the provisioned email (OTP works after admin email verification).
 
@@ -60,29 +60,34 @@ Eunice Chon is unchanged: `eunice_chon@berkeley.edu`.
 
 ## Owner onboarding checklist
 
-1. Keep public sign-up disabled on the Production Clerk instance. Administrator and viewer identities still use environment allowlists (`ACCEPTED_ADMIN_*` / `ACCEPTED_VIEWER_*`).
-2. For **tutors and students**, use **Provision people** at
+1. Keep public sign-up disabled on the Production Clerk instance. Administrator identities still use environment allowlists (`ACCEPTED_ADMIN_*`). `ACCEPTED_VIEWER_*` is only a legacy fallback.
+2. For **tutors, students, and parent viewers**, use **Provision people** at
    `/admin/curriculum?section=people`. Enter the email (and optional Production
-   Clerk user ID). The API looks up the Production user; if missing, it creates
-   one without an invitation. A pasted ID from another Clerk instance is
-   ignored and replaced. Railway env sync is not required for these roles.
-3. Restart the **API Server** workflow only after changing **administrator or
-   viewer** environment allowlists. Tutor/student People grants take effect
-   without a Railway variable change.
+   Clerk user ID). For a parent viewer, select the one student to mirror. The
+   API looks up the Production user; if missing, it creates one without an
+   invitation. A pasted ID from another Clerk instance is ignored and replaced.
+   Railway env sync is not required for these roles.
+3. Restart the **API Server** workflow only after changing **administrator**
+   environment allowlists (or the legacy viewer fallback). People grants take
+   effect without a Railway variable change. Ryo’s Taito mirror is applied by
+   migrations `0041_viewer_role_category` and `0042_ryo_taito_parent_mirror`,
+   then the access grant is upserted on API startup. No separate People step
+   is required for this pair.
 4. Have the provisioned person sign in at `/login`; `/portal` is the canonical return path. `/sign-in` remains an alias, and `/t-g` only redirects to the secure entry point.
 5. On the first authorized request, the API records the application user and the appropriate PostgreSQL course membership. The approved seed roster (Taito/Nika/Eunice/Michelle) still receives those tutor assignments automatically. Additional links are created only from People assign.
 6. Sign in as the administrator and review **Clients & tutors** at
    `/admin/curriculum?section=people`. Use **Provision people** to grant
    student or tutor access, then **Assign** to link tutors and students.
    Client preview is read-only and reflects those live links.
-   Administrator and viewer roles remain environment-only.
-7. To revoke in-app grants, use **Revoke** on the access grant. To revoke
-   environment allowlist access for administrators or viewers, remove the
-   Clerk user ID from the allowlist and restart the API workflow. Remove
-   old PostgreSQL memberships or tutor assignments as part of the offboarding
-   review.
+   Administrator roles remain environment-only. Parent viewers are People grants
+   linked to one student.
+7. To revoke in-app grants, use **Revoke** on the access grant. Revoking a parent
+   viewer turns off that mirror. To revoke environment allowlist access for
+   administrators (or a legacy viewer fallback), remove the Clerk user ID from
+   the allowlist and restart the API workflow. Remove old PostgreSQL memberships
+   or tutor assignments as part of the offboarding review.
 
-An identity that is not an administrator/viewer on the environment allowlists and does not have an active `portal_access_grants` row (or a legacy tutor/student env override) can authenticate with Clerk but receives no application user, course membership, or private course/session/assignment/attempt/review data. Existing database roles are never selected by the browser. The API records denied requests for previously provisioned users without storing session tokens or passwords.
+An identity that is not an administrator on the environment allowlists and does not have an active `portal_access_grants` row (or a legacy tutor/student/viewer env override) can authenticate with Clerk but receives no application user, course membership, or private course/session/assignment/attempt/review data. Existing database roles are never selected by the browser. The API records denied requests for previously provisioned users without storing session tokens or passwords. A parent viewer’s active link is the only student they can read.
 
 There is no development auto-enrollment exception: preview identities must also be explicitly provisioned (People grant or env allowlist). This prevents a test identity from becoming a student merely by signing in.
 
@@ -103,9 +108,10 @@ sequence when checking the preview:
    administrators at `/admin`.
 7. Confirm a direct URL for another role shows an access message rather than
    private data.
-8. For a viewer, confirm the dashboard displays “You are viewing Taito Goto’s
-   dashboard in view-only mode.” and that both UI actions and direct mutation
-   requests are rejected with `VIEW_ONLY`.
+8. For Ryo, sign in as `ryo@jaac.co.jp` (not as Taito). Confirm the banner says
+   “Viewing as” Taito, the curriculum matches Taito’s portal (including hidden
+   SAT payment/receipts), and both UI actions and direct mutation requests are
+   rejected with `VIEW_ONLY`. Confirm another student’s sessions are not listed.
 
 Expected error states:
 

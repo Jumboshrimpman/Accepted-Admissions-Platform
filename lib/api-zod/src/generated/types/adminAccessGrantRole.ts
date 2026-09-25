@@ -12,4 +12,5 @@ export type AdminAccessGrantRole = typeof AdminAccessGrantRole[keyof typeof Admi
 export const AdminAccessGrantRole = {
   tutor: 'tutor',
   student: 'student',
+  viewer: 'viewer',
 } as const;

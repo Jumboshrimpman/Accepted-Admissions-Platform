@@ -28,7 +28,13 @@ export const GetCurrentUserResponse = zod.object({
   "title": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "timezone": zod.string(),
-  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional(),
+  "viewingAs": zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "timezone": zod.string()
+}).describe('The one student a parent viewer is mirroring.').nullish().describe('Student mirrored by a parent viewer. Null for every other role.')
 })
 
 
@@ -58,7 +64,13 @@ export const UpdateCurrentUserResponse = zod.object({
   "title": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "timezone": zod.string(),
-  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional(),
+  "viewingAs": zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "timezone": zod.string()
+}).describe('The one student a parent viewer is mirroring.').nullish().describe('Student mirrored by a parent viewer. Null for every other role.')
 })
 
 
@@ -373,7 +385,7 @@ export const GetAdminCurriculumResponse = zod.object({
 
 
 /**
- * @summary List portal access grants for tutors and students
+ * @summary List portal access grants for tutors, students, and parent viewers
  */
 export const ListAdminAccessGrantsResponse = zod.object({
   "grants": zod.array(zod.object({
@@ -381,9 +393,10 @@ export const ListAdminAccessGrantsResponse = zod.object({
   "email": zod.string(),
   "clerkUserId": zod.string().nullable(),
   "displayName": zod.string(),
-  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
-  "role": zod.enum(['tutor', 'student']),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer']).describe('Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.'),
+  "role": zod.enum(['tutor', 'student', 'viewer']),
   "subject": zod.string(),
+  "linkedStudentEmail": zod.string().nullable().describe('Student email this parent viewer mirrors. Null for tutors and students.'),
   "active": zod.boolean(),
   "notes": zod.string().nullable(),
   "userId": zod.string().nullable(),
@@ -396,8 +409,8 @@ export const ListAdminAccessGrantsResponse = zod.object({
 
 
 /**
- * Creates or reactivates a database access grant for a tutor or student. Resolves the Production Clerk user by email (find or create, no invitation). A pasted clerkUserId is used only if it exists in Production for this email; otherwise it is replaced and a warning is returned. Administrator and viewer roles cannot be provisioned from this endpoint.
- * @summary Provision a tutor or student for portal access
+ * Creates or reactivates a database access grant for a tutor, student, or parent viewer. Resolves the Production Clerk user by email (find or create, no invitation). A pasted clerkUserId is used only if it exists in Production for this email; otherwise it is replaced and a warning is returned. Administrator roles cannot be provisioned from this endpoint. A parent viewer must include linkedStudentEmail and can mirror only that one student.
+ * @summary Provision a tutor, student, or parent viewer for portal access
  */
 export const createAdminAccessGrantBodyEmailMin = 3;
 
@@ -413,8 +426,9 @@ export const createAdminAccessGrantBodyNotesMax = 500;
 export const CreateAdminAccessGrantBody = zod.object({
   "email": zod.string().min(createAdminAccessGrantBodyEmailMin),
   "displayName": zod.string().min(1).max(createAdminAccessGrantBodyDisplayNameMax),
-  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer']).describe('Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.'),
   "clerkUserId": zod.string().min(createAdminAccessGrantBodyClerkUserIdMin).max(createAdminAccessGrantBodyClerkUserIdMax).nullish().describe('Optional Production Clerk user ID. If the ID is not in the Production Clerk instance (or belongs to a different email), it is ignored and replaced by an email lookup or create.\n'),
+  "linkedStudentEmail": zod.string().nullish().describe('Required when roleCategory is viewer. The one student whose portal this parent mirrors.'),
   "notes": zod.string().max(createAdminAccessGrantBodyNotesMax).nullish()
 })
 
@@ -423,9 +437,10 @@ export const CreateAdminAccessGrantResponse = zod.object({
   "email": zod.string(),
   "clerkUserId": zod.string().nullable(),
   "displayName": zod.string(),
-  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
-  "role": zod.enum(['tutor', 'student']),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer']).describe('Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.'),
+  "role": zod.enum(['tutor', 'student', 'viewer']),
   "subject": zod.string(),
+  "linkedStudentEmail": zod.string().nullable().describe('Student email this parent viewer mirrors. Null for tutors and students.'),
   "active": zod.boolean(),
   "notes": zod.string().nullable(),
   "userId": zod.string().nullable(),
@@ -437,7 +452,7 @@ export const CreateAdminAccessGrantResponse = zod.object({
 
 
 /**
- * @summary Update or revoke a tutor or student access grant
+ * @summary Update or revoke a tutor, student, or parent viewer access grant
  */
 export const UpdateAdminAccessGrantParams = zod.object({
   "grantId": zod.coerce.string()
@@ -454,8 +469,9 @@ export const updateAdminAccessGrantBodyNotesMax = 500;
 
 export const UpdateAdminAccessGrantBody = zod.object({
   "displayName": zod.string().min(1).max(updateAdminAccessGrantBodyDisplayNameMax).optional(),
-  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).optional().describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer']).optional().describe('Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.'),
   "clerkUserId": zod.string().min(updateAdminAccessGrantBodyClerkUserIdMin).max(updateAdminAccessGrantBodyClerkUserIdMax).nullish(),
+  "linkedStudentEmail": zod.string().nullish().describe('Required when roleCategory is viewer.'),
   "notes": zod.string().max(updateAdminAccessGrantBodyNotesMax).nullish(),
   "active": zod.boolean().optional()
 })
@@ -465,9 +481,10 @@ export const UpdateAdminAccessGrantResponse = zod.object({
   "email": zod.string(),
   "clerkUserId": zod.string().nullable(),
   "displayName": zod.string(),
-  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student']).describe('Roles that administrators may provision from the portal (never administrator or viewer).'),
-  "role": zod.enum(['tutor', 'student']),
+  "roleCategory": zod.enum(['sat_tutor', 'english_tutor', 'tutor', 'student', 'viewer']).describe('Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.'),
+  "role": zod.enum(['tutor', 'student', 'viewer']),
   "subject": zod.string(),
+  "linkedStudentEmail": zod.string().nullable().describe('Student email this parent viewer mirrors. Null for tutors and students.'),
   "active": zod.boolean(),
   "notes": zod.string().nullable(),
   "userId": zod.string().nullable(),
@@ -540,7 +557,13 @@ export const UpdateAdminUserResponse = zod.object({
   "title": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "timezone": zod.string(),
-  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional(),
+  "viewingAs": zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "timezone": zod.string()
+}).describe('The one student a parent viewer is mirroring.').nullish().describe('Student mirrored by a parent viewer. Null for every other role.')
 })
 
 
@@ -560,7 +583,13 @@ export const GetAdminClientDashboardResponse = zod.object({
   "title": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "timezone": zod.string(),
-  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional(),
+  "viewingAs": zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "timezone": zod.string()
+}).describe('The one student a parent viewer is mirroring.').nullish().describe('Student mirrored by a parent viewer. Null for every other role.')
 }),
   "welcomeMessage": zod.string().optional(),
   "courses": zod.array(zod.object({
@@ -2254,7 +2283,13 @@ export const GetDashboardResponse = zod.object({
   "title": zod.string().nullish(),
   "avatarUrl": zod.string().nullish(),
   "timezone": zod.string(),
-  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional()
+  "timezoneSource": zod.enum(['default', 'admin', 'browser']).optional(),
+  "viewingAs": zod.object({
+  "id": zod.string(),
+  "displayName": zod.string(),
+  "email": zod.string(),
+  "timezone": zod.string()
+}).describe('The one student a parent viewer is mirroring.').nullish().describe('Student mirrored by a parent viewer. Null for every other role.')
 }),
   "welcomeMessage": zod.string().optional(),
   "courses": zod.array(zod.object({
@@ -2814,7 +2849,7 @@ export const GetSessionResponse = zod.object({
 
 
 /**
- * Tutor of that session or an administrator can delete attempt state (responses, timer events, consolidated result). Omit the body to clear live before_session homework. Send deliveryPhase during_session to clear in-session homework on this session, or assignmentId to clear one assignment of either phase. Does not wipe the College Board bank.
+ * Tutor of that session or an administrator can delete attempt state (responses, timer events, consolidated result), including empty or glitched submits. The same assignment and questions stay attached. Does not wipe the College Board bank or other sessions. Omit the body to clear live before_session homework only. Send deliveryPhase during_session to clear every in-session assignment on this session. Send assignmentId to clear one assignment of either phase.
  * @summary Clear homework attempts so the student can redo
  */
 export const ClearSessionHomeworkParams = zod.object({
@@ -2824,7 +2859,7 @@ export const ClearSessionHomeworkParams = zod.object({
 export const ClearSessionHomeworkBody = zod.object({
   "deliveryPhase": zod.enum(['before_session', 'during_session']).optional(),
   "assignmentId": zod.string().optional()
-}).optional()
+})
 
 export const ClearSessionHomeworkResponse = zod.object({
   "sessionId": zod.string(),

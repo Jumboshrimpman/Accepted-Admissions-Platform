@@ -154,7 +154,7 @@ paths:
     get:
       operationId: listAdminAccessGrants
       tags: [administration]
-      summary: List portal access grants for tutors and students
+      summary: List portal access grants for tutors, students, and parent viewers
       responses:
         "200":
           description: Access grants
@@ -166,13 +166,14 @@ paths:
     post:
       operationId: createAdminAccessGrant
       tags: [administration]
-      summary: Provision a tutor or student for portal access
+      summary: Provision a tutor, student, or parent viewer for portal access
       description: >
-        Creates or reactivates a database access grant for a tutor or student.
-        Resolves the Production Clerk user by email (find or create, no invitation).
-        A pasted clerkUserId is used only if it exists in Production for this email;
-        otherwise it is replaced and a warning is returned.
-        Administrator and viewer roles cannot be provisioned from this endpoint.
+        Creates or reactivates a database access grant for a tutor, student, or
+        parent viewer. Resolves the Production Clerk user by email (find or create,
+        no invitation). A pasted clerkUserId is used only if it exists in Production
+        for this email; otherwise it is replaced and a warning is returned.
+        Administrator roles cannot be provisioned from this endpoint. A parent viewer
+        must include linkedStudentEmail and can mirror only that one student.
       requestBody:
         required: true
         content:
@@ -192,7 +193,7 @@ paths:
     patch:
       operationId: updateAdminAccessGrant
       tags: [administration]
-      summary: Update or revoke a tutor or student access grant
+      summary: Update or revoke a tutor, student, or parent viewer access grant
       parameters:
         - $ref: "#/components/parameters/GrantId"
       requestBody:
@@ -2528,10 +2529,20 @@ components:
     Role:
       type: string
       enum: [administrator, tutor, student, viewer]
+    ViewingAs:
+      type: object
+      description: The one student a parent viewer is mirroring.
+      required: [id, displayName, email, timezone]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+        timezone: { type: string }
     ProvisionableRoleCategory:
       type: string
-      description: Roles that administrators may provision from the portal (never administrator or viewer).
-      enum: [sat_tutor, english_tutor, tutor, student]
+      description: Roles that administrators may provision from the portal. Administrator stays environment-only. Viewer is a read-only parent mirror of one student.
+      enum: [sat_tutor, english_tutor, tutor, student, viewer]
     AdminAccessGrant:
       type: object
       required:
@@ -2543,6 +2554,7 @@ components:
           roleCategory,
           role,
           subject,
+          linkedStudentEmail,
           active,
           notes,
           userId,
@@ -2557,8 +2569,11 @@ components:
         clerkUserId: { type: ["string", "null"] }
         displayName: { type: string }
         roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
-        role: { type: string, enum: [tutor, student] }
+        role: { type: string, enum: [tutor, student, viewer] }
         subject: { type: string }
+        linkedStudentEmail:
+          type: ["string", "null"]
+          description: Student email this parent viewer mirrors. Null for tutors and students.
         active: { type: boolean }
         notes: { type: ["string", "null"] }
         userId: { type: ["string", "null"] }
@@ -2592,6 +2607,9 @@ components:
             replaced by an email lookup or create.
           minLength: 3
           maxLength: 128
+        linkedStudentEmail:
+          type: ["string", "null"]
+          description: Required when roleCategory is viewer. The one student whose portal this parent mirrors.
         notes: { type: ["string", "null"], maxLength: 500 }
     AdminAccessGrantUpdate:
       type: object
@@ -2601,6 +2619,9 @@ components:
         displayName: { type: string, minLength: 1, maxLength: 120 }
         roleCategory: { $ref: "#/components/schemas/ProvisionableRoleCategory" }
         clerkUserId: { type: ["string", "null"], minLength: 3, maxLength: 128 }
+        linkedStudentEmail:
+          type: ["string", "null"]
+          description: Required when roleCategory is viewer.
         notes: { type: ["string", "null"], maxLength: 500 }
         active: { type: boolean }
     CurrentUser:
@@ -2615,6 +2636,11 @@ components:
         avatarUrl: { type: ["string", "null"] }
         timezone: { type: string }
         timezoneSource: { type: string, enum: [default, admin, browser] }
+        viewingAs:
+          description: Student mirrored by a parent viewer. Null for every other role.
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ViewingAs"
     CurrentUserUpdate:
       type: object
       additionalProperties: false

@@ -106,6 +106,16 @@ function dashboardForRole(
       email: `${role}@example.invalid`,
       role,
       avatarUrl: null,
+      ...(role === "viewer"
+        ? {
+            viewingAs: {
+              id: "student-user",
+              displayName: "Taito Goto",
+              email: "taito0525@gmail.com",
+              timezone: "Asia/Tokyo",
+            },
+          }
+        : {}),
     },
     welcomeMessage: "Your Fall program is ready.",
     courses: [
@@ -665,7 +675,8 @@ describe("authenticated role dashboard flows", () => {
     mocks.dashboard = dashboardForRole("viewer");
     render(<FallWelcomeDashboard />);
 
-    expect(screen.getByRole("status").textContent).toContain("view-only mode");
+    expect(screen.getByRole("status").textContent).toContain("Viewing as Taito Goto");
+    expect(screen.getByRole("status").textContent).toContain("read-only");
     expect(screen.getByText("Your tutors")).toBeTruthy();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Join meeting/i })[0]?.getAttribute("href")).toBe(

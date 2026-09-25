@@ -281,6 +281,20 @@
       "when": 1790600000000,
       "tag": "0040_client_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0041_viewer_role_category",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790800000000,
+      "tag": "0042_ryo_taito_parent_mirror",
+      "breakpoints": true
     }
   ]
 }

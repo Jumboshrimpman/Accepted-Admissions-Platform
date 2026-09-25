@@ -316,6 +316,7 @@ import {
   UpsertSessionArtifactResponse,
 } from "@workspace/api-zod";
 import {
+  accessForDatabaseGrant,
   accessFromRoleCategory,
   configuredAccessConflicts,
   envRoleCategoriesForIdentity,
@@ -324,11 +325,20 @@ import {
   resolvePortalAccess,
   subjectsForRoleCategory,
   tutorTitleForRoleCategory,
+  type AccessRoleCategory,
   type ConfiguredAccess,
   type DatabaseAccessGrant,
   type ProvisionableRoleCategory,
   verifiedPrimaryEmail,
 } from "../lib/access-config";
+import {
+  RYO_PARENT_EMAIL,
+  TAITO_PARENT_MIRROR_RELATIONSHIP,
+  deactivateViewerLinks,
+  mirroredStudentForViewer,
+  mirroredStudentIdForViewer,
+  syncViewerMirrorLink,
+} from "../lib/parent-mirror";
 import {
   ClerkProductionUserError,
   getProductionClerkUser,
@@ -518,9 +528,7 @@ const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
 const NIKA_LEGACY_SEED_PHOTO_URL = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
 const NIKA_LEGACY_APPROVED_WIX_PHOTO_URL =
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
-const RYO_VIEWER_EMAIL = "ryo@jaac.co.jp";
-const TAITO_VIEWER_RELATIONSHIP =
-  "view only mirror of Taito’s client account";
+const TAITO_VIEWER_RELATIONSHIP = TAITO_PARENT_MIRROR_RELATIONSHIP;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -2116,6 +2124,7 @@ async function loadActiveDatabaseAccessGrants(
       email: portalAccessGrantsTable.email,
       clerkUserId: portalAccessGrantsTable.clerkUserId,
       roleCategory: portalAccessGrantsTable.roleCategory,
+      linkedStudentEmail: portalAccessGrantsTable.linkedStudentEmail,
       active: portalAccessGrantsTable.active,
     })
     .from(portalAccessGrantsTable)
@@ -2126,6 +2135,7 @@ async function loadActiveDatabaseAccessGrants(
     email: row.email,
     clerkUserId: row.clerkUserId,
     roleCategory: row.roleCategory,
+    linkedStudentEmail: row.linkedStudentEmail,
     active: row.active,
   }));
 }
@@ -2145,15 +2155,24 @@ function adminAccessGrantShape(
   grant: PortalAccessGrant,
   extra: { warning?: string | null } = {},
 ) {
-  const access = accessFromRoleCategory(grant.roleCategory);
+  const access =
+    accessForDatabaseGrant({
+      roleCategory: grant.roleCategory,
+      linkedStudentEmail: grant.linkedStudentEmail,
+    }) ?? accessFromRoleCategory(grant.roleCategory);
+  const role =
+    access.role === "viewer" || access.role === "student" || access.role === "tutor"
+      ? access.role
+      : "tutor";
   return {
     id: grant.id,
     email: grant.email,
     clerkUserId: grant.clerkUserId,
     displayName: grant.displayName,
     roleCategory: grant.roleCategory,
-    role: access.role as "tutor" | "student",
+    role,
     subject: access.subject,
+    linkedStudentEmail: grant.linkedStudentEmail,
     active: grant.active,
     notes: grant.notes,
     userId: grant.userId,
@@ -2185,12 +2204,19 @@ async function ensureProvisionedAppUser(input: {
   displayName: string;
   roleCategory: ProvisionableRoleCategory;
   clerkUserId?: string | null;
+  linkedStudentEmail?: string | null;
 }): Promise<AppUser> {
   const email = normalizeProvisionedEmail(input.email);
   if (isRetiredXavierEmail(email)) {
     throw new Error("RETIRED_XAVIER_EMAIL");
   }
-  const access = accessFromRoleCategory(input.roleCategory);
+  const access = accessForDatabaseGrant({
+    roleCategory: input.roleCategory,
+    linkedStudentEmail: input.linkedStudentEmail,
+  });
+  if (!access) {
+    throw new Error("VIEWER_STUDENT_REQUIRED");
+  }
   const desiredClerkUserId =
     isCanonicalXavierEmail(email)
       ? input.clerkUserId &&
@@ -2221,6 +2247,7 @@ async function ensureProvisionedAppUser(input: {
   }
 
   const existing = byEmail ?? byClerk;
+  const previousRole = existing?.role;
   let user: AppUser;
   if (existing) {
     const nextClerkUserId =
@@ -2254,11 +2281,14 @@ async function ensureProvisionedAppUser(input: {
   }
 
   await syncConfiguredAccess(user!, access);
+  if (previousRole === "viewer" && access.role !== "viewer") {
+    await deactivateViewerLinks(user!.id);
+  }
 
   if (access.role === "tutor") {
     const subjects = subjectsForRoleCategory(input.roleCategory);
     const title = tutorTitleForRoleCategory(
-      input.roleCategory as Exclude<ProvisionableRoleCategory, "student">,
+      input.roleCategory as Exclude<ProvisionableRoleCategory, "student" | "viewer">,
     );
     const [existingProfile] = await db
       .select()
@@ -2311,39 +2341,14 @@ async function syncConfiguredAccess(
   if (access.role === "viewer") {
     const [, targetEmail] = access.subject.split(":");
     if (!targetEmail) return;
-    const [student] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(
-        and(
-          eq(usersTable.email, normalizeProvisionedEmail(targetEmail)),
-          eq(usersTable.role, "student"),
-        ),
-      )
-      .limit(1);
-    await db
-      .update(viewerLinksTable)
-      .set({ active: false })
-      .where(
-        and(
-          eq(viewerLinksTable.viewerUserId, user.id),
-          ...(student
-            ? [ne(viewerLinksTable.studentUserId, student.id)]
-            : []),
-        ),
-      );
-    if (!student) return;
-    await db
-      .insert(viewerLinksTable)
-      .values({
-        viewerUserId: user.id,
-        studentUserId: student.id,
-        relationship: TAITO_VIEWER_RELATIONSHIP,
-      })
-      .onConflictDoUpdate({
-        target: [viewerLinksTable.viewerUserId, viewerLinksTable.studentUserId],
-        set: { active: true, relationship: TAITO_VIEWER_RELATIONSHIP },
-      });
+    await syncViewerMirrorLink({
+      viewerUserId: user.id,
+      studentEmail: targetEmail,
+      relationship:
+        normalizeProvisionedEmail(targetEmail) === TAITO_STUDENT_EMAIL
+          ? TAITO_VIEWER_RELATIONSHIP
+          : undefined,
+    });
     return;
   }
   if (access.role === "administrator") return;
@@ -2371,37 +2376,22 @@ async function syncConfiguredAccess(
     access.role === "student" &&
     normalizeProvisionedEmail(user.email) === TAITO_STUDENT_EMAIL
   ) {
-    const [viewer] = await db
+    const [parent] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
       .where(
         and(
-          eq(usersTable.email, RYO_VIEWER_EMAIL),
+          eq(usersTable.email, RYO_PARENT_EMAIL),
           eq(usersTable.role, "viewer"),
         ),
       )
       .limit(1);
-    if (viewer) {
-      await db
-        .update(viewerLinksTable)
-        .set({ active: false })
-        .where(
-          and(
-            eq(viewerLinksTable.viewerUserId, viewer.id),
-            ne(viewerLinksTable.studentUserId, user.id),
-          ),
-        );
-      await db
-        .insert(viewerLinksTable)
-        .values({
-          viewerUserId: viewer.id,
-          studentUserId: user.id,
-          relationship: TAITO_VIEWER_RELATIONSHIP,
-        })
-        .onConflictDoUpdate({
-          target: [viewerLinksTable.viewerUserId, viewerLinksTable.studentUserId],
-          set: { active: true, relationship: TAITO_VIEWER_RELATIONSHIP },
-        });
+    if (parent) {
+      await syncViewerMirrorLink({
+        viewerUserId: parent.id,
+        studentEmail: TAITO_STUDENT_EMAIL,
+        relationship: TAITO_VIEWER_RELATIONSHIP,
+      });
     }
   }
 
@@ -2653,7 +2643,11 @@ async function requireAppUser(
     return;
   }
   await syncConfiguredAccess(appUser, configured);
-  if (configured.role === "tutor" || configured.role === "student") {
+  if (
+    configured.role === "tutor" ||
+    configured.role === "student" ||
+    configured.role === "viewer"
+  ) {
     const grantEmail = normalizeProvisionedEmail(appUser.email);
     await db
       .update(portalAccessGrantsTable)
@@ -2781,17 +2775,7 @@ async function canAccessCourse(
 
 async function dataSubjectUserId(user: AppUser): Promise<string> {
   if (user.role !== "viewer") return user.id;
-  const [link] = await db
-    .select({ studentUserId: viewerLinksTable.studentUserId })
-    .from(viewerLinksTable)
-    .where(
-      and(
-        eq(viewerLinksTable.viewerUserId, user.id),
-        eq(viewerLinksTable.active, true),
-      ),
-    )
-    .limit(1);
-  return link?.studentUserId ?? user.id;
+  return (await mirroredStudentIdForViewer(user.id)) ?? user.id;
 }
 
 async function dataSubjectEmail(
@@ -5326,8 +5310,6 @@ router.post("/public/client-requests", async (req, res): Promise<void> => {
 });
 
 router.use(requireAppUser);
-router.use(satBankRouter);
-
 router.use((req: AuthedRequest, res: Response, next: () => void) => {
   if (
     req.appUser?.role === "viewer" &&
@@ -5341,6 +5323,7 @@ router.use((req: AuthedRequest, res: Response, next: () => void) => {
   }
   next();
 });
+router.use(satBankRouter);
 
 router.get(
   "/tutor/curriculum",
@@ -8045,6 +8028,48 @@ function adminMutationError(res: Response, message: string): void {
   res.status(400).json({ error: message });
 }
 
+function portalGrantEnvConflict(
+  envCategories: AccessRoleCategory[],
+  desired: ConfiguredAccess,
+): string | null {
+  if (envCategories.includes("administrator")) {
+    return "This identity is already configured as an administrator in environment allowlists.";
+  }
+  for (const category of envCategories) {
+    const envAccess = accessFromRoleCategory(category);
+    if (envAccess.role !== desired.role || envAccess.subject !== desired.subject) {
+      return "This identity already has a conflicting role in environment allowlists.";
+    }
+  }
+  return null;
+}
+
+async function viewerStudentEmailForGrant(
+  roleCategory: ProvisionableRoleCategory,
+  linkedStudentEmail: string | null | undefined,
+  viewerEmail: string,
+): Promise<{ email: string | null } | { error: string }> {
+  if (roleCategory !== "viewer") return { email: null };
+  const studentEmail = linkedStudentEmail
+    ? normalizeProvisionedEmail(linkedStudentEmail)
+    : "";
+  if (!studentEmail.includes("@")) {
+    return { error: "A parent viewer must be linked to one student email." };
+  }
+  if (studentEmail === viewerEmail) {
+    return { error: "A parent viewer cannot mirror their own account." };
+  }
+  const [existing] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.email, studentEmail))
+    .limit(1);
+  if (existing && existing.role !== "student") {
+    return { error: "Parent viewers can only mirror a student account." };
+  }
+  return { email: studentEmail };
+}
+
 router.get(
   "/admin/access-grants",
   ensureRole(["administrator"]),
@@ -8075,11 +8100,20 @@ router.post(
     }
     if (!isProvisionableRoleCategory(body.data.roleCategory)) {
       res.status(400).json({
-        error: "Only tutor and student roles can be provisioned here.",
+        error: "Only tutor, student, and parent viewer roles can be provisioned here.",
       });
       return;
     }
     const email = normalizeProvisionedEmail(body.data.email);
+    const linkedStudent = await viewerStudentEmailForGrant(
+      body.data.roleCategory,
+      body.data.linkedStudentEmail,
+      email,
+    );
+    if ("error" in linkedStudent) {
+      adminMutationError(res, linkedStudent.error);
+      return;
+    }
     if (!email.includes("@")) {
       adminMutationError(res, "A valid email address is required.");
       return;
@@ -8112,26 +8146,18 @@ router.post(
       clerkUserId,
       email,
     );
-    if (envCategories.includes("administrator") || envCategories.includes("viewer")) {
-      res.status(409).json({
-        error:
-          "This identity is already configured as an administrator or viewer in environment allowlists.",
-      });
+    const desiredAccess = accessForDatabaseGrant({
+      roleCategory: body.data.roleCategory,
+      linkedStudentEmail: linkedStudent.email,
+    });
+    if (!desiredAccess) {
+      adminMutationError(res, "A parent viewer must be linked to one student email.");
       return;
     }
-    const desiredAccess = accessFromRoleCategory(body.data.roleCategory);
-    for (const category of envCategories) {
-      const envAccess = accessFromRoleCategory(category);
-      if (
-        envAccess.role !== desiredAccess.role ||
-        envAccess.subject !== desiredAccess.subject
-      ) {
-        res.status(409).json({
-          error:
-            "This identity already has a conflicting role in environment allowlists.",
-        });
-        return;
-      }
+    const envConflict = portalGrantEnvConflict(envCategories, desiredAccess);
+    if (envConflict) {
+      res.status(409).json({ error: envConflict });
+      return;
     }
 
     let user: AppUser;
@@ -8141,6 +8167,7 @@ router.post(
         displayName: body.data.displayName,
         roleCategory: body.data.roleCategory,
         clerkUserId,
+        linkedStudentEmail: linkedStudent.email,
       });
     } catch (error) {
       if (error instanceof Error && error.message === "CLERK_USER_EMAIL_CONFLICT") {
@@ -8171,6 +8198,7 @@ router.post(
       clerkUserId,
       displayName: body.data.displayName.trim(),
       roleCategory: body.data.roleCategory,
+      linkedStudentEmail: linkedStudent.email,
       active: true,
       notes: body.data.notes?.trim() || null,
       provisionedByUserId: req.appUser!.id,
@@ -8240,8 +8268,19 @@ router.patch(
     const nextRoleCategory = body.data.roleCategory ?? existing.roleCategory;
     if (!isProvisionableRoleCategory(nextRoleCategory)) {
       res.status(400).json({
-        error: "Only tutor and student roles can be provisioned here.",
+        error: "Only tutor, student, and parent viewer roles can be provisioned here.",
       });
+      return;
+    }
+    const linkedStudent = await viewerStudentEmailForGrant(
+      nextRoleCategory,
+      body.data.linkedStudentEmail === undefined
+        ? existing.linkedStudentEmail
+        : body.data.linkedStudentEmail,
+      normalizeProvisionedEmail(existing.email),
+    );
+    if ("error" in linkedStudent) {
+      adminMutationError(res, linkedStudent.error);
       return;
     }
     const requestedClerkUserId =
@@ -8285,29 +8324,18 @@ router.patch(
         nextClerkUserId ?? undefined,
         existing.email,
       );
-      if (
-        envCategories.includes("administrator") ||
-        envCategories.includes("viewer")
-      ) {
-        res.status(409).json({
-          error:
-            "This identity is already configured as an administrator or viewer in environment allowlists.",
-        });
+      const desiredAccess = accessForDatabaseGrant({
+        roleCategory: nextRoleCategory,
+        linkedStudentEmail: linkedStudent.email,
+      });
+      if (!desiredAccess) {
+        adminMutationError(res, "A parent viewer must be linked to one student email.");
         return;
       }
-      const desiredAccess = accessFromRoleCategory(nextRoleCategory);
-      for (const category of envCategories) {
-        const envAccess = accessFromRoleCategory(category);
-        if (
-          envAccess.role !== desiredAccess.role ||
-          envAccess.subject !== desiredAccess.subject
-        ) {
-          res.status(409).json({
-            error:
-              "This identity already has a conflicting role in environment allowlists.",
-          });
-          return;
-        }
+      const envConflict = portalGrantEnvConflict(envCategories, desiredAccess);
+      if (envConflict) {
+        res.status(409).json({ error: envConflict });
+        return;
       }
     }
 
@@ -8319,6 +8347,7 @@ router.patch(
           displayName: nextDisplayName,
           roleCategory: nextRoleCategory,
           clerkUserId: nextClerkUserId,
+          linkedStudentEmail: linkedStudent.email,
         });
         userId = user.id;
       } catch (error) {
@@ -8332,8 +8361,14 @@ router.patch(
           });
           return;
         }
+        if (error instanceof Error && error.message === "VIEWER_STUDENT_REQUIRED") {
+          adminMutationError(res, "A parent viewer must be linked to one student email.");
+          return;
+        }
         throw error;
       }
+    } else if (existing.userId) {
+      await deactivateViewerLinks(existing.userId);
     }
 
     const [grant] = await db
@@ -8341,6 +8376,7 @@ router.patch(
       .set({
         displayName: nextDisplayName,
         roleCategory: nextRoleCategory,
+        linkedStudentEmail: linkedStudent.email,
         clerkUserId: nextClerkUserId,
         notes: nextNotes,
         active: nextActive,
@@ -9312,6 +9348,18 @@ router.patch(
   },
 );
 
+async function viewingAsForUser(user: AppUser) {
+  if (user.role !== "viewer") return null;
+  const student = await mirroredStudentForViewer(user.id);
+  if (!student) return null;
+  return {
+    id: student.id,
+    displayName: student.displayName,
+    email: student.email,
+    timezone: student.timezone?.trim() || DEFAULT_USER_TIMEZONE,
+  };
+}
+
 async function currentUserPayload(
   user: AppUser,
   identityName?: string,
@@ -9333,6 +9381,7 @@ async function currentUserPayload(
     avatarUrl,
     timezone: user.timezone?.trim() || DEFAULT_USER_TIMEZONE,
     timezoneSource: normalizeTimezoneSource(user.timezoneSource),
+    viewingAs: await viewingAsForUser(user),
   };
 }
 
@@ -9772,6 +9821,7 @@ async function dashboardDataForUser(user: AppUser) {
         avatarUrl: null,
         timezone: user.timezone?.trim() || DEFAULT_USER_TIMEZONE,
         timezoneSource: normalizeTimezoneSource(user.timezoneSource),
+        viewingAs: await viewingAsForUser(user),
       },
       welcomeMessage: twelveSessionPlanForEmail(billingUser?.email ?? user.email)
         ? "Your Fall program is ready. Keep building on each session."
