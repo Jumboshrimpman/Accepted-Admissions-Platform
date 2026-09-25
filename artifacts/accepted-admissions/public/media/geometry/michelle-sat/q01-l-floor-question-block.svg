@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 400" role="img">
+  <title>L-shaped floor with outer sides 18 m and 14 m and a removed corner 7 m by 6 m</title>
+  <rect width="560" height="400" fill="#ffffff"/>
+  <path d="M140 64 H294 V148 H392 V260 H140 Z" fill="#ffffff" stroke="#111111" stroke-width="2" stroke-linejoin="miter"/>
+  <path d="M278 148 V164 H294" fill="none" stroke="#111111" stroke-width="1.5"/>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="266" y="294" text-anchor="middle">18 m</text>
+    <text x="108" y="168" text-anchor="middle" transform="rotate(-90 108 168)">14 m</text>
+    <text x="343" y="136" text-anchor="middle">7 m</text>
+    <text x="408" y="112" text-anchor="start">6 m</text>
+  </g>
+</svg>

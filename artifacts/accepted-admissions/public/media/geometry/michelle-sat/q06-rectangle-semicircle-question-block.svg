@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 400" role="img">
+  <title>Rectangle 12 by 5 with a semicircle of diameter 12</title>
+  <rect width="560" height="400" fill="#ffffff"/>
+  <path d="M160 210 A120 120 0 0 0 400 210 V310 H160 Z" fill="#ffffff" stroke="#111111" stroke-width="2" stroke-linejoin="miter"/>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="280" y="342" text-anchor="middle">12</text>
+    <text x="416" y="266" text-anchor="start">5</text>
+  </g>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400" role="img">
+  <title>Cylinder and cone with radius 6 and height 10</title>
+  <rect width="680" height="400" fill="#ffffff"/>
+  <g fill="none" stroke="#111111" stroke-width="2">
+    <path d="M120 140 V240"/>
+    <path d="M240 140 V240"/>
+    <path d="M120 240 A60 18 0 0 0 240 240"/>
+    <ellipse cx="180" cy="140" rx="60" ry="18" fill="#ffffff"/>
+    <path d="M120 240 A60 18 0 0 1 240 240" stroke-dasharray="5 4"/>
+    <path d="M180 140 H240"/>
+    <path d="M470 140 L410 240"/>
+    <path d="M470 140 L530 240"/>
+    <path d="M410 240 A60 18 0 0 0 530 240"/>
+    <path d="M410 240 A60 18 0 0 1 530 240" stroke-dasharray="5 4"/>
+    <path d="M470 140 V240" stroke-dasharray="6 4"/>
+    <path d="M470 240 H530"/>
+  </g>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="210" y="128" text-anchor="middle">6</text>
+    <text x="256" y="196" text-anchor="start">10</text>
+    <text x="548" y="248" text-anchor="start">6</text>
+    <text x="482" y="196" text-anchor="start">10</text>
+  </g>
+</svg>

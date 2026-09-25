@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 420" role="img">
+  <title>Two similar rectangular prisms with corresponding edges 5 cm and 8 cm</title>
+  <rect width="680" height="420" fill="#ffffff"/>
+  <g fill="#ffffff" stroke="#111111" stroke-width="2" stroke-linejoin="miter">
+    <path d="M70 250 H150 V186 H70 Z"/>
+    <path d="M150 186 L186 158 H106 L70 186"/>
+    <path d="M150 250 L186 222 V158"/>
+  </g>
+  <g fill="none" stroke="#111111" stroke-width="1.6" stroke-dasharray="6 4">
+    <path d="M70 250 L106 222 H186"/>
+    <path d="M106 222 V158"/>
+  </g>
+  <g fill="#ffffff" stroke="#111111" stroke-width="2" stroke-linejoin="miter">
+    <path d="M300 300 H428 V188 H300 Z"/>
+    <path d="M428 188 L486 146 H358 L300 188"/>
+    <path d="M428 300 L486 258 V146"/>
+  </g>
+  <g fill="none" stroke="#111111" stroke-width="1.6" stroke-dasharray="6 4">
+    <path d="M300 300 L358 258 H486"/>
+    <path d="M358 258 V146"/>
+  </g>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="110" y="278" text-anchor="middle">5 cm</text>
+    <text x="364" y="332" text-anchor="middle">8 cm</text>
+  </g>
+</svg>

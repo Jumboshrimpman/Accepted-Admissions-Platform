@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420" role="img">
+  <title>Rectangular prism with base edges 8 cm and 5 cm</title>
+  <rect width="560" height="420" fill="#ffffff"/>
+  <g fill="#ffffff" stroke="#111111" stroke-width="2" stroke-linejoin="miter">
+    <path d="M130 290 H290 V160 H130 Z"/>
+    <path d="M290 160 L370 100 H210 L130 160"/>
+    <path d="M290 290 L370 230 V100"/>
+  </g>
+  <g fill="none" stroke="#111111" stroke-width="1.6" stroke-dasharray="6 4">
+    <path d="M130 290 L210 230 H370"/>
+    <path d="M210 230 V100"/>
+  </g>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="210" y="322" text-anchor="middle">8 cm</text>
+    <text x="338" y="274" text-anchor="middle">5 cm</text>
+  </g>
+</svg>

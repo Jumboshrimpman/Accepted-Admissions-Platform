@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 440" role="img">
+  <title>Cylinder of radius 4 and height 9 with a hole of radius 2</title>
+  <rect width="560" height="440" fill="#ffffff"/>
+  <g fill="none" stroke="#111111" stroke-width="2">
+    <path d="M170 100 V298"/>
+    <path d="M346 100 V298"/>
+    <path d="M170 298 A88 24 0 0 0 346 298"/>
+    <ellipse cx="258" cy="100" rx="88" ry="24" fill="#ffffff"/>
+    <ellipse cx="258" cy="100" rx="44" ry="12" fill="#ffffff"/>
+    <path d="M170 298 A88 24 0 0 1 346 298" stroke-dasharray="6 4"/>
+    <path d="M214 100 V298" stroke-dasharray="6 4"/>
+    <path d="M302 100 V298" stroke-dasharray="6 4"/>
+    <path d="M214 298 A44 12 0 0 0 302 298" stroke-dasharray="5 4"/>
+    <path d="M214 298 A44 12 0 0 1 302 298" stroke-dasharray="5 4"/>
+    <path d="M258 100 H346"/>
+  </g>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="280" y="84" text-anchor="middle">2</text>
+    <text x="324" y="84" text-anchor="middle">4</text>
+    <text x="364" y="206" text-anchor="start">9</text>
+  </g>
+</svg>
