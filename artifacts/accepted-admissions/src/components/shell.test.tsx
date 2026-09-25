@@ -5,7 +5,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 const currentUser = vi.hoisted(() => ({
   data: undefined as
     | {
-        role: "student" | "tutor" | "administrator";
+        role: "student" | "tutor" | "administrator" | "viewer";
         displayName: string;
         title?: string | null;
         avatarUrl: string | null;
@@ -14,6 +14,18 @@ const currentUser = vi.hoisted(() => ({
   isLoading: true,
   error: null as unknown,
   refetch: vi.fn(),
+}));
+
+const dashboard = vi.hoisted(() => ({
+  data: undefined as
+    | {
+        credits: {
+          selfServeSatBooking: boolean;
+          twelveSessionPlan: boolean;
+        };
+      }
+    | undefined,
+  isLoading: false,
 }));
 
 vi.mock("@clerk/react", () => ({
@@ -36,7 +48,9 @@ vi.mock("wouter", () => ({
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetCurrentUserQueryKey: () => ["/api/me"],
+  getGetDashboardQueryKey: () => ["/api/dashboard"],
   useGetCurrentUser: () => currentUser,
+  useGetDashboard: () => dashboard,
   useUpdateCurrentUser: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -50,6 +64,8 @@ afterEach(() => {
   currentUser.data = undefined;
   currentUser.isLoading = true;
   currentUser.error = null;
+  dashboard.data = undefined;
+  dashboard.isLoading = false;
 });
 
 function renderShell() {
@@ -102,6 +118,9 @@ describe("Shell", () => {
       displayName: "Michelle",
       avatarUrl: null,
     };
+    dashboard.data = {
+      credits: { selfServeSatBooking: true, twelveSessionPlan: false },
+    };
     rerender(
       <ErrorBoundary>
         <Shell>Portal content</Shell>
@@ -110,6 +129,33 @@ describe("Shell", () => {
     expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe(
       "/portal#booking-schedule",
     );
+
+    currentUser.data = {
+      role: "student",
+      displayName: "Taito Goto",
+      avatarUrl: null,
+    };
+    dashboard.data = {
+      credits: { selfServeSatBooking: false, twelveSessionPlan: true },
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    expect(screen.queryByRole("link", { name: "Book SAT" })).toBeNull();
+
+    currentUser.data = {
+      role: "viewer",
+      displayName: "Ryo",
+      avatarUrl: null,
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    expect(screen.queryByRole("link", { name: "Book SAT" })).toBeNull();
   });
 
   it("hides Book SAT and purchase links from tutor chrome", () => {

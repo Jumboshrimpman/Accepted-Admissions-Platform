@@ -18,7 +18,13 @@ const mocks = vi.hoisted(() => ({
   },
   dashboard: {
     data: {
-      credits: { selfServeSatBooking: true, remainingHours: 0, purchasedHours: 0, usedHours: 0 },
+      credits: {
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+        remainingHours: 0,
+        purchasedHours: 0,
+        usedHours: 0,
+      },
       user: { role: "student", id: "student-1", displayName: "Michelle" },
       upcomingSessions: [
         {
@@ -91,6 +97,7 @@ const defaultUpcomingSessions = mocks.dashboard.data.upcomingSessions;
 afterEach(() => {
   cleanup();
   mocks.dashboard.data.credits.selfServeSatBooking = true;
+  mocks.dashboard.data.credits.twelveSessionPlan = false;
   mocks.dashboard.data.credits.remainingHours = 0;
   mocks.dashboard.data.credits.purchasedHours = 0;
   mocks.dashboard.data.credits.usedHours = 0;
@@ -293,10 +300,18 @@ describe("portal SAT book/pay", () => {
 
   test("hides checkout for off-platform clients such as Taito", () => {
     mocks.dashboard.data.credits.selfServeSatBooking = false;
+    mocks.dashboard.data.credits.twelveSessionPlan = true;
     render(<PortalSat />);
-    expect(screen.getByTestId("portal-sat-off-platform")).toBeTruthy();
-    expect(screen.getByTestId("portal-sat-upcoming")).toBeTruthy();
+    expect(screen.getByTestId("portal-sat-access-denied")).toBeTruthy();
+    expect(screen.getByText("SAT billing is handled off-platform")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open curriculum" }).getAttribute("href")).toBe("/portal");
+    expect(screen.queryByTestId("portal-sat-page")).toBeNull();
     expect(screen.queryByTestId("portal-sat-purchase")).toBeNull();
+    expect(screen.queryByTestId("portal-sat-upcoming")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /secure checkout/i })).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "SAT book and pay" })).toBeNull();
   });
 
   test("checkout return does not claim credits are ready while the ledger is still 0", async () => {

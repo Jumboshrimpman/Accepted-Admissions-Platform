@@ -91,6 +91,7 @@ import {
   isTaitoFirstSatSession,
   isFall2026Term,
   meetingUrlForTerm,
+  satCommerceEmailForAccount,
   selfServeSatBookingForAccount,
   sessionTitle,
   taitoSessionDateTime,
@@ -6353,6 +6354,17 @@ router.post(
       res.status(404).json({ error: "SAT product not found" });
       return;
     }
+    if (
+      !selfServeSatBookingForAccount({
+        role: req.appUser!.role,
+        email: req.appUser!.email,
+      })
+    ) {
+      res.status(403).json({
+        error: "SAT checkout is not available for this account.",
+      });
+      return;
+    }
     const [invoice, payment] = await db.transaction(async (tx) => {
       const [createdInvoice] = await tx
         .insert(invoicesTable)
@@ -9804,6 +9816,14 @@ async function dashboardDataForUser(user: AppUser) {
           .from(usersTable)
           .where(eq(usersTable.id, subjectUserId))
           .limit(1);
+  const commerceEmail = satCommerceEmailForAccount({
+    role: user.role,
+    email: user.email,
+    linkedStudentEmail:
+      user.role === "viewer" && user.id !== subjectUserId
+        ? billingUser?.email ?? null
+        : null,
+  });
   const creditEntries = await db
     .select({
       entryType: creditLedgerTable.entryType,
@@ -9823,7 +9843,7 @@ async function dashboardDataForUser(user: AppUser) {
         timezoneSource: normalizeTimezoneSource(user.timezoneSource),
         viewingAs: await viewingAsForUser(user),
       },
-      welcomeMessage: twelveSessionPlanForEmail(billingUser?.email ?? user.email)
+      welcomeMessage: twelveSessionPlanForEmail(commerceEmail)
         ? "Your Fall program is ready. Keep building on each session."
         : "Your sessions and practice are ready.",
       courses,
@@ -9864,11 +9884,9 @@ async function dashboardDataForUser(user: AppUser) {
         readOnly: user.role === "viewer",
         selfServeSatBooking: selfServeSatBookingForAccount({
           role: user.role,
-          email: billingUser?.email ?? user.email,
+          email: commerceEmail,
         }),
-        twelveSessionPlan: twelveSessionPlanForEmail(
-          billingUser?.email ?? user.email,
-        ),
+        twelveSessionPlan: twelveSessionPlanForEmail(commerceEmail),
       },
       progress: {
         totalSessions: scopedSessions.length,

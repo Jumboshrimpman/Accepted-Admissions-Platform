@@ -147,7 +147,27 @@ export function sessionTitle(
 export function selfServeSatBookingForEmail(
   email: string | null | undefined,
 ): boolean {
-  return email?.trim().toLowerCase() !== TAITO_STUDENT_EMAIL;
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized !== TAITO_STUDENT_EMAIL;
+}
+
+/**
+ * Email that decides SAT buy/book flags.
+ * Students use their own address. Viewers inherit the linked student and
+ * stay off-platform when that link is missing.
+ */
+export function satCommerceEmailForAccount(args: {
+  role: string | null | undefined;
+  email: string | null | undefined;
+  linkedStudentEmail?: string | null;
+}): string | null {
+  if (args.role === "viewer") {
+    const linked = args.linkedStudentEmail?.trim();
+    return linked || null;
+  }
+  const own = args.email?.trim();
+  return own || null;
 }
 
 /** SAT buy/book is student/client commerce. Tutor and admin chrome never advertise it. */

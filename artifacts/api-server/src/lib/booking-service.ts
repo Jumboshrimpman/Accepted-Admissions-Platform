@@ -20,6 +20,8 @@ import {
 } from "./session-schedule-guard.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { ledgerHours, remainingCreditHours } from "./credit-hours.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { selfServeSatBookingForAccount } from "./session-schedule.ts";
 
 export { remainingCreditHours } from "./credit-hours.ts";
 
@@ -436,12 +438,19 @@ export async function notifyAdministratorsOfBooking(args: {
   );
 }
 
-export function requireStudentBooker(user: AppUser): void {
+export function requireStudentBooker(user: Pick<AppUser, "role" | "email">): void {
   if (user.role !== "student") {
     throw new BookingServiceError(
       403,
       "STUDENT_ONLY",
       "Only a student can reserve a prepaid session.",
+    );
+  }
+  if (!selfServeSatBookingForAccount({ role: user.role, email: user.email })) {
+    throw new BookingServiceError(
+      403,
+      "OFF_PLATFORM_BILLING",
+      "SAT booking is handled off-platform for this account.",
     );
   }
 }

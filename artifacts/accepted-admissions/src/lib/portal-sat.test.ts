@@ -9,6 +9,7 @@ import {
   isPortalHomePath,
   portalPathname,
   shouldShowSatPaymentReceipts,
+  showsSelfServeSatCommerce,
 } from "./portal-sat.ts";
 
 test("only students can purchase or book SAT credits", () => {
@@ -19,11 +20,21 @@ test("only students can purchase or book SAT credits", () => {
   assert.equal(canPurchaseOrBookSatCredits(undefined), false);
 });
 
-test("Book SAT nav is student-only", () => {
-  assert.equal(canSeePortalSatNav("student"), true);
-  assert.equal(canSeePortalSatNav("tutor"), false);
-  assert.equal(canSeePortalSatNav("administrator"), false);
-  assert.equal(canSeePortalSatNav("viewer"), false);
+const michelleCredits = { selfServeSatBooking: true, twelveSessionPlan: false };
+const taitoCredits = { selfServeSatBooking: false, twelveSessionPlan: true };
+
+test("Book SAT nav is only for self-serve students", () => {
+  assert.equal(canSeePortalSatNav("student", michelleCredits), true);
+  assert.equal(canSeePortalSatNav("student", taitoCredits), false);
+  assert.equal(canSeePortalSatNav("student", null), false);
+  assert.equal(canSeePortalSatNav("student"), false);
+  assert.equal(canSeePortalSatNav("tutor", michelleCredits), false);
+  assert.equal(canSeePortalSatNav("administrator", michelleCredits), false);
+  assert.equal(canSeePortalSatNav("viewer", taitoCredits), false);
+  assert.equal(canSeePortalSatNav("viewer", michelleCredits), false);
+  assert.equal(showsSelfServeSatCommerce(michelleCredits), true);
+  assert.equal(showsSelfServeSatCommerce(taitoCredits), false);
+  assert.equal(showsSelfServeSatCommerce(null), false);
 });
 
 test("off-platform program clients skip Stripe booking and purchase gates", () => {

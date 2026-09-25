@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/components/portal-auth";
-import { getGetCurrentUserQueryKey, useGetCurrentUser } from "@workspace/api-client-react";
+import { getGetCurrentUserQueryKey, getGetDashboardQueryKey, useGetCurrentUser, useGetDashboard } from "@workspace/api-client-react";
 import { ArrowRight, CalendarClock } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import {
   normalizeSatContent,
   type SatContent,
 } from "@/lib/public-site-content";
+import { showsSelfServeSatCommerce } from "@/lib/portal-sat";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -47,12 +48,24 @@ export default function SatOfferings() {
     },
   });
   const signedInStudent = Boolean(isSignedIn) && currentUser?.role === "student";
-  const pricingHref = signedInStudent ? "/portal/sat" : satPricingSignInHref();
-  const pricingLabel = signedInStudent
+  const dashboard = useGetDashboard({
+    query: {
+      queryKey: getGetDashboardQueryKey(),
+      enabled: signedInStudent,
+      retry: false,
+    },
+  });
+  const canBookPay = signedInStudent && showsSelfServeSatCommerce(dashboard.data?.credits);
+  const accountPending =
+    Boolean(isSignedIn) && (currentUserLoading || (signedInStudent && dashboard.isLoading && !dashboard.data));
+  const pricingHref = canBookPay ? "/portal/sat" : signedInStudent ? "/portal" : satPricingSignInHref();
+  const pricingLabel = canBookPay
     ? "Open SAT book and pay"
-    : isSignedIn && currentUserLoading
+    : accountPending
       ? "Checking account access…"
-      : "Sign in to view SAT pricing";
+      : signedInStudent
+        ? "Open your curriculum"
+        : "Sign in to view SAT pricing";
 
   useEffect(() => {
     fetchPublicJson<unknown>("/api/public/content/sat")
@@ -91,7 +104,7 @@ export default function SatOfferings() {
                   </Link>
                 </Button>
               </div>
-              {signedInStudent ? (
+              {canBookPay ? (
                 <p className="mt-4 text-sm">
                   <Link href="/portal/sat" className="font-semibold text-primary hover:underline" data-testid="link-sat-stay-in-portal">
                     Book and pay inside your client portal

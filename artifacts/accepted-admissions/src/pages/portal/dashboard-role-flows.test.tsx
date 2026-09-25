@@ -696,6 +696,46 @@ describe("authenticated role dashboard flows", () => {
     );
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
     expect(screen.queryByRole("button", { name: /Mark reviewed/i })).toBeNull();
+    expect(screen.queryByTestId("client-credit-balance")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase SAT/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
+    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+  });
+
+  test("a parent viewer does not see Michelle-style booking even if self-serve flags leak", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("viewer"),
+      user: {
+        id: "viewer-user",
+        displayName: "Ryo",
+        email: "ryo@jaac.co.jp",
+        role: "viewer",
+        avatarUrl: null,
+        viewingAs: {
+          id: "student-user",
+          displayName: "Taito Goto",
+          email: "taito0525@gmail.com",
+          timezone: "Asia/Tokyo",
+        },
+      },
+      credits: {
+        purchasedHours: 1,
+        usedHours: 0,
+        remainingHours: 1,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.queryByTestId("client-credit-balance")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByText(/Pay \$130/)).toBeNull();
+    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
   });
 
   test("administrator preview keeps client data visible without client actions", () => {
