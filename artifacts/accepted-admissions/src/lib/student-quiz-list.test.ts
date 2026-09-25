@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { isPastSession } from "./session-display.ts";
 import {
+  GEOMETRY_SAT_FOLLOW_UP_TITLE,
   classifyStudentQuizzes,
   collapsedStudentQuizzes,
   sessionCalendarDayIsPast,
+  studentQuizActionLabel,
 } from "./student-quiz-list.ts";
 
 function quiz(overrides: Record<string, unknown> = {}) {
@@ -162,6 +164,29 @@ test("past-session quizzes are completed and collapsed; today and future stay pr
   assert.deepEqual(
     expanded.visible.map((item) => item.assignment.id),
     ["unlinked", "future-quiz", "today-quiz", "past-live", "past-prework"],
+  );
+});
+
+test("Geometry SAT Questions stays open after the linked session day", () => {
+  const now = new Date("2026-09-24T14:00:00.000Z");
+  const followUp = quiz({
+    id: "geometry-follow-up",
+    title: GEOMETRY_SAT_FOLLOW_UP_TITLE,
+    sessionId: "past-session",
+    latestAttemptStatus: null,
+  });
+  const classified = classifyStudentQuizzes(
+    [followUp],
+    [session({ id: "past-session", dateTime: "2026-09-23T17:00:00.000Z" })],
+    { now, clientTimezone: "Asia/Dubai" },
+  );
+  assert.equal(classified.open.length, 1);
+  assert.equal(classified.archived.length, 0);
+  assert.equal(classified.open[0]?.status, "Not started");
+  assert.equal(classified.open[0]?.pastSessionDay, false);
+  assert.equal(
+    studentQuizActionLabel(classified.open[0]!, false),
+    "Start quiz",
   );
 });
 

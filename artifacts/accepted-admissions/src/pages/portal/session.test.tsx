@@ -150,6 +150,36 @@ describe("student session quiz path", () => {
     expect(resume.getAttribute("href")).toBe("/portal/assignments/quiz-1?resume=1");
   });
 
+  test("keeps Geometry SAT Questions open as follow-up after the session day", () => {
+    const original = mocks.assignments.map((item) => ({ ...item }));
+    mocks.dateTime = "2020-01-01T17:00:00.000Z";
+    mocks.timezone = "UTC";
+    mocks.assignments.splice(
+      0,
+      mocks.assignments.length,
+      { ...original[0]!, title: "Yesterday pre-work" },
+      {
+        id: "geometry-quiz",
+        title: "Geometry SAT Questions",
+        deliveryPhase: "before_session",
+        questionCount: 12,
+        timeLimitMinutes: 30,
+        latestScore: null,
+        latestAttemptId: null,
+        latestAttemptStatus: null,
+      },
+    );
+    render(<PortalSession />);
+    const past = screen.getByTestId("session-homework-quiz-1");
+    expect(past.textContent).toContain("Complete");
+    expect(past.textContent).toContain("Review");
+    const followUp = screen.getByTestId("session-homework-geometry-quiz");
+    expect(followUp.textContent).toContain("Follow-up");
+    expect(followUp.textContent).toContain("Start quiz");
+    expect(followUp.textContent).not.toContain("Due before");
+    mocks.assignments.splice(0, mocks.assignments.length, ...original);
+  });
+
   test("marks session homework complete after that session calendar day", () => {
     mocks.dateTime = "2020-01-01T17:00:00.000Z";
     mocks.timezone = "UTC";

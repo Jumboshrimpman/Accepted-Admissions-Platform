@@ -2,8 +2,10 @@ import {
   resolveClientDisplayTimezone,
   sessionTimezoneLabel,
 } from "./session-display.ts";
+import { isPostSessionFollowUpQuiz } from "./student-quiz-list.ts";
 
 export type PreworkDeadlineAssignment = {
+  title?: string | null;
   deliveryPhase?: string | null;
   deadline?: string | Date | null;
   latestAttemptStatus?: string | null;
@@ -89,6 +91,7 @@ export function studentPreworkDeadlineCopy(input: {
   pastSessionDay?: boolean;
   clientTimezone?: string | null;
 }): string | null {
+  if (isPostSessionFollowUpQuiz(input.assignment)) return null;
   if (!preworkStillNeedsDeadline(input.assignment, input.pastSessionDay))
     return null;
   const due = resolveStudentPreworkDue(input);

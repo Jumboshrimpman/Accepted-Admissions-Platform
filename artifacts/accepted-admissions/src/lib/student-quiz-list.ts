@@ -6,6 +6,15 @@ import {
   sessionDateKey,
 } from "./session-display.ts";
 
+/** Post-session geometry homework. Stays open after the linked session day. */
+export const GEOMETRY_SAT_FOLLOW_UP_TITLE = "Geometry SAT Questions";
+
+export function isPostSessionFollowUpQuiz(assignment: {
+  title?: string | null;
+}): boolean {
+  return assignment.title?.trim() === GEOMETRY_SAT_FOLLOW_UP_TITLE;
+}
+
 type QuizAttempt = {
   id: string;
   title: string;
@@ -93,9 +102,11 @@ export function classifyStudentQuizzes<T extends QuizAttempt>(
   const archived: ClassifiedStudentQuiz<T>[] = [];
   for (const assignment of assignments) {
     const session = sessionForStudentQuiz(assignment, sessions);
-    const pastSessionDay = session
-      ? sessionCalendarDayIsPast(session, now, options?.clientTimezone)
-      : false;
+    const followUp = isPostSessionFollowUpQuiz(assignment);
+    const pastSessionDay =
+      followUp || !session
+        ? false
+        : sessionCalendarDayIsPast(session, now, options?.clientTimezone);
     const attemptStatus = studentQuizAttemptStatus(assignment, now);
     const status =
       pastSessionDay && attemptStatus !== "Complete" && !attemptStatus.endsWith("%")
@@ -142,5 +153,10 @@ export function studentQuizActionLabel(
   if (viewer) return "Review";
   const status = quiz.assignment.latestAttemptStatus;
   if (quiz.pastSessionDay && status !== "submitted" && status !== "expired") return "Review";
+  if (isPostSessionFollowUpQuiz(quiz.assignment)) {
+    if (status === "submitted" || status === "expired") return "Review answers";
+    if (status === "active" || status === "paused") return "Resume";
+    return "Start quiz";
+  }
   return studentAssignmentActionLabel(status);
 }
