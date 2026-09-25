@@ -29,6 +29,7 @@ import {
   GEOMETRY_SAT_FOLLOW_UP_TAG,
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
   GEOMETRY_SAT_QUESTIONS,
+  geometryQuestionsNeedingRefresh,
 } from "./michelle-geometry-sat-questions.ts";
 
 export { isCompletedXavierSession, pickMostRecentCompletedSession };
@@ -61,6 +62,8 @@ export type MichelleGeometryFollowUpOptions = {
 
 export type MichelleGeometryFollowUpResult = {
   created: boolean;
+  refreshed: boolean;
+  updatedQuestionCount: number;
   assignmentId: string | null;
   sessionId: string | null;
   sessionDateTime: string | null;
@@ -107,6 +110,8 @@ export async function ensureMichelleGeometryFollowUp(
   );
   const empty: MichelleGeometryFollowUpResult = {
     created: false,
+    refreshed: false,
+    updatedQuestionCount: 0,
     assignmentId: null,
     sessionId: null,
     sessionDateTime: null,
@@ -185,18 +190,34 @@ export async function ensureMichelleGeometryFollowUp(
     .limit(1);
   const already = existingForMichelle[0];
   if (already) {
+    if (already.session.clientUserId !== michelle.id || isForbiddenClient(michelle.email)) {
+      const skipped = {
+        ...empty,
+        skippedReason: "Refusing to refresh Geometry SAT Questions for a non-Michelle client.",
+      };
+      logger.info(skipped, "Michelle geometry follow-up skipped");
+      return skipped;
+    }
+    const updatedQuestionCount = await refreshMichelleGeometryQuestions(
+      already.assignment.id,
+    );
     const [counted] = await db
       .select({ count: sql<number>`count(*)` })
       .from(assignmentQuestionsTable)
       .where(eq(assignmentQuestionsTable.assignmentId, already.assignment.id));
     const ready = {
       created: false,
+      refreshed: updatedQuestionCount > 0,
+      updatedQuestionCount,
       assignmentId: already.assignment.id,
       sessionId: already.session.id,
       sessionDateTime: already.session.dateTime.toISOString(),
       sessionTitle: already.session.title,
       questionCount: Number(counted?.count ?? 0),
-      skippedReason: "Geometry SAT Questions is already assigned to Michelle.",
+      skippedReason:
+        updatedQuestionCount > 0
+          ? undefined
+          : "Geometry SAT Questions is already assigned to Michelle.",
     };
     logger.info(ready, "Michelle geometry follow-up already assigned");
     return ready;
@@ -251,6 +272,8 @@ async function insertFollowUpAssignment(
   if (!assignment) {
     return {
       created: false,
+      refreshed: false,
+      updatedQuestionCount: 0,
       assignmentId: null,
       sessionId: session.id,
       sessionDateTime: session.dateTime.toISOString(),
@@ -269,7 +292,7 @@ async function insertFollowUpAssignment(
         skill: draft.skill,
         questionType: "multiple_choice",
         difficulty: "hard",
-        stimulus: null,
+        stimulus: draft.stimulus,
         prompt: draft.prompt,
         choices: draft.choices,
         correctAnswer: draft.correctAnswer,
@@ -290,10 +313,85 @@ async function insertFollowUpAssignment(
 
   return {
     created: true,
+    refreshed: false,
+    updatedQuestionCount: 0,
     assignmentId: assignment.id,
     sessionId: session.id,
     sessionDateTime: session.dateTime.toISOString(),
     sessionTitle: session.title,
     questionCount: GEOMETRY_SAT_QUESTIONS.length,
   };
+}
+
+/**
+ * Rewrite Michelle's existing Geometry SAT Questions rows in place.
+ * Question ids stay put so attempt history still points at the same items.
+ * Rows must carry the Michelle follow-up tag, and a question linked to any
+ * other assignment is left unchanged.
+ */
+async function refreshMichelleGeometryQuestions(assignmentId: string): Promise<number> {
+  const links = await db
+    .select({
+      id: questionsTable.id,
+      tags: questionsTable.tags,
+      prompt: questionsTable.prompt,
+      stimulus: questionsTable.stimulus,
+      choices: questionsTable.choices,
+      correctAnswer: questionsTable.correctAnswer,
+      explanation: questionsTable.explanation,
+      skill: questionsTable.skill,
+    })
+    .from(assignmentQuestionsTable)
+    .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  const updates = geometryQuestionsNeedingRefresh(links);
+  if (updates.length === 0) return 0;
+
+  const shared = await db
+    .select({
+      questionId: assignmentQuestionsTable.questionId,
+      count: sql<number>`count(*)`,
+    })
+    .from(assignmentQuestionsTable)
+    .where(
+      inArray(
+        assignmentQuestionsTable.questionId,
+        updates.map((update) => update.id),
+      ),
+    )
+    .groupBy(assignmentQuestionsTable.questionId);
+  const sharedIds = new Set(
+    shared
+      .filter((row) => Number(row.count) > 1)
+      .map((row) => row.questionId),
+  );
+
+  let updated = 0;
+  for (const update of updates) {
+    if (sharedIds.has(update.id)) {
+      logger.info(
+        { questionId: update.id, assignmentId },
+        "Skipping shared question while refreshing Michelle geometry follow-up",
+      );
+      continue;
+    }
+    await db
+      .update(questionsTable)
+      .set({
+        prompt: update.draft.prompt,
+        stimulus: update.draft.stimulus,
+        choices: update.draft.choices.map((item) => ({ ...item })),
+        correctAnswer: update.draft.correctAnswer,
+        explanation: "",
+        skill: update.draft.skill,
+      })
+      .where(
+        and(
+          eq(questionsTable.id, update.id),
+          sql`${questionsTable.tags} @> ${JSON.stringify([GEOMETRY_SAT_FOLLOW_UP_TAG])}::jsonb`,
+        ),
+      );
+    updated += 1;
+  }
+  return updated;
 }

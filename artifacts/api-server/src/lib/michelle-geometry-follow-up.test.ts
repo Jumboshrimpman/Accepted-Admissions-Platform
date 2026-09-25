@@ -71,7 +71,7 @@ test(
     const { ensureMichelleGeometryFollowUp } = await import(
       "./michelle-geometry-follow-up.ts"
     );
-    const { GEOMETRY_SAT_FOLLOW_UP_TITLE } = await import(
+    const { GEOMETRY_SAT_FOLLOW_UP_TITLE, GEOMETRY_SAT_QUESTIONS } = await import(
       "./michelle-geometry-sat-questions.ts"
     );
 
@@ -206,6 +206,7 @@ test(
 
       const second = await ensureMichelleGeometryFollowUp({ now, identities });
       assert.equal(second.created, false);
+      assert.equal(second.refreshed, false);
       assert.equal(second.assignmentId, first.assignmentId);
       assert.equal(second.questionCount, 12);
 
@@ -238,7 +239,29 @@ test(
         assert.equal(link.question.difficulty, "hard");
         assert.equal(link.question.sourceType, "original");
         assert.equal(link.question.questionType, "multiple_choice");
+        assert.match(link.question.stimulus ?? "", /\/media\/geometry\/michelle-sat\//);
       }
+
+      const stale = links[0]!.question;
+      const draft = GEOMETRY_SAT_QUESTIONS.find((item) =>
+        (stale.tags ?? []).includes(item.key),
+      );
+      assert.ok(draft);
+      await db
+        .update(questionsTable)
+        .set({ prompt: "stale geometry stem", correctAnswer: "c" })
+        .where(eq(questionsTable.id, stale.id));
+      const refreshed = await ensureMichelleGeometryFollowUp({ now, identities });
+      assert.equal(refreshed.created, false);
+      assert.equal(refreshed.refreshed, true);
+      assert.equal(refreshed.updatedQuestionCount, 1);
+      const [restored] = await db
+        .select()
+        .from(questionsTable)
+        .where(eq(questionsTable.id, stale.id));
+      assert.equal(restored?.prompt, draft.prompt);
+      assert.equal(restored?.correctAnswer, draft.correctAnswer);
+      assert.equal(restored?.explanation, "");
     } finally {
       const assignmentIds = (
         await db

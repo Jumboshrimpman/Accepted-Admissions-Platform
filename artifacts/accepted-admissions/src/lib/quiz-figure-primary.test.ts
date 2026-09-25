@@ -933,3 +933,25 @@ test("live audit after #72 rematerialize: table-cite, trig smash, junk-bleed, ta
     false,
   );
 });
+
+test("Michelle geometry figures stay on the page when the stem cites the figure", () => {
+  const stimulus =
+    "![L-shaped floor with outer sides 18 m and 14 m and a removed corner 7 m by 6 m](https://app.acceptedadmissions.org/media/geometry/michelle-sat/q01-l-floor-question-block.svg)";
+  const question = {
+    prompt:
+      "In the figure, an L-shaped floor is formed by removing a 7 m by 6 m rectangle from one corner of an 18 m by 14 m rectangle. What is the area, in square meters, of the remaining floor?",
+    stimulus,
+    presentation: "figure_primary" as const,
+    questionType: "mcq",
+    choices: ["210", "168", "252", "196"].map((text, index) => ({
+      id: String.fromCharCode(97 + index),
+      label: String.fromCharCode(65 + index),
+      text,
+    })),
+  };
+  assert.equal(stemCitesVisual(`${question.prompt}\n${question.stimulus}`), true);
+  assert.equal(shouldHideQuizOcrStem(question), false);
+  assert.equal(shouldHideMismatchedQuizFigures(question), false);
+  assert.equal(isFigurePrimaryQuestion(question), true);
+  assert.equal(shouldShowQuizChoices(question), true);
+});

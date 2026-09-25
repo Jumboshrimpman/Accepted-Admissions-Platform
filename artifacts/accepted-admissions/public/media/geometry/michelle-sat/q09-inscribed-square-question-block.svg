@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420" role="img">
+  <title>Square inscribed in a circle of radius 5</title>
+  <rect width="560" height="420" fill="#ffffff"/>
+  <circle cx="280" cy="200" r="130" fill="#ffffff" stroke="#111111" stroke-width="2"/>
+  <path d="M372 108.1 L372 291.9 L188 291.9 L188 108.1 Z" fill="none" stroke="#111111" stroke-width="2" stroke-linejoin="miter"/>
+  <path d="M280 200 L372 108.1" fill="none" stroke="#111111" stroke-width="1.5"/>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="334" y="148" text-anchor="start">5</text>
+  </g>
+</svg>

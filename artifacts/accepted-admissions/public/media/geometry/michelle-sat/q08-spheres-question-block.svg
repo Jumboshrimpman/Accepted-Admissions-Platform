@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img">
+  <title>Two spheres with radii 3 and 6</title>
+  <rect width="640" height="400" fill="#ffffff"/>
+  <circle cx="150" cy="200" r="52" fill="#ffffff" stroke="#111111" stroke-width="2"/>
+  <circle cx="430" cy="200" r="104" fill="#ffffff" stroke="#111111" stroke-width="2"/>
+  <path d="M150 200 H202 M430 200 H534" fill="none" stroke="#111111" stroke-width="1.5"/>
+  <circle cx="150" cy="200" r="2.2" fill="#111111"/>
+  <circle cx="430" cy="200" r="2.2" fill="#111111"/>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="176" y="190" text-anchor="middle">3</text>
+    <text x="482" y="188" text-anchor="middle">6</text>
+  </g>
+</svg>

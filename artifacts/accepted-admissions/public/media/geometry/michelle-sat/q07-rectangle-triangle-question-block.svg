@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 440" role="img">
+  <title>Rectangle 16 by 9 with an attached right triangle of base 16 and height 5</title>
+  <rect width="560" height="440" fill="#ffffff"/>
+  <path d="M140 200 H396 V344 H140 Z" fill="#ffffff" stroke="#111111" stroke-width="2"/>
+  <path d="M140 200 L236 120 L396 200" fill="#ffffff" stroke="#111111" stroke-width="2" stroke-linejoin="miter"/>
+  <path d="M236 120 V200" fill="none" stroke="#111111" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <path d="M236 184 H252 V200" fill="none" stroke="#111111" stroke-width="1.5"/>
+  <g fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">
+    <text x="268" y="380" text-anchor="middle">16</text>
+    <text x="412" y="280" text-anchor="start">9</text>
+    <text x="220" y="170" text-anchor="end">5</text>
+  </g>
+</svg>
