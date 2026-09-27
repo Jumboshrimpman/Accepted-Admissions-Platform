@@ -16,6 +16,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger";
 import {
+  connectionHasRefreshToken,
   describeStoredGoogleCalendarConnection,
   shouldSelfHealGoogleCalendarConnection,
 } from "../lib/calendar-connection-adopt";
@@ -23,6 +24,7 @@ import {
   CalendarOAuthError,
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
   calendarCredentialFailureAction,
+  calendarGrantDisconnectDecision,
   calendarOAuthProbeOutcome,
   calendarOAuthStateFailureMessage,
   callGoogleCalendarRecovering,
@@ -54,6 +56,7 @@ import {
   markGoogleCalendarConnected,
   markGoogleCalendarDisconnected,
   persistGoogleCalendarConnection,
+  revokeGoogleCalendarGrant,
   saveRefreshedGoogleAccessToken,
 } from "../lib/calendar-persistence";
 import {
@@ -4222,6 +4225,29 @@ class BookingError extends Error {
   }
 }
 
+async function applyCalendarDisconnectDecision(
+  tutorProfileId: string,
+  connectionId: string,
+  connection: {
+    status?: string | null;
+    encryptedRefreshToken?: string | null;
+    encryptedAccessToken?: string | null;
+    accessTokenExpiresAt?: Date | null;
+  },
+  hasRefreshToken: boolean,
+  reason: string,
+): Promise<"revoke" | "disconnect" | "keep"> {
+  const decision = calendarGrantDisconnectDecision({ hasRefreshToken, reason });
+  if (decision === "keep_connected") return "keep";
+  logCalendarMarkedDisconnected(reason, tutorProfileId, connection);
+  if (decision === "revoke") {
+    await revokeGoogleCalendarGrant(tutorProfileId, connectionId);
+    return "revoke";
+  }
+  await markGoogleCalendarDisconnected(tutorProfileId, connectionId);
+  return "disconnect";
+}
+
 function logCalendarMarkedDisconnected(
   reason: string,
   tutorProfileId: string,
@@ -4271,16 +4297,36 @@ async function calendarAccess(tutorProfileId: string) {
       ),
     )
     .limit(1);
-  if (!connection?.calendarId) return null;
+  if (!connection) return null;
+  const storedGrant = connectionHasRefreshToken(connection);
+  if (!connection.calendarId && !storedGrant) return null;
   if (!connection.encryptedAccessToken && !connection.encryptedRefreshToken) return null;
+  let refreshToken: string | null = null;
   try {
-    const refreshToken = connection.encryptedRefreshToken
+    refreshToken = connection.encryptedRefreshToken
       ? decryptCalendarToken(connection.encryptedRefreshToken)
       : null;
     const accessToken = connection.encryptedAccessToken
       ? decryptCalendarToken(connection.encryptedAccessToken)
       : "";
-    const forceRefresh = shouldSelfHealGoogleCalendarConnection(connection);
+    const strandedGrant = shouldSelfHealGoogleCalendarConnection(connection);
+    if (storedGrant && (!connection.calendarId || connection.status !== "connected")) {
+      await markGoogleCalendarConnected(tutorProfileId, connection.id);
+      connection.status = "connected";
+      if (!connection.calendarId) {
+        await db
+          .update(calendarConnectionsTable)
+          .set({ calendarId: "primary", updatedAt: new Date() })
+          .where(
+            and(
+              eq(calendarConnectionsTable.id, connection.id),
+              isNull(calendarConnectionsTable.calendarId),
+            ),
+          );
+        connection.calendarId = "primary";
+      }
+    }
+    const forceRefresh = strandedGrant;
     const resolved = await resolveGoogleCalendarAccessToken({
       accessToken,
       refreshToken,
@@ -4288,8 +4334,20 @@ async function calendarAccess(tutorProfileId: string) {
     });
     if (!resolved.ok) {
       if (resolved.action === "disconnect") {
-        logCalendarMarkedDisconnected(resolved.reason, tutorProfileId, connection);
-        await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
+        const applied = await applyCalendarDisconnectDecision(
+          tutorProfileId,
+          connection.id,
+          connection,
+          storedGrant || Boolean(refreshToken),
+          resolved.reason,
+        );
+        if (applied === "keep") {
+          throw new BookingError(
+            503,
+            "CALENDAR_UNAVAILABLE",
+            "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+          );
+        }
         return null;
       }
       const accessTokenStillValid =
@@ -4328,8 +4386,13 @@ async function calendarAccess(tutorProfileId: string) {
   } catch (error) {
     if (error instanceof BookingError) throw error;
     if (calendarCredentialFailureAction(error) === "disconnect") {
-      logCalendarMarkedDisconnected("credential_failure", tutorProfileId, connection);
-      await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
+      await applyCalendarDisconnectDecision(
+        tutorProfileId,
+        connection.id,
+        connection,
+        storedGrant || Boolean(refreshToken),
+        "credential_failure",
+      );
       return null;
     }
     throw new BookingError(
@@ -4354,13 +4417,20 @@ async function runTutorCalendarCall<T>(
   });
   if (!result.ok) {
     if (result.action === "disconnect") {
-      logCalendarMarkedDisconnected(result.reason, access.connection.tutorProfileId, access.connection);
-      await markGoogleCalendarDisconnected(access.connection.tutorProfileId, access.connection.id);
-      throw new BookingError(
-        409,
-        "CALENDAR_DISCONNECTED",
-        "The tutor's calendar is disconnected.",
+      const applied = await applyCalendarDisconnectDecision(
+        access.connection.tutorProfileId,
+        access.connection.id,
+        access.connection,
+        Boolean(access.refreshToken) || Boolean(access.connection.encryptedRefreshToken),
+        result.reason,
       );
+      if (applied !== "keep") {
+        throw new BookingError(
+          409,
+          "CALENDAR_DISCONNECTED",
+          "The tutor's calendar is disconnected.",
+        );
+      }
     }
     throw new BookingError(
       503,
@@ -4847,17 +4917,32 @@ router.get(
       });
       const probeOutcome = calendarOAuthProbeOutcome(probe);
       if (probeOutcome === "reconnect") {
-        logCallback("warn", "probe_refresh_rejected", {
-          outcome: "expired",
+        const reason = probe.ok ? "refresh_rejected" : probe.reason;
+        const applied = await applyCalendarDisconnectDecision(
+          profile.id,
+          connection.id,
+          connection,
+          Boolean(storedRefreshToken),
+          reason,
+        );
+        if (applied === "revoke" || applied === "disconnect") {
+          logCallback("warn", "probe_refresh_rejected", {
+            outcome: "expired",
+            tutorProfileId: profile.id,
+            appUserId: stateData.appUserId,
+            reason,
+          });
+          throw new CalendarOAuthError(
+            "expired",
+            "Google revoked this calendar refresh token. Reconnect from the dashboard.",
+          );
+        }
+        logCallback("warn", "probe_disconnect_kept_grant", {
+          outcome: "connected",
           tutorProfileId: profile.id,
           appUserId: stateData.appUserId,
-          reason: probe.ok ? undefined : probe.reason,
+          reason,
         });
-        await markGoogleCalendarDisconnected(profile.id, connection.id);
-        throw new CalendarOAuthError(
-          "expired",
-          "Google revoked this calendar refresh token. Reconnect from the dashboard.",
-        );
       }
       if (probeOutcome === "rejected") {
         logCallback("warn", "probe_auth_kept_grant", {
