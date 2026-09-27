@@ -50,6 +50,7 @@ function isEasyAreaOrRateFiller(prompt: string): boolean {
   ) {
     return true;
   }
+  if (/\b(gallon of stain|will cover \d+|draining from)\b/i.test(text)) return true;
   if (/\bremoved from\b/i.test(text) && /\barea\b/i.test(text)) return true;
   if (
     /\brectangle\b/i.test(text) &&
@@ -61,6 +62,98 @@ function isEasyAreaOrRateFiller(prompt: string): boolean {
     return true;
   }
   return false;
+}
+
+type ChoiceText = readonly [string, string, string, string];
+
+/**
+ * Session-local repairs only. Each stem is rebuilt from numbers and relations
+ * already stated in that item's in-repo prompt or official explanation.
+ * Bank rows are not rewritten.
+ */
+const SESSION_LOCAL_REPAIRS: Record<string, { prompt: string; choices: ChoiceText }> = {
+  "sat-pt4-math-m1-q18": {
+    prompt:
+      "Square P has a side length of x inches. Square Q has a perimeter that is 176 inches greater than the perimeter of square P. The function f gives the area of square Q, in square inches. Which of the following defines f?",
+    choices: [
+      "f(x) = (x + 44)^2",
+      "f(x) = (x + 176)^2",
+      "f(x) = (176x + 44)^2",
+      "f(x) = (176x + 176)^2",
+    ],
+  },
+  "sat-pt4-math-m2-q26": {
+    prompt:
+      "Two identical rectangular prisms each have a height of 90 centimeters (cm). The base of each prism is a square, and the surface area of each prism is K cm^2. If the prisms are glued together along a square base, the resulting prism has a surface area of (92/47)K cm^2. What is the side length, in cm, of each square base?",
+    choices: ["4", "8", "9", "16"],
+  },
+  "sat-pt8-math-m1-q16": {
+    prompt:
+      "The area A, in square centimeters, of a rectangular cutting board can be represented by the expression w(w + 9), where w is the width, in centimeters, of the cutting board. Which expression represents the length, in centimeters, of the cutting board?",
+    choices: ["w(w + 9)", "w", "9", "w + 9"],
+  },
+  "sat-pt8-math-m1-q18": {
+    prompt:
+      "Circle A has a radius of 3/n and circle B has a radius of 129/n, where n is a positive constant. The area of circle B is how many times the area of circle A?",
+    choices: ["43", "86", "129", "1,849"],
+  },
+  "sat-pt8-math-m2-q22": {
+    prompt:
+      "A cube has an edge length of 68 inches. A solid sphere with a radius of 34 inches is inside the cube, such that the sphere touches the center of each face of the cube. To the nearest cubic inch, what is the volume of the space in the cube not taken up by the sphere?",
+    choices: ["149,796", "164,500", "190,955", "310,800"],
+  },
+  "sat-pt10-math-m1-q15": {
+    prompt:
+      "The function f(w) = 6w^2 gives the area of a rectangle, in square feet, if its width is w feet and its length is 6 times its width. Which of the following is the best interpretation of f(14) = 1,176?",
+    choices: [
+      "If the width of the rectangle is 14 ft, then the area of the rectangle is 1,176 ft^2.",
+      "If the width of the rectangle is 14 ft, then the length of the rectangle is 1,176 ft.",
+      "If the width of the rectangle is 1,176 ft, then the length of the rectangle is 14 ft.",
+      "If the width of the rectangle is 1,176 ft, then the area of the rectangle is 14 ft^2.",
+    ],
+  },
+  "sat-pt10-math-m1-q22": {
+    prompt:
+      "The floor of a ballroom has an area of 600 square meters. An architect creates a scale model of the floor of the ballroom, where the length of each side of the model is 1/10 times the length of the corresponding side of the actual floor of the ballroom. What is the area, in square meters, of the scale model?",
+    choices: ["6", "10", "60", "150"],
+  },
+  "sat-pt11-math-m1-q26": {
+    prompt:
+      "A right rectangular prism has a base area of 24t square centimeters. The length of the base is 8/3 cm, and the height of the rectangular prism is 15 cm. Which expression represents the surface area, in cm^2, of the right rectangular prism?",
+    choices: ["48t + 160", "318t + 80", "1,968t + 80", "360t"],
+  },
+};
+
+function letterChoices(texts: ChoiceText): GeometryAreaVolumeDraft["choices"] {
+  return texts.map((text, index) => ({
+    id: "abcd"[index]!,
+    label: "ABCD"[index]!,
+    text,
+  }));
+}
+
+function servedItem(record: ParsedBankRecord): {
+  prompt: string;
+  stimulus: string | null;
+  choices: GeometryAreaVolumeDraft["choices"];
+} {
+  const repair = SESSION_LOCAL_REPAIRS[record.sourceKey];
+  if (!repair) {
+    return {
+      prompt: record.prompt,
+      stimulus: record.stimulus,
+      choices: record.choices.map((choice) => ({
+        id: choice.id,
+        label: choice.label,
+        text: choice.text,
+      })),
+    };
+  }
+  return {
+    prompt: repair.prompt,
+    stimulus: null,
+    choices: letterChoices(repair.choices),
+  };
 }
 
 /** OCR that passed a loose letter check but is not solvable as printed. */
@@ -83,14 +176,27 @@ function isUnreadableAreaVolumeExtract(record: ParsedBankRecord): boolean {
   return false;
 }
 
-export function isHardGeometryAreaVolumeItem(record: ParsedBankRecord): boolean {
-  if (!isOfficialSatExtract(record)) return false;
-  if (record.section !== "math") return false;
-  if (record.questionType === "spr") return false;
-  const prompt = record.prompt.replace(/\s+/g, " ").trim();
-  if (!AREA_VOLUME_TOPIC.test(prompt) || !GEOMETRY_SOLID_OR_REGION.test(prompt)) return false;
-  if (isEasyAreaOrRateFiller(prompt)) return false;
-  if (isUnreadableAreaVolumeExtract(record)) return false;
+export function toHardGeometryAreaVolumeDraft(
+  record: ParsedBankRecord,
+): GeometryAreaVolumeDraft | null {
+  if (!isOfficialSatExtract(record)) return null;
+  if (record.section !== "math") return null;
+  if (record.questionType === "spr") return null;
+  const served = servedItem(record);
+  const prompt = served.prompt.replace(/\s+/g, " ").trim();
+  if (!AREA_VOLUME_TOPIC.test(prompt) || !GEOMETRY_SOLID_OR_REGION.test(prompt)) return null;
+  if (isEasyAreaOrRateFiller(prompt)) return null;
+  if (
+    isUnreadableAreaVolumeExtract({
+      ...record,
+      prompt: served.prompt,
+      stimulus: served.stimulus,
+      choices: served.choices,
+      figures: SESSION_LOCAL_REPAIRS[record.sourceKey] ? [] : record.figures,
+    })
+  ) {
+    return null;
+  }
   const auditInput: DiagnosticQualityInput = {
     id: record.sourceKey,
     sourceKey: record.sourceKey,
@@ -98,47 +204,52 @@ export function isHardGeometryAreaVolumeItem(record: ParsedBankRecord): boolean 
     section: record.section,
     module: record.module,
     questionNumber: record.questionNumber,
-    prompt: record.prompt,
-    stimulus: record.stimulus,
-    choices: record.choices,
-    figures: record.figures,
+    prompt: served.prompt,
+    stimulus: served.stimulus,
+    choices: served.choices,
+    figures: SESSION_LOCAL_REPAIRS[record.sourceKey] ? [] : record.figures,
     questionType: record.questionType,
     correctAnswer: record.correctAnswer,
     extractGaps: record.extractGaps,
     subject: "SAT Math",
     domain: "Geometry and Trigonometry",
   };
-  return auditStudentQuizItem(auditInput).ok;
+  if (!auditStudentQuizItem(auditInput).ok) return null;
+  return {
+    sourceKey: record.sourceKey,
+    module: record.module,
+    questionNumber: record.questionNumber,
+    prompt: served.prompt,
+    stimulus: served.stimulus,
+    choices: served.choices,
+    correctAnswer: record.correctAnswer,
+  };
+}
+
+export function isHardGeometryAreaVolumeItem(record: ParsedBankRecord): boolean {
+  return toHardGeometryAreaVolumeDraft(record) !== null;
 }
 
 /**
- * Hard official SAT area and volume items a student can answer from the
- * in-repo extracts. Figure-smashed and one-step fillers stay out. The pool
- * is shorter than 12 when the bank has no further clean items.
+ * Official SAT area and volume items a student can answer. Stacked fractions,
+ * dropped exponents, and extraction-marker bleed are repaired on the
+ * session-local copy. Student-produced responses, missing choice sets, and
+ * figures that were never extracted stay out.
  */
 export function selectHardGeometryAreaVolumeItems(
   records: readonly ParsedBankRecord[],
 ): GeometryAreaVolumeDraft[] {
-  const selected = records.filter(isHardGeometryAreaVolumeItem);
+  const selected = records.flatMap((record) => {
+    const draft = toHardGeometryAreaVolumeDraft(record);
+    return draft ? [draft] : [];
+  });
   selected.sort(
     (left, right) =>
       right.module - left.module ||
       left.questionNumber - right.questionNumber ||
       left.sourceKey.localeCompare(right.sourceKey),
   );
-  return selected.slice(0, GEOMETRY_AREA_VOLUME_MAX_ITEMS).map((record) => ({
-    sourceKey: record.sourceKey,
-    module: record.module,
-    questionNumber: record.questionNumber,
-    prompt: record.prompt,
-    stimulus: record.stimulus,
-    choices: record.choices.map((choice) => ({
-      id: choice.id,
-      label: choice.label,
-      text: choice.text,
-    })),
-    correctAnswer: record.correctAnswer,
-  }));
+  return selected.slice(0, GEOMETRY_AREA_VOLUME_MAX_ITEMS);
 }
 
 export async function loadHardGeometryAreaVolumeQuestions(

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   assignmentQuestionsTable,
   assignmentsTable,
+  attemptsTable,
   db,
   questionsTable,
   sessionsTable,
@@ -186,6 +187,44 @@ async function questionIdsForAssignment(assignmentId: string): Promise<string[]>
   return links.map((link) => link.questionId);
 }
 
+async function assignmentHasAttempt(assignmentId: string): Promise<boolean> {
+  const [attempt] = await db
+    .select({ id: attemptsTable.id })
+    .from(attemptsTable)
+    .where(eq(attemptsTable.assignmentId, assignmentId))
+    .limit(1);
+  return Boolean(attempt);
+}
+
+async function sourceKeysForQuestionIds(questionIds: readonly string[]): Promise<string[]> {
+  if (questionIds.length === 0) return [];
+  const rows = await db
+    .select({ id: questionsTable.id, tags: questionsTable.tags })
+    .from(questionsTable)
+    .where(inArray(questionsTable.id, [...questionIds]));
+  const byId = new Map(rows.map((row) => [row.id, row.tags ?? []]));
+  return questionIds.map(
+    (id) => (byId.get(id) ?? []).find((tag) => tag.startsWith("sat-pt")) ?? "",
+  );
+}
+
+async function replaceAssignmentQuestions(
+  assignmentId: string,
+  questionIds: readonly string[],
+): Promise<void> {
+  await db
+    .delete(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  for (const [index, questionId] of questionIds.entries()) {
+    await db.insert(assignmentQuestionsTable).values({
+      assignmentId,
+      questionId,
+      position: index,
+      predictionFirst: false,
+    });
+  }
+}
+
 async function insertQuestions(
   drafts: readonly GeometryAreaVolumeDraft[],
 ): Promise<string[]> {
@@ -275,6 +314,7 @@ async function assignToClient(input: {
   drafts: readonly GeometryAreaVolumeDraft[];
   sessionMode: "completed" | "preview";
   label: string;
+  preserveAttemptedQuestions: boolean;
 }): Promise<{ result: GeometryAreaVolumeAssigneeResult; questionIds: string[] }> {
   const already = await existingFollowUp(input.user.id);
   if (already) {
@@ -285,15 +325,67 @@ async function assignToClient(input: {
       };
     }
     const linked = await questionIdsForAssignment(already.assignment.id);
+    const attempted = await assignmentHasAttempt(already.assignment.id);
+    const draftKeys = input.drafts.map((item) => item.sourceKey);
+    const linkedKeys = await sourceKeysForQuestionIds(linked);
+    const sameQuiz =
+      input.questionIds.length > 0
+        ? linked.length === input.questionIds.length &&
+          linked.every((id, index) => id === input.questionIds[index])
+        : linkedKeys.length === draftKeys.length &&
+          linkedKeys.every((key, index) => key === draftKeys[index]);
+    if (attempted) {
+      return {
+        result: {
+          created: false,
+          assignmentId: already.assignment.id,
+          sessionId: already.session.id,
+          questionCount: linked.length,
+          skippedReason:
+            "Geometry Area and Volume already has an attempt, so its questions were left unchanged.",
+        },
+        questionIds: input.questionIds.length > 0 ? input.questionIds : linked,
+      };
+    }
+    if (input.preserveAttemptedQuestions && input.questionIds.length > 0 && !sameQuiz) {
+      await replaceAssignmentQuestions(already.assignment.id, input.questionIds);
+      return {
+        result: {
+          created: false,
+          assignmentId: already.assignment.id,
+          sessionId: already.session.id,
+          questionCount: input.questionIds.length,
+          skippedReason: "Geometry Area and Volume now matches the quiz that already has an attempt.",
+        },
+        questionIds: input.questionIds,
+      };
+    }
+    if (input.preserveAttemptedQuestions || sameQuiz) {
+      return {
+        result: {
+          created: false,
+          assignmentId: already.assignment.id,
+          sessionId: already.session.id,
+          questionCount: linked.length,
+          skippedReason: "Geometry Area and Volume is already assigned.",
+        },
+        questionIds: input.questionIds.length > 0 ? input.questionIds : linked,
+      };
+    }
+    let questionIds = input.questionIds;
+    if (questionIds.length === 0) {
+      questionIds = await insertQuestions(input.drafts);
+    }
+    await replaceAssignmentQuestions(already.assignment.id, questionIds);
     return {
       result: {
         created: false,
         assignmentId: already.assignment.id,
         sessionId: already.session.id,
-        questionCount: linked.length,
-        skippedReason: "Geometry Area and Volume is already assigned.",
+        questionCount: questionIds.length,
+        skippedReason: "Geometry Area and Volume was expanded before anyone started it.",
       },
-      questionIds: input.questionIds.length > 0 ? input.questionIds : linked,
+      questionIds,
     };
   }
 
@@ -389,6 +481,16 @@ export async function ensureGeometryAreaVolumeFollowUp(
   });
 
   let questionIds: string[] = [];
+  let preserveAttemptedQuestions = false;
+  for (const user of [michelleIdentity.user, samaIdentity.user]) {
+    if (!user) continue;
+    const existing = await existingFollowUp(user.id);
+    if (!existing) continue;
+    if (!(await assignmentHasAttempt(existing.assignment.id))) continue;
+    questionIds = await questionIdsForAssignment(existing.assignment.id);
+    preserveAttemptedQuestions = true;
+    break;
+  }
   const michelle = michelleIdentity.user
     ? await assignToClient({
         user: michelleIdentity.user,
@@ -398,6 +500,7 @@ export async function ensureGeometryAreaVolumeFollowUp(
         drafts,
         sessionMode: "completed",
         label: "Michelle Makarem",
+        preserveAttemptedQuestions,
       })
     : {
         result: emptyAssignee(michelleIdentity.skippedReason),
@@ -414,6 +517,7 @@ export async function ensureGeometryAreaVolumeFollowUp(
         drafts,
         sessionMode: "preview",
         label: "Sama's test student",
+        preserveAttemptedQuestions,
       })
     : {
         result: emptyAssignee(samaIdentity.skippedReason),
