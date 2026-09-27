@@ -20,7 +20,9 @@ export function shouldAdoptLoserCalendarConnection(
   } | null,
   loser: { encryptedRefreshToken?: string | null } | null,
 ): boolean {
+  // A disconnected canonical row may still hold a valid refresh token.
+  // Never replace that grant with a retired duplicate's token.
   return Boolean(
-    connectionHasRefreshToken(loser) && !connectionLooksConnected(winner),
+    connectionHasRefreshToken(loser) && !connectionHasRefreshToken(winner),
   );
 }

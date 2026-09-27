@@ -8,8 +8,14 @@ const {
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
   calendarBusyFailureAction,
   calendarCredentialFailureAction,
+  calendarFailureAfterRefreshAction,
   classifyGoogleTokenRefreshFailure,
+  googleAccessTokenNeedsRefresh,
+  GOOGLE_ACCESS_TOKEN_REFRESH_SKEW_MS,
   isGoogleTokenRefreshAuthFailure,
+  listGoogleBusyWindowsRecovering,
+  preserveGoogleRefreshToken,
+  resolveGoogleCalendarAccessToken,
   calendarConnectProbeFailure,
   calendarOAuthReturnHref,
   calendarOAuthStateFailureMessage,
@@ -297,6 +303,7 @@ test("getGoogleCalendarConfig uses environment-provided HTTPS redirect", () => {
     "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
   );
   assert.equal(parsed.searchParams.get("login_hint"), "xaver.rmz6@gmail.com");
+  assert.equal(parsed.searchParams.get("access_type"), "offline");
   assert.equal(parsed.searchParams.get("include_granted_scopes"), "true");
   assert.equal(parsed.searchParams.get("prompt"), "consent select_account");
   assert.equal(
@@ -418,7 +425,7 @@ test("granted Google scopes accept userinfo.email aliases and require calendar d
   );
 });
 
-test("freeBusy auth and scope errors disconnect; transient errors stay connected", () => {
+test("freeBusy auth errors refresh before any disconnect; transient errors stay connected", () => {
   const insufficient = classifyGoogleCalendarRequestFailure(
     403,
     JSON.stringify({
@@ -432,17 +439,35 @@ test("freeBusy auth and scope errors disconnect; transient errors stay connected
   );
   assert.equal(insufficient instanceof GoogleCalendarRequestError, true);
   assert.equal(isGoogleCalendarAuthFailure(insufficient), true);
-  assert.equal(calendarBusyFailureAction(insufficient), "disconnect");
+  assert.equal(calendarBusyFailureAction(insufficient), "refresh");
+  assert.equal(calendarFailureAfterRefreshAction(insufficient), "disconnect");
   assert.equal(calendarConnectProbeFailure(insufficient).outcome, "rejected");
 
   const unauthorized = classifyGoogleCalendarRequestFailure(401, "{}");
-  assert.equal(calendarBusyFailureAction(unauthorized), "disconnect");
+  assert.equal(calendarBusyFailureAction(unauthorized), "refresh");
+  assert.equal(calendarCredentialFailureAction(unauthorized), "unavailable");
+  assert.equal(calendarFailureAfterRefreshAction(unauthorized), "disconnect");
+
+  const rateLimited = classifyGoogleCalendarRequestFailure(
+    403,
+    JSON.stringify({
+      error: {
+        errors: [{ reason: "rateLimitExceeded", message: "Rate Limit Exceeded" }],
+        code: 403,
+        message: "Rate Limit Exceeded",
+      },
+    }),
+  );
+  assert.equal(isGoogleCalendarAuthFailure(rateLimited), false);
+  assert.equal(calendarBusyFailureAction(rateLimited), "unavailable");
+  assert.equal(calendarFailureAfterRefreshAction(rateLimited), "unavailable");
 
   const unavailable = classifyGoogleCalendarRequestFailure(503, "{}");
   assert.equal(isGoogleCalendarAuthFailure(unavailable), false);
   assert.equal(calendarBusyFailureAction(unavailable), "unavailable");
   assert.equal(calendarConnectProbeFailure(unavailable).outcome, "unavailable");
   assert.equal(calendarBusyFailureAction(new Error("network down")), "unavailable");
+  assert.equal(calendarFailureAfterRefreshAction(new Error("network down")), "unavailable");
 });
 
 test("token refresh 5xx stays connected; invalid_grant disconnects", () => {
@@ -482,4 +507,248 @@ test("missing Google Calendar events are treated as already cancelled", () => {
     ),
     false,
   );
+});
+
+test("access tokens refresh before expiry and when expiry was never stored", () => {
+  const now = new Date("2026-09-27T16:00:00.000Z");
+  assert.equal(googleAccessTokenNeedsRefresh(null, now), true);
+  assert.equal(
+    googleAccessTokenNeedsRefresh(new Date(now.getTime() + GOOGLE_ACCESS_TOKEN_REFRESH_SKEW_MS), now),
+    true,
+  );
+  assert.equal(
+    googleAccessTokenNeedsRefresh(
+      new Date(now.getTime() + GOOGLE_ACCESS_TOKEN_REFRESH_SKEW_MS + 1_000),
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    googleAccessTokenNeedsRefresh(new Date(now.getTime() - 1_000), now),
+    true,
+  );
+});
+
+test("preserve refresh_token when Google omits it from a token response", () => {
+  assert.equal(preserveGoogleRefreshToken("stored-refresh", undefined), "stored-refresh");
+  assert.equal(preserveGoogleRefreshToken("stored-refresh", ""), "stored-refresh");
+  assert.equal(preserveGoogleRefreshToken("stored-refresh", "   "), "stored-refresh");
+  assert.equal(preserveGoogleRefreshToken("stored-refresh", "rotated-refresh"), "rotated-refresh");
+  assert.equal(preserveGoogleRefreshToken(null, undefined), null);
+});
+
+async function withGoogleOAuthFetch(
+  fetchImpl: typeof fetch,
+  run: () => Promise<void>,
+) {
+  const previous = {
+    id: process.env.GOOGLE_CALENDAR_CLIENT_ID,
+    secret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
+    redirect: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+    nodeEnv: process.env.NODE_ENV,
+    fetch: globalThis.fetch,
+  };
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = "client-id";
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = "client-secret";
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI =
+    "https://app.example.com/api/calendar/oauth/callback";
+  process.env.NODE_ENV = "test";
+  globalThis.fetch = fetchImpl;
+  try {
+    await run();
+  } finally {
+    process.env.GOOGLE_CALENDAR_CLIENT_ID = previous.id;
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET = previous.secret;
+    process.env.GOOGLE_CALENDAR_REDIRECT_URI = previous.redirect;
+    process.env.NODE_ENV = previous.nodeEnv;
+    globalThis.fetch = previous.fetch;
+  }
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+test("unexpired access token is reused without calling Google", async () => {
+  await withGoogleOAuthFetch(async () => {
+    throw new Error("token endpoint should not be called");
+  }, async () => {
+    const resolved = await resolveGoogleCalendarAccessToken({
+      accessToken: "still-valid",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: new Date(Date.now() + 10 * 60_000),
+    });
+    assert.deepEqual(resolved, {
+      ok: true,
+      accessToken: "still-valid",
+      refreshed: false,
+    });
+  });
+});
+
+test("refresh success keeps the stored refresh token when Google omits a new one", async () => {
+  await withGoogleOAuthFetch(async (input, init) => {
+    assert.equal(String(input), "https://oauth2.googleapis.com/token");
+    const body = new URLSearchParams(String(init?.body ?? ""));
+    assert.equal(body.get("grant_type"), "refresh_token");
+    assert.equal(body.get("refresh_token"), "stored-refresh");
+    return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
+  }, async () => {
+    const refreshed = await googleCalendar.refreshGoogleAccessToken("stored-refresh");
+    assert.equal(refreshed.accessToken, "fresh-access");
+    assert.equal(refreshed.expiresIn, 3600);
+    assert.equal(refreshed.refreshToken, undefined);
+    assert.equal(
+      preserveGoogleRefreshToken("stored-refresh", refreshed.refreshToken),
+      "stored-refresh",
+    );
+    const now = new Date("2026-09-27T16:00:00.000Z");
+    const resolved = await resolveGoogleCalendarAccessToken(
+      {
+        accessToken: "expired-access",
+        refreshToken: "stored-refresh",
+        accessTokenExpiresAt: new Date("2026-09-27T15:00:00.000Z"),
+      },
+      now,
+    );
+    assert.equal(resolved.ok, true);
+    if (resolved.ok) {
+      assert.equal(resolved.accessToken, "fresh-access");
+      assert.equal(resolved.refreshed, true);
+      assert.equal(resolved.rotatedRefreshToken, undefined);
+    }
+  });
+});
+
+test("refresh failure invalid_grant disconnects; token endpoint 5xx stays connected", async () => {
+  await withGoogleOAuthFetch(async () => {
+    return jsonResponse(400, { error: "invalid_grant", error_description: "Token has been expired or revoked." });
+  }, async () => {
+    await assert.rejects(
+      () => googleCalendar.refreshGoogleAccessToken("revoked-refresh"),
+      (error: unknown) => {
+        assert.equal(error instanceof googleCalendar.CalendarOAuthError, true);
+        assert.equal(calendarCredentialFailureAction(error), "disconnect");
+        return true;
+      },
+    );
+    const resolved = await resolveGoogleCalendarAccessToken({
+      accessToken: "expired-access",
+      refreshToken: "revoked-refresh",
+      accessTokenExpiresAt: new Date("2026-09-27T15:00:00.000Z"),
+    });
+    assert.deepEqual(resolved, { ok: false, action: "disconnect" });
+  });
+
+  await withGoogleOAuthFetch(async () => jsonResponse(503, {}), async () => {
+    const resolved = await resolveGoogleCalendarAccessToken({
+      accessToken: "expired-access",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: new Date("2026-09-27T15:00:00.000Z"),
+    });
+    assert.deepEqual(resolved, { ok: false, action: "unavailable" });
+  });
+});
+
+test("freeBusy 401 refreshes a valid grant and does not disconnect", async () => {
+  const calls: string[] = [];
+  await withGoogleOAuthFetch(async (input, init) => {
+    const url = String(input);
+    calls.push(url);
+    if (url === "https://oauth2.googleapis.com/token") {
+      const body = new URLSearchParams(String(init?.body ?? ""));
+      assert.equal(body.get("refresh_token"), "stored-refresh");
+      return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
+    }
+    const authorization = new Headers(init?.headers).get("authorization");
+    if (authorization === "Bearer expired-access") {
+      return jsonResponse(401, { error: { code: 401, message: "Invalid Credentials", status: "UNAUTHENTICATED" } });
+    }
+    assert.equal(authorization, "Bearer fresh-access");
+    return jsonResponse(200, {
+      calendars: { primary: { busy: [{ start: "2026-09-28T15:00:00.000Z", end: "2026-09-28T16:00:00.000Z" }] } },
+    });
+  }, async () => {
+    const read = await listGoogleBusyWindowsRecovering({
+      accessToken: "expired-access",
+      refreshToken: "stored-refresh",
+      calendarId: "primary",
+      timeMin: new Date("2026-09-28T00:00:00.000Z"),
+      timeMax: new Date("2026-09-29T00:00:00.000Z"),
+    });
+    assert.equal(read.ok, true);
+    if (read.ok) {
+      assert.equal(read.refreshed, true);
+      assert.equal(read.accessToken, "fresh-access");
+      assert.equal(read.rotatedRefreshToken, undefined);
+      assert.deepEqual(read.busy, [
+        { start: "2026-09-28T15:00:00.000Z", end: "2026-09-28T16:00:00.000Z" },
+      ]);
+    }
+    assert.equal(calls.filter((url) => url.includes("/token")).length, 1);
+  });
+});
+
+test("freeBusy 401 followed by invalid_grant disconnects; a 503 does not", async () => {
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") {
+      return jsonResponse(400, { error: "invalid_grant" });
+    }
+    return jsonResponse(401, {});
+  }, async () => {
+    const read = await listGoogleBusyWindowsRecovering({
+      accessToken: "expired-access",
+      refreshToken: "revoked-refresh",
+      calendarId: "primary",
+      timeMin: new Date("2026-09-28T00:00:00.000Z"),
+      timeMax: new Date("2026-09-29T00:00:00.000Z"),
+    });
+    assert.deepEqual(read, { ok: false, action: "disconnect" });
+  });
+
+  let tokenCalls = 0;
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") tokenCalls += 1;
+    return jsonResponse(503, {});
+  }, async () => {
+    const read = await listGoogleBusyWindowsRecovering({
+      accessToken: "still-valid",
+      refreshToken: "stored-refresh",
+      calendarId: "primary",
+      timeMin: new Date("2026-09-28T00:00:00.000Z"),
+      timeMax: new Date("2026-09-29T00:00:00.000Z"),
+    });
+    assert.deepEqual(read, { ok: false, action: "unavailable" });
+    assert.equal(tokenCalls, 0);
+  });
+});
+
+test("rotated refresh tokens are kept and an omitted refresh token is not dropped", async () => {
+  await withGoogleOAuthFetch(async () => {
+    return jsonResponse(200, {
+      access_token: "fresh-access",
+      expires_in: 3600,
+      refresh_token: "rotated-refresh",
+    });
+  }, async () => {
+    const resolved = await resolveGoogleCalendarAccessToken(
+      {
+        accessToken: "expired-access",
+        refreshToken: "stored-refresh",
+        accessTokenExpiresAt: new Date(0),
+      },
+      new Date("2026-09-27T16:00:00.000Z"),
+    );
+    assert.equal(resolved.ok, true);
+    if (resolved.ok) {
+      assert.equal(resolved.rotatedRefreshToken, "rotated-refresh");
+      assert.equal(
+        preserveGoogleRefreshToken("stored-refresh", resolved.rotatedRefreshToken),
+        "rotated-refresh",
+      );
+    }
+  });
 });

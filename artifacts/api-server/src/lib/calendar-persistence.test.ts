@@ -117,7 +117,7 @@ test("Google Calendar credentials persist through reconnect, refresh, and discon
 
     await markGoogleCalendarDisconnected(profile!.id, refreshed!.id);
     const [failedConnection] = await db
-      .select({ status: calendarConnectionsTable.status })
+      .select()
       .from(calendarConnectionsTable)
       .where(eq(calendarConnectionsTable.id, refreshed!.id));
     const [failedProfile] = await db
@@ -126,6 +126,10 @@ test("Google Calendar credentials persist through reconnect, refresh, and discon
       .where(eq(tutorProfilesTable.id, profile!.id));
     assert.equal(failedConnection!.status, "disconnected");
     assert.equal(failedProfile!.calendarStatus, "disconnected");
+    assert.equal(
+      decryptCalendarToken(failedConnection!.encryptedRefreshToken!),
+      "durable-refresh-token",
+    );
 
     await disconnectGoogleCalendarConnection(profile!.id);
     const [disconnected] = await db
