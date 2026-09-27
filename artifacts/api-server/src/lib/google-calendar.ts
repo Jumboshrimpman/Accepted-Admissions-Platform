@@ -205,17 +205,17 @@ export function calendarBusyFailureAction(
   return isGoogleCalendarAuthFailure(error) ? "refresh" : "unavailable";
 }
 
+/**
+ * True only when Google says this refresh grant is revoked (`invalid_grant`).
+ * Client-config failures (`invalid_client`) and bare HTTP 401/403 are not a
+ * revoked tutor grant and must not permanently disconnect the calendar.
+ */
 export function isGoogleTokenRefreshAuthFailure(error: unknown): boolean {
   if (error instanceof CalendarOAuthError) {
-    return error.outcome === "expired" || error.outcome === "rejected";
+    return error.outcome === "expired";
   }
   const message = error instanceof Error ? error.message.toLowerCase() : "";
-  return (
-    message.includes("invalid_grant") ||
-    message.includes("invalid_client") ||
-    message.includes("unauthorized_client") ||
-    /google token refresh failed \(40[13]\)/.test(message)
-  );
+  return message.includes("invalid_grant");
 }
 
 /** Refresh-grant failures. Calendar API 401s are not refresh failures. */
@@ -227,16 +227,14 @@ export function calendarCredentialFailureAction(
 }
 
 /**
- * After a refresh attempt, disconnect only when the grant itself is unusable
- * (invalid_grant / rejected refresh, or the new access token still cannot call
- * Calendar). Rate limits, network errors, and 5xx stay connected.
+ * After a refresh attempt succeeds, a later Calendar API failure is transient:
+ * the refresh token still works. Disconnect only when the refresh call itself
+ * reports `invalid_grant` / a revoked grant.
  */
 export function calendarFailureAfterRefreshAction(
   error: unknown,
 ): "disconnect" | "unavailable" {
-  if (isGoogleTokenRefreshAuthFailure(error) || isGoogleCalendarAuthFailure(error)) {
-    return "disconnect";
-  }
+  if (isGoogleTokenRefreshAuthFailure(error)) return "disconnect";
   return "unavailable";
 }
 
@@ -282,28 +280,18 @@ export function classifyGoogleTokenRefreshFailure(
   }
   const haystack = `${parsed.error ?? ""} ${parsed.error_description ?? ""}`.toLowerCase();
   const errorCode = parsed.error?.trim() || `http_${status}`;
-  if (haystack.includes("invalid_grant")) {
+  if (haystack.includes("invalid_grant") || /\brevoked\b/.test(haystack)) {
     return new CalendarOAuthError(
       "expired",
       "Google revoked this calendar refresh token. Reconnect from the dashboard.",
     );
   }
-  if (haystack.includes("invalid_client") || haystack.includes("unauthorized_client")) {
-    return new CalendarOAuthError(
-      "rejected",
-      `Google rejected the stored calendar credentials (${errorCode}).`,
-    );
-  }
-  if (status === 401 || status === 403) {
-    return new CalendarOAuthError(
-      "rejected",
-      `Google rejected the stored calendar credentials (${errorCode}).`,
-    );
-  }
-  if (status >= 500) {
+  if (status === 429 || status >= 500 || status === 401 || status === 403) {
     return new CalendarOAuthError(
       "unavailable",
-      "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+      status === 401 || status === 403
+        ? `Google could not refresh the calendar token (${errorCode}). The stored grant was kept.`
+        : "Google Calendar is temporarily unavailable. Try again in a few minutes.",
     );
   }
   return new CalendarOAuthError(
@@ -1146,6 +1134,156 @@ export async function resolveGoogleCalendarAccessToken(
   }
 }
 
+export type GoogleCalendarCallRecovery<T> =
+  | {
+      ok: true;
+      value: T;
+      accessToken: string;
+      refreshed: boolean;
+      expiresIn?: number;
+      rotatedRefreshToken?: string;
+    }
+  | { ok: false; action: "disconnect" | "unavailable"; reason: string };
+
+async function recoverGoogleCalendarGrant(
+  refreshToken: string,
+): Promise<GoogleCalendarAccessResolution> {
+  try {
+    return resolutionFromRefresh(refreshToken, await refreshGoogleAccessToken(refreshToken));
+  } catch (error) {
+    const action = calendarCredentialFailureAction(error);
+    return {
+      ok: false,
+      action,
+      reason: action === "disconnect" ? "refresh_rejected" : "refresh_unavailable",
+    };
+  }
+}
+
+/**
+ * Shared free/busy and booking helper.
+ * Refreshes a near-expiry access token before the call when expiry is known,
+ * and on an auth failure refreshes once and retries. A stored refresh token is
+ * never treated as revoked unless Google returns `invalid_grant`.
+ */
+export async function callGoogleCalendarRecovering<T>(args: {
+  accessToken: string;
+  refreshToken?: string | null;
+  /** When set, refresh before the call if the access token is near expiry. Omit to try the current token first. */
+  accessTokenExpiresAt?: Date | null;
+  now?: Date;
+  call: (accessToken: string) => Promise<T>;
+}): Promise<GoogleCalendarCallRecovery<T>> {
+  const now = args.now ?? new Date();
+  const refreshToken = args.refreshToken?.trim() ?? "";
+  let accessToken = args.accessToken;
+  let refreshed = false;
+  let expiresIn: number | undefined;
+  let rotatedRefreshToken: string | undefined;
+
+  if (
+    args.accessTokenExpiresAt !== undefined &&
+    googleAccessTokenNeedsRefresh(args.accessTokenExpiresAt, now)
+  ) {
+    if (!refreshToken) {
+      const expiresAt = args.accessTokenExpiresAt;
+      const expired =
+        expiresAt !== null &&
+        !Number.isNaN(expiresAt.getTime()) &&
+        expiresAt.getTime() <= now.getTime();
+      if (expired || !accessToken) {
+        return {
+          ok: false,
+          action: "disconnect",
+          reason: "access_expired_without_refresh_token",
+        };
+      }
+    } else {
+      const recovered = await recoverGoogleCalendarGrant(refreshToken);
+      if (!recovered.ok) return recovered;
+      accessToken = recovered.accessToken;
+      refreshed = true;
+      expiresIn = recovered.expiresIn;
+      rotatedRefreshToken = recovered.rotatedRefreshToken;
+    }
+  }
+
+  try {
+    const value = await args.call(accessToken);
+    return { ok: true, value, accessToken, refreshed, expiresIn, rotatedRefreshToken };
+  } catch (error) {
+    if (calendarBusyFailureAction(error) !== "refresh") {
+      return {
+        ok: false,
+        action: "unavailable",
+        reason: refreshed ? "calendar_transient_after_refresh" : "calendar_transient",
+      };
+    }
+    if (!refreshToken) {
+      return { ok: false, action: "disconnect", reason: "calendar_auth_without_refresh_token" };
+    }
+    if (refreshed) {
+      return { ok: false, action: "unavailable", reason: "calendar_auth_after_refresh" };
+    }
+    const recovered = await recoverGoogleCalendarGrant(refreshToken);
+    if (!recovered.ok) return recovered;
+    try {
+      const value = await args.call(recovered.accessToken);
+      return {
+        ok: true,
+        value,
+        accessToken: recovered.accessToken,
+        refreshed: true,
+        expiresIn: recovered.expiresIn,
+        rotatedRefreshToken: recovered.rotatedRefreshToken,
+      };
+    } catch (retryError) {
+      if (calendarFailureAfterRefreshAction(retryError) === "disconnect") {
+        return { ok: false, action: "disconnect", reason: "refresh_rejected" };
+      }
+      return {
+        ok: false,
+        action: "unavailable",
+        reason:
+          calendarBusyFailureAction(retryError) === "refresh"
+            ? "calendar_auth_after_refresh"
+            : "calendar_transient_after_refresh",
+      };
+    }
+  }
+}
+
+function freeBusyRecoveryReason(reason: string): string {
+  switch (reason) {
+    case "calendar_auth_without_refresh_token":
+      return "freebusy_auth_without_refresh_token";
+    case "calendar_auth_after_refresh":
+      return "freebusy_auth_after_refresh";
+    case "calendar_transient":
+      return "freebusy_transient";
+    case "calendar_transient_after_refresh":
+      return "freebusy_transient_after_refresh";
+    default:
+      return reason;
+  }
+}
+
+/**
+ * OAuth callback probe after the refresh token has already been stored.
+ * `reconnect` is only an explicit revoked grant. Auth and transient probe
+ * failures keep the stored grant.
+ */
+export function calendarOAuthProbeOutcome(result: {
+  ok: boolean;
+  action?: "disconnect" | "unavailable";
+  reason?: string;
+}): "connected" | "rejected" | "reconnect" {
+  if (result.ok) return "connected";
+  if (result.action === "disconnect") return "reconnect";
+  if (result.reason?.includes("auth")) return "rejected";
+  return "connected";
+}
+
 export async function listGoogleBusyWindowsRecovering(args: {
   accessToken: string;
   refreshToken?: string | null;
@@ -1163,62 +1301,23 @@ export async function listGoogleBusyWindowsRecovering(args: {
     }
   | { ok: false; action: "disconnect" | "unavailable"; reason: string }
 > {
-  try {
-    const busy = await listGoogleBusyWindows(
-      args.accessToken,
-      args.calendarId,
-      args.timeMin,
-      args.timeMax,
-    );
-    return { ok: true, busy, accessToken: args.accessToken, refreshed: false };
-  } catch (error) {
-    if (calendarBusyFailureAction(error) !== "refresh") {
-      return { ok: false, action: "unavailable", reason: "freebusy_transient" };
-    }
-    const refreshToken = args.refreshToken?.trim() ?? "";
-    if (!refreshToken) {
-      return { ok: false, action: "disconnect", reason: "freebusy_auth_without_refresh_token" };
-    }
-    let recovered: GoogleCalendarAccessResolution;
-    try {
-      recovered = resolutionFromRefresh(
-        refreshToken,
-        await refreshGoogleAccessToken(refreshToken),
-      );
-    } catch (refreshError) {
-      const action = calendarCredentialFailureAction(refreshError);
-      return {
-        ok: false,
-        action,
-        reason: action === "disconnect" ? "refresh_rejected" : "refresh_unavailable",
-      };
-    }
-    if (!recovered.ok) return recovered;
-    try {
-      const busy = await listGoogleBusyWindows(
-        recovered.accessToken,
-        args.calendarId,
-        args.timeMin,
-        args.timeMax,
-      );
-      return {
-        ok: true,
-        busy,
-        accessToken: recovered.accessToken,
-        refreshed: true,
-        expiresIn: recovered.expiresIn,
-        rotatedRefreshToken: recovered.rotatedRefreshToken,
-      };
-    } catch (retryError) {
-      const action = calendarFailureAfterRefreshAction(retryError);
-      return {
-        ok: false,
-        action,
-        reason:
-          action === "disconnect" ? "freebusy_auth_after_refresh" : "freebusy_transient_after_refresh",
-      };
-    }
+  const result = await callGoogleCalendarRecovering({
+    accessToken: args.accessToken,
+    refreshToken: args.refreshToken,
+    call: (token) =>
+      listGoogleBusyWindows(token, args.calendarId, args.timeMin, args.timeMax),
+  });
+  if (!result.ok) {
+    return { ok: false, action: result.action, reason: freeBusyRecoveryReason(result.reason) };
   }
+  return {
+    ok: true,
+    busy: result.value,
+    accessToken: result.accessToken,
+    refreshed: result.refreshed,
+    expiresIn: result.expiresIn,
+    rotatedRefreshToken: result.rotatedRefreshToken,
+  };
 }
 
 export async function googleCalendarRequest<T>(

@@ -46,6 +46,39 @@ export function describeStoredGoogleCalendarConnection(
   };
 }
 
+/**
+ * Ciphertext to store after connect or re-consent.
+ * Google omits `refresh_token` on some re-consents; never replace a stored grant with empty.
+ */
+export function encryptedRefreshTokenAfterConnect(
+  existingEncrypted: string | null | undefined,
+  incomingRefreshToken: string | null | undefined,
+  encrypt: (value: string) => string,
+): string | null {
+  const incoming = typeof incomingRefreshToken === "string" ? incomingRefreshToken.trim() : "";
+  if (incoming) return encrypt(incoming);
+  const existing = typeof existingEncrypted === "string" ? existingEncrypted.trim() : "";
+  return existing || null;
+}
+
+/**
+ * A disconnected row that still has a calendar id and refresh token can be
+ * marked connected again after a successful refresh or API call.
+ * User-initiated disconnect clears `calendarId` and must not self-heal.
+ */
+export function shouldSelfHealGoogleCalendarConnection(connection: {
+  status?: string | null;
+  calendarId?: string | null;
+  encryptedRefreshToken?: string | null;
+} | null | undefined): boolean {
+  return Boolean(
+    connection &&
+      connection.status !== "connected" &&
+      connection.calendarId &&
+      connectionHasRefreshToken(connection),
+  );
+}
+
 export function shouldAdoptLoserCalendarConnection(
   winner: {
     status?: string | null;
