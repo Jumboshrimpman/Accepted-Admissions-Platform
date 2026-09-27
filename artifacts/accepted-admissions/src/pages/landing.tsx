@@ -148,7 +148,6 @@ export function LandingContent({ content }: { content: HomeContent }) {
           <div>
             <p className="font-metadata text-accent">Explore with confidence</p>
             <h2 className="font-display mt-3 text-4xl tracking-tight">See the people and published stories behind the work.</h2>
-            <p className="mt-4 leading-relaxed text-muted-foreground">Public profiles and stories appear only when they have been approved for display. If a record is not published, we will not fill the gap with a claim.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Link href="/our-team" data-testid="link-home-team" className="rounded-lg border bg-background p-5 transition-colors hover:border-accent">
