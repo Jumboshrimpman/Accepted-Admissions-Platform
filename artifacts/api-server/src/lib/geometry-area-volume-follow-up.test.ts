@@ -214,6 +214,41 @@ test(
       xavierDuplicateClerkUserId: `user_xavier_dup_${suffix}`,
     };
     const now = new Date("2026-09-27T16:00:00.000Z");
+    const [geometryHistory] = await db
+      .insert(assignmentsTable)
+      .values({
+        courseId: course!.id,
+        sessionId: latest.id,
+        deliveryPhase: "before_session",
+        title: "Geometry SAT Questions",
+        subject: "SAT Math",
+        instructions: "Completed geometry history.",
+        status: "published",
+        timeLimitMinutes: 30,
+        maxAttempts: 1,
+      })
+      .returning();
+    await db.insert(attemptsTable).values({
+      assignmentId: geometryHistory!.id,
+      userId: michelle.id,
+      status: "submitted",
+      submittedAt: new Date("2026-09-22T12:00:00.000Z"),
+      score: 70,
+    });
+    const [legacyArea] = await db
+      .insert(assignmentsTable)
+      .values({
+        courseId: course!.id,
+        sessionId: latest.id,
+        deliveryPhase: "before_session",
+        title: GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+        subject: "SAT Math",
+        instructions: "Still attached to the session.",
+        status: "published",
+        timeLimitMinutes: 30,
+        maxAttempts: 1,
+      })
+      .returning();
 
     try {
       const refused = await ensureGeometryAreaVolumeFollowUp({
@@ -224,10 +259,11 @@ test(
       assert.equal(refused.sama.assignmentId, null);
 
       const first = await ensureGeometryAreaVolumeFollowUp({ now, identities });
-      assert.equal(first.michelle.created, true);
-      assert.equal(first.michelle.sessionId, latest.id);
+      assert.equal(first.michelle.created, false);
+      assert.equal(first.michelle.assignmentId, legacyArea!.id);
+      assert.equal(first.michelle.sessionId, null);
       assert.equal(first.sama.created, true);
-      assert.equal(first.sama.sessionId, samaSession.id);
+      assert.equal(first.sama.sessionId, null);
       assert.equal(first.michelle.questionCount, first.questionCount);
       assert.equal(first.sama.questionCount, first.questionCount);
       assert.ok(first.questionCount >= 4);
@@ -244,17 +280,39 @@ test(
         .from(assignmentsTable)
         .where(
           and(
-            inArray(assignmentsTable.sessionId, createdSessionIds),
+            eq(assignmentsTable.courseId, course!.id),
             eq(assignmentsTable.title, GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE),
           ),
         );
       assert.equal(quizzes.length, 2);
       for (const quiz of quizzes) {
         assert.equal(quiz.status, "published");
+        assert.equal(quiz.sessionId, null);
         assert.equal(quiz.deadline, null);
         assert.equal(quiz.deliveryPhase, "before_session");
         assert.equal(quiz.subject, "SAT Math");
+        assert.equal(quiz.assignedTutorUserId, xavier.id);
       }
+      assert.equal(
+        quizzes.find((quiz) => quiz.id === first.michelle.assignmentId)?.assignedStudentUserId,
+        michelle.id,
+      );
+      assert.equal(
+        quizzes.find((quiz) => quiz.id === first.sama.assignmentId)?.assignedStudentUserId,
+        sama.id,
+      );
+      const [historyStill] = await db
+        .select()
+        .from(assignmentsTable)
+        .where(eq(assignmentsTable.id, geometryHistory!.id));
+      assert.equal(historyStill?.title, "Geometry SAT Questions");
+      assert.equal(historyStill?.sessionId, latest.id);
+      const [historyAttempt] = await db
+        .select()
+        .from(attemptsTable)
+        .where(eq(attemptsTable.assignmentId, geometryHistory!.id));
+      assert.equal(historyAttempt?.score, 70);
+      assert.equal(historyAttempt?.status, "submitted");
 
       const linksFor = async (assignmentId: string) =>
         db
@@ -311,7 +369,7 @@ test(
         await db
           .select({ id: assignmentsTable.id })
           .from(assignmentsTable)
-          .where(inArray(assignmentsTable.sessionId, createdSessionIds))
+          .where(eq(assignmentsTable.courseId, course!.id))
       ).map((row) => row.id);
       if (assignmentIds.length > 0) {
         await db.delete(attemptsTable).where(inArray(attemptsTable.assignmentId, assignmentIds));

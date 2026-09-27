@@ -100,18 +100,18 @@ test("official SAT area and volume set is math only and excludes easy fillers", 
   assert.deepEqual(
     selected.map((item) => item.sourceKey),
     [
-      "sat-pt6-math-m2-q16",
-      "sat-pt5-math-m2-q22",
-      "sat-pt8-math-m2-q22",
-      "sat-pt9-math-m2-q23",
-      "sat-pt4-math-m2-q26",
       "sat-pt10-math-m1-q15",
       "sat-pt8-math-m1-q16",
-      "sat-pt4-math-m1-q18",
-      "sat-pt8-math-m1-q18",
-      "sat-pt10-math-m1-q22",
+      "sat-pt6-math-m2-q16",
       "sat-pt5-math-m1-q23",
+      "sat-pt10-math-m1-q22",
+      "sat-pt5-math-m2-q22",
+      "sat-pt9-math-m2-q23",
+      "sat-pt8-math-m1-q18",
+      "sat-pt4-math-m1-q18",
       "sat-pt11-math-m1-q26",
+      "sat-pt4-math-m2-q26",
+      "sat-pt8-math-m2-q22",
     ],
   );
   for (const item of selected) {
@@ -146,6 +146,11 @@ test("official SAT area and volume set is math only and excludes easy fillers", 
   const cube = selected.find((item) => item.sourceKey === "sat-pt8-math-m2-q22");
   assert.match(cube?.prompt ?? "", /not taken up by the sphere/i);
   assert.equal(cube?.correctAnswer, "a");
+  assert.equal(selected.at(-1)?.sourceKey, "sat-pt8-math-m2-q22");
+  assert.deepEqual(
+    selected.slice(0, 2).map((item) => item.sourceKey),
+    ["sat-pt10-math-m1-q15", "sat-pt8-math-m1-q16"],
+  );
 });
 
 test("content filter drops English, algebra, density, and one-step rectangle area", () => {

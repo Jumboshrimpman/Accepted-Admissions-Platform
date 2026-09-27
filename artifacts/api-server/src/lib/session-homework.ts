@@ -2,6 +2,7 @@ import {
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
+import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import {
   inferSessionPreworkKind,
   isSeededOrAutogenPreworkTitle,
@@ -15,6 +16,7 @@ export const MAX_IN_SESSION_HOMEWORK_QUESTIONS = 15;
 export type SessionHomeworkCandidate = {
   deliveryPhase?: string | null;
   status?: string | null;
+  title?: string | null;
 };
 
 /** Session homework status lists: one row per assignment, no archived leftovers. */
@@ -199,7 +201,10 @@ export function selectActivePrework<T extends SessionHomeworkCandidate>(
 ): T | null {
   return (
     assignments.find(
-      (item) => item.deliveryPhase === "before_session" && item.status !== "archived",
+      (item) =>
+        item.deliveryPhase === "before_session" &&
+        item.status !== "archived" &&
+        !isPostSessionFollowUpTitle(item.title),
     ) ?? null
   );
 }

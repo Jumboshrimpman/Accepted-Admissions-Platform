@@ -119,6 +119,10 @@ test("reusable bank quizzes are session-less, published or draft, and before-ses
   assert.equal(isReusableBankQuiz(quiz({ status: "archived" })), false);
   assert.equal(isReusableBankQuiz(quiz({ status: "completed" })), false);
   assert.equal(isReusableBankQuiz(quiz({ deliveryPhase: "during_session" })), false);
+  assert.equal(
+    isReusableBankQuiz(quiz({ title: "Geometry Area and Volume", sessionId: null })),
+    false,
+  );
 });
 
 test("assign dropdown only includes sessionId-null bank quizzes and dedupes by id", () => {

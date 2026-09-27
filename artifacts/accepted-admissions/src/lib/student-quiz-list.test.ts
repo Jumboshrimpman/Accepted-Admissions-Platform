@@ -6,6 +6,7 @@ import {
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
   classifyStudentQuizzes,
   collapsedStudentQuizzes,
+  isStandaloneStudentTodo,
   sessionCalendarDayIsPast,
   studentQuizActionLabel,
 } from "./student-quiz-list.ts";
@@ -204,6 +205,22 @@ test("Geometry Area and Volume stays open as a follow-up after the session day",
     [session({ id: "past-session", dateTime: "2026-09-23T17:00:00.000Z" })],
     { now, clientTimezone: "Asia/Dubai" },
   );
+  assert.equal(classified.open.length, 1);
+  assert.equal(classified.archived.length, 0);
+  assert.equal(classified.open[0]?.status, "Not started");
+  assert.equal(studentQuizActionLabel(classified.open[0]!, false), "Start quiz");
+});
+
+test("Geometry Area and Volume with no session is an open standalone to-do", () => {
+  const now = new Date("2026-09-24T14:00:00.000Z");
+  const followUp = quiz({
+    id: "area-volume-todo",
+    title: GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+    sessionId: null,
+    latestAttemptStatus: null,
+  });
+  assert.equal(isStandaloneStudentTodo(followUp), true);
+  const classified = classifyStudentQuizzes([followUp], [], { now, clientTimezone: "Asia/Dubai" });
   assert.equal(classified.open.length, 1);
   assert.equal(classified.archived.length, 0);
   assert.equal(classified.open[0]?.status, "Not started");

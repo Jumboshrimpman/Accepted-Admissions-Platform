@@ -157,6 +157,19 @@ async function xavierUserIds(identities: GeometryAreaVolumeFollowUpIdentities): 
 }
 
 async function existingFollowUp(clientUserId: string) {
+  const [standalone] = await db
+    .select({ assignment: assignmentsTable })
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.assignedStudentUserId, clientUserId),
+        eq(assignmentsTable.title, GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    )
+    .limit(1);
+  if (standalone) return { assignment: standalone.assignment, session: null as SessionRow | null };
+
   const rows = await db
     .select({
       assignment: assignmentsTable,
@@ -260,15 +273,35 @@ async function insertQuestions(
   return ids;
 }
 
+async function markStandaloneTodo(input: {
+  assignmentId: string;
+  studentUserId: string;
+  tutorUserId: string;
+}): Promise<void> {
+  await db
+    .update(assignmentsTable)
+    .set({
+      sessionId: null,
+      assignedStudentUserId: input.studentUserId,
+      assignedTutorUserId: input.tutorUserId,
+      instructions: GEOMETRY_AREA_VOLUME_INSTRUCTIONS,
+    })
+    .where(eq(assignmentsTable.id, input.assignmentId));
+}
+
 async function insertAssignment(input: {
-  session: SessionRow;
+  courseId: string;
+  studentUserId: string;
+  tutorUserId: string;
   questionIds: string[];
 }): Promise<string | null> {
   const [assignment] = await db
     .insert(assignmentsTable)
     .values({
-      courseId: input.session.courseId,
-      sessionId: input.session.id,
+      courseId: input.courseId,
+      sessionId: null,
+      assignedStudentUserId: input.studentUserId,
+      assignedTutorUserId: input.tutorUserId,
       deliveryPhase: "before_session",
       title: GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
       subject: "SAT Math",
@@ -306,6 +339,36 @@ function pickSamaPreviewSession(sessions: readonly SessionRow[]): SessionRow | n
   return [...open].sort((left, right) => right.dateTime.getTime() - left.dateTime.getTime())[0] ?? null;
 }
 
+function idsInDraftOrder(
+  linkedIds: readonly string[],
+  linkedKeys: readonly string[],
+  drafts: readonly GeometryAreaVolumeDraft[],
+): string[] | null {
+  if (linkedIds.length !== drafts.length || linkedKeys.length !== linkedIds.length) return null;
+  const byKey = new Map<string, string>();
+  linkedIds.forEach((id, index) => {
+    const key = linkedKeys[index];
+    if (key) byKey.set(key, id);
+  });
+  if (byKey.size !== drafts.length) return null;
+  if (!drafts.every((draft) => byKey.has(draft.sourceKey))) return null;
+  return drafts.map((draft) => byKey.get(draft.sourceKey)!);
+}
+
+function tutorIdForTodo(input: {
+  xavierIds: readonly string[];
+  assignedTutorUserId?: string | null;
+  sessionTutorUserId?: string | null;
+}): string | null {
+  if (input.assignedTutorUserId && input.xavierIds.includes(input.assignedTutorUserId)) {
+    return input.assignedTutorUserId;
+  }
+  if (input.sessionTutorUserId && input.xavierIds.includes(input.sessionTutorUserId)) {
+    return input.sessionTutorUserId;
+  }
+  return input.xavierIds[0] ?? null;
+}
+
 async function assignToClient(input: {
   user: UserRow;
   xavierIds: string[];
@@ -318,9 +381,25 @@ async function assignToClient(input: {
 }): Promise<{ result: GeometryAreaVolumeAssigneeResult; questionIds: string[] }> {
   const already = await existingFollowUp(input.user.id);
   if (already) {
-    if (already.session.clientUserId !== input.user.id || isForbiddenClient(input.user.email)) {
+    if (
+      (already.session && already.session.clientUserId !== input.user.id) ||
+      (already.assignment.assignedStudentUserId &&
+        already.assignment.assignedStudentUserId !== input.user.id) ||
+      isForbiddenClient(input.user.email)
+    ) {
       return {
         result: emptyAssignee(`Refusing to attach Geometry Area and Volume for ${input.label}.`),
+        questionIds: input.questionIds,
+      };
+    }
+    const tutorUserId = tutorIdForTodo({
+      xavierIds: input.xavierIds,
+      assignedTutorUserId: already.assignment.assignedTutorUserId,
+      sessionTutorUserId: already.session?.tutorUserId,
+    });
+    if (!tutorUserId) {
+      return {
+        result: emptyAssignee(`Xavier Morales was not found for ${input.label}.`),
         questionIds: input.questionIds,
       };
     }
@@ -334,59 +413,51 @@ async function assignToClient(input: {
           linked.every((id, index) => id === input.questionIds[index])
         : linkedKeys.length === draftKeys.length &&
           linkedKeys.every((key, index) => key === draftKeys[index]);
-    if (attempted) {
+    const finish = async (questionIds: string[], skippedReason: string) => {
+      await markStandaloneTodo({
+        assignmentId: already.assignment.id,
+        studentUserId: input.user.id,
+        tutorUserId,
+      });
       return {
         result: {
           created: false,
           assignmentId: already.assignment.id,
-          sessionId: already.session.id,
-          questionCount: linked.length,
-          skippedReason:
-            "Geometry Area and Volume already has an attempt, so its questions were left unchanged.",
+          sessionId: null,
+          questionCount: questionIds.length,
+          skippedReason,
         },
-        questionIds: input.questionIds.length > 0 ? input.questionIds : linked,
+        questionIds,
       };
+    };
+    if (attempted) {
+      return finish(
+        input.questionIds.length > 0 ? input.questionIds : linked,
+        "Geometry Area and Volume already has an attempt, so its questions were left unchanged.",
+      );
     }
     if (input.preserveAttemptedQuestions && input.questionIds.length > 0 && !sameQuiz) {
       await replaceAssignmentQuestions(already.assignment.id, input.questionIds);
-      return {
-        result: {
-          created: false,
-          assignmentId: already.assignment.id,
-          sessionId: already.session.id,
-          questionCount: input.questionIds.length,
-          skippedReason: "Geometry Area and Volume now matches the quiz that already has an attempt.",
-        },
-        questionIds: input.questionIds,
-      };
+      return finish(
+        input.questionIds,
+        "Geometry Area and Volume now matches the quiz that already has an attempt.",
+      );
     }
     if (input.preserveAttemptedQuestions || sameQuiz) {
-      return {
-        result: {
-          created: false,
-          assignmentId: already.assignment.id,
-          sessionId: already.session.id,
-          questionCount: linked.length,
-          skippedReason: "Geometry Area and Volume is already assigned.",
-        },
-        questionIds: input.questionIds.length > 0 ? input.questionIds : linked,
-      };
+      return finish(
+        input.questionIds.length > 0 ? input.questionIds : linked,
+        "Geometry Area and Volume is already assigned.",
+      );
     }
     let questionIds = input.questionIds;
+    if (questionIds.length === 0) {
+      questionIds = idsInDraftOrder(linked, linkedKeys, input.drafts) ?? [];
+    }
     if (questionIds.length === 0) {
       questionIds = await insertQuestions(input.drafts);
     }
     await replaceAssignmentQuestions(already.assignment.id, questionIds);
-    return {
-      result: {
-        created: false,
-        assignmentId: already.assignment.id,
-        sessionId: already.session.id,
-        questionCount: questionIds.length,
-        skippedReason: "Geometry Area and Volume was expanded before anyone started it.",
-      },
-      questionIds,
-    };
+    return finish(questionIds, "Geometry Area and Volume was expanded before anyone started it.");
   }
 
   const candidateSessions = await db
@@ -422,7 +493,22 @@ async function assignToClient(input: {
     }
     questionIds = await insertQuestions(input.drafts);
   }
-  const assignmentId = await insertAssignment({ session, questionIds });
+  const tutorUserId = tutorIdForTodo({
+    xavierIds: input.xavierIds,
+    sessionTutorUserId: session.tutorUserId,
+  });
+  if (!tutorUserId) {
+    return {
+      result: emptyAssignee(`Xavier Morales was not found for ${input.label}.`),
+      questionIds,
+    };
+  }
+  const assignmentId = await insertAssignment({
+    courseId: session.courseId,
+    studentUserId: input.user.id,
+    tutorUserId,
+    questionIds,
+  });
   if (!assignmentId) {
     return {
       result: emptyAssignee("The geometry follow-up assignment could not be created."),
@@ -433,7 +519,7 @@ async function assignToClient(input: {
     result: {
       created: true,
       assignmentId,
-      sessionId: session.id,
+      sessionId: null,
       questionCount: questionIds.length,
     },
     questionIds,
@@ -441,9 +527,10 @@ async function assignToClient(input: {
 }
 
 /**
- * New post-session quiz drawn from official SAT extracts already in the repo.
+ * Official SAT area and volume quiz, assigned as a standalone student to-do.
  * Session-local copies are not bank-linked, so this does not rematerialize
  * College Board rows or rewrite a quiz someone has already opened.
+ * Geometry SAT Questions is a different assignment and is never updated here.
  */
 export async function ensureGeometryAreaVolumeFollowUp(
   options: GeometryAreaVolumeFollowUpOptions = {},

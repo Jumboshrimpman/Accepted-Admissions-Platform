@@ -173,6 +173,8 @@ export const assignmentsTable = pgTable("assignments", {
   id: uuid("id").primaryKey().defaultRandom(),
   courseId: uuid("course_id").notNull().references(() => coursesTable.id),
   sessionId: uuid("session_id").references(() => sessionsTable.id),
+  assignedStudentUserId: uuid("assigned_student_user_id").references(() => usersTable.id),
+  assignedTutorUserId: uuid("assigned_tutor_user_id").references(() => usersTable.id),
   deliveryPhase: text("delivery_phase").notNull().default("before_session"),
   title: text("title").notNull(),
   subject: text("subject").notNull(),

@@ -19,7 +19,28 @@ export const GEOMETRY_AREA_VOLUME_FOLLOW_UP_TAG =
 export const GEOMETRY_AREA_VOLUME_MAX_ITEMS = 12;
 
 export const GEOMETRY_AREA_VOLUME_INSTRUCTIONS =
-  "Geometry area and volume practice assigned after your session. Choose one answer for each question. Your score is the percent correct.";
+  "Geometry area and volume practice. Choose one answer for each question. Your score is the percent correct. Your tutor receives the result when you submit.";
+
+/**
+ * Easy to hard. The in-repo official SAT bank has no harder multiple-choice
+ * area, surface area, volume, similar-figure, or area-conversion item than
+ * the cube-and-sphere problem. The two easier official items stay in the set
+ * and move to the front: function interpretation, then the cutting-board factor.
+ */
+export const GEOMETRY_AREA_VOLUME_DIFFICULTY_ORDER = [
+  "sat-pt10-math-m1-q15",
+  "sat-pt8-math-m1-q16",
+  "sat-pt6-math-m2-q16",
+  "sat-pt5-math-m1-q23",
+  "sat-pt10-math-m1-q22",
+  "sat-pt5-math-m2-q22",
+  "sat-pt9-math-m2-q23",
+  "sat-pt8-math-m1-q18",
+  "sat-pt4-math-m1-q18",
+  "sat-pt11-math-m1-q26",
+  "sat-pt4-math-m2-q26",
+  "sat-pt8-math-m2-q22",
+] as const;
 
 export type GeometryAreaVolumeDraft = {
   sourceKey: string;
@@ -245,11 +266,18 @@ export function selectHardGeometryAreaVolumeItems(
   });
   selected.sort(
     (left, right) =>
-      right.module - left.module ||
-      left.questionNumber - right.questionNumber ||
+      geometryAreaVolumeDifficultyScore(right) - geometryAreaVolumeDifficultyScore(left) ||
       left.sourceKey.localeCompare(right.sourceKey),
   );
-  return selected.slice(0, GEOMETRY_AREA_VOLUME_MAX_ITEMS);
+  return selected.slice(0, GEOMETRY_AREA_VOLUME_MAX_ITEMS).reverse();
+}
+
+function geometryAreaVolumeDifficultyScore(item: GeometryAreaVolumeDraft): number {
+  const listed = GEOMETRY_AREA_VOLUME_DIFFICULTY_ORDER.indexOf(
+    item.sourceKey as (typeof GEOMETRY_AREA_VOLUME_DIFFICULTY_ORDER)[number],
+  );
+  if (listed >= 0) return listed;
+  return 1_000 + item.module * 100 + item.questionNumber;
 }
 
 export async function loadHardGeometryAreaVolumeQuestions(

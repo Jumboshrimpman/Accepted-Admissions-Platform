@@ -302,10 +302,18 @@ export function studentCanListAssignment(input: {
   sessionClientUserId?: string | null;
   sessionTitle?: string | null;
   assignmentTitle?: string | null;
+  assignedStudentUserId?: string | null;
 }): boolean {
   const role = input.role ?? "";
   if (role !== "student" && role !== "viewer") return true;
-  if (!studentOwnsSessionAssignment(input.sessionClientUserId, input.studentUserId)) {
+  const standaloneTodo =
+    !input.sessionClientUserId &&
+    Boolean(input.assignedStudentUserId) &&
+    input.assignedStudentUserId === input.studentUserId;
+  if (
+    !standaloneTodo &&
+    !studentOwnsSessionAssignment(input.sessionClientUserId, input.studentUserId)
+  ) {
     return false;
   }
   const capability =
