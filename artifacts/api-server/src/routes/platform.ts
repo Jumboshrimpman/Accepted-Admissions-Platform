@@ -14,6 +14,8 @@ import {
 } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import { logger } from "../lib/logger";
+import { describeStoredGoogleCalendarConnection } from "../lib/calendar-connection-adopt";
 import {
   CalendarOAuthError,
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
@@ -4202,6 +4204,27 @@ class BookingError extends Error {
   }
 }
 
+function logCalendarMarkedDisconnected(
+  reason: string,
+  tutorProfileId: string,
+  connection: {
+    status?: string | null;
+    encryptedRefreshToken?: string | null;
+    encryptedAccessToken?: string | null;
+    accessTokenExpiresAt?: Date | null;
+  },
+) {
+  logger.warn(
+    {
+      event: "calendar.marked_disconnected",
+      reason,
+      tutorProfileId,
+      ...describeStoredGoogleCalendarConnection(connection),
+    },
+    "Google Calendar marked disconnected",
+  );
+}
+
 function asDate(value: unknown): Date {
   if (typeof value !== "string") throw new BookingError(400, "INVALID_TIME", "A valid start time is required.");
   const date = new Date(value);
@@ -4246,6 +4269,7 @@ async function calendarAccess(tutorProfileId: string) {
     });
     if (!resolved.ok) {
       if (resolved.action === "disconnect") {
+        logCalendarMarkedDisconnected(resolved.reason, tutorProfileId, connection);
         await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
         return null;
       }
@@ -4272,6 +4296,7 @@ async function calendarAccess(tutorProfileId: string) {
   } catch (error) {
     if (error instanceof BookingError) throw error;
     if (calendarCredentialFailureAction(error) === "disconnect") {
+      logCalendarMarkedDisconnected("credential_failure", tutorProfileId, connection);
       await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
       return null;
     }
@@ -4421,6 +4446,7 @@ async function slotsForTutor(
   });
   if (!read.ok) {
     if (read.action === "disconnect") {
+      logCalendarMarkedDisconnected(read.reason, tutorProfileId, access.connection);
       await markGoogleCalendarDisconnected(tutorProfileId, access.connection.id);
       return { tutor, rule, access: null, slots: [] as string[] };
     }

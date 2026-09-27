@@ -640,7 +640,7 @@ test("refresh failure invalid_grant disconnects; token endpoint 5xx stays connec
       refreshToken: "revoked-refresh",
       accessTokenExpiresAt: new Date("2026-09-27T15:00:00.000Z"),
     });
-    assert.deepEqual(resolved, { ok: false, action: "disconnect" });
+    assert.deepEqual(resolved, { ok: false, action: "disconnect", reason: "refresh_rejected" });
   });
 
   await withGoogleOAuthFetch(async () => jsonResponse(503, {}), async () => {
@@ -649,7 +649,7 @@ test("refresh failure invalid_grant disconnects; token endpoint 5xx stays connec
       refreshToken: "stored-refresh",
       accessTokenExpiresAt: new Date("2026-09-27T15:00:00.000Z"),
     });
-    assert.deepEqual(resolved, { ok: false, action: "unavailable" });
+    assert.deepEqual(resolved, { ok: false, action: "unavailable", reason: "refresh_unavailable" });
   });
 });
 
@@ -706,7 +706,7 @@ test("freeBusy 401 followed by invalid_grant disconnects; a 503 does not", async
       timeMin: new Date("2026-09-28T00:00:00.000Z"),
       timeMax: new Date("2026-09-29T00:00:00.000Z"),
     });
-    assert.deepEqual(read, { ok: false, action: "disconnect" });
+    assert.deepEqual(read, { ok: false, action: "disconnect", reason: "refresh_rejected" });
   });
 
   let tokenCalls = 0;
@@ -721,7 +721,7 @@ test("freeBusy 401 followed by invalid_grant disconnects; a 503 does not", async
       timeMin: new Date("2026-09-28T00:00:00.000Z"),
       timeMax: new Date("2026-09-29T00:00:00.000Z"),
     });
-    assert.deepEqual(read, { ok: false, action: "unavailable" });
+    assert.deepEqual(read, { ok: false, action: "unavailable", reason: "freebusy_transient" });
     assert.equal(tokenCalls, 0);
   });
 });

@@ -1089,7 +1089,7 @@ export type GoogleCalendarAccessResolution =
       expiresIn?: number;
       rotatedRefreshToken?: string;
     }
-  | { ok: false; action: "disconnect" | "unavailable" };
+  | { ok: false; action: "disconnect" | "unavailable"; reason: string };
 
 function resolutionFromRefresh(
   storedRefreshToken: string,
@@ -1124,14 +1124,25 @@ export async function resolveGoogleCalendarAccessToken(
       expiresAt !== null &&
       !Number.isNaN(expiresAt.getTime()) &&
       expiresAt.getTime() <= now.getTime();
-    if (expired) return { ok: false, action: "disconnect" };
+    if (expired) {
+      return {
+        ok: false,
+        action: "disconnect",
+        reason: "access_expired_without_refresh_token",
+      };
+    }
     return { ok: true, accessToken: credentials.accessToken, refreshed: false };
   }
   try {
     const refreshed = await refreshGoogleAccessToken(refreshToken);
     return resolutionFromRefresh(refreshToken, refreshed);
   } catch (error) {
-    return { ok: false, action: calendarCredentialFailureAction(error) };
+    const action = calendarCredentialFailureAction(error);
+    return {
+      ok: false,
+      action,
+      reason: action === "disconnect" ? "refresh_rejected" : "refresh_unavailable",
+    };
   }
 }
 
@@ -1150,7 +1161,7 @@ export async function listGoogleBusyWindowsRecovering(args: {
       expiresIn?: number;
       rotatedRefreshToken?: string;
     }
-  | { ok: false; action: "disconnect" | "unavailable" }
+  | { ok: false; action: "disconnect" | "unavailable"; reason: string }
 > {
   try {
     const busy = await listGoogleBusyWindows(
@@ -1162,10 +1173,12 @@ export async function listGoogleBusyWindowsRecovering(args: {
     return { ok: true, busy, accessToken: args.accessToken, refreshed: false };
   } catch (error) {
     if (calendarBusyFailureAction(error) !== "refresh") {
-      return { ok: false, action: "unavailable" };
+      return { ok: false, action: "unavailable", reason: "freebusy_transient" };
     }
     const refreshToken = args.refreshToken?.trim() ?? "";
-    if (!refreshToken) return { ok: false, action: "disconnect" };
+    if (!refreshToken) {
+      return { ok: false, action: "disconnect", reason: "freebusy_auth_without_refresh_token" };
+    }
     let recovered: GoogleCalendarAccessResolution;
     try {
       recovered = resolutionFromRefresh(
@@ -1173,7 +1186,12 @@ export async function listGoogleBusyWindowsRecovering(args: {
         await refreshGoogleAccessToken(refreshToken),
       );
     } catch (refreshError) {
-      return { ok: false, action: calendarCredentialFailureAction(refreshError) };
+      const action = calendarCredentialFailureAction(refreshError);
+      return {
+        ok: false,
+        action,
+        reason: action === "disconnect" ? "refresh_rejected" : "refresh_unavailable",
+      };
     }
     if (!recovered.ok) return recovered;
     try {
@@ -1192,9 +1210,12 @@ export async function listGoogleBusyWindowsRecovering(args: {
         rotatedRefreshToken: recovered.rotatedRefreshToken,
       };
     } catch (retryError) {
+      const action = calendarFailureAfterRefreshAction(retryError);
       return {
         ok: false,
-        action: calendarFailureAfterRefreshAction(retryError),
+        action,
+        reason:
+          action === "disconnect" ? "freebusy_auth_after_refresh" : "freebusy_transient_after_refresh",
       };
     }
   }
