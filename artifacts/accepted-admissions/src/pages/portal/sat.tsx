@@ -243,11 +243,7 @@ export default function PortalSat() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">
-              {tutorDenied
-                ? PORTAL_SAT_TUTOR_DENIED_TITLE
-                : offPlatformStudent
-                  ? "SAT billing is handled off-platform"
-                  : "SAT book and pay is unavailable"}
+              {tutorDenied ? PORTAL_SAT_TUTOR_DENIED_TITLE : "SAT book and pay is unavailable"}
             </CardTitle>
             <CardDescription>
               {tutorDenied

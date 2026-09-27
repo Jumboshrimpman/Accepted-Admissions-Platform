@@ -340,7 +340,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getAllByText("9:00–10:00 PM JST").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Join meeting/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByRole("link", { name: /Open calendar/i }).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText(/billing is handled off-platform/i)).toBeNull();
+    expect(screen.queryByText(/handled offline/i)).toBeNull();
     expect(screen.queryByTestId("portal-payment-receipts")).toBeNull();
     expect(screen.queryByText("SAT session payment and receipts")).toBeNull();
     expect(screen.queryByText("Your SAT session payment")).toBeNull();
@@ -365,6 +367,101 @@ describe("authenticated role dashboard flows", () => {
     expect(roster.textContent).toContain("English");
     expect(screen.getByText("One plan. Twelve focused meetings.")).toBeTruthy();
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
+  });
+
+  test("off-platform student and parent mirror omit billing and deferred-prep lines", () => {
+    const deferredPrep =
+      "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";
+    const base = dashboardForRole("student");
+    mocks.dashboard = {
+      ...base,
+      assignments: [
+        ...base.assignments,
+        {
+          id: "assignment-deferred",
+          title: "The live plan handles the unfinished prep.",
+          subject: "SAT",
+          status: "published",
+          deadline: "2099-10-01T00:00:00.000Z",
+          questionCount: 4,
+          timeLimitMinutes: 15,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+      ],
+      curriculumSessions: [
+        {
+          id: "session-sat",
+          courseId: "course-fall",
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Taito’s SAT Session with Eunice",
+          status: "published",
+          meetingUrl: "https://meet.google.com/sat-room",
+          calendarEventUrl: null,
+          tutor: { id: "eunice", name: "Eunice Chon", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Taito Goto" },
+          readiness: "not_started",
+          nextAction: "Take quiz",
+          currentFocus: "The live plan handles the unfinished prep",
+          preparation: {
+            id: "assignment-deferred",
+            title: deferredPrep,
+            latestAttemptStatus: null,
+          },
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
+    const { unmount } = render(<FallWelcomeDashboard />);
+
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText(/billing/i)).toBeNull();
+    expect(screen.queryByText(/handled offline/i)).toBeNull();
+    expect(screen.queryByText(/unfinished prep/i)).toBeNull();
+    expect(screen.queryByText(/live plan handles/i)).toBeNull();
+    expect(screen.queryByText(/live plan now carries/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
+    expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
+    unmount();
+
+    mocks.dashboard = {
+      ...mocks.dashboard,
+      user: {
+        id: "viewer-user",
+        displayName: "Ryo",
+        email: "ryo@jaac.co.jp",
+        role: "viewer",
+        avatarUrl: null,
+        viewingAs: {
+          id: "student-user",
+          displayName: "Taito Goto",
+          email: "taito0525@gmail.com",
+          timezone: "Asia/Tokyo",
+        },
+      },
+      credits: {
+        ...base.credits,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    expect(screen.getByRole("status").textContent).toContain("Viewing as Taito Goto");
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText(/billing/i)).toBeNull();
+    expect(screen.queryByText(/unfinished prep/i)).toBeNull();
+    expect(screen.queryByText(/live plan handles/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
   });
 
   test("past-session quizzes show Complete and stay collapsed under Quizzes", () => {
@@ -699,7 +796,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.queryByTestId("client-credit-balance")).toBeNull();
     expect(screen.queryByRole("link", { name: /Purchase SAT/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
-    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText(/billing is handled off-platform/i)).toBeNull();
+    expect(screen.queryByText(/handled offline/i)).toBeNull();
   });
 
   test("a parent viewer does not see Michelle-style booking even if self-serve flags leak", () => {
@@ -735,7 +834,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
     expect(screen.queryByText(/Pay \$130/)).toBeNull();
-    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText(/billing is handled off-platform/i)).toBeNull();
+    expect(screen.queryByText(/handled offline/i)).toBeNull();
   });
 
   test("administrator preview keeps client data visible without client actions", () => {
@@ -1092,7 +1193,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.queryByRole("link", { name: /Purchase SAT hours/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Book a SAT session/i })).toBeNull();
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
-    expect(screen.getByTestId("off-platform-billing-note")).toBeTruthy();
+    expect(screen.queryByTestId("off-platform-billing-note")).toBeNull();
+    expect(screen.queryByText(/billing is handled off-platform/i)).toBeNull();
+    expect(screen.queryByText(/handled offline/i)).toBeNull();
   });
 
   test("tutor dashboard has no SAT buy or book entry points", () => {

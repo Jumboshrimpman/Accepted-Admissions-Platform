@@ -440,6 +440,7 @@ import {
   assignmentQuestionShape,
   courseIdsForAssignmentList,
   isAssignmentListedForRole,
+  isDeferredUnfinishedPrepBlock,
   isUnfinishedHomeworkClientCopy,
   studentCanListAssignment,
   studentFacingAssignmentTitle,
@@ -10242,12 +10243,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
                 if (block.status !== "published" || block.visibility === "tutor") {
                   return false;
                 }
-                const text = [
-                  typeof block.config?.text === "string" ? block.config.text : "",
-                  typeof block.config?.html === "string" ? block.config.html : "",
-                  typeof block.config?.title === "string" ? block.config.title : "",
-                ].join(" ");
-                return !isUnfinishedHomeworkClientCopy(text);
+                return !isDeferredUnfinishedPrepBlock(block);
               })
               .map((block) => ({
                 ...block,
@@ -10613,15 +10609,9 @@ async function adaptiveCurriculumForSession(
     publishedBlocks: isStaff
       ? blocks
       : blocks
-          .filter((block) => {
-            if (block.visibility === "tutor") return false;
-            const text = [
-              typeof block.config?.text === "string" ? block.config.text : "",
-              typeof block.config?.html === "string" ? block.config.html : "",
-              typeof block.config?.title === "string" ? block.config.title : "",
-            ].join(" ");
-            return !isUnfinishedHomeworkClientCopy(text);
-          })
+          .filter(
+            (block) => block.visibility !== "tutor" && !isDeferredUnfinishedPrepBlock(block),
+          )
           .map((block) => ({
             ...block,
             config: studentFacingJson(block.config),

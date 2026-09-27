@@ -447,13 +447,7 @@ export function ClientDashboardView({
             )}
           </CardContent>
         </Card>
-      ) : (
-        <Card data-testid="off-platform-billing-note">
-          <CardContent className="p-5 text-sm text-muted-foreground">
-            Session billing is handled off-platform. Join Google Meet or open the calendar event from each upcoming date below.
-          </CardContent>
-        </Card>
-      )}
+      ) : null}
 
       {studentSatCommerce && showSelfServeBooking ? (
         <BookingCard
@@ -530,7 +524,12 @@ export function ClientDashboardView({
               <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 {nextSession.preparation
-                  ? `${studentFacingCopy(nextSession.preparation.title)} · ${featuredQuizSettled ? "Complete" : readinessLabel(nextSession)}`
+                  ? [
+                      studentFacingCopy(nextSession.preparation.title),
+                      featuredQuizSettled ? "Complete" : readinessLabel(nextSession),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
                   : "No required preparation."}
               </p>
               <PreworkDeadlineNote
@@ -581,9 +580,9 @@ export function ClientDashboardView({
             <CardDescription>Based only on the latest finalized {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{guidance?.strength ?? "Keep building your baseline."}</p></div>
-            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-missed-skill"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-2 text-sm">{guidance?.missedSkill ?? "No repeated missed skill yet."}</p></div>
-            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-next-practice"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-2 text-sm">{guidance?.nextPractice ?? "Continue with the published session plan."}</p></div>
+            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.strength) || "Keep building your baseline."}</p></div>
+            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-missed-skill"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.missedSkill) || "No repeated missed skill yet."}</p></div>
+            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-next-practice"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.nextPractice) || "Continue with the published session plan."}</p></div>
           </CardContent>
         </Card>
       )}
@@ -601,7 +600,9 @@ export function ClientDashboardView({
         <CardContent className="space-y-3">
           {dashboard.assignments.length > 0 ? (
             <>
-              {quizList.visible.map((quiz) => (
+              {quizList.visible.map((quiz) => {
+                const quizTitle = studentFacingCopy(quiz.assignment.title);
+                return (
                 <div
                   key={quiz.assignment.id}
                   className="flex flex-col gap-2 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -609,7 +610,7 @@ export function ClientDashboardView({
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold">{studentFacingCopy(quiz.assignment.title)}</p>
+                      {quizTitle ? <p className="font-semibold">{quizTitle}</p> : null}
                       <Badge variant="outline">{quiz.status}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>
@@ -634,7 +635,8 @@ export function ClientDashboardView({
                     </Button>
                   )}
                 </div>
-              ))}
+                );
+              })}
               <SessionListDisclosure
                 canToggle={quizList.canToggle}
                 expanded={showAllQuizzes}
@@ -676,7 +678,9 @@ export function ClientDashboardView({
                         <span className="truncate text-sm font-medium">{displaySessionFocus(session.currentFocus, session.latestResult?.analysis, "Open the session to review the focus.")}</span>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {session.preparation ? `Before: ${studentFacingCopy(session.preparation.title)}` : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
+                        {session.preparation
+                          ? `Before: ${studentFacingCopy(session.preparation.title) || "assigned pre-work"}`
+                          : "Before: no required pre-work"} · During: published {sessionSubjectLabel(session.subject)} plan · After: {session.hasReport ? "report ready" : "feedback and report"}
                       </p>
                       <PreworkDeadlineNote
                         label={

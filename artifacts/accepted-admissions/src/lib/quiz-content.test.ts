@@ -79,6 +79,30 @@ test("hides unfinished-homework banners and cancelled session cards", () => {
     ),
     true,
   );
+  assert.equal(
+    isUnfinishedHomeworkClientCopy("The live plan handles the unfinished prep."),
+    true,
+  );
+  assert.equal(
+    isUnfinishedHomeworkClientCopy("Unfinished homework is handled by the live plan."),
+    true,
+  );
+  assert.equal(
+    isUnfinishedHomeworkClientCopy("Unfinished pre-work is due before the linked session."),
+    false,
+  );
+  assert.equal(
+    studentFacingCopy(
+      "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+    ),
+    "",
+  );
+  assert.equal(
+    studentFacingCopy(
+      "Keep the October routine. The live plan handles the unfinished prep during the meeting.",
+    ),
+    "Keep the October routine.",
+  );
   assert.equal(isLiveListedSession({ bookingStatus: "cancelled" }), false);
   assert.equal(isLiveListedSession({ bookingStatus: "Canceled" }), false);
   assert.equal(isLiveListedSession({ cancelledAt: "2026-09-07T20:00:00.000Z" }), false);
