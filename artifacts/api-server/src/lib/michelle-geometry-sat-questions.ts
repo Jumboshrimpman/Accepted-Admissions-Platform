@@ -1,13 +1,15 @@
 import { auditStudentQuizItem } from "./sat-bank-diagnostic-quality.ts";
 import { enrichStimulusWithFigures } from "./sat-bank-figures.ts";
 import { CANONICAL_APP_ORIGIN } from "./public-origin.ts";
+import { GEOMETRY_SAT_FOLLOW_UP_TITLE } from "./post-session-follow-up.ts";
+
+export { GEOMETRY_SAT_FOLLOW_UP_TITLE };
 
 /**
  * Original Digital SAT–style geometry items for one client follow-up.
  * Stems and line figures are written for this quiz. They are not College Board extracts.
  * Student-facing fields have an answer key and no solution text.
  */
-export const GEOMETRY_SAT_FOLLOW_UP_TITLE = "Geometry SAT Questions";
 
 export const GEOMETRY_SAT_FOLLOW_UP_TAG = "michelle-geometry-sat-follow-up";
 

@@ -9,10 +9,18 @@ import {
 /** Post-session geometry homework. Stays open after the linked session day. */
 export const GEOMETRY_SAT_FOLLOW_UP_TITLE = "Geometry SAT Questions";
 
+/** Official SAT area and volume follow-up. Same open-after-session behavior. */
+export const GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE = "Geometry Area and Volume";
+
+const POST_SESSION_FOLLOW_UP_TITLES = new Set<string>([
+  GEOMETRY_SAT_FOLLOW_UP_TITLE,
+  GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+]);
+
 export function isPostSessionFollowUpQuiz(assignment: {
   title?: string | null;
 }): boolean {
-  return assignment.title?.trim() === GEOMETRY_SAT_FOLLOW_UP_TITLE;
+  return POST_SESSION_FOLLOW_UP_TITLES.has(assignment.title?.trim() ?? "");
 }
 
 type QuizAttempt = {

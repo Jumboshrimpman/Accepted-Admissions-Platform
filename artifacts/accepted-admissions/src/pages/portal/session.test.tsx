@@ -259,6 +259,46 @@ describe("student session quiz path", () => {
     mocks.assignments.splice(0, mocks.assignments.length, ...original);
   });
 
+  test("keeps Geometry Area and Volume open as follow-up without replacing in-session practice", () => {
+    const original = mocks.assignments.map((item) => ({ ...item }));
+    const prep = mocks.sessionPrep;
+    mocks.dateTime = "2020-01-01T17:00:00.000Z";
+    mocks.timezone = "UTC";
+    mocks.sessionPrep = {
+      mode: "hard_bank",
+      summary: "Harder problems for leftover time",
+      duringAssignmentId: "during-1",
+      attachedQuestionCount: 4,
+    };
+    mocks.assignments.splice(
+      0,
+      mocks.assignments.length,
+      { ...original[0]!, id: "during-1", title: "In-session practice", deliveryPhase: "during_session" },
+      {
+        id: "area-volume-quiz",
+        title: "Geometry Area and Volume",
+        deliveryPhase: "before_session",
+        questionCount: 4,
+        timeLimitMinutes: 30,
+        latestScore: null,
+        latestAttemptId: null,
+        latestAttemptStatus: null,
+      },
+    );
+    try {
+      render(<PortalSession />);
+      const followUp = screen.getByTestId("session-homework-area-volume-quiz");
+      expect(followUp.textContent).toContain("Follow-up");
+      expect(followUp.textContent).toContain("Start quiz");
+      expect(followUp.textContent).not.toContain("Due before");
+      const practice = screen.getByTestId("in-session-practice-link");
+      expect(practice.textContent).toContain("In-session practice");
+    } finally {
+      mocks.assignments.splice(0, mocks.assignments.length, ...original);
+      mocks.sessionPrep = prep;
+    }
+  });
+
   test("marks session homework complete after that session calendar day", () => {
     mocks.dateTime = "2020-01-01T17:00:00.000Z";
     mocks.timezone = "UTC";

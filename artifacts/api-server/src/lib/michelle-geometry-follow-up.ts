@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import {
   assignmentQuestionsTable,
   assignmentsTable,
+  attemptsTable,
   db,
   questionsTable,
   sessionsTable,
@@ -330,6 +331,13 @@ async function insertFollowUpAssignment(
  * other assignment is left unchanged.
  */
 async function refreshMichelleGeometryQuestions(assignmentId: string): Promise<number> {
+  const [attempt] = await db
+    .select({ id: attemptsTable.id })
+    .from(attemptsTable)
+    .where(eq(attemptsTable.assignmentId, assignmentId))
+    .limit(1);
+  if (attempt) return 0;
+
   const links = await db
     .select({
       id: questionsTable.id,

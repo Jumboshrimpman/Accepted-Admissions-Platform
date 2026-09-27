@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { isPastSession } from "./session-display.ts";
 import {
+  GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
   classifyStudentQuizzes,
   collapsedStudentQuizzes,
@@ -188,6 +189,25 @@ test("Geometry SAT Questions stays open after the linked session day", () => {
     studentQuizActionLabel(classified.open[0]!, false),
     "Start quiz",
   );
+});
+
+test("Geometry Area and Volume stays open as a follow-up after the session day", () => {
+  const now = new Date("2026-09-24T14:00:00.000Z");
+  const followUp = quiz({
+    id: "area-volume-follow-up",
+    title: GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+    sessionId: "past-session",
+    latestAttemptStatus: null,
+  });
+  const classified = classifyStudentQuizzes(
+    [followUp],
+    [session({ id: "past-session", dateTime: "2026-09-23T17:00:00.000Z" })],
+    { now, clientTimezone: "Asia/Dubai" },
+  );
+  assert.equal(classified.open.length, 1);
+  assert.equal(classified.archived.length, 0);
+  assert.equal(classified.open[0]?.status, "Not started");
+  assert.equal(studentQuizActionLabel(classified.open[0]!, false), "Start quiz");
 });
 
 test("a scored past-session quiz keeps its result and still archives", () => {

@@ -1,4 +1,5 @@
 import { isFullLengthDiagnosticAssignment } from "./assignment-visibility.ts";
+import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 
 export type SessionPreworkKind = "diagnostic" | "routine";
 
@@ -17,8 +18,10 @@ export type LiveSessionPreworkCandidate = {
 export function isLiveBeforeSessionHomework(input: {
   status?: string | null;
   deliveryPhase?: string | null;
+  title?: string | null;
 }): boolean {
   if (input.status === "archived") return false;
+  if (isPostSessionFollowUpTitle(input.title)) return false;
   const phase = input.deliveryPhase ?? "before_session";
   return phase === "before_session";
 }
