@@ -143,6 +143,18 @@ test("selectActivePrework ignores archived session copies left by replace/remove
   };
   assert.equal(selectActivePrework([archived, during, live])?.id, "new-clone");
   assert.equal(selectActivePrework([archived, during]), null);
+  assert.equal(
+    selectActivePrework([
+      {
+        id: "area-volume",
+        title: "Geometry Area and Volume",
+        deliveryPhase: "before_session",
+        status: "published",
+      },
+      live,
+    ])?.id,
+    "new-clone",
+  );
 });
 
 test("canShowClearHomework is for live before-session and in-session attempts, including empty ones", () => {

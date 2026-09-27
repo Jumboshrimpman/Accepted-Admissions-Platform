@@ -23,6 +23,14 @@ export function isPostSessionFollowUpQuiz(assignment: {
   return POST_SESSION_FOLLOW_UP_TITLES.has(assignment.title?.trim() ?? "");
 }
 
+/** A follow-up quiz with no meeting is a student to-do, not session prep. */
+export function isStandaloneStudentTodo(assignment: {
+  sessionId?: string | null;
+  title?: string | null;
+}): boolean {
+  return assignment.sessionId == null && isPostSessionFollowUpQuiz(assignment);
+}
+
 type QuizAttempt = {
   id: string;
   title: string;

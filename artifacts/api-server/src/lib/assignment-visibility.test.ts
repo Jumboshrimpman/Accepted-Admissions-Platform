@@ -453,4 +453,37 @@ test("students only list homework on their own sessions, never Xavier capability
     }),
     true,
   );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-michelle",
+      studentEmail: "makaremmichelle7@gmail.com",
+      sessionClientUserId: null,
+      assignmentTitle: "Geometry Area and Volume",
+      assignedStudentUserId: "student-michelle",
+    }),
+    true,
+    "A standalone to-do is listed for the student it is assigned to",
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-taito",
+      studentEmail: "taito0525@gmail.com",
+      sessionClientUserId: null,
+      assignmentTitle: "Geometry Area and Volume",
+      assignedStudentUserId: "student-michelle",
+    }),
+    false,
+  );
+  assert.equal(
+    studentCanListAssignment({
+      role: "student",
+      studentUserId: "student-michelle",
+      sessionClientUserId: null,
+      assignmentTitle: "Reusable bank quiz",
+      assignedStudentUserId: null,
+    }),
+    false,
+  );
 });

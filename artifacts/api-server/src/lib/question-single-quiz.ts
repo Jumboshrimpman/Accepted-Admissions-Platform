@@ -5,6 +5,7 @@ export type QuestionAssignmentLink = {
   assignmentId: string;
   sessionId: string | null;
   title: string;
+  assignedStudentUserId?: string | null;
 };
 
 function normalizeTitle(title: string): string {
@@ -20,6 +21,13 @@ export function questionCanAttachToAssignment(
     if (item.assignmentId === target.assignmentId) return true;
     const sameTitle = normalizeTitle(item.title) === normalizeTitle(target.title);
     const cloneLineage = item.sessionId != null || target.sessionId != null;
-    return sameTitle && cloneLineage;
+    const standalonePair =
+      sameTitle &&
+      item.sessionId == null &&
+      target.sessionId == null &&
+      Boolean(item.assignedStudentUserId) &&
+      Boolean(target.assignedStudentUserId) &&
+      item.assignedStudentUserId !== target.assignedStudentUserId;
+    return (sameTitle && cloneLineage) || standalonePair;
   });
 }

@@ -30,6 +30,7 @@ import {
 } from "@/lib/session-display";
 import {
   collapsedStudentQuizzes,
+  isStandaloneStudentTodo,
   sessionCalendarDayIsPast,
   sessionForStudentQuiz,
   studentQuizActionLabel,
@@ -611,6 +612,11 @@ export function ClientDashboardView({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       {quizTitle ? <p className="font-semibold">{quizTitle}</p> : null}
+                      {isStandaloneStudentTodo(quiz.assignment) ? (
+                        <Badge variant="secondary" data-testid={`client-quiz-todo-${quiz.assignment.id}`}>
+                          To-do
+                        </Badge>
+                      ) : null}
                       <Badge variant="outline">{quiz.status}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>

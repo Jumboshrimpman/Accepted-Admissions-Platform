@@ -1,3 +1,5 @@
+import { isPostSessionFollowUpQuiz } from "./student-quiz-list.ts";
+
 export const BANK_QUIZ_EMPTY_STATE =
   "Create a quiz in the Quizzes workspace (no session) first.";
 
@@ -22,6 +24,7 @@ export function isAssignableBankQuizStatus(status: string): boolean {
 }
 
 export function isReusableBankQuiz(item: BankQuizCandidate): boolean {
+  if (isPostSessionFollowUpQuiz(item)) return false;
   return (
     item.sessionId == null &&
     isAssignableBankQuizStatus(item.status) &&

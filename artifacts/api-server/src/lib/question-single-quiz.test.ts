@@ -47,3 +47,21 @@ test("same-title bank quizzes cannot share a question", () => {
   assert.equal(questionCanAttachToAssignment([sameTitleBank], bank), false);
   assert.equal(questionCanAttachToAssignment([bank, clone], sameTitleBank), false);
 });
+
+test("standalone student to-dos with the same title can share a question", () => {
+  const michelle = {
+    assignmentId: "area-michelle",
+    sessionId: null,
+    title: "Geometry Area and Volume",
+    assignedStudentUserId: "michelle",
+  };
+  const sama = {
+    assignmentId: "area-sama",
+    sessionId: null,
+    title: "Geometry Area and Volume",
+    assignedStudentUserId: "sama",
+  };
+  assert.equal(questionCanAttachToAssignment([michelle], sama), true);
+  assert.equal(questionCanAttachToAssignment([sama], michelle), true);
+  assert.equal(questionCanAttachToAssignment([michelle], bank), false);
+});

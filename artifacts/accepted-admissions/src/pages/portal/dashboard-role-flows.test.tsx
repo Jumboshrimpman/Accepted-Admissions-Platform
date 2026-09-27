@@ -606,6 +606,60 @@ describe("authenticated role dashboard flows", () => {
     expect(pastLive.textContent).not.toContain("Due before");
   });
 
+  test("Geometry Area and Volume is a standalone to-do and not the session prep", () => {
+    const base = dashboardForRole("student");
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false },
+      assignments: [
+        {
+          id: "area-volume",
+          sessionId: null,
+          title: "Geometry Area and Volume",
+          subject: "SAT Math",
+          status: "published",
+          deadline: null,
+          questionCount: 12,
+          timeLimitMinutes: 30,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+      ],
+      curriculumSessions: [
+        {
+          id: "session-sat",
+          courseId: "course-fall",
+          dateTime: "2026-10-02T12:00:00.000Z",
+          timezone: "Asia/Tokyo",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Michelle’s SAT Session with Xavier",
+          status: "published",
+          meetingUrl: null,
+          calendarEventUrl: null,
+          tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Michelle Makarem" },
+          readiness: "ready",
+          nextAction: "Open session plan",
+          currentFocus: "SAT reasoning.",
+          preparation: { id: "other-prep", title: "SAT pre-work", latestAttemptStatus: null },
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    const card = screen.getByTestId("client-quiz-area-volume");
+    expect(within(card).getByTestId("client-quiz-todo-area-volume").textContent).toBe("To-do");
+    expect(card.textContent).toContain("Geometry Area and Volume");
+    expect(card.textContent).toContain("Start quiz");
+    expect(card.textContent).not.toContain("Due before");
+    expect(screen.getByText(/Before: SAT pre-work/)).toBeTruthy();
+    expect(screen.queryByText(/Before: Geometry Area and Volume/)).toBeNull();
+  });
+
   test("Taito’s client dashboard does not show clean-question wording", () => {
     const dashboard = dashboardForRole("student");
     dashboard.assignments = [
@@ -958,6 +1012,31 @@ describe("authenticated role dashboard flows", () => {
     fireEvent.click(screen.getByTestId("assignment-notifications-show-more"));
     expect(screen.queryByTestId("submission-alert-attempt-oldest")).toBeNull();
     expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
+  });
+
+  test("a completed standalone geometry quiz alerts the tutor with score and misses", () => {
+    mocks.queue = [];
+    mocks.dashboard = {
+      ...dashboardForRole("tutor"),
+      newSubmissions: [
+        {
+          ...tutorSubmission("attempt-geo", "Geometry Area and Volume", "2026-09-27T18:00:00.000Z"),
+          studentName: "Michelle Makarem",
+          score: 67,
+          mistakeCount: 4,
+          sessionId: null,
+          sessionDateTime: null,
+        },
+      ],
+    } as Dashboard;
+    render(<TutorDashboard />);
+    const alert = screen.getByTestId("submission-alert-attempt-geo");
+    expect(alert.textContent).toContain("Michelle Makarem");
+    expect(alert.textContent).toContain("Geometry Area and Volume");
+    expect(alert.textContent).toContain("67%");
+    expect(alert.textContent).toContain("4 mistakes");
+    expect(within(alert).getByRole("link", { name: /Review submission/i })).toBeTruthy();
+    expect(within(alert).queryByRole("link", { name: /Open meeting plan/i })).toBeNull();
   });
 
   test("adaptive guidance never shows Skill not in extract to clients", () => {
