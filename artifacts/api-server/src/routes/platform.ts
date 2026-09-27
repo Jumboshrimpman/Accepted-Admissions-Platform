@@ -11060,6 +11060,14 @@ router.put(
       res.status(409).json({ error: "Prediction is locked" });
       return;
     }
+    const [stillActive] = await db
+      .select({ status: attemptsTable.status })
+      .from(attemptsTable)
+      .where(eq(attemptsTable.id, attempt.id));
+    if (stillActive?.status !== "active") {
+      res.status(409).json({ error: "Responses can only be saved while active" });
+      return;
+    }
     const alreadyRevealed = isResponseRevealed(existing?.correct);
     const nextFinalAnswer = lockedFinalAnswerAfterReveal({
       alreadyRevealed,
@@ -11141,8 +11149,8 @@ router.post(
   async (req: AuthedRequest, res): Promise<void> => {
     const params = PauseAttemptParams.safeParse(req.params);
     const body = PauseAttemptBody.safeParse(req.body ?? {});
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: (params.success ? body.error : params.error).message });
       return;
     }
     const [attempt] = await db
@@ -11161,7 +11169,61 @@ router.post(
       res.status(409).json({ error: "Attempt is not active" });
       return;
     }
-    const progress = body.success ? body.data : {};
+    const progress = body.data;
+    const drafted = progress.responses ?? [];
+    if (drafted.length > 0) {
+      const membership = await db
+        .select({ questionId: assignmentQuestionsTable.questionId })
+        .from(assignmentQuestionsTable)
+        .where(eq(assignmentQuestionsTable.assignmentId, attempt.assignmentId));
+      const allowed = new Set(membership.map((row) => row.questionId));
+      if (drafted.some((response) => !allowed.has(response.questionId))) {
+        res.status(400).json({ error: "Question is not part of this assignment" });
+        return;
+      }
+      for (const response of drafted) {
+        const [existing] = await db
+          .select()
+          .from(responsesTable)
+          .where(
+            and(
+              eq(responsesTable.attemptId, attempt.id),
+              eq(responsesTable.questionId, response.questionId),
+            ),
+          );
+        const nextFinalAnswer = lockedFinalAnswerAfterReveal({
+          alreadyRevealed: isResponseRevealed(existing?.correct),
+          existingAnswer: existing?.finalAnswer,
+          incomingAnswer: response.finalAnswer ?? null,
+        });
+        const values = {
+          attemptId: attempt.id,
+          questionId: response.questionId,
+          prediction: existing?.prediction ?? null,
+          predictionLocked: existing?.predictionLocked ?? false,
+          finalAnswer: nextFinalAnswer,
+          flagged: response.flagged ?? existing?.flagged ?? false,
+          timeSpentSeconds: existing?.timeSpentSeconds ?? 0,
+          correct: existing?.correct ?? null,
+          savedAt: new Date(),
+        };
+        await db
+          .insert(responsesTable)
+          .values(values)
+          .onConflictDoUpdate({
+            target: [responsesTable.attemptId, responsesTable.questionId],
+            set: values,
+          });
+      }
+    }
+    const [stillActive] = await db
+      .select({ status: attemptsTable.status })
+      .from(attemptsTable)
+      .where(eq(attemptsTable.id, attempt.id));
+    if (stillActive?.status !== "active") {
+      res.status(409).json({ error: "Attempt is not active" });
+      return;
+    }
     await db
       .update(attemptsTable)
       .set({

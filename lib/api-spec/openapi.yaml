@@ -1559,7 +1559,9 @@ paths:
       description: >
         Marks the attempt paused and stops the timer. Optional
         currentQuestionIndex is stored so Resume returns the student to the
-        same item after Save for later.
+        same item after Save for later. Optional responses are written before
+        the attempt is paused so the latest answers are not lost if autosave
+        has not finished. An invalid response does not pause the attempt.
       parameters:
         - $ref: "#/components/parameters/AttemptId"
       requestBody:
@@ -3528,6 +3530,18 @@ components:
           type: number
           minimum: 0
           description: Zero-based question index to restore when the student resumes.
+        responses:
+          type: array
+          description: >
+            In-progress answers to store before the attempt is paused. Save for
+            later sends these so a selection that has not autosaved yet is kept.
+          items:
+            type: object
+            required: [questionId]
+            properties:
+              questionId: { type: string }
+              finalAnswer: { type: ["string", "null"], maxLength: 2000 }
+              flagged: { type: boolean }
     Attempt:
       type: object
       required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, remainingSeconds, currentQuestionIndex, responses]

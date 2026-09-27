@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const submitMutate = vi.fn();
@@ -76,7 +76,13 @@ const mocks = vi.hoisted(() => ({
   latestAttemptId: "attempt-1" as string | null,
   latestAttemptStatus: "active" as string | null,
   timezone: "Asia/Tokyo",
-  linkedSession: null as null | { id: string; dateTime: string; timezone: string; durationMinutes: number },
+  linkedSession: null as null | {
+    id: string;
+    courseId?: string;
+    dateTime: string;
+    timezone: string;
+    durationMinutes: number;
+  },
   linkedSessionFetched: true,
 }));
 
@@ -85,6 +91,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getGetAttemptQueryKey: (id: string) => ["/api/attempts", id],
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
+  getGetDashboardQueryKey: () => ["/api/dashboard"],
   useGetCurrentUser: () => ({ data: { role: "student", timezone: mocks.timezone } }),
   getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
   useGetSession: () => ({
@@ -1492,22 +1499,78 @@ describe("student attempt UI", () => {
     expect(submitMutate).not.toHaveBeenCalled();
   });
 
-  test("Save for later pauses without submitting and leaves the quiz", () => {
+  test("Save for later persists the current answer and leaves only after the pause succeeds", () => {
     render(<PortalAssignment />);
     fireEvent.click(screen.getByRole("button", { name: /However/i }));
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     fireEvent.click(screen.getByTestId("save-for-later"));
     expect(submitMutate).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
     expect(pauseMutate).toHaveBeenCalledWith(
-      { attemptId: "attempt-1", data: { currentQuestionIndex: 1 } },
+      {
+        attemptId: "attempt-1",
+        data: {
+          currentQuestionIndex: 1,
+          responses: [{ questionId: "q1", finalAnswer: "a", flagged: false }],
+        },
+      },
       expect.any(Object),
     );
     pauseMutate.mock.calls[0][1].onSuccess({
       ...mocks.attempt,
       status: "paused",
       currentQuestionIndex: 1,
+      responses: [
+        { questionId: "q1", prediction: null, predictionLocked: false, finalAnswer: "a", flagged: false },
+      ],
     });
     expect(setLocation).toHaveBeenCalledWith("/portal");
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
+  });
+
+  test("Save for later stays on the same question when progress cannot be saved", () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    fireEvent.click(screen.getByTestId("save-for-later"));
+    act(() => {
+      pauseMutate.mock.calls[0][1].onError(new Error("network"));
+    });
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByTestId("save-for-later-error").textContent).toMatch(/still in this quiz/i);
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /However/i }).className).toMatch(/border-primary/);
+  });
+
+  test("Save for later returns to the session quiz list when the quiz belongs to a session", () => {
+    mocks.sessionId = "session-1";
+    mocks.linkedSession = {
+      id: "session-1",
+      courseId: "course-1",
+      dateTime: "2026-10-02T12:00:00.000Z",
+      timezone: "America/New_York",
+      durationMinutes: 60,
+    };
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /Therefore/i }));
+    fireEvent.click(screen.getByTestId("save-for-later"));
+    expect(pauseMutate).toHaveBeenCalledWith(
+      {
+        attemptId: "attempt-1",
+        data: {
+          currentQuestionIndex: 0,
+          responses: [{ questionId: "q1", finalAnswer: "b", flagged: false }],
+        },
+      },
+      expect.any(Object),
+    );
+    pauseMutate.mock.calls[0][1].onSuccess({
+      ...mocks.attempt,
+      status: "paused",
+      currentQuestionIndex: 0,
+    });
+    expect(setLocation).toHaveBeenCalledWith("/portal/courses/course-1/sessions/session-1");
+    expect(setLocation).not.toHaveBeenCalledWith("/portal");
   });
 
   test("Resume restores the saved question and answers without a Flag control", () => {

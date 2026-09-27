@@ -2236,12 +2236,21 @@ export interface TimerEvent {
   at: string;
 }
 
+export interface AttemptProgressResponseInput {
+  questionId: string;
+  /** @nullable */
+  finalAnswer?: string | null;
+  flagged?: boolean;
+}
+
 export interface AttemptProgressInput {
   /**
      * Zero-based question index to restore when the student resumes.
      * @minimum 0
      */
   currentQuestionIndex?: number;
+  /** In-progress answers to store before the attempt is paused. */
+  responses?: AttemptProgressResponseInput[];
 }
 
 export type AttemptStatus = typeof AttemptStatus[keyof typeof AttemptStatus];

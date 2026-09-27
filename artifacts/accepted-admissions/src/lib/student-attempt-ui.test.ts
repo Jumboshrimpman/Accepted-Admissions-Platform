@@ -12,6 +12,8 @@ import {
   normalizeQuestionIndex,
   shouldAutoSubmitOnExpiry,
   studentAssignmentActionLabel,
+  quizResponsesForPause,
+  saveForLaterExitHref,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
   studentSeesFinishedResult,
@@ -73,6 +75,27 @@ test("resume copy and href restore an in-progress quiz from the portal", () => {
   assert.equal(wantsResumeAttempt("resume=1"), true);
   assert.equal(wantsResumeAttempt("foo=1"), false);
   assert.equal(normalizeQuestionIndex(7, 3), 2);
+});
+
+test("save for later stores answered items and leaves to the session or quiz list", () => {
+  assert.deepEqual(
+    quizResponsesForPause({
+      q1: { finalAnswer: "a", flagged: true },
+      q2: { finalAnswer: "  ", flagged: false },
+      q3: { finalAnswer: "", flagged: true },
+      q4: undefined,
+    }),
+    [
+      { questionId: "q1", finalAnswer: "a", flagged: true },
+      { questionId: "q3", finalAnswer: null, flagged: true },
+    ],
+  );
+  assert.equal(
+    saveForLaterExitHref({ sessionId: "session-1", courseId: "course-1" }),
+    "/portal/courses/course-1/sessions/session-1",
+  );
+  assert.equal(saveForLaterExitHref({ sessionId: "session-1", courseId: null }), "/portal");
+  assert.equal(saveForLaterExitHref({ sessionId: null, courseId: "course-1" }), "/portal");
 });
 
 test("timer expiry with zero answers does not show a finished result", () => {
