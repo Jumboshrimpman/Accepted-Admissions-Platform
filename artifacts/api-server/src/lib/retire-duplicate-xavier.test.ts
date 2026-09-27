@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
-  describeStoredGoogleCalendarConnection,
-  shouldAdoptLoserCalendarConnection,
-} from "./calendar-connection-adopt.ts";
+import { describeStoredGoogleCalendarConnection, encryptedRefreshTokenAfterConnect, shouldAdoptLoserCalendarConnection, shouldSelfHealGoogleCalendarConnection } from "./calendar-connection-adopt.ts";
 
 test("Xavier identity remaps adopt a loser refresh token only when the winner has none", () => {
   assert.equal(
@@ -37,6 +34,63 @@ test("Xavier identity remaps adopt a loser refresh token only when the winner ha
       { status: "disconnected", encryptedRefreshToken: null },
       { encryptedRefreshToken: null },
     ),
+    false,
+  );
+});
+
+test("Google returns no new refresh_token on reconnect keeps prior", () => {
+  const encrypt = (value: string) => `enc:${value}`;
+  assert.equal(
+    encryptedRefreshTokenAfterConnect("enc:prior-refresh", undefined, encrypt),
+    "enc:prior-refresh",
+  );
+  assert.equal(
+    encryptedRefreshTokenAfterConnect("enc:prior-refresh", "", encrypt),
+    "enc:prior-refresh",
+  );
+  assert.equal(
+    encryptedRefreshTokenAfterConnect("enc:prior-refresh", "   ", encrypt),
+    "enc:prior-refresh",
+  );
+  assert.equal(
+    encryptedRefreshTokenAfterConnect("enc:prior-refresh", "rotated-refresh", encrypt),
+    "enc:rotated-refresh",
+  );
+  assert.equal(encryptedRefreshTokenAfterConnect(null, undefined, encrypt), null);
+  assert.equal(encryptedRefreshTokenAfterConnect(undefined, "fresh-refresh", encrypt), "enc:fresh-refresh");
+});
+
+test("stranded refresh token can self-heal until the tutor disconnects", () => {
+  assert.equal(
+    shouldSelfHealGoogleCalendarConnection({
+      status: "disconnected",
+      calendarId: "primary",
+      encryptedRefreshToken: "stored-refresh",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSelfHealGoogleCalendarConnection({
+      status: "connected",
+      calendarId: "primary",
+      encryptedRefreshToken: "stored-refresh",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSelfHealGoogleCalendarConnection({
+      status: "disconnected",
+      calendarId: null,
+      encryptedRefreshToken: "stored-refresh",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSelfHealGoogleCalendarConnection({
+      status: "disconnected",
+      calendarId: "primary",
+      encryptedRefreshToken: null,
+    }),
     false,
   );
 });

@@ -7,7 +7,7 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { encryptCalendarToken, googleAccessTokenExpiresAt } from "./google-calendar.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { connectionHasRefreshToken } from "./calendar-connection-adopt.ts";
+import { connectionHasRefreshToken, encryptedRefreshTokenAfterConnect } from "./calendar-connection-adopt.ts";
 
 export {
   connectionHasRefreshToken,
@@ -29,9 +29,6 @@ export async function persistGoogleCalendarConnection(
   tokens: GoogleCalendarTokens,
   connectedAt = new Date(),
 ) {
-  const encryptedRefreshToken = tokens.refreshToken
-    ? encryptCalendarToken(tokens.refreshToken)
-    : undefined;
   const accessTokenExpiresAt = googleAccessTokenExpiresAt(tokens.expiresIn, connectedAt);
 
   return db.transaction(async (tx) => {
@@ -48,8 +45,11 @@ export async function persistGoogleCalendarConnection(
         ),
       )
       .limit(1);
-    const nextRefreshToken =
-      encryptedRefreshToken ?? existing?.encryptedRefreshToken ?? null;
+    const nextRefreshToken = encryptedRefreshTokenAfterConnect(
+      existing?.encryptedRefreshToken,
+      tokens.refreshToken,
+      encryptCalendarToken,
+    );
     if (!nextRefreshToken) {
       throw new Error(GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING);
     }

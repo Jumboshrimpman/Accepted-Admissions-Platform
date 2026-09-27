@@ -15,26 +15,30 @@ import {
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger";
-import { describeStoredGoogleCalendarConnection } from "../lib/calendar-connection-adopt";
+import {
+  describeStoredGoogleCalendarConnection,
+  shouldSelfHealGoogleCalendarConnection,
+} from "../lib/calendar-connection-adopt";
 import {
   CalendarOAuthError,
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
-  calendarConnectProbeFailure,
   calendarCredentialFailureAction,
+  calendarOAuthProbeOutcome,
   calendarOAuthStateFailureMessage,
+  callGoogleCalendarRecovering,
   classifyGoogleProviderError,
   createGoogleEvent,
   decryptCalendarToken,
   deleteGoogleEvent,
   exchangeGoogleCode,
   getGoogleCalendarConfig,
+  googleAccessTokenExpiresAt,
   googleAccountMatchesPortalEmails,
   googleCalendarCompletionHtml,
   googleCalendarAuthorizationUrl,
   inspectCalendarOAuthState,
   normalizeGoogleCalendarStatus,
   listGoogleBusyWindows,
-  listGoogleBusyWindowsRecovering,
   resolveGoogleCalendarAccessToken,
   resolvePublicRequestOrigin,
   readCalendarCallbackQuery,
@@ -4276,16 +4280,24 @@ async function calendarAccess(tutorProfileId: string) {
     const accessToken = connection.encryptedAccessToken
       ? decryptCalendarToken(connection.encryptedAccessToken)
       : "";
+    const forceRefresh = shouldSelfHealGoogleCalendarConnection(connection);
     const resolved = await resolveGoogleCalendarAccessToken({
       accessToken,
       refreshToken,
-      accessTokenExpiresAt: connection.accessTokenExpiresAt,
+      accessTokenExpiresAt: forceRefresh ? new Date(0) : connection.accessTokenExpiresAt,
     });
     if (!resolved.ok) {
       if (resolved.action === "disconnect") {
         logCalendarMarkedDisconnected(resolved.reason, tutorProfileId, connection);
         await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
         return null;
+      }
+      const accessTokenStillValid =
+        Boolean(accessToken) &&
+        connection.accessTokenExpiresAt instanceof Date &&
+        connection.accessTokenExpiresAt.getTime() > Date.now();
+      if (forceRefresh && accessTokenStillValid) {
+        return { connection, accessToken, refreshToken };
       }
       throw new BookingError(
         503,
@@ -4294,12 +4306,18 @@ async function calendarAccess(tutorProfileId: string) {
       );
     }
     if (resolved.refreshed) {
+      const refreshedAt = new Date();
       await saveRefreshedGoogleAccessToken(
         connection.id,
         resolved.accessToken,
         resolved.expiresIn,
-        new Date(),
+        refreshedAt,
         resolved.rotatedRefreshToken,
+      );
+      connection.status = "connected";
+      connection.accessTokenExpiresAt = googleAccessTokenExpiresAt(
+        resolved.expiresIn,
+        refreshedAt,
       );
     }
     return {
@@ -4320,6 +4338,57 @@ async function calendarAccess(tutorProfileId: string) {
       "Google Calendar is temporarily unavailable. Try again in a few minutes.",
     );
   }
+}
+
+type TutorCalendarAccess = NonNullable<Awaited<ReturnType<typeof calendarAccess>>>;
+
+async function runTutorCalendarCall<T>(
+  access: TutorCalendarAccess,
+  call: (accessToken: string) => Promise<T>,
+): Promise<T> {
+  const result = await callGoogleCalendarRecovering({
+    accessToken: access.accessToken,
+    refreshToken: access.refreshToken,
+    accessTokenExpiresAt: access.connection.accessTokenExpiresAt,
+    call,
+  });
+  if (!result.ok) {
+    if (result.action === "disconnect") {
+      logCalendarMarkedDisconnected(result.reason, access.connection.tutorProfileId, access.connection);
+      await markGoogleCalendarDisconnected(access.connection.tutorProfileId, access.connection.id);
+      throw new BookingError(
+        409,
+        "CALENDAR_DISCONNECTED",
+        "The tutor's calendar is disconnected.",
+      );
+    }
+    throw new BookingError(
+      503,
+      "CALENDAR_UNAVAILABLE",
+      "Google Calendar is temporarily unavailable. Try again in a few minutes.",
+    );
+  }
+  if (result.refreshed) {
+    const refreshedAt = new Date();
+    await saveRefreshedGoogleAccessToken(
+      access.connection.id,
+      result.accessToken,
+      result.expiresIn,
+      refreshedAt,
+      result.rotatedRefreshToken,
+    );
+    access.accessToken = result.accessToken;
+    if (result.rotatedRefreshToken) access.refreshToken = result.rotatedRefreshToken;
+    access.connection.status = "connected";
+    access.connection.accessTokenExpiresAt = googleAccessTokenExpiresAt(
+      result.expiresIn,
+      refreshedAt,
+    );
+  } else if (shouldSelfHealGoogleCalendarConnection(access.connection)) {
+    await markGoogleCalendarConnected(access.connection.tutorProfileId, access.connection.id);
+    access.connection.status = "connected";
+  }
+  return result.value;
 }
 
 async function calendarAccessForUser(tutorUserId: string) {
@@ -4378,10 +4447,8 @@ async function syncGoogleCalendarForSessionChange(args: {
     );
   }
   if (cancelling) {
-    await deleteGoogleEvent(
-      access.accessToken,
-      access.connection.calendarId!,
-      args.existing.providerEventId,
+    await runTutorCalendarCall(access, (token) =>
+      deleteGoogleEvent(token, access.connection.calendarId!, args.existing.providerEventId!),
     );
     return { providerEventId: null, providerEventUrl: null };
   }
@@ -4391,17 +4458,19 @@ async function syncGoogleCalendarForSessionChange(args: {
       providerEventUrl: args.existing.providerEventUrl,
     };
   }
-  const event = await updateGoogleEvent(
-    access.accessToken,
-    access.connection.calendarId!,
-    args.existing.providerEventId,
-    calendarEventPayload(
-      args.next.title,
-      args.next.dateTime,
-      args.next.durationMinutes,
-      args.next.timezone,
-      await attendeeEmailForUser(args.next.clientUserId),
-      SHARED_FALL_MEETING_URL,
+  const event = await runTutorCalendarCall(access, async (token) =>
+    updateGoogleEvent(
+      token,
+      access.connection.calendarId!,
+      args.existing.providerEventId!,
+      calendarEventPayload(
+        args.next.title,
+        args.next.dateTime,
+        args.next.durationMinutes,
+        args.next.timezone,
+        await attendeeEmailForUser(args.next.clientUserId),
+        SHARED_FALL_MEETING_URL,
+      ),
     ),
   );
   return {
@@ -4451,39 +4520,17 @@ async function slotsForTutor(
   if (!access) {
     return { tutor, rule, access: null, slots: [] as string[] };
   }
-  const read = await listGoogleBusyWindowsRecovering({
-    accessToken: access.accessToken,
-    refreshToken: access.refreshToken,
-    calendarId: access.connection.calendarId!,
-    timeMin: from,
-    timeMax: to,
-  });
-  if (!read.ok) {
-    if (read.action === "disconnect") {
-      logCalendarMarkedDisconnected(read.reason, tutorProfileId, access.connection);
-      await markGoogleCalendarDisconnected(tutorProfileId, access.connection.id);
+  let busyWindows: BusyWindow[];
+  try {
+    busyWindows = await runTutorCalendarCall(access, (token) =>
+      listGoogleBusyWindows(token, access.connection.calendarId!, from, to),
+    );
+  } catch (error) {
+    if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") {
       return { tutor, rule, access: null, slots: [] as string[] };
     }
-    throw new BookingError(
-      503,
-      "CALENDAR_UNAVAILABLE",
-      "Google Calendar is temporarily unavailable. Try again in a few minutes.",
-    );
+    throw error;
   }
-  if (read.refreshed) {
-    await saveRefreshedGoogleAccessToken(
-      access.connection.id,
-      read.accessToken,
-      read.expiresIn,
-      new Date(),
-      read.rotatedRefreshToken,
-    );
-    access.accessToken = read.accessToken;
-    if (read.rotatedRefreshToken) access.refreshToken = read.rotatedRefreshToken;
-  } else if (access.connection.status !== "connected") {
-    await markGoogleCalendarConnected(tutorProfileId, access.connection.id);
-  }
-  const busyWindows = read.busy;
   const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({
@@ -4768,19 +4815,9 @@ router.get(
         });
         return;
       }
-      const verificationStart = new Date();
+      let connection;
       try {
-        await listGoogleBusyWindows(
-          tokens.accessToken,
-          "primary",
-          verificationStart,
-          new Date(verificationStart.getTime() + 60_000),
-        );
-      } catch (error) {
-        throw calendarConnectProbeFailure(error);
-      }
-      try {
-        await persistGoogleCalendarConnection(profile.id, tokens);
+        connection = await persistGoogleCalendarConnection(profile.id, tokens);
       } catch (error) {
         if (
           error instanceof Error &&
@@ -4792,6 +4829,63 @@ router.get(
           );
         }
         throw error;
+      }
+      const verificationStart = new Date();
+      const storedRefreshToken = connection.encryptedRefreshToken
+        ? decryptCalendarToken(connection.encryptedRefreshToken)
+        : tokens.refreshToken;
+      const probe = await callGoogleCalendarRecovering({
+        accessToken: tokens.accessToken,
+        refreshToken: storedRefreshToken,
+        call: (token) =>
+          listGoogleBusyWindows(
+            token,
+            "primary",
+            verificationStart,
+            new Date(verificationStart.getTime() + 60_000),
+          ),
+      });
+      const probeOutcome = calendarOAuthProbeOutcome(probe);
+      if (probeOutcome === "reconnect") {
+        logCallback("warn", "probe_refresh_rejected", {
+          outcome: "expired",
+          tutorProfileId: profile.id,
+          appUserId: stateData.appUserId,
+          reason: probe.ok ? undefined : probe.reason,
+        });
+        await markGoogleCalendarDisconnected(profile.id, connection.id);
+        throw new CalendarOAuthError(
+          "expired",
+          "Google revoked this calendar refresh token. Reconnect from the dashboard.",
+        );
+      }
+      if (probeOutcome === "rejected") {
+        logCallback("warn", "probe_auth_kept_grant", {
+          outcome: "rejected",
+          tutorProfileId: profile.id,
+          appUserId: stateData.appUserId,
+          reason: probe.ok ? undefined : probe.reason,
+        });
+        throw new CalendarOAuthError(
+          "rejected",
+          "Google Calendar is missing required free/busy or event permissions. Reconnect and grant the requested access.",
+        );
+      }
+      if (probe.ok && probe.refreshed) {
+        await saveRefreshedGoogleAccessToken(
+          connection.id,
+          probe.accessToken,
+          probe.expiresIn,
+          new Date(),
+          probe.rotatedRefreshToken,
+        );
+      } else if (!probe.ok) {
+        logCallback("warn", "probe_transient_kept_grant", {
+          outcome: "connected",
+          tutorProfileId: profile.id,
+          appUserId: stateData.appUserId,
+          reason: probe.reason,
+        });
       }
       logCallback("info", "connected", {
         outcome: "connected",
@@ -5789,6 +5883,15 @@ router.get(
   ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const tutorProfile = await resolveCalendarProfileForUser(req.appUser!);
+    if (tutorProfile) {
+      try {
+        // Refresh a stranded or near-expiry grant before the card reads status.
+        // A Google blip must not hide the stored connection.
+        await calendarAccess(tutorProfile.id);
+      } catch {
+        // Invalid grants are marked disconnected inside calendarAccess.
+      }
+    }
     const rows = await db
       .select({
         id: calendarConnectionsTable.id,
@@ -6097,13 +6200,11 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       await assertNoScheduleConflict(tx, { participantIds, start, end });
       let liveBusyWindows: BusyWindow[];
       try {
-        liveBusyWindows = await listGoogleBusyWindows(
-          access.accessToken,
-          access.connection.calendarId!,
-          start,
-          end,
+        liveBusyWindows = await runTutorCalendarCall(access, (token) =>
+          listGoogleBusyWindows(token, access.connection.calendarId!, start, end),
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") throw error;
         throw new BookingError(
           503,
           "CALENDAR_UNAVAILABLE",
@@ -6127,16 +6228,18 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       });
     });
     try {
-      const event = await createGoogleEvent(
-        access.accessToken,
-        access.connection.calendarId!,
-        calendarEventPayload(
-          created.title,
-          start,
-          durationMinutes,
-          rule.timezone,
-          req.appUser!.email,
-          SHARED_FALL_MEETING_URL,
+      const event = await runTutorCalendarCall(access, (token) =>
+        createGoogleEvent(
+          token,
+          access.connection.calendarId!,
+          calendarEventPayload(
+            created.title,
+            start,
+            durationMinutes,
+            rule.timezone,
+            req.appUser!.email,
+            SHARED_FALL_MEETING_URL,
+          ),
         ),
       );
       const [updated] = await db
@@ -6162,7 +6265,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         // Autogen must not roll back a confirmed SAT booking.
       }
       res.status(201).json(await bookingSessionShape(confirmed));
-    } catch {
+    } catch (error) {
       await db.transaction(async (tx) => {
         await rollbackBookingAfterCalendarFailure(tx, {
           sessionId: created.id,
@@ -6171,6 +6274,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
           actorUserId: req.appUser!.id,
         });
       });
+      if (error instanceof BookingError) throw error;
       throw new BookingError(
         503,
         "CALENDAR_UNAVAILABLE",
@@ -6199,7 +6303,9 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
         .limit(1);
       const access = profile[0] ? await calendarAccess(profile[0].id) : null;
       if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
-      await deleteGoogleEvent(access.accessToken, access.connection.calendarId!, session.providerEventId);
+      await runTutorCalendarCall(access, (token) =>
+        deleteGoogleEvent(token, access.connection.calendarId!, session.providerEventId!),
+      );
     }
     const reason = stringField((req.body ?? {}) as Record<string, unknown>, "reason") || "Cancelled by client";
     const result = await db.transaction(async (tx) =>
@@ -6265,18 +6371,23 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       });
     });
     const previousStart = session.dateTime;
+    const attendeeEmail = session.clientUserId
+      ? ((await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, session.clientUserId)).limit(1))[0]?.email ?? "")
+      : "";
     const event = session.providerEventId
-      ? await updateGoogleEvent(
-          access.accessToken,
-          access.connection.calendarId!,
-          session.providerEventId,
-          calendarEventPayload(
-            session.title,
-            start,
-            session.durationMinutes,
-            rule.timezone,
-            (await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, session.clientUserId!)).limit(1))[0]?.email ?? "",
-            SHARED_FALL_MEETING_URL,
+      ? await runTutorCalendarCall(access, (token) =>
+          updateGoogleEvent(
+            token,
+            access.connection.calendarId!,
+            session.providerEventId!,
+            calendarEventPayload(
+              session.title,
+              start,
+              session.durationMinutes,
+              rule.timezone,
+              attendeeEmail,
+              SHARED_FALL_MEETING_URL,
+            ),
           ),
         )
       : null;
@@ -6294,17 +6405,19 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       .returning();
     if (!updated) {
       if (session.providerEventId) {
-        await updateGoogleEvent(
-          access.accessToken,
-          access.connection.calendarId!,
-          session.providerEventId,
-          calendarEventPayload(
-            session.title,
-            previousStart,
-            session.durationMinutes,
-            session.timezone,
-            "",
-            SHARED_FALL_MEETING_URL,
+        await runTutorCalendarCall(access, (token) =>
+          updateGoogleEvent(
+            token,
+            access.connection.calendarId!,
+            session.providerEventId!,
+            calendarEventPayload(
+              session.title,
+              previousStart,
+              session.durationMinutes,
+              session.timezone,
+              "",
+              SHARED_FALL_MEETING_URL,
+            ),
           ),
         );
       }
@@ -7996,19 +8109,20 @@ async function adminSessionConflicts(
       }
     } else {
       try {
-        const busyWindows = await listGoogleBusyWindows(
-          access.accessToken,
-          access.connection.calendarId!,
-          payload.dateTime,
-          end,
+        const busyWindows = await runTutorCalendarCall(access, (token) =>
+          listGoogleBusyWindows(token, access.connection.calendarId!, payload.dateTime, end),
         );
         if (overlapsBusyWindow(payload.dateTime, end, busyWindows, 0)) {
           conflicts.push(
             `Tutor's connected calendar is busy during ${payload.dateTime.toISOString()}–${end.toISOString()}.`,
           );
         }
-      } catch {
-        if (options.strictProvider) {
+      } catch (error) {
+        if (!options.strictProvider) {
+          // A non-strict admin check skips provider conflicts when Google is down.
+        } else if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") {
+          throw error;
+        } else {
           throw new BookingError(
             503,
             "CALENDAR_UNAVAILABLE",
