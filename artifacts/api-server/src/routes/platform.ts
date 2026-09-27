@@ -434,7 +434,10 @@ import {
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
   isPostSessionFollowUpTitle,
 } from "../lib/post-session-follow-up";
-import { ensureGeometryAreaVolumeFollowUp } from "../lib/geometry-area-volume-follow-up";
+import {
+  ensureGeometryAreaVolumeFollowUp,
+  ensureGeometryAreaVolumeTimeLimit,
+} from "../lib/geometry-area-volume-follow-up";
 import { reopenBrokenEmptyAttempt, reopenBrokenEmptyAttemptsForAssignment } from "../lib/heal-empty-attempt";
 import { tutorOwnsStandaloneQuiz } from "../lib/standalone-quiz-access";
 import {
@@ -11026,6 +11029,7 @@ router.get(
     }
     const geometryTodo = assignment.title === GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE;
     if (studentFacing && geometryTodo) {
+      await ensureGeometryAreaVolumeTimeLimit(assignment.id);
       await reopenBrokenEmptyAttemptsForAssignment(assignment.id);
     }
     const loadJoinedQuestions = () =>

@@ -18,6 +18,9 @@ export const GEOMETRY_AREA_VOLUME_FOLLOW_UP_TAG =
 
 export const GEOMETRY_AREA_VOLUME_MAX_ITEMS = 12;
 
+/** This quiz only. Other SAT assignments keep their own limits. */
+export const GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES = 60;
+
 export const GEOMETRY_AREA_VOLUME_INSTRUCTIONS =
   "Geometry area and volume practice. Choose one answer for each question. Your score is the percent correct. Your tutor receives the result when you submit.";
 
