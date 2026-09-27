@@ -1,5 +1,6 @@
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
+  calendarConnectionsTable,
   db,
   tutorProfilesTable,
   usersTable,
@@ -21,6 +22,8 @@ export {
   scoreCalendarProfile,
   selectBestCalendarProfile,
 };
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { describeStoredGoogleCalendarConnection } from "./calendar-connection-adopt.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { adoptGoogleCalendarConnection } from "./calendar-persistence.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -212,6 +215,11 @@ export async function xavierCalendarIdentityAlignment(): Promise<{
     calendarStatus: string;
     retired: boolean;
     linkedToCanonicalUser: boolean;
+    connectionStatus: string | null;
+    hasRefreshToken: boolean;
+    hasAccessToken: boolean;
+    accessTokenExpiresAt: string | null;
+    googleReconnectRequired: boolean;
   }>;
 }> {
   const [user] = await db
@@ -229,16 +237,45 @@ export async function xavierCalendarIdentityAlignment(): Promise<{
       (email.endsWith("@retired.accepted.local") && /xavier/i.test(profile.name ?? ""))
     );
   });
-  const mapped = xavierProfiles.map((profile) => ({
-    id: profile.id,
-    userId: profile.userId,
-    email: profile.email,
-    active: profile.active,
-    bookingEligible: profile.bookingEligible,
-    calendarStatus: profile.calendarStatus,
-    retired: isRetiredTutorProfile(profile),
-    linkedToCanonicalUser: Boolean(user && profile.userId === user.id),
-  }));
+  const connections = xavierProfiles.length
+    ? await db
+        .select({
+          tutorProfileId: calendarConnectionsTable.tutorProfileId,
+          status: calendarConnectionsTable.status,
+          encryptedAccessToken: calendarConnectionsTable.encryptedAccessToken,
+          encryptedRefreshToken: calendarConnectionsTable.encryptedRefreshToken,
+          accessTokenExpiresAt: calendarConnectionsTable.accessTokenExpiresAt,
+        })
+        .from(calendarConnectionsTable)
+        .where(
+          and(
+            inArray(
+              calendarConnectionsTable.tutorProfileId,
+              xavierProfiles.map((profile) => profile.id),
+            ),
+            eq(calendarConnectionsTable.provider, "google"),
+          ),
+        )
+    : [];
+  const connectionByProfile = new Map(
+    connections.map((connection) => [connection.tutorProfileId, connection]),
+  );
+  const mapped = xavierProfiles.map((profile) => {
+    const diagnostic = describeStoredGoogleCalendarConnection(
+      connectionByProfile.get(profile.id),
+    );
+    return {
+      id: profile.id,
+      userId: profile.userId,
+      email: profile.email,
+      active: profile.active,
+      bookingEligible: profile.bookingEligible,
+      calendarStatus: profile.calendarStatus,
+      retired: isRetiredTutorProfile(profile),
+      linkedToCanonicalUser: Boolean(user && profile.userId === user.id),
+      ...diagnostic,
+    };
+  });
   return {
     aligned: Boolean(
       user &&

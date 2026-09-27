@@ -14,10 +14,11 @@ import {
 } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import { logger } from "../lib/logger";
+import { describeStoredGoogleCalendarConnection } from "../lib/calendar-connection-adopt";
 import {
   CalendarOAuthError,
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
-  calendarBusyFailureAction,
   calendarConnectProbeFailure,
   calendarCredentialFailureAction,
   calendarOAuthStateFailureMessage,
@@ -33,9 +34,10 @@ import {
   inspectCalendarOAuthState,
   normalizeGoogleCalendarStatus,
   listGoogleBusyWindows,
+  listGoogleBusyWindowsRecovering,
+  resolveGoogleCalendarAccessToken,
   resolvePublicRequestOrigin,
   readCalendarCallbackQuery,
-  refreshGoogleAccessToken,
   resolveGoogleCalendarRedirectUri,
   resolveOAuthRedirectUriForRequest,
   safeCalendarReturnTo,
@@ -45,6 +47,7 @@ import {
 import {
   disconnectGoogleCalendarConnection,
   GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING,
+  markGoogleCalendarConnected,
   markGoogleCalendarDisconnected,
   persistGoogleCalendarConnection,
   saveRefreshedGoogleAccessToken,
@@ -4201,6 +4204,27 @@ class BookingError extends Error {
   }
 }
 
+function logCalendarMarkedDisconnected(
+  reason: string,
+  tutorProfileId: string,
+  connection: {
+    status?: string | null;
+    encryptedRefreshToken?: string | null;
+    encryptedAccessToken?: string | null;
+    accessTokenExpiresAt?: Date | null;
+  },
+) {
+  logger.warn(
+    {
+      event: "calendar.marked_disconnected",
+      reason,
+      tutorProfileId,
+      ...describeStoredGoogleCalendarConnection(connection),
+    },
+    "Google Calendar marked disconnected",
+  );
+}
+
 function asDate(value: unknown): Date {
   if (typeof value !== "string") throw new BookingError(400, "INVALID_TIME", "A valid start time is required.");
   const date = new Date(value);
@@ -4226,28 +4250,53 @@ async function calendarAccess(tutorProfileId: string) {
       and(
         eq(calendarConnectionsTable.tutorProfileId, tutorProfileId),
         eq(calendarConnectionsTable.provider, "google"),
-        eq(calendarConnectionsTable.status, "connected"),
       ),
     )
     .limit(1);
-  if (!connection?.encryptedAccessToken || !connection.calendarId) return null;
+  if (!connection?.calendarId) return null;
+  if (!connection.encryptedAccessToken && !connection.encryptedRefreshToken) return null;
   try {
-    let accessToken = decryptCalendarToken(connection.encryptedAccessToken);
-    if (connection.accessTokenExpiresAt && connection.accessTokenExpiresAt <= new Date()) {
-      if (!connection.encryptedRefreshToken) return null;
-      const refreshed = await refreshGoogleAccessToken(
-        decryptCalendarToken(connection.encryptedRefreshToken),
-      );
-      accessToken = refreshed.accessToken;
-      await saveRefreshedGoogleAccessToken(
-        connection.id,
-        accessToken,
-        refreshed.expiresIn,
+    const refreshToken = connection.encryptedRefreshToken
+      ? decryptCalendarToken(connection.encryptedRefreshToken)
+      : null;
+    const accessToken = connection.encryptedAccessToken
+      ? decryptCalendarToken(connection.encryptedAccessToken)
+      : "";
+    const resolved = await resolveGoogleCalendarAccessToken({
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: connection.accessTokenExpiresAt,
+    });
+    if (!resolved.ok) {
+      if (resolved.action === "disconnect") {
+        logCalendarMarkedDisconnected(resolved.reason, tutorProfileId, connection);
+        await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
+        return null;
+      }
+      throw new BookingError(
+        503,
+        "CALENDAR_UNAVAILABLE",
+        "Google Calendar is temporarily unavailable. Try again in a few minutes.",
       );
     }
-    return { connection, accessToken };
+    if (resolved.refreshed) {
+      await saveRefreshedGoogleAccessToken(
+        connection.id,
+        resolved.accessToken,
+        resolved.expiresIn,
+        new Date(),
+        resolved.rotatedRefreshToken,
+      );
+    }
+    return {
+      connection,
+      accessToken: resolved.accessToken,
+      refreshToken: resolved.rotatedRefreshToken ?? refreshToken,
+    };
   } catch (error) {
+    if (error instanceof BookingError) throw error;
     if (calendarCredentialFailureAction(error) === "disconnect") {
+      logCalendarMarkedDisconnected("credential_failure", tutorProfileId, connection);
       await markGoogleCalendarDisconnected(tutorProfileId, connection.id);
       return null;
     }
@@ -4261,16 +4310,11 @@ async function calendarAccess(tutorProfileId: string) {
 
 async function calendarAccessForUser(tutorUserId: string) {
   const [profile] = await db
-    .select({
-      id: tutorProfilesTable.id,
-      calendarStatus: tutorProfilesTable.calendarStatus,
-    })
+    .select({ id: tutorProfilesTable.id })
     .from(tutorProfilesTable)
     .where(eq(tutorProfilesTable.userId, tutorUserId))
     .limit(1);
-  if (!profile || normalizeGoogleCalendarStatus(profile.calendarStatus) !== "connected") {
-    return null;
-  }
+  if (!profile) return null;
   return calendarAccess(profile.id);
 }
 
@@ -4393,20 +4437,17 @@ async function slotsForTutor(
   if (!access) {
     return { tutor, rule, access: null, slots: [] as string[] };
   }
-  let busyWindows: BusyWindow[];
-  try {
-    busyWindows = await listGoogleBusyWindows(
-      access.accessToken,
-      access.connection.calendarId!,
-      from,
-      to,
-    );
-  } catch (error) {
-    if (calendarBusyFailureAction(error) === "disconnect") {
-      await markGoogleCalendarDisconnected(
-        tutorProfileId,
-        access.connection.id,
-      );
+  const read = await listGoogleBusyWindowsRecovering({
+    accessToken: access.accessToken,
+    refreshToken: access.refreshToken,
+    calendarId: access.connection.calendarId!,
+    timeMin: from,
+    timeMax: to,
+  });
+  if (!read.ok) {
+    if (read.action === "disconnect") {
+      logCalendarMarkedDisconnected(read.reason, tutorProfileId, access.connection);
+      await markGoogleCalendarDisconnected(tutorProfileId, access.connection.id);
       return { tutor, rule, access: null, slots: [] as string[] };
     }
     throw new BookingError(
@@ -4415,6 +4456,20 @@ async function slotsForTutor(
       "Google Calendar is temporarily unavailable. Try again in a few minutes.",
     );
   }
+  if (read.refreshed) {
+    await saveRefreshedGoogleAccessToken(
+      access.connection.id,
+      read.accessToken,
+      read.expiresIn,
+      new Date(),
+      read.rotatedRefreshToken,
+    );
+    access.accessToken = read.accessToken;
+    if (read.rotatedRefreshToken) access.refreshToken = read.rotatedRefreshToken;
+  } else if (access.connection.status !== "connected") {
+    await markGoogleCalendarConnected(tutorProfileId, access.connection.id);
+  }
+  const busyWindows = read.busy;
   const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({

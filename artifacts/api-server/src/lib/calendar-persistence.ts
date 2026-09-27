@@ -5,12 +5,9 @@ import {
   tutorProfilesTable,
 } from "@workspace/db";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { encryptCalendarToken } from "./google-calendar.ts";
+import { encryptCalendarToken, googleAccessTokenExpiresAt } from "./google-calendar.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import {
-  connectionHasRefreshToken,
-  connectionLooksConnected,
-} from "./calendar-connection-adopt.ts";
+import { connectionHasRefreshToken } from "./calendar-connection-adopt.ts";
 
 export {
   connectionHasRefreshToken,
@@ -35,9 +32,7 @@ export async function persistGoogleCalendarConnection(
   const encryptedRefreshToken = tokens.refreshToken
     ? encryptCalendarToken(tokens.refreshToken)
     : undefined;
-  const accessTokenExpiresAt = tokens.expiresIn
-    ? new Date(connectedAt.getTime() + tokens.expiresIn * 1000)
-    : null;
+  const accessTokenExpiresAt = googleAccessTokenExpiresAt(tokens.expiresIn, connectedAt);
 
   return db.transaction(async (tx) => {
     const [existing] = await tx
@@ -131,7 +126,7 @@ export async function adoptGoogleCalendarConnection(
         ),
       )
       .limit(1);
-    if (connectionLooksConnected(to) && to!.id !== from.id) {
+    if (to && connectionHasRefreshToken(to) && to.id !== from.id) {
       return to;
     }
 
@@ -187,20 +182,44 @@ export async function saveRefreshedGoogleAccessToken(
   accessToken: string,
   expiresIn?: number,
   refreshedAt = new Date(),
+  rotatedRefreshToken?: string,
 ) {
   const [connection] = await db
     .update(calendarConnectionsTable)
     .set({
+      status: "connected",
       encryptedAccessToken: encryptCalendarToken(accessToken),
-      accessTokenExpiresAt: expiresIn
-        ? new Date(refreshedAt.getTime() + expiresIn * 1000)
-        : null,
+      ...(rotatedRefreshToken
+        ? { encryptedRefreshToken: encryptCalendarToken(rotatedRefreshToken) }
+        : {}),
+      accessTokenExpiresAt: googleAccessTokenExpiresAt(expiresIn, refreshedAt),
       updatedAt: refreshedAt,
     })
     .where(eq(calendarConnectionsTable.id, connectionId))
     .returning();
   if (!connection) throw new Error("Calendar connection no longer exists");
+  await db
+    .update(tutorProfilesTable)
+    .set({ calendarStatus: "connected", updatedAt: refreshedAt })
+    .where(eq(tutorProfilesTable.id, connection.tutorProfileId));
   return connection;
+}
+
+export async function markGoogleCalendarConnected(
+  tutorProfileId: string,
+  connectionId: string,
+  connectedAt = new Date(),
+) {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(calendarConnectionsTable)
+      .set({ status: "connected", updatedAt: connectedAt })
+      .where(eq(calendarConnectionsTable.id, connectionId));
+    await tx
+      .update(tutorProfilesTable)
+      .set({ calendarStatus: "connected", updatedAt: connectedAt })
+      .where(eq(tutorProfilesTable.id, tutorProfileId));
+  });
 }
 
 export async function markGoogleCalendarDisconnected(

@@ -162,8 +162,27 @@ export function classifyGoogleCalendarRequestFailure(
   return new GoogleCalendarRequestError(status, reason, message);
 }
 
+/** Refresh this long before the stored access-token expiry to absorb clock skew. */
+export const GOOGLE_ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
+
+/** Google access tokens last one hour when the token response omits expires_in. */
+export const GOOGLE_ACCESS_TOKEN_DEFAULT_TTL_SECONDS = 3_600;
+
+function isTransientGoogleCalendarReason(reason: string, status: number): boolean {
+  if (status === 429 || status >= 500) return true;
+  const normalized = reason.toLowerCase();
+  return (
+    normalized.includes("ratelimit") ||
+    normalized.includes("rate_limit") ||
+    normalized.includes("quota") ||
+    normalized.includes("dailylimit") ||
+    normalized.includes("backenderror")
+  );
+}
+
 export function isGoogleCalendarAuthFailure(error: unknown): boolean {
   if (!(error instanceof GoogleCalendarRequestError)) return false;
+  if (isTransientGoogleCalendarReason(error.reason, error.status)) return false;
   if (error.status === 401 || error.status === 403) return true;
   const reason = error.reason.toLowerCase();
   return (
@@ -176,18 +195,19 @@ export function isGoogleCalendarAuthFailure(error: unknown): boolean {
   );
 }
 
+/**
+ * First freeBusy/calendar auth error. Refresh and retry.
+ * Do not drop a stored refresh token on this failure alone.
+ */
 export function calendarBusyFailureAction(
   error: unknown,
-): "disconnect" | "unavailable" {
-  return isGoogleCalendarAuthFailure(error) ? "disconnect" : "unavailable";
+): "refresh" | "unavailable" {
+  return isGoogleCalendarAuthFailure(error) ? "refresh" : "unavailable";
 }
 
 export function isGoogleTokenRefreshAuthFailure(error: unknown): boolean {
   if (error instanceof CalendarOAuthError) {
     return error.outcome === "expired" || error.outcome === "rejected";
-  }
-  if (error instanceof GoogleCalendarRequestError) {
-    return isGoogleCalendarAuthFailure(error);
   }
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   return (
@@ -198,13 +218,56 @@ export function isGoogleTokenRefreshAuthFailure(error: unknown): boolean {
   );
 }
 
+/** Refresh-grant failures. Calendar API 401s are not refresh failures. */
 export function calendarCredentialFailureAction(
+  error: unknown,
+): "disconnect" | "unavailable" {
+  if (isGoogleTokenRefreshAuthFailure(error)) return "disconnect";
+  return "unavailable";
+}
+
+/**
+ * After a refresh attempt, disconnect only when the grant itself is unusable
+ * (invalid_grant / rejected refresh, or the new access token still cannot call
+ * Calendar). Rate limits, network errors, and 5xx stay connected.
+ */
+export function calendarFailureAfterRefreshAction(
   error: unknown,
 ): "disconnect" | "unavailable" {
   if (isGoogleTokenRefreshAuthFailure(error) || isGoogleCalendarAuthFailure(error)) {
     return "disconnect";
   }
   return "unavailable";
+}
+
+export function googleAccessTokenLifetimeSeconds(expiresIn: number | undefined): number {
+  if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
+    return Math.floor(expiresIn);
+  }
+  return GOOGLE_ACCESS_TOKEN_DEFAULT_TTL_SECONDS;
+}
+
+export function googleAccessTokenExpiresAt(expiresIn: number | undefined, from: Date): Date {
+  return new Date(from.getTime() + googleAccessTokenLifetimeSeconds(expiresIn) * 1000);
+}
+
+export function googleAccessTokenNeedsRefresh(
+  expiresAt: Date | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!expiresAt || Number.isNaN(expiresAt.getTime())) return true;
+  return expiresAt.getTime() <= now.getTime() + GOOGLE_ACCESS_TOKEN_REFRESH_SKEW_MS;
+}
+
+/** Keep the stored refresh token when Google omits one on re-auth or refresh. */
+export function preserveGoogleRefreshToken(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+): string | null {
+  const next = typeof incoming === "string" ? incoming.trim() : "";
+  if (next) return next;
+  const prior = typeof existing === "string" ? existing.trim() : "";
+  return prior || null;
 }
 
 export function classifyGoogleTokenRefreshFailure(
@@ -982,6 +1045,7 @@ export async function exchangeGoogleCode(
 export async function refreshGoogleAccessToken(refreshToken: string): Promise<{
   accessToken: string;
   expiresIn?: number;
+  refreshToken?: string;
 }> {
   const config = getGoogleCalendarConfig();
   if (!config) throw new Error("Google Calendar OAuth is not configured");
@@ -998,14 +1062,163 @@ export async function refreshGoogleAccessToken(refreshToken: string): Promise<{
   if (!response.ok) {
     throw classifyGoogleTokenRefreshFailure(response.status, await response.text());
   }
-  const data = (await response.json()) as { access_token?: string; expires_in?: number };
+  const data = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+    refresh_token?: string;
+  };
   if (!data.access_token) {
     throw new CalendarOAuthError(
       "unavailable",
       "Google refresh response did not include an access token",
     );
   }
-  return { accessToken: data.access_token, expiresIn: data.expires_in };
+  const rotated = data.refresh_token?.trim();
+  return {
+    accessToken: data.access_token,
+    expiresIn: data.expires_in,
+    refreshToken: rotated || undefined,
+  };
+}
+
+export type GoogleCalendarAccessResolution =
+  | {
+      ok: true;
+      accessToken: string;
+      refreshed: boolean;
+      expiresIn?: number;
+      rotatedRefreshToken?: string;
+    }
+  | { ok: false; action: "disconnect" | "unavailable"; reason: string };
+
+function resolutionFromRefresh(
+  storedRefreshToken: string,
+  refreshed: { accessToken: string; expiresIn?: number; refreshToken?: string },
+): GoogleCalendarAccessResolution {
+  const preserved = preserveGoogleRefreshToken(storedRefreshToken, refreshed.refreshToken);
+  return {
+    ok: true,
+    accessToken: refreshed.accessToken,
+    refreshed: true,
+    expiresIn: refreshed.expiresIn,
+    rotatedRefreshToken:
+      preserved && preserved !== storedRefreshToken ? preserved : undefined,
+  };
+}
+
+export async function resolveGoogleCalendarAccessToken(
+  credentials: {
+    accessToken: string;
+    refreshToken?: string | null;
+    accessTokenExpiresAt?: Date | null;
+  },
+  now: Date = new Date(),
+): Promise<GoogleCalendarAccessResolution> {
+  const refreshToken = credentials.refreshToken?.trim() ?? "";
+  const expiresAt = credentials.accessTokenExpiresAt ?? null;
+  if (!googleAccessTokenNeedsRefresh(expiresAt, now)) {
+    return { ok: true, accessToken: credentials.accessToken, refreshed: false };
+  }
+  if (!refreshToken) {
+    const expired =
+      expiresAt !== null &&
+      !Number.isNaN(expiresAt.getTime()) &&
+      expiresAt.getTime() <= now.getTime();
+    if (expired) {
+      return {
+        ok: false,
+        action: "disconnect",
+        reason: "access_expired_without_refresh_token",
+      };
+    }
+    return { ok: true, accessToken: credentials.accessToken, refreshed: false };
+  }
+  try {
+    const refreshed = await refreshGoogleAccessToken(refreshToken);
+    return resolutionFromRefresh(refreshToken, refreshed);
+  } catch (error) {
+    const action = calendarCredentialFailureAction(error);
+    return {
+      ok: false,
+      action,
+      reason: action === "disconnect" ? "refresh_rejected" : "refresh_unavailable",
+    };
+  }
+}
+
+export async function listGoogleBusyWindowsRecovering(args: {
+  accessToken: string;
+  refreshToken?: string | null;
+  calendarId: string;
+  timeMin: Date;
+  timeMax: Date;
+}): Promise<
+  | {
+      ok: true;
+      busy: GoogleBusyWindow[];
+      accessToken: string;
+      refreshed: boolean;
+      expiresIn?: number;
+      rotatedRefreshToken?: string;
+    }
+  | { ok: false; action: "disconnect" | "unavailable"; reason: string }
+> {
+  try {
+    const busy = await listGoogleBusyWindows(
+      args.accessToken,
+      args.calendarId,
+      args.timeMin,
+      args.timeMax,
+    );
+    return { ok: true, busy, accessToken: args.accessToken, refreshed: false };
+  } catch (error) {
+    if (calendarBusyFailureAction(error) !== "refresh") {
+      return { ok: false, action: "unavailable", reason: "freebusy_transient" };
+    }
+    const refreshToken = args.refreshToken?.trim() ?? "";
+    if (!refreshToken) {
+      return { ok: false, action: "disconnect", reason: "freebusy_auth_without_refresh_token" };
+    }
+    let recovered: GoogleCalendarAccessResolution;
+    try {
+      recovered = resolutionFromRefresh(
+        refreshToken,
+        await refreshGoogleAccessToken(refreshToken),
+      );
+    } catch (refreshError) {
+      const action = calendarCredentialFailureAction(refreshError);
+      return {
+        ok: false,
+        action,
+        reason: action === "disconnect" ? "refresh_rejected" : "refresh_unavailable",
+      };
+    }
+    if (!recovered.ok) return recovered;
+    try {
+      const busy = await listGoogleBusyWindows(
+        recovered.accessToken,
+        args.calendarId,
+        args.timeMin,
+        args.timeMax,
+      );
+      return {
+        ok: true,
+        busy,
+        accessToken: recovered.accessToken,
+        refreshed: true,
+        expiresIn: recovered.expiresIn,
+        rotatedRefreshToken: recovered.rotatedRefreshToken,
+      };
+    } catch (retryError) {
+      const action = calendarFailureAfterRefreshAction(retryError);
+      return {
+        ok: false,
+        action,
+        reason:
+          action === "disconnect" ? "freebusy_auth_after_refresh" : "freebusy_transient_after_refresh",
+      };
+    }
+  }
 }
 
 export async function googleCalendarRequest<T>(
