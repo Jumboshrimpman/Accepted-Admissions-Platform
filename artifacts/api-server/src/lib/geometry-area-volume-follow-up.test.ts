@@ -17,14 +17,16 @@ test(
       db,
       questionsTable,
       sessionsTable,
+      timerEventsTable,
       usersTable,
     } = await import("@workspace/db");
     const { ensureGeometryAreaVolumeFollowUp } = await import(
       "./geometry-area-volume-follow-up.ts"
     );
-    const { GEOMETRY_AREA_VOLUME_FOLLOW_UP_TAG } = await import(
-      "./geometry-area-volume-bank.ts"
-    );
+    const {
+      GEOMETRY_AREA_VOLUME_FOLLOW_UP_TAG,
+      GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES,
+    } = await import("./geometry-area-volume-bank.ts");
     const { GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE } = await import(
       "./post-session-follow-up.ts"
     );
@@ -260,6 +262,34 @@ test(
         result: null,
       })
       .returning();
+    const [inProgress] = await db
+      .insert(attemptsTable)
+      .values({
+        assignmentId: legacyArea!.id,
+        userId: michelle.id,
+        status: "active",
+      })
+      .returning();
+    const staleStart = new Date("2026-09-27T14:00:00.000Z");
+    const [staleTimer] = await db
+      .insert(timerEventsTable)
+      .values({ attemptId: inProgress!.id, type: "started", at: staleStart })
+      .returning();
+    const scoredAt = new Date("2026-09-26T15:00:00.000Z");
+    const [scoredAttempt] = await db
+      .insert(attemptsTable)
+      .values({
+        assignmentId: legacyArea!.id,
+        userId: michelle.id,
+        status: "submitted",
+        submittedAt: scoredAt,
+        score: 80,
+      })
+      .returning();
+    const [scoredTimer] = await db
+      .insert(timerEventsTable)
+      .values({ attemptId: scoredAttempt!.id, type: "submitted", at: scoredAt })
+      .returning();
 
     try {
       const refused = await ensureGeometryAreaVolumeFollowUp({
@@ -303,6 +333,7 @@ test(
         assert.equal(quiz.deliveryPhase, "before_session");
         assert.equal(quiz.subject, "SAT Math");
         assert.equal(quiz.assignedTutorUserId, xavier.id);
+        assert.equal(quiz.timeLimitMinutes, GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES);
       }
       assert.equal(
         quizzes.find((quiz) => quiz.id === first.michelle.assignmentId)?.assignedStudentUserId,
@@ -318,6 +349,7 @@ test(
         .where(eq(assignmentsTable.id, geometryHistory!.id));
       assert.equal(historyStill?.title, "Geometry SAT Questions");
       assert.equal(historyStill?.sessionId, latest.id);
+      assert.equal(historyStill?.timeLimitMinutes, 30);
       const [historyAttempt] = await db
         .select()
         .from(attemptsTable)
@@ -331,6 +363,39 @@ test(
       assert.equal(reopenedEmpty?.status, "active");
       assert.equal(reopenedEmpty?.result ?? null, null);
       assert.equal(reopenedEmpty?.score ?? null, null);
+      const reopenedTimers = await db
+        .select()
+        .from(timerEventsTable)
+        .where(eq(timerEventsTable.attemptId, emptyAttempt!.id));
+      assert.equal(reopenedTimers.length, 1);
+      assert.equal(reopenedTimers[0]?.type, "started");
+      const [scoredStill] = await db
+        .select()
+        .from(attemptsTable)
+        .where(eq(attemptsTable.id, scoredAttempt!.id));
+      assert.equal(scoredStill?.status, "submitted");
+      assert.equal(scoredStill?.score, 80);
+      const scoredTimers = await db
+        .select()
+        .from(timerEventsTable)
+        .where(eq(timerEventsTable.attemptId, scoredAttempt!.id));
+      assert.equal(scoredTimers.length, 1);
+      assert.equal(scoredTimers[0]?.id, scoredTimer!.id);
+      assert.equal(scoredTimers[0]?.type, "submitted");
+      const [inProgressStill] = await db
+        .select()
+        .from(attemptsTable)
+        .where(eq(attemptsTable.id, inProgress!.id));
+      assert.equal(inProgressStill?.status, "active");
+      assert.equal(inProgressStill?.score ?? null, null);
+      const openTimers = await db
+        .select()
+        .from(timerEventsTable)
+        .where(eq(timerEventsTable.attemptId, inProgress!.id));
+      assert.equal(openTimers.some((event) => event.id === staleTimer!.id), false);
+      assert.equal(openTimers.length, 1);
+      assert.equal(openTimers[0]?.type, "started");
+      assert.ok((openTimers[0]?.at.getTime() ?? 0) > staleStart.getTime());
 
       const linksFor = async (assignmentId: string) =>
         db
@@ -390,6 +455,15 @@ test(
           .where(eq(assignmentsTable.courseId, course!.id))
       ).map((row) => row.id);
       if (assignmentIds.length > 0) {
+        const attemptIds = (
+          await db
+            .select({ id: attemptsTable.id })
+            .from(attemptsTable)
+            .where(inArray(attemptsTable.assignmentId, assignmentIds))
+        ).map((row) => row.id);
+        if (attemptIds.length > 0) {
+          await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, attemptIds));
+        }
         await db.delete(attemptsTable).where(inArray(attemptsTable.assignmentId, assignmentIds));
         const questionIds = (
           await db

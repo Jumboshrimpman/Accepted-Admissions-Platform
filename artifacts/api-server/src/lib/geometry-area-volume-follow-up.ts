@@ -7,6 +7,7 @@ import {
   questionsTable,
   responsesTable,
   sessionsTable,
+  timerEventsTable,
   usersTable,
 } from "@workspace/db";
 import { logger } from "./logger.ts";
@@ -39,6 +40,7 @@ import {
 import {
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TAG,
   GEOMETRY_AREA_VOLUME_INSTRUCTIONS,
+  GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES,
   loadHardGeometryAreaVolumeQuestions,
   type GeometryAreaVolumeDraft,
 } from "./geometry-area-volume-bank.ts";
@@ -297,11 +299,48 @@ async function insertQuestions(
   return ids;
 }
 
+/**
+ * Move this quiz to 60 minutes. The first time the stored limit changes,
+ * unscored in-progress attempts get a new clock so a 30-minute elapsed
+ * timer cannot expire them. Scored attempts are left alone.
+ */
+export async function ensureGeometryAreaVolumeTimeLimit(assignmentId: string): Promise<void> {
+  const [row] = await db
+    .select({ timeLimitMinutes: assignmentsTable.timeLimitMinutes })
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, assignmentId))
+    .limit(1);
+  if (!row || row.timeLimitMinutes === GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES) return;
+  await db
+    .update(assignmentsTable)
+    .set({ timeLimitMinutes: GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES })
+    .where(eq(assignmentsTable.id, assignmentId));
+  const attempts = await db
+    .select({
+      id: attemptsTable.id,
+      status: attemptsTable.status,
+      result: attemptsTable.result,
+      score: attemptsTable.score,
+    })
+    .from(attemptsTable)
+    .where(eq(attemptsTable.assignmentId, assignmentId));
+  for (const attempt of attempts) {
+    if (attempt.result != null || attempt.score != null) continue;
+    if (attempt.status !== "active" && attempt.status !== "paused") continue;
+    await db.delete(timerEventsTable).where(eq(timerEventsTable.attemptId, attempt.id));
+    await db.insert(timerEventsTable).values({
+      attemptId: attempt.id,
+      type: attempt.status === "paused" ? "paused" : "started",
+    });
+  }
+}
+
 async function markStandaloneTodo(input: {
   assignmentId: string;
   studentUserId: string;
   tutorUserId: string;
 }): Promise<void> {
+  await ensureGeometryAreaVolumeTimeLimit(input.assignmentId);
   await db
     .update(assignmentsTable)
     .set({
@@ -309,6 +348,7 @@ async function markStandaloneTodo(input: {
       assignedStudentUserId: input.studentUserId,
       assignedTutorUserId: input.tutorUserId,
       instructions: GEOMETRY_AREA_VOLUME_INSTRUCTIONS,
+      timeLimitMinutes: GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES,
     })
     .where(eq(assignmentsTable.id, input.assignmentId));
 }
@@ -332,7 +372,7 @@ async function insertAssignment(input: {
       instructions: GEOMETRY_AREA_VOLUME_INSTRUCTIONS,
       status: "published",
       deadline: null,
-      timeLimitMinutes: 30,
+      timeLimitMinutes: GEOMETRY_AREA_VOLUME_TIME_LIMIT_MINUTES,
       maxAttempts: 1,
     })
     .returning({ id: assignmentsTable.id });
@@ -416,6 +456,7 @@ async function assignToClient(input: {
         questionIds: input.questionIds,
       };
     }
+    await ensureGeometryAreaVolumeTimeLimit(already.assignment.id);
     await reopenBrokenEmptyAttemptsForAssignment(already.assignment.id);
     const tutorUserId = tutorIdForTodo({
       xavierIds: input.xavierIds,
@@ -600,6 +641,7 @@ export async function ensureGeometryAreaVolumeFollowUp(
     if (!user) continue;
     const existing = await existingFollowUp(user.id);
     if (!existing) continue;
+    await ensureGeometryAreaVolumeTimeLimit(existing.assignment.id);
     await reopenBrokenEmptyAttemptsForAssignment(existing.assignment.id);
     if (!(await assignmentHasRecordedWork(existing.assignment.id))) continue;
     questionIds = await questionIdsForAssignment(existing.assignment.id);
