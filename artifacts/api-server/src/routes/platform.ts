@@ -112,6 +112,7 @@ import { buildStudentWrittenFeedback } from "../lib/written-quiz-feedback";
 import {
   HARD_BANK_SEED_QUESTIONS,
 } from "../lib/sat-assessment-content";
+import { selectHomeworkForPracticePrep } from "../lib/in-session-practice";
 import {
   enqueueMissedReviewItems,
   prepareSessionCurriculum,
@@ -10468,14 +10469,25 @@ async function adaptiveCurriculumForSession(
     duringAssignmentId: string | null;
     attachedQuestionCount: number;
   } | null = null;
-  if (isStaff) {
-    if (completed && latestAttempt) {
+  const sessionStudent =
+    Boolean(session.clientUserId) && subjectUserId === session.clientUserId;
+  const homeworkHasResults = summaries.some(
+    (item) =>
+      item?.deliveryPhase === "before_session" &&
+      (item.latestAttemptStatus === "submitted" || item.latestAttemptStatus === "expired"),
+  );
+  if (isStaff || (sessionStudent && (completed || homeworkHasResults))) {
+    if (isStaff && completed && latestAttempt) {
       await deriveAdaptiveRecommendations(latestAttempt.id);
     }
     const prep = await prepareSessionCurriculum(session);
+    const summary =
+      !isStaff && isUnfinishedHomeworkClientCopy(prep.summary)
+        ? "Work through the in-session set with your tutor."
+        : prep.summary;
     sessionPrep = {
       mode: prep.mode,
-      summary: prep.summary,
+      summary,
       duringAssignmentId: prep.duringAssignmentId,
       attachedQuestionCount: prep.attachedQuestionCount,
     };
@@ -10661,8 +10673,8 @@ router.post(
       res.status(404).json({ error: "Session not found" });
       return;
     }
-    const homework = await db
-      .select({ id: assignmentsTable.id })
+    const homeworkRows = await db
+      .select()
       .from(assignmentsTable)
       .where(
         and(
@@ -10670,14 +10682,34 @@ router.post(
           eq(assignmentsTable.deliveryPhase, "before_session"),
         ),
       )
-      .limit(1);
-    if (homework[0]) {
+      .orderBy(asc(assignmentsTable.createdAt));
+    const submittedHomework =
+      session.clientUserId && homeworkRows.length > 0
+        ? await db
+            .select({ assignmentId: attemptsTable.assignmentId })
+            .from(attemptsTable)
+            .where(
+              and(
+                eq(attemptsTable.userId, session.clientUserId),
+                inArray(attemptsTable.status, ["submitted", "expired"]),
+                inArray(
+                  attemptsTable.assignmentId,
+                  homeworkRows.map((row) => row.id),
+                ),
+              ),
+            )
+        : [];
+    const homework = selectHomeworkForPracticePrep(
+      homeworkRows,
+      new Set(submittedHomework.map((row) => row.assignmentId)),
+    );
+    if (homework && submittedHomework.some((row) => row.assignmentId === homework.id)) {
       const [attempt] = await db
         .select({ id: attemptsTable.id })
         .from(attemptsTable)
         .where(
           and(
-            eq(attemptsTable.assignmentId, homework[0].id),
+            eq(attemptsTable.assignmentId, homework.id),
             eq(attemptsTable.userId, session.clientUserId ?? ""),
             inArray(attemptsTable.status, ["submitted", "expired"]),
           ),

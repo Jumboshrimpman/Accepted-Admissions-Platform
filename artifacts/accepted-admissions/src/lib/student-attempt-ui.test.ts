@@ -11,6 +11,8 @@ import {
   isQuestionFeedbackRevealed,
   normalizeQuestionIndex,
   shouldAutoSubmitOnExpiry,
+  inSessionPracticeHref,
+  resolveInSessionPracticeLink,
   studentAssignmentActionLabel,
   quizResponsesForPause,
   studentAssignmentHref,
@@ -88,6 +90,52 @@ test("pause stores answered items and review flags", () => {
       { questionId: "q1", finalAnswer: "a", flagged: true },
       { questionId: "q3", finalAnswer: null, flagged: true },
     ],
+  );
+});
+
+test("in-session practice link targets the quiz generated from homework results", () => {
+  assert.equal(
+    inSessionPracticeHref("practice-quiz-1", null),
+    "/portal/assignments/practice-quiz-1",
+  );
+  assert.equal(
+    inSessionPracticeHref("practice-quiz-1", "paused"),
+    "/portal/assignments/practice-quiz-1?resume=1",
+  );
+  assert.equal(inSessionPracticeHref("  ", null), null);
+  const target = resolveInSessionPracticeLink({
+    duringAssignmentId: "practice-from-homework",
+    attachedQuestionCount: 4,
+    assignments: [
+      {
+        id: "generic-bank",
+        deliveryPhase: "during_session",
+        questionCount: 12,
+        latestAttemptStatus: null,
+      },
+      {
+        id: "practice-from-homework",
+        deliveryPhase: "during_session",
+        questionCount: 4,
+        latestAttemptStatus: "active",
+      },
+    ],
+  });
+  assert.deepEqual(target, {
+    assignmentId: "practice-from-homework",
+    attemptStatus: "active",
+  });
+  assert.equal(
+    inSessionPracticeHref(target?.assignmentId, target?.attemptStatus),
+    "/portal/assignments/practice-from-homework?resume=1",
+  );
+  assert.equal(
+    resolveInSessionPracticeLink({
+      duringAssignmentId: "practice-from-homework",
+      attachedQuestionCount: 3,
+      assignments: [],
+    })?.assignmentId,
+    "practice-from-homework",
   );
 });
 

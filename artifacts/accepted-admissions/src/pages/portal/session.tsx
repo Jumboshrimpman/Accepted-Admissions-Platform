@@ -35,7 +35,12 @@ import {
   sessionCalendarDayIsPast,
   studentQuizActionLabel,
 } from "@/lib/student-quiz-list";
-import { studentAssignmentActionLabel, studentAssignmentHref } from "@/lib/student-attempt-ui";
+import {
+  inSessionPracticeHref,
+  resolveInSessionPracticeLink,
+  studentAssignmentActionLabel,
+  studentAssignmentHref,
+} from "@/lib/student-attempt-ui";
 
 function RenderBlock({ block }: { block: CurriculumBlock }) {
   return <CurriculumBlockView block={block} studentFacing />;
@@ -83,6 +88,20 @@ export default function PortalSession() {
     session.assignments.filter((item) => isPostSessionFollowUpQuiz(item)),
   );
   const duringAssignments = session.assignments.filter((item) => item.deliveryPhase === "during_session");
+  const generatedPracticeId = adaptive?.sessionPrep?.duringAssignmentId ?? "";
+  const generatedPracticeMode = adaptive?.sessionPrep?.mode;
+  const generatedPracticeReady =
+    Boolean(generatedPracticeId) &&
+    (adaptive?.sessionPrep?.attachedQuestionCount ?? 0) > 0 &&
+    (generatedPracticeMode === "mistake_focus" || generatedPracticeMode === "hard_bank");
+  const practiceLink = resolveInSessionPracticeLink({
+    duringAssignmentId: adaptive?.sessionPrep?.duringAssignmentId,
+    attachedQuestionCount: adaptive?.sessionPrep?.attachedQuestionCount,
+    assignments: session.assignments,
+  });
+  const practiceAssignment = practiceLink
+    ? duringAssignments.find((item) => item.id === practiceLink.assignmentId)
+    : undefined;
   const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
   const reports = artifacts.filter(
     (item) =>
@@ -164,7 +183,27 @@ export default function PortalSession() {
         <CardContent className="space-y-5">
           <SessionLessonDashboard sessionId={sessionId} audience="student" />
           {studentBlocks.map((block) => <div key={block.id} className="rounded-xl border p-4"><RenderBlock block={block} /></div>)}
-          {duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white" data-testid={`session-homework-${assignment.id}`}><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{studentFacingCopy(assignment.title)}</p>{pastSessionDay ? <Badge variant="outline" className="border-white/30 text-white">Complete</Badge> : null}</div><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{assignmentAction(assignment.latestAttemptStatus, true, pastSessionDay)}</Link></Button></div>)}
+          {generatedPracticeReady && practiceLink ? (
+            <div className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white" data-testid="in-session-practice-link">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">{studentFacingCopy(practiceAssignment?.title ?? "In-session practice")}</p>
+                  {pastSessionDay ? <Badge variant="outline" className="border-white/30 text-white">Complete</Badge> : null}
+                </div>
+                <p className="text-xs text-white/70">
+                  {(practiceAssignment?.questionCount ?? adaptive?.sessionPrep?.attachedQuestionCount ?? 0)}{" "}
+                  {generatedPracticeMode === "mistake_focus"
+                    ? "problems from homework results"
+                    : "harder problems for leftover time"}
+                </p>
+              </div>
+              <Button asChild size="sm" variant="secondary">
+                <Link href={inSessionPracticeHref(practiceLink.assignmentId, practiceLink.attemptStatus) ?? "#"}>
+                  {assignmentAction(practiceLink.attemptStatus, true, pastSessionDay)}
+                </Link>
+              </Button>
+            </div>
+          ) : duringAssignments.map((assignment) => <div key={assignment.id} className="flex items-center justify-between gap-3 rounded-3xl bg-brand-ink p-4 text-white" data-testid={`session-homework-${assignment.id}`}><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{studentFacingCopy(assignment.title)}</p>{pastSessionDay ? <Badge variant="outline" className="border-white/30 text-white">Complete</Badge> : null}</div><p className="text-xs text-white/70">{assignment.questionCount} problems to work through together</p></div><Button asChild size="sm" variant="secondary"><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{assignmentAction(assignment.latestAttemptStatus, true, pastSessionDay)}</Link></Button></div>)}
           {adaptiveLoading && <p className="text-sm text-muted-foreground">Loading the approved adaptive sequence…</p>}
           {adaptiveUnavailable && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground"><Sparkles className="mr-2 inline h-4 w-4" />Adaptive guidance is unavailable. The published tutor plan remains available.</p>}
           {adaptive && adaptive.publishedBlocks.length === 0 && adaptive.recommendations.length === 0 && <p className="text-xs text-muted-foreground">No adaptive additions have been published for this meeting.</p>}
