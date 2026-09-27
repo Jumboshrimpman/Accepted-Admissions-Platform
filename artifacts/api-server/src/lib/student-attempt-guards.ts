@@ -57,6 +57,32 @@ export function isBrokenEmptyAttempt(input: {
   );
 }
 
+/** True when this attempt must not freeze or replace the quiz's question rows. */
+export function attemptHasRecordedWork(input: {
+  hasResult: boolean;
+  score: number | null;
+  answeredCount: number;
+}): boolean {
+  return input.hasResult || input.score != null || input.answeredCount > 0;
+}
+
+/**
+ * Submitted/expired with nothing recorded is the empty-attempt dead end.
+ * Reopen it. A stored result or any answered item stays as history.
+ */
+export function shouldReopenBrokenEmptyAttempt(input: {
+  status: string;
+  hasResult: boolean;
+  score: number | null;
+  answeredCount: number;
+}): boolean {
+  if (attemptHasRecordedWork(input)) return false;
+  return isBrokenEmptyAttempt({
+    status: input.status,
+    answeredCount: input.answeredCount,
+  });
+}
+
 export function normalizeQuestionIndex(
   index: unknown,
   questionCount = Number.POSITIVE_INFINITY,

@@ -249,6 +249,17 @@ test(
         maxAttempts: 1,
       })
       .returning();
+    const [emptyAttempt] = await db
+      .insert(attemptsTable)
+      .values({
+        assignmentId: legacyArea!.id,
+        userId: michelle.id,
+        status: "submitted",
+        submittedAt: new Date("2026-09-26T12:00:00.000Z"),
+        score: null,
+        result: null,
+      })
+      .returning();
 
     try {
       const refused = await ensureGeometryAreaVolumeFollowUp({
@@ -313,6 +324,13 @@ test(
         .where(eq(attemptsTable.assignmentId, geometryHistory!.id));
       assert.equal(historyAttempt?.score, 70);
       assert.equal(historyAttempt?.status, "submitted");
+      const [reopenedEmpty] = await db
+        .select()
+        .from(attemptsTable)
+        .where(eq(attemptsTable.id, emptyAttempt!.id));
+      assert.equal(reopenedEmpty?.status, "active");
+      assert.equal(reopenedEmpty?.result ?? null, null);
+      assert.equal(reopenedEmpty?.score ?? null, null);
 
       const linksFor = async (assignmentId: string) =>
         db

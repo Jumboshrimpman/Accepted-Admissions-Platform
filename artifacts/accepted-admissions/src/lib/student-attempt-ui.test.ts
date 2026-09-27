@@ -17,6 +17,7 @@ import {
   quizResponsesForPause,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
+  isBrokenEmptyClientAttempt,
   studentSeesFinishedResult,
   studentSeesPredictionStep,
   wantsResumeAttempt,
@@ -35,6 +36,33 @@ test("empty submit is blocked and cannot glitch forward to results", () => {
   assert.equal(shouldAutoSubmitOnExpiry(0), false);
   assert.deepEqual(canSubmitStudentAttempt({ answeredCount: 2 }), { ok: true, reason: "ok" });
   assert.equal(shouldAutoSubmitOnExpiry(1), true);
+});
+
+test("an empty submitted attempt is still a takeable quiz", () => {
+  assert.equal(
+    isBrokenEmptyClientAttempt({ status: "submitted", hasResult: false, responses: [] }),
+    true,
+  );
+  assert.equal(
+    isBrokenEmptyClientAttempt({ status: "expired", hasResult: false, responses: [] }),
+    true,
+  );
+  assert.equal(
+    isBrokenEmptyClientAttempt({
+      status: "submitted",
+      hasResult: false,
+      responses: [{ finalAnswer: "a" }],
+    }),
+    false,
+  );
+  assert.equal(
+    isBrokenEmptyClientAttempt({ status: "submitted", hasResult: true, responses: [] }),
+    false,
+  );
+  assert.equal(
+    isBrokenEmptyClientAttempt({ status: "active", hasResult: false, responses: [] }),
+    false,
+  );
 });
 
 test("in-session practice is collaborative, not a prediction quiz", () => {
