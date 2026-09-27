@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
     position: number;
     config: { title?: string; items?: string[] };
   }>,
+  studentNotes: null as string | null,
+  artifacts: [] as Array<{ id: string; kind: string; content: string }>,
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -43,7 +45,7 @@ vi.mock("@workspace/api-client-react", () => ({
       durationMinutes: 60,
       meetingUrl: null,
       calendarEventUrl: null,
-      studentNotes: null,
+      studentNotes: mocks.studentNotes,
       assignments: mocks.assignments,
       blocks: mocks.blocks,
       homework: [],
@@ -52,7 +54,7 @@ vi.mock("@workspace/api-client-react", () => ({
     error: null,
   }),
   useGetAdaptiveCurriculum: () => ({ data: null, isLoading: false, isError: false }),
-  useListSessionArtifacts: () => ({ data: [] }),
+  useListSessionArtifacts: () => ({ data: mocks.artifacts }),
   getGetSessionLessonQueryKey: (id: string) => ["/api/sessions", id, "lesson"],
   useGetSessionLesson: () => ({
     data: {
@@ -98,6 +100,8 @@ afterEach(() => {
   mocks.assignments[0]!.latestAttemptId = null;
   mocks.assignments[0]!.latestAttemptStatus = null;
   mocks.blocks = [];
+  mocks.studentNotes = null;
+  mocks.artifacts = [];
 });
 
 describe("student session quiz path", () => {
@@ -178,6 +182,8 @@ describe("student session quiz path", () => {
     expect(followUp.textContent).toContain("Follow-up");
     expect(followUp.textContent).toContain("Start quiz");
     expect(followUp.textContent).not.toContain("Due before");
+    expect(screen.getByTestId("after-session-reports")).toBeTruthy();
+    expect(screen.queryByText(/not available yet/i)).toBeNull();
     mocks.assignments.splice(0, mocks.assignments.length, ...original);
   });
 
@@ -191,5 +197,56 @@ describe("student session quiz path", () => {
     expect(card.textContent).toContain("Review");
     expect(card.textContent).not.toContain("Start pre-work");
     expect(card.textContent).not.toContain("Due before");
+  });
+});
+
+describe("after-session reports", () => {
+  test("hides the after-session section when the tutor has no report", () => {
+    render(<PortalSession />);
+
+    expect(screen.queryByTestId("after-session-reports")).toBeNull();
+    expect(screen.queryByText(/after the session/i)).toBeNull();
+    expect(screen.queryByText(/after-session reports/i)).toBeNull();
+    expect(screen.queryByText(/published session report/i)).toBeNull();
+    expect(screen.queryByText(/not available yet/i)).toBeNull();
+  });
+
+  test("ignores transcripts and blank reports", () => {
+    mocks.artifacts = [
+      { id: "transcript-1", kind: "transcript", content: "Private transcript text" },
+      { id: "report-blank", kind: "report", content: "   " },
+    ];
+    render(<PortalSession />);
+
+    expect(screen.queryByTestId("after-session-reports")).toBeNull();
+    expect(screen.queryByText(/private transcript text/i)).toBeNull();
+    expect(screen.queryByText(/after the session/i)).toBeNull();
+  });
+
+  test("shows published tutor reports", () => {
+    mocks.artifacts = [
+      {
+        id: "report-1",
+        kind: "report",
+        content: "Taito improved transitions and should review geometry next.",
+      },
+    ];
+    render(<PortalSession />);
+
+    expect(screen.getByTestId("after-session-reports")).toBeTruthy();
+    expect(screen.getByText(/after the session/i)).toBeTruthy();
+    expect(screen.getByTestId("after-session-report-report-1").textContent).toMatch(
+      /Taito improved transitions and should review geometry next/,
+    );
+    expect(screen.queryByText(/not available yet/i)).toBeNull();
+  });
+
+  test("shows tutor feedback when notes exist without a report artifact", () => {
+    mocks.studentNotes = "Nice work on transitions.";
+    render(<PortalSession />);
+
+    expect(screen.getByTestId("after-session-reports")).toBeTruthy();
+    expect(screen.getByText(/after the session/i)).toBeTruthy();
+    expect(screen.getByText(/Nice work on transitions/)).toBeTruthy();
   });
 });

@@ -84,7 +84,15 @@ export default function PortalSession() {
   );
   const duringAssignments = session.assignments.filter((item) => item.deliveryPhase === "during_session");
   const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
-  const reports = artifacts.filter((item) => item.kind === "report");
+  const reports = artifacts.filter(
+    (item) =>
+      item.kind === "report" &&
+      typeof item.content === "string" &&
+      item.content.trim().length > 0,
+  );
+  const hasTutorFeedback = Boolean(session.studentNotes?.trim());
+  const showAfterSession =
+    reports.length > 0 || hasTutorFeedback || followUpAssignments.length > 0;
   const analysis = session.homework?.find((item) => item.analysis)?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
 
@@ -163,7 +171,8 @@ export default function PortalSession() {
         </CardContent>
       </Card>
 
-      <Card>
+      {showAfterSession && (
+      <Card data-testid="after-session-reports">
         <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-emerald-600" />After the session</CardTitle><CardDescription>Feedback and reports appear only after they are published.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           {followUpAssignments.map((assignment) => (
@@ -178,11 +187,11 @@ export default function PortalSession() {
               <Button asChild disabled={viewer && !assignment.latestAttemptId}><Link href={studentAssignmentHref(assignment.id, assignment.latestAttemptStatus)}>{viewer && !assignment.latestAttemptId ? "Not started" : studentQuizActionLabel({ assignment, pastSessionDay: false }, viewer)}<ArrowIcon /></Link></Button>
             </div>
           ))}
-          {session.studentNotes && <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Tutor feedback</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(session.studentNotes)}</p></details>}
-          {reports.map((report) => <details key={report.id} className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Published session report</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(report.content)}</p></details>)}
-          {!session.studentNotes && reports.length === 0 && followUpAssignments.length === 0 && <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">Feedback and the session report are not available yet.</p>}
+          {hasTutorFeedback && <details className="rounded-xl border p-4"><summary className="cursor-pointer font-medium">Tutor feedback</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(session.studentNotes ?? "")}</p></details>}
+          {reports.map((report) => <details key={report.id} className="rounded-xl border p-4" data-testid={`after-session-report-${report.id}`}><summary className="cursor-pointer font-medium">Published session report</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{studentFacingCopy(report.content)}</p></details>)}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
