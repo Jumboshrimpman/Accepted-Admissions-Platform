@@ -227,10 +227,28 @@ export function calendarCredentialFailureAction(
 }
 
 /**
- * After a refresh attempt succeeds, a later Calendar API failure is transient:
- * the refresh token still works. Disconnect only when the refresh call itself
- * reports `invalid_grant` / a revoked grant.
+ * What to do when a calendar call asks to disconnect.
+ * `revoke` is only a confirmed invalid_grant / revocation from the refresh call.
+ * Any other reason keeps a stored refresh token connected.
  */
+export function calendarGrantDisconnectDecision(args: {
+  hasRefreshToken: boolean;
+  reason: string;
+}): "revoke" | "disconnect_without_grant" | "keep_connected" {
+  if (args.reason === "refresh_rejected" || args.reason === "credential_failure") {
+    return "revoke";
+  }
+  if (
+    !args.hasRefreshToken &&
+    (args.reason === "access_expired_without_refresh_token" ||
+      args.reason === "calendar_auth_without_refresh_token" ||
+      args.reason === "freebusy_auth_without_refresh_token")
+  ) {
+    return "disconnect_without_grant";
+  }
+  return "keep_connected";
+}
+
 export function calendarFailureAfterRefreshAction(
   error: unknown,
 ): "disconnect" | "unavailable" {
@@ -1238,9 +1256,8 @@ export async function callGoogleCalendarRecovering<T>(args: {
         rotatedRefreshToken: recovered.rotatedRefreshToken,
       };
     } catch (retryError) {
-      if (calendarFailureAfterRefreshAction(retryError) === "disconnect") {
-        return { ok: false, action: "disconnect", reason: "refresh_rejected" };
-      }
+      // Refresh already succeeded, so this grant is still valid. A Calendar API
+      // 401/403/5xx — even one whose body mentions invalid_grant — must not revoke it.
       return {
         ok: false,
         action: "unavailable",

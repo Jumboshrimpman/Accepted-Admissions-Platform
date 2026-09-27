@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { xavierCalendarIdentityAlignment } from "./lib/calendar-profile";
+import { reconnectStoredGoogleCalendarGrants } from "./lib/calendar-persistence";
 import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
@@ -36,7 +37,18 @@ void ensureRyoTaitoParentMirror()
       void ensureOfficialExtractsImported()
         .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
         .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
-        .then(() => retireDuplicateXavierIdentities())
+        .then(() =>
+          retireDuplicateXavierIdentities().catch((err) =>
+            logger.warn({ err }, "Xavier identity retirement skipped"),
+          ),
+        )
+        .then(() => reconnectStoredGoogleCalendarGrants())
+        .then((healed) =>
+          logger.info(
+            { event: "calendar.grants_kept_connected", ...healed },
+            "Stored Google Calendar refresh tokens kept connected",
+          ),
+        )
         .then(() => ensureXavierSatCapabilitySession())
         .then((result) => logger.info(result, "Xavier SAT capability session ready"))
         .then(() =>

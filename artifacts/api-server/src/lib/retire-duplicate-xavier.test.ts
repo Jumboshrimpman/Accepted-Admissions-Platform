@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { describeStoredGoogleCalendarConnection, encryptedRefreshTokenAfterConnect, shouldAdoptLoserCalendarConnection, shouldSelfHealGoogleCalendarConnection } from "./calendar-connection-adopt.ts";
+import { adoptedGoogleCalendarConnectionStatus, describeStoredGoogleCalendarConnection, encryptedRefreshTokenAfterConnect, shouldAdoptLoserCalendarConnection, shouldSelfHealGoogleCalendarConnection, storedRefreshTokenKeepsCalendarConnected } from "./calendar-connection-adopt.ts";
 
 test("Xavier identity remaps adopt a loser refresh token only when the winner has none", () => {
   assert.equal(
@@ -58,6 +58,62 @@ test("Google returns no new refresh_token on reconnect keeps prior", () => {
   );
   assert.equal(encryptedRefreshTokenAfterConnect(null, undefined, encrypt), null);
   assert.equal(encryptedRefreshTokenAfterConnect(undefined, "fresh-refresh", encrypt), "enc:fresh-refresh");
+});
+
+test("boot and adopt keep a stored refresh token looking connected", () => {
+  assert.equal(
+    storedRefreshTokenKeepsCalendarConnected({
+      status: "disconnected",
+      calendarId: null,
+      encryptedRefreshToken: "stored-refresh",
+    }),
+    true,
+  );
+  assert.equal(
+    storedRefreshTokenKeepsCalendarConnected({
+      status: "connected",
+      calendarId: "primary",
+      encryptedRefreshToken: "stored-refresh",
+    }),
+    true,
+  );
+  assert.equal(
+    storedRefreshTokenKeepsCalendarConnected({
+      status: "disconnected",
+      calendarId: "primary",
+      encryptedRefreshToken: null,
+    }),
+    false,
+  );
+  assert.equal(
+    storedRefreshTokenKeepsCalendarConnected({
+      status: "disconnected",
+      calendarId: null,
+      encryptedRefreshToken: "   ",
+    }),
+    true,
+  );
+  assert.equal(
+    adoptedGoogleCalendarConnectionStatus({
+      status: "disconnected",
+      encryptedRefreshToken: "loser-refresh",
+    }),
+    "connected",
+  );
+  assert.equal(
+    adoptedGoogleCalendarConnectionStatus({
+      status: "disconnected",
+      encryptedRefreshToken: null,
+    }),
+    "disconnected",
+  );
+  assert.equal(
+    adoptedGoogleCalendarConnectionStatus({
+      status: "connected",
+      encryptedRefreshToken: null,
+    }),
+    "connected",
+  );
 });
 
 test("stranded refresh token can self-heal until the tutor disconnects", () => {

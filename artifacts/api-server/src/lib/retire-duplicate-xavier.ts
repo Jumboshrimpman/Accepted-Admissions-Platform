@@ -10,8 +10,14 @@ import {
   tutorProfilesTable,
   usersTable,
 } from "@workspace/db";
-import { adoptGoogleCalendarConnection } from "./calendar-persistence";
-import { shouldAdoptLoserCalendarConnection } from "./calendar-connection-adopt";
+import {
+  adoptGoogleCalendarConnection,
+  reconnectStoredGoogleCalendarGrants,
+} from "./calendar-persistence";
+import {
+  connectionHasRefreshToken,
+  shouldAdoptLoserCalendarConnection,
+} from "./calendar-connection-adopt";
 import {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
@@ -30,6 +36,14 @@ function normalizeEmail(email: string): string {
 }
 
 export async function retireDuplicateXavierIdentities(): Promise<void> {
+  try {
+    await retireDuplicateXavierIdentityRecords();
+  } finally {
+    await reconnectStoredGoogleCalendarGrants();
+  }
+}
+
+async function retireDuplicateXavierIdentityRecords(): Promise<void> {
   const users = await db.select().from(usersTable);
   const winner =
     users.find((user) => user.clerkUserId === CANONICAL_XAVIER_CLERK_USER_ID) ??
@@ -191,10 +205,23 @@ export async function retireDuplicateXavierIdentities(): Promise<void> {
       if (shouldAdoptLoserCalendarConnection(winnerConnection, loserConnection)) {
         await adoptGoogleCalendarConnection(profile.id, winnerProfile.id);
       } else if (!winnerConnection && loserConnection) {
+        const movedAt = new Date();
         await db
           .update(calendarConnectionsTable)
-          .set({ tutorProfileId: winnerProfile.id, updatedAt: new Date() })
+          .set({
+            tutorProfileId: winnerProfile.id,
+            ...(connectionHasRefreshToken(loserConnection)
+              ? { status: "connected" as const }
+              : {}),
+            updatedAt: movedAt,
+          })
           .where(eq(calendarConnectionsTable.tutorProfileId, profile.id));
+        if (connectionHasRefreshToken(loserConnection)) {
+          await db
+            .update(tutorProfilesTable)
+            .set({ calendarStatus: "connected", updatedAt: movedAt })
+            .where(eq(tutorProfilesTable.id, winnerProfile.id));
+        }
       }
       await db
         .update(tutorCompensationRatesTable)
@@ -264,6 +291,7 @@ export async function retireDuplicateXavierIdentities(): Promise<void> {
         .where(eq(portalAccessGrantsTable.id, grant.id));
     }
   }
+
 }
 
 export function isRetiredOverviewUser(user: {
