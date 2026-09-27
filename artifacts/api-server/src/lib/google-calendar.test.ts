@@ -9,6 +9,7 @@ const {
   calendarBusyFailureAction,
   calendarCredentialFailureAction,
   calendarFailureAfterRefreshAction,
+  calendarGrantDisconnectDecision,
   calendarOAuthProbeOutcome,
   callGoogleCalendarRecovering,
   classifyGoogleTokenRefreshFailure,
@@ -897,4 +898,226 @@ test("oauth probe keeps the stored grant unless refresh returns invalid_grant", 
     calendarOAuthProbeOutcome({ ok: false, action: "disconnect", reason: "refresh_rejected" }),
     "reconnect",
   );
+  assert.equal(
+    calendarGrantDisconnectDecision({
+      hasRefreshToken: true,
+      reason: "refresh_unavailable",
+    }),
+    "keep_connected",
+  );
+});
+
+test("a stored refresh token is revoked only after invalid_grant", () => {
+  for (const reason of [
+    "refresh_unavailable",
+    "freebusy_transient",
+    "freebusy_transient_after_refresh",
+    "freebusy_auth_after_refresh",
+    "calendar_transient",
+    "calendar_transient_after_refresh",
+    "calendar_auth_after_refresh",
+    "calendar_auth_without_refresh_token",
+    "freebusy_auth_without_refresh_token",
+    "access_expired_without_refresh_token",
+  ]) {
+    assert.equal(
+      calendarGrantDisconnectDecision({ hasRefreshToken: true, reason }),
+      "keep_connected",
+      reason,
+    );
+  }
+  assert.equal(
+    calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: "refresh_rejected" }),
+    "revoke",
+  );
+  assert.equal(
+    calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: "credential_failure" }),
+    "revoke",
+  );
+  assert.equal(
+    calendarGrantDisconnectDecision({
+      hasRefreshToken: false,
+      reason: "freebusy_auth_without_refresh_token",
+    }),
+    "disconnect_without_grant",
+  );
+  assert.equal(
+    calendarGrantDisconnectDecision({
+      hasRefreshToken: false,
+      reason: "calendar_auth_without_refresh_token",
+    }),
+    "disconnect_without_grant",
+  );
+  assert.equal(
+    calendarGrantDisconnectDecision({
+      hasRefreshToken: false,
+      reason: "access_expired_without_refresh_token",
+    }),
+    "disconnect_without_grant",
+  );
+});
+
+test("freeBusy 403 and 500 keep a stored refresh token connected", async () => {
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") {
+      return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
+    }
+    return jsonResponse(403, {
+      error: { code: 403, status: "PERMISSION_DENIED", message: "insufficientPermissions" },
+    });
+  }, async () => {
+    const read = await listGoogleBusyWindowsRecovering({
+      accessToken: "stale-access",
+      refreshToken: "stored-refresh",
+      calendarId: "primary",
+      timeMin: new Date("2026-09-28T00:00:00.000Z"),
+      timeMax: new Date("2026-09-29T00:00:00.000Z"),
+    });
+    assert.equal(read.ok, false);
+    if (!read.ok) {
+      assert.equal(read.action, "unavailable");
+      assert.equal(read.reason, "freebusy_auth_after_refresh");
+      assert.equal(
+        calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: read.reason }),
+        "keep_connected",
+      );
+    }
+  });
+
+  let tokenCalls = 0;
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") tokenCalls += 1;
+    return jsonResponse(500, { error: { code: 500, message: "Backend Error" } });
+  }, async () => {
+    const read = await listGoogleBusyWindowsRecovering({
+      accessToken: "still-valid",
+      refreshToken: "stored-refresh",
+      calendarId: "primary",
+      timeMin: new Date("2026-09-28T00:00:00.000Z"),
+      timeMax: new Date("2026-09-29T00:00:00.000Z"),
+    });
+    assert.equal(tokenCalls, 0);
+    assert.deepEqual(read, { ok: false, action: "unavailable", reason: "freebusy_transient" });
+    assert.equal(
+      calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: "freebusy_transient" }),
+      "keep_connected",
+    );
+  });
+});
+
+test("Meet event create 401 refreshes once and does not disconnect a stored grant", async () => {
+  let eventWrites = 0;
+  await withGoogleOAuthFetch(async (input, init) => {
+    const url = String(input);
+    if (url === "https://oauth2.googleapis.com/token") {
+      return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
+    }
+    assert.match(url, /\/calendar\/v3\/calendars\/primary\/events\?sendUpdates=all$/);
+    assert.equal(init?.method, "POST");
+    eventWrites += 1;
+    const authorization = new Headers(init?.headers).get("authorization");
+    if (authorization !== "Bearer fresh-access") {
+      return jsonResponse(401, {
+        error: { code: 401, message: "Invalid Credentials", status: "UNAUTHENTICATED" },
+      });
+    }
+    return jsonResponse(200, {
+      id: "meet-event-1",
+      hangoutLink: "https://meet.google.com/abc-defg-hij",
+    });
+  }, async () => {
+    const result = await callGoogleCalendarRecovering({
+      accessToken: "stale-access",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: new Date(Date.now() + 30 * 60_000),
+      call: (token) =>
+        googleCalendar.createGoogleEvent(token, "primary", {
+          summary: "SAT session",
+          conferenceData: { createRequest: { requestId: "meet-1" } },
+        }),
+    });
+    assert.equal(eventWrites, 2);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.refreshed, true);
+      assert.equal(result.value.id, "meet-event-1");
+      assert.equal(result.rotatedRefreshToken, undefined);
+    }
+  });
+});
+
+test("Meet event create 500 keeps a stored refresh token connected", async () => {
+  let tokenCalls = 0;
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") {
+      tokenCalls += 1;
+      return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
+    }
+    return jsonResponse(500, { error: { code: 500, message: "Backend Error" } });
+  }, async () => {
+    const result = await callGoogleCalendarRecovering({
+      accessToken: "still-valid",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: new Date(Date.now() + 30 * 60_000),
+      call: (token) => googleCalendar.createGoogleEvent(token, "primary", { summary: "SAT session" }),
+    });
+    assert.equal(tokenCalls, 0);
+    assert.deepEqual(result, { ok: false, action: "unavailable", reason: "calendar_transient" });
+    assert.equal(
+      calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: "calendar_transient" }),
+      "keep_connected",
+    );
+  });
+});
+
+test("Meet event create disconnects only when refresh returns invalid_grant", async () => {
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") {
+      return jsonResponse(400, {
+        error: "invalid_grant",
+        error_description: "Token has been expired or revoked.",
+      });
+    }
+    return jsonResponse(401, {});
+  }, async () => {
+    const result = await callGoogleCalendarRecovering({
+      accessToken: "stale-access",
+      refreshToken: "revoked-refresh",
+      accessTokenExpiresAt: new Date(Date.now() + 30 * 60_000),
+      call: (token) => googleCalendar.createGoogleEvent(token, "primary", { summary: "SAT session" }),
+    });
+    assert.deepEqual(result, { ok: false, action: "disconnect", reason: "refresh_rejected" });
+    assert.equal(
+      calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: "refresh_rejected" }),
+      "revoke",
+    );
+  });
+});
+
+test("a calendar invalid_grant after a successful refresh does not revoke the grant", async () => {
+  let tokenCalls = 0;
+  await withGoogleOAuthFetch(async (input) => {
+    if (String(input) === "https://oauth2.googleapis.com/token") {
+      tokenCalls += 1;
+      return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
+    }
+    return jsonResponse(401, { error: "invalid_grant" });
+  }, async () => {
+    const result = await callGoogleCalendarRecovering({
+      accessToken: "stale-access",
+      refreshToken: "stored-refresh",
+      accessTokenExpiresAt: new Date(Date.now() + 30 * 60_000),
+      call: (token) => googleCalendar.createGoogleEvent(token, "primary", { summary: "SAT session" }),
+    });
+    assert.equal(tokenCalls, 1);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.action, "unavailable");
+      assert.equal(result.reason, "calendar_auth_after_refresh");
+      assert.equal(
+        calendarGrantDisconnectDecision({ hasRefreshToken: true, reason: result.reason }),
+        "keep_connected",
+      );
+    }
+  });
 });

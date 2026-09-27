@@ -79,6 +79,30 @@ export function shouldSelfHealGoogleCalendarConnection(connection: {
   );
 }
 
+/**
+ * Boot and identity cleanup must not leave a stored refresh token looking disconnected.
+ * A tutor-initiated disconnect clears the token, so it does not match.
+ */
+export function storedRefreshTokenKeepsCalendarConnected(connection: {
+  status?: string | null;
+  calendarId?: string | null;
+  encryptedRefreshToken?: string | null;
+} | null | undefined): boolean {
+  return Boolean(connection && connectionHasRefreshToken(connection));
+}
+
+/**
+ * Moving a duplicate's grant onto the canonical profile. A refresh token is a
+ * live grant, even if the source row was previously marked disconnected.
+ */
+export function adoptedGoogleCalendarConnectionStatus(from: {
+  status?: string | null;
+  encryptedRefreshToken?: string | null;
+} | null | undefined): "connected" | "disconnected" {
+  if (connectionHasRefreshToken(from)) return "connected";
+  return from?.status === "connected" ? "connected" : "disconnected";
+}
+
 export function shouldAdoptLoserCalendarConnection(
   winner: {
     status?: string | null;
