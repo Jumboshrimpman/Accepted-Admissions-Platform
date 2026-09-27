@@ -116,6 +116,7 @@ describe("student session quiz path", () => {
     );
     expect(screen.queryByTestId("opened-miss")).toBeNull();
     expect(screen.getByText(/Open a miss or similar problem and work it with your tutor/)).toBeTruthy();
+    expect(screen.queryByText(/has not published (this |the )?sequence/i)).toBeNull();
   });
 
   test("hides clean-question wording on the student session", () => {
