@@ -3549,7 +3549,7 @@ async function finalizeAttemptResult(
     if (item.response) {
       await db
         .update(responsesTable)
-        .set({ correct: flagged || reported ? null : correct })
+        .set({ correct: reported ? null : correct })
         .where(eq(responsesTable.id, item.response.id));
     }
   }
@@ -3589,7 +3589,7 @@ async function finalizeAttemptResult(
   });
   const scoredForAnalysis = items.filter((item, index) => {
     const scored = scoredItems[index];
-    return !item.flagged && !reportedQuestionIds.has(item.questionId) && !scored?.unusable;
+    return !reportedQuestionIds.has(item.questionId) && !scored?.unusable;
   });
   const breakdown = skillBreakdownFromItems(scoredForAnalysis);
   const homeworkKind = await homeworkKindForAssignment(attempt.assignment.id);

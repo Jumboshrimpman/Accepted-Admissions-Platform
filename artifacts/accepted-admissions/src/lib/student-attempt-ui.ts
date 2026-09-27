@@ -152,7 +152,7 @@ export type PauseResponseDraft = {
   flagged: boolean;
 };
 
-/** Answers to send with pause so Save for later cannot drop a selection that has not autosaved yet. */
+/** Answers to send with pause so hiding the quiz cannot drop a selection that has not autosaved yet. */
 export function quizResponsesForPause(
   local: Record<string, { finalAnswer?: string | null; flagged?: boolean } | undefined>,
 ): PauseResponseDraft[] {
@@ -169,20 +169,4 @@ export function quizResponsesForPause(
     });
   }
   return drafts;
-}
-
-/**
- * After a successful save, leave the player for the session that owns the quiz
- * when that route is known. Otherwise return to the portal quiz list.
- */
-export function saveForLaterExitHref(input: {
-  sessionId?: string | null;
-  courseId?: string | null;
-}): string {
-  const sessionId = input.sessionId?.trim();
-  const courseId = input.courseId?.trim();
-  if (sessionId && courseId) {
-    return `/portal/courses/${courseId}/sessions/${sessionId}`;
-  }
-  return "/portal";
 }

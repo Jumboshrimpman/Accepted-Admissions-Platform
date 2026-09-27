@@ -77,7 +77,7 @@ async function jsonRequest(
   };
 }
 
-test("save for later pauses an attempt and resume restores answers, flags, and question index", async () => {
+test("flagging a response leaves the attempt active, and pause still restores answers", async () => {
   const fixture = await createDashboardRoleFixture();
   const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
   const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
@@ -196,7 +196,9 @@ test("save for later pauses an attempt and resume restores answers, flags, and q
     );
     assert.equal(stillActive.response.status, 200, JSON.stringify(stillActive.body));
     assert.equal(stillActive.body.status, "active");
+    assert.notEqual(stillActive.body.status, "submitted");
     assert.equal(stillActive.body.responses?.length, 1);
+    assert.equal(stillActive.body.responses?.[0]?.flagged, true);
 
     const paused = await jsonRequest(
       studentServer.baseUrl,
