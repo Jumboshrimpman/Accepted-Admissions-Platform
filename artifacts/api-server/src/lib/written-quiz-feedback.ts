@@ -166,13 +166,13 @@ export function practiceAdvice(theme: string): PracticeAdvice {
       miss: "Say the quantity the question wants, in words, and point to the row, bar, or percent that supplies it. Then compute only that. A nearby number from the same display is the usual trap.",
     };
   }
-  if (key === "math") {
+  if (key === "math" || key === "sat math") {
     return {
       hit: "The Math work held up. Keep writing what the problem is asking before you calculate.",
       miss: "On the Math misses, write what is being asked and what you already know before you calculate. Check that the number you produce is the quantity in the question, not an intermediate step.",
     };
   }
-  if (key === "reading and writing") {
+  if (key === "reading and writing" || key === "sat reading and writing") {
     return {
       hit: "Reading and Writing held up. Keep tying each choice back to a line in the text.",
       miss: "On the Reading and Writing misses, point to the line that decides the item and say how the correct choice follows from it. If you cannot point to that line, the choice is a guess.",
@@ -194,6 +194,81 @@ export function practiceAdvice(theme: string): PracticeAdvice {
     hit: "You chose the answer that fit. When you look back, say in one sentence what made it fit so the same move is available next time.",
     miss: "Compare the choice you marked with the correct one. Say what the question was asking, and what your choice assumed instead. That comparison is the practice.",
   };
+}
+
+/** What a repeated miss means. Coaching, not a question title. */
+export function patternMeaning(theme: string): string {
+  const key = theme.toLowerCase();
+  if (key.includes("transition")) {
+    return "That means the word you chose did not match how the two ideas actually relate.";
+  }
+  if (
+    key.includes("boundar") ||
+    key.includes("punctuation") ||
+    key.includes("grammar") ||
+    key.includes("form, structure") ||
+    key.includes("form and structure") ||
+    key.includes("conventions")
+  ) {
+    return "That means a sentence was joined or split in a way the grammar does not allow.";
+  }
+  if (key.includes("evidence") || key.includes("textual") || key.includes("quotation")) {
+    return "That means the choice was not the line that actually proves the claim.";
+  }
+  if (key.includes("inference") || key.includes("implied")) {
+    return "That means a conclusion was added that the passage never licenses.";
+  }
+  if (
+    key.includes("words in context") ||
+    key.includes("vocabulary") ||
+    key.includes("precision") ||
+    key.includes("word choice")
+  ) {
+    return "That means a familiar synonym was chosen instead of the word this sentence needs.";
+  }
+  if (
+    key.includes("linear") ||
+    key.includes("equation") ||
+    key.includes("algebra") ||
+    key.includes("system")
+  ) {
+    return "That means the equation that got solved was not the relationship the problem described.";
+  }
+  if (
+    key.includes("quadratic") ||
+    key.includes("nonlinear") ||
+    key.includes("function") ||
+    key.includes("advanced math") ||
+    key.includes("exponential")
+  ) {
+    return "That means the expression was rewritten before it was clear what the question wanted.";
+  }
+  if (key.includes("geometry") || key.includes("triangle") || key.includes("circle") || key.includes("trig")) {
+    return "That means a formula was used that does not match the relationship in the figure.";
+  }
+  if (
+    key.includes("problem-solving") ||
+    key.includes("problem solving") ||
+    key.includes("data") ||
+    key.includes("percent") ||
+    key.includes("ratio") ||
+    key.includes("statistics")
+  ) {
+    return "That means a nearby number from the display was used instead of the quantity the question asked for.";
+  }
+  if (key === "math" || key === "sat math") {
+    return "That means the number produced was not the quantity the question asked for.";
+  }
+  if (key === "reading and writing" || key === "sat reading and writing") {
+    return "That means a choice was made without a line in the text that decides it.";
+  }
+  if (key.includes("writing") || key.includes("task response")) {
+    return "That means the response left the task or added facts that were not given.";
+  }
+  if (key.includes("ielts") || key.includes("true / false") || key.includes("matching heading") || key.includes("reading")) {
+    return "That means the choice quietly changes the claim the passage actually makes.";
+  }
+  return "That means the choice assumed something the question was not asking.";
 }
 
 export type WrittenQuestionNote = {
@@ -255,10 +330,28 @@ function headline(correctCount: number, totalCount: number, score: number): stri
   return `You finished with ${ratio} correct, about ${pct}%. This set was difficult. The useful part is the pattern in the misses, which tells us what to practice next.`;
 }
 
-function snippetList(examples: string[]): string {
-  if (examples.length === 0) return "";
-  if (examples.length === 1) return `, including “${examples[0]}”`;
-  return `, including “${examples[0]}” and “${examples[1]}”`;
+/** Own paragraph in the student letter. The result page renders everything after it as prose. */
+export const MISTAKE_PATTERNS_HEADING = "Mistake patterns";
+
+function patternOpener(label: string, missCount: number): string {
+  const count = missCount === 1 ? "one miss" : `${missCount} misses`;
+  return `The pattern is ${label}. It showed up on ${count}.`;
+}
+
+function patternParagraph(cluster: { label: string; missCount: number }): string {
+  const advice = practiceAdvice(cluster.label);
+  return `${patternOpener(cluster.label, cluster.missCount)} ${patternMeaning(cluster.label)} ${advice.miss}`;
+}
+
+function practiceOrder(labels: string[], noun: string): string {
+  if (labels.length === 0) return "";
+  if (labels.length === 1) {
+    return `Before the next ${noun}, stay with ${labels[0]} until you can say what the pattern was and what you will do differently.`;
+  }
+  const [first, ...rest] = labels;
+  const tail =
+    rest.length === 1 ? rest[0]! : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`;
+  return `Before the next ${noun}, start with ${first}, then ${tail}. For each one, say what the pattern was and what you will do differently before you move on.`;
 }
 
 function nextPracticeNoun(kind: WrittenFeedbackKind): string {
@@ -340,11 +433,11 @@ export function buildStudentWrittenFeedback(input: {
   const sections = buildSectionBreakdown(items);
   const stats = themeStats(items);
   const top = clusters[0] ?? null;
-  const second = clusters[1] ?? null;
   const strength =
     stats.find((row) => row.accuracy >= 70 && row.label !== top?.label) ?? null;
   const blanks = items.filter((item) => !item.finalAnswer?.trim() && !item.correct).length;
 
+  const noun = nextPracticeNoun(kind);
   const pattern: string[] = [];
   if (items.length === 0) {
     pattern.push(
@@ -354,16 +447,14 @@ export function buildStudentWrittenFeedback(input: {
     const held = strength ? ` ${strength.label} is in good shape (${strength.correct} of ${strength.total}).` : "";
     pattern.push(`Nothing in this set needs a repair pass.${held}`);
   } else {
-    const countNoun = top.missCount === 1 ? "item" : "items";
-    pattern.push(
-      `The misses gathered around ${top.label} — ${top.missCount} ${countNoun}${snippetList(top.examples)}. Those are the ones to reopen first.`,
-    );
-    if (second) {
-      const secondNoun = second.missCount === 1 ? "item" : "items";
-      pattern.push(`After that, ${second.label} also showed up on ${second.missCount} ${secondNoun}.`);
+    pattern.push(MISTAKE_PATTERNS_HEADING);
+    for (const cluster of clusters) {
+      pattern.push(patternParagraph(cluster));
     }
     if (strength) {
-      pattern.push(`${strength.label} was steadier (${strength.correct} of ${strength.total}).`);
+      pattern.push(
+        `${strength.label} was steadier (${strength.correct} of ${strength.total}). Leave that alone while you repair the patterns above.`,
+      );
     }
     if (sections.length >= 2) {
       const sectionSentence = sections
@@ -372,29 +463,23 @@ export function buildStudentWrittenFeedback(input: {
             `${row.label} was about ${Math.round(row.accuracy)}% (${row.missCount} miss${row.missCount === 1 ? "" : "es"})`,
         )
         .join(", and ");
-      pattern.push(`Across the sections, ${sectionSentence}.`);
+      pattern.push(`Across the sections, ${sectionSentence}. That only shows where the patterns sit.`);
     }
-  }
-  if (blanks > 0) {
-    pattern.push(
-      blanks === 1
-        ? "One item was left blank. A blank cannot be coached, so on the next pass commit to a choice even when you are unsure."
-        : `${blanks} items were left blank. A blank cannot be coached, so on the next pass commit to a choice even when you are unsure.`,
-    );
-  }
-
-  const noun = nextPracticeNoun(kind);
-  let nextStep: string;
-  if (!top) {
-    const stretch = strength?.label ?? "these ideas";
-    nextStep = `Use the next session to stretch into harder versions of ${stretch} so the easy wins turn into a higher ceiling, rather than another pass over questions you already know how to do.`;
-  } else {
-    const advice = practiceAdvice(top.label);
-    const followUp = second ? ` Then give the same kind of attention to ${second.label}.` : "";
-    nextStep = `Before the next ${noun}, work ${top.label} like this. ${advice.miss}${followUp}`;
+    if (blanks > 0) {
+      pattern.push(
+        blanks === 1
+          ? "One item was left blank. A blank cannot be coached, so on the next pass commit to a choice even when you are unsure."
+          : `${blanks} items were left blank. A blank cannot be coached, so on the next pass commit to a choice even when you are unsure.`,
+      );
+    }
+    pattern.push(practiceOrder(clusters.map((cluster) => cluster.label), noun));
   }
 
-  return [headline(input.correctCount, input.totalCount, input.score), pattern.join(" "), nextStep, honestyParagraph(kind, items)]
+  const nextStep = top
+    ? null
+    : `Use the next session to stretch into harder versions of ${strength?.label ?? "these ideas"} so the easy wins turn into a higher ceiling, rather than another pass over questions you already know how to do.`;
+
+  return [headline(input.correctCount, input.totalCount, input.score), honestyParagraph(kind, items), ...pattern, nextStep]
     .filter((part): part is string => Boolean(part && part.trim()))
     .join("\n\n");
 }

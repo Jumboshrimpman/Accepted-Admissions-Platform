@@ -82,7 +82,7 @@ import {
   repairMichelleQuizQuestionFields,
   shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
-import { feedbackParagraphs, writtenQuestionNote } from "@/lib/written-quiz-feedback";
+import { splitWrittenFeedback, writtenQuestionNote } from "@/lib/written-quiz-feedback";
 
 function QuizRichText({
   text,
@@ -167,6 +167,37 @@ function answerText(
   return displayAnswerLabel(answer, choices);
 }
 
+function WrittenFeedbackLetter({ feedback, label }: { feedback: string; label: string }) {
+  const { intro, mistakePatterns } = splitWrittenFeedback(feedback);
+  return (
+    <div className="rounded-xl border bg-muted/30 p-4" data-testid="written-feedback">
+      <div className="mb-2 flex items-center gap-2 font-semibold">
+        <Brain className="h-4 w-4 text-accent" /> Feedback
+      </div>
+      {intro.length > 0 ? (
+        <div className="space-y-3 text-sm leading-relaxed text-foreground">
+          {intro.map((paragraph, index) => (
+            <p key={index}>{paragraph}</p>
+          ))}
+        </div>
+      ) : null}
+      {mistakePatterns.length > 0 ? (
+        <div className="mt-4 space-y-3" data-testid="mistake-patterns">
+          <h3 className="text-sm font-semibold">Mistake patterns</h3>
+          <div className="space-y-3 text-sm leading-relaxed text-foreground">
+            {mistakePatterns.map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <Badge variant="outline" className="mt-3">
+        {label} · shared with your tutor
+      </Badge>
+    </div>
+  );
+}
+
 function ResultView({ result }: { result: AttemptResult }) {
   const repairStackedMath = shouldRepairMichelleQuizMath({
     clientName: result.studentName,
@@ -243,19 +274,7 @@ function ResultView({ result }: { result: AttemptResult }) {
           {showEstimated && estimated?.label ? (
             <p className="text-sm text-muted-foreground">{estimated.label}</p>
           ) : null}
-          <div className="rounded-xl border bg-muted/30 p-4" data-testid="written-feedback">
-            <div className="mb-2 flex items-center gap-2 font-semibold">
-              <Brain className="h-4 w-4 text-accent" /> Feedback
-            </div>
-            <div className="space-y-3 text-sm leading-relaxed text-foreground">
-              {feedbackParagraphs(result.studentFeedback).map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
-            <Badge variant="outline" className="mt-3">
-              {result.analysis.label} · shared with your tutor
-            </Badge>
-          </div>
+          <WrittenFeedbackLetter feedback={result.studentFeedback} label={result.analysis.label} />
           <div className="grid gap-4 md:grid-cols-2">
             <Card className="bg-emerald-50/50 dark:bg-emerald-950/20">
               <CardHeader className="pb-2">

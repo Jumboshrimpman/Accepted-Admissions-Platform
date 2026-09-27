@@ -31,6 +31,22 @@ export function feedbackParagraphs(feedback: string | null | undefined): string[
     .filter(Boolean);
 }
 
+/** Matches the heading emitted by the API letter. Everything after it is pattern prose. */
+export const MISTAKE_PATTERNS_HEADING = "Mistake patterns";
+
+export function splitWrittenFeedback(feedback: string | null | undefined): {
+  intro: string[];
+  mistakePatterns: string[];
+} {
+  const paragraphs = feedbackParagraphs(feedback);
+  const index = paragraphs.indexOf(MISTAKE_PATTERNS_HEADING);
+  if (index === -1) return { intro: paragraphs, mistakePatterns: [] };
+  return {
+    intro: paragraphs.slice(0, index),
+    mistakePatterns: paragraphs.slice(index + 1),
+  };
+}
+
 function sectionTheme(item: WrittenFeedbackItem): "Math" | "Reading and Writing" | null {
   const haystack = `${item.subject ?? ""} ${item.domain ?? ""} ${item.skill ?? ""}`.toLowerCase();
   if (/math|algebra|geometry|problem-solving|problem solving/.test(haystack)) return "Math";

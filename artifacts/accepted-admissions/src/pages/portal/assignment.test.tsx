@@ -1079,8 +1079,13 @@ describe("student attempt UI", () => {
         nextFocus: ["Practice Transitions next."],
         feedback: "Tutor brief stays off the student letter.",
       },
-      studentFeedback:
-        "You finished with 1 of 2 correct, about 50%. The misses are concentrated enough to practice on purpose instead of redoing the whole quiz.\n\nThe misses gathered around Transitions — 1 item, including “Which transition best connects the paragraphs?”. Those are the ones to reopen first.\n\nBefore the next timed pre-work set, work Transitions like this. Read the ideas on both sides of the blank and name the relationship they actually have: contrast, cause, example, or sequence.",
+      studentFeedback: [
+        "You finished with 1 of 2 correct, about 50%. The misses are concentrated enough to practice on purpose instead of redoing the whole quiz.",
+        "This pre-work reports accuracy only. It is not an official SAT score.",
+        "Mistake patterns",
+        "The pattern is Transitions. It showed up on one miss. That means the word you chose did not match how the two ideas actually relate. Read the ideas on both sides of the blank and name the relationship they actually have: contrast, cause, example, or sequence.",
+        "Before the next timed pre-work set, stay with Transitions until you can say what the pattern was and what you will do differently.",
+      ].join("\n\n"),
       homeworkKind: "routine",
       scoreReporting: "none",
       estimatedSatScore: null,
@@ -1090,6 +1095,12 @@ describe("student attempt UI", () => {
     expect(letter).toMatch(/You finished with 1 of 2 correct/);
     expect(letter).toMatch(/contrast, cause, example, or sequence/);
     expect(letter).not.toMatch(/Tutor brief stays off/);
+    const patterns = screen.getByTestId("mistake-patterns");
+    expect(patterns.querySelector("ul")).toBeNull();
+    expect(patterns.querySelectorAll("p").length).toBeGreaterThan(0);
+    expect(patterns.textContent).toMatch(/The pattern is Transitions/);
+    expect(patterns.textContent).toMatch(/did not match how the two ideas actually relate/);
+    expect(patterns.textContent).not.toMatch(/Which transition best connects/);
     const notes = screen.getAllByTestId("written-item-note").map((node) => node.textContent ?? "");
     expect(notes.some((note) => /Note:/.test(note) && /Transitions/.test(note) && /relationship/.test(note))).toBe(
       true,
