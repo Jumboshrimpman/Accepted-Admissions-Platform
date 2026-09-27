@@ -7,6 +7,7 @@ import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
 import { resetSamaXavierSatCapabilityAttempts } from "./lib/reset-sama-xavier-capability";
 import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-up";
+import { ensureGeometryAreaVolumeFollowUp } from "./lib/geometry-area-volume-follow-up";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 
 const rawPort = process.env["PORT"];
@@ -62,6 +63,8 @@ void ensureRyoTaitoParentMirror()
         )
         .then(() => ensureMichelleGeometryFollowUp())
         .then((result) => logger.info(result, "Michelle geometry follow-up ready"))
+        .then(() => ensureGeometryAreaVolumeFollowUp())
+        .then((result) => logger.info(result, "Geometry area and volume follow-up ready"))
         .then(() => xavierCalendarIdentityAlignment())
         .then((alignment) =>
           logger.info(

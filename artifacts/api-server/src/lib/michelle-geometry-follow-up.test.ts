@@ -296,3 +296,145 @@ test(
     }
   },
 );
+
+test(
+  "a submitted Geometry SAT Questions attempt is not rewritten",
+  { skip: !hasDatabase },
+  async () => {
+    const { eq, inArray } = await import("drizzle-orm");
+    const {
+      assignmentQuestionsTable,
+      assignmentsTable,
+      attemptsTable,
+      coursesTable,
+      db,
+      questionsTable,
+      sessionsTable,
+      usersTable,
+    } = await import("@workspace/db");
+    const { ensureMichelleGeometryFollowUp } = await import(
+      "./michelle-geometry-follow-up.ts"
+    );
+
+    const suffix = randomUUID().slice(0, 8);
+    const michelleEmail = `michelle-history-${suffix}@example.com`;
+    const xavierEmail = `xavier-history-${suffix}@example.com`;
+    const michelleClerk = `user_michelle_history_${suffix}`;
+    const xavierClerk = `user_xavier_history_${suffix}`;
+    const createdUserIds: string[] = [];
+    const createdSessionIds: string[] = [];
+    const createdCourseIds: string[] = [];
+
+    const [course] = await db
+      .insert(coursesTable)
+      .values({
+        title: `Geometry history ${suffix}`,
+        subject: "SAT",
+        term: "Fall 2026",
+        status: "active",
+      })
+      .returning();
+    createdCourseIds.push(course!.id);
+    const insertUser = async (
+      email: string,
+      displayName: string,
+      role: "student" | "tutor",
+      clerkUserId: string,
+    ) => {
+      const [created] = await db
+        .insert(usersTable)
+        .values({ clerkUserId, email, displayName, role })
+        .returning();
+      createdUserIds.push(created!.id);
+      return created!;
+    };
+    const michelle = await insertUser(michelleEmail, "Michelle Fixture", "student", michelleClerk);
+    const xavier = await insertUser(xavierEmail, "Xavier Fixture", "tutor", xavierClerk);
+    const [session] = await db
+      .insert(sessionsTable)
+      .values({
+        courseId: course!.id,
+        clientUserId: michelle.id,
+        tutorUserId: xavier.id,
+        dateTime: new Date("2026-09-20T12:00:00.000Z"),
+        timezone: "Asia/Dubai",
+        subject: "SAT",
+        title: "Michelle’s SAT Session with Xavier",
+        status: "published",
+        bookingStatus: "confirmed",
+        durationMinutes: 60,
+      })
+      .returning();
+    createdSessionIds.push(session!.id);
+    const identities = {
+      michelleEmail,
+      michelleClerkUserId: michelleClerk,
+      xavierEmail,
+      xavierClerkUserId: xavierClerk,
+    };
+    const now = new Date("2026-09-27T16:00:00.000Z");
+
+    try {
+      const created = await ensureMichelleGeometryFollowUp({ now, identities });
+      assert.equal(created.created, true);
+      await db.insert(attemptsTable).values({
+        assignmentId: created.assignmentId!,
+        userId: michelle.id,
+        status: "submitted",
+        submittedAt: now,
+        score: 75,
+      });
+      const [link] = await db
+        .select({ questionId: assignmentQuestionsTable.questionId })
+        .from(assignmentQuestionsTable)
+        .where(eq(assignmentQuestionsTable.assignmentId, created.assignmentId!))
+        .limit(1);
+      await db
+        .update(questionsTable)
+        .set({ prompt: "completed attempt stem", correctAnswer: "d" })
+        .where(eq(questionsTable.id, link!.questionId));
+      const again = await ensureMichelleGeometryFollowUp({ now, identities });
+      assert.equal(again.created, false);
+      assert.equal(again.refreshed, false);
+      assert.equal(again.updatedQuestionCount, 0);
+      const [kept] = await db
+        .select()
+        .from(questionsTable)
+        .where(eq(questionsTable.id, link!.questionId));
+      assert.equal(kept?.prompt, "completed attempt stem");
+      assert.equal(kept?.correctAnswer, "d");
+    } finally {
+      const assignmentIds = (
+        await db
+          .select({ id: assignmentsTable.id })
+          .from(assignmentsTable)
+          .where(inArray(assignmentsTable.sessionId, createdSessionIds))
+      ).map((row) => row.id);
+      if (assignmentIds.length > 0) {
+        await db.delete(attemptsTable).where(inArray(attemptsTable.assignmentId, assignmentIds));
+        const questionIds = (
+          await db
+            .select({ id: assignmentQuestionsTable.questionId })
+            .from(assignmentQuestionsTable)
+            .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds))
+        ).map((row) => row.id);
+        await db
+          .delete(assignmentQuestionsTable)
+          .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds));
+        if (questionIds.length > 0) {
+          await db.delete(questionsTable).where(inArray(questionsTable.id, questionIds));
+        }
+        await db.delete(assignmentsTable).where(inArray(assignmentsTable.id, assignmentIds));
+      }
+      if (createdSessionIds.length > 0) {
+        await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
+      }
+      if (createdUserIds.length > 0) {
+        await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
+      }
+      if (createdCourseIds.length > 0) {
+        await db.delete(coursesTable).where(inArray(coursesTable.id, createdCourseIds));
+      }
+    }
+  },
+);

@@ -15,6 +15,8 @@ import { zonedDateTimeToUtc } from "./booking.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { assignPreworkFromBank } from "./sat-bank-service.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isLiveBeforeSessionHomework } from "./session-prework-dedupe.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   TAITO_FALL_2026_SESSIONS,
   TAITO_STUDENT_EMAIL,
@@ -295,17 +297,21 @@ async function ensureMembership(
 }
 
 async function attachRoutinePrework(sessionId: string): Promise<boolean> {
-  const [existing] = await db
-    .select({ id: assignmentsTable.id })
+  const existing = await db
+    .select({
+      id: assignmentsTable.id,
+      title: assignmentsTable.title,
+      status: assignmentsTable.status,
+      deliveryPhase: assignmentsTable.deliveryPhase,
+    })
     .from(assignmentsTable)
     .where(
       and(
         eq(assignmentsTable.sessionId, sessionId),
         eq(assignmentsTable.deliveryPhase, "before_session"),
       ),
-    )
-    .limit(1);
-  if (existing) return false;
+    );
+  if (existing.some((row) => isLiveBeforeSessionHomework(row))) return false;
   try {
     await assignPreworkFromBank({
       sessionId,
