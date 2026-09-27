@@ -641,6 +641,7 @@ describe("authenticated role dashboard flows", () => {
           meetingUrl: null,
           calendarEventUrl: null,
           tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Michelle Makarem" },
           readiness: "ready",
           nextAction: "Open session plan",
           currentFocus: "SAT reasoning.",
