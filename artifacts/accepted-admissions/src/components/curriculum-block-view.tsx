@@ -1,6 +1,10 @@
 import type { CurriculumBlock } from "@workspace/api-client-react";
 import { BookOpen, ExternalLink, Target } from "lucide-react";
-import { isUnfinishedHomeworkClientCopy, studentFacingCopy } from "@/lib/quiz-content";
+import {
+  isDeferredUnfinishedPrepBlock,
+  isUnfinishedHomeworkClientCopy,
+  studentFacingCopy,
+} from "@/lib/quiz-content";
 
 function textValue(value: unknown, studentFacing = false): string {
   const text = typeof value === "string" ? value : "";
@@ -14,6 +18,8 @@ export function CurriculumBlockView({
   block: CurriculumBlock;
   studentFacing?: boolean;
 }) {
+  if (studentFacing && isDeferredUnfinishedPrepBlock(block)) return null;
+
   const { kind } = block;
   const config = block.config;
   const libraryKind = textValue(config.libraryKind);
@@ -72,13 +78,18 @@ export function CurriculumBlockView({
     );
   }
   if (kind === "objectives") {
-    const items = Array.isArray(config.items) ? config.items : [];
+    const rawItems: unknown[] = Array.isArray(config.items) ? config.items : [];
+    const items = rawItems.flatMap((item, index) => {
+      const text = studentFacing ? studentFacingCopy(String(item)) : String(item);
+      return text.trim() ? [{ index, text }] : [];
+    });
+    if (items.length === 0) return null;
     return (
       <ul className="space-y-2">
-        {items.map((item, index) => (
-          <li key={index} className="flex gap-2 text-sm">
+        {items.map((item) => (
+          <li key={item.index} className="flex gap-2 text-sm">
             <Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            {studentFacing ? studentFacingCopy(String(item)) : String(item)}
+            {item.text}
           </li>
         ))}
       </ul>

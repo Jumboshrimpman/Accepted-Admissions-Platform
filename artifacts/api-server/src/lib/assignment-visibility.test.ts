@@ -9,6 +9,7 @@ import {
   isAssignmentListedForRole,
   isFullLengthDiagnosticAssignment,
   isLetterMultipleChoiceAnswer,
+  isDeferredUnfinishedPrepBlock,
   isUnfinishedHomeworkClientCopy,
   isXavierSatCapabilityCopy,
   pickDiagnosticKeeper,
@@ -254,11 +255,42 @@ test("Michelle stacked-math repair rebuilds smashed equations only when opted in
 });
 
 test("unfinished-homework copy is rewritten for students and kept detectable", () => {
+  const livePlanCopy =
+    "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";
+  assert.equal(isUnfinishedHomeworkClientCopy(livePlanCopy), true);
   assert.equal(
-    isUnfinishedHomeworkClientCopy(
-      "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
-    ),
+    isUnfinishedHomeworkClientCopy("The live plan handles the unfinished prep."),
     true,
+  );
+  assert.equal(
+    isUnfinishedHomeworkClientCopy("Unfinished homework is handled by the live plan."),
+    true,
+  );
+  assert.equal(
+    isUnfinishedHomeworkClientCopy("Unfinished pre-work is due before the linked session."),
+    false,
+  );
+  assert.equal(studentFacingCopy(livePlanCopy), "");
+  assert.equal(
+    isDeferredUnfinishedPrepBlock({
+      kind: "adaptive_prep",
+      config: { mode: "complete_homework_in_session", title: "AI-native session plan", text: "Ready." },
+    }),
+    true,
+  );
+  assert.equal(
+    isDeferredUnfinishedPrepBlock({
+      kind: "callout",
+      config: { text: livePlanCopy },
+    }),
+    true,
+  );
+  assert.equal(
+    isDeferredUnfinishedPrepBlock({
+      kind: "objectives",
+      config: { title: "Session goals", items: ["Review the misses."] },
+    }),
+    false,
   );
   assert.equal(
     studentSafeAssignmentInstructions(

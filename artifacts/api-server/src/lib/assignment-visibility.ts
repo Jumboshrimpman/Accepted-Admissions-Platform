@@ -69,8 +69,52 @@ export function isUnfinishedHomeworkClientCopy(value: string | null | undefined)
   return (
     /homework was not finished/i.test(text) ||
     /unfinished prep/i.test(text) ||
-    /live plan now carries the unfinished/i.test(text)
+    /unfinished homework/i.test(text) ||
+    /live plan (?:now )?(?:carries|handles) the unfinished/i.test(text) ||
+    /unfinished (?:prep|homework).{0,80}live plan/i.test(text) ||
+    /live plan.{0,80}unfinished (?:prep|homework)/i.test(text)
   );
+}
+
+function collectConfigStrings(value: unknown, out: string[]): void {
+  if (typeof value === "string") {
+    out.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectConfigStrings(item, out);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      collectConfigStrings(item, out);
+    }
+  }
+}
+
+/** Live-plan note stored when before-session work is finished in the meeting. */
+export function isDeferredUnfinishedPrepBlock(block: {
+  kind?: string | null;
+  config?: unknown;
+}): boolean {
+  const config =
+    block.config && typeof block.config === "object" && !Array.isArray(block.config)
+      ? (block.config as Record<string, unknown>)
+      : null;
+  if (config?.mode === "complete_homework_in_session") return true;
+  const strings: string[] = [];
+  collectConfigStrings(block.config, strings);
+  return isUnfinishedHomeworkClientCopy(strings.join(" "));
+}
+
+function withoutDeferredLivePrepSentences(value: string): string {
+  return value
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !isUnfinishedHomeworkClientCopy(sentence))
+    .join(" ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 const CLEAN_QUESTION_PHRASE = /\bclean questions?\b/gi;
@@ -85,7 +129,7 @@ const CLEAN_BANK_SHORTFALL_SENTENCE =
  */
 export function studentFacingCopy(value: string | null | undefined): string {
   if (!value) return "";
-  return value
+  const cleaned = value
     .replace(/\((\d+)\s+clean questions?\)/gi, (_match, count: string) => {
       const total = Number(count);
       return `(${count} ${total === 1 ? "question" : "questions"})`;
@@ -97,6 +141,7 @@ export function studentFacingCopy(value: string | null | undefined): string {
     .replace(CLEAN_BANK_SHORTFALL_SENTENCE, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/ +\n/g, "\n");
+  return withoutDeferredLivePrepSentences(cleaned);
 }
 
 export function studentFacingAssignmentTitle(value: string | null | undefined): string {

@@ -28,7 +28,7 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionLessonDashboard } from "@/components/session-lesson-dashboard";
 import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { clientAdaptiveGuidance } from "@/lib/client-adaptive-guidance";
-import { studentFacingCopy } from "@/lib/quiz-content";
+import { isDeferredUnfinishedPrepBlock, studentFacingCopy } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 import {
   isPostSessionFollowUpQuiz,
@@ -102,7 +102,9 @@ export default function PortalSession() {
   const practiceAssignment = practiceLink
     ? duringAssignments.find((item) => item.id === practiceLink.assignmentId)
     : undefined;
-  const studentBlocks = session.blocks.filter((item) => item.visibility !== "tutor");
+  const studentBlocks = session.blocks.filter(
+    (item) => item.visibility !== "tutor" && !isDeferredUnfinishedPrepBlock(item),
+  );
   const reports = artifacts.filter(
     (item) =>
       item.kind === "report" &&

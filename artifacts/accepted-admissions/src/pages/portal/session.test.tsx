@@ -189,6 +189,36 @@ describe("student session quiz path", () => {
     mocks.assignments.splice(0, mocks.assignments.length, ...original);
   });
 
+  test("does not show the live-plan unfinished-prep note", () => {
+    mocks.blocks = [
+      {
+        id: "prep",
+        kind: "adaptive_prep",
+        status: "published",
+        visibility: "both",
+        position: 0,
+        config: {
+          title: "AI-native session plan",
+          items: [
+            "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+          ],
+        },
+      },
+    ];
+    mocks.sessionPrep = {
+      mode: "complete_homework_in_session",
+      summary:
+        "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+      duringAssignmentId: "during-1",
+      attachedQuestionCount: 4,
+    };
+    render(<PortalSession />);
+    expect(screen.queryByText(/unfinished prep/i)).toBeNull();
+    expect(screen.queryByText(/live plan now carries/i)).toBeNull();
+    expect(screen.queryByText("AI-native session plan")).toBeNull();
+    expect(screen.queryByTestId("in-session-practice-link")).toBeNull();
+  });
+
   test("in-progress pre-work shows Resume and opens the quiz with resume=1", () => {
     mocks.assignments[0]!.latestAttemptId = "attempt-1";
     mocks.assignments[0]!.latestAttemptStatus = "paused";

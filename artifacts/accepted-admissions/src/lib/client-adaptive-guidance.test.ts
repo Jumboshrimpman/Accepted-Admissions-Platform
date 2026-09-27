@@ -51,6 +51,25 @@ test("uses section coaching when Bluebook skill and domain are missing", () => {
   );
 });
 
+test("does not use a deferred live-plan note as the session focus", () => {
+  assert.equal(
+    displaySessionFocus(
+      "The live plan handles the unfinished prep",
+      null,
+      "Open the session to review the focus.",
+    ),
+    "Open the session to review the focus.",
+  );
+  const copy = clientAdaptiveGuidance({
+    feedback:
+      "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+    sessionOpener:
+      "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+  });
+  assert.doesNotMatch(copy.missedSkill, /unfinished prep/i);
+  assert.doesNotMatch(copy.nextPractice, /live plan now carries/i);
+});
+
 test("falls back to qualitative drill coaching without dumping placeholders", () => {
   const copy = clientAdaptiveGuidance({
     strengths: ["Skill not in extract"],

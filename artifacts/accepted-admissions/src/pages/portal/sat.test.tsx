@@ -303,7 +303,9 @@ describe("portal SAT book/pay", () => {
     mocks.dashboard.data.credits.twelveSessionPlan = true;
     render(<PortalSat />);
     expect(screen.getByTestId("portal-sat-access-denied")).toBeTruthy();
-    expect(screen.getByText("SAT billing is handled off-platform")).toBeTruthy();
+    expect(screen.getByText("SAT book and pay is unavailable")).toBeTruthy();
+    expect(screen.queryByText(/billing is handled off-platform/i)).toBeNull();
+    expect(screen.queryByText(/handled offline/i)).toBeNull();
     expect(screen.getByRole("link", { name: "Open curriculum" }).getAttribute("href")).toBe("/portal");
     expect(screen.queryByTestId("portal-sat-page")).toBeNull();
     expect(screen.queryByTestId("portal-sat-purchase")).toBeNull();

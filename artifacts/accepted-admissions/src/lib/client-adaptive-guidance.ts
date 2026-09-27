@@ -1,3 +1,4 @@
+import { isUnfinishedHomeworkClientCopy, studentFacingCopy } from "./quiz-content.ts";
 import {
   isCoarseSectionLabel,
   isFillerAnalysis,
@@ -217,7 +218,14 @@ export function clientAdaptiveGuidance(
     strength = "Keep building your baseline — no skip-it strength yet.";
   }
 
-  return { strength, missedSkill, nextPractice };
+  return {
+    strength: studentFacingCopy(strength) || "Keep building your baseline — no skip-it strength yet.",
+    missedSkill:
+      studentFacingCopy(missedSkill) ||
+      "Review the missed questions from this set and explain each right answer before another timed drill.",
+    nextPractice:
+      studentFacingCopy(nextPractice) || "Continue with the published session plan.",
+  };
 }
 
 export function displaySessionFocus(
@@ -232,6 +240,7 @@ export function displaySessionFocus(
   if (
     currentFocus?.trim() &&
     !hasExtractPlaceholder(currentFocus) &&
+    !isUnfinishedHomeworkClientCopy(currentFocus) &&
     usableGuidanceTheme(currentFocus)
   ) {
     return currentFocus.trim();
