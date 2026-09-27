@@ -23,6 +23,7 @@ import { TutorAnalysisBrief } from "@/components/tutor-analysis-brief";
 import { sessionStatusHomework } from "@/lib/assignable-bank-quizzes";
 import { canShowClearHomework, isBeforeSessionHomework } from "@/lib/clear-homework";
 import { isPostSessionFollowUpQuiz } from "@/lib/student-quiz-list";
+import { inSessionPracticeHref } from "@/lib/student-attempt-ui";
 import { tutorWrongAnswersHref } from "@/lib/wrong-answers";
 import {
   BookOpenCheck,
@@ -72,7 +73,7 @@ export default function TutorSession() {
       queryKey: getListSessionArtifactsQueryKey(sessionId),
     },
   });
-  const duringAssignmentId =
+  const listedDuringAssignmentId =
     session?.assignments.find(
       (assignment) => assignment.deliveryPhase === "during_session",
     )?.id ?? "";
@@ -85,16 +86,25 @@ export default function TutorSession() {
     session?.assignments.find((assignment) => assignment.deliveryPhase === "before_session")
       ?.id ??
     "";
-  const { data: duringAssignment } = useGetAssignment(duringAssignmentId, {
-    query: {
-      enabled: Boolean(duringAssignmentId),
-      queryKey: getGetAssignmentQueryKey(duringAssignmentId),
-    },
-  });
   const { data: adaptive } = useGetAdaptiveCurriculum(sessionId, {
     query: {
       enabled: Boolean(sessionId),
       queryKey: getGetAdaptiveCurriculumQueryKey(sessionId),
+    },
+  });
+  const duringAssignmentId =
+    adaptive?.sessionPrep?.duringAssignmentId || listedDuringAssignmentId;
+  const practiceMode = adaptive?.sessionPrep?.mode;
+  const practiceHref = inSessionPracticeHref(
+    (adaptive?.sessionPrep?.attachedQuestionCount ?? 0) > 0 &&
+      (practiceMode === "mistake_focus" || practiceMode === "hard_bank")
+      ? adaptive?.sessionPrep?.duringAssignmentId
+      : null,
+  );
+  const { data: duringAssignment } = useGetAssignment(duringAssignmentId, {
+    query: {
+      enabled: Boolean(duringAssignmentId),
+      queryKey: getGetAssignmentQueryKey(duringAssignmentId),
     },
   });
   const createBlock = useCreateCurriculumBlock();
@@ -550,6 +560,13 @@ export default function TutorSession() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     Only approved original practice can enter this sequence.
                   </p>
+                  {practiceHref ? (
+                    <div className="mt-3" data-testid="in-session-practice-link">
+                      <Button asChild size="sm">
+                        <Link href={practiceHref}>Open in-session practice</Link>
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

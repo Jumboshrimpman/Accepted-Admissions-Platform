@@ -105,7 +105,8 @@ vi.mock("@workspace/api-client-react", () => ({
       sessionPrep: {
         mode: "mistake_focus",
         summary: "Open with the missed transition item.",
-        attachedQuestionCount: 0,
+        duringAssignmentId: "practice-from-homework",
+        attachedQuestionCount: 3,
       },
     },
   }),
@@ -177,7 +178,7 @@ describe("tutor session review page", () => {
     render(<TutorSession />);
 
     expect(screen.getByTestId("session-authoring-note").textContent).toMatch(/session’s copy/);
-    expect(screen.getByTestId("tutor-session-quiz-editor")).toBeTruthy();
+    expect(screen.getAllByTestId("tutor-session-quiz-editor").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("Authoring tools")).toBeNull();
     expect(screen.queryByText("Generate original practice drafts")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create drafts" })).toBeNull();
@@ -189,6 +190,9 @@ describe("tutor session review page", () => {
     );
     expect(screen.getByTestId("practice-wrong-answers-quiz-1")).toBeTruthy();
     expect(screen.getByTestId("practice-wrong-answers-before-session")).toBeTruthy();
+    expect(screen.getByTestId("in-session-practice-link").querySelector("a")?.getAttribute("href")).toBe(
+      "/portal/assignments/practice-from-homework",
+    );
     const practiceLinks = screen.getAllByRole("link", { name: /Practice wrong answers only/i });
     expect(practiceLinks.length).toBeGreaterThanOrEqual(1);
     for (const link of practiceLinks) {

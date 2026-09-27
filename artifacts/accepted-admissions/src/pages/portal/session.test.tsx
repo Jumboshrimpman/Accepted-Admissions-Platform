@@ -27,6 +27,12 @@ const mocks = vi.hoisted(() => ({
   }>,
   studentNotes: null as string | null,
   artifacts: [] as Array<{ id: string; kind: string; content: string }>,
+  sessionPrep: null as null | {
+    mode: string;
+    summary: string;
+    duringAssignmentId: string;
+    attachedQuestionCount: number;
+  },
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -53,7 +59,13 @@ vi.mock("@workspace/api-client-react", () => ({
     isLoading: false,
     error: null,
   }),
-  useGetAdaptiveCurriculum: () => ({ data: null, isLoading: false, isError: false }),
+  useGetAdaptiveCurriculum: () => ({
+    data: mocks.sessionPrep
+      ? { sessionPrep: mocks.sessionPrep, recommendations: [], publishedBlocks: [] }
+      : null,
+    isLoading: false,
+    isError: false,
+  }),
   useListSessionArtifacts: () => ({ data: mocks.artifacts }),
   getGetSessionLessonQueryKey: (id: string) => ["/api/sessions", id, "lesson"],
   useGetSessionLesson: () => ({
@@ -102,6 +114,8 @@ afterEach(() => {
   mocks.blocks = [];
   mocks.studentNotes = null;
   mocks.artifacts = [];
+  mocks.sessionPrep = null;
+  if (mocks.assignments.length > 1) mocks.assignments.splice(1);
 });
 
 describe("student session quiz path", () => {
@@ -145,6 +159,34 @@ describe("student session quiz path", () => {
     ).toBeTruthy();
     expect(screen.getByText("Walk the largest miss clusters from the diagnostic.")).toBeTruthy();
     expect(screen.queryByText(/clean question/i)).toBeNull();
+  });
+
+  test("in-session practice link opens the quiz generated from homework results", () => {
+    const original = mocks.assignments.map((item) => ({ ...item }));
+    mocks.assignments.push({
+      id: "generic-bank",
+      title: "Hard-question bank — leftover time",
+      deliveryPhase: "during_session",
+      questionCount: 8,
+      timeLimitMinutes: 30,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+    });
+    mocks.sessionPrep = {
+      mode: "mistake_focus",
+      summary: "Homework misses were converted into similar in-session practice.",
+      duringAssignmentId: "practice-from-homework",
+      attachedQuestionCount: 4,
+    };
+    render(<PortalSession />);
+    const practice = screen.getByTestId("in-session-practice-link");
+    expect(practice.textContent).toMatch(/from homework results/i);
+    expect(practice.querySelector("a")?.getAttribute("href")).toBe(
+      "/portal/assignments/practice-from-homework",
+    );
+    expect(screen.queryByTestId("session-homework-generic-bank")).toBeNull();
+    mocks.assignments.splice(0, mocks.assignments.length, ...original);
   });
 
   test("in-progress pre-work shows Resume and opens the quiz with resume=1", () => {

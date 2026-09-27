@@ -140,6 +140,48 @@ export function studentAssignmentHref(
   return isInProgressAttemptStatus(status) ? `${path}?resume=1` : path;
 }
 
+export function inSessionPracticeHref(
+  assignmentId: string | null | undefined,
+  status?: string | null,
+): string | null {
+  const id = assignmentId?.trim() ?? "";
+  if (!id) return null;
+  return studentAssignmentHref(id, status);
+}
+
+/**
+ * Prefer the practice quiz generated from homework results.
+ * A generic during-session bank on the same session must not win the link.
+ */
+export function resolveInSessionPracticeLink(input: {
+  duringAssignmentId?: string | null;
+  attachedQuestionCount?: number | null;
+  assignments?: ReadonlyArray<{
+    id: string;
+    deliveryPhase?: string | null;
+    questionCount?: number | null;
+    latestAttemptStatus?: string | null;
+  }>;
+}): { assignmentId: string; attemptStatus: string | null } | null {
+  const generatedId = input.duringAssignmentId?.trim() ?? "";
+  const generatedCount = input.attachedQuestionCount ?? 0;
+  if (generatedId && generatedCount > 0) {
+    const match = input.assignments?.find((item) => item.id === generatedId);
+    return {
+      assignmentId: generatedId,
+      attemptStatus: match?.latestAttemptStatus ?? null,
+    };
+  }
+  const fallback = input.assignments?.find(
+    (item) => item.deliveryPhase === "during_session" && (item.questionCount ?? 0) > 0,
+  );
+  if (!fallback) return null;
+  return {
+    assignmentId: fallback.id,
+    attemptStatus: fallback.latestAttemptStatus ?? null,
+  };
+}
+
 export function wantsResumeAttempt(search?: string | null): boolean {
   if (!search) return false;
   const query = search.startsWith("?") ? search.slice(1) : search;

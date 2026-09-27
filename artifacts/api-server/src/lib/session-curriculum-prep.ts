@@ -17,17 +17,25 @@ import {
   type SessionPrepMode,
 } from "./assessment-analysis";
 import {
+  IN_SESSION_PRACTICE_INSTRUCTIONS,
+  IN_SESSION_PRACTICE_TITLE,
+  deterministicPracticeQuestion,
+  practiceSubjectFamily,
+  samePracticeQuestionSet,
+  selectHomeworkForPracticePrep,
+  selectPracticeQuestionsFromHomeworkMisses,
+  type HomeworkMissForPractice,
+  type PracticeSkillMapping,
+} from "./in-session-practice";
+import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
+import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
+  MAX_IN_SESSION_HOMEWORK_QUESTIONS,
   selectInSessionHomeworkQuestionIds,
 } from "./session-homework";
 
 function subjectFamily(subject: string): string {
-  const normalized = subject.trim().toLowerCase();
-  if (normalized.includes("ielts") || normalized.includes("english")) return "ielts";
-  if (normalized.includes("sat") || normalized.includes("math") || normalized.includes("reading")) {
-    return "sat";
-  }
-  return normalized || "all";
+  return practiceSubjectFamily(subject);
 }
 
 async function ensureDuringSessionAssignment(
@@ -227,43 +235,191 @@ async function copyHomeworkIntoDuringSession(
   return attached;
 }
 
-async function acceptOpenRecommendations(
-  session: typeof sessionsTable.$inferSelect,
-  duringId: string,
-): Promise<number> {
-  const open = await db
+async function ensureOriginalPracticeQuestion(
+  skill: string,
+  subject: string,
+  blocked: Set<string>,
+) {
+  const existing = await db
     .select()
-    .from(adaptiveRecommendationsTable)
+    .from(questionsTable)
     .where(
       and(
-        eq(adaptiveRecommendationsTable.sessionId, session.id),
-        eq(adaptiveRecommendationsTable.status, "recommended"),
+        eq(questionsTable.subject, subject),
+        eq(questionsTable.skill, skill),
+        eq(questionsTable.sourceType, "original"),
+        eq(questionsTable.generationMethod, "adaptive-deterministic"),
+        eq(questionsTable.reviewStatus, "approved"),
       ),
     )
-    .orderBy(asc(adaptiveRecommendationsTable.position));
-  if (open.length === 0) return 0;
-  const questionIds = open
-    .map((row) => row.recommendedQuestionId)
-    .filter((id): id is string => Boolean(id));
-  const attached = await attachQuestions(duringId, questionIds);
-  for (const row of open) {
+    .orderBy(desc(questionsTable.createdAt));
+  const available = existing.find(
+    (question) => !blocked.has(question.id) && isStudentUsableServedQuestion(question),
+  );
+  if (available) return available;
+
+  const template = deterministicPracticeQuestion(skill);
+  const [created] = await db
+    .insert(questionsTable)
+    .values({
+      subject,
+      domain: "Adaptive practice",
+      skill,
+      questionType: "multiple_choice",
+      difficulty: "medium",
+      stimulus: template.stimulus,
+      prompt: template.prompt,
+      choices: template.choices,
+      correctAnswer: template.correctAnswer,
+      explanation: template.explanation,
+      sourceType: "original",
+      sourceId: null,
+      reviewStatus: "approved",
+      tags: [`adaptive:${skill.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, "in-session-practice"],
+      generationMethod: "adaptive-deterministic",
+      reviewedAt: new Date(),
+    })
+    .returning();
+  return created ?? null;
+}
+
+async function usedQuestionIdsForPractice(
+  courseId: string,
+  studentUserId: string,
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ questionId: responsesTable.questionId })
+    .from(responsesTable)
+    .innerJoin(attemptsTable, eq(attemptsTable.id, responsesTable.attemptId))
+    .innerJoin(assignmentsTable, eq(assignmentsTable.id, attemptsTable.assignmentId))
+    .where(
+      and(eq(assignmentsTable.courseId, courseId), eq(attemptsTable.userId, studentUserId)),
+    );
+  return new Set(rows.map((row) => row.questionId));
+}
+
+async function syncPracticeQuestions(
+  assignmentId: string,
+  questionIds: string[],
+): Promise<boolean> {
+  const existing = await db
+    .select({ questionId: assignmentQuestionsTable.questionId })
+    .from(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId))
+    .orderBy(asc(assignmentQuestionsTable.position));
+  const current = existing.map((row) => row.questionId);
+  if (samePracticeQuestionSet(current, questionIds)) return false;
+  await db
+    .delete(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  for (let index = 0; index < questionIds.length; index += 1) {
+    await db.insert(assignmentQuestionsTable).values({
+      assignmentId,
+      questionId: questionIds[index]!,
+      position: index,
+      predictionFirst: false,
+    });
+  }
+  return true;
+}
+
+async function publishPracticeFromHomeworkMisses(
+  session: typeof sessionsTable.$inferSelect,
+  duringId: string,
+  studentUserId: string,
+  missed: HomeworkMissForPractice[],
+): Promise<{ questionCount: number; changed: boolean; mapping: PracticeSkillMapping[] }> {
+  const blocked = await usedQuestionIdsForPractice(session.courseId, studentUserId);
+  const bankRows = await db
+    .select()
+    .from(questionsTable)
+    .where(
+      and(
+        inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
+        eq(questionsTable.sourceType, "original"),
+      ),
+    );
+  const usable = bankRows.filter((question) => isStudentUsableServedQuestion(question));
+  const recommendations = await db
+    .select({
+      id: adaptiveRecommendationsTable.id,
+      status: adaptiveRecommendationsTable.status,
+      recommendedQuestionId: adaptiveRecommendationsTable.recommendedQuestionId,
+    })
+    .from(adaptiveRecommendationsTable)
+    .where(eq(adaptiveRecommendationsTable.sessionId, session.id));
+  const recommendedIds = new Set(
+    recommendations
+      .filter((row) => row.status !== "dismissed")
+      .map((row) => row.recommendedQuestionId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const preferred = usable.filter((question) => recommendedIds.has(question.id));
+  const rest = usable.filter((question) => !recommendedIds.has(question.id));
+  const plan = selectPracticeQuestionsFromHomeworkMisses({
+    missed,
+    bank: [...preferred, ...rest].map((question) => ({
+      id: question.id,
+      skill: question.skill,
+      subject: question.subject,
+    })),
+    sessionSubject: session.subject,
+    usedQuestionIds: blocked,
+    maxCount: MAX_IN_SESSION_HOMEWORK_QUESTIONS,
+  });
+  const mapping = plan.mapping.map((row) => ({ ...row }));
+  for (const row of mapping) {
+    if (row.practiceQuestionId) continue;
+    const created = await ensureOriginalPracticeQuestion(row.skill, session.subject, blocked);
+    if (!created) continue;
+    row.practiceQuestionId = created.id;
+    blocked.add(created.id);
+  }
+  const questionIds: string[] = [];
+  for (const id of [
+    ...mapping.flatMap((row) => (row.practiceQuestionId ? [row.practiceQuestionId] : [])),
+    ...plan.extraQuestionIds,
+  ]) {
+    if (questionIds.includes(id)) continue;
+    questionIds.push(id);
+    if (questionIds.length >= MAX_IN_SESSION_HOMEWORK_QUESTIONS) break;
+  }
+  if (questionIds.length === 0) {
+    return { questionCount: await assignmentQuestionCount(duringId), changed: false, mapping };
+  }
+  const questionsChanged = await syncPracticeQuestions(duringId, questionIds);
+  const [current] = await db
+    .select({ title: assignmentsTable.title, status: assignmentsTable.status })
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, duringId))
+    .limit(1);
+  const metaChanged =
+    current?.title !== IN_SESSION_PRACTICE_TITLE || current.status !== "published";
+  if (questionsChanged || metaChanged) {
+    await db
+      .update(assignmentsTable)
+      .set({
+        status: "published",
+        title: IN_SESSION_PRACTICE_TITLE,
+        instructions: IN_SESSION_PRACTICE_INSTRUCTIONS,
+        timeLimitMinutes: 30,
+      })
+      .where(eq(assignmentsTable.id, duringId));
+  }
+  const attachedIds = new Set(questionIds);
+  for (const row of recommendations) {
+    if (row.status === "dismissed" || row.status === "accepted") continue;
+    if (!row.recommendedQuestionId || !attachedIds.has(row.recommendedQuestionId)) continue;
     await db
       .update(adaptiveRecommendationsTable)
       .set({ status: "accepted", updatedAt: new Date() })
       .where(eq(adaptiveRecommendationsTable.id, row.id));
   }
-  if (attached > 0) {
-    await db
-      .update(assignmentsTable)
-      .set({
-        status: "published",
-        instructions:
-          "Work the similar practice items generated from homework misses. Review the answer and explanation for each item together.",
-        title: "In-session mistake focus",
-      })
-      .where(eq(assignmentsTable.id, duringId));
-  }
-  return attached;
+  return {
+    questionCount: questionIds.length,
+    changed: questionsChanged || metaChanged,
+    mapping,
+  };
 }
 
 async function attachHardBank(
@@ -324,7 +480,7 @@ export async function prepareSessionCurriculum(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<SessionPrepResult> {
   const during = await ensureDuringSessionAssignment(session);
-  const [homework] = await db
+  const homeworkRows = await db
     .select()
     .from(assignmentsTable)
     .where(
@@ -333,8 +489,27 @@ export async function prepareSessionCurriculum(
         eq(assignmentsTable.deliveryPhase, "before_session"),
       ),
     )
-    .orderBy(asc(assignmentsTable.createdAt))
-    .limit(1);
+    .orderBy(asc(assignmentsTable.createdAt));
+  const submittedRows =
+    session.clientUserId && homeworkRows.length > 0
+      ? await db
+          .select({ assignmentId: attemptsTable.assignmentId })
+          .from(attemptsTable)
+          .where(
+            and(
+              eq(attemptsTable.userId, session.clientUserId),
+              inArray(attemptsTable.status, ["submitted", "expired"]),
+              inArray(
+                attemptsTable.assignmentId,
+                homeworkRows.map((row) => row.id),
+              ),
+            ),
+          )
+      : [];
+  const homework = selectHomeworkForPracticePrep(
+    homeworkRows,
+    new Set(submittedRows.map((row) => row.assignmentId)),
+  );
 
   if (!homework || !session.clientUserId) {
     const mode: SessionPrepMode = "awaiting_homework";
@@ -382,10 +557,13 @@ export async function prepareSessionCurriculum(
   }
 
   const result = latestAttempt.result as
-    | { items?: Array<{ correct: boolean }> }
+    | { items?: Array<{ questionId?: string; correct?: boolean; skill?: string | null }> }
     | null
     | undefined;
-  const missed = (result?.items ?? []).filter((item) => item.correct === false);
+  const missed = (result?.items ?? []).filter(
+    (item): item is { questionId: string; correct: boolean; skill?: string | null } =>
+      item.correct === false && typeof item.questionId === "string" && item.questionId.length > 0,
+  );
 
   if (missed.length === 0) {
     const attached = await attachHardBank(session, during.id, session.clientUserId);
@@ -407,17 +585,35 @@ export async function prepareSessionCurriculum(
     };
   }
 
-  const attached = await acceptOpenRecommendations(session, during.id);
+  const practice = await publishPracticeFromHomeworkMisses(
+    session,
+    during.id,
+    session.clientUserId,
+    missed,
+  );
   const mode: SessionPrepMode = "mistake_focus";
   const summary = describeSessionPrepMode(mode);
   await ensurePrepBlock(session.id, mode, summary);
-  await db.insert(auditLogsTable).values({
-    actorUserId: session.clientUserId,
-    action: "session_curriculum.prep_mistake_focus",
-    entityType: "session",
-    entityId: session.id,
-    metadata: { duringAssignmentId: during.id, attached, missed: missed.length },
-  });
+  if (practice.changed) {
+    await db.insert(auditLogsTable).values({
+      actorUserId: session.clientUserId,
+      action: "session_curriculum.prep_mistake_focus",
+      entityType: "session",
+      entityId: session.id,
+      metadata: {
+        duringAssignmentId: during.id,
+        homeworkAssignmentId: homework.id,
+        sourceAttemptId: latestAttempt.id,
+        missed: missed.length,
+        questionCount: practice.questionCount,
+        mapping: practice.mapping.map((row) => ({
+          skill: row.skill,
+          missedQuestionIds: row.missedQuestionIds,
+          practiceQuestionId: row.practiceQuestionId,
+        })),
+      },
+    });
+  }
   return {
     mode,
     summary,
