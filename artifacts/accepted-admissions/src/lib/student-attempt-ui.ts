@@ -51,6 +51,24 @@ export function studentSeesFinishedResult(input: {
   return true;
 }
 
+/** Submitted or expired with no score and no answers. The quiz itself is still open. */
+export function isBrokenEmptyClientAttempt(input: {
+  status?: string | null;
+  hasResult: boolean;
+  responses?: Array<{ finalAnswer?: string | null }> | null;
+}): boolean {
+  if (input.hasResult) return false;
+  if (input.status !== "submitted" && input.status !== "expired") return false;
+  return answeredQuestionCount(
+    Object.fromEntries(
+      (input.responses ?? []).map((response, index) => [
+        String(index),
+        { finalAnswer: response.finalAnswer },
+      ]),
+    ),
+  ) < 1;
+}
+
 export const IN_SESSION_HOMEWORK_COMPLETION_TITLE = "In-session homework completion";
 
 export function isInSessionHomeworkCompletion(input: {

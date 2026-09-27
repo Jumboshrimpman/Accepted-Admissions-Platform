@@ -6,10 +6,12 @@ import {
   countRecordedAnswers,
   countsTowardAttemptLimit,
   emptyAttemptSubmitError,
+  attemptHasRecordedWork,
   isBrokenEmptyAttempt,
   isResumableIncompleteAttempt,
   normalizeQuestionIndex,
   shouldFinalizeExpiredAttempt,
+  shouldReopenBrokenEmptyAttempt,
 } from "./student-attempt-guards.ts";
 
 test("empty submit is blocked when no final answers were recorded", () => {
@@ -39,6 +41,53 @@ test("broken empty submits are the only attempts the first-session cleanup targe
   assert.equal(isBrokenEmptyAttempt({ status: "expired", answeredCount: 0 }), true);
   assert.equal(isBrokenEmptyAttempt({ status: "submitted", answeredCount: 3 }), false);
   assert.equal(isBrokenEmptyAttempt({ status: "active", answeredCount: 0 }), false);
+});
+
+test("an empty submitted attempt reopens and a scored attempt stays history", () => {
+  assert.equal(
+    shouldReopenBrokenEmptyAttempt({
+      status: "submitted",
+      hasResult: false,
+      score: null,
+      answeredCount: 0,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldReopenBrokenEmptyAttempt({
+      status: "expired",
+      hasResult: false,
+      score: null,
+      answeredCount: 0,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldReopenBrokenEmptyAttempt({
+      status: "submitted",
+      hasResult: true,
+      score: 70,
+      answeredCount: 8,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldReopenBrokenEmptyAttempt({
+      status: "active",
+      hasResult: false,
+      score: null,
+      answeredCount: 0,
+    }),
+    false,
+  );
+  assert.equal(
+    attemptHasRecordedWork({ hasResult: false, score: null, answeredCount: 0 }),
+    false,
+  );
+  assert.equal(
+    attemptHasRecordedWork({ hasResult: false, score: 70, answeredCount: 0 }),
+    true,
+  );
 });
 
 test("timer expiry with zero answers cannot finalize a completed 0/N result", () => {

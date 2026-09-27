@@ -46,6 +46,7 @@ import { sessionCalendarDayIsPast } from "@/lib/student-quiz-list";
 import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
+  isBrokenEmptyClientAttempt,
   IN_SESSION_PARTIAL_SUBMIT_COPY,
   IN_SESSION_PER_QUESTION_FEEDBACK_COPY,
   IN_SESSION_PRACTICE_CHECK_COPY,
@@ -622,6 +623,7 @@ export default function PortalAssignment() {
   const expirySubmitted = useRef(false);
   const restoredAttemptId = useRef<string | null>(null);
   const autoResumed = useRef(false);
+  const reopenedEmptyAttempt = useRef(false);
   const inSessionHomework = isInSessionHomeworkCompletion({
     deliveryPhase: assignment?.deliveryPhase,
     title: assignment?.title,
@@ -664,6 +666,26 @@ export default function PortalAssignment() {
       { onSuccess: (data) => queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data) },
     );
   }, [attempt?.status, attemptId, queryClient, resumeAttempt, search, viewer]);
+
+  const brokenEmptyAttempt = isBrokenEmptyClientAttempt({
+    status: attempt?.status,
+    hasResult: Boolean(resultQuery.data),
+    responses: attempt?.responses,
+  });
+  useEffect(() => {
+    if (reopenedEmptyAttempt.current || viewer || !assignmentId || !brokenEmptyAttempt) return;
+    if (questionCount < 1) return;
+    reopenedEmptyAttempt.current = true;
+    startAttempt.mutate(
+      { assignmentId },
+      {
+        onSuccess: (data) => {
+          setAttemptId(data.id);
+          queryClient.setQueryData(getGetAttemptQueryKey(data.id), data);
+        },
+      },
+    );
+  }, [assignmentId, brokenEmptyAttempt, questionCount, queryClient, startAttempt, viewer]);
 
   useEffect(() => {
     if (!attempt) return;
@@ -952,7 +974,15 @@ export default function PortalAssignment() {
               size="lg"
               className="w-full rounded-full"
               onClick={() =>
-                startAttempt.mutate({ assignmentId }, { onSuccess: (data) => setAttemptId(data.id) })
+                startAttempt.mutate(
+                  { assignmentId },
+                  {
+                    onSuccess: (data) => {
+                      setAttemptId(data.id);
+                      queryClient.setQueryData(getGetAttemptQueryKey(data.id), data);
+                    },
+                  },
+                )
               }
               disabled={viewer || startAttempt.isPending}
             >
@@ -982,7 +1012,8 @@ export default function PortalAssignment() {
       hasResult: Boolean(resultQuery.data),
       resultError: resultQuery.isError,
     });
-    if (!finished && (resultQuery.isError || !resultQuery.isLoading)) {
+    const reopenIntoQuiz = !finished && brokenEmptyAttempt && questionCount > 0;
+    if (!reopenIntoQuiz && !finished && (resultQuery.isError || !resultQuery.isLoading)) {
       return (
         <div className="mx-auto max-w-3xl space-y-4 py-10">
           <h2 className="text-2xl font-bold">Attempt not submitted</h2>
@@ -995,7 +1026,15 @@ export default function PortalAssignment() {
               className="rounded-full"
               data-testid="restart-empty-attempt"
               onClick={() =>
-                startAttempt.mutate({ assignmentId }, { onSuccess: (data) => setAttemptId(data.id) })
+                startAttempt.mutate(
+                  { assignmentId },
+                  {
+                    onSuccess: (data) => {
+                      setAttemptId(data.id);
+                      queryClient.setQueryData(getGetAttemptQueryKey(data.id), data);
+                    },
+                  },
+                )
               }
               disabled={startAttempt.isPending}
             >
@@ -1005,14 +1044,16 @@ export default function PortalAssignment() {
         </div>
       );
     }
-    if (resultQuery.isLoading || !resultQuery.data) {
-      return (
-        <div className="p-8">
-          <Skeleton className="h-96 w-full rounded-2xl" />
-        </div>
-      );
+    if (!reopenIntoQuiz) {
+      if (resultQuery.isLoading || !resultQuery.data) {
+        return (
+          <div className="p-8">
+            <Skeleton className="h-96 w-full rounded-2xl" />
+          </div>
+        );
+      }
+      return <ResultView result={resultQuery.data} />;
     }
-    return <ResultView result={resultQuery.data} />;
   }
   if (attempt.status === "paused") {
     return (

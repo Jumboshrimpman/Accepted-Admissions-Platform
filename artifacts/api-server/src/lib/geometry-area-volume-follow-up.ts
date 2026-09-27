@@ -5,6 +5,7 @@ import {
   attemptsTable,
   db,
   questionsTable,
+  responsesTable,
   sessionsTable,
   usersTable,
 } from "@workspace/db";
@@ -30,6 +31,11 @@ import {
   MICHELLE_GEOMETRY_CLIENT_EMAIL,
 } from "./michelle-geometry-follow-up.ts";
 import { GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE } from "./post-session-follow-up.ts";
+import { reopenBrokenEmptyAttemptsForAssignment } from "./heal-empty-attempt.ts";
+import {
+  attemptHasRecordedWork,
+  countRecordedAnswers,
+} from "./student-attempt-guards.ts";
 import {
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TAG,
   GEOMETRY_AREA_VOLUME_INSTRUCTIONS,
@@ -200,13 +206,31 @@ async function questionIdsForAssignment(assignmentId: string): Promise<string[]>
   return links.map((link) => link.questionId);
 }
 
-async function assignmentHasAttempt(assignmentId: string): Promise<boolean> {
-  const [attempt] = await db
-    .select({ id: attemptsTable.id })
+async function assignmentHasRecordedWork(assignmentId: string): Promise<boolean> {
+  const attempts = await db
+    .select({
+      id: attemptsTable.id,
+      result: attemptsTable.result,
+      score: attemptsTable.score,
+    })
     .from(attemptsTable)
-    .where(eq(attemptsTable.assignmentId, assignmentId))
-    .limit(1);
-  return Boolean(attempt);
+    .where(eq(attemptsTable.assignmentId, assignmentId));
+  for (const attempt of attempts) {
+    const responses = await db
+      .select({ finalAnswer: responsesTable.finalAnswer })
+      .from(responsesTable)
+      .where(eq(responsesTable.attemptId, attempt.id));
+    if (
+      attemptHasRecordedWork({
+        hasResult: attempt.result != null,
+        score: attempt.score,
+        answeredCount: countRecordedAnswers(responses),
+      })
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function sourceKeysForQuestionIds(questionIds: readonly string[]): Promise<string[]> {
@@ -392,6 +416,7 @@ async function assignToClient(input: {
         questionIds: input.questionIds,
       };
     }
+    await reopenBrokenEmptyAttemptsForAssignment(already.assignment.id);
     const tutorUserId = tutorIdForTodo({
       xavierIds: input.xavierIds,
       assignedTutorUserId: already.assignment.assignedTutorUserId,
@@ -404,7 +429,7 @@ async function assignToClient(input: {
       };
     }
     const linked = await questionIdsForAssignment(already.assignment.id);
-    const attempted = await assignmentHasAttempt(already.assignment.id);
+    const attempted = await assignmentHasRecordedWork(already.assignment.id);
     const draftKeys = input.drafts.map((item) => item.sourceKey);
     const linkedKeys = await sourceKeysForQuestionIds(linked);
     const sameQuiz =
@@ -529,8 +554,10 @@ async function assignToClient(input: {
 /**
  * Official SAT area and volume quiz, assigned as a standalone student to-do.
  * Session-local copies are not bank-linked, so this does not rematerialize
- * College Board rows or rewrite a quiz someone has already opened.
- * Geometry SAT Questions is a different assignment and is never updated here.
+ * College Board rows or rewrite a quiz that already has recorded answers.
+ * An empty submitted attempt does not count as recorded work: it is reopened
+ * and missing question rows are attached. Geometry SAT Questions is a
+ * different assignment and is never updated here.
  */
 export async function ensureGeometryAreaVolumeFollowUp(
   options: GeometryAreaVolumeFollowUpOptions = {},
@@ -573,7 +600,8 @@ export async function ensureGeometryAreaVolumeFollowUp(
     if (!user) continue;
     const existing = await existingFollowUp(user.id);
     if (!existing) continue;
-    if (!(await assignmentHasAttempt(existing.assignment.id))) continue;
+    await reopenBrokenEmptyAttemptsForAssignment(existing.assignment.id);
+    if (!(await assignmentHasRecordedWork(existing.assignment.id))) continue;
     questionIds = await questionIdsForAssignment(existing.assignment.id);
     preserveAttemptedQuestions = true;
     break;

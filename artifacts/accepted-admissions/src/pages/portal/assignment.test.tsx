@@ -1572,17 +1572,17 @@ describe("student attempt UI", () => {
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
-  test("empty expired attempt stays incomplete and can be restarted", () => {
+  test("empty expired attempt opens the questions instead of the dead end", async () => {
     mocks.attempt.status = "expired";
     mocks.attempt.remainingSeconds = 0;
     mocks.attempt.responses = [];
     mocks.result = null;
     mocks.resultError = true;
     render(<PortalAssignment />);
-    expect(screen.getByText("Attempt not submitted")).toBeTruthy();
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(screen.queryByText("Attempt not submitted")).toBeNull();
     expect(screen.queryByText("Time expired")).toBeNull();
     expect(screen.queryByText(/0%/)).toBeNull();
-    fireEvent.click(screen.getByTestId("restart-empty-attempt"));
     expect(startMutate).toHaveBeenCalledWith({ assignmentId: "asg-1" }, expect.any(Object));
     expect(submitMutate).not.toHaveBeenCalled();
   });
