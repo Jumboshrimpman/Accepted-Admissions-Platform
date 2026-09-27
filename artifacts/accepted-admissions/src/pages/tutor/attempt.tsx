@@ -27,6 +27,19 @@ import {
   repairMichelleQuizQuestionFields,
   shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
+import { writtenQuestionNote } from "@/lib/written-quiz-feedback";
+
+function AttemptItemNote({ item }: { item: AttemptResult["items"][number] }) {
+  const note = writtenQuestionNote(item);
+  return (
+    <p className="text-sm leading-relaxed text-muted-foreground" data-testid="written-item-note">
+      <span className="font-medium text-foreground">
+        {note.source === "explanation" ? "Explanation:" : "Written note:"}
+      </span>{" "}
+      {note.text}
+    </p>
+  );
+}
 
 function answerText(answer: string | null | undefined, choices: AttemptResult["items"][number]["choices"]) {
   if (!answer) return "Not answered";
@@ -150,7 +163,7 @@ export default function TutorAttempt() {
                   <div className="rounded-lg bg-muted/50 p-3"><span className="text-muted-foreground">Student:</span> {answerText(item.finalAnswer, item.choices)}</div>
                   <div className="rounded-lg bg-primary/5 p-3"><span className="text-muted-foreground">Correct:</span> {answerText(item.correctAnswer, item.choices)}</div>
                 </div>
-                <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Explanation:</span> {item.explanation}</p>
+                <AttemptItemNote item={item} />
                 {item.prediction && <p className="text-xs text-muted-foreground">Prediction first: {item.prediction}</p>}
               </CardContent>
             </Card>

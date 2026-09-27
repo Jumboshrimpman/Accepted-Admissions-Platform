@@ -265,4 +265,15 @@ describe("session lesson dashboard", () => {
     expect(screen.getByTestId("retry-feedback-retry-3").textContent).toMatch(/Your answer/);
     expect(screen.queryByTestId("retry-correct-answer-retry-3")).toBeNull();
   });
+
+  test("a miss without an official explanation shows written coaching instead of an empty stub", () => {
+    render(<SessionLessonDashboard sessionId="session-1" />);
+    fireEvent.click(screen.getByTestId("miss-picker-q2"));
+    const opened = screen.getByTestId("opened-miss").textContent ?? "";
+    expect(opened).toMatch(/Written note/);
+    expect(opened).toMatch(/Transitions/);
+    expect(opened).toMatch(/contrast, cause, example, or sequence/);
+    expect(opened).not.toMatch(/Do not invent College Board/);
+    expect(opened).not.toMatch(/Official explanation is not in the extract/);
+  });
 });

@@ -24,6 +24,7 @@ import {
   retrySourceLabel,
   type RetryFeedbackFields,
 } from "./session-lesson-display";
+import { usableWrittenExplanation, writtenQuestionNote } from "@/lib/written-quiz-feedback";
 
 function errorText(error: unknown): string {
   const data = (error as { data?: { error?: string; blockedReason?: string } } | null)?.data;
@@ -35,6 +36,42 @@ function displayedAnswer(
   choices?: Array<{ id: string; label: string; text: string }>,
 ): string {
   return formatAnswer(answer, choices) || "Not answered";
+}
+
+function MissWrittenNote({
+  miss,
+}: {
+  miss: {
+    skill?: string | null;
+    domain?: string | null;
+    prompt?: string | null;
+    officialExplanation?: string | null;
+    studentAnswer?: string | null;
+  };
+}) {
+  const explanation = usableWrittenExplanation(miss.officialExplanation);
+  if (explanation) {
+    return (
+      <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
+        <p className="font-medium">Official explanation</p>
+        <QuizContent text={explanation} className="mt-1 text-white/75" />
+      </div>
+    );
+  }
+  const note = writtenQuestionNote({
+    correct: false,
+    skill: miss.skill,
+    domain: miss.domain,
+    prompt: miss.prompt,
+    explanation: miss.officialExplanation,
+    finalAnswer: miss.studentAnswer,
+  });
+  return (
+    <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm" data-testid="written-item-note">
+      <p className="font-medium">Written note</p>
+      <p className="mt-1 leading-relaxed text-white/85">{note.text}</p>
+    </div>
+  );
 }
 
 export function SessionLessonDashboard({
@@ -180,16 +217,7 @@ export function SessionLessonDashboard({
                   <span className="font-medium">Correct answer:</span>{" "}
                   {displayedAnswer(selectedMiss.correctAnswer, selectedMiss.choices)}
                 </p>
-                <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
-                  <p className="font-medium">Official explanation</p>
-                  <QuizContent
-                    text={
-                      selectedMiss.officialExplanation ||
-                      "Official explanation is not in the extract yet. Do not invent College Board wording."
-                    }
-                    className="mt-1 text-white/75"
-                  />
-                </div>
+                <MissWrittenNote miss={selectedMiss} />
                 {selectedMiss.aiTutorGuidance ? (
                   <div className="mt-3 rounded-lg border border-white/20 p-3 text-sm">
                     <p className="font-medium">AI tutor guidance (separate)</p>
@@ -251,6 +279,7 @@ export function SessionLessonDashboard({
               });
               const active = retry.outcome === "pending" && Boolean(retry.retryQuestionId);
               const formattedCorrect = formatAnswer(retry.correctAnswer, retry.choices);
+              const retryExplanation = usableWrittenExplanation(retry.explanation);
               return (
                 <div
                   key={retry.id}
@@ -354,14 +383,28 @@ export function SessionLessonDashboard({
                                 <span className="font-medium">Correct answer:</span>{" "}
                                 {formattedCorrect || "Not available"}
                               </p>
-                              {retry.explanation?.trim() ? (
+                              {retryExplanation ? (
                                 <p
                                   className="text-muted-foreground"
                                   data-testid={`retry-explanation-${retry.id}`}
                                 >
-                                  {retry.explanation}
+                                  {retryExplanation}
                                 </p>
-                              ) : null}
+                              ) : (
+                                <p
+                                  className="leading-relaxed text-muted-foreground"
+                                  data-testid={`retry-explanation-${retry.id}`}
+                                >
+                                  {
+                                    writtenQuestionNote({
+                                      correct: false,
+                                      prompt: retry.prompt,
+                                      explanation: retry.explanation,
+                                      finalAnswer: retry.studentAnswer,
+                                    }).text
+                                  }
+                                </p>
+                              )}
                             </>
                           ) : null}
                         </div>
