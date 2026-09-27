@@ -50,6 +50,16 @@ describe("Landing visitor paths", () => {
     expect(main.queryByText(/20-hour/i)).toBeNull();
   });
 
+  it("does not show the unpublished-record display disclaimer", () => {
+    render(<Landing />);
+
+    expect(screen.queryByText(/public profiles and stories appear only when they have been approved for display/i)).toBeNull();
+    expect(screen.queryByText(/we will not fill the gap with a claim/i)).toBeNull();
+    expect(screen.getByRole("heading", { name: /see the people and published stories behind the work/i })).toBeTruthy();
+    expect(screen.getByTestId("link-home-team")).toBeTruthy();
+    expect(screen.getByTestId("link-home-stories")).toBeTruthy();
+  });
+
   it("keeps a visible portal sign-in path for students, tutors, and administrators", () => {
     render(<Landing />);
 
