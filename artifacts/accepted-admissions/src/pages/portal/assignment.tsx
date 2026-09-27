@@ -80,6 +80,7 @@ import {
   repairMichelleQuizQuestionFields,
   shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
+import { feedbackParagraphs, writtenQuestionNote } from "@/lib/written-quiz-feedback";
 
 function QuizRichText({
   text,
@@ -240,11 +241,15 @@ function ResultView({ result }: { result: AttemptResult }) {
           {showEstimated && estimated?.label ? (
             <p className="text-sm text-muted-foreground">{estimated.label}</p>
           ) : null}
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <div className="mb-1 flex items-center gap-2 font-semibold">
+          <div className="rounded-xl border bg-muted/30 p-4" data-testid="written-feedback">
+            <div className="mb-2 flex items-center gap-2 font-semibold">
               <Brain className="h-4 w-4 text-accent" /> Feedback
             </div>
-            <p className="text-sm text-muted-foreground">{result.studentFeedback}</p>
+            <div className="space-y-3 text-sm leading-relaxed text-foreground">
+              {feedbackParagraphs(result.studentFeedback).map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
+            </div>
             <Badge variant="outline" className="mt-3">
               {result.analysis.label} · shared with your tutor
             </Badge>
@@ -337,10 +342,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                         {answerText(item.correctAnswer, item.choices)}
                       </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">Why:</span>{" "}
-                      <QuizContent text={item.explanation} className="mt-1 inline-block" />
-                    </div>
+                    <QuestionWrittenNote item={item} />
                   </CardContent>
                 </Card>
               ))}
@@ -356,12 +358,40 @@ function ResultView({ result }: { result: AttemptResult }) {
   );
 }
 
+function QuestionWrittenNote({
+  item,
+}: {
+  item: {
+    correct: boolean;
+    skill?: string | null;
+    domain?: string | null;
+    subject?: string | null;
+    prompt?: string | null;
+    explanation?: string | null;
+    finalAnswer?: string | null;
+  };
+}) {
+  const note = writtenQuestionNote(item);
+  return (
+    <div className="text-sm leading-relaxed text-foreground" data-testid="written-item-note">
+      <span className="font-medium">{note.source === "explanation" ? "Why:" : "Note:"}</span>{" "}
+      {note.source === "explanation" ? (
+        <QuizContent text={note.text} className="mt-1 inline-block" />
+      ) : (
+        note.text
+      )}
+    </div>
+  );
+}
+
 function InSessionQuestionFeedback({
   correct,
   studentAnswer,
   correctAnswer,
   explanation,
   choices,
+  skill,
+  prompt,
   tone = "default",
 }: {
   correct?: boolean | null;
@@ -369,9 +399,18 @@ function InSessionQuestionFeedback({
   correctAnswer?: string | null;
   explanation?: string | null;
   choices?: Array<{ id: string; label: string; text: string }>;
+  skill?: string | null;
+  prompt?: string | null;
   tone?: "default" | "ink";
 }) {
   const ink = tone === "ink";
+  const note = writtenQuestionNote({
+    correct: correct === true,
+    skill,
+    prompt,
+    explanation,
+    finalAnswer: studentAnswer,
+  });
   return (
     <div
       className={`mt-4 space-y-3 rounded-xl p-4 ${
@@ -403,12 +442,13 @@ function InSessionQuestionFeedback({
           {answerText(correctAnswer, choices)}
         </div>
       </div>
-      {explanation ? (
-        <p className={`text-sm ${ink ? "text-white/85" : "text-muted-foreground"}`}>
-          <span className={ink ? "font-medium text-white" : "font-medium text-foreground"}>Why:</span>{" "}
-          {explanation}
-        </p>
-      ) : null}
+      <p
+        className={`text-sm leading-relaxed ${ink ? "text-white/85" : "text-foreground"}`}
+        data-testid="written-item-note"
+      >
+        <span className={ink ? "font-medium text-white" : "font-medium"}>{note.source === "explanation" ? "Why:" : "Note:"}</span>{" "}
+        {note.text}
+      </p>
     </div>
   );
 }
@@ -1078,6 +1118,8 @@ export default function PortalAssignment() {
               correctAnswer={response.correctAnswer}
               explanation={repairMichelleQuizMathText(response.explanation, repairStackedMath)}
               choices={question.choices}
+              skill={question.skill}
+              prompt={question.prompt}
               tone="ink"
             />
           ) : recordedHere ? (
@@ -1316,6 +1358,8 @@ export default function PortalAssignment() {
           correctAnswer={response.correctAnswer}
           explanation={repairMichelleQuizMathText(response.explanation, repairStackedMath)}
           choices={question.choices}
+          skill={question.skill}
+          prompt={question.prompt}
         />
       ) : null}
       {inSessionHomework ? (

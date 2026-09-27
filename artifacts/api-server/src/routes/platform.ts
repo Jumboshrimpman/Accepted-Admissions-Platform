@@ -108,6 +108,7 @@ import {
   tutorAlertFields,
   type AttemptAnalysis,
 } from "../lib/assessment-analysis";
+import { buildStudentWrittenFeedback } from "../lib/written-quiz-feedback";
 import {
   HARD_BANK_SEED_QUESTIONS,
 } from "../lib/sat-assessment-content";
@@ -3435,16 +3436,19 @@ function withDisplaySkills(
     assignmentTitle ?? result.assignmentTitle,
     result.homeworkKind ?? null,
   );
-  const storedFeedback = result.studentFeedback ?? "";
   return {
     ...result,
     items,
     breakdown,
     analysis,
-    studentFeedback:
-      !storedFeedback.trim() || /start with the focus areas below/i.test(storedFeedback)
-        ? analysis.feedback
-        : storedFeedback,
+    studentFeedback: buildStudentWrittenFeedback({
+      score: result.score,
+      correctCount: result.correctCount,
+      totalCount: result.totalCount,
+      assignmentTitle: assignmentTitle ?? result.assignmentTitle,
+      homeworkKind: result.homeworkKind ?? null,
+      items: items.filter((item) => !item.flagged),
+    }),
   };
 }
 
@@ -3609,6 +3613,14 @@ async function finalizeAttemptResult(
     scoreReporting === "estimated_diagnostic"
       ? estimateSatScoreFromScoringGuide(scoredForAnalysis)
       : null;
+  const studentFeedback = buildStudentWrittenFeedback({
+    score,
+    correctCount,
+    totalCount,
+    assignmentTitle: attempt.assignment.title,
+    homeworkKind,
+    items: scoredForAnalysis,
+  });
   const result: AttemptResultPayload = {
     attemptId: attempt.attempt.id,
     assignmentId: attempt.assignment.id,
@@ -3627,7 +3639,7 @@ async function finalizeAttemptResult(
     breakdown,
     items,
     analysis,
-    studentFeedback: analysis.feedback,
+    studentFeedback,
     homeworkKind,
     scoreReporting,
     estimatedSatScore: estimatedSatScore
@@ -3650,7 +3662,7 @@ async function finalizeAttemptResult(
       score,
       result,
       analysis,
-      studentFeedback: analysis.feedback,
+      studentFeedback,
       reviewStatus: "new",
     })
     .where(eq(attemptsTable.id, attempt.attempt.id));

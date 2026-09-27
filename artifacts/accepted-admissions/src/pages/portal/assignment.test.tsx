@@ -1015,6 +1015,83 @@ describe("student attempt UI", () => {
     );
   });
 
+  test("completed quiz results render written feedback and hide empty explanation stubs", () => {
+    mocks.attempt.status = "submitted";
+    mocks.result = {
+      attemptId: "attempt-1",
+      assignmentId: "asg-1",
+      assignmentTitle: "60-minute SAT pre-work",
+      studentUserId: "stu",
+      studentName: "Taito",
+      sessionId: "session-1",
+      sessionDateTime: null,
+      status: "submitted",
+      score: 50,
+      correctCount: 1,
+      totalCount: 2,
+      activeSeconds: 600,
+      pausedSeconds: 0,
+      breakdown: [{ skill: "Transitions", correct: 1, total: 2, accuracy: 50 }],
+      items: [
+        {
+          questionId: "q1",
+          correct: false,
+          finalAnswer: "a",
+          correctAnswer: "b",
+          explanation: "Because.",
+          skill: "Transitions",
+          flagged: false,
+          prompt: "Which transition best connects the paragraphs?",
+          choices: [
+            { id: "a", label: "A", text: "Similarly" },
+            { id: "b", label: "B", text: "However" },
+          ],
+        },
+        {
+          questionId: "q2",
+          correct: true,
+          finalAnswer: "b",
+          correctAnswer: "b",
+          explanation: "However signals contrast.",
+          skill: "Transitions",
+          flagged: false,
+          prompt: "Which word marks the contrast?",
+          choices: [
+            { id: "a", label: "A", text: "Similarly" },
+            { id: "b", label: "B", text: "However" },
+          ],
+        },
+      ],
+      analysis: {
+        source: "deterministic",
+        label: "Adaptive skill analysis",
+        provider: null,
+        strengths: ["Transitions was steadier in the items you got right."],
+        weaknesses: ["Transitions is where the miss landed."],
+        mistakePatterns: [],
+        nextFocus: ["Practice Transitions next."],
+        feedback: "Tutor brief stays off the student letter.",
+      },
+      studentFeedback:
+        "You finished with 1 of 2 correct, about 50%. The misses are concentrated enough to practice on purpose instead of redoing the whole quiz.\n\nThe misses gathered around Transitions — 1 item, including “Which transition best connects the paragraphs?”. Those are the ones to reopen first.\n\nBefore the next timed pre-work set, work Transitions like this. Read the ideas on both sides of the blank and name the relationship they actually have: contrast, cause, example, or sequence.",
+      homeworkKind: "routine",
+      scoreReporting: "none",
+      estimatedSatScore: null,
+    };
+    render(<PortalAssignment />);
+    const letter = screen.getByTestId("written-feedback").textContent ?? "";
+    expect(letter).toMatch(/You finished with 1 of 2 correct/);
+    expect(letter).toMatch(/contrast, cause, example, or sequence/);
+    expect(letter).not.toMatch(/Tutor brief stays off/);
+    const notes = screen.getAllByTestId("written-item-note").map((node) => node.textContent ?? "");
+    expect(notes.some((note) => /Note:/.test(note) && /Transitions/.test(note) && /relationship/.test(note))).toBe(
+      true,
+    );
+    expect(notes.some((note) => /Why:/.test(note) && /However signals contrast/.test(note))).toBe(true);
+    expect(screen.queryByText(/^Because\.$/)).toBeNull();
+    expect(screen.queryByText(/Do not invent College Board/i)).toBeNull();
+  });
+
   test("never renders a student-produced-response text box and recovers letter choices", () => {
     mocks.questions = [
       {
