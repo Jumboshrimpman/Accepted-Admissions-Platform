@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useParams, useSearch } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import {
   getGetAssignmentQueryKey,
   getGetAttemptQueryKey,
   getGetAttemptResultQueryKey,
+  getGetDashboardQueryKey,
   getGetSessionQueryKey,
   useGetAssignment,
   useGetAttempt,
@@ -59,6 +60,7 @@ import {
   studentSeesFinishedResult,
   studentSeesPredictionStep,
   normalizeQuestionIndex,
+  quizResponsesForPause,
   wantsResumeAttempt,
 } from "@/lib/student-attempt-ui";
 import {
@@ -525,7 +527,6 @@ function AnswerChoices({
 export default function PortalAssignment() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const search = useSearch();
-  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
   const viewer = currentUser?.role === "viewer";
@@ -747,7 +748,7 @@ export default function PortalAssignment() {
 
   const updateResponse = (
     questionId: string,
-    updates: { prediction?: string; finalAnswer?: string; locked?: boolean },
+    updates: { prediction?: string; finalAnswer?: string; locked?: boolean; flagged?: boolean },
     options?: { checkAnswer?: boolean },
   ) => {
     const current = localResponses[questionId] ?? {};
@@ -795,7 +796,7 @@ export default function PortalAssignment() {
   };
 
   const persistQuestionIndex = (index: number) => {
-    const question = assignment?.questions[index];
+    const question = questions[index];
     if (!attemptId || viewer || !question || attempt?.status !== "active") return;
     const current = localResponses[question.id] ?? {};
     saveResponse.mutate({
@@ -813,7 +814,7 @@ export default function PortalAssignment() {
   };
 
   const goToQuestion = (index: number) => {
-    const next = normalizeQuestionIndex(index, assignment?.questions.length ?? 0);
+    const next = normalizeQuestionIndex(index, questions.length);
     if (next !== currentQuestionIndex) {
       setReportOpen(false);
       setReportNote("");
@@ -823,22 +824,38 @@ export default function PortalAssignment() {
     persistQuestionIndex(next);
   };
 
-  const pauseCurrentAttempt = (leaveAfterPause: boolean) => {
-    if (!attemptId || viewer) return;
-    if (attempt?.status === "paused") {
-      if (leaveAfterPause) setLocation("/portal");
-      return;
+  const refreshSavedQuizLists = () => {
+    if (assignmentId) {
+      queryClient.invalidateQueries({ queryKey: getGetAssignmentQueryKey(assignmentId) });
     }
+    queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    if (assignment?.sessionId) {
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(assignment.sessionId) });
+    }
+  };
+
+  const pauseCurrentAttempt = () => {
+    if (!attemptId || viewer || attempt?.status !== "active") return;
     pauseAttempt.mutate(
-      { attemptId, data: { currentQuestionIndex } },
+      {
+        attemptId,
+        data: {
+          currentQuestionIndex,
+          responses: quizResponsesForPause(localResponses),
+        },
+      },
       {
         onSuccess: (data) => {
+          refreshSavedQuizLists();
           queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data);
-          queryClient.invalidateQueries({ queryKey: getGetAssignmentQueryKey(assignmentId) });
-          if (leaveAfterPause) setLocation("/portal");
         },
       },
     );
+  };
+
+  const saveCurrentQuestionForLater = (questionId: string) => {
+    const current = localResponses[questionId] ?? {};
+    updateResponse(questionId, { flagged: !current.flagged });
   };
 
   if (loadingAssignment) {
@@ -907,7 +924,7 @@ export default function PortalAssignment() {
               <p className="text-sm text-muted-foreground">
                 {inSessionHomework
                   ? `${IN_SESSION_PARTIAL_SUBMIT_COPY} ${IN_SESSION_PER_QUESTION_FEEDBACK_COPY}`
-                  : "Your timer is tracked on the server. Answers autosave as you work. Pause hides the questions; Save for later leaves the quiz so you can Resume from the portal. Submit is blocked until at least one question is answered."}
+                  : "Your timer is tracked on the server. Answers autosave as you work. Pause hides the questions. Save for later marks this question so you can jump back to it without leaving the quiz. Submit is a separate action and stays blocked until at least one question is answered."}
               </p>
             )}
           </CardContent>
@@ -987,13 +1004,14 @@ export default function PortalAssignment() {
         <h2 className="text-3xl font-bold">Attempt paused</h2>
         <p className="max-w-md text-lg text-muted-foreground">
           Your timer, answers, and place in the quiz are saved. Question content is hidden while
-          paused.
+          paused. Resume brings you back to this question.
         </p>
         {viewer ? (
           <p className="text-sm text-muted-foreground">Viewer mode is read only.</p>
         ) : (
           <div className="flex w-full max-w-sm flex-col gap-3">
             <Button
+              type="button"
               size="lg"
               className="h-12 w-full rounded-full"
               onClick={() =>
@@ -1005,15 +1023,6 @@ export default function PortalAssignment() {
               disabled={resumeAttempt.isPending}
             >
               <Play className="mr-2 h-5 w-5" /> Resume
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-12 w-full rounded-full"
-              data-testid="save-for-later"
-              onClick={() => setLocation("/portal")}
-            >
-              <BookmarkPlus className="mr-2 h-5 w-5" /> Save for later
             </Button>
           </div>
         )}
@@ -1192,25 +1201,29 @@ export default function PortalAssignment() {
           {!viewer && (
             <>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 className="h-11"
-                onClick={() => pauseCurrentAttempt(false)}
+                onClick={pauseCurrentAttempt}
                 disabled={pauseAttempt.isPending}
               >
                 <Pause className="mr-2 h-4 w-4" /> Pause
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 className="h-11"
                 data-testid="save-for-later"
-                onClick={() => pauseCurrentAttempt(true)}
-                disabled={pauseAttempt.isPending}
+                aria-pressed={Boolean(response.flagged)}
+                onClick={() => saveCurrentQuestionForLater(question.id)}
               >
-                <BookmarkPlus className="mr-2 h-4 w-4" /> Save for later
+                <BookmarkPlus className="mr-2 h-4 w-4" />
+                {response.flagged ? "Saved for later" : "Save for later"}
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 size="sm"
                 className="h-11"
@@ -1295,6 +1308,30 @@ export default function PortalAssignment() {
           </div>
         </form>
       ) : null}
+      <div className="flex flex-wrap gap-2" data-testid="question-review-nav">
+        {questions.map((item, index) => {
+          const savedForLater = Boolean(localResponses[item.id]?.flagged);
+          return (
+            <Button
+              key={item.id}
+              type="button"
+              size="sm"
+              variant={index === currentQuestionIndex ? "default" : "outline"}
+              data-testid={`question-nav-${item.id}`}
+              aria-pressed={savedForLater}
+              aria-label={
+                savedForLater
+                  ? `Question ${index + 1}, saved for later`
+                  : `Question ${index + 1}`
+              }
+              onClick={() => goToQuestion(index)}
+            >
+              {index + 1}
+              {savedForLater ? <BookmarkPlus className="h-3 w-3" aria-hidden /> : null}
+            </Button>
+          );
+        })}
+      </div>
       {reportedQuestionIds.has(question.id) ? (
         <p className="text-sm text-muted-foreground" data-testid="report-question-status">
           Reported. You can keep going — this question isn’t scored.
@@ -1380,6 +1417,7 @@ export default function PortalAssignment() {
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background p-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Button
+            type="button"
             variant="outline"
             size="lg"
             className="rounded-full"
@@ -1390,6 +1428,7 @@ export default function PortalAssignment() {
           </Button>
           {inSessionHomework ? (
             <Button
+              type="button"
               size="lg"
               className="rounded-full bg-accent text-white hover:bg-accent/90"
               onClick={submit}
@@ -1402,6 +1441,7 @@ export default function PortalAssignment() {
           ) : null}
           {currentQuestionIndex < questions.length - 1 ? (
             <Button
+              type="button"
               size="lg"
               className="rounded-full"
               onClick={() => goToQuestion(currentQuestionIndex + 1)}
@@ -1410,6 +1450,7 @@ export default function PortalAssignment() {
             </Button>
           ) : inSessionHomework ? null : (
             <Button
+              type="button"
               size="lg"
               className="rounded-full bg-accent text-white hover:bg-accent/90"
               onClick={submit}

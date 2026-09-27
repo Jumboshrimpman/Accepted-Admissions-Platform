@@ -6,10 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export interface AttemptProgressResponseInput {
+  questionId: string;
+  /** @nullable */
+  finalAnswer?: string | null;
+  flagged?: boolean;
+}
+
 export interface AttemptProgressInput {
   /**
      * Zero-based question index to restore when the student resumes.
      * @minimum 0
      */
   currentQuestionIndex?: number;
+  /** In-progress answers to store before the attempt is paused. */
+  responses?: AttemptProgressResponseInput[];
 }

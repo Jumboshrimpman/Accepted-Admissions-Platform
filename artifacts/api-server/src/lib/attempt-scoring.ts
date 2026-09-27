@@ -7,7 +7,9 @@ export type ScoreableAttemptItem = {
 };
 
 export function isUnscoredAttemptItem(item: ScoreableAttemptItem): boolean {
-  return Boolean(item.flagged || item.reported || item.unusable);
+  // A review flag (Save for later) keeps the answer in the score.
+  // Reported and unusable items stay out of the denominator.
+  return Boolean(item.reported || item.unusable);
 }
 
 export function scoreAttemptItems(items: readonly ScoreableAttemptItem[]): {

@@ -6,6 +6,7 @@ import {
   assignmentQuestionsTable,
   assignmentsTable,
   attemptsTable,
+  curriculumBlocksTable,
   db,
   questionsTable,
   responsesTable,
@@ -76,7 +77,7 @@ async function jsonRequest(
   };
 }
 
-test("save for later pauses an attempt and resume restores answers, flags, and question index", async () => {
+test("flagging a response leaves the attempt active, and pause still restores answers", async () => {
   const fixture = await createDashboardRoleFixture();
   const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
   const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
@@ -178,24 +179,35 @@ test("save for later pauses an attempt and resume restores answers, flags, and q
     );
     assert.equal(savedFirst.response.status, 200, JSON.stringify(savedFirst.body));
 
-    const savedPlace = await jsonRequest(
+    const rejected = await jsonRequest(
       studentServer.baseUrl,
-      `/api/attempts/${attemptId}/responses`,
-      "PUT",
+      `/api/attempts/${attemptId}/pause`,
+      "POST",
       {
-        questionId: secondQuestion.id,
-        finalAnswer: "b",
-        flagged: false,
         currentQuestionIndex: 1,
+        responses: [{ questionId: "not-on-this-assignment", finalAnswer: "b" }],
       },
     );
-    assert.equal(savedPlace.response.status, 200, JSON.stringify(savedPlace.body));
+    assert.equal(rejected.response.status, 400, JSON.stringify(rejected.body));
+    const stillActive = await jsonRequest(
+      studentServer.baseUrl,
+      `/api/attempts/${attemptId}`,
+      "GET",
+    );
+    assert.equal(stillActive.response.status, 200, JSON.stringify(stillActive.body));
+    assert.equal(stillActive.body.status, "active");
+    assert.notEqual(stillActive.body.status, "submitted");
+    assert.equal(stillActive.body.responses?.length, 1);
+    assert.equal(stillActive.body.responses?.[0]?.flagged, true);
 
     const paused = await jsonRequest(
       studentServer.baseUrl,
       `/api/attempts/${attemptId}/pause`,
       "POST",
-      { currentQuestionIndex: 1 },
+      {
+        currentQuestionIndex: 1,
+        responses: [{ questionId: secondQuestion.id, finalAnswer: "b", flagged: false }],
+      },
     );
     assert.equal(paused.response.status, 200, JSON.stringify(paused.body));
     assert.equal(paused.body.status, "paused");
@@ -210,6 +222,18 @@ test("save for later pauses an attempt and resume restores answers, flags, and q
     assert.equal(flagged?.finalAnswer, "a");
     assert.equal(flagged?.flagged, true);
     assert.equal(second?.finalAnswer, "b");
+
+    const lateSave = await jsonRequest(
+      studentServer.baseUrl,
+      `/api/attempts/${attemptId}/responses`,
+      "PUT",
+      {
+        questionId: secondQuestion.id,
+        finalAnswer: "a",
+        currentQuestionIndex: 0,
+      },
+    );
+    assert.equal(lateSave.response.status, 409, JSON.stringify(lateSave.body));
 
     const reopened = await jsonRequest(
       studentServer.baseUrl,
@@ -239,7 +263,14 @@ test("save for later pauses an attempt and resume restores answers, flags, and q
     );
     assert.equal(submitted.response.status, 200, JSON.stringify(submitted.body));
     assert.equal(submitted.body.status, "submitted");
-    assert.ok(submitted.body.correctCount >= 1);
+    const submittedItems = (submitted.body.items ?? []) as Array<{
+      finalAnswer?: string | null;
+      flagged?: boolean;
+    }>;
+    assert.equal(submittedItems[0]?.finalAnswer, "a");
+    assert.equal(submittedItems[0]?.flagged, true);
+    assert.equal(submittedItems[1]?.finalAnswer, "b");
+    assert.equal(submittedItems[1]?.flagged, false);
   } finally {
     await studentServer?.close();
     if (previousAdminIds === undefined) delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
@@ -260,6 +291,32 @@ test("save for later pauses an attempt and resume restores answers, flags, and q
       .delete(assignmentQuestionsTable)
       .where(eq(assignmentQuestionsTable.assignmentId, homework!.id));
     await db.delete(assignmentsTable).where(eq(assignmentsTable.id, homework!.id));
+    // Opening the quiz can attach a during-session practice row and a curriculum
+    // block to the fixture session. Remove those before the shared fixture cleanup.
+    const sessionAssignments = await db
+      .select({ id: assignmentsTable.id })
+      .from(assignmentsTable)
+      .where(inArray(assignmentsTable.sessionId, Object.values(fixture.sessionIds)));
+    const sessionAssignmentIds = sessionAssignments.map((row) => row.id);
+    if (sessionAssignmentIds.length > 0) {
+      const sessionAttempts = await db
+        .select({ id: attemptsTable.id })
+        .from(attemptsTable)
+        .where(inArray(attemptsTable.assignmentId, sessionAssignmentIds));
+      const sessionAttemptIds = sessionAttempts.map((row) => row.id);
+      if (sessionAttemptIds.length > 0) {
+        await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, sessionAttemptIds));
+        await db.delete(responsesTable).where(inArray(responsesTable.attemptId, sessionAttemptIds));
+        await db.delete(attemptsTable).where(inArray(attemptsTable.id, sessionAttemptIds));
+      }
+      await db
+        .delete(assignmentQuestionsTable)
+        .where(inArray(assignmentQuestionsTable.assignmentId, sessionAssignmentIds));
+      await db.delete(assignmentsTable).where(inArray(assignmentsTable.id, sessionAssignmentIds));
+    }
+    await db
+      .delete(curriculumBlocksTable)
+      .where(inArray(curriculumBlocksTable.sessionId, Object.values(fixture.sessionIds)));
     await db
       .delete(questionsTable)
       .where(inArray(questionsTable.id, [firstQuestion.id, secondQuestion.id]));

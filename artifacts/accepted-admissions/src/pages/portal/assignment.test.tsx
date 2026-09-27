@@ -76,7 +76,13 @@ const mocks = vi.hoisted(() => ({
   latestAttemptId: "attempt-1" as string | null,
   latestAttemptStatus: "active" as string | null,
   timezone: "Asia/Tokyo",
-  linkedSession: null as null | { id: string; dateTime: string; timezone: string; durationMinutes: number },
+  linkedSession: null as null | {
+    id: string;
+    courseId?: string;
+    dateTime: string;
+    timezone: string;
+    durationMinutes: number;
+  },
   linkedSessionFetched: true,
 }));
 
@@ -85,6 +91,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getGetAttemptQueryKey: (id: string) => ["/api/attempts", id],
   getGetAttemptResultQueryKey: (id: string) => ["/api/attempts", id, "result"],
+  getGetDashboardQueryKey: () => ["/api/dashboard"],
   useGetCurrentUser: () => ({ data: { role: "student", timezone: mocks.timezone } }),
   getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
   useGetSession: () => ({
@@ -1569,22 +1576,55 @@ describe("student attempt UI", () => {
     expect(submitMutate).not.toHaveBeenCalled();
   });
 
-  test("Save for later pauses without submitting and leaves the quiz", () => {
+  test("Pause stays in the quiz and does not submit", () => {
     render(<PortalAssignment />);
-    fireEvent.click(screen.getByRole("button", { name: /However/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
-    fireEvent.click(screen.getByTestId("save-for-later"));
+    fireEvent.click(screen.getByRole("button", { name: /^Pause$/i }));
+    expect(screen.getByRole("button", { name: /^Pause$/i })).toHaveProperty("type", "button");
     expect(submitMutate).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(pauseMutate).toHaveBeenCalledWith(
-      { attemptId: "attempt-1", data: { currentQuestionIndex: 1 } },
+      expect.objectContaining({
+        attemptId: "attempt-1",
+        data: expect.objectContaining({ currentQuestionIndex: 0 }),
+      }),
       expect.any(Object),
     );
-    pauseMutate.mock.calls[0][1].onSuccess({
-      ...mocks.attempt,
-      status: "paused",
-      currentQuestionIndex: 1,
-    });
-    expect(setLocation).toHaveBeenCalledWith("/portal");
+  });
+
+  test("Save for later flags the current question and stays in the quiz", () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const saveForLater = screen.getByTestId("save-for-later");
+    expect(saveForLater).toHaveProperty("type", "button");
+    fireEvent.click(saveForLater);
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(pauseMutate).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(screen.getByTestId("save-for-later").textContent).toMatch(/Saved for later/i);
+    expect(screen.getByRole("button", { name: /However/i }).className).toMatch(/border-primary/);
+    expect(saveMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptId: "attempt-1",
+        data: expect.objectContaining({
+          questionId: "q1",
+          finalAnswer: "a",
+          flagged: true,
+        }),
+      }),
+      expect.any(Object),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Next$/i }));
+    expect(screen.getByText("Which word is most precise?")).toBeTruthy();
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Question 1, saved for later/i }));
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(screen.getByTestId("save-for-later").textContent).toMatch(/Saved for later/i);
+    expect(screen.getByRole("button", { name: /However/i }).className).toMatch(/border-primary/);
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(pauseMutate).not.toHaveBeenCalled();
   });
 
   test("Resume restores the saved question and answers without a Flag control", () => {
@@ -1602,6 +1642,7 @@ describe("student attempt UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /Previous/i }));
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /However/i }).className).toMatch(/border-primary/);
+    expect(screen.getByTestId("save-for-later").textContent).toMatch(/Saved for later/i);
     expect(screen.queryByRole("button", { name: /^Flag(ged)?$/i })).toBeNull();
     expect(screen.queryByText(/Flagged and reported questions aren’t scored/i)).toBeNull();
   });
@@ -1645,15 +1686,14 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("report-question").textContent).toMatch(/Reported/);
   });
 
-  test("paused overlay offers Resume and Save for later, and ?resume=1 auto-resumes", () => {
+  test("paused overlay offers Resume, and ?resume=1 auto-resumes", () => {
     mocks.attempt.status = "paused";
     mocks.attempt.currentQuestionIndex = 1;
     render(<PortalAssignment />);
     expect(screen.getByRole("button", { name: /^Resume$/i })).toBeTruthy();
-    expect(screen.getByTestId("save-for-later")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("save-for-later"));
-    expect(setLocation).toHaveBeenCalledWith("/portal");
+    expect(screen.queryByTestId("save-for-later")).toBeNull();
     expect(submitMutate).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
     cleanup();
     mocks.search = "resume=1";
     render(<PortalAssignment />);

@@ -3828,7 +3828,7 @@ export const SaveAttemptResponseResponse = zod.object({
 
 
 /**
- * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item after Save for later.
+ * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item. Optional responses are written before the attempt is paused so the latest answers are not lost if autosave has not finished. An invalid response does not pause the attempt. Save for later does not call this endpoint.
  * @summary Pause an active attempt
  */
 export const PauseAttemptParams = zod.object({
@@ -3837,10 +3837,17 @@ export const PauseAttemptParams = zod.object({
 
 export const pauseAttemptBodyCurrentQuestionIndexMin = 0;
 
+export const pauseAttemptBodyFinalAnswerMax = 2000;
+
 
 
 export const PauseAttemptBody = zod.object({
-  "currentQuestionIndex": zod.number().min(pauseAttemptBodyCurrentQuestionIndexMin).optional().describe('Zero-based question index to restore when the student resumes.')
+  "currentQuestionIndex": zod.number().min(pauseAttemptBodyCurrentQuestionIndexMin).optional().describe('Zero-based question index to restore when the student resumes.'),
+  "responses": zod.array(zod.object({
+    "questionId": zod.string(),
+    "finalAnswer": zod.string().max(pauseAttemptBodyFinalAnswerMax).nullish(),
+    "flagged": zod.boolean().optional()
+  })).optional().describe('In-progress answers to store before the attempt is paused.')
 })
 
 export const pauseAttemptResponseCurrentQuestionIndexMin = 0;
@@ -4083,7 +4090,7 @@ export const ResumeAttemptResponse = zod.object({
 
 
 /**
- * Students can report a broken or incorrect item and continue the quiz. Creates an admin queue row and emails admin@acceptedadmissions.org. Reported questions are excluded from scoring along with flagged items.
+ * Students can report a broken or incorrect item and continue the quiz. Creates an admin queue row and emails admin@acceptedadmissions.org. Reported questions are excluded from scoring. A review flag on an answer is not.
  * @summary Report the current question as incorrect or a bug
  */
 export const ReportAttemptQuestionParams = zod.object({

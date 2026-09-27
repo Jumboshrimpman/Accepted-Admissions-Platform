@@ -145,3 +145,28 @@ export function wantsResumeAttempt(search?: string | null): boolean {
   const query = search.startsWith("?") ? search.slice(1) : search;
   return new URLSearchParams(query).get("resume") === "1";
 }
+
+export type PauseResponseDraft = {
+  questionId: string;
+  finalAnswer: string | null;
+  flagged: boolean;
+};
+
+/** Answers to send with pause so hiding the quiz cannot drop a selection that has not autosaved yet. */
+export function quizResponsesForPause(
+  local: Record<string, { finalAnswer?: string | null; flagged?: boolean } | undefined>,
+): PauseResponseDraft[] {
+  const drafts: PauseResponseDraft[] = [];
+  for (const [questionId, response] of Object.entries(local)) {
+    if (!response) continue;
+    const trimmed = response.finalAnswer?.trim() ?? "";
+    const flagged = Boolean(response.flagged);
+    if (!trimmed && !flagged) continue;
+    drafts.push({
+      questionId,
+      finalAnswer: trimmed || null,
+      flagged,
+    });
+  }
+  return drafts;
+}

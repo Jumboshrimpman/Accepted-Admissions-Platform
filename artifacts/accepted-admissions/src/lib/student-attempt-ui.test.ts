@@ -12,6 +12,7 @@ import {
   normalizeQuestionIndex,
   shouldAutoSubmitOnExpiry,
   studentAssignmentActionLabel,
+  quizResponsesForPause,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
   studentSeesFinishedResult,
@@ -73,6 +74,21 @@ test("resume copy and href restore an in-progress quiz from the portal", () => {
   assert.equal(wantsResumeAttempt("resume=1"), true);
   assert.equal(wantsResumeAttempt("foo=1"), false);
   assert.equal(normalizeQuestionIndex(7, 3), 2);
+});
+
+test("pause stores answered items and review flags", () => {
+  assert.deepEqual(
+    quizResponsesForPause({
+      q1: { finalAnswer: "a", flagged: true },
+      q2: { finalAnswer: "  ", flagged: false },
+      q3: { finalAnswer: "", flagged: true },
+      q4: undefined,
+    }),
+    [
+      { questionId: "q1", finalAnswer: "a", flagged: true },
+      { questionId: "q3", finalAnswer: null, flagged: true },
+    ],
+  );
 });
 
 test("timer expiry with zero answers does not show a finished result", () => {

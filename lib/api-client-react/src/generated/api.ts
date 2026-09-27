@@ -5624,7 +5624,7 @@ export const getPauseAttemptUrl = (attemptId: string,) => {
 }
 
 /**
- * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item after Save for later.
+ * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item. Save for later does not call this endpoint.
  * @summary Pause an active attempt
  */
 export const pauseAttempt = async (attemptId: string,
@@ -5768,7 +5768,7 @@ export const getReportAttemptQuestionUrl = (attemptId: string,) => {
 }
 
 /**
- * Students can report a broken or incorrect item and continue the quiz. Creates an admin queue row and emails admin@acceptedadmissions.org. Reported questions are excluded from scoring along with flagged items.
+ * Students can report a broken or incorrect item and continue the quiz. Creates an admin queue row and emails admin@acceptedadmissions.org. Reported questions are excluded from scoring. A review flag on an answer is not.
  * @summary Report the current question as incorrect or a bug
  */
 export const reportAttemptQuestion = async (attemptId: string,

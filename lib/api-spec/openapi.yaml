@@ -1559,7 +1559,10 @@ paths:
       description: >
         Marks the attempt paused and stops the timer. Optional
         currentQuestionIndex is stored so Resume returns the student to the
-        same item after Save for later.
+        same item. Optional responses are written before the attempt is paused
+        so the latest answers are not lost if autosave has not finished. An
+        invalid response does not pause the attempt. Save for later does not
+        call this endpoint.
       parameters:
         - $ref: "#/components/parameters/AttemptId"
       requestBody:
@@ -1613,7 +1616,8 @@ paths:
       description: >
         Students can report a broken or incorrect item and continue the quiz.
         Creates an admin queue row and emails admin@acceptedadmissions.org.
-        Reported questions are excluded from scoring along with flagged items.
+        Reported questions are excluded from scoring. A review flag on an
+        answer is not.
       parameters:
         - $ref: "#/components/parameters/AttemptId"
       requestBody:
@@ -3490,7 +3494,11 @@ components:
         prediction: { type: ["string", "null"] }
         predictionLocked: { type: boolean }
         finalAnswer: { type: ["string", "null"] }
-        flagged: { type: boolean }
+        flagged:
+          type: boolean
+          description: >
+            Review mark for the current question. The student stays in the quiz
+            and can return to it. The answer is still scored.
         savedAt: { type: string, format: date-time }
         revealed: { type: boolean }
         correct: { type: ["boolean", "null"] }
@@ -3528,6 +3536,18 @@ components:
           type: number
           minimum: 0
           description: Zero-based question index to restore when the student resumes.
+        responses:
+          type: array
+          description: >
+            In-progress answers to store before the attempt is paused. Save for
+            later sends these so a selection that has not autosaved yet is kept.
+          items:
+            type: object
+            required: [questionId]
+            properties:
+              questionId: { type: string }
+              finalAnswer: { type: ["string", "null"], maxLength: 2000 }
+              flagged: { type: boolean }
     Attempt:
       type: object
       required: [id, assignmentId, status, startedAt, activeSeconds, pausedSeconds, pauseCount, remainingSeconds, currentQuestionIndex, responses]
