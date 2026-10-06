@@ -164,6 +164,14 @@ test("hides the similar-problem key until the retry is graded", () => {
   );
 });
 
+test("accepts equivalent grid-in spacing, minus signs, and factor order", () => {
+  assert.equal(answersMatch("−13", "-13"), true);
+  assert.equal(answersMatch("(x + 6)(x - 3)", "(x+6)(x-3); (x-3)(x+6)"), true);
+  assert.equal(answersMatch("(x - 3)(x + 6)", "(x+6)(x-3); (x-3)(x+6)"), true);
+  assert.equal(answersMatch("5x²(3x − 5)", "5x^2(3x-5); (3x-5)(5x^2)"), true);
+  assert.equal(answersMatch("(x+6)(x-4)", "(x+6)(x-3); (x-3)(x+6)"), false);
+});
+
 test("accepts semicolon-separated SPR forms without requiring A–D", () => {
   assert.deepEqual(retryOutcomeFromAnswer({ studentAnswer: "9", correctAnswer: "9; 9.0" }), {
     correct: true,

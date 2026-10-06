@@ -479,6 +479,7 @@ import {
   isStudentUsableServedQuestion,
   liveDiagnosticAssignmentTitle,
 } from "../lib/sat-bank-diagnostic-quality";
+import { isXavierAuthoredFollowUpQuestion } from "../lib/xavier-follow-up-content";
 import { scoreAttemptItems } from "../lib/attempt-scoring";
 import {
   createQuestionReport,
@@ -3607,7 +3608,10 @@ async function finalizeAttemptResult(
     const correct = answersMatch(item.response?.finalAnswer, item.question.correctAnswer);
     const flagged = item.response?.flagged ?? false;
     const reported = reportedQuestionIds.has(item.question.id);
-    const unusable = !isStudentUsableServedQuestion(item.question);
+    const unusable = !(
+      isStudentUsableServedQuestion(item.question) ||
+      isXavierAuthoredFollowUpQuestion(item.question)
+    );
     scoredItems.push({ correct, flagged, reported, unusable });
     if (item.response) {
       await db
@@ -11076,7 +11080,8 @@ router.get(
             ({ question }) =>
               (question.reviewStatus === "reviewed" ||
                 question.reviewStatus === "approved") &&
-              isStudentUsableServedQuestion(question),
+              (isStudentUsableServedQuestion(question) ||
+                isXavierAuthoredFollowUpQuestion(question)),
           )
         : joined;
     const [latestAttempt] = await db

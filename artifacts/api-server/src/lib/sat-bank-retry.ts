@@ -100,23 +100,42 @@ export function decideRetrySource(input: {
 export function acceptedAnswerForms(correctAnswer: string): string[] {
   return correctAnswer
     .split(";")
-    .map((part) => part.trim().toLowerCase())
+    .map((part) => canonicalizeAnswer(part))
     .filter(Boolean);
+}
+
+/** Hyphens, superscripts, and spacing students use for the same grid-in. */
+export function canonicalizeAnswer(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[−–—]/g, "-")
+    .replace(/[×·]/g, "*")
+    .replace(/²/g, "^2")
+    .replace(/³/g, "^3")
+    .replace(/⁴/g, "^4");
+}
+
+function compactExpression(value: string): string {
+  const canonical = canonicalizeAnswer(value);
+  const withoutStar = /[a-z(]/.test(canonical) ? canonical.replace(/\*/g, "") : canonical;
+  return withoutStar.replace(/\s+/g, "");
 }
 
 export function answersMatch(
   studentAnswer: string | null | undefined,
   correctAnswer: string,
 ): boolean {
-  const given = (studentAnswer ?? "").trim().toLowerCase();
+  const given = canonicalizeAnswer(studentAnswer ?? "");
   if (!given) return false;
   const forms = acceptedAnswerForms(correctAnswer);
   if (forms.includes(given)) return true;
-  const numeric = Number(given);
-  if (Number.isFinite(numeric) && forms.some((form) => Number(form) === numeric)) {
+  const numeric = Number(given.replace(/\s+/g, ""));
+  if (Number.isFinite(numeric) && forms.some((form) => Number(form.replace(/\s+/g, "")) === numeric)) {
     return true;
   }
-  return false;
+  const compactGiven = compactExpression(given);
+  return forms.some((form) => compactExpression(form) === compactGiven);
 }
 
 export function retryOutcomeFromAnswer(input: {

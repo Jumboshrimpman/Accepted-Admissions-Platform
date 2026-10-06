@@ -1135,6 +1135,33 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/sat-bank-figures/i)).toBeNull();
   });
 
+  test("authored follow-up grid-ins accept a typed number without opening SAT-bank SPR", () => {
+    mocks.questions = [
+      {
+        id: "q-grid",
+        position: 0,
+        subject: "SAT Math",
+        questionType: "spr",
+        presentation: "text",
+        prompt:
+          "8|x - 3| - 11|x - 3| = -48\n\nWhat is the negative solution to the given equation?",
+        stimulus: null,
+        choices: [],
+        skill: "absolute value equations",
+        difficulty: "hard",
+        predictionFirst: false,
+      },
+    ];
+    keepOnlyFirstQuestion();
+    render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-no-answerable-questions")).toBeNull();
+    expect(screen.queryByTestId("spr-answer")).toBeNull();
+    const input = screen.getByPlaceholderText("Type a number or expression");
+    fireEvent.change(input, { target: { value: "-13" } });
+    expect(saveMutate).toHaveBeenCalled();
+    expect(screen.getByTestId("grid-in-answer")).toBeTruthy();
+  });
+
   test("figure-primary comment without usable A–D text does not show letter-only buttons", () => {
     mocks.questions = [
       {

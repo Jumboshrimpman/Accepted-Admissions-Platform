@@ -12,9 +12,17 @@ export const GEOMETRY_SAT_FOLLOW_UP_TITLE = "Geometry SAT Questions";
 /** Official SAT area and volume follow-up. Same open-after-session behavior. */
 export const GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE = "Geometry Area and Volume";
 
+/** Xavier SAT Math practice assigned after Michelle's latest session. */
+export const SAT_MATH_FOLLOW_UP_TITLE = "SAT Math Problems";
+
+/** Xavier factoring practice assigned after Michelle's latest session. */
+export const FACTORING_QUIZ_FOLLOW_UP_TITLE = "Factoring Quiz";
+
 const POST_SESSION_FOLLOW_UP_TITLES = new Set<string>([
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+  SAT_MATH_FOLLOW_UP_TITLE,
+  FACTORING_QUIZ_FOLLOW_UP_TITLE,
 ]);
 
 export function isPostSessionFollowUpQuiz(assignment: {

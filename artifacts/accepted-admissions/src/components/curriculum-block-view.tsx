@@ -11,6 +11,37 @@ function textValue(value: unknown, studentFacing = false): string {
   return studentFacing ? studentFacingCopy(text) : text;
 }
 
+function isPdfUrl(url: string): boolean {
+  return /\.pdf(?:$|\?)/i.test(url);
+}
+
+function SessionResourceLink({
+  url,
+  label,
+  openLabel,
+}: {
+  url: string;
+  label: string;
+  openLabel: string;
+}) {
+  const pdf = isPdfUrl(url);
+  const filename = pdf
+    ? decodeURIComponent(url.split("/").pop()?.split("?")[0] || "download.pdf")
+    : undefined;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={filename}
+      className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+    >
+      <ExternalLink className="h-4 w-4" />
+      {pdf ? `Download ${label}` : openLabel}
+    </a>
+  );
+}
+
 export function CurriculumBlockView({
   block,
   studentFacing = false,
@@ -43,17 +74,7 @@ export function CurriculumBlockView({
         {html && !isUnfinishedHomeworkClientCopy(html) ? (
           <div className="text-sm text-muted-foreground">{html}</div>
         ) : null}
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open resource
-          </a>
-        ) : null}
+        {url ? <SessionResourceLink url={url} label={title || "PDF"} openLabel="Open resource" /> : null}
       </div>
     );
   }
@@ -96,17 +117,7 @@ export function CurriculumBlockView({
     );
   }
   if (kind === "external_link" || kind === "file_link") {
-    return (
-      <a
-        href={url || "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-      >
-        <ExternalLink className="h-4 w-4" />
-        {title || "Open resource"}
-      </a>
-    );
+    return <SessionResourceLink url={url || "#"} label={title || "resource"} openLabel={title || "Open resource"} />;
   }
   if (title || description) {
     return (

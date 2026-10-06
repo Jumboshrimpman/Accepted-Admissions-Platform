@@ -267,11 +267,16 @@ export function looksGluedMinusSpacing(text: string | null | undefined): boolean
   return GLUED_MINUS_ONTO_COEFF_VAR.test(raw);
 }
 
+/** `|x - 3|` is an absolute-value bar, not a fraction-layout pipe dump. */
+function withoutAbsoluteValueBars(value: string): string {
+  return value.replace(/\|[A-Za-z](?:\s*[+\-−–]\s*\d+)?\|/g, "");
+}
+
 export function looksFailedMathLayoutDump(text: string | null | undefined): boolean {
   const value = (text ?? "").trim();
   if (!value) return false;
   if (MATH_LAYOUT_GLYPH.test(value) || /[\uFFFD�]/.test(value)) return true;
-  const slashes = (value.match(/[|\\/]/g) ?? []).length;
+  const slashes = (withoutAbsoluteValueBars(value).match(/[|\\/]/g) ?? []).length;
   if (value.length <= 96 && slashes >= 3 && /[=()]/.test(value)) return true;
   if (/\bF\s+\d/.test(value) && /=/.test(value) && value.length <= 64) return true;
   return false;
@@ -807,10 +812,32 @@ export function hasCompleteLetterChoiceText(
   return labels.size >= 4;
 }
 
-/** Student-facing items must be answerable A–D. Never ship an unavailable-choice shell. */
+/**
+ * Tutor-authored grid-in on a follow-up quiz. Presentation is explicit text,
+ * so broken SAT-bank SPR extracts (no presentation) stay hidden.
+ */
+export function isAuthoredGridInQuestion(
+  question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
+): boolean {
+  const type = (question.questionType ?? "").trim().toLowerCase();
+  if (type !== "spr" && type !== "student_produced_response" && type !== "free_response") return false;
+  if (question.presentation !== "text") return false;
+  if (hasCompleteLetterChoiceText(question.choices)) return false;
+  const prompt = question.prompt?.trim() ?? "";
+  if (prompt.length < 40) return false;
+  if (looksBrokenMathOcr(prompt) || looksCorruptStemOcr(prompt) || looksGarbledQuizText(prompt)) {
+    return false;
+  }
+  const stimulus = question.stimulus?.trim() ?? "";
+  if (stimulus && (looksBrokenMathOcr(stimulus) || looksGarbledQuizText(stimulus))) return false;
+  return true;
+}
+
+/** Student-facing items must be answerable A–D, or an authored grid-in. Never ship an unavailable-choice shell. */
 export function isStudentAnswerableQuizQuestion(
   question: Pick<AssignmentQuestion, "prompt" | "stimulus" | "choices" | "presentation" | "questionType">,
 ): boolean {
+  if (isAuthoredGridInQuestion(question)) return true;
   const figurePrimarySalvage =
     question.presentation === "figure_primary" &&
     hasQuizFigure(question) &&
@@ -928,5 +955,8 @@ export function displayAnswerLabel(
   if (match?.text.trim() && !SEE_FIGURE_CHOICE.test(match.text)) {
     return match.text;
   }
-  return (match?.label ?? answer).toUpperCase();
+  if (match?.label) return match.label.toUpperCase();
+  const firstForm = answer.split(";")[0]?.trim() || answer;
+  if (/^[a-d]$/i.test(firstForm)) return firstForm.toUpperCase();
+  return firstForm;
 }

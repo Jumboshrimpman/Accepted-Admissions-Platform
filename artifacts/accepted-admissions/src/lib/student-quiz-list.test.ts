@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { isPastSession } from "./session-display.ts";
 import {
+  FACTORING_QUIZ_FOLLOW_UP_TITLE,
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
+  SAT_MATH_FOLLOW_UP_TITLE,
   classifyStudentQuizzes,
   collapsedStudentQuizzes,
   isStandaloneStudentTodo,
@@ -225,6 +227,36 @@ test("Geometry Area and Volume with no session is an open standalone to-do", () 
   assert.equal(classified.archived.length, 0);
   assert.equal(classified.open[0]?.status, "Not started");
   assert.equal(studentQuizActionLabel(classified.open[0]!, false), "Start quiz");
+});
+
+test("SAT Math Problems and Factoring Quiz stay open after the linked session day", () => {
+  const now = new Date("2026-09-24T14:00:00.000Z");
+  const sessions = [session({ id: "past-session", dateTime: "2026-09-23T17:00:00.000Z" })];
+  for (const title of [SAT_MATH_FOLLOW_UP_TITLE, FACTORING_QUIZ_FOLLOW_UP_TITLE]) {
+    const followUp = quiz({
+      id: title,
+      title,
+      sessionId: "past-session",
+      latestAttemptStatus: null,
+    });
+    const classified = classifyStudentQuizzes([followUp], sessions, {
+      now,
+      clientTimezone: "Asia/Dubai",
+    });
+    assert.equal(classified.open.length, 1);
+    assert.equal(classified.archived.length, 0);
+    assert.equal(studentQuizActionLabel(classified.open[0]!, false), "Start quiz");
+  }
+  const preview = quiz({
+    id: "factoring-preview",
+    title: FACTORING_QUIZ_FOLLOW_UP_TITLE,
+    sessionId: null,
+    latestAttemptStatus: null,
+  });
+  assert.equal(isStandaloneStudentTodo(preview), true);
+  const standalone = classifyStudentQuizzes([preview], [], { now, clientTimezone: "Asia/Dubai" });
+  assert.equal(standalone.open.length, 1);
+  assert.equal(studentQuizActionLabel(standalone.open[0]!, false), "Start quiz");
 });
 
 test("a scored past-session quiz keeps its result and still archives", () => {
