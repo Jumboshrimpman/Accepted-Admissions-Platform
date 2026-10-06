@@ -123,6 +123,8 @@ test("preserves A–D choice text on figure-primary items instead of hiding it",
 });
 
 test("rejects fraction dumps, missing exponents, and hides OCR next to a crop", () => {
+  assert.equal(looksFailedMathLayoutDump("8|x - 3| - 11|x - 3| = -48"), false);
+  assert.equal(looksFailedMathLayoutDump("| | | = ()"), true);
   assert.equal(looksFailedMathLayoutDump("w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x"), true);
   assert.equal(isStudentReadableChoiceText("w = −19 y F 28x"), false);
   assert.equal(isStudentReadableChoiceText("b h"), false);

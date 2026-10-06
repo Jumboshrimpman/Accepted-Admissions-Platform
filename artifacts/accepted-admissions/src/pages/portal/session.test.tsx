@@ -23,7 +23,15 @@ const mocks = vi.hoisted(() => ({
     status: string;
     visibility: string;
     position: number;
-    config: { title?: string; items?: string[] };
+    config: {
+      title?: string;
+      label?: string;
+      text?: string;
+      html?: string;
+      url?: string;
+      libraryKind?: string;
+      items?: string[];
+    };
   }>,
   studentNotes: null as string | null,
   artifacts: [] as Array<{ id: string; kind: string; content: string }>,
@@ -310,6 +318,71 @@ describe("student session quiz path", () => {
     expect(card.textContent).not.toContain("Start pre-work");
     expect(card.textContent).not.toContain("Due before");
   });
+});
+
+test("shows SAT Math, Factoring, and a downloadable Factoring Notes PDF on the session page", () => {
+  const original = mocks.assignments.map((item) => ({ ...item }));
+  mocks.dateTime = "2020-01-01T17:00:00.000Z";
+  mocks.timezone = "UTC";
+  mocks.assignments.splice(
+    0,
+    mocks.assignments.length,
+    {
+      id: "sat-math",
+      title: "SAT Math Problems",
+      deliveryPhase: "before_session",
+      questionCount: 22,
+      timeLimitMinutes: 33,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+    },
+    {
+      id: "factoring",
+      title: "Factoring Quiz",
+      deliveryPhase: "before_session",
+      questionCount: 26,
+      timeLimitMinutes: 39,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+    },
+  );
+  mocks.blocks = [
+    {
+      id: "factoring-notes",
+      kind: "external_link",
+      status: "published",
+      visibility: "both",
+      position: 0,
+      config: {
+        title: "Factoring Notes",
+        label: "Factoring Notes",
+        text: "Factoring notes from this session. Download the PDF and keep it open while you practice.",
+        url: "/media/factoring/xavier-factoring-notes.pdf",
+        libraryKind: "resource",
+      },
+    },
+  ];
+  try {
+    render(<PortalSession />);
+    const sat = screen.getByTestId("session-homework-sat-math");
+    expect(sat.textContent).toContain("SAT Math Problems");
+    expect(sat.textContent).toContain("22 questions");
+    expect(sat.textContent).toContain("33 minutes");
+    expect(sat.textContent).toContain("Start quiz");
+    const factoring = screen.getByTestId("session-homework-factoring");
+    expect(factoring.textContent).toContain("Factoring Quiz");
+    expect(factoring.textContent).toContain("26 questions");
+    expect(factoring.textContent).toContain("39 minutes");
+    const notes = screen.getByRole("link", { name: /Download Factoring Notes/i });
+    expect(notes.getAttribute("href")).toBe("/media/factoring/xavier-factoring-notes.pdf");
+    expect(notes.getAttribute("download")).toBe("xavier-factoring-notes.pdf");
+    expect(screen.getByTestId("after-session-reports")).toBeTruthy();
+  } finally {
+    mocks.assignments.splice(0, mocks.assignments.length, ...original);
+    mocks.blocks = [];
+  }
 });
 
 describe("after-session reports", () => {

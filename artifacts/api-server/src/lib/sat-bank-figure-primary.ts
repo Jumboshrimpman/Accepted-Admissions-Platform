@@ -659,11 +659,16 @@ export function looksBrokenStemPlaceholders(text: string | null | undefined): bo
 }
 
 /** Failed fraction / box-drawing / pipe dumps such as `w = − 19 ⎜⎜⎝ ⎟⎟⎠ y`. */
+/** `|x - 3|` is an absolute-value bar, not a fraction-layout pipe dump. */
+function withoutAbsoluteValueBars(value: string): string {
+  return value.replace(/\|[A-Za-z](?:\s*[+\-−–]\s*\d+)?\|/g, "");
+}
+
 export function looksFailedMathLayoutDump(text: string | null | undefined): boolean {
   const value = (text ?? "").trim();
   if (!value) return false;
   if (MATH_LAYOUT_GLYPH.test(value) || /[\uFFFD�]/.test(value)) return true;
-  const slashes = (value.match(/[|\\/]/g) ?? []).length;
+  const slashes = (withoutAbsoluteValueBars(value).match(/[|\\/]/g) ?? []).length;
   if (value.length <= 96 && slashes >= 3 && /[=()]/.test(value)) return true;
   if (/\bF\s+\d/.test(value) && /=/.test(value) && value.length <= 64) return true;
   return false;

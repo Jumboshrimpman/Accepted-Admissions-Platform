@@ -412,6 +412,8 @@ test("rejects math OCR that lost exponents, radicals, or dumped fractions", () =
     looksBrokenMathOcr("14x = 2 w + 19\n7y\nWhich equation correctly expresses w in terms of x and y ?\nf(x)"),
     true,
   );
+  assert.equal(looksFailedMathLayoutDump("8|x - 3| - 11|x - 3| = -48"), false);
+  assert.equal(looksFailedMathLayoutDump("| | | = ()"), true);
   assert.equal(looksFailedMathLayoutDump("w = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ � = − 19 ⎜⎜⎜⎝ ⎟⎟⎠ y ⎟ 2⎞⎟ ⎛28x"), true);
   assert.equal(looksFailedMathLayoutDump("w = −19 y F 28x"), true);
   assert.equal(isStudentReadableChoiceText("w = −19 y F 28x"), false);

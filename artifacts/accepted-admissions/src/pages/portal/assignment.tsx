@@ -75,6 +75,7 @@ import {
   isStudentReadableChoiceText,
   shouldHideMismatchedQuizFigures,
   shouldHideQuizOcrStem,
+  isAuthoredGridInQuestion,
   shouldShowQuizChoices,
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
@@ -494,6 +495,25 @@ function AnswerChoices({
   const choices = (rawChoices ?? [])
     .map((choice) => ({ ...choice, text: formatStudentChoiceText(choice.text) }))
     .filter((choice) => isStudentReadableChoiceText(choice.text));
+  if (isAuthoredGridInQuestion(question)) {
+    return (
+      <label className={`block space-y-2 ${ink ? "text-white" : ""}`} data-testid="grid-in-answer">
+        <span className="text-lg font-semibold">{ink ? "Enter the answer together" : "Your answer"}</span>
+        <input
+          type="text"
+          value={selected ?? ""}
+          disabled={disabled}
+          placeholder="Type a number or expression"
+          onChange={(event) => onSelect(event.target.value)}
+          className={`h-12 w-full rounded-xl border px-4 text-base ${
+            ink
+              ? "border-white/30 bg-white/10 text-white placeholder:text-white/50"
+              : "border-border bg-background"
+          }`}
+        />
+      </label>
+    );
+  }
   if (shouldShowQuizChoices({ ...question, choices }) && hasCompleteLetterChoiceText(choices)) {
     return (
       <div className="min-w-0 max-w-full space-y-3 overflow-visible" data-testid="answer-choices">
