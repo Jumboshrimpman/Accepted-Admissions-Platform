@@ -1,3 +1,12 @@
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
+  adminAttendeeEmailsForPair,
+  mergeCalendarAttendees,
+  type CalendarInviteParty,
+} from "./calendar-pair-attendees.ts";
+
+export type { CalendarInviteParty };
+
 export type AvailabilityWindow = { start: string; end: string };
 export type AvailabilityRule = {
   timezone: string;
@@ -147,13 +156,42 @@ export function calendarEventPayload(
   timeZone: string,
   attendeeEmail: string,
   location?: string,
+  parties?: {
+    student?: CalendarInviteParty | null;
+    tutor?: CalendarInviteParty | null;
+  } | null,
 ) {
+  const existing = attendeeEmail.trim() ? [{ email: attendeeEmail }] : [];
+  const extras = adminAttendeeEmailsForPair(parties?.student, parties?.tutor);
+  const attendees = mergeCalendarAttendees(existing, extras);
   return {
     summary: title,
     description: "Accepted Admissions tutoring session",
     ...(location ? { location } : {}),
     start: { dateTime: start.toISOString(), timeZone },
     end: { dateTime: new Date(start.getTime() + durationMinutes * 60_000).toISOString(), timeZone },
-    attendees: [{ email: attendeeEmail }],
+    attendees: attendees.length > 0 ? attendees : [{ email: attendeeEmail }],
   };
+}
+
+/** Calendar invite used by booking create, reschedule, and admin session updates. */
+export function bookingCalendarEventPayload(args: {
+  title: string;
+  start: Date;
+  durationMinutes: number;
+  timeZone: string;
+  attendeeEmail: string;
+  location?: string;
+  student: CalendarInviteParty | null;
+  tutor: CalendarInviteParty | null;
+}) {
+  return calendarEventPayload(
+    args.title,
+    args.start,
+    args.durationMinutes,
+    args.timeZone,
+    args.attendeeEmail,
+    args.location,
+    { student: args.student, tutor: args.tutor },
+  );
 }
