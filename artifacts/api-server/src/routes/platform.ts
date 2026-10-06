@@ -82,13 +82,14 @@ import {
 import { summarizeCreditHours } from "../lib/credit-hours";
 import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
 import {
-  calendarEventPayload,
+  bookingCalendarEventPayload,
   generateAvailableSlots,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
   satTutorWeeklyHours,
   type AvailabilityRule,
   type BusyWindow,
+  type CalendarInviteParty,
 } from "../lib/booking";
 import {
   SHARED_FALL_MEETING_URL,
@@ -4517,14 +4518,21 @@ async function calendarAccessForUser(tutorUserId: string) {
   return calendarAccess(profile.id);
 }
 
-async function attendeeEmailForUser(userId: string | null | undefined): Promise<string> {
-  if (!userId) return "";
+async function calendarInviteParty(
+  userId: string | null | undefined,
+  fallback: CalendarInviteParty = {},
+): Promise<CalendarInviteParty> {
+  if (!userId) return fallback;
   const [row] = await db
-    .select({ email: usersTable.email })
+    .select({ email: usersTable.email, clerkUserId: usersTable.clerkUserId })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
-  return row?.email ?? "";
+  if (!row) return fallback;
+  return {
+    email: row.email || fallback.email,
+    clerkUserId: row.clerkUserId || fallback.clerkUserId,
+  };
 }
 
 async function syncGoogleCalendarForSessionChange(args: {
@@ -4574,19 +4582,25 @@ async function syncGoogleCalendarForSessionChange(args: {
       providerEventUrl: args.existing.providerEventUrl,
     };
   }
-  const event = await runTutorCalendarCall(access, async (token) =>
+  const [student, tutor] = await Promise.all([
+    calendarInviteParty(args.next.clientUserId),
+    calendarInviteParty(args.next.tutorUserId ?? args.existing.tutorUserId),
+  ]);
+  const event = await runTutorCalendarCall(access, (token) =>
     updateGoogleEvent(
       token,
       access.connection.calendarId!,
       args.existing.providerEventId!,
-      calendarEventPayload(
-        args.next.title,
-        args.next.dateTime,
-        args.next.durationMinutes,
-        args.next.timezone,
-        await attendeeEmailForUser(args.next.clientUserId),
-        SHARED_FALL_MEETING_URL,
-      ),
+      bookingCalendarEventPayload({
+        title: args.next.title,
+        start: args.next.dateTime,
+        durationMinutes: args.next.durationMinutes,
+        timeZone: args.next.timezone,
+        attendeeEmail: student.email ?? "",
+        location: SHARED_FALL_MEETING_URL,
+        student,
+        tutor,
+      }),
     ),
   );
   return {
@@ -6360,18 +6374,25 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       });
     });
     try {
+      const student = {
+        email: req.appUser!.email,
+        clerkUserId: req.appUser!.clerkUserId,
+      };
+      const tutorParty = await calendarInviteParty(tutor.userId, { email: tutor.email });
       const event = await runTutorCalendarCall(access, (token) =>
         createGoogleEvent(
           token,
           access.connection.calendarId!,
-          calendarEventPayload(
-            created.title,
+          bookingCalendarEventPayload({
+            title: created.title,
             start,
             durationMinutes,
-            rule.timezone,
-            req.appUser!.email,
-            SHARED_FALL_MEETING_URL,
-          ),
+            timeZone: rule.timezone,
+            attendeeEmail: req.appUser!.email,
+            location: SHARED_FALL_MEETING_URL,
+            student,
+            tutor: tutorParty,
+          }),
         ),
       );
       const [updated] = await db
@@ -6503,23 +6524,29 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       });
     });
     const previousStart = session.dateTime;
-    const attendeeEmail = session.clientUserId
-      ? ((await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, session.clientUserId)).limit(1))[0]?.email ?? "")
-      : "";
+    const [student, tutorParty] = await Promise.all([
+      calendarInviteParty(session.clientUserId),
+      calendarInviteParty(session.tutorUserId, { email: profile.email }),
+    ]);
+    const attendeeEmail = student.email ?? "";
+    const inviteAt = (startTime: Date, timeZone: string) =>
+      bookingCalendarEventPayload({
+        title: session.title,
+        start: startTime,
+        durationMinutes: session.durationMinutes,
+        timeZone,
+        attendeeEmail,
+        location: SHARED_FALL_MEETING_URL,
+        student,
+        tutor: tutorParty,
+      });
     const event = session.providerEventId
       ? await runTutorCalendarCall(access, (token) =>
           updateGoogleEvent(
             token,
             access.connection.calendarId!,
             session.providerEventId!,
-            calendarEventPayload(
-              session.title,
-              start,
-              session.durationMinutes,
-              rule.timezone,
-              attendeeEmail,
-              SHARED_FALL_MEETING_URL,
-            ),
+            inviteAt(start, rule.timezone),
           ),
         )
       : null;
@@ -6542,14 +6569,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             token,
             access.connection.calendarId!,
             session.providerEventId!,
-            calendarEventPayload(
-              session.title,
-              previousStart,
-              session.durationMinutes,
-              session.timezone,
-              "",
-              SHARED_FALL_MEETING_URL,
-            ),
+            inviteAt(previousStart, session.timezone),
           ),
         );
       }
