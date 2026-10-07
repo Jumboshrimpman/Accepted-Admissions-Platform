@@ -3,6 +3,8 @@ import {
   assignmentQuestionsTable,
   assignmentsTable,
   attemptsTable,
+  courseMembershipsTable,
+  coursesTable,
   curriculumBlocksTable,
   curriculumLibraryAssetsTable,
   db,
@@ -22,6 +24,7 @@ import { SESSION_QUESTION_COPY_METHOD } from "./session-question-copy.ts";
 import {
   SAMA_TEST_CLIENT_CLERK_USER_ID,
   SAMA_TEST_CLIENT_EMAIL,
+  FALL_SAT_COURSE_TITLE,
   XAVIER_CANONICAL_CLERK_USER_ID,
   XAVIER_DUPLICATE_CLERK_USER_ID,
   XAVIER_SAT_CAPABILITY_SESSION_TITLE,
@@ -131,6 +134,10 @@ const FACTORING_SPEC: QuizSpec = {
   timeLimitMinutes: FACTORING_QUIZ_TIME_LIMIT_MINUTES,
   drafts: FACTORING_QUIZ_QUESTIONS,
 };
+
+/** Notes are a session block. Without an open session of her own, samapostgrad does not borrow Michelle's. */
+export const SAMA_PREVIEW_NOTES_SKIP_REASON =
+  "Factoring Notes stay on Michelle's Xavier session. samapostgrad has no open Xavier session for a separate copy.";
 
 function normalizeEmail(email: string | null | undefined): string {
   return email?.trim().toLowerCase() ?? "";
@@ -383,6 +390,69 @@ function tutorIdForTodo(input: {
   return input.xavierIds[0] ?? null;
 }
 
+/**
+ * Course for a standalone to-do when samapostgrad has no open Xavier session.
+ * Prefer a quiz already assigned to her, then any of her Xavier sessions
+ * (including a cancelled capability test), then the shared Fall course.
+ * Never scans other students' courses.
+ */
+async function courseIdForPreviewTodo(
+  studentUserId: string,
+  xavierIds: readonly string[],
+): Promise<string | null> {
+  const [owned] = await db
+    .select({ courseId: assignmentsTable.courseId })
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.assignedStudentUserId, studentUserId),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    )
+    .limit(1);
+  if (owned?.courseId) return owned.courseId;
+
+  if (xavierIds.length > 0) {
+    const [session] = await db
+      .select({ courseId: sessionsTable.courseId })
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.clientUserId, studentUserId),
+          inArray(sessionsTable.tutorUserId, [...xavierIds]),
+        ),
+      )
+      .limit(1);
+    if (session?.courseId) return session.courseId;
+  }
+
+  const [fall] = await db
+    .select({ id: coursesTable.id })
+    .from(coursesTable)
+    .where(eq(coursesTable.title, FALL_SAT_COURSE_TITLE))
+    .limit(1);
+  return fall?.id ?? null;
+}
+
+/** DB grant only. Does not invite, email, or change Railway allowlists. */
+async function ensureStudentCourseMembership(
+  courseId: string,
+  studentUserId: string,
+): Promise<void> {
+  await db
+    .insert(courseMembershipsTable)
+    .values({
+      courseId,
+      userId: studentUserId,
+      membershipRole: "student",
+      subject: "all",
+    })
+    .onConflictDoUpdate({
+      target: [courseMembershipsTable.courseId, courseMembershipsTable.userId],
+      set: { membershipRole: "student", subject: "all" },
+    });
+}
+
 async function michelleSessions(clientUserId: string, xavierIds: string[]): Promise<SessionRow[]> {
   return db
     .select()
@@ -473,6 +543,9 @@ async function assignQuiz(input: {
         questionIds: input.questionIds,
       };
     }
+    if (input.sessionMode === "preview") {
+      await ensureStudentCourseMembership(already.assignment.courseId, input.user.id);
+    }
     await ensureTimeLimit(already.assignment.id, minutes);
     await reopenBrokenEmptyAttemptsForAssignment(already.assignment.id);
     const tutorUserId = tutorIdForTodo({
@@ -556,15 +629,9 @@ async function assignQuiz(input: {
       questionIds: input.questionIds,
     };
   }
-  if (!targetSession) {
-    return {
-      result: emptyAssignee(minutes, `No Xavier session was found for ${input.label}.`),
-      questionIds: input.questionIds,
-    };
-  }
   const tutorUserId = tutorIdForTodo({
     xavierIds: input.xavierIds,
-    sessionTutorUserId: targetSession.tutorUserId,
+    sessionTutorUserId: targetSession?.tutorUserId,
   });
   if (!tutorUserId) {
     return {
@@ -572,12 +639,25 @@ async function assignQuiz(input: {
       questionIds: input.questionIds,
     };
   }
+  let courseId = targetSession?.courseId ?? null;
+  if (!courseId && input.sessionMode === "preview") {
+    courseId = await courseIdForPreviewTodo(input.user.id, input.xavierIds);
+  }
+  if (!courseId) {
+    return {
+      result: emptyAssignee(minutes, `No Xavier session was found for ${input.label}.`),
+      questionIds: input.questionIds,
+    };
+  }
+  if (input.sessionMode === "preview") {
+    await ensureStudentCourseMembership(courseId, input.user.id);
+  }
   let questionIds = input.questionIds;
   if (questionIds.length === 0) questionIds = await insertQuestions(input.spec);
-  const sessionId = input.sessionMode === "preview" ? null : targetSession.id;
+  const sessionId = input.sessionMode === "preview" || !targetSession ? null : targetSession.id;
   const assignmentId = await insertAssignment({
     spec: input.spec,
-    courseId: targetSession.courseId,
+    courseId,
     studentUserId: input.user.id,
     tutorUserId,
     sessionId,
@@ -746,6 +826,9 @@ async function ensureQuizPair(input: {
     await ensureTimeLimit(existing.assignment.id, input.spec.timeLimitMinutes);
     await reopenBrokenEmptyAttemptsForAssignment(existing.assignment.id);
     if (!(await assignmentHasRecordedWork(existing.assignment.id))) continue;
+    // Only Michelle's recorded quiz is the source of truth. Sama's attempt
+    // freezes her own copy inside assignQuiz and must not rewrite Michelle.
+    if (user !== input.michelle) continue;
     questionIds = await questionIdsForAssignment(existing.assignment.id);
     preserveAttemptedQuestions = true;
     break;
@@ -787,9 +870,13 @@ async function ensureQuizPair(input: {
 /**
  * SAT Math Problems and Factoring Quiz on Michelle's latest completed
  * session with Xavier, plus the same quizzes as standalone to-dos for
- * samapostgrad. Factoring Notes is a downloadable block on that Michelle
- * session and on Sama's Xavier preview session. Geometry follow-ups are
- * left unchanged.
+ * samapostgrad. Her copy does not require an open Xavier session: a quiz
+ * she already has, any of her Xavier sessions, or the Fall course supplies
+ * the course id, and a student membership makes the to-do listable.
+ * Factoring Notes are a session block on Michelle's session and, when
+ * samapostgrad has an open Xavier session, on that session too. Geometry
+ * follow-ups are left unchanged. A recorded attempt on either copy freezes
+ * that copy; Sama's attempt never rewrites Michelle's questions.
  */
 export async function ensureMichelleXavierSessionFollowUps(
   options: XavierSessionFollowUpOptions = {},
@@ -864,7 +951,7 @@ export async function ensureMichelleXavierSessionFollowUps(
       });
     }
   }
-  let samaNotes = emptyNotes(samaIdentity.skippedReason ?? "No session for Factoring Notes.");
+  let samaNotes = emptyNotes(samaIdentity.skippedReason ?? SAMA_PREVIEW_NOTES_SKIP_REASON);
   if (samaIdentity.user) {
     const preview = pickSamaPreviewSession(
       await michelleSessions(samaIdentity.user.id, xavierIds),

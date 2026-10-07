@@ -13,6 +13,7 @@ test(
       assignmentQuestionsTable,
       assignmentsTable,
       attemptsTable,
+      courseMembershipsTable,
       coursesTable,
       curriculumBlocksTable,
       curriculumLibraryAssetsTable,
@@ -303,6 +304,23 @@ test(
       assert.equal(third.notes.michelle.sessionId, afterAttempt.id);
       const satAfterAttempt = await loadAssignment(third.satMath.michelle.assignmentId);
       assert.equal(satAfterAttempt.links.length, 22);
+      assert.equal(third.satMath.sama.created, false);
+      assert.equal(third.satMath.sama.assignmentId, first.satMath.sama.assignmentId);
+      assert.equal(third.factoring.sama.created, false);
+      assert.equal(third.factoring.sama.assignmentId, first.factoring.sama.assignmentId);
+      assert.equal(third.satMath.sama.sessionId, null);
+      const [michelleSatAttempt] = await db
+        .select()
+        .from(attemptsTable)
+        .where(eq(attemptsTable.assignmentId, first.satMath.michelle.assignmentId!));
+      assert.equal(michelleSatAttempt?.userId, michelle.id);
+      assert.equal(michelleSatAttempt?.status, "submitted");
+      assert.equal(michelleSatAttempt?.score, 50);
+      const samaAttemptCount = await db
+        .select({ id: attemptsTable.id })
+        .from(attemptsTable)
+        .where(eq(attemptsTable.assignmentId, first.satMath.sama.assignmentId!));
+      assert.equal(samaAttemptCount.length, 0);
 
       const [geometryStill] = await db
         .select()
@@ -317,6 +335,11 @@ test(
         .where(eq(questionsTable.id, geometryQuestion!.id));
       assert.equal(geometryPrompt?.prompt, "What is the area of the rectangle that stays untouched?");
     } finally {
+      if (createdCourseIds.length > 0) {
+        await db
+          .delete(courseMembershipsTable)
+          .where(inArray(courseMembershipsTable.courseId, createdCourseIds));
+      }
       const assignmentIds = (
         await db
           .select({ id: assignmentsTable.id })
@@ -339,6 +362,331 @@ test(
           await db.delete(timerEventsTable).where(inArray(timerEventsTable.attemptId, attemptIds));
           await db.delete(attemptsTable).where(inArray(attemptsTable.id, attemptIds));
         }
+        const questionIds = (
+          await db
+            .select({ id: assignmentQuestionsTable.questionId })
+            .from(assignmentQuestionsTable)
+            .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds))
+        ).map((row) => row.id);
+        await db
+          .delete(assignmentQuestionsTable)
+          .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds));
+        if (questionIds.length > 0) {
+          await db.delete(questionsTable).where(inArray(questionsTable.id, questionIds));
+        }
+        await db.delete(assignmentsTable).where(inArray(assignmentsTable.id, assignmentIds));
+      }
+      if (!existingNotes && createdUserIds.length > 0) {
+        await db
+          .delete(curriculumLibraryAssetsTable)
+          .where(
+            and(
+              eq(curriculumLibraryAssetsTable.title, "Factoring Notes"),
+              inArray(curriculumLibraryAssetsTable.createdByUserId, createdUserIds),
+            ),
+          );
+      }
+      if (createdSessionIds.length > 0) {
+        await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
+      }
+      if (createdUserIds.length > 0) {
+        await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
+      }
+      if (createdCourseIds.length > 0) {
+        await db.delete(coursesTable).where(inArray(coursesTable.id, createdCourseIds));
+      }
+    }
+  },
+);
+
+test(
+  "gives samapostgrad standalone copies without a Xavier session and does not rewrite Michelle",
+  { skip: !hasDatabase },
+  async () => {
+    const { and, asc, eq, inArray, sql } = await import("drizzle-orm");
+    const {
+      assignmentQuestionsTable,
+      assignmentsTable,
+      attemptsTable,
+      courseMembershipsTable,
+      coursesTable,
+      curriculumBlocksTable,
+      curriculumLibraryAssetsTable,
+      db,
+      questionsTable,
+      sessionsTable,
+      usersTable,
+    } = await import("@workspace/db");
+    const {
+      SAMA_PREVIEW_NOTES_SKIP_REASON,
+      ensureMichelleXavierSessionFollowUps,
+    } = await import("./michelle-xavier-session-follow-up.ts");
+    const { FACTORING_NOTES_SEED_KEY } = await import("./xavier-follow-up-content.ts");
+    const {
+      FACTORING_QUIZ_FOLLOW_UP_TITLE,
+      GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+      SAT_MATH_FOLLOW_UP_TITLE,
+    } = await import("./post-session-follow-up.ts");
+
+    const suffix = randomUUID().slice(0, 8);
+    const michelleEmail = `michelle-solo-${suffix}@example.com`;
+    const samaEmail = `sama-solo-${suffix}@example.com`;
+    const xavierEmail = `xavier-solo-${suffix}@example.com`;
+    const michelleClerk = `user_michelle_solo_${suffix}`;
+    const samaClerk = `user_sama_solo_${suffix}`;
+    const xavierClerk = `user_xavier_solo_${suffix}`;
+    const now = new Date("2026-10-06T12:00:00.000Z");
+    const identities = {
+      michelleEmail,
+      michelleClerkUserId: michelleClerk,
+      samaEmail,
+      samaClerkUserId: samaClerk,
+      xavierEmail,
+      xavierClerkUserId: xavierClerk,
+      xavierDuplicateClerkUserId: `user_xavier_solo_dup_${suffix}`,
+    };
+    const createdUserIds: string[] = [];
+    const createdSessionIds: string[] = [];
+    const createdCourseIds: string[] = [];
+    const [existingNotes] = await db
+      .select({ id: curriculumLibraryAssetsTable.id })
+      .from(curriculumLibraryAssetsTable)
+      .where(eq(curriculumLibraryAssetsTable.title, "Factoring Notes"))
+      .limit(1);
+
+    const [course] = await db
+      .insert(coursesTable)
+      .values({
+        title: `Xavier solo follow-up ${suffix}`,
+        subject: "SAT",
+        term: "Fall 2026",
+        status: "active",
+      })
+      .returning();
+    createdCourseIds.push(course!.id);
+
+    const insertUser = async (
+      email: string,
+      displayName: string,
+      role: "student" | "tutor",
+      clerkUserId: string,
+    ) => {
+      const [created] = await db
+        .insert(usersTable)
+        .values({ clerkUserId, email, displayName, role })
+        .returning();
+      createdUserIds.push(created!.id);
+      return created!;
+    };
+    const michelle = await insertUser(michelleEmail, "Michelle Fixture", "student", michelleClerk);
+    const sama = await insertUser(samaEmail, "Sama Fixture", "student", samaClerk);
+    const xavier = await insertUser(xavierEmail, "Xavier Fixture", "tutor", xavierClerk);
+    const [session] = await db
+      .insert(sessionsTable)
+      .values({
+        courseId: course!.id,
+        clientUserId: michelle.id,
+        tutorUserId: xavier.id,
+        dateTime: new Date("2026-10-04T12:00:00.000Z"),
+        timezone: "Asia/Dubai",
+        subject: "SAT",
+        title: "Michelle Oct 4 session",
+        status: "published",
+        bookingStatus: "confirmed",
+        durationMinutes: 60,
+      })
+      .returning();
+    createdSessionIds.push(session!.id);
+    await db.insert(assignmentsTable).values({
+      courseId: course!.id,
+      sessionId: null,
+      assignedStudentUserId: sama.id,
+      assignedTutorUserId: xavier.id,
+      deliveryPhase: "before_session",
+      title: GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+      subject: "SAT Math",
+      instructions: "Existing geometry to-do supplies the course.",
+      status: "published",
+      timeLimitMinutes: 60,
+      maxAttempts: 1,
+    });
+
+    const questionIdsFor = async (assignmentId: string) =>
+      (
+        await db
+          .select({ questionId: assignmentQuestionsTable.questionId })
+          .from(assignmentQuestionsTable)
+          .where(eq(assignmentQuestionsTable.assignmentId, assignmentId))
+          .orderBy(asc(assignmentQuestionsTable.position))
+      ).map((row) => row.questionId);
+
+    try {
+      const first = await ensureMichelleXavierSessionFollowUps({ now, identities });
+      assert.equal(first.satMath.michelle.sessionId, session!.id);
+      assert.equal(first.satMath.michelle.questionCount, 22);
+      assert.equal(first.factoring.michelle.questionCount, 26);
+      assert.equal(first.satMath.sama.sessionId, null);
+      assert.equal(first.satMath.sama.created, true);
+      assert.equal(first.satMath.sama.questionCount, 22);
+      assert.equal(first.satMath.sama.timeLimitMinutes, 33);
+      assert.equal(first.factoring.sama.sessionId, null);
+      assert.equal(first.factoring.sama.created, true);
+      assert.equal(first.factoring.sama.questionCount, 26);
+      assert.equal(first.factoring.sama.timeLimitMinutes, 39);
+      assert.equal(first.notes.michelle.sessionId, session!.id);
+      assert.equal(first.notes.sama.sessionId, null);
+      assert.equal(first.notes.sama.attached, false);
+      assert.equal(first.notes.sama.skippedReason, SAMA_PREVIEW_NOTES_SKIP_REASON);
+
+      const [samaSat] = await db
+        .select()
+        .from(assignmentsTable)
+        .where(eq(assignmentsTable.id, first.satMath.sama.assignmentId!));
+      assert.equal(samaSat?.sessionId, null);
+      assert.equal(samaSat?.assignedStudentUserId, sama.id);
+      assert.equal(samaSat?.assignedTutorUserId, xavier.id);
+      assert.equal(samaSat?.courseId, course!.id);
+      assert.equal(samaSat?.timeLimitMinutes, 33);
+      assert.equal(samaSat?.status, "published");
+      const [membership] = await db
+        .select()
+        .from(courseMembershipsTable)
+        .where(
+          and(
+            eq(courseMembershipsTable.courseId, course!.id),
+            eq(courseMembershipsTable.userId, sama.id),
+          ),
+        );
+      assert.equal(membership?.membershipRole, "student");
+
+      const michelleSatQuestions = await questionIdsFor(first.satMath.michelle.assignmentId!);
+      const michelleFactoringQuestions = await questionIdsFor(first.factoring.michelle.assignmentId!);
+      assert.deepEqual(await questionIdsFor(first.satMath.sama.assignmentId!), michelleSatQuestions);
+      assert.deepEqual(
+        await questionIdsFor(first.factoring.sama.assignmentId!),
+        michelleFactoringQuestions,
+      );
+
+      const [decoy] = await db
+        .insert(questionsTable)
+        .values({
+          subject: "SAT Math",
+          domain: "Decoy",
+          skill: "decoy",
+          questionType: "multiple_choice",
+          difficulty: "medium",
+          prompt: "This decoy must not replace Michelle's SAT Math Problems.",
+          choices: [
+            { id: "a", label: "A", text: "1" },
+            { id: "b", label: "B", text: "2" },
+            { id: "c", label: "C", text: "3" },
+            { id: "d", label: "D", text: "4" },
+          ],
+          correctAnswer: "a",
+          explanation: "",
+          sourceType: "original",
+          reviewStatus: "approved",
+          tags: ["xavier-authored-follow-up", "decoy"],
+          generationMethod: "session-copy",
+        })
+        .returning();
+      await db
+        .delete(assignmentQuestionsTable)
+        .where(eq(assignmentQuestionsTable.assignmentId, first.satMath.sama.assignmentId!));
+      await db.insert(assignmentQuestionsTable).values({
+        assignmentId: first.satMath.sama.assignmentId!,
+        questionId: decoy!.id,
+        position: 0,
+        predictionFirst: false,
+      });
+      await db.insert(attemptsTable).values({
+        assignmentId: first.satMath.sama.assignmentId!,
+        userId: sama.id,
+        status: "submitted",
+        submittedAt: new Date("2026-10-05T12:00:00.000Z"),
+        score: 10,
+      });
+
+      const second = await ensureMichelleXavierSessionFollowUps({ now, identities });
+      assert.equal(second.satMath.michelle.assignmentId, first.satMath.michelle.assignmentId);
+      assert.equal(second.satMath.michelle.sessionId, session!.id);
+      assert.equal(second.factoring.michelle.assignmentId, first.factoring.michelle.assignmentId);
+      assert.equal(second.factoring.michelle.sessionId, session!.id);
+      assert.deepEqual(
+        await questionIdsFor(first.satMath.michelle.assignmentId!),
+        michelleSatQuestions,
+      );
+      assert.deepEqual(
+        await questionIdsFor(first.factoring.michelle.assignmentId!),
+        michelleFactoringQuestions,
+      );
+      assert.deepEqual(await questionIdsFor(first.satMath.sama.assignmentId!), [decoy!.id]);
+      assert.equal(second.satMath.sama.assignmentId, first.satMath.sama.assignmentId);
+      assert.equal(second.satMath.sama.created, false);
+      assert.equal(second.factoring.sama.assignmentId, first.factoring.sama.assignmentId);
+      assert.equal(second.factoring.sama.created, false);
+
+      const titled = await db
+        .select({ id: assignmentsTable.id, title: assignmentsTable.title })
+        .from(assignmentsTable)
+        .where(
+          and(
+            eq(assignmentsTable.assignedStudentUserId, sama.id),
+            inArray(assignmentsTable.title, [
+              SAT_MATH_FOLLOW_UP_TITLE,
+              FACTORING_QUIZ_FOLLOW_UP_TITLE,
+            ]),
+          ),
+        );
+      assert.equal(titled.filter((row) => row.title === SAT_MATH_FOLLOW_UP_TITLE).length, 1);
+      assert.equal(titled.filter((row) => row.title === FACTORING_QUIZ_FOLLOW_UP_TITLE).length, 1);
+
+      const noteBlocks = await db
+        .select({ sessionId: curriculumBlocksTable.sessionId })
+        .from(curriculumBlocksTable)
+        .where(
+          and(
+            inArray(curriculumBlocksTable.sessionId, createdSessionIds),
+            sql`${curriculumBlocksTable.config}->>'seedKey' = ${FACTORING_NOTES_SEED_KEY}`,
+          ),
+        );
+      assert.deepEqual(
+        noteBlocks.map((block) => block.sessionId),
+        [session!.id],
+      );
+      const [michelleAttemptCount, samaAttempt] = await Promise.all([
+        db
+          .select({ id: attemptsTable.id })
+          .from(attemptsTable)
+          .where(eq(attemptsTable.assignmentId, first.satMath.michelle.assignmentId!)),
+        db
+          .select()
+          .from(attemptsTable)
+          .where(eq(attemptsTable.assignmentId, first.satMath.sama.assignmentId!)),
+      ]);
+      assert.equal(michelleAttemptCount.length, 0);
+      assert.equal(samaAttempt.length, 1);
+      assert.equal(samaAttempt[0]?.score, 10);
+      assert.equal(samaAttempt[0]?.userId, sama.id);
+    } finally {
+      if (createdCourseIds.length > 0) {
+        await db
+          .delete(courseMembershipsTable)
+          .where(inArray(courseMembershipsTable.courseId, createdCourseIds));
+      }
+      const assignmentIds = (
+        await db
+          .select({ id: assignmentsTable.id })
+          .from(assignmentsTable)
+          .where(eq(assignmentsTable.courseId, course!.id))
+      ).map((row) => row.id);
+      if (createdSessionIds.length > 0) {
+        await db
+          .delete(curriculumBlocksTable)
+          .where(inArray(curriculumBlocksTable.sessionId, createdSessionIds));
+      }
+      if (assignmentIds.length > 0) {
+        await db.delete(attemptsTable).where(inArray(attemptsTable.assignmentId, assignmentIds));
         const questionIds = (
           await db
             .select({ id: assignmentQuestionsTable.questionId })
