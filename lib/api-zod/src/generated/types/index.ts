@@ -175,6 +175,7 @@ export * from './curriculumSessionLatestResultStatus';
 export * from './curriculumSessionReadiness';
 export * from './dashboard';
 export * from './dashboardCredits';
+export * from './dashboardMaterial';
 export * from './dashboardProgress';
 export * from './dashboardRecentScoresItem';
 export * from './dashboardStudent';

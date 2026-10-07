@@ -158,6 +158,7 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.equal(Array.isArray(preview.body.previewFinancials.invoices), true);
     assert.equal(Array.isArray(preview.body.previewFinancials.credits), true);
     assert.equal(Array.isArray(preview.body.previewBooking.sessions), true);
+    assert.equal(Array.isArray(preview.body.materials), true);
     assert.equal(
       ["connected", "disconnected", "unavailable"].includes(
         preview.body.previewBooking.calendarStatus,

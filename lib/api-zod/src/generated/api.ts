@@ -785,6 +785,14 @@ export const GetAdminClientDashboardResponse = zod.object({
   "examples": zod.array(zod.string()).optional()
 })).optional()
 })),
+  "materials": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "url": zod.string(),
+  "kind": zod.enum(['external_link', 'file_link'])
+})).optional(),
   "openReviewCount": zod.number()
 }).and(zod.object({
   "adminPreview": zod.literal(true),
@@ -2485,6 +2493,14 @@ export const GetDashboardResponse = zod.object({
   "examples": zod.array(zod.string()).optional()
 })).optional()
 })),
+  "materials": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "url": zod.string(),
+  "kind": zod.enum(['external_link', 'file_link'])
+})).optional(),
   "openReviewCount": zod.number()
 })
 

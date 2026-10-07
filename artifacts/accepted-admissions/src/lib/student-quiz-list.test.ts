@@ -259,6 +259,67 @@ test("SAT Math Problems and Factoring Quiz stay open after the linked session da
   assert.equal(studentQuizActionLabel(standalone.open[0]!, false), "Start quiz");
 });
 
+test("open follow-up quizzes stay visible when more than three quizzes are open", () => {
+  const now = new Date("2026-10-07T14:00:00.000Z");
+  const sessions = [session({ id: "past-session", dateTime: "2026-10-04T06:00:00.000Z" })];
+  const collapsed = collapsedStudentQuizzes(
+    [
+      quiz({ id: "algebra", title: "Algebra pre-work", sessionId: "past-session" }),
+      quiz({ id: "biology", title: "Biology pre-work", sessionId: null }),
+      quiz({ id: "chemistry", title: "Chemistry pre-work", sessionId: null }),
+      quiz({
+        id: "geometry-sat",
+        title: GEOMETRY_SAT_FOLLOW_UP_TITLE,
+        sessionId: "past-session",
+      }),
+      quiz({
+        id: "geometry-area",
+        title: GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+        sessionId: "past-session",
+      }),
+      quiz({
+        id: "factoring",
+        title: FACTORING_QUIZ_FOLLOW_UP_TITLE,
+        sessionId: "past-session",
+      }),
+      quiz({
+        id: "sat-math",
+        title: SAT_MATH_FOLLOW_UP_TITLE,
+        sessionId: "past-session",
+      }),
+    ],
+    sessions,
+    { expanded: false, now, clientTimezone: "Asia/Dubai" },
+  );
+  assert.deepEqual(
+    collapsed.visible.map((item) => item.assignment.title),
+    [
+      "Biology pre-work",
+      "Chemistry pre-work",
+      FACTORING_QUIZ_FOLLOW_UP_TITLE,
+      GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+      GEOMETRY_SAT_FOLLOW_UP_TITLE,
+      SAT_MATH_FOLLOW_UP_TITLE,
+    ],
+  );
+  assert.equal(
+    collapsed.archived.some((item) => item.assignment.id === "algebra"),
+    true,
+  );
+  assert.equal(collapsed.visible.some((item) => item.assignment.id === "algebra"), false);
+  assert.equal(collapsed.canToggle, true);
+  for (const title of [
+    GEOMETRY_SAT_FOLLOW_UP_TITLE,
+    GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+    SAT_MATH_FOLLOW_UP_TITLE,
+    FACTORING_QUIZ_FOLLOW_UP_TITLE,
+  ]) {
+    const item = collapsed.visible.find((quizItem) => quizItem.assignment.title === title);
+    assert.equal(item?.status, "Not started");
+    assert.equal(item?.pastSessionDay, false);
+  }
+});
+
 test("a scored past-session quiz keeps its result and still archives", () => {
   const now = new Date("2026-09-24T14:00:00.000Z");
   const collapsed = collapsedStudentQuizzes(

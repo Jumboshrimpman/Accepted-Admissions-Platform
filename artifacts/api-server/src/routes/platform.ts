@@ -147,6 +147,7 @@ import {
   dashboardSessionShape,
   dashboardSessionsForUser,
 } from "../lib/dashboard-data";
+import { dashboardMaterialsFromBlocks } from "../lib/dashboard-materials";
 import {
   courseForTutorAssignments,
   createTutorStudentAssignment,
@@ -10175,6 +10176,33 @@ async function dashboardDataForUser(user: AppUser) {
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, subjectUserId));
   const creditSummary = creditHoursSummary(creditEntries);
+  const visibleSessionIds = scopedSessions.map((session) => session.id);
+  const materialBlocks =
+    visibleSessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: curriculumBlocksTable.id,
+            sessionId: curriculumBlocksTable.sessionId,
+            kind: curriculumBlocksTable.kind,
+            visibility: curriculumBlocksTable.visibility,
+            status: curriculumBlocksTable.status,
+            position: curriculumBlocksTable.position,
+            config: curriculumBlocksTable.config,
+          })
+          .from(curriculumBlocksTable)
+          .where(
+            and(
+              inArray(curriculumBlocksTable.sessionId, visibleSessionIds),
+              eq(curriculumBlocksTable.status, "published"),
+              inArray(curriculumBlocksTable.kind, ["external_link", "file_link"]),
+              inArray(curriculumBlocksTable.visibility, ["student", "both"]),
+            ),
+          );
+  const materials = dashboardMaterialsFromBlocks(materialBlocks, {
+    studentFacing: user.role === "student" || user.role === "viewer",
+    sessionOrder: visibleSessionIds,
+  });
   return GetDashboardResponse.parse({
       user: {
         id: user.id,
@@ -10211,6 +10239,7 @@ async function dashboardDataForUser(user: AppUser) {
       ),
       curriculumSessions,
       assignments: assignmentSummaries,
+      materials,
       recentScores: attempts
         .filter((attempt) => attempt.score !== null)
         .slice(0, 4)

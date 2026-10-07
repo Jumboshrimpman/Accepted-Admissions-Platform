@@ -7,7 +7,7 @@ import {
   type Dashboard,
   type FinancialSummary,
 } from "@workspace/api-client-react";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, Eye, Sparkles, Target, Users } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, ExternalLink, Eye, FileText, Sparkles, Target, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ import {
 import { clientSatCreditAction } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { studentAssignmentHref } from "@/lib/student-attempt-ui";
+import { adminCurriculumHref } from "@/lib/admin-curriculum-location";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -84,6 +85,11 @@ function primaryHref(session: CurriculumSession): string {
     return studentAssignmentHref(session.preparation.id, session.preparation.latestAttemptStatus);
   }
   return sessionPlanHref(session);
+}
+
+function materialDownloadName(url: string): string | undefined {
+  if (!/\.pdf(?:$|\?)/i.test(url)) return undefined;
+  return decodeURIComponent(url.split("/").pop()?.split("?")[0] || "download.pdf");
 }
 
 function readinessLabel(session: CurriculumSession): string {
@@ -306,7 +312,7 @@ export function ClientDashboardView({
             </p>
             <p className="mt-1 text-amber-800">
               {adminPreview
-                ? "You can review the student's curriculum without opening student actions."
+                ? "Open quizzes and session materials to review them. Booking, meetings, and student actions stay disabled."
                 : "Parent view is read-only. You can review the plan, preparation, and published results. Only the student can complete work."}
             </p>
           </div>
@@ -595,7 +601,7 @@ export function ClientDashboardView({
             Quizzes
           </CardTitle>
           <CardDescription>
-            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Quizzes from a past session date are marked complete and stay behind Show more. A follow-up quiz stays open until it is submitted.
+            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Open follow-up quizzes stay in this list until they are submitted. Quizzes from a past session date are marked complete and stay behind Show more.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -631,7 +637,18 @@ export function ClientDashboardView({
                     />
                   </div>
                   {adminPreview ? (
-                    <Button disabled variant="ghost" size="sm">Read only</Button>
+                    <Button asChild variant="ghost" size="sm">
+                      <Link
+                        href={adminCurriculumHref({
+                          section: "curriculum",
+                          tab: "quizzes",
+                          quiz: quiz.assignment.id,
+                        })}
+                      >
+                        Review quiz
+                        <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
                   ) : (
                     <Button asChild variant="ghost" size="sm">
                       <Link href={studentAssignmentHref(quiz.assignment.id, quiz.assignment.latestAttemptStatus)}>
@@ -655,6 +672,47 @@ export function ClientDashboardView({
           )}
         </CardContent>
       </Card>
+
+      {(dashboard.materials?.length ?? 0) > 0 ? (
+        <Card data-testid="client-materials">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-primary" />
+              Materials
+            </CardTitle>
+            <CardDescription>
+              Notes and files from your sessions. Download them here, the same files attached to the meeting.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dashboard.materials?.map((material) => (
+              <div
+                key={material.id}
+                className="flex flex-col gap-2 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                data-testid={`client-material-${material.id}`}
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold">{material.title}</p>
+                  {material.description ? (
+                    <p className="mt-1 text-sm text-muted-foreground">{material.description}</p>
+                  ) : null}
+                </div>
+                <a
+                  href={material.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={materialDownloadName(material.url)}
+                  data-testid={`client-material-download-${material.id}`}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  {materialDownloadName(material.url) ? `Download ${material.title}` : "Open resource"}
+                </a>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b px-5 py-5 sm:px-6">
