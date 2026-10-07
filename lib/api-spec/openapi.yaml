@@ -3937,6 +3937,16 @@ components:
         courseId: { type: string }
         courseTitle: { type: string }
         subject: { type: string }
+    DashboardMaterial:
+      type: object
+      required: [id, sessionId, title, description, url, kind]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        url: { type: string }
+        kind: { type: string, enum: [external_link, file_link] }
     Dashboard:
       type: object
       required: [user, courses, upcomingSessions, curriculumSessions, assignments, recentScores, reviewSkills, credits, progress, assignedStudents, newSubmissions, openReviewCount]
@@ -3955,6 +3965,10 @@ components:
         assignments:
           type: array
           items: { $ref: "#/components/schemas/AssignmentSummary" }
+        materials:
+          description: Published session files the student can download, including follow-up notes attached to a meeting.
+          type: array
+          items: { $ref: "#/components/schemas/DashboardMaterial" }
         recentScores:
           type: array
           items:

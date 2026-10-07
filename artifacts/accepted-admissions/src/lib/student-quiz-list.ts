@@ -1,6 +1,5 @@
 import { studentAssignmentActionLabel } from "./student-attempt-ui.ts";
 import {
-  collapsedItems,
   DEFAULT_VISIBLE_UPCOMING_COUNT,
   resolveClientDisplayTimezone,
   sessionDateKey,
@@ -160,13 +159,21 @@ export function collapsedStudentQuizzes<T extends QuizAttempt>(
   },
 ) {
   const classified = classifyStudentQuizzes(assignments, sessions, options);
-  const prominent = Math.min(
-    options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT,
-    classified.open.length,
-  );
+  const initialCount = options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT;
+  let otherOpenShown = 0;
+  const collapsedVisible: ClassifiedStudentQuiz<T>[] = [];
+  for (const item of classified.open) {
+    const followUp = isPostSessionFollowUpQuiz(item.assignment);
+    if (!followUp && otherOpenShown >= initialCount) continue;
+    collapsedVisible.push(item);
+    if (!followUp) otherOpenShown += 1;
+  }
+  const hiddenCount = classified.ordered.length - collapsedVisible.length;
   return {
     ...classified,
-    ...collapsedItems(classified.ordered, options.expanded, prominent),
+    visible: options.expanded ? [...classified.ordered] : collapsedVisible,
+    hiddenCount,
+    canToggle: hiddenCount > 0,
   };
 }
 

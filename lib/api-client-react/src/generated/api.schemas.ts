@@ -1729,6 +1729,24 @@ export type DashboardRecentScoresItem = {
   date: string;
 };
 
+export type DashboardMaterialKind = typeof DashboardMaterialKind[keyof typeof DashboardMaterialKind];
+
+
+export const DashboardMaterialKind = {
+  external_link: 'external_link',
+  file_link: 'file_link',
+} as const;
+
+export interface DashboardMaterial {
+  id: string;
+  sessionId: string;
+  title: string;
+  /** @nullable */
+  description: string | null;
+  url: string;
+  kind: DashboardMaterialKind;
+}
+
 export interface Dashboard {
   user: CurrentUser;
   welcomeMessage?: string;
@@ -1736,6 +1754,8 @@ export interface Dashboard {
   upcomingSessions: Session[];
   curriculumSessions: CurriculumSession[];
   assignments: AssignmentSummary[];
+  /** Published session files the student can download, including follow-up notes attached to a meeting. */
+  materials?: DashboardMaterial[];
   recentScores: DashboardRecentScoresItem[];
   reviewSkills: string[];
   credits: DashboardCredits;

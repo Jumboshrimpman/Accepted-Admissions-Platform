@@ -10,6 +10,7 @@ import type { Course } from './course';
 import type { CurrentUser } from './currentUser';
 import type { CurriculumSession } from './curriculumSession';
 import type { DashboardCredits } from './dashboardCredits';
+import type { DashboardMaterial } from './dashboardMaterial';
 import type { DashboardProgress } from './dashboardProgress';
 import type { DashboardRecentScoresItem } from './dashboardRecentScoresItem';
 import type { DashboardStudent } from './dashboardStudent';
@@ -23,6 +24,8 @@ export interface Dashboard {
   upcomingSessions: Session[];
   curriculumSessions: CurriculumSession[];
   assignments: AssignmentSummary[];
+  /** Published session files the student can download, including follow-up notes attached to a meeting. */
+  materials?: DashboardMaterial[];
   recentScores: DashboardRecentScoresItem[];
   reviewSkills: string[];
   credits: DashboardCredits;

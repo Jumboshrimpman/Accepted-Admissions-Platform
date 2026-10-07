@@ -660,6 +660,185 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.queryByText(/Before: Geometry Area and Volume/)).toBeNull();
   });
 
+  test("Xavier follow-up quizzes and Factoring Notes stay on the client dashboard", () => {
+    const base = dashboardForRole("student");
+    const past = "2020-01-15T06:00:00.000Z";
+    const quizFields = {
+      sessionId: "xavier-session",
+      subject: "SAT Math",
+      status: "published" as const,
+      deadline: null,
+      questionCount: 10,
+      timeLimitMinutes: 30,
+      attemptCount: 0,
+      maxAttempts: 1,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+    };
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false },
+      user: { ...base.user, timezone: "Asia/Dubai" },
+      assignments: [
+        {
+          ...quizFields,
+          id: "algebra",
+          title: "Algebra pre-work",
+        },
+        {
+          ...quizFields,
+          id: "biology",
+          sessionId: null,
+          title: "Biology pre-work",
+        },
+        {
+          ...quizFields,
+          id: "chemistry",
+          sessionId: null,
+          title: "Chemistry pre-work",
+        },
+        {
+          ...quizFields,
+          id: "geometry-area",
+          title: "Geometry Area and Volume",
+        },
+        {
+          ...quizFields,
+          id: "geometry-sat",
+          title: "Geometry SAT Questions",
+        },
+        {
+          ...quizFields,
+          id: "factoring",
+          title: "Factoring Quiz",
+        },
+        {
+          ...quizFields,
+          id: "sat-math",
+          title: "SAT Math Problems",
+        },
+      ],
+      materials: [
+        {
+          id: "factoring-notes",
+          sessionId: "xavier-session",
+          title: "Factoring Notes",
+          description: "Factoring notes from this session. Download the PDF and keep it open while you practice.",
+          url: "/media/factoring/xavier-factoring-notes.pdf",
+          kind: "external_link",
+        },
+      ],
+      curriculumSessions: [
+        {
+          id: "xavier-session",
+          courseId: "course-fall",
+          dateTime: past,
+          timezone: "Asia/Dubai",
+          durationMinutes: 60,
+          subject: "SAT",
+          title: "Michelle’s SAT Session with Xavier",
+          status: "completed",
+          meetingUrl: null,
+          calendarEventUrl: null,
+          tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Michelle Makarem" },
+          readiness: "complete",
+          nextAction: "Open session plan",
+          currentFocus: "Factoring.",
+          preparation: { id: "algebra", title: "Algebra pre-work", latestAttemptStatus: null },
+          latestResult: null,
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    const quizzes = screen.getByTestId("client-quizzes");
+    expect(within(quizzes).getByTestId("client-quiz-factoring").textContent).toContain("Not started");
+    expect(within(quizzes).getByTestId("client-quiz-sat-math").textContent).toContain("Not started");
+    expect(within(quizzes).getByTestId("client-quiz-geometry-area").textContent).toContain("Not started");
+    expect(within(quizzes).getByTestId("client-quiz-geometry-sat").textContent).toContain("Not started");
+    expect(within(quizzes).queryByText("Algebra pre-work")).toBeNull();
+    expect(within(quizzes).getByTestId("client-quiz-factoring").querySelector("a")?.getAttribute("href")).toBe(
+      "/portal/assignments/factoring",
+    );
+    expect(within(quizzes).getByTestId("client-quiz-sat-math").textContent).toContain("Start quiz");
+
+    const notes = screen.getByTestId("client-material-factoring-notes");
+    expect(notes.textContent).toContain("Factoring Notes");
+    expect(notes.textContent).toContain("Download the PDF");
+    const download = screen.getByTestId("client-material-download-factoring-notes");
+    expect(download.getAttribute("href")).toBe("/media/factoring/xavier-factoring-notes.pdf");
+    expect(download.getAttribute("download")).toBe("xavier-factoring-notes.pdf");
+    expect(download.textContent).toContain("Download Factoring Notes");
+  });
+
+  test("administrator preview opens follow-up quizzes and Factoring Notes", () => {
+    const base = dashboardForRole("student");
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false },
+      assignments: [
+        {
+          id: "factoring",
+          sessionId: "xavier-session",
+          title: "Factoring Quiz",
+          subject: "SAT Math",
+          status: "published",
+          deadline: null,
+          questionCount: 26,
+          timeLimitMinutes: 39,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+        {
+          id: "sat-math",
+          sessionId: "xavier-session",
+          title: "SAT Math Problems",
+          subject: "SAT Math",
+          status: "published",
+          deadline: null,
+          questionCount: 22,
+          timeLimitMinutes: 33,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+      ],
+      materials: [
+        {
+          id: "factoring-notes",
+          sessionId: "xavier-session",
+          title: "Factoring Notes",
+          description: "Factoring notes from this session.",
+          url: "/media/factoring/xavier-factoring-notes.pdf",
+          kind: "external_link",
+        },
+      ],
+    } as Dashboard;
+    render(<ClientDashboardView dashboard={mocks.dashboard} adminPreview />);
+
+    const quizzes = screen.getByTestId("client-quizzes");
+    expect(within(quizzes).getByTestId("client-quiz-factoring").textContent).toContain("Factoring Quiz");
+    expect(within(quizzes).getByTestId("client-quiz-sat-math").textContent).toContain("SAT Math Problems");
+    expect(
+      within(quizzes).getAllByRole("link", { name: /Review quiz/i }).map((link) => link.getAttribute("href")),
+    ).toEqual([
+      "/admin/curriculum?section=curriculum&tab=quizzes&quiz=factoring",
+      "/admin/curriculum?section=curriculum&tab=quizzes&quiz=sat-math",
+    ]);
+    expect(within(quizzes).queryByRole("link", { name: /Start quiz/i })).toBeNull();
+    expect(screen.getByTestId("client-material-download-factoring-notes").getAttribute("href")).toBe(
+      "/media/factoring/xavier-factoring-notes.pdf",
+    );
+    expect(screen.getAllByRole("button", { name: "Read only" }).length).toBeGreaterThan(0);
+  });
+
   test("Taito’s client dashboard does not show clean-question wording", () => {
     const dashboard = dashboardForRole("student");
     dashboard.assignments = [

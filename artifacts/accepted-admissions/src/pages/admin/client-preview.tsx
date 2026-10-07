@@ -54,7 +54,7 @@ export default function AdminClientPreview() {
           <div>
             <h1 className="font-semibold">Administrator client preview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              This frame uses {preview.data.user.displayName}&apos;s client-scoped data. All actions are disabled. Tutor links are live; assign or remove them under People.
+              This frame uses {preview.data.user.displayName}&apos;s client-scoped data. Open quizzes and session materials to review them. Booking and meeting actions stay disabled. Tutor links are live; assign or remove them under People.
             </p>
           </div>
         </div>
