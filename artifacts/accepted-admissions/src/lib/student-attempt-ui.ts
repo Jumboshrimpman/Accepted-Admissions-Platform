@@ -230,3 +230,43 @@ export function quizResponsesForPause(
   }
   return drafts;
 }
+
+export const QUIZ_PAUSE_EXIT_LABEL = "Pause / Save & exit";
+
+/**
+ * The attempt clock advances only while status is active. Remaining time is
+ * timeLimit minus those active seconds, so a paused attempt does not burn
+ * time while the student is away.
+ *
+ * "Pause / Save & exit" stores answers (including typed free-response text
+ * and flagged-for-later marks) and the current question, sets the attempt to
+ * paused, and returns to the dashboard. The attempt stays in progress and is
+ * not submitted or graded.
+ *
+ * Closing the tab or leaving the page sends the same pause with
+ * navigator.sendBeacon, falling back to fetch keepalive, so the clock stops
+ * even when the page is going away. A tab switch also pauses, then resumes
+ * when the tab is visible again, so a quick switch does not leave the quiz.
+ * If the browser dies before that request is delivered, time can still run
+ * until the next successful pause.
+ */
+export type QuizTimerLeaveEvent = "pause-click" | "pagehide" | "unmount" | "hidden" | "visible";
+
+export function quizTimerLeaveAction(input: {
+  event: QuizTimerLeaveEvent;
+  viewer: boolean;
+  status: string | null | undefined;
+  intentionalExit: boolean;
+  autoPaused: boolean;
+}): "pause" | "resume" | "none" {
+  if (input.viewer) return "none";
+  if (input.event === "pause-click" || input.event === "pagehide" || input.event === "unmount") {
+    return input.status === "active" ? "pause" : "none";
+  }
+  if (input.event === "hidden") {
+    if (input.intentionalExit || input.autoPaused || input.status !== "active") return "none";
+    return "pause";
+  }
+  if (input.intentionalExit || !input.autoPaused || input.status !== "paused") return "none";
+  return "resume";
+}

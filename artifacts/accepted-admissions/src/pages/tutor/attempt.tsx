@@ -28,6 +28,9 @@ import {
   shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
 import { writtenQuestionNote } from "@/lib/written-quiz-feedback";
+import { quizShowsFormattedMath } from "@/lib/quiz-math";
+import { QuizMathText } from "@/components/quiz-math-text";
+import { displayAnswerLabel } from "@/lib/quiz-figure-primary";
 
 function AttemptItemNote({ item }: { item: AttemptResult["items"][number] }) {
   const note = writtenQuestionNote(item);
@@ -41,9 +44,16 @@ function AttemptItemNote({ item }: { item: AttemptResult["items"][number] }) {
   );
 }
 
-function answerText(answer: string | null | undefined, choices: AttemptResult["items"][number]["choices"]) {
-  if (!answer) return "Not answered";
-  return choices?.find((choice) => choice.id === answer)?.text ?? answer.toUpperCase();
+function answerText(
+  answer: string | null | undefined,
+  choices: AttemptResult["items"][number]["choices"],
+  formatMath: boolean,
+) {
+  if (!formatMath) {
+    if (!answer) return "Not answered";
+    return choices?.find((choice) => choice.id === answer)?.text ?? answer.toUpperCase();
+  }
+  return displayAnswerLabel(answer, choices);
 }
 
 export default function TutorAttempt() {
@@ -81,6 +91,7 @@ export default function TutorAttempt() {
   if (isLoading) return <div className="space-y-6"><Skeleton className="h-10 w-64" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;
   if (error || !result) return <div className="rounded-2xl bg-destructive/10 p-8 text-center text-destructive">This submission is not available.</div>;
   const tutorNotes = notes ?? result.tutorNotes ?? "";
+  const formatMath = quizShowsFormattedMath(result.assignmentTitle);
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-20 animate-in fade-in">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -154,14 +165,16 @@ export default function TutorAttempt() {
                     <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${item.correct ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{index + 1}</div>
                     <div>
                       <Badge variant="outline">{item.skill}</Badge>
-                      <p className="mt-2 font-medium">{item.prompt}</p>
+                      <p className="mt-2 font-medium">
+                        {formatMath ? <QuizMathText text={item.prompt} /> : item.prompt}
+                      </p>
                     </div>
                   </div>
                   {item.correct ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <CircleAlert className="h-5 w-5 text-amber-600" />}
                 </div>
                 <div className="grid gap-2 text-sm sm:grid-cols-2">
-                  <div className="rounded-lg bg-muted/50 p-3"><span className="text-muted-foreground">Student:</span> {answerText(item.finalAnswer, item.choices)}</div>
-                  <div className="rounded-lg bg-primary/5 p-3"><span className="text-muted-foreground">Correct:</span> {answerText(item.correctAnswer, item.choices)}</div>
+                  <div className="rounded-lg bg-muted/50 p-3"><span className="text-muted-foreground">Student:</span> {formatMath ? <QuizMathText text={answerText(item.finalAnswer, item.choices, true)} /> : answerText(item.finalAnswer, item.choices, false)}</div>
+                  <div className="rounded-lg bg-primary/5 p-3"><span className="text-muted-foreground">Correct:</span> {formatMath ? <QuizMathText text={answerText(item.correctAnswer, item.choices, true)} /> : answerText(item.correctAnswer, item.choices, false)}</div>
                 </div>
                 <AttemptItemNote item={item} />
                 {item.prediction && <p className="text-xs text-muted-foreground">Prediction first: {item.prediction}</p>}

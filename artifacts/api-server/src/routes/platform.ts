@@ -15,6 +15,7 @@ import {
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger";
+import { remainingAttemptSeconds, summarizeAttemptTimer } from "../lib/attempt-timer";
 import {
   connectionHasRefreshToken,
   describeStoredGoogleCalendarConnection,
@@ -3123,52 +3124,9 @@ async function timerSummary(attemptId: string) {
     .from(timerEventsTable)
     .where(eq(timerEventsTable.attemptId, attemptId))
     .orderBy(asc(timerEventsTable.at));
-  let activeSeconds = 0;
-  let pausedSeconds = 0;
-  let pauseCount = 0;
-  let activeStart: Date | null = null;
-  let pauseStart: Date | null = null;
-  for (const event of events) {
-    if (event.type === "started" || event.type === "resumed") {
-      if (pauseStart) {
-        pausedSeconds += Math.max(
-          0,
-          Math.floor((event.at.getTime() - pauseStart.getTime()) / 1000),
-        );
-        pauseStart = null;
-      }
-      activeStart = event.at;
-    } else if (event.type === "paused" || event.type === "submitted") {
-      if (activeStart) {
-        activeSeconds += Math.max(
-          0,
-          Math.floor((event.at.getTime() - activeStart.getTime()) / 1000),
-        );
-        activeStart = null;
-      }
-      if (event.type === "paused") {
-        pauseCount += 1;
-        pauseStart = event.at;
-      }
-    }
-  }
-  const now = new Date();
-  if (activeStart) {
-    activeSeconds += Math.max(
-      0,
-      Math.floor((now.getTime() - activeStart.getTime()) / 1000),
-    );
-  }
-  if (pauseStart) {
-    pausedSeconds += Math.max(
-      0,
-      Math.floor((now.getTime() - pauseStart.getTime()) / 1000),
-    );
-  }
+  const summary = summarizeAttemptTimer(events, new Date());
   return {
-    activeSeconds,
-    pausedSeconds,
-    pauseCount,
+    ...summary,
     timerEvents: events.map((event) => ({ type: event.type, at: event.at })),
   };
 }
@@ -3266,10 +3224,7 @@ async function attemptShape(attemptId: string) {
     status: attempt.status,
     startedAt: attempt.startedAt,
     ...timing,
-    remainingSeconds: Math.max(
-      0,
-      record.timeLimitMinutes * 60 - timing.activeSeconds,
-    ),
+    remainingSeconds: remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
     currentQuestionIndex: normalizeQuestionIndex(attempt.currentQuestionIndex),
     result:
       attempt.status === "submitted" || attempt.status === "expired"
@@ -11603,11 +11558,19 @@ router.post(
       res.status(404).json({ error: "Attempt not found" });
       return;
     }
+    if (attempt.status === "submitted" || attempt.status === "expired") {
+      res.status(409).json({ error: "Attempt is not active" });
+      return;
+    }
     if ((await enforceTimeLimit(attempt.id))?.status === "expired") {
       res.status(409).json({ error: "Time limit reached" });
       return;
     }
-    if (attempt.status !== "active") {
+    const [openAttempt] = await db
+      .select()
+      .from(attemptsTable)
+      .where(eq(attemptsTable.id, attempt.id));
+    if (!openAttempt || (openAttempt.status !== "active" && openAttempt.status !== "paused")) {
       res.status(409).json({ error: "Attempt is not active" });
       return;
     }
@@ -11658,26 +11621,31 @@ router.post(
           });
       }
     }
-    const [stillActive] = await db
+    const [stillOpen] = await db
       .select({ status: attemptsTable.status })
       .from(attemptsTable)
       .where(eq(attemptsTable.id, attempt.id));
-    if (stillActive?.status !== "active") {
+    if (stillOpen?.status !== "active" && stillOpen?.status !== "paused") {
       res.status(409).json({ error: "Attempt is not active" });
       return;
     }
-    await db
-      .update(attemptsTable)
-      .set({
-        status: "paused",
-        currentQuestionIndex: normalizeQuestionIndex(
-          progress.currentQuestionIndex ?? attempt.currentQuestionIndex,
-        ),
-      })
-      .where(eq(attemptsTable.id, attempt.id));
-    await db
-      .insert(timerEventsTable)
-      .values({ attemptId: attempt.id, type: "paused" });
+    const nextIndex = normalizeQuestionIndex(
+      progress.currentQuestionIndex ?? openAttempt.currentQuestionIndex,
+    );
+    if (stillOpen.status === "active") {
+      await db
+        .update(attemptsTable)
+        .set({ status: "paused", currentQuestionIndex: nextIndex })
+        .where(eq(attemptsTable.id, attempt.id));
+      await db.insert(timerEventsTable).values({ attemptId: attempt.id, type: "paused" });
+    } else {
+      // A second pause, including a tab-close beacon after the button pause,
+      // stores the latest answers without adding another timer interval.
+      await db
+        .update(attemptsTable)
+        .set({ currentQuestionIndex: nextIndex })
+        .where(eq(attemptsTable.id, attempt.id));
+    }
     res.json(PauseAttemptResponse.parse(await attemptShape(attempt.id)));
   },
 );
@@ -11747,11 +11715,16 @@ router.post(
       res.status(404).json({ error: "Attempt not found" });
       return;
     }
-    if ((await enforceTimeLimit(attempt.id))?.status === "expired") {
+    const limited = await enforceTimeLimit(attempt.id);
+    if (limited?.status === "expired") {
       res.status(409).json({ error: "Time limit reached" });
       return;
     }
-    if (attempt.status !== "paused") {
+    if (limited?.status === "active") {
+      res.json(ResumeAttemptResponse.parse(await attemptShape(attempt.id)));
+      return;
+    }
+    if (limited?.status !== "paused") {
       res.status(409).json({ error: "Attempt is not paused" });
       return;
     }

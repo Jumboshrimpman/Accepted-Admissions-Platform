@@ -601,6 +601,13 @@ async function assignQuiz(input: {
       questionIds,
     });
     if (attempted) {
+      if (sameQuiz) {
+        await refreshQuestionRows(linked, input.spec.drafts);
+        return finish(
+          linked,
+          `${input.spec.title} already has an attempt. Question text was updated in place and the attempt was kept.`,
+        );
+      }
       return finish(
         linked,
         `${input.spec.title} already has an attempt, so its questions were left unchanged.`,
@@ -875,8 +882,9 @@ async function ensureQuizPair(input: {
  * the course id, and a student membership makes the to-do listable.
  * Factoring Notes are a session block on Michelle's session and, when
  * samapostgrad has an open Xavier session, on that session too. Geometry
- * follow-ups are left unchanged. A recorded attempt on either copy freezes
- * that copy; Sama's attempt never rewrites Michelle's questions.
+ * follow-ups are left unchanged. A recorded attempt keeps its question ids
+ * and score. When the source keys still match, authored question text is
+ * refreshed in place. Sama's attempt never rewrites Michelle's questions.
  */
 export async function ensureMichelleXavierSessionFollowUps(
   options: XavierSessionFollowUpOptions = {},

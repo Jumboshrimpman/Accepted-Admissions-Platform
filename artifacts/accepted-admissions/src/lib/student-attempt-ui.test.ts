@@ -15,6 +15,7 @@ import {
   resolveInSessionPracticeLink,
   studentAssignmentActionLabel,
   quizResponsesForPause,
+  quizTimerLeaveAction,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
   isBrokenEmptyClientAttempt,
@@ -104,6 +105,54 @@ test("resume copy and href restore an in-progress quiz from the portal", () => {
   assert.equal(wantsResumeAttempt("resume=1"), true);
   assert.equal(wantsResumeAttempt("foo=1"), false);
   assert.equal(normalizeQuestionIndex(7, 3), 2);
+});
+
+test("leaving a timed quiz pauses, and a tab switch resumes", () => {
+  const active = { viewer: false, status: "active", intentionalExit: false, autoPaused: false };
+  assert.equal(quizTimerLeaveAction({ ...active, event: "pause-click" }), "pause");
+  assert.equal(quizTimerLeaveAction({ ...active, event: "pagehide" }), "pause");
+  assert.equal(quizTimerLeaveAction({ ...active, event: "unmount" }), "pause");
+  assert.equal(quizTimerLeaveAction({ ...active, event: "hidden" }), "pause");
+  assert.equal(quizTimerLeaveAction({ ...active, event: "visible" }), "none");
+  assert.equal(
+    quizTimerLeaveAction({ ...active, event: "hidden", autoPaused: true }),
+    "none",
+  );
+  assert.equal(
+    quizTimerLeaveAction({ ...active, event: "pagehide", viewer: true }),
+    "none",
+  );
+  const away = { viewer: false, status: "paused", intentionalExit: false, autoPaused: true };
+  assert.equal(quizTimerLeaveAction({ ...away, event: "visible" }), "resume");
+  assert.equal(quizTimerLeaveAction({ ...away, event: "pause-click" }), "none");
+  assert.equal(
+    quizTimerLeaveAction({ ...away, event: "visible", intentionalExit: true }),
+    "none",
+  );
+  assert.equal(
+    quizTimerLeaveAction({ ...away, event: "visible", autoPaused: false }),
+    "none",
+  );
+  assert.equal(
+    quizTimerLeaveAction({
+      event: "hidden",
+      viewer: false,
+      status: "paused",
+      intentionalExit: false,
+      autoPaused: false,
+    }),
+    "none",
+  );
+  assert.equal(
+    quizTimerLeaveAction({
+      event: "pagehide",
+      viewer: false,
+      status: "submitted",
+      intentionalExit: false,
+      autoPaused: false,
+    }),
+    "none",
+  );
 });
 
 test("pause stores answered items and review flags", () => {

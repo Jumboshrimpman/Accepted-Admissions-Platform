@@ -1,3 +1,4 @@
+import { answersAlgebraicallyMatch } from "./answer-equivalence.ts";
 import { questionGenerationStatus } from "./question-generation.ts";
 
 export type RetryCandidate = {
@@ -110,10 +111,22 @@ export function canonicalizeAnswer(value: string): string {
     .trim()
     .toLowerCase()
     .replace(/[−–—]/g, "-")
-    .replace(/[×·]/g, "*")
+    .replace(/[×·∙]/g, "*")
     .replace(/²/g, "^2")
     .replace(/³/g, "^3")
-    .replace(/⁴/g, "^4");
+    .replace(/⁴/g, "^4")
+    .replace(/⁵/g, "^5")
+    .replace(/⁶/g, "^6")
+    .replace(/⁷/g, "^7")
+    .replace(/⁸/g, "^8")
+    .replace(/⁹/g, "^9")
+    .replace(/⁰/g, "^0")
+    .replace(/¹/g, "^1")
+    .replace(/\*\*/g, "^")
+    .replace(/π/g, "pi")
+    .replace(/½/g, "(1/2)")
+    .replace(/¼/g, "(1/4)")
+    .replace(/¾/g, "(3/4)");
 }
 
 function compactExpression(value: string): string {
@@ -135,7 +148,8 @@ export function answersMatch(
     return true;
   }
   const compactGiven = compactExpression(given);
-  return forms.some((form) => compactExpression(form) === compactGiven);
+  if (forms.some((form) => compactExpression(form) === compactGiven)) return true;
+  return forms.some((form) => answersAlgebraicallyMatch(given, form));
 }
 
 export function retryOutcomeFromAnswer(input: {

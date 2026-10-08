@@ -13,7 +13,7 @@ import {
   timerEventsTable,
   type AppUser,
 } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import express, {
   type NextFunction,
   type Request,
@@ -223,6 +223,43 @@ test("flagging a response leaves the attempt active, and pause still restores an
     assert.equal(flagged?.flagged, true);
     assert.equal(second?.finalAnswer, "b");
 
+    const pausedAgain = await jsonRequest(
+      studentServer.baseUrl,
+      `/api/attempts/${attemptId}/pause`,
+      "POST",
+      {
+        currentQuestionIndex: 1,
+        responses: [{ questionId: secondQuestion.id, finalAnswer: "(x + 6)(x - 3)", flagged: false }],
+      },
+    );
+    assert.equal(pausedAgain.response.status, 200, JSON.stringify(pausedAgain.body));
+    assert.equal(pausedAgain.body.status, "paused");
+    assert.notEqual(pausedAgain.body.status, "submitted");
+    const pausedEvents = await db
+      .select({ id: timerEventsTable.id })
+      .from(timerEventsTable)
+      .where(and(eq(timerEventsTable.attemptId, attemptId), eq(timerEventsTable.type, "paused")));
+    assert.equal(pausedEvents.length, 1);
+
+    const pausedAt = new Date("2026-10-08T12:01:00.000Z");
+    const startedAt = new Date(pausedAt.getTime() - 60_000);
+    await db
+      .update(timerEventsTable)
+      .set({ at: startedAt })
+      .where(and(eq(timerEventsTable.attemptId, attemptId), eq(timerEventsTable.type, "started")));
+    await db
+      .update(timerEventsTable)
+      .set({ at: pausedAt })
+      .where(and(eq(timerEventsTable.attemptId, attemptId), eq(timerEventsTable.type, "paused")));
+    const whileAway = await jsonRequest(studentServer.baseUrl, `/api/attempts/${attemptId}`, "GET");
+    assert.equal(whileAway.response.status, 200, JSON.stringify(whileAway.body));
+    assert.equal(whileAway.body.status, "paused");
+    assert.equal(whileAway.body.remainingSeconds, 134 * 60 - 60);
+    const savedExpression = whileAway.body.responses.find(
+      (response: { questionId: string }) => response.questionId === secondQuestion.id,
+    );
+    assert.equal(savedExpression?.finalAnswer, "(x + 6)(x - 3)");
+
     const lateSave = await jsonRequest(
       studentServer.baseUrl,
       `/api/attempts/${attemptId}/responses`,
@@ -254,6 +291,20 @@ test("flagging a response leaves the attempt active, and pause still restores an
     assert.equal(resumed.body.status, "active");
     assert.equal(resumed.body.currentQuestionIndex, 1);
     assert.equal(resumed.body.responses?.length, 2);
+    assert.ok(resumed.body.remainingSeconds <= 134 * 60 - 60);
+    assert.ok(resumed.body.remainingSeconds >= 134 * 60 - 65);
+    const resumedAgain = await jsonRequest(
+      studentServer.baseUrl,
+      `/api/attempts/${attemptId}/resume`,
+      "POST",
+    );
+    assert.equal(resumedAgain.response.status, 200, JSON.stringify(resumedAgain.body));
+    assert.equal(resumedAgain.body.status, "active");
+    const resumedEvents = await db
+      .select({ id: timerEventsTable.id })
+      .from(timerEventsTable)
+      .where(and(eq(timerEventsTable.attemptId, attemptId), eq(timerEventsTable.type, "resumed")));
+    assert.equal(resumedEvents.length, 1);
 
     const submitted = await jsonRequest(
       studentServer.baseUrl,
@@ -269,7 +320,7 @@ test("flagging a response leaves the attempt active, and pause still restores an
     }>;
     assert.equal(submittedItems[0]?.finalAnswer, "a");
     assert.equal(submittedItems[0]?.flagged, true);
-    assert.equal(submittedItems[1]?.finalAnswer, "b");
+    assert.equal(submittedItems[1]?.finalAnswer, "(x + 6)(x - 3)");
     assert.equal(submittedItems[1]?.flagged, false);
   } finally {
     await studentServer?.close();

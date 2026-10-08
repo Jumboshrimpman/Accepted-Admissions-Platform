@@ -36,6 +36,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { adminCurriculumHref, readAdminCurriculumSearch } from "@/lib/admin-curriculum-location";
+import { quizShowsFormattedMath } from "@/lib/quiz-math";
+import { QuizMathText } from "@/components/quiz-math-text";
 
 function errorText(error: unknown): string {
   const data = (error as { data?: { error?: string; conflicts?: string[] } } | null)?.data;
@@ -489,6 +491,7 @@ function QuizQuestionEditor({
                 <QuizQuestionEditorCard
                   index={index + 1}
                   questionId={question.id}
+                  formatMath={quizShowsFormattedMath(quiz.title)}
                   prompt={question.prompt}
                   skill={question.skill}
                   choices={choices}
@@ -605,6 +608,7 @@ function QuizQuestionEditor({
 function QuizQuestionEditorCard({
   index,
   questionId,
+  formatMath = false,
   prompt,
   skill,
   choices,
@@ -616,6 +620,7 @@ function QuizQuestionEditorCard({
 }: {
   index: number;
   questionId: string;
+  formatMath?: boolean;
   prompt: string;
   skill: string;
   choices: Array<{ id: string; label: string; text: string }>;
@@ -646,6 +651,11 @@ function QuizQuestionEditorCard({
       <div className="grid gap-3">
         <div className="space-y-2">
           <Label>Prompt</Label>
+          {formatMath ? (
+            <div className="rounded-md bg-muted/40 p-3 text-sm" data-testid="quiz-math-preview">
+              <QuizMathText text={draftPrompt} />
+            </div>
+          ) : null}
           <Textarea
             aria-label={`Question ${index} prompt`}
             value={draftPrompt}
