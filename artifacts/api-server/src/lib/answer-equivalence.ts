@@ -102,8 +102,11 @@ function tokenize(input: string): Tok[] | null {
     if (c === "." || (c >= "0" && c <= "9")) {
       const match = /^(?:\d+\.\d+|\.\d+|\d+)/.exec(input.slice(i));
       if (!match) return null;
+      const end = i + match[0].length;
+      // "1.2.3" is not a number. A second dot means the token is malformed.
+      if (input[end] === ".") return null;
       toks.push({ t: "num", v: parseDecimal(match[0]) });
-      i += match[0].length;
+      i = end;
       continue;
     }
     if (c >= "a" && c <= "z") {
@@ -154,6 +157,8 @@ function parseExpression(toks: Tok[]): Expr | null {
         continue;
       }
       if (tok?.t === "num" || tok?.t === "id" || tok?.t === "lp") {
+        // "2 4" is not 2*4. Juxtaposed numbers are a different answer, not a product.
+        if (tok.t === "num" && toks[i - 1]?.t === "num") return null;
         const right = parsePow();
         if (!right) return null;
         factors.push(right);
@@ -444,9 +449,18 @@ function parseAnswerExpression(value: string): Expr | null {
   return parseExpression(toks);
 }
 
+function isLetterWord(value: string): boolean {
+  return /^[a-z]{3,}$/i.test(value.trim());
+}
+
 export function answersAlgebraicallyMatch(studentAnswer: string, correctForm: string): boolean {
   const key = correctForm.trim();
   if (!key || /^[a-d]$/i.test(key)) return false;
+  // A run of letters is a word. "neon" must not match "none" just because
+  // the letters multiply to the same monomial.
+  if (isLetterWord(studentAnswer) || isLetterWord(key)) {
+    return studentAnswer.trim().toLowerCase() === key.toLowerCase();
+  }
   const student = parseAnswerExpression(studentAnswer);
   const expected = parseAnswerExpression(key);
   if (!student || !expected) return false;

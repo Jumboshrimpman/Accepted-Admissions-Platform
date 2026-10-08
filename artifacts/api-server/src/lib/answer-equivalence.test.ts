@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { answersMatch } from "./sat-bank-retry.ts";
-import { factorOrderAnswers } from "./xavier-follow-up-content.ts";
+import { factorOrderAnswers, FACTORING_QUIZ_QUESTIONS, SAT_MATH_FOLLOW_UP_QUESTIONS } from "./xavier-follow-up-content.ts";
 
 const factors = factorOrderAnswers("(x+6)", "(x-3)");
 const gcf = factorOrderAnswers("5x^2", "3x-5");
@@ -70,6 +70,34 @@ test("letter keys stay exact and are not treated as variables", () => {
   assert.equal(answersMatch("a", "d"), false);
   assert.equal(answersMatch("2a/2", "a"), false);
   assert.equal(answersMatch("b", ""), false);
+});
+
+test("spaced numbers and malformed decimals are not products", () => {
+  assert.equal(answersMatch("2 4", "8"), false);
+  assert.equal(answersMatch("2 3", "6"), false);
+  assert.equal(answersMatch("3 5", "15"), false);
+  assert.equal(answersMatch("1 1/2", "1/2"), false);
+  assert.equal(answersMatch("1.2.3", ".36"), false);
+  assert.equal(answersMatch("1.2.3", "0.36"), false);
+  assert.equal(answersMatch("2*4", "8"), true);
+  assert.equal(answersMatch("2+4", "6"), true);
+  assert.equal(answersMatch("neon", "none"), false);
+  assert.equal(answersMatch("none", "none"), true);
+});
+
+test("every authored follow-up key still grades itself", () => {
+  const questions = [...SAT_MATH_FOLLOW_UP_QUESTIONS, ...FACTORING_QUIZ_QUESTIONS];
+  assert.equal(questions.length, 48);
+  for (const question of questions) {
+    const forms = question.correctAnswer
+      .split(";")
+      .map((form) => form.trim())
+      .filter(Boolean);
+    assert.ok(forms.length >= 1, question.sourceKey);
+    for (const form of forms) {
+      assert.equal(answersMatch(form, question.correctAnswer), true, `${question.sourceKey}: ${form}`);
+    }
+  }
 });
 
 test("equivalent expanded polynomials match when the key is not factored", () => {

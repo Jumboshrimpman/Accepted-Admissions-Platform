@@ -17,13 +17,19 @@ function renderExpr(expr: MathExpr): ReactNode {
       );
     case "add":
       return expr.terms.map((term, index) => {
-        const body = renderExpr(term);
-        if (index === 0) return <span key={index}>{body}</span>;
-        const minus = term.type === "neg";
+        if (index === 0) return <span key={index}>{renderExpr(term)}</span>;
+        if (term.type === "neg") {
+          return (
+            <span key={index}>
+              {" − "}
+              {renderExpr(term.expr)}
+            </span>
+          );
+        }
         return (
           <span key={index}>
-            {minus ? " " : " + "}
-            {body}
+            {" + "}
+            {renderExpr(term)}
           </span>
         );
       });
