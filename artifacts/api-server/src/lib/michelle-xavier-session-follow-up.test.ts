@@ -30,6 +30,7 @@ test(
       FACTORING_NOTES_PUBLIC_PATH,
       FACTORING_NOTES_SEED_KEY,
       FACTORING_QUIZ_TIME_LIMIT_MINUTES,
+      SAT_MATH_FOLLOW_UP_QUESTIONS,
       SAT_MATH_FOLLOW_UP_TIME_LIMIT_MINUTES,
     } = await import("./xavier-follow-up-content.ts");
     const {
@@ -205,9 +206,11 @@ test(
           .limit(1);
         const links = await db
           .select({
+            id: questionsTable.id,
             position: assignmentQuestionsTable.position,
             tags: questionsTable.tags,
             questionType: questionsTable.questionType,
+            prompt: questionsTable.prompt,
           })
           .from(assignmentQuestionsTable)
           .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
@@ -245,6 +248,7 @@ test(
         samaSat.links.map((link) => link.tags),
         michelleSat.links.map((link) => link.tags),
       );
+      assert.equal(samaSat.links[0]?.id, michelleSat.links[0]?.id);
 
       const notesBlocks = await db
         .select()
@@ -292,6 +296,11 @@ test(
         submittedAt: new Date("2026-10-02T12:00:00.000Z"),
         score: 50,
       });
+      const satQuestionId = michelleSat.links[0]!.id;
+      await db
+        .update(questionsTable)
+        .set({ prompt: "STALE prompt that must be restored." })
+        .where(eq(questionsTable.id, satQuestionId));
       const afterAttempt = await insertSession({
         clientUserId: michelle.id,
         dateTime: new Date("2026-10-05T12:00:00.000Z"),
@@ -316,6 +325,12 @@ test(
       assert.equal(michelleSatAttempt?.userId, michelle.id);
       assert.equal(michelleSatAttempt?.status, "submitted");
       assert.equal(michelleSatAttempt?.score, 50);
+      const [restoredPrompt] = await db
+        .select({ prompt: questionsTable.prompt })
+        .from(questionsTable)
+        .where(eq(questionsTable.id, satQuestionId));
+      assert.equal(restoredPrompt?.prompt, SAT_MATH_FOLLOW_UP_QUESTIONS[0]!.prompt);
+      assert.match(third.satMath.michelle.skippedReason ?? "", /updated in place/);
       const samaAttemptCount = await db
         .select({ id: attemptsTable.id })
         .from(attemptsTable)

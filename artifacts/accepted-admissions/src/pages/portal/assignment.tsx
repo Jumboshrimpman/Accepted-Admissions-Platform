@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearch } from "wouter";
+import { Link, useLocation, useParams, useSearch } from "wouter";
 import {
   getGetAssignmentQueryKey,
   getGetAttemptQueryKey,
@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizContent } from "@/components/quiz-content";
+import { QuizMathText } from "@/components/quiz-math-text";
 import {
   BookmarkPlus,
   Brain,
@@ -61,9 +62,12 @@ import {
   studentSeesFinishedResult,
   studentSeesPredictionStep,
   normalizeQuestionIndex,
+  QUIZ_PAUSE_EXIT_LABEL,
   quizResponsesForPause,
+  quizTimerLeaveAction,
   wantsResumeAttempt,
 } from "@/lib/student-attempt-ui";
+import { FREE_RESPONSE_FORMAT_HINT, quizShowsFormattedMath } from "@/lib/quiz-math";
 import {
   displayAnswerLabel,
   formatStudentChoiceText,
@@ -92,12 +96,14 @@ function QuizRichText({
   imageClassName,
   hideGarbledText,
   hideImages,
+  formatMath = false,
 }: {
   text: string | null | undefined;
   className?: string;
   imageClassName?: string;
   hideGarbledText?: boolean;
   hideImages?: boolean;
+  formatMath?: boolean;
 }) {
   if (!text) return null;
   const parts = splitQuizRichText(formatStudentStemText(text), { hideGarbledText, hideImages });
@@ -145,11 +151,11 @@ function QuizRichText({
             key={`text-${index}`}
             className="min-w-0 overflow-x-auto whitespace-pre-wrap break-words leading-relaxed"
           >
-            {part.value}
+            {formatMath ? <QuizMathText text={part.value} /> : part.value}
           </pre>
         ) : (
           <p key={`text-${index}`} className="max-w-full whitespace-pre-wrap break-words leading-relaxed">
-            {part.value}
+            {formatMath ? <QuizMathText text={part.value} /> : part.value}
           </p>
         ),
       )}
@@ -214,6 +220,7 @@ function ResultView({ result }: { result: AttemptResult }) {
   const estimated = result.estimatedSatScore;
   const showEstimated =
     result.homeworkKind === "diagnostic" || result.scoreReporting === "estimated_diagnostic";
+  const formatMath = quizShowsFormattedMath(result.assignmentTitle);
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-20 animate-in fade-in">
       <Link href="/portal" className="text-sm text-muted-foreground hover:text-primary">
@@ -338,6 +345,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                               className="mt-2 text-sm text-muted-foreground"
                               hideGarbledText={item.presentation === "figure_primary"}
                               hideImages={shouldHideMismatchedQuizFigures(item)}
+                              formatMath={formatMath}
                             />
                           ) : null}
                           {item.presentation === "figure_primary" && !item.prompt ? null : (
@@ -345,6 +353,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                               text={item.prompt}
                               className="mt-2 font-medium"
                               hideGarbledText={item.presentation === "figure_primary"}
+                              formatMath={formatMath}
                             />
                           )}
                         </div>
@@ -358,11 +367,19 @@ function ResultView({ result }: { result: AttemptResult }) {
                     <div className="grid gap-2 text-sm sm:grid-cols-2">
                       <div className="rounded-lg bg-muted/50 p-3">
                         <span className="text-muted-foreground">Your answer:</span>{" "}
-                        {answerText(item.finalAnswer, item.choices)}
+                        {formatMath ? (
+                          <QuizMathText text={answerText(item.finalAnswer, item.choices)} />
+                        ) : (
+                          answerText(item.finalAnswer, item.choices)
+                        )}
                       </div>
                       <div className="rounded-lg bg-primary/5 p-3">
                         <span className="text-muted-foreground">Correct answer:</span>{" "}
-                        {answerText(item.correctAnswer, item.choices)}
+                        {formatMath ? (
+                          <QuizMathText text={answerText(item.correctAnswer, item.choices)} />
+                        ) : (
+                          answerText(item.correctAnswer, item.choices)
+                        )}
                       </div>
                     </div>
                     <QuestionWrittenNote item={item} />
@@ -416,6 +433,7 @@ function InSessionQuestionFeedback({
   skill,
   prompt,
   tone = "default",
+  formatMath = false,
 }: {
   correct?: boolean | null;
   studentAnswer?: string | null;
@@ -425,6 +443,7 @@ function InSessionQuestionFeedback({
   skill?: string | null;
   prompt?: string | null;
   tone?: "default" | "ink";
+  formatMath?: boolean;
 }) {
   const ink = tone === "ink";
   const note = writtenQuestionNote({
@@ -458,11 +477,19 @@ function InSessionQuestionFeedback({
       <div className={`grid gap-2 text-sm ${ink ? "text-white/90" : ""} sm:grid-cols-2`}>
         <div className={ink ? "rounded-lg bg-white/10 p-3" : "rounded-lg bg-background/70 p-3"}>
           <span className={ink ? "text-white/70" : "text-muted-foreground"}>Your answer:</span>{" "}
-          {answerText(studentAnswer, choices)}
+          {formatMath ? (
+            <QuizMathText text={answerText(studentAnswer, choices)} />
+          ) : (
+            answerText(studentAnswer, choices)
+          )}
         </div>
         <div className={ink ? "rounded-lg bg-white/10 p-3" : "rounded-lg bg-background/70 p-3"}>
           <span className={ink ? "text-white/70" : "text-muted-foreground"}>Correct answer:</span>{" "}
-          {answerText(correctAnswer, choices)}
+          {formatMath ? (
+            <QuizMathText text={answerText(correctAnswer, choices)} />
+          ) : (
+            answerText(correctAnswer, choices)
+          )}
         </div>
       </div>
       <p
@@ -482,12 +509,14 @@ function AnswerChoices({
   disabled,
   onSelect,
   tone = "default",
+  formatMath = false,
 }: {
   question: AssignmentQuestion;
   selected?: string;
   disabled?: boolean;
   onSelect: (value: string) => void;
   tone?: "default" | "ink";
+  formatMath?: boolean;
 }) {
   const ink = tone === "ink";
   const figurePrimary = isFigurePrimaryQuestion(question);
@@ -511,6 +540,9 @@ function AnswerChoices({
               : "border-border bg-background"
           }`}
         />
+        <span className={`text-sm ${ink ? "text-white/70" : "text-muted-foreground"}`} data-testid="grid-in-format-hint">
+          {FREE_RESPONSE_FORMAT_HINT}
+        </span>
       </label>
     );
   }
@@ -553,7 +585,7 @@ function AnswerChoices({
                 {choice.label}
               </div>
               <div className="min-w-0 max-w-full flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                {choice.text}
+                {formatMath ? <QuizMathText text={choice.text} /> : choice.text}
               </div>
             </button>
           );
@@ -567,6 +599,7 @@ function AnswerChoices({
 export default function PortalAssignment() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const search = useSearch();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
   const viewer = currentUser?.role === "viewer";
@@ -644,6 +677,16 @@ export default function PortalAssignment() {
   const restoredAttemptId = useRef<string | null>(null);
   const autoResumed = useRef(false);
   const reopenedEmptyAttempt = useRef(false);
+  const intentionalExitRef = useRef(false);
+  const autoPausedRef = useRef(false);
+  const [autoPaused, setAutoPaused] = useState(false);
+  const leaveRef = useRef({
+    status: undefined as string | undefined,
+    viewer: false,
+    attemptId: null as string | null,
+    currentQuestionIndex: 0,
+    responses: {} as typeof localResponses,
+  });
   const inSessionHomework = isInSessionHomeworkCompletion({
     deliveryPhase: assignment?.deliveryPhase,
     title: assignment?.title,
@@ -746,6 +789,118 @@ export default function PortalAssignment() {
     const interval = window.setInterval(() => setRemainingSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
     return () => window.clearInterval(interval);
   }, [attempt?.status, collaborative]);
+
+  useEffect(() => {
+    leaveRef.current.status = attempt?.status;
+  }, [attempt?.status]);
+
+  leaveRef.current.viewer = viewer;
+  leaveRef.current.attemptId = attemptId;
+  leaveRef.current.currentQuestionIndex = currentQuestionIndex;
+  leaveRef.current.responses = localResponses;
+
+  const pauseMutateRef = useRef(pauseAttempt.mutate);
+  const resumeMutateRef = useRef(resumeAttempt.mutate);
+  const queryClientRef = useRef(queryClient);
+  pauseMutateRef.current = pauseAttempt.mutate;
+  resumeMutateRef.current = resumeAttempt.mutate;
+  queryClientRef.current = queryClient;
+
+  useEffect(() => {
+    const snapshot = () => ({
+      viewer: leaveRef.current.viewer,
+      status: leaveRef.current.status,
+      intentionalExit: intentionalExitRef.current,
+      autoPaused: autoPausedRef.current,
+    });
+    const sendKeepalivePause = () => {
+      if (import.meta.env.MODE === "test") return;
+      const id = leaveRef.current.attemptId;
+      if (!id) return;
+      const payload = JSON.stringify({
+        currentQuestionIndex: leaveRef.current.currentQuestionIndex,
+        responses: quizResponsesForPause(leaveRef.current.responses),
+      });
+      const url = `/api/attempts/${encodeURIComponent(id)}/pause`;
+      try {
+        if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+          const blob = new Blob([payload], { type: "application/json" });
+          if (navigator.sendBeacon(url, blob)) return;
+        }
+      } catch {
+        // fetch keepalive below still tries to persist the pause
+      }
+      void fetch(url, {
+        method: "POST",
+        body: payload,
+        keepalive: true,
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+      }).catch(() => undefined);
+    };
+    const pauseInPlace = () => {
+      const id = leaveRef.current.attemptId;
+      if (!id) return;
+      autoPausedRef.current = true;
+      setAutoPaused(true);
+      pauseMutateRef.current(
+        {
+          attemptId: id,
+          data: {
+            currentQuestionIndex: leaveRef.current.currentQuestionIndex,
+            responses: quizResponsesForPause(leaveRef.current.responses),
+          },
+        },
+        {
+          onSuccess: (data) => {
+            leaveRef.current.status = data.status;
+            queryClientRef.current.setQueryData(getGetAttemptQueryKey(id), data);
+          },
+        },
+      );
+    };
+    const resumeInPlace = () => {
+      const id = leaveRef.current.attemptId;
+      if (!id) return;
+      autoPausedRef.current = false;
+      setAutoPaused(false);
+      resumeMutateRef.current(
+        { attemptId: id },
+        {
+          onSuccess: (data) => {
+            leaveRef.current.status = data.status;
+            queryClientRef.current.setQueryData(getGetAttemptQueryKey(id), data);
+          },
+        },
+      );
+    };
+    const onVisibility = () => {
+      const action = quizTimerLeaveAction({
+        ...snapshot(),
+        event: document.visibilityState === "hidden" ? "hidden" : "visible",
+      });
+      if (action === "pause") pauseInPlace();
+      else if (action === "resume") resumeInPlace();
+    };
+    const onPageHide = () => {
+      const action = quizTimerLeaveAction({ ...snapshot(), event: "pagehide" });
+      if (action !== "pause") return;
+      intentionalExitRef.current = true;
+      leaveRef.current.status = "paused";
+      sendKeepalivePause();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+      const action = quizTimerLeaveAction({ ...snapshot(), event: "unmount" });
+      if (action !== "pause") return;
+      intentionalExitRef.current = true;
+      leaveRef.current.status = "paused";
+      sendKeepalivePause();
+    };
+  }, []);
 
   const answeredCount = answeredQuestionCount(localResponses);
   const submitGuard = canSubmitStudentAttempt({
@@ -897,6 +1052,7 @@ export default function PortalAssignment() {
 
   const pauseCurrentAttempt = () => {
     if (!attemptId || viewer || attempt?.status !== "active") return;
+    intentionalExitRef.current = true;
     pauseAttempt.mutate(
       {
         attemptId,
@@ -907,8 +1063,10 @@ export default function PortalAssignment() {
       },
       {
         onSuccess: (data) => {
+          leaveRef.current.status = data.status;
           refreshSavedQuizLists();
           queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data);
+          setLocation("/portal");
         },
       },
     );
@@ -985,7 +1143,7 @@ export default function PortalAssignment() {
               <p className="text-sm text-muted-foreground">
                 {inSessionHomework
                   ? `${IN_SESSION_PARTIAL_SUBMIT_COPY} ${IN_SESSION_PER_QUESTION_FEEDBACK_COPY}`
-                  : "Your timer is tracked on the server. Answers autosave as you work. Pause hides the questions. Save for later marks this question so you can jump back to it without leaving the quiz. Submit is a separate action and stays blocked until at least one question is answered."}
+                  : "Your timer is tracked on the server and pauses when you leave. Answers autosave as you work. Pause / Save & exit stores this attempt and returns you to the dashboard. Save for later marks this question so you can jump back to it without leaving the quiz. Submit is a separate action and stays blocked until at least one question is answered."}
               </p>
             )}
           </CardContent>
@@ -1075,16 +1233,21 @@ export default function PortalAssignment() {
       return <ResultView result={resultQuery.data} />;
     }
   }
-  if (attempt.status === "paused") {
+  const formatMath = quizShowsFormattedMath(assignment.title);
+  if (attempt.status === "paused" && !autoPaused) {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center space-y-5 px-4 text-center">
+      <div
+        className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center space-y-5 px-4 text-center"
+        data-testid="quiz-paused"
+      >
         <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted">
           <Pause className="h-10 w-10 text-muted-foreground" />
         </div>
         <h2 className="text-3xl font-bold">Attempt paused</h2>
         <p className="max-w-md text-lg text-muted-foreground">
-          Your timer, answers, and place in the quiz are saved. Question content is hidden while
-          paused. Resume brings you back to this question.
+          Your answers and place in the quiz are saved. This attempt is still in progress and has
+          not been submitted. Time remaining: {formatTime(remainingSeconds)}. Resume brings you
+          back to this question.
         </p>
         {viewer ? (
           <p className="text-sm text-muted-foreground">Viewer mode is read only.</p>
@@ -1094,10 +1257,17 @@ export default function PortalAssignment() {
               type="button"
               size="lg"
               className="h-12 w-full rounded-full"
+              data-testid="resume-quiz"
               onClick={() =>
                 resumeAttempt.mutate(
                   { attemptId },
-                  { onSuccess: (data) => queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data) },
+                  {
+                    onSuccess: (data) => {
+                      leaveRef.current.status = data.status;
+                      autoPausedRef.current = false;
+                      queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data);
+                    },
+                  },
                 )
               }
               disabled={resumeAttempt.isPending}
@@ -1168,6 +1338,7 @@ export default function PortalAssignment() {
               imageClassName="my-3 h-auto max-h-[min(28rem,70vh)] w-auto max-w-full rounded-md bg-white"
               hideGarbledText={shouldHideQuizOcrStem(question)}
               hideImages={shouldHideMismatchedQuizFigures(question)}
+              formatMath={formatMath}
             />
           ) : null}
           {shouldHideQuizOcrStem(question) || (isFigurePrimaryQuestion(question) && !question.prompt) ? null : (
@@ -1175,6 +1346,7 @@ export default function PortalAssignment() {
               text={question.prompt}
               className="mt-5 text-xl font-medium leading-relaxed"
               hideGarbledText={shouldHideQuizOcrStem(question)}
+              formatMath={formatMath}
             />
           )}
           <div className="mt-6">
@@ -1186,6 +1358,7 @@ export default function PortalAssignment() {
                 selected={response.finalAnswer}
                 disabled={viewer || revealedHere}
                 tone="ink"
+                formatMath={formatMath}
                 onSelect={(value) => updateResponse(question.id, { finalAnswer: value })}
               />
             )}
@@ -1210,6 +1383,7 @@ export default function PortalAssignment() {
               skill={question.skill}
               prompt={question.prompt}
               tone="ink"
+              formatMath={formatMath}
             />
           ) : recordedHere ? (
             <p className="mt-4 text-sm text-white/75">Recorded. Check the answer, or open another problem.</p>
@@ -1285,10 +1459,11 @@ export default function PortalAssignment() {
                 variant="outline"
                 size="sm"
                 className="h-11"
+                data-testid="pause-save-exit"
                 onClick={pauseCurrentAttempt}
                 disabled={pauseAttempt.isPending}
               >
-                <Pause className="mr-2 h-4 w-4" /> Pause
+                <Pause className="mr-2 h-4 w-4" /> {QUIZ_PAUSE_EXIT_LABEL}
               </Button>
               <Button
                 type="button"
@@ -1433,6 +1608,7 @@ export default function PortalAssignment() {
                   text={question.stimulus}
                   hideGarbledText={shouldHideQuizOcrStem(question)}
                   hideImages={shouldHideMismatchedQuizFigures(question)}
+                  formatMath={formatMath}
                 />
               </CardContent>
             </Card>
@@ -1442,6 +1618,7 @@ export default function PortalAssignment() {
               text={question.prompt}
               className="text-lg font-medium leading-relaxed"
               hideGarbledText={shouldHideQuizOcrStem(question)}
+              formatMath={formatMath}
             />
           )}
         </div>
@@ -1454,6 +1631,7 @@ export default function PortalAssignment() {
             question={question}
             selected={response.finalAnswer}
             disabled={viewer || revealedHere}
+            formatMath={formatMath}
             onSelect={(value) => updateResponse(question.id, { finalAnswer: value })}
           />
         )}
@@ -1477,6 +1655,7 @@ export default function PortalAssignment() {
           choices={question.choices}
           skill={question.skill}
           prompt={question.prompt}
+          formatMath={formatMath}
         />
       ) : null}
       {inSessionHomework ? (

@@ -25,6 +25,8 @@ import {
   repairMichelleQuizMathText,
   shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
+import { quizShowsFormattedMath } from "@/lib/quiz-math";
+import { QuizMathText } from "@/components/quiz-math-text";
 
 function createSessionAssignmentQuestion(
   assignmentId: string,
@@ -259,7 +261,11 @@ export function TutorSessionQuizEditor({
                   ) : (
                     <div>
                       <p className="text-sm">
-                        {repairMichelleQuizMathText(question.prompt, repairStackedMath)}
+                        {quizShowsFormattedMath(assignment?.title) ? (
+                          <QuizMathText text={repairMichelleQuizMathText(question.prompt, repairStackedMath)} />
+                        ) : (
+                          repairMichelleQuizMathText(question.prompt, repairStackedMath)
+                        )}
                       </p>
                       {mcq && question.correctAnswer ? (
                         <p className="mt-1 text-xs text-muted-foreground">

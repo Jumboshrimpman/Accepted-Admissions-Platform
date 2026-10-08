@@ -178,6 +178,10 @@ afterEach(() => {
   mocks.deadline = null;
   mocks.latestAttemptId = "attempt-1";
   mocks.latestAttemptStatus = "active";
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => "visible",
+  });
   mocks.timezone = "Asia/Tokyo";
   mocks.linkedSession = null;
   mocks.linkedSessionFetched = true;
@@ -1160,6 +1164,7 @@ describe("student attempt UI", () => {
     fireEvent.change(input, { target: { value: "-13" } });
     expect(saveMutate).toHaveBeenCalled();
     expect(screen.getByTestId("grid-in-answer")).toBeTruthy();
+    expect(screen.getByTestId("grid-in-format-hint").textContent).toMatch(/x\^2/);
   });
 
   test("figure-primary comment without usable A–D text does not show letter-only buttons", () => {
@@ -1614,10 +1619,10 @@ describe("student attempt UI", () => {
     expect(submitMutate).not.toHaveBeenCalled();
   });
 
-  test("Pause stays in the quiz and does not submit", () => {
+  test("Pause / Save & exit stores the attempt and returns to the dashboard", () => {
     render(<PortalAssignment />);
-    fireEvent.click(screen.getByRole("button", { name: /^Pause$/i }));
-    expect(screen.getByRole("button", { name: /^Pause$/i })).toHaveProperty("type", "button");
+    fireEvent.click(screen.getByRole("button", { name: /Pause \/ Save & exit/i }));
+    expect(screen.getByTestId("pause-save-exit")).toHaveProperty("type", "button");
     expect(submitMutate).not.toHaveBeenCalled();
     expect(setLocation).not.toHaveBeenCalled();
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
@@ -1628,6 +1633,63 @@ describe("student attempt UI", () => {
       }),
       expect.any(Object),
     );
+    const options = pauseMutate.mock.calls[0]?.[1] as { onSuccess?: (data: unknown) => void };
+    options.onSuccess?.({ ...mocks.attempt, status: "paused" });
+    expect(setLocation).toHaveBeenCalledWith("/portal");
+    expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  test("hiding the tab pauses and showing it resumes without submitting", () => {
+    render(<PortalAssignment />);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    expect(pauseMutate).toHaveBeenCalledTimes(1);
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    const options = pauseMutate.mock.calls[0]?.[1] as { onSuccess?: (data: unknown) => void };
+    options.onSuccess?.({ ...mocks.attempt, status: "paused", currentQuestionIndex: 0 });
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+  });
+
+  test("Factoring Quiz stems and choices render formatted math", () => {
+    mocks.title = "Factoring Quiz";
+    mocks.questions = [
+      {
+        id: "q-factor",
+        position: 0,
+        subject: "SAT Math",
+        questionType: "multiple_choice",
+        presentation: "text",
+        prompt: "x^2 + 3x - 18\n\nFactor the given expression.",
+        stimulus: null,
+        choices: [
+          { id: "a", label: "A", text: "(x + 6)(x - 3)" },
+          { id: "b", label: "B", text: "(21x^2 + 63x + 18) / (x + 3)" },
+          { id: "c", label: "C", text: "x^2 + 3x - 18" },
+          { id: "d", label: "D", text: "3x + 6" },
+        ],
+        skill: "factoring quadratics",
+        difficulty: "medium",
+        predictionFirst: false,
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByText("Factor the given expression.")).toBeTruthy();
+    expect(screen.getAllByTestId("quiz-sup").length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("quiz-fraction").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("pause-save-exit")).toBeTruthy();
+    expect(screen.queryByText("x^2 + 3x - 18")).toBeNull();
   });
 
   test("Save for later flags the current question and stays in the quiz", () => {
