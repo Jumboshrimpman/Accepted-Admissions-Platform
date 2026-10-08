@@ -231,6 +231,8 @@ test("admin overview lists a guidance submit that succeeded without RESEND_API_K
         goals: string;
         serviceRequested: string;
         status: string;
+        resolvedAt: string | null;
+        resolvedByUserId: string | null;
       }>;
     };
     assert.equal(overviewResponse.status, 200);
@@ -241,6 +243,8 @@ test("admin overview lists a guidance submit that succeeded without RESEND_API_K
     assert.equal(listed.goals, "See this row in the admin portal without mail.");
     assert.equal(listed.serviceRequested, "Private SAT tutoring");
     assert.equal(listed.status, "new");
+    assert.equal(listed.resolvedAt, null);
+    assert.equal(listed.resolvedByUserId, null);
   } finally {
     await server.close();
     await deleteByEmail(String(payload.email));

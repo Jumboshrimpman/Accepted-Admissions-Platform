@@ -20,14 +20,22 @@ import {
   UserRound,
   WalletCards,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
+  getGetAdminOverviewQueryKey,
   getGetCurrentUserQueryKey,
   getGetDashboardQueryKey,
+  useGetAdminOverview,
   useGetCurrentUser,
   useGetDashboard,
   useUpdateCurrentUser,
 } from "@workspace/api-client-react";
+import {
+  unresolvedFormSubmissionHref,
+  unresolvedFormSubmissionLabel,
+  unresolvedFormSubmissions,
+} from "@/lib/form-submissions";
 import { isValidIanaTimeZone } from "@/lib/session-display";
 import { PortalProfileEditor } from "@/components/portal-profile-editor";
 import { portalAvatarUrl, portalDisplayName } from "@/lib/portal-profile";
@@ -39,6 +47,17 @@ import {
   canSeePortalSatNav,
   goToPortalBooking,
 } from "@/lib/portal-sat";
+
+type PortalNavLink = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  badge?: {
+    href: string;
+    count: number;
+    label: string;
+  };
+};
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -55,6 +74,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
       queryKey: getGetDashboardQueryKey(),
       retry: false,
       enabled: Boolean(apiUser),
+    },
+  });
+  const isAdministrator = apiUser?.role === "administrator";
+  const { data: adminOverview } = useGetAdminOverview({
+    query: {
+      queryKey: getGetAdminOverviewQueryKey(),
+      retry: false,
+      enabled: isAdministrator,
     },
   });
   const updateCurrentUser = useUpdateCurrentUser();
@@ -111,7 +138,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const role = apiUser.role;
 
-  const getLinks = () => {
+  const getLinks = (): PortalNavLink[] => {
     switch (role) {
       case "tutor":
         return [
@@ -119,13 +146,27 @@ export function Shell({ children }: { children: React.ReactNode }) {
           { href: "/tutor/curriculum", label: "Curriculum", icon: BookOpen },
           { href: "/tutor/profile", label: "Profile", icon: UserRound },
         ];
-      case "administrator":
+      case "administrator": {
+        const openSubmissions = unresolvedFormSubmissions(adminOverview?.guidanceRequests);
+        const submissionHref = unresolvedFormSubmissionHref(openSubmissions);
         return [
-          { href: "/admin", label: "Overview", icon: Settings },
+          {
+            href: "/admin",
+            label: "Overview",
+            icon: Settings,
+            badge: submissionHref
+              ? {
+                  href: submissionHref,
+                  count: openSubmissions.length,
+                  label: unresolvedFormSubmissionLabel(openSubmissions.length),
+                }
+              : undefined,
+          },
           { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
           { href: "/admin/content", label: "Content", icon: FileText },
           { href: "/tutor", label: "Tutor view", icon: BookOpen },
         ];
+      }
       default:
         return [
           { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
@@ -194,19 +235,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
             <nav className="hidden md:flex gap-1" aria-label="Portal navigation">
               {links.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={link.href === PORTAL_SAT_HREF ? openBookSat : undefined}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    linkActive(link.href)
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <link.icon className="w-4 h-4" />
-                  {link.label}
-                </Link>
+                <div key={link.href} className="flex items-center gap-1">
+                  <Link
+                    href={link.href}
+                    onClick={link.href === PORTAL_SAT_HREF ? openBookSat : undefined}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      linkActive(link.href)
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <link.icon className="w-4 h-4" />
+                    {link.label}
+                  </Link>
+                  {link.badge ? (
+                    <Link
+                      href={link.badge.href}
+                      data-testid="nav-unresolved-form-submissions"
+                      aria-label={link.badge.label}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold tabular-nums text-amber-950"
+                    >
+                      {link.badge.count}
+                    </Link>
+                  ) : null}
+                </div>
               ))}
             </nav>
           </div>
@@ -292,19 +344,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
           >
             <div className="container mx-auto grid gap-1">
               {links.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={link.href === PORTAL_SAT_HREF ? openBookSat : () => setMenuOpen(false)}
-                  className={`flex items-center gap-2 rounded-md px-3 py-3 text-sm font-medium ${
-                    linkActive(link.href)
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  <link.icon className="h-4 w-4" />
-                  {link.label}
-                </Link>
+                <div key={link.href} className="flex items-center gap-1">
+                  <Link
+                    href={link.href}
+                    onClick={link.href === PORTAL_SAT_HREF ? openBookSat : () => setMenuOpen(false)}
+                    className={`flex flex-1 items-center gap-2 rounded-md px-3 py-3 text-sm font-medium ${
+                      linkActive(link.href)
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <link.icon className="h-4 w-4" />
+                    {link.label}
+                  </Link>
+                  {link.badge ? (
+                    <Link
+                      href={link.badge.href}
+                      data-testid="nav-unresolved-form-submissions-mobile"
+                      aria-label={link.badge.label}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold tabular-nums text-amber-950"
+                    >
+                      {link.badge.count}
+                    </Link>
+                  ) : null}
+                </div>
               ))}
             </div>
           </nav>

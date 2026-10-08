@@ -2773,7 +2773,7 @@ components:
         status: { type: string, enum: [unread, read, dismissed] }
     AdminGuidanceRequest:
       type: object
-      required: [id, guardianName, studentName, email, phone, gradeOrGraduationYear, currentSchool, serviceRequested, currentSatTotal, currentReadingWriting, currentMath, targetSatScore, plannedTestDate, goals, schedulingAvailability, referralSource, consentToContact, privacyAcknowledged, sourcePage, status, assignedStaffUserId, followUpNotes, conversionStatus, createdAt]
+      required: [id, guardianName, studentName, email, phone, gradeOrGraduationYear, currentSchool, serviceRequested, currentSatTotal, currentReadingWriting, currentMath, targetSatScore, plannedTestDate, goals, schedulingAvailability, referralSource, consentToContact, privacyAcknowledged, sourcePage, status, assignedStaffUserId, followUpNotes, conversionStatus, resolvedAt, resolvedByUserId, resolvedByName, createdAt]
       properties:
         id: { type: string }
         guardianName: { type: string }
@@ -2798,6 +2798,12 @@ components:
         assignedStaffUserId: { type: ["string", "null"] }
         followUpNotes: { type: ["string", "null"] }
         conversionStatus: { $ref: "#/components/schemas/AdminGuidanceConversionStatus" }
+        resolvedAt:
+          description: When an administrator resolved this public form submission. Null while it should keep alerting.
+          type: ["string", "null"]
+          format: date-time
+        resolvedByUserId: { type: ["string", "null"] }
+        resolvedByName: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         notificationDelivery:
           type: object
@@ -2820,6 +2826,9 @@ components:
         assignedStaffUserId: { type: ["string", "null"] }
         followUpNotes: { type: ["string", "null"], maxLength: 5000 }
         conversionStatus: { $ref: "#/components/schemas/AdminGuidanceConversionStatus" }
+        resolved:
+          type: boolean
+          description: True marks the submission resolved by the signed-in administrator and clears the alert. False reopens it.
     AdminProgram:
       type: object
       required: [id, title, subject, term, status, goalSummary, meetUrl, driveUrl, sessionCount, completedSessionCount]

@@ -149,6 +149,9 @@ export const GetAdminOverviewResponse = zod.object({
   "assignedStaffUserId": zod.string().nullable(),
   "followUpNotes": zod.string().nullable(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedByUserId": zod.string().nullable(),
+  "resolvedByName": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "notificationDelivery": zod.object({
   "status": zod.enum(['sent', 'failed']),
@@ -213,7 +216,8 @@ export const UpdateAdminGuidanceRequestBody = zod.object({
   "status": zod.enum(['new', 'contacted', 'in_progress', 'closed']).optional(),
   "assignedStaffUserId": zod.string().nullish(),
   "followUpNotes": zod.string().max(updateAdminGuidanceRequestBodyFollowUpNotesMax).nullish(),
-  "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']).optional()
+  "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']).optional(),
+  "resolved": zod.boolean().optional()
 })
 
 export const UpdateAdminGuidanceRequestResponse = zod.object({
@@ -240,6 +244,9 @@ export const UpdateAdminGuidanceRequestResponse = zod.object({
   "assignedStaffUserId": zod.string().nullable(),
   "followUpNotes": zod.string().nullable(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedByUserId": zod.string().nullable(),
+  "resolvedByName": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "notificationDelivery": zod.object({
   "status": zod.enum(['sent', 'failed']),

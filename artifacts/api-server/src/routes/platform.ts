@@ -7848,9 +7848,13 @@ router.get(
            assignedStaffUserId: clientRequestsTable.assignedStaffUserId,
            followUpNotes: clientRequestsTable.followUpNotes,
            conversionStatus: clientRequestsTable.conversionStatus,
+           resolvedAt: clientRequestsTable.resolvedAt,
+           resolvedByUserId: clientRequestsTable.resolvedByUserId,
+           resolvedByName: usersTable.displayName,
            createdAt: clientRequestsTable.createdAt,
          })
          .from(clientRequestsTable)
+         .leftJoin(usersTable, eq(usersTable.id, clientRequestsTable.resolvedByUserId))
          .orderBy(desc(clientRequestsTable.createdAt)),
       db
         .select({
@@ -8091,13 +8095,24 @@ router.patch(
         ...(body.data.conversionStatus === undefined
           ? {}
           : { conversionStatus: body.data.conversionStatus }),
+        ...(body.data.resolved === undefined
+          ? {}
+          : body.data.resolved
+            ? { resolvedAt: new Date(), resolvedByUserId: req.appUser!.id }
+            : { resolvedAt: null, resolvedByUserId: null }),
       })
       .where(eq(clientRequestsTable.id, existing.id))
       .returning();
 
+    const resolvedByName = await guidanceResolverName(updated!.resolvedByUserId);
     await db.insert(auditLogsTable).values({
       actorUserId: req.appUser!.id,
-      action: "guidance_request.updated",
+      action:
+        body.data.resolved === true
+          ? "guidance_request.resolved"
+          : body.data.resolved === false
+            ? "guidance_request.reopened"
+            : "guidance_request.updated",
       entityType: "client_request",
       entityId: updated!.id,
       metadata: {
@@ -8105,6 +8120,8 @@ router.patch(
         status: updated!.status,
         assignedStaffUserId: updated!.assignedStaffUserId,
         conversionStatus: updated!.conversionStatus,
+        resolvedAt: updated!.resolvedAt,
+        resolvedByUserId: updated!.resolvedByUserId,
       },
     });
     let notificationDelivery:
@@ -8159,11 +8176,24 @@ router.patch(
       assignedStaffUserId: updated!.assignedStaffUserId,
       followUpNotes: updated!.followUpNotes,
       conversionStatus: updated!.conversionStatus,
+      resolvedAt: updated!.resolvedAt,
+      resolvedByUserId: updated!.resolvedByUserId,
+      resolvedByName,
       createdAt: updated!.createdAt,
       ...(notificationDelivery ? { notificationDelivery } : {}),
     }));
   },
 );
+
+async function guidanceResolverName(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const [resolver] = await db
+    .select({ displayName: usersTable.displayName })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return resolver?.displayName ?? null;
+}
 
 async function adminProgramShape(course: typeof coursesTable.$inferSelect) {
   const [counts] = await db

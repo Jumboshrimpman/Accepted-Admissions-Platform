@@ -397,6 +397,9 @@ test("HTTP admin overview returns private guidance requests only to administrato
       assignedStaffUserId: null,
       followUpNotes: null,
       conversionStatus: "unqualified",
+      resolvedAt: null,
+      resolvedByUserId: null,
+      resolvedByName: null,
       createdAt: "2099-09-01T12:00:00.000Z",
     });
 
@@ -576,6 +579,67 @@ test("HTTP admin overview returns private guidance requests only to administrato
       followUpNotes: "This private note must not be included.",
       conversionStatus: "qualified",
     });
+
+    const resolved = await patchJson(administratorServer.baseUrl, updatePath, {
+      resolved: true,
+    });
+    assert.equal(resolved.response.status, 200);
+    assert.equal(resolved.body.status, "contacted");
+    assert.equal(resolved.body.resolvedByUserId, fixture.administrator.id);
+    assert.equal(resolved.body.resolvedByName, "Dashboard Administrator");
+    assert.equal(typeof resolved.body.resolvedAt, "string");
+    assert.equal(resolved.body.notificationDelivery, undefined);
+
+    const [resolvedRow] = await db
+      .select({
+        status: clientRequestsTable.status,
+        resolvedAt: clientRequestsTable.resolvedAt,
+        resolvedByUserId: clientRequestsTable.resolvedByUserId,
+      })
+      .from(clientRequestsTable)
+      .where(eq(clientRequestsTable.id, createdRequestIds[1]))
+      .limit(1);
+    assert.equal(resolvedRow?.status, "contacted");
+    assert.ok(resolvedRow?.resolvedAt instanceof Date);
+    assert.equal(resolvedRow?.resolvedByUserId, fixture.administrator.id);
+
+    const [resolutionAudit] = await db
+      .select({ action: auditLogsTable.action })
+      .from(auditLogsTable)
+      .where(
+        and(
+          eq(auditLogsTable.entityType, "client_request"),
+          eq(auditLogsTable.entityId, createdRequestIds[1]),
+          eq(auditLogsTable.action, "guidance_request.resolved"),
+        ),
+      )
+      .limit(1);
+    assert.equal(resolutionAudit?.action, "guidance_request.resolved");
+
+    const forbiddenResolve = await patchJson(studentServer.baseUrl, updatePath, {
+      resolved: false,
+    });
+    assert.equal(forbiddenResolve.response.status, 403);
+
+    const reopened = await patchJson(administratorServer.baseUrl, updatePath, {
+      resolved: false,
+    });
+    assert.equal(reopened.response.status, 200);
+    assert.equal(reopened.body.resolvedAt, null);
+    assert.equal(reopened.body.resolvedByUserId, null);
+    assert.equal(reopened.body.resolvedByName, null);
+    assert.equal(reopened.body.status, "contacted");
+
+    const [reopenedRow] = await db
+      .select({
+        resolvedAt: clientRequestsTable.resolvedAt,
+        resolvedByUserId: clientRequestsTable.resolvedByUserId,
+      })
+      .from(clientRequestsTable)
+      .where(eq(clientRequestsTable.id, createdRequestIds[1]))
+      .limit(1);
+    assert.equal(reopenedRow?.resolvedAt, null);
+    assert.equal(reopenedRow?.resolvedByUserId, null);
   } finally {
     await studentServer?.close();
     await secondaryAdministratorServer?.close();

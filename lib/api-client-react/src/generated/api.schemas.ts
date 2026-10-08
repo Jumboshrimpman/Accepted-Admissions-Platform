@@ -779,6 +779,15 @@ export interface AdminGuidanceRequest {
   /** @nullable */
   followUpNotes: string | null;
   conversionStatus: AdminGuidanceConversionStatus;
+  /**
+   * When an administrator resolved this public form submission. Null while it should keep alerting.
+   * @nullable
+   */
+  resolvedAt: string | null;
+  /** @nullable */
+  resolvedByUserId: string | null;
+  /** @nullable */
+  resolvedByName: string | null;
   createdAt: string;
   notificationDelivery?: AdminGuidanceRequestNotificationDelivery;
 }
@@ -855,6 +864,8 @@ export interface AdminGuidanceRequestUpdate {
      */
   followUpNotes?: string | null;
   conversionStatus?: AdminGuidanceConversionStatus;
+  /** True marks the submission resolved by the signed-in administrator and clears the alert. False reopens it. */
+  resolved?: boolean;
 }
 
 export type AdminProgramStatus = typeof AdminProgramStatus[keyof typeof AdminProgramStatus];

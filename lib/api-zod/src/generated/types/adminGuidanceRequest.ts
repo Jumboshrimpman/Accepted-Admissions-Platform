@@ -40,6 +40,15 @@ export interface AdminGuidanceRequest {
   /** @nullable */
   followUpNotes: string | null;
   conversionStatus: AdminGuidanceConversionStatus;
+  /**
+   * When an administrator resolved this public form submission. Null while it should keep alerting.
+   * @nullable
+   */
+  resolvedAt: Date | null;
+  /** @nullable */
+  resolvedByUserId: string | null;
+  /** @nullable */
+  resolvedByName: string | null;
   createdAt: Date;
   notificationDelivery?: AdminGuidanceRequestNotificationDelivery;
 }
