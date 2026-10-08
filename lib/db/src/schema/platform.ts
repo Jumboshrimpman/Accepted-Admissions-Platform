@@ -669,6 +669,8 @@ export const clientRequestsTable = pgTable("client_requests", {
   assignedStaffUserId: uuid("assigned_staff_user_id").references(() => usersTable.id),
   followUpNotes: text("follow_up_notes"),
   conversionStatus: text("conversion_status").notNull().default("unqualified"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  resolvedByUserId: uuid("resolved_by_user_id").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -18,4 +18,6 @@ export interface AdminGuidanceRequestUpdate {
      */
   followUpNotes?: string | null;
   conversionStatus?: AdminGuidanceConversionStatus;
+  /** True marks the submission resolved by the signed-in administrator and clears the alert. False reopens it. */
+  resolved?: boolean;
 }

@@ -11,7 +11,7 @@ import {
   type AdminOverview,
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ArrowRight, AlertTriangle, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,11 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
+import {
+  formSubmissionSourceLabel,
+  isFormSubmissionResolved,
+  unresolvedFormSubmissions,
+} from "@/lib/form-submissions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { QuestionReportsQueue } from "./question-reports-queue";
 import { previewableStudents } from "@/lib/previewable-students";
@@ -76,6 +81,51 @@ function notificationsByNewest<T extends { createdAt: string | Date }>(notificat
   );
 }
 
+function applyGuidanceRequestUpdate(queryClient: QueryClient, updated: AdminGuidanceRequest) {
+  queryClient.setQueryData<AdminOverviewWithPlatform>(getGetAdminOverviewQueryKey(), (current) => {
+    if (!current) return current;
+    const guidanceRequests = current.guidanceRequests.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    return {
+      ...current,
+      guidanceRequests,
+      platform: current.platform
+        ? {
+            ...current.platform,
+            newRequests: guidanceRequests.reduce(
+              (count, item) => count + (item.status === "new" ? 1 : 0),
+              0,
+            ),
+          }
+        : undefined,
+    };
+  });
+}
+
+function revealAdminHashTarget(hash: string) {
+  if (hash === "guidance-requests") {
+    document.getElementById("guidance-requests")?.scrollIntoView({ block: "start" });
+    return;
+  }
+  if (!hash.startsWith("guidance-request-")) return;
+  const requestId = hash.slice("guidance-request-".length);
+  const element = document.getElementById(`guidance-request-${requestId}`);
+  if (!element) return;
+  const history = document.getElementById("resolved-form-submissions");
+  if (history instanceof HTMLDetailsElement && history.contains(element)) history.open = true;
+  if (element instanceof HTMLDetailsElement) element.open = true;
+  element.scrollIntoView({ block: "start" });
+}
+
+function resolutionSummary(request: AdminGuidanceRequest): string {
+  if (!isFormSubmissionResolved(request) || !request.resolvedAt) return "Unresolved";
+  if (request.resolvedByName) {
+    return `Resolved ${new Date(request.resolvedAt).toLocaleString()} by ${request.resolvedByName}`;
+  }
+  return "Resolved earlier";
+}
+
 export default function AdminDashboard() {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
@@ -83,6 +133,12 @@ export default function AdminDashboard() {
   const { data: curriculum } = useGetAdminCurriculum();
   const queryClient = useQueryClient();
   const updateNotification = useUpdateAdminNotification();
+  useEffect(() => {
+    if (overviewLoading || !overview) return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash) return;
+    revealAdminHashTarget(hash);
+  }, [overview, overviewLoading]);
   if (overviewLoading) {
     return <div className="space-y-6"><Skeleton className="h-10 w-72 rounded-xl" /><Skeleton className="h-40 rounded-2xl" /><Skeleton className="h-72 rounded-2xl" /></div>;
   }
@@ -93,6 +149,8 @@ export default function AdminDashboard() {
   const platform = (overview as typeof overview & { platform?: { outstandingInvoices: number; upcomingSessions: number; newRequests: number } } | undefined)?.platform;
   const loginActivity = overview?.loginActivity ?? [];
   const guidanceRequests = overview?.guidanceRequests ?? [];
+  const unresolvedRequests = unresolvedFormSubmissions(guidanceRequests);
+  const resolvedRequests = guidanceRequests.filter((request) => isFormSubmissionResolved(request));
   const notifications = notificationsByNewest(overview?.notifications ?? []);
   const unreadNotifications = notifications.filter((notification) => notification.status === "unread");
   const priorNotifications = notifications.filter((notification) => notification.status !== "unread");
@@ -124,6 +182,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-in fade-in">
+      <UnresolvedFormSubmissionsAlert requests={unresolvedRequests} />
       <div>
         <p className="mb-2 text-sm font-medium text-primary">Accepted Admissions · administrator</p>
         <h1 className="text-3xl font-bold tracking-tight">Admin overview</h1>
@@ -306,7 +365,7 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      <Card id="guidance-requests" data-testid="card-guidance-requests">
+      <Card id="guidance-requests" data-testid="card-guidance-requests" className="scroll-mt-24">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -314,7 +373,7 @@ export default function AdminDashboard() {
                 <MessageSquareText className="h-5 w-5 text-primary" /> Guidance requests
               </CardTitle>
               <CardDescription>
-                Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable.
+                Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable. Resolve a submission to clear its alert. Resolved submissions stay in history.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -331,9 +390,29 @@ export default function AdminDashboard() {
               No guidance requests have been submitted yet.
             </p>
           ) : (
-            guidanceRequests.map((request) => (
-              <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
-            ))
+            <>
+              {unresolvedRequests.map((request) => (
+                <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
+              ))}
+              {unresolvedRequests.length === 0 && (
+                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-unresolved-form-submissions">
+                  No unresolved form submissions.
+                </p>
+              )}
+              {resolvedRequests.length > 0 && (
+                <details id="resolved-form-submissions" className="rounded-xl border" data-testid="resolved-form-submissions">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    Resolved history ({resolvedRequests.length})
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </summary>
+                  <div className="space-y-3 border-t p-4">
+                    {resolvedRequests.map((request) => (
+                      <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -378,6 +457,78 @@ export default function AdminDashboard() {
         </details>
       </Card>
     </div>
+  );
+}
+
+function UnresolvedFormSubmissionsAlert({ requests }: { requests: AdminGuidanceRequest[] }) {
+  const queryClient = useQueryClient();
+  const updateRequest = useUpdateAdminGuidanceRequest();
+  const [error, setError] = useState("");
+  if (requests.length === 0) return null;
+
+  const resolve = (requestId: string) => {
+    setError("");
+    updateRequest.mutate(
+      { requestId, data: { resolved: true } },
+      {
+        onSuccess: (updated) => applyGuidanceRequestUpdate(queryClient, updated),
+        onError: (updateError) => {
+          const detail = (updateError as { data?: { error?: string } } | null)?.data?.error;
+          setError(detail || "Could not resolve this submission. Please try again.");
+        },
+      },
+    );
+  };
+
+  return (
+    <section
+      role="alert"
+      aria-labelledby="unresolved-form-submissions-heading"
+      data-testid="alert-unresolved-form-submissions"
+      className="rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950 shadow-sm"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="unresolved-form-submissions-heading" className="flex items-center gap-2 text-lg font-semibold">
+            <MessageSquareText className="h-5 w-5" />
+            Unresolved form submissions
+          </h2>
+          <p className="mt-1 text-sm text-amber-900">
+            {requests.length} public {requests.length === 1 ? "client request is" : "client requests are"} waiting. {requests.length === 1 ? "It stays" : "They stay"} here until you resolve {requests.length === 1 ? "it" : "them"}.
+          </p>
+        </div>
+        <Badge className="w-fit border-transparent bg-amber-500 text-amber-950 hover:bg-amber-500" data-testid="count-unresolved-form-submissions">
+          {requests.length} unresolved
+        </Badge>
+      </div>
+      <ul className="mt-4 space-y-3">
+        {requests.map((request) => {
+          const receivedAt = new Date(request.createdAt);
+          return (
+            <li key={request.id} className="rounded-xl border border-amber-300 bg-white/80 p-4 text-foreground" data-testid={`alert-form-submission-${request.id}`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Link
+                  href={`/admin#guidance-request-${request.id}`}
+                  className="min-w-0"
+                  onClick={() => revealAdminHashTarget(`guidance-request-${request.id}`)}
+                  data-testid={`link-unresolved-form-submission-${request.id}`}
+                >
+                  <p className="font-semibold">{request.studentName}</p>
+                  <p className="mt-1 text-sm">Parent {request.guardianName} · {formSubmissionSourceLabel(request.sourcePage)} · {request.serviceRequested}</p>
+                  <time className="mt-1 block text-xs text-amber-800" dateTime={receivedAt.toISOString()} data-testid={`time-unresolved-form-submission-${request.id}`}>
+                    Received {receivedAt.toLocaleString()}
+                  </time>
+                </Link>
+                <Button type="button" size="sm" onClick={() => resolve(request.id)} disabled={updateRequest.isPending} data-testid={`resolve-form-submission-${request.id}`}>
+                  Resolve
+                </Button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {error ? <p className="mt-3 text-sm font-medium text-destructive" data-testid="error-unresolved-form-submissions">{error}</p> : null}
+    </section>
   );
 }
 
@@ -450,28 +601,7 @@ function GuidanceRequestItem({ request, administrators }: { request: AdminGuidan
       { requestId: request.id, data: draft },
       {
         onSuccess: (updated) => {
-          queryClient.setQueryData<AdminOverviewWithPlatform>(
-            getGetAdminOverviewQueryKey(),
-            (current) => {
-              if (!current) return current;
-              return {
-                ...current,
-                guidanceRequests: current.guidanceRequests.map((item) =>
-                  item.id === updated.id ? updated : item
-                ),
-                platform: current.platform
-                  ? {
-                      ...current.platform,
-                      newRequests: current.guidanceRequests.reduce(
-                        (count, item) =>
-                          count + ((item.id === updated.id ? updated.status : item.status) === "new" ? 1 : 0),
-                        0,
-                      ),
-                    }
-                  : undefined,
-              };
-            },
-          );
+          applyGuidanceRequestUpdate(queryClient, updated);
           setDraft({
             status: updated.status,
             assignedStaffUserId: updated.assignedStaffUserId,
@@ -494,8 +624,26 @@ function GuidanceRequestItem({ request, administrators }: { request: AdminGuidan
     );
   };
 
+  const resolved = isFormSubmissionResolved(request);
+  const setResolution = (nextResolved: boolean) => {
+    setMessage("");
+    updateRequest.mutate(
+      { requestId: request.id, data: { resolved: nextResolved } },
+      {
+        onSuccess: (updated) => {
+          applyGuidanceRequestUpdate(queryClient, updated);
+          setMessage(nextResolved ? "Resolved. This submission will no longer alert." : "Reopened. This submission is alerting again.");
+        },
+        onError: (error) => {
+          const detail = (error as { data?: { error?: string } } | null)?.data?.error;
+          setMessage(detail || "Could not update resolution. Please try again.");
+        },
+      },
+    );
+  };
+
   return (
-    <details className="group rounded-xl border" data-testid={`details-guidance-request-${request.id}`}>
+    <details id={`guidance-request-${request.id}`} className="group scroll-mt-24 rounded-xl border" data-testid={`details-guidance-request-${request.id}`}>
       <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="truncate font-semibold" data-testid={`text-guidance-request-student-${request.id}`}>{request.studentName}</p>
@@ -503,11 +651,27 @@ function GuidanceRequestItem({ request, administrators }: { request: AdminGuidan
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <time className="whitespace-nowrap text-xs text-muted-foreground" dateTime={receivedAt.toISOString()} data-testid={`time-guidance-request-${request.id}`}>{receivedLabel}</time>
+          <Badge variant={resolved ? "outline" : "default"} data-testid={`resolution-guidance-request-${request.id}`}>{resolved ? "Resolved" : "Unresolved"}</Badge>
           <Badge variant={request.status === "new" ? "default" : "secondary"} data-testid={`status-guidance-request-${request.id}`}>{request.status}</Badge>
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
         </div>
       </summary>
       <div className="border-t px-4 py-4 sm:px-6">
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border bg-amber-50/80 p-4 sm:flex-row sm:items-center sm:justify-between" data-testid={`resolution-panel-guidance-request-${request.id}`}>
+          <div>
+            <h3 className="font-semibold">{resolved ? "Resolved" : "Needs resolution"}</h3>
+            <p className="mt-1 text-sm text-muted-foreground" data-testid={`text-resolution-guidance-request-${request.id}`}>{resolutionSummary(request)}</p>
+          </div>
+          {resolved ? (
+            <Button type="button" variant="outline" onClick={() => setResolution(false)} disabled={updateRequest.isPending} data-testid={`reopen-guidance-request-${request.id}`}>
+              Reopen
+            </Button>
+          ) : (
+            <Button type="button" onClick={() => setResolution(true)} disabled={updateRequest.isPending} data-testid={`resolve-guidance-request-${request.id}`}>
+              Resolve
+            </Button>
+          )}
+        </div>
         <dl className="grid gap-4 sm:grid-cols-2">
           <RequestField label="Parent / guardian" value={request.guardianName} testId={`text-guidance-request-guardian-${request.id}`} />
           <RequestField label="Email" value={request.email} testId={`text-guidance-request-email-${request.id}`} />

@@ -16,6 +16,14 @@ const currentUser = vi.hoisted(() => ({
   refetch: vi.fn(),
 }));
 
+const adminOverview = vi.hoisted(() => ({
+  data: undefined as
+    | {
+        guidanceRequests: Array<{ id: string; resolvedAt: string | null }>;
+      }
+    | undefined,
+}));
+
 const dashboard = vi.hoisted(() => ({
   data: undefined as
     | {
@@ -49,8 +57,10 @@ vi.mock("wouter", () => ({
 vi.mock("@workspace/api-client-react", () => ({
   getGetCurrentUserQueryKey: () => ["/api/me"],
   getGetDashboardQueryKey: () => ["/api/dashboard"],
+  getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
   useGetCurrentUser: () => currentUser,
   useGetDashboard: () => dashboard,
+  useGetAdminOverview: () => adminOverview,
   useUpdateCurrentUser: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -66,6 +76,7 @@ afterEach(() => {
   currentUser.error = null;
   dashboard.data = undefined;
   dashboard.isLoading = false;
+  adminOverview.data = undefined;
 });
 
 function renderShell() {
@@ -210,6 +221,80 @@ describe("Shell", () => {
     expect(screen.getByTestId("portal-profile-title-label").textContent).toBe("Founder");
     expect(screen.getByTestId("portal-profile-menu").querySelector("img")?.getAttribute("src")).toBe(
       "https://example.com/sama.jpg",
+    );
+  });
+
+  it("shows an unresolved form-submission count only to administrators", () => {
+    adminOverview.data = {
+      guidanceRequests: [
+        { id: "sleiman", resolvedAt: null },
+        { id: "handled", resolvedAt: "2026-09-01T00:00:00.000Z" },
+      ],
+    };
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "student",
+      displayName: "Sophia Sleiman",
+      avatarUrl: null,
+    };
+    const { rerender } = renderShell();
+    expect(screen.queryByTestId("nav-unresolved-form-submissions")).toBeNull();
+
+    currentUser.data = {
+      role: "tutor",
+      displayName: "Xavier Morales",
+      avatarUrl: null,
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    expect(screen.queryByTestId("nav-unresolved-form-submissions")).toBeNull();
+
+    currentUser.data = {
+      role: "viewer",
+      displayName: "Nabil Sleiman",
+      avatarUrl: null,
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    expect(screen.queryByTestId("nav-unresolved-form-submissions")).toBeNull();
+
+    currentUser.data = {
+      role: "administrator",
+      displayName: "Sama",
+      avatarUrl: null,
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    const badge = screen.getByTestId("nav-unresolved-form-submissions");
+    expect(badge.getAttribute("href")).toBe("/admin#guidance-request-sleiman");
+    expect(badge.getAttribute("aria-label")).toBe("1 unresolved form submission");
+    expect(badge.textContent).toBe("1");
+
+    adminOverview.data = {
+      guidanceRequests: [
+        { id: "sleiman", resolvedAt: null },
+        { id: "second", resolvedAt: null },
+      ],
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    expect(screen.getByTestId("nav-unresolved-form-submissions").getAttribute("href")).toBe(
+      "/admin#guidance-requests",
+    );
+    expect(screen.getByTestId("nav-unresolved-form-submissions").getAttribute("aria-label")).toBe(
+      "2 unresolved form submissions",
     );
   });
 });

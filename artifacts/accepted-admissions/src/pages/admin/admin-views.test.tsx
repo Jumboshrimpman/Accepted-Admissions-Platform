@@ -69,6 +69,9 @@ const mocks = vi.hoisted(() => ({
       assignedStaffUserId: string | null;
       followUpNotes: string | null;
       conversionStatus: string;
+      resolvedAt?: string | null;
+      resolvedByUserId?: string | null;
+      resolvedByName?: string | null;
       createdAt: string;
     }>,
   },
@@ -429,7 +432,7 @@ describe("administrator overview", () => {
       {
         id: "session-live",
         courseId: "course-1",
-        dateTime: "2026-10-02T16:00:00.000Z",
+        dateTime: "2026-11-02T16:00:00.000Z",
         timezone: "America/New_York",
         durationMinutes: 60,
         subject: "SAT",
@@ -440,7 +443,7 @@ describe("administrator overview", () => {
       {
         id: "session-cancelled",
         courseId: "course-1",
-        dateTime: "2026-10-03T16:00:00.000Z",
+        dateTime: "2026-11-03T16:00:00.000Z",
         timezone: "America/New_York",
         durationMinutes: 60,
         subject: "SAT",
@@ -451,7 +454,7 @@ describe("administrator overview", () => {
       {
         id: "session-cancelled-at",
         courseId: "course-1",
-        dateTime: "2026-10-04T16:00:00.000Z",
+        dateTime: "2026-11-04T16:00:00.000Z",
         timezone: "America/New_York",
         durationMinutes: 60,
         subject: "SAT",
@@ -852,7 +855,102 @@ describe("administrator overview", () => {
     fireEvent.change(screen.getByLabelText("Assigned administrator"), { target: { value: "administrator-1" } });
     fireEvent.click(screen.getByTestId("save-guidance-request-request-1"));
 
-    expect(screen.getByRole("alert").textContent).toContain("Triage details saved");
-    expect(screen.getByRole("alert").textContent).toContain("could not be delivered");
+    expect(screen.getByText(/Triage details saved, but the assignment notification could not be delivered\./).textContent).toContain(
+      "could not be delivered",
+    );
+  });
+
+  test("keeps an unresolved client request in the admin alert until it is resolved", () => {
+    mocks.overview.guidanceRequests = [
+      {
+        id: "sleiman",
+        guardianName: "Nabil Sleiman",
+        studentName: "Sophia Sleiman",
+        email: "nabil@example.invalid",
+        phone: "+1 555 0102",
+        gradeOrGraduationYear: "11th grade",
+        currentSchool: "Example School",
+        serviceRequested: "SAT",
+        currentSatTotal: null,
+        currentReadingWriting: null,
+        currentMath: null,
+        targetSatScore: null,
+        plannedTestDate: null,
+        goals: "SAT prep",
+        schedulingAvailability: "Evenings",
+        referralSource: "Website",
+        consentToContact: true,
+        privacyAcknowledged: true,
+        sourcePage: "/client-request",
+        status: "new",
+        assignedStaffUserId: null,
+        followUpNotes: null,
+        conversionStatus: "unqualified",
+        resolvedAt: null,
+        resolvedByUserId: null,
+        resolvedByName: null,
+        createdAt: "2026-10-02T15:00:00.000Z",
+      },
+      {
+        id: "handled",
+        guardianName: "Earlier Parent",
+        studentName: "Earlier Student",
+        email: "earlier@example.invalid",
+        phone: "+1 555 0199",
+        gradeOrGraduationYear: "12th grade",
+        currentSchool: "Example School",
+        serviceRequested: "College essays",
+        currentSatTotal: null,
+        currentReadingWriting: null,
+        currentMath: null,
+        targetSatScore: null,
+        plannedTestDate: null,
+        goals: "Essays",
+        schedulingAvailability: "Weekends",
+        referralSource: "Friend",
+        consentToContact: true,
+        privacyAcknowledged: true,
+        sourcePage: "/client-request",
+        status: "closed",
+        assignedStaffUserId: null,
+        followUpNotes: null,
+        conversionStatus: "unqualified",
+        resolvedAt: "2026-09-01T12:00:00.000Z",
+        resolvedByUserId: null,
+        resolvedByName: null,
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    const alert = screen.getByTestId("alert-unresolved-form-submissions");
+    expect(alert.textContent).toContain("Sophia Sleiman");
+    expect(alert.textContent).toContain("Nabil Sleiman");
+    expect(alert.textContent).toContain("SAT");
+    expect(alert.textContent).toContain("Client request");
+    expect(alert.textContent).not.toContain("Earlier Student");
+    expect(screen.getByTestId("count-unresolved-form-submissions").textContent).toBe("1 unresolved");
+    expect(screen.getByTestId("link-unresolved-form-submission-sleiman").getAttribute("href")).toBe(
+      "/admin#guidance-request-sleiman",
+    );
+    expect(screen.getByTestId("time-unresolved-form-submission-sleiman").getAttribute("dateTime")).toBe(
+      "2026-10-02T15:00:00.000Z",
+    );
+
+    fireEvent.click(screen.getByTestId("resolve-form-submission-sleiman"));
+    expect(mocks.updateGuidanceRequest).toHaveBeenCalledWith(
+      { requestId: "sleiman", data: { resolved: true } },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+    );
+
+    fireEvent.click(screen.getByTestId("resolved-form-submissions").querySelector("summary")!);
+    fireEvent.click(screen.getByTestId("details-guidance-request-handled").querySelector("summary")!);
+    fireEvent.click(screen.getByTestId("reopen-guidance-request-handled"));
+    expect(mocks.updateGuidanceRequest).toHaveBeenCalledWith(
+      { requestId: "handled", data: { resolved: false } },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+    );
+    expect(screen.getByTestId("text-resolution-guidance-request-handled").textContent).toBe("Resolved earlier");
   });
 });
