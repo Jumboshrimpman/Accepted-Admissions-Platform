@@ -125,6 +125,95 @@ test("status homework collapses same-title IELTS routines to the newest complete
   );
 });
 
+test("bank SAT pre-work and seeded grammar or IELTS homework both stay listed", () => {
+  const listed = selectStatusHomework([
+    {
+      id: "grammar",
+      title: "SAT Homework — Grammar and Boundaries",
+      status: "published",
+      deliveryPhase: "before_session",
+      subject: "SAT Reading & Writing",
+      homeworkKind: "routine",
+      questionCount: 4,
+      attemptCount: 1,
+    },
+    {
+      id: "bank",
+      title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+      status: "published",
+      deliveryPhase: "before_session",
+      subject: "SAT",
+      homeworkKind: "routine",
+      questionCount: 40,
+      attemptCount: 0,
+    },
+    {
+      id: "ielts",
+      title: "IELTS-style reading pre-work — Taito’s English Session with Nika",
+      status: "published",
+      deliveryPhase: "before_session",
+      subject: "IELTS",
+      homeworkKind: "routine",
+      questionCount: 12,
+      attemptCount: 0,
+    },
+  ]);
+  assert.deepEqual(
+    listed.map((item) => item.id),
+    ["grammar", "bank", "ielts"],
+  );
+  assert.equal(
+    isDuplicateSessionPrework(
+      {
+        id: "grammar",
+        title: "SAT Homework — Grammar and Boundaries",
+        status: "published",
+        subject: "SAT Reading & Writing",
+      },
+      {
+        id: "bank",
+        title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+        status: "published",
+        subject: "SAT",
+        questionCount: 40,
+      },
+    ),
+    false,
+  );
+});
+
+test("duplicate routine SAT pre-work collapses to the copy with attempts", () => {
+  const untouched = {
+    id: "bank-untouched",
+    title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+    status: "published",
+    deliveryPhase: "before_session",
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 40,
+    attemptCount: 0,
+  };
+  const started = {
+    id: "bank-started",
+    title: "60-minute SAT pre-work — Taito’s SAT Session with Eunice",
+    status: "published",
+    deliveryPhase: "before_session",
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 32,
+    attemptCount: 1,
+  };
+  assert.equal(isDuplicateSessionPrework(untouched, started), true);
+  assert.deepEqual(
+    selectStatusHomework([untouched, started]).map((item) => item.id),
+    ["bank-started"],
+  );
+  assert.deepEqual(
+    selectStatusHomework([started, untouched]).map((item) => item.id),
+    ["bank-started"],
+  );
+});
+
 test("selectActivePrework ignores archived session copies left by replace/remove", () => {
   const archived = {
     id: "old-clone",

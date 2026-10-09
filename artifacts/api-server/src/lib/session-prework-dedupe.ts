@@ -57,18 +57,39 @@ export function sessionPreworkSubjectFamily(
   return "other";
 }
 
-/** Seeded SAT homework or autogen English/SAT pre-work titles Cos should not multiply. */
-export function isSeededOrAutogenPreworkTitle(title?: string | null): boolean {
+/**
+ * Interchangeable copies of one template.
+ * Bank routine SAT ("SAT pre-work (30–50 questions)", "60-minute SAT pre-work")
+ * is not the seeded topic set ("SAT Homework — Grammar and Boundaries") or an
+ * IELTS-style reading assignment.
+ */
+export type SessionPreworkDedupeSlot =
+  | "sat-bank-prework"
+  | "sat-topic-homework"
+  | "sat-diagnostic"
+  | "ielts-prework";
+
+export function sessionPreworkDedupeSlot(
+  title?: string | null,
+): SessionPreworkDedupeSlot | null {
   const normalized = title?.trim().toLowerCase() ?? "";
-  if (!normalized) return false;
-  return (
-    normalized.includes("ielts-style") ||
-    normalized.includes("sat homework") ||
-    normalized.includes("sat pre-work") ||
-    normalized.includes("sat diagnostic") ||
+  if (!normalized) return null;
+  if (
     normalized.includes("full-length sat diagnostic") ||
-    normalized.includes("full sat practice diagnostic")
-  );
+    normalized.includes("full sat practice diagnostic") ||
+    normalized.includes("sat diagnostic")
+  ) {
+    return "sat-diagnostic";
+  }
+  if (normalized.includes("sat pre-work")) return "sat-bank-prework";
+  if (normalized.includes("sat homework")) return "sat-topic-homework";
+  if (normalized.includes("ielts-style")) return "ielts-prework";
+  return null;
+}
+
+/** Seeded topic homework or autogen English/SAT pre-work titles Cos should not multiply within one slot. */
+export function isSeededOrAutogenPreworkTitle(title?: string | null): boolean {
+  return sessionPreworkDedupeSlot(title) !== null;
 }
 
 function createdAtMs(value: LiveSessionPreworkCandidate["createdAt"]): number {

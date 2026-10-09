@@ -5,8 +5,8 @@ import {
 import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import {
   inferSessionPreworkKind,
-  isSeededOrAutogenPreworkTitle,
   pickLiveSessionPreworkKeeper,
+  sessionPreworkDedupeSlot,
   sessionPreworkSubjectFamily,
 } from "./session-prework-dedupe.ts";
 
@@ -25,6 +25,7 @@ export type StatusHomeworkCandidate = {
   assignmentId?: string;
   title?: string | null;
   status?: string | null;
+  subject?: string | null;
   homeworkKind?: string | null;
   questionCount?: number | null;
   attemptCount?: number | null;
@@ -64,9 +65,11 @@ export function isDuplicateSessionPrework(
   const keeperTitle = keeper.title?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
   const candidateTitle = candidate.title?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
   if (Boolean(keeperTitle) && keeperTitle === candidateTitle) return true;
+  const keeperSlot = sessionPreworkDedupeSlot(keeper.title);
+  const candidateSlot = sessionPreworkDedupeSlot(candidate.title);
   if (
-    isSeededOrAutogenPreworkTitle(keeper.title) &&
-    isSeededOrAutogenPreworkTitle(candidate.title) &&
+    keeperSlot !== null &&
+    keeperSlot === candidateSlot &&
     inferSessionPreworkKind(keeper) === inferSessionPreworkKind(candidate) &&
     sessionPreworkSubjectFamily(keeper) === sessionPreworkSubjectFamily(candidate) &&
     sessionPreworkSubjectFamily(keeper) !== "other"
