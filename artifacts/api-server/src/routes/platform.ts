@@ -10596,21 +10596,34 @@ async function listAssignmentsForUser(
     string,
     { clientUserId: string | null; title: string; bookingStatus: string | null }
   >();
+  const planAssignmentBySession = new Map<string, string>();
   if (sessionIds.length > 0) {
-    const linkedSessions = await db
-      .select({
-        id: sessionsTable.id,
-        bookingStatus: sessionsTable.bookingStatus,
-        clientUserId: sessionsTable.clientUserId,
-        title: sessionsTable.title,
-      })
-      .from(sessionsTable)
-      .where(inArray(sessionsTable.id, sessionIds));
+    const [linkedSessions, plans] = await Promise.all([
+      db
+        .select({
+          id: sessionsTable.id,
+          bookingStatus: sessionsTable.bookingStatus,
+          clientUserId: sessionsTable.clientUserId,
+          title: sessionsTable.title,
+        })
+        .from(sessionsTable)
+        .where(inArray(sessionsTable.id, sessionIds)),
+      db
+        .select({
+          sessionId: sessionPreworkPlansTable.sessionId,
+          assignmentId: sessionPreworkPlansTable.assignmentId,
+        })
+        .from(sessionPreworkPlansTable)
+        .where(inArray(sessionPreworkPlansTable.sessionId, sessionIds)),
+    ]);
     for (const session of linkedSessions) {
       sessionsById.set(session.id, session);
       if (hideCancelled && isCancelledBooking(session)) {
         cancelledSessionIds.add(session.id);
       }
+    }
+    for (const plan of plans) {
+      planAssignmentBySession.set(plan.sessionId, plan.assignmentId);
     }
   }
   const subjectUserId = await dataSubjectUserId(user);
@@ -10675,6 +10688,10 @@ async function listAssignmentsForUser(
         latestScore: attempts[0]?.score ?? null,
         latestAttemptId: attempts[0]?.id ?? null,
         latestAttemptStatus: attempts[0]?.status ?? null,
+        createdAt: assignment.createdAt,
+        planAssignmentId: assignment.sessionId
+          ? (planAssignmentBySession.get(assignment.sessionId) ?? null)
+          : null,
       };
     }),
   ).then((items) => {
