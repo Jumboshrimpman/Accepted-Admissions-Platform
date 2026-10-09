@@ -205,13 +205,13 @@ describe("student attempt UI", () => {
     mocks.deadline = null;
     mocks.linkedSession = {
       id: "session-1",
-      dateTime: "2026-10-02T12:00:00.000Z",
+      dateTime: "2026-10-16T12:00:00.000Z",
       timezone: "America/New_York",
       durationMinutes: 60,
     };
     render(<PortalAssignment />);
     expect(screen.getByTestId("prework-deadline-asg-1").textContent).toBe(
-      "Due before your session: Friday, October 2, 2026 at 9:00 PM JST",
+      "Due before your session: Friday, October 16, 2026 at 9:00 PM JST",
     );
     expect(screen.getByRole("button", { name: "Start quiz" })).toBeTruthy();
   });

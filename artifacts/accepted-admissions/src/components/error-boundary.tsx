@@ -55,8 +55,16 @@ function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
-            onClick={resetError}
+            onClick={() => window.location.reload()}
             className="rounded bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
+            data-testid="error-reload"
+          >
+            Reload
+          </button>
+          <button
+            type="button"
+            onClick={resetError}
+            className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-900 hover:bg-gray-100"
           >
             Try again
           </button>
@@ -68,6 +76,37 @@ function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
             Back to home
           </a>
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function StudentPageErrorFallback({ resetError }: ErrorFallbackProps) {
+  return (
+    <div
+      className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center px-6 text-center"
+      data-testid="student-page-error"
+    >
+      <h1 className="text-xl font-semibold text-gray-900">This page ran into a problem</h1>
+      <p className="mt-2 text-sm text-gray-600">
+        Reload to keep working. Quiz answers that already reached the server are still saved.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          data-testid="student-page-reload"
+          className="rounded-full bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
+          onClick={() => window.location.reload()}
+        >
+          Reload
+        </button>
+        <button
+          type="button"
+          onClick={resetError}
+          className="text-sm font-medium text-gray-700 underline-offset-4 hover:underline"
+        >
+          Try again
+        </button>
       </div>
     </div>
   );

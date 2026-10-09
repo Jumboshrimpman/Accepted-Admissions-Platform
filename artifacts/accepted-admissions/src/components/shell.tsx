@@ -1,5 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
+import { SessionReconnectNotice, usePortalAuth } from "@/components/portal-auth";
+import { markClerkExplicitSignOut } from "@/lib/clerk-session-gate";
+import { clerkSessionTokens } from "@/lib/clerk-session-token";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
@@ -63,6 +66,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const portalAuth = usePortalAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -111,14 +115,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
     );
   }, [apiUser, refetch, updateCurrentUser]);
 
-  if (isLoading) {
+  if (isLoading && !apiUser) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         Checking portal access…
       </div>
     );
   }
-  if (error || !apiUser) {
+  if (!apiUser) {
     const status = (error as { status?: number } | null)?.status;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
@@ -314,7 +318,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     Edit profile
                   </DropdownMenuItem>
                 ) : null}
-                <DropdownMenuItem onClick={() => signOut()} className="text-destructive cursor-pointer">
+                <DropdownMenuItem
+                  onClick={() => {
+                    markClerkExplicitSignOut();
+                    clerkSessionTokens.clear();
+                    void signOut();
+                  }}
+                  className="text-destructive cursor-pointer"
+                >
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
                 </DropdownMenuItem>
@@ -374,6 +385,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
       </header>
       <main className="flex-1 container mx-auto px-4 py-8">
+        {error && !portalAuth.holdSignedInShell ? (
+          <SessionReconnectNotice
+            key="shell-reconnect"
+            onRetry={() => {
+              portalAuth.retrySession?.();
+              void refetch();
+            }}
+          />
+        ) : null}
         {apiUser.viewingAs ? (
           <div
             role="status"
@@ -391,7 +411,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         ) : null}
-        {children}
+        <div key="shell-page" className="contents">
+          {children}
+        </div>
       </main>
     </div>
   );
