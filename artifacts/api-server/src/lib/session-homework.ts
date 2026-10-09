@@ -5,7 +5,6 @@ import {
 import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import {
   inferSessionPreworkKind,
-  pickLiveSessionPreworkKeeper,
   sessionPreworkDedupeSlot,
   sessionPreworkSubjectFamily,
 } from "./session-prework-dedupe.ts";
@@ -30,6 +29,12 @@ export type StatusHomeworkCandidate = {
   questionCount?: number | null;
   attemptCount?: number | null;
   deliveryPhase?: string | null;
+  createdAt?: Date | string | number | null;
+  /**
+   * `session_prework_plans.assignmentId` for this row's session.
+   * A bank pre-work stays beside seeded topic homework only when it is this id.
+   */
+  planAssignmentId?: string | null;
 };
 
 export function statusHomeworkId(item: StatusHomeworkCandidate): string | null {
@@ -79,6 +84,72 @@ export function isDuplicateSessionPrework(
   return false;
 }
 
+function listedCreatedAtMs(value: StatusHomeworkCandidate["createdAt"]): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+/** The plan's chosen bank pre-work. It stays listed beside seeded topic homework. */
+function isPlanChosenBankPrework(item: StatusHomeworkCandidate): boolean {
+  const id = statusHomeworkId(item);
+  if (!id || !item.planAssignmentId || id !== item.planAssignmentId) return false;
+  return sessionPreworkDedupeSlot(item.title) === "sat-bank-prework";
+}
+
+/**
+ * List collapse. Same-slot copies still collapse. A bank pre-work that is not
+ * the session plan also collapses with seeded topic homework (the pre-slot rule),
+ * so extra bank copies stay hidden.
+ */
+function collapsesWithListedHomework(
+  keeper: StatusHomeworkCandidate,
+  candidate: StatusHomeworkCandidate,
+): boolean {
+  if (isDuplicateSessionPrework(keeper, candidate)) return true;
+  if (candidate.status === "archived" || keeper.status === "archived") return false;
+  if (
+    candidate.deliveryPhase === "during_session" ||
+    keeper.deliveryPhase === "during_session"
+  ) {
+    return false;
+  }
+  const keeperSlot = sessionPreworkDedupeSlot(keeper.title);
+  const candidateSlot = sessionPreworkDedupeSlot(candidate.title);
+  if (keeperSlot === null || candidateSlot === null || keeperSlot === candidateSlot) {
+    return false;
+  }
+  return (
+    inferSessionPreworkKind(keeper) === inferSessionPreworkKind(candidate) &&
+    sessionPreworkSubjectFamily(keeper) === sessionPreworkSubjectFamily(candidate) &&
+    sessionPreworkSubjectFamily(keeper) !== "other"
+  );
+}
+
+/**
+ * Has questions, then attempts, then createdAt, then id.
+ * createdAt replaces the largest-id tie-break. An untouched newer copy does
+ * not outrank homework the student already started.
+ */
+function pickListedStatusKeeper<T extends StatusHomeworkCandidate>(current: T, incoming: T): T {
+  const currentQuestions = (current.questionCount ?? 0) > 0 ? 1 : 0;
+  const incomingQuestions = (incoming.questionCount ?? 0) > 0 ? 1 : 0;
+  if (incomingQuestions !== currentQuestions) {
+    return incomingQuestions > currentQuestions ? incoming : current;
+  }
+  const attemptDelta = (incoming.attemptCount ?? 0) - (current.attemptCount ?? 0);
+  if (attemptDelta !== 0) return attemptDelta > 0 ? incoming : current;
+  const createdDelta = listedCreatedAtMs(incoming.createdAt) - listedCreatedAtMs(current.createdAt);
+  if (createdDelta !== 0) return createdDelta > 0 ? incoming : current;
+  const currentId = statusHomeworkId(current) ?? "";
+  const incomingId = statusHomeworkId(incoming) ?? "";
+  return incomingId.localeCompare(currentId) > 0 ? incoming : current;
+}
+
 /**
  * Student/tutor Homework status & results: hide archived reset leftovers,
  * dedupe by assignment id, and keep one current full-length diagnostic.
@@ -122,33 +193,31 @@ export function selectStatusHomework<T extends StatusHomeworkCandidate>(
       return !isDiagnostic || statusHomeworkId(item) === keeperId;
     });
   })();
+  const planChosenBanks = afterDiagnostics.filter(isPlanChosenBankPrework);
+  const planChosenIds = new Set(
+    planChosenBanks
+      .map((item) => statusHomeworkId(item))
+      .filter((id): id is string => Boolean(id)),
+  );
+  const collapsible = afterDiagnostics.filter(
+    (item) => !planChosenIds.has(statusHomeworkId(item) ?? ""),
+  );
   const kept: T[] = [];
-  for (const item of afterDiagnostics) {
-    const duplicateOf = kept.find((keeper) => isDuplicateSessionPrework(keeper, item));
+  for (const item of collapsible) {
+    const duplicateOf = kept.find((keeper) => collapsesWithListedHomework(keeper, item));
     if (!duplicateOf) {
       kept.push(item);
       continue;
     }
-    const winner = pickLiveSessionPreworkKeeper([
-      {
-        id: statusHomeworkId(duplicateOf)!,
-        title: duplicateOf.title,
-        homeworkKind: duplicateOf.homeworkKind,
-        questionCount: duplicateOf.questionCount,
-        attemptCount: duplicateOf.attemptCount,
-      },
-      {
-        id: statusHomeworkId(item)!,
-        title: item.title,
-        homeworkKind: item.homeworkKind,
-        questionCount: item.questionCount,
-        attemptCount: item.attemptCount,
-      },
-    ]);
-    if (winner && winner.id === statusHomeworkId(item)) {
+    if (pickListedStatusKeeper(duplicateOf, item) !== duplicateOf) {
       const index = kept.indexOf(duplicateOf);
       kept.splice(index, 1, item);
     }
+  }
+  for (const pinned of planChosenBanks) {
+    const id = statusHomeworkId(pinned);
+    if (!id || kept.some((item) => statusHomeworkId(item) === id)) continue;
+    kept.push(pinned);
   }
   return kept;
 }

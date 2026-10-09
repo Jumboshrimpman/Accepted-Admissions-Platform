@@ -125,42 +125,50 @@ test("status homework collapses same-title IELTS routines to the newest complete
   );
 });
 
-test("bank SAT pre-work and seeded grammar or IELTS homework both stay listed", () => {
-  const listed = selectStatusHomework([
-    {
-      id: "grammar",
-      title: "SAT Homework — Grammar and Boundaries",
-      status: "published",
-      deliveryPhase: "before_session",
-      subject: "SAT Reading & Writing",
-      homeworkKind: "routine",
-      questionCount: 4,
-      attemptCount: 1,
-    },
-    {
-      id: "bank",
-      title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
-      status: "published",
-      deliveryPhase: "before_session",
-      subject: "SAT",
-      homeworkKind: "routine",
-      questionCount: 40,
-      attemptCount: 0,
-    },
-    {
-      id: "ielts",
-      title: "IELTS-style reading pre-work — Taito’s English Session with Nika",
-      status: "published",
-      deliveryPhase: "before_session",
-      subject: "IELTS",
-      homeworkKind: "routine",
-      questionCount: 12,
-      attemptCount: 0,
-    },
-  ]);
+test("plan-chosen bank SAT pre-work stays beside grammar; other bank copies collapse", () => {
+  const grammar = {
+    id: "grammar",
+    title: "SAT Homework — Grammar and Boundaries",
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "SAT Reading & Writing",
+    homeworkKind: "routine" as const,
+    questionCount: 4,
+    attemptCount: 1,
+    createdAt: "2026-09-01T00:00:00.000Z",
+  };
+  const bank = {
+    id: "bank",
+    title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 40,
+    attemptCount: 0,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+  const ielts = {
+    id: "ielts",
+    title: "IELTS-style reading pre-work — Taito’s English Session with Nika",
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "IELTS",
+    homeworkKind: "routine" as const,
+    questionCount: 12,
+    attemptCount: 0,
+  };
   assert.deepEqual(
-    listed.map((item) => item.id),
-    ["grammar", "bank", "ielts"],
+    selectStatusHomework([
+      { ...grammar, planAssignmentId: "bank" },
+      { ...bank, planAssignmentId: "bank" },
+      { ...ielts, planAssignmentId: "bank" },
+    ]).map((item) => item.id),
+    ["grammar", "ielts", "bank"],
+  );
+  assert.deepEqual(
+    selectStatusHomework([grammar, bank, ielts]).map((item) => item.id),
+    ["grammar", "ielts"],
   );
   assert.equal(
     isDuplicateSessionPrework(
@@ -179,6 +187,134 @@ test("bank SAT pre-work and seeded grammar or IELTS homework both stay listed", 
       },
     ),
     false,
+  );
+});
+
+test("Taito sees the Oct 9 plan bank pre-work beside one Grammar set, and no extra bank copies", () => {
+  const planId = "3483abbd-e1e0-410f-8e38-e88940444ef7";
+  const bankTitle = "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice";
+  const grammarTitle = "SAT Homework — Grammar and Boundaries";
+  const otherTopics = [
+    ["2026-10-16", "SAT Homework — Evidence and Inference"],
+    ["2026-10-30", "SAT Homework — Transitions and Purpose"],
+    ["2026-11-06", "SAT Homework — Sentence Structure Check"],
+    ["2026-11-20", "SAT Homework — Main Ideas and Evidence"],
+    ["2026-11-27", "SAT Homework — Words in Context"],
+    ["2026-12-11", "SAT Homework — Rhetorical Synthesis"],
+  ] as const;
+
+  const grammar = (
+    id: string,
+    createdAt: string,
+    planAssignmentId: string,
+  ) => ({
+    id,
+    sessionId: "2026-10-09",
+    title: grammarTitle,
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "SAT Reading & Writing",
+    homeworkKind: "routine" as const,
+    questionCount: 4,
+    attemptCount: 1,
+    createdAt,
+    planAssignmentId,
+  });
+  const bank = (
+    id: string,
+    sessionId: string,
+    createdAt: string,
+    planAssignmentId: string | null,
+  ) => ({
+    id,
+    sessionId,
+    title: bankTitle,
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 40,
+    attemptCount: 0,
+    createdAt,
+    planAssignmentId,
+  });
+
+  const oct9 = [
+    grammar("zzzz-gb-older", "2026-09-01T00:00:00.000Z", planId),
+    grammar("gb-newer", "2026-09-20T00:00:00.000Z", planId),
+    bank(planId, "2026-10-09", "2026-10-02T00:00:00.000Z", planId),
+  ];
+  const otherSessions = otherTopics.map(([sessionId, title], index) => {
+    const topicId = `topic-${sessionId}`;
+    return [
+      {
+        id: topicId,
+        sessionId,
+        title,
+        status: "published" as const,
+        deliveryPhase: "before_session" as const,
+        subject: "SAT Reading & Writing",
+        homeworkKind: "routine" as const,
+        questionCount: 4,
+        attemptCount: 1,
+        createdAt: "2026-09-01T00:00:00.000Z",
+        planAssignmentId: topicId,
+      },
+      bank(
+        `zzzz-bank-extra-${index}`,
+        sessionId,
+        "2026-10-08T00:00:00.000Z",
+        topicId,
+      ),
+    ];
+  });
+  const bySession = [oct9, ...otherSessions];
+  assert.equal(
+    bySession.flat().filter((row) => row.title === bankTitle).length,
+    7,
+  );
+  assert.equal(
+    bySession.flat().filter((row) => row.title === grammarTitle).length,
+    2,
+  );
+
+  const listed = bySession.flatMap((group) => selectStatusHomework(group));
+  const oct9Listed = listed.filter((row) => row.sessionId === "2026-10-09").map((row) => row.id);
+  assert.deepEqual(oct9Listed.sort(), [planId, "gb-newer"].sort());
+  const extraIds = otherTopics.map((_, index) => `zzzz-bank-extra-${index}`);
+  assert.deepEqual(
+    listed.filter((row) => extraIds.includes(row.id)).map((row) => row.id),
+    [],
+  );
+  for (const [sessionId] of otherTopics) {
+    assert.deepEqual(
+      listed.filter((row) => row.sessionId === sessionId).map((row) => row.id),
+      [`topic-${sessionId}`],
+    );
+  }
+
+  const piledOnOct9 = [
+    ...otherTopics.map((_, index) =>
+      bank(`zzzz-bank-extra-${index}`, "2026-10-09", "2026-10-08T00:00:00.000Z", planId),
+    ),
+    ...oct9,
+    ...otherTopics.map(([sessionId, title]) => ({
+      id: `topic-${sessionId}`,
+      sessionId: "2026-10-09",
+      title,
+      status: "published" as const,
+      deliveryPhase: "before_session" as const,
+      subject: "SAT Reading & Writing",
+      homeworkKind: "routine" as const,
+      questionCount: 4,
+      attemptCount: 0,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      planAssignmentId: planId,
+    })),
+  ];
+  assert.deepEqual(
+    selectStatusHomework(piledOnOct9).map((row) => row.id).sort(),
+    [planId, "gb-newer"].sort(),
   );
 });
 
