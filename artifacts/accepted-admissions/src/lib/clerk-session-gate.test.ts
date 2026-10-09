@@ -109,6 +109,31 @@ test("explicit sign-out releases the shell, and a short clerk signed-out blip do
   );
 });
 
+test("a confirmed sign-out releases after the grace period even if token refresh looks stuck", () => {
+  assert.equal(
+    shouldHoldSignedInShell({
+      established: true,
+      explicitSignOut: false,
+      isLoaded: true,
+      isSignedIn: false,
+      tokenReconnecting: true,
+      signedOutForMs: 1_000,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldHoldSignedInShell({
+      established: true,
+      explicitSignOut: false,
+      isLoaded: true,
+      isSignedIn: false,
+      tokenReconnecting: true,
+      signedOutForMs: CLERK_SIGNOUT_GRACE_MS,
+    }),
+    false,
+  );
+});
+
 test("an established session survives a bridge remount until sign-out", () => {
   resetClerkSessionGateForTests();
   assert.equal(hasEstablishedClerkSession(), false);

@@ -64,6 +64,7 @@ import {
   applyClerkRouterNavigation,
   clerkSignInUrl,
 } from '@/lib/clerk-session-urls';
+import { noteClerkUserChange } from '@/lib/clerk-session-token';
 
 const clerkKeyResult = resolveClerkPublishableKey(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -84,9 +85,11 @@ function ClerkQueryClientCacheInvalidator() {
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
-      // A token refresh can report no user for a moment. Clearing the cache
-      // then unmounts the quiz and fires pause. Only drop data when the
-      // signed-in account actually changes.
+      // Drop a JWT cached for the previous account as soon as Clerk's user
+      // changes or the session ends. Query data stays until the account
+      // actually changes: clearing it on a momentary null user unmounts the
+      // quiz and fires pause.
+      noteClerkUserChange(userId);
       if (
         previousUserId.current &&
         userId &&

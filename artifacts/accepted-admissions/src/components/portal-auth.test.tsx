@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { CLERK_SIGNOUT_GRACE_MS, resetClerkSessionGateForTests } from "@/lib/clerk-session-gate";
+import { clerkSessionTokens, resetNotedClerkUserForTests } from "@/lib/clerk-session-token";
 import {
+  ClerkPortalAuthBridge,
   PortalAuthProvider,
   SignedIn,
   SignedOut,
@@ -8,7 +12,29 @@ import {
   WhenSignedOut,
 } from "./portal-auth";
 
-afterEach(cleanup);
+const clerkAuth = vi.hoisted(() => ({
+  isLoaded: true,
+  isSignedIn: false as boolean,
+  userId: null as string | null,
+  sessionId: null as string | null,
+  getToken: vi.fn(async () => null as string | null),
+}));
+
+vi.mock("@clerk/react", () => ({
+  useAuth: () => clerkAuth,
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  resetClerkSessionGateForTests();
+  resetNotedClerkUserForTests();
+  clerkSessionTokens.clear();
+  clerkAuth.isLoaded = true;
+  clerkAuth.isSignedIn = false;
+  clerkAuth.userId = null;
+  clerkAuth.sessionId = null;
+});
 
 describe("portal auth visibility", () => {
   it("keeps signed-out actions visible while Clerk is still loading", () => {
@@ -156,5 +182,53 @@ describe("student session gate", () => {
     expect(screen.queryByText("Login redirect")).toBeNull();
     fireEvent.click(screen.getByTestId("auth-session-retry"));
     expect(retrySession).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects to login after the grace period when sign-out has a cold token cache", async () => {
+    vi.useFakeTimers();
+    resetClerkSessionGateForTests();
+    clerkSessionTokens.clear();
+    clerkAuth.isLoaded = true;
+    clerkAuth.isSignedIn = true;
+    clerkAuth.userId = "user_a";
+    clerkAuth.sessionId = "sess_a";
+    clerkAuth.getToken.mockReset();
+    clerkAuth.getToken.mockResolvedValue(null);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <ClerkPortalAuthBridge>
+          <SignedIn>
+            <div data-testid="quiz">Quiz</div>
+          </SignedIn>
+          <SignedOut>Login redirect</SignedOut>
+        </ClerkPortalAuthBridge>
+      </QueryClientProvider>
+    );
+    const view = render(tree());
+    await act(async () => {});
+    expect(screen.getByTestId("quiz")).toBeTruthy();
+    expect(screen.queryByText("Login redirect")).toBeNull();
+
+    clerkAuth.isSignedIn = false;
+    clerkAuth.userId = null;
+    clerkAuth.sessionId = null;
+    view.rerender(tree());
+    await act(async () => {});
+    expect(screen.getByTestId("quiz")).toBeTruthy();
+    expect(screen.queryByText("Login redirect")).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CLERK_SIGNOUT_GRACE_MS - 1_000);
+    });
+    expect(screen.getByTestId("quiz")).toBeTruthy();
+    expect(screen.queryByText("Login redirect")).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(screen.queryByTestId("quiz")).toBeNull();
+    expect(screen.getByText("Login redirect")).toBeTruthy();
   });
 });

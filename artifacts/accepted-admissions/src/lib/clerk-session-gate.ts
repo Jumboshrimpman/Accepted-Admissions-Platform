@@ -57,9 +57,14 @@ export function shouldHoldSignedInShell(input: {
   signedOutForMs: number;
 }): boolean {
   if (input.explicitSignOut || !input.established) return false;
+  // A loaded, signed-out Clerk session is a real sign-out. The grace period
+  // still applies when a token refresh is marked reconnecting — a resolved
+  // null from getToken() must not pin the shell open.
+  if (input.isLoaded && !input.isSignedIn) {
+    return input.signedOutForMs < CLERK_SIGNOUT_GRACE_MS;
+  }
   if (!input.isLoaded || input.tokenReconnecting) return true;
-  if (input.isSignedIn) return false;
-  return input.signedOutForMs < CLERK_SIGNOUT_GRACE_MS;
+  return false;
 }
 
 export type ClerkSignedInMode = "children" | "signed-out" | "checking" | "reconnecting" | "hold";

@@ -10,7 +10,11 @@ import {
   markClerkSessionEstablished,
   shouldHoldSignedInShell,
 } from "@/lib/clerk-session-gate";
-import { clerkSessionTokens, type ClerkTokenGetter } from "@/lib/clerk-session-token";
+import {
+  clerkSessionTokens,
+  type ClerkSessionIdentity,
+  type ClerkTokenGetter,
+} from "@/lib/clerk-session-token";
 
 const SLOW_CLERK_MS = 8_000;
 
@@ -53,10 +57,12 @@ export function PortalAuthProvider({
 }
 
 export function ClerkPortalAuthBridge({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, userId, sessionId, getToken } = useAuth();
   const queryClient = useQueryClient();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  const sessionRef = useRef({ isLoaded, userId: userId ?? null, sessionId: sessionId ?? null });
+  sessionRef.current = { isLoaded, userId: userId ?? null, sessionId: sessionId ?? null };
   const [tokenReconnecting, setTokenReconnecting] = useState(false);
   const [slow, setSlow] = useState(false);
   const [signedOutAt, setSignedOutAt] = useState<number | null>(null);
@@ -93,7 +99,15 @@ export function ClerkPortalAuthBridge({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const readToken: ClerkTokenGetter = (options) => getTokenRef.current(options);
-    setAuthTokenGetter(() => clerkSessionTokens.tokenForRequest(readToken));
+    setAuthTokenGetter(() => {
+      const session = sessionRef.current;
+      // While Clerk is still loading, keep the last good token. Once it has
+      // loaded, refuse a JWT whose sub/sid is not the current session.
+      const identity: ClerkSessionIdentity | undefined = session.isLoaded
+        ? { userId: session.userId, sessionId: session.sessionId }
+        : undefined;
+      return clerkSessionTokens.tokenForRequest(readToken, identity);
+    });
     return () => setAuthTokenGetter(null);
   }, []);
 
@@ -102,9 +116,9 @@ export function ClerkPortalAuthBridge({ children }: { children: ReactNode }) {
     if (clerkExplicitSignOut()) return;
     let cancelled = false;
     void clerkSessionTokens
-      .refresh((options) => getTokenRef.current(options))
-      .then((token) => {
-        if (!cancelled) setTokenReconnecting(!token);
+      .refreshOutcome((options) => getTokenRef.current(options))
+      .then((result) => {
+        if (!cancelled) setTokenReconnecting(result.reconnecting);
       });
     return () => {
       cancelled = true;
@@ -124,11 +138,14 @@ export function ClerkPortalAuthBridge({ children }: { children: ReactNode }) {
 
   const retrySession = () => {
     setSlow(false);
-    setSignedOutAt(null);
+    // Re-arm the sign-out grace. Clearing signedOutAt left a confirmed
+    // sign-out held forever, because this effect does not run again.
+    if (signedIn) setSignedOutAt(null);
+    else setSignedOutAt(Date.now());
     setRetryNonce((nonce) => nonce + 1);
-    void clerkSessionTokens.retry((options) => getTokenRef.current(options)).then((token) => {
-      setTokenReconnecting(!token);
-      if (token) void queryClient.invalidateQueries();
+    void clerkSessionTokens.retryOutcome((options) => getTokenRef.current(options)).then((result) => {
+      setTokenReconnecting(result.reconnecting);
+      if (result.token) void queryClient.invalidateQueries();
     });
   };
 
