@@ -8,6 +8,20 @@ export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
+const MISSING_ATTEMPT_RESULT_IDS = new Set(["", "result", "undefined", "null"]);
+
+/**
+ * `/api/attempts/${""}/result` is `/api/attempts//result`. Proxies collapse that
+ * to `/api/attempts/result`, and the get-attempt route then queries uuid "result".
+ */
+export function attemptResultUrlIsMissingId(url: string): boolean {
+  const path = (url.split("?")[0] ?? "").replace(/\/{2,}/g, "/");
+  if (/\/api\/attempts\/result$/.test(path)) return true;
+  const match = path.match(/\/api\/attempts\/([^/]+)\/result$/);
+  if (!match) return false;
+  return MISSING_ATTEMPT_RESULT_IDS.has(match[1] ?? "");
+}
+
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
@@ -330,6 +344,17 @@ export async function customFetch<T = unknown>(
   const { responseType = "auto", headers: headersInit, ...init } = options;
 
   const method = resolveMethod(input, init.method);
+  const requestUrl = resolveUrl(input);
+  if (attemptResultUrlIsMissingId(requestUrl)) {
+    throw new ApiError(
+      new Response(JSON.stringify({ error: "Invalid attempt id" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+      { error: "Invalid attempt id" },
+      { method, url: requestUrl },
+    );
+  }
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);

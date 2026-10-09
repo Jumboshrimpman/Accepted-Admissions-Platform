@@ -18,7 +18,9 @@ import {
   quizTimerLeaveAction,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
+  isAttemptUuid,
   isBrokenEmptyClientAttempt,
+  shouldRequestAttemptResult,
   studentSeesFinishedResult,
   studentSeesPredictionStep,
   wantsResumeAttempt,
@@ -91,6 +93,19 @@ test("in-session practice is collaborative, not a prediction quiz", () => {
   assert.equal(allowsInSessionPerQuestionFeedback({ deliveryPhase: "before_session" }), false);
   assert.equal(isQuestionFeedbackRevealed({ revealed: true, correct: false }), true);
   assert.equal(isQuestionFeedbackRevealed({ revealed: false, correct: null }), false);
+});
+
+test("attempt results are not requested without a uuid or before submit", () => {
+  const attemptId = "d1e2452c-67f2-42ad-add7-bacaac535714";
+  assert.equal(isAttemptUuid(attemptId), true);
+  assert.equal(isAttemptUuid(""), false);
+  assert.equal(isAttemptUuid("result"), false);
+  assert.equal(shouldRequestAttemptResult(null, "submitted"), false);
+  assert.equal(shouldRequestAttemptResult("", "submitted"), false);
+  assert.equal(shouldRequestAttemptResult(attemptId, "active"), false);
+  assert.equal(shouldRequestAttemptResult(attemptId, "paused"), false);
+  assert.equal(shouldRequestAttemptResult(attemptId, "submitted"), true);
+  assert.equal(shouldRequestAttemptResult(attemptId, "expired"), true);
 });
 
 test("resume copy and href restore an in-progress quiz from the portal", () => {

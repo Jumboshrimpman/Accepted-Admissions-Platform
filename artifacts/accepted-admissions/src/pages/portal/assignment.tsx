@@ -47,6 +47,7 @@ import { sessionCalendarDayIsPast } from "@/lib/student-quiz-list";
 import {
   COLLABORATIVE_PRACTICE_COPY,
   EMPTY_SUBMIT_MESSAGE,
+  isAttemptUuid,
   isBrokenEmptyClientAttempt,
   IN_SESSION_PARTIAL_SUBMIT_COPY,
   IN_SESSION_PER_QUESTION_FEEDBACK_COPY,
@@ -59,6 +60,7 @@ import {
   isInSessionHomeworkCompletion,
   isQuestionFeedbackRevealed,
   shouldAutoSubmitOnExpiry,
+  shouldRequestAttemptResult,
   studentSeesFinishedResult,
   studentSeesPredictionStep,
   normalizeQuestionIndex,
@@ -637,10 +639,14 @@ export default function PortalAssignment() {
       refetchInterval: 5000,
     },
   });
-  const resultQuery = useGetAttemptResult(attemptId ?? "", {
+  const resultAttemptId = isAttemptUuid(attemptId) ? attemptId : "";
+  // The second argument is the wrongAnswersOnly query. Hook options, including
+  // enabled, are the third argument. Passing them second fetches /attempts/result
+  // with the id missing whenever attemptId is still empty.
+  const resultQuery = useGetAttemptResult(resultAttemptId, undefined, {
     query: {
-      enabled: Boolean(attemptId && (attempt?.status === "submitted" || attempt?.status === "expired")),
-      queryKey: getGetAttemptResultQueryKey(attemptId ?? ""),
+      enabled: shouldRequestAttemptResult(attemptId, attempt?.status),
+      queryKey: getGetAttemptResultQueryKey(resultAttemptId || "pending"),
     },
   });
   const startAttempt = useStartAttempt();

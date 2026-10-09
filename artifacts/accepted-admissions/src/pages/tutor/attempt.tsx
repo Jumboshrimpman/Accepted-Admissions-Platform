@@ -60,7 +60,7 @@ export default function TutorAttempt() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const search = useSearch();
   const queryClient = useQueryClient();
-  const { data: result, isLoading, error } = useGetAttemptResult(attemptId, {
+  const { data: result, isLoading, error } = useGetAttemptResult(attemptId, undefined, {
     query: { enabled: Boolean(attemptId), queryKey: getGetAttemptResultQueryKey(attemptId) },
   });
   const wrongAnswersQuery = useQuery({

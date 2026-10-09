@@ -15,6 +15,7 @@ import {
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger";
+import { invalidAttemptIdGate, isUuidAttemptId } from "../lib/attempt-id";
 import { remainingAttemptSeconds, summarizeAttemptTimer } from "../lib/attempt-timer";
 import {
   connectionHasRefreshToken,
@@ -457,6 +458,7 @@ import {
   updateSessionAssignmentQuestionContent,
 } from "../lib/session-question-edit";
 import {
+  assignmentDifficulty,
   assignmentQuestionShape,
   courseIdsForAssignmentList,
   isAssignmentListedForRole,
@@ -3253,6 +3255,7 @@ async function attemptShape(attemptId: string) {
 }
 
 async function canAccessAttempt(user: AppUser, attemptId: string) {
+  if (!isUuidAttemptId(attemptId)) return null;
   const [record] = await db
     .select({
       attempt: attemptsTable,
@@ -11260,6 +11263,8 @@ router.post(
   },
 );
 
+router.use("/attempts/:attemptId", invalidAttemptIdGate());
+
 router.get("/attempts/:attemptId", async (req: AuthedRequest, res): Promise<void> => {
   const params = GetAttemptParams.safeParse(req.params);
   if (!params.success) {
@@ -12086,7 +12091,7 @@ function questionBankShape(question: typeof questionsTable.$inferSelect) {
     domain: question.domain,
     skill: question.skill,
     questionType: question.questionType,
-    difficulty: question.difficulty,
+    difficulty: assignmentDifficulty(question.difficulty),
     stimulus: question.stimulus,
     prompt: question.prompt,
     choices: question.choices,

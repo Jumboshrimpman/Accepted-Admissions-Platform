@@ -5,7 +5,7 @@ import {
   QueryClientProvider,
   useQueryClient,
 } from '@tanstack/react-query';
-import { ErrorBoundary } from '@/components/error-boundary';
+import { ErrorBoundary, StudentPageErrorFallback } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
@@ -17,10 +17,10 @@ import {
 } from 'wouter';
 import { ClerkProvider, useClerk } from '@clerk/react';
 import {
-  AuthSessionLoading,
   ClerkPortalAuthBridge,
   PortalAuthProvider,
-  usePortalAuth,
+  SignedIn,
+  SignedOut,
 } from '@/components/portal-auth';
 import SignInPage, { LoginErrorState } from '@/pages/login';
 import {
@@ -64,6 +64,7 @@ import {
   applyClerkRouterNavigation,
   clerkSignInUrl,
 } from '@/lib/clerk-session-urls';
+import { noteClerkUserChange } from '@/lib/clerk-session-token';
 
 const clerkKeyResult = resolveClerkPublishableKey(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -84,13 +85,19 @@ function ClerkQueryClientCacheInvalidator() {
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
+      // Drop a JWT cached for the previous account as soon as Clerk's user
+      // changes or the session ends. Query data stays until the account
+      // actually changes: clearing it on a momentary null user unmounts the
+      // quiz and fires pause.
+      noteClerkUserChange(userId);
       if (
-        previousUserId.current !== undefined &&
+        previousUserId.current &&
+        userId &&
         previousUserId.current !== userId
       ) {
         queryClient.clear();
       }
-      previousUserId.current = userId;
+      if (userId) previousUserId.current = userId;
     });
     return unsubscribe;
   }, [addListener, queryClient]);
@@ -98,20 +105,13 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-function SignedIn({ children }: { children: ReactNode }) {
-  const auth = usePortalAuth();
-  if (auth.clerkAvailable && !auth.isLoaded) {
-    return <AuthSessionLoading message="Checking your session…" />;
-  }
-  if (!auth.isSignedIn) return null;
-  return <>{children}</>;
-}
-
-function SignedOut({ children }: { children: ReactNode }) {
-  const auth = usePortalAuth();
-  if (auth.clerkAvailable && !auth.isLoaded) return null;
-  if (auth.isSignedIn) return null;
-  return <>{children}</>;
+function StudentShell({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  return (
+    <ErrorBoundary resetKey={location} FallbackComponent={StudentPageErrorFallback}>
+      <Shell>{children}</Shell>
+    </ErrorBoundary>
+  );
 }
 
 export function Router() {
@@ -159,9 +159,9 @@ export function Router() {
 
         <Route path="/portal/courses/:courseId">
           <SignedIn>
-            <Shell>
+            <StudentShell>
               <PortalCourse />
-            </Shell>
+            </StudentShell>
           </SignedIn>
           <SignedOut>
             <Redirect to="/login" />
@@ -170,9 +170,9 @@ export function Router() {
 
         <Route path="/portal/sat">
           <SignedIn>
-            <Shell>
+            <StudentShell>
               <PortalSat />
-            </Shell>
+            </StudentShell>
           </SignedIn>
           <SignedOut>
             <Redirect to="/login?returnTo=%2Fportal%2Fsat" />
@@ -181,9 +181,9 @@ export function Router() {
 
         <Route path="/portal/curriculum">
           <SignedIn>
-            <Shell>
+            <StudentShell>
               <PortalDashboard />
-            </Shell>
+            </StudentShell>
           </SignedIn>
           <SignedOut>
             <Redirect to="/login" />
@@ -192,9 +192,9 @@ export function Router() {
 
         <Route path="/portal/courses/:courseId/sessions/:sessionId">
           <SignedIn>
-            <Shell>
+            <StudentShell>
               <PortalSession />
-            </Shell>
+            </StudentShell>
           </SignedIn>
           <SignedOut>
             <Redirect to="/login" />
@@ -203,9 +203,9 @@ export function Router() {
 
         <Route path="/portal/assignments/:assignmentId">
           <SignedIn>
-            <Shell>
+            <StudentShell>
               <PortalAssignment />
-            </Shell>
+            </StudentShell>
           </SignedIn>
           <SignedOut>
             <Redirect to="/login" />
@@ -214,7 +214,7 @@ export function Router() {
 
         <Route path="/portal*">
           <SignedIn>
-            <Shell>
+            <StudentShell>
               <Switch>
                 <Route path="/portal" component={PortalEntry} />
                 <Route path="/portal/sat" component={PortalSat} />
@@ -224,7 +224,7 @@ export function Router() {
                 <Route path="/portal/assignments/:assignmentId" component={PortalAssignment} />
                 <Route>{() => <NotFound embedded />}</Route>
               </Switch>
-            </Shell>
+            </StudentShell>
           </SignedIn>
           <SignedOut>
             <Redirect to="/login" />

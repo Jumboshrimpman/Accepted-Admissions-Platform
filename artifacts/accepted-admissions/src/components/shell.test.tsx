@@ -113,6 +113,29 @@ describe("Shell", () => {
     expect(screen.getByRole("navigation", { name: "Portal navigation" })).toBeTruthy();
   });
 
+  it("keeps the open page mounted when a later portal request fails", () => {
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "student",
+      displayName: "Taito Goto",
+      avatarUrl: null,
+    };
+    const { rerender } = renderShell();
+    expect(screen.getByText("Portal content")).toBeTruthy();
+
+    currentUser.error = { status: 401 };
+    currentUser.isLoading = true;
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText("Portal content")).toBeTruthy();
+    expect(screen.getByTestId("status-auth-reconnecting").textContent).toMatch(/Reconnecting/i);
+    expect(screen.queryByText("Portal access unavailable")).toBeNull();
+  });
+
   it("hides Finance from admin nav and offers Book SAT from the client portal", () => {
     currentUser.isLoading = false;
     currentUser.data = {

@@ -29,6 +29,12 @@ test("assignment list queries an explicit course even when the user has no membe
   assert.deepEqual(courseIdsForAssignmentList([]), []);
 });
 
+test("question bank difficulty unspecified matches the assignment API enum", () => {
+  assert.equal(assignmentDifficulty("unspecified"), "foundational");
+  assert.equal(assignmentDifficulty("UNSPECIFIED"), "foundational");
+  assert.equal(assignmentDifficulty("moderate"), "medium");
+});
+
 test("students do not list draft or archived assignments that staff can still open", () => {
   assert.equal(isAssignmentListedForRole("student", "published"), true);
   assert.equal(isAssignmentListedForRole("student", "draft"), false);

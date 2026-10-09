@@ -51,6 +51,26 @@ export function studentSeesFinishedResult(input: {
   return true;
 }
 
+const ATTEMPT_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isAttemptUuid(value: string | null | undefined): value is string {
+  return typeof value === "string" && ATTEMPT_UUID.test(value);
+}
+
+/**
+ * The result route is only for a submitted or expired attempt.
+ * An empty id becomes `/api/attempts//result`, which proxies collapse to
+ * `/api/attempts/result` and the server then treats "result" as the attempt id.
+ */
+export function shouldRequestAttemptResult(
+  attemptId: string | null | undefined,
+  status: string | null | undefined,
+): boolean {
+  if (!isAttemptUuid(attemptId)) return false;
+  return status === "submitted" || status === "expired";
+}
+
 /** Submitted or expired with no score and no answers. The quiz itself is still open. */
 export function isBrokenEmptyClientAttempt(input: {
   status?: string | null;

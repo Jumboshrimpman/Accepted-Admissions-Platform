@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useAuth, useClerk } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { markClerkExplicitSignOut } from "@/lib/clerk-session-gate";
+import { clerkSessionTokens } from "@/lib/clerk-session-token";
 
 function loginUrl(): string {
   const basePath = import.meta.env.BASE_URL.endsWith("/")
@@ -21,6 +23,8 @@ export function SignInRecoveryButton() {
     setIsReturning(true);
     setErrorMessage(null);
     queryClient.clear();
+    markClerkExplicitSignOut();
+    clerkSessionTokens.clear();
 
     try {
       if (isSignedIn) {
