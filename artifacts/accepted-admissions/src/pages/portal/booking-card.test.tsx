@@ -221,7 +221,11 @@ describe("client availability calendar", () => {
     ];
 
     render(<BookingCard />);
+    expect(screen.queryByText("Xavier helps students strengthen SAT reasoning.")).toBeNull();
+    fireEvent.click(screen.getByTestId("booking-tutor-bio-tutor-xavier"));
     expect(screen.getByText("Xavier helps students strengthen SAT reasoning.")).toBeTruthy();
+    expect(screen.queryByText("Eunice coaches scholarship and admissions work.")).toBeNull();
+    fireEvent.click(screen.getByTestId("booking-tutor-bio-tutor-eunice"));
     expect(screen.getByText("Eunice coaches scholarship and admissions work.")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
 
@@ -229,6 +233,72 @@ describe("client availability calendar", () => {
     await waitFor(() => {
       expect(screen.getByText("Available times with Eunice Chon")).toBeTruthy();
     });
+  });
+
+  test("shows Victoria's tagline and collapsed bio, and hides the control when a bio is empty", () => {
+    mocks.tutorsQuery.data = [
+      {
+        id: "tutor-xavier",
+        name: "Xavier Morales",
+        title: "College Consulting Tutor",
+        photoUrl: "/media/team/xavier-morales.jpg",
+        biography: "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy.",
+        tagline: "Harvard Math, Econ and CS '24, Rhodes Scholar Oxford MA Philosophy '26, Quant Finance",
+        subjects: ["College Consulting"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+        serviceName: "College Consulting",
+        hourlyRateCents: 20000,
+        bookable: true,
+      },
+      {
+        id: "tutor-victoria",
+        name: "Victoria Wijerathnayapa",
+        title: "College Consulting Tutor",
+        photoUrl: "/media/team/victoria.jpg",
+        biography:
+          "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
+        tagline: "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
+        subjects: ["College Consulting"],
+        calendarStatus: "disconnected",
+        providerStatus: "disconnected",
+        serviceName: "College Consulting",
+        hourlyRateCents: 13000,
+        bookable: false,
+      },
+      {
+        id: "tutor-blank",
+        name: "Blank Tutor",
+        title: "Tutor",
+        photoUrl: null,
+        biography: "   ",
+        tagline: "",
+        subjects: ["College Consulting"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+        serviceName: "College Consulting",
+        hourlyRateCents: 13000,
+        bookable: true,
+      },
+    ];
+
+    render(<BookingCard />);
+    expect(
+      screen.getByText(
+        "Harvard Math, Econ and CS '24, Rhodes Scholar Oxford MA Philosophy '26, Quant Finance",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/2024 graduate of Harvard/)).toBeNull();
+    expect(
+      screen.getByText("Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/admitted to Brown and Yale/)).toBeNull();
+    fireEvent.click(screen.getByTestId("booking-tutor-bio-tutor-victoria"));
+    expect(screen.getByText(/admitted to Brown and Yale/)).toBeTruthy();
+    expect(screen.getByText(/Not bookable until Google Calendar is connected/)).toBeTruthy();
+    expect(screen.queryByTestId("booking-tutor-bio-tutor-blank")).toBeNull();
+    const photo = screen.getByRole("button", { name: /Victoria Wijerathnayapa/i }).querySelector("img");
+    expect(photo?.getAttribute("src")).toBe("/media/team/victoria.jpg");
   });
 
   test("prompts a zero-credit client to buy a single hour or 10-hour package before booking", async () => {

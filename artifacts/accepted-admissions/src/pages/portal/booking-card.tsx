@@ -66,11 +66,117 @@ function dateFromDayKey(dayKey: string): Date {
   return parseISO(`${dayKey}T12:00:00`);
 }
 
-function truncateBio(value: string | null | undefined, max = 180): string {
-  const text = value?.trim() ?? "";
-  if (!text) return "Biography coming soon.";
-  if (text.length <= max) return text;
-  return `${text.slice(0, max).trimEnd()}…`;
+function BookingTutorOption({
+  tutor,
+  selected,
+  onChoose,
+}: {
+  tutor: {
+    id: string;
+    name: string;
+    title: string;
+    photoUrl?: string | null;
+    biography?: string | null;
+    tagline?: string | null;
+    subjects: string[];
+    providerStatus?: string | null;
+    hourlyRateCents?: number | null;
+    bookable?: boolean | null;
+    serviceName?: string | null;
+  };
+  selected: boolean;
+  onChoose: (tutorId: string) => void;
+}) {
+  const [bioOpen, setBioOpen] = useState(false);
+  const tagline = tutor.tagline?.trim() ?? "";
+  const biography = tutor.biography?.trim() ?? "";
+  return (
+    <div
+      className={`rounded-2xl border transition-colors ${
+        selected
+          ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+          : "hover:border-primary/40 hover:bg-muted/40"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onChoose(tutor.id)}
+        className="w-full p-4 text-left"
+      >
+        <div className="flex items-start gap-4">
+          {tutor.photoUrl ? (
+            <img
+              src={tutor.photoUrl}
+              alt=""
+              className="h-16 w-16 shrink-0 rounded-2xl object-cover"
+            />
+          ) : (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-semibold text-muted-foreground">
+              {tutor.name
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part[0] ?? "")
+                .join("")}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">{tutor.name}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{tutor.title}</p>
+              </div>
+              <span
+                className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                  tutor.providerStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+                title={
+                  tutor.providerStatus === "connected"
+                    ? "Calendar connected"
+                    : "Calendar connection needed"
+                }
+              />
+            </div>
+            {tagline ? <p className="mt-2 text-sm leading-snug">{tagline}</p> : null}
+            {tutor.subjects.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {tutor.subjects.map((subject) => (
+                  <Badge key={subject} variant="outline" className="rounded-full text-xs">
+                    {subject}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {tutor.serviceName === "College Consulting" && typeof tutor.hourlyRateCents === "number"
+                ? `$${Math.round(tutor.hourlyRateCents / 100)}/hr · `
+                : ""}
+              {tutor.providerStatus === "connected"
+                ? "Calendar connected — times below"
+                : tutor.bookable === false
+                  ? "Not bookable until Google Calendar is connected"
+                  : "Calendar connection needed before times appear"}
+            </p>
+          </div>
+        </div>
+      </button>
+      {biography ? (
+        <div className="px-4 pb-4">
+          <button
+            type="button"
+            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            aria-expanded={bioOpen}
+            data-testid={`booking-tutor-bio-${tutor.id}`}
+            onClick={() => setBioOpen((open) => !open)}
+          >
+            {bioOpen ? "Hide bio" : "Read bio"}
+          </button>
+          {bioOpen ? (
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{biography}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function asListedBookingSession(session: ListedSession) {
@@ -170,6 +276,11 @@ export function BookingCard({
           subjects: [] as string[],
           calendarStatus: "connected",
           providerStatus: "connected" as const,
+          prepaidHours: undefined,
+          hourlyRateCents: null,
+          bookable: true,
+          serviceName: null,
+          tagline: null,
         }
       : undefined);
   const durationMinutes = Number(activeSession?.durationMinutes) || 60;
@@ -346,18 +457,23 @@ export function BookingCard({
     );
   };
 
+  const collegeConsulting = tutors.some((tutor) => tutor.serviceName === "College Consulting");
+  const selectedTutorHours =
+    collegeConsulting && typeof selectedTutor?.prepaidHours === "number"
+      ? selectedTutor.prepaidHours
+      : remainingHours;
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
   const upcomingReserved = bookedSessionList.upcoming.filter((session) =>
     canCancelOrRescheduleSession(session),
   );
   const creditWall = bookingCreditWallState({
-    remainingHours,
+    remainingHours: selectedTutorHours,
     purchasedHours,
     hasLiveBookedSession: upcomingReserved.length > 0,
     rescheduling: Boolean(reschedulingSessionId),
   });
   const canConfirmSelectedSlot =
-    Boolean(reschedulingSessionId) || remainingHours === null || remainingHours > 0;
+    Boolean(reschedulingSessionId) || selectedTutorHours === null || selectedTutorHours > 0;
   const availableSlots = availabilityQuery.data?.slots ?? [];
   const availableDateKeys = useMemo(
     () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
@@ -386,12 +502,12 @@ export function BookingCard({
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarClock className="h-5 w-5 text-primary" />
-              Book a prepaid SAT session
+              {collegeConsulting ? "Book a College Consulting session" : "Book a prepaid SAT session"}
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-              Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar.
-              Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking.
-              Cancel at least 24 hours ahead to restore the credit.
+              {collegeConsulting
+                ? "Choose Nika Raiffe ($130/hr), Victoria Wijerathnayapa ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
+                : "Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -432,69 +548,12 @@ export function BookingCard({
 
             <div className="grid gap-3">
               {tutors.map((tutor) => (
-                <button
+                <BookingTutorOption
                   key={tutor.id}
-                  type="button"
-                  onClick={() => chooseTutor(tutor.id)}
-                  className={`rounded-2xl border p-4 text-left transition-colors ${
-                    selectedTutorId === tutor.id
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "hover:border-primary/40 hover:bg-muted/40"
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    {tutor.photoUrl ? (
-                      <img
-                        src={tutor.photoUrl}
-                        alt=""
-                        className="h-16 w-16 shrink-0 rounded-2xl object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-semibold text-muted-foreground">
-                        {tutor.name
-                          .split(/\s+/)
-                          .slice(0, 2)
-                          .map((part) => part[0] ?? "")
-                          .join("")}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{tutor.name}</p>
-                          <p className="mt-0.5 text-sm text-muted-foreground">{tutor.title}</p>
-                        </div>
-                        <span
-                          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                            tutor.providerStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"
-                          }`}
-                          title={
-                            tutor.providerStatus === "connected"
-                              ? "Calendar connected"
-                              : "Calendar connection needed"
-                          }
-                        />
-                      </div>
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                        {truncateBio(tutor.biography)}
-                      </p>
-                      {tutor.subjects.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {tutor.subjects.map((subject) => (
-                            <Badge key={subject} variant="outline" className="rounded-full text-xs">
-                              {subject}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {tutor.providerStatus === "connected"
-                          ? "Calendar connected — times below"
-                          : "Calendar connection needed before times appear"}
-                      </p>
-                    </div>
-                  </div>
-                </button>
+                  tutor={tutor}
+                  selected={selectedTutorId === tutor.id}
+                  onChoose={chooseTutor}
+                />
               ))}
             </div>
 
@@ -596,10 +655,12 @@ export function BookingCard({
                 {creditWall === "unpaid" && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p>
-                      You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here.
+                      {collegeConsulting
+                        ? `You need a prepaid hour with ${selectedTutor?.name ?? "this tutor"} before reserving. Hours do not transfer between tutors.`
+                        : "You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here."}
                     </p>
                     <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/portal/sat">Purchase SAT hours</Link>
+                      <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
                     </Button>
                   </div>
                 )}
@@ -640,7 +701,7 @@ export function BookingCard({
                       Buy another hour to book a new time.
                     </p>
                     <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/portal/sat">Purchase SAT hours</Link>
+                      <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
                     </Button>
                   </div>
                 )}

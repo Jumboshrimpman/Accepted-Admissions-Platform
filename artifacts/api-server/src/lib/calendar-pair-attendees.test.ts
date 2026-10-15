@@ -9,6 +9,14 @@ import {
 } from "./booking.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  NEEL_DHARNI_USER_ID,
+  NEEL_PLACEHOLDER_EMAIL,
+  NIKA_CONSULTING_EMAIL,
+  VICTORIA_INTENDED_EMAIL,
+  VICTORIA_PLACEHOLDER_EMAIL,
+  VICTORIA_USER_ID,
+} from "./college-consulting.ts";
+import {
   adminAttendeeEmailsForPair,
   CALENDAR_PAIR_ADMIN_INVITES,
   mergeCalendarAttendees,
@@ -53,8 +61,8 @@ function invite(
   });
 }
 
-test("admin calendar guests are configured only for Michelle with Xavier", () => {
-  assert.equal(CALENDAR_PAIR_ADMIN_INVITES.length, 1);
+test("Michelle with Xavier keeps the original admin invite rule", () => {
+  assert.equal(CALENDAR_PAIR_ADMIN_INVITES.length, 4);
   assert.deepEqual(CALENDAR_PAIR_ADMIN_INVITES[0], {
     studentClerkUserIds: ["user_3JCRGfBj8dgWSjO1r2zeKovFVE7"],
     studentEmails: ["makaremmichelle7@gmail.com"],
@@ -66,6 +74,50 @@ test("admin calendar guests are configured only for Michelle with Xavier", () =>
   assert.deepEqual(adminAttendeeEmailsForPair(michelle, xavier), [ADMIN]);
   assert.deepEqual(adminAttendeeEmailsForPair(null, xavier), []);
   assert.deepEqual(adminAttendeeEmailsForPair(michelle, null), []);
+});
+
+test("Neel College Consulting pairs invite admin and survive an email swap", () => {
+  const neel = { userId: NEEL_DHARNI_USER_ID, email: NEEL_PLACEHOLDER_EMAIL };
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(neel, { email: NIKA_CONSULTING_EMAIL }),
+    [ADMIN],
+  );
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(neel, xavier),
+    [ADMIN],
+  );
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(neel, { email: VICTORIA_PLACEHOLDER_EMAIL }),
+    [ADMIN],
+  );
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(
+      { userId: NEEL_DHARNI_USER_ID, email: "neel.real@example.com" },
+      { userId: VICTORIA_USER_ID, email: VICTORIA_INTENDED_EMAIL },
+    ),
+    [ADMIN],
+  );
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(
+      { email: VICTORIA_INTENDED_EMAIL },
+      { email: NIKA_CONSULTING_EMAIL },
+    ),
+    [],
+  );
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(
+      { userId: NEEL_DHARNI_USER_ID, email: "taito0525@gmail.com" },
+      { email: "eunice_chon@berkeley.edu" },
+    ),
+    [],
+  );
+  assert.deepEqual(
+    adminAttendeeEmailsForPair(
+      { email: "taito0525@gmail.com" },
+      { email: NIKA_CONSULTING_EMAIL },
+    ),
+    [],
+  );
 });
 
 test("Michelle and Xavier match by Clerk id or email, not by display name", () => {

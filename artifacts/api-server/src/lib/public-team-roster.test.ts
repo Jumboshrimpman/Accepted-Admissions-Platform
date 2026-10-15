@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,7 @@ const {
   LEGACY_WIX_PUBLIC_TEAM_PORTRAITS,
   LEGACY_WIX_SCHOOL_LOGO_URLS,
   MIRRORED_PORTRAIT_RECONCILIATIONS,
+  NIKA_BOOKING_TAGLINE,
   NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
   NIKA_PUBLIC_BIOGRAPHY,
   PUBLIC_TUTOR_ORDER,
@@ -22,6 +23,7 @@ const {
   rewriteLegacyWixMediaUrl,
   rewriteLegacyWixSchoolLogos,
   mergeApprovedSchoolLogos,
+  XAVIER_BOOKING_TAGLINE,
   XAVIER_LEGACY_PUBLIC_BIOGRAPHIES,
   XAVIER_PUBLIC_BIOGRAPHY,
 } = roster;
@@ -70,6 +72,7 @@ test("serves first-party portraits instead of Wix CDN URLs", () => {
 
 test("publishes the current Xavier, Eunice, and Nika biographies and retires the stale seed copy", () => {
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /Jane Street Capital/);
+  assert.match(XAVIER_PUBLIC_BIOGRAPHY, /admitted to multiple Ivy League schools before choosing Harvard/);
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /2030 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /2029 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /Oxford until 2026/);
@@ -83,8 +86,24 @@ test("publishes the current Xavier, Eunice, and Nika biographies and retires the
   assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /Stuyvesant High School/);
   assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /at a Research Intern/);
   assert.match(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[0], /2029 Harvard Law School/);
+  assert.match(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Jane Street Capital/);
+  assert.doesNotMatch(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Ivy League/);
   assert.match(EUNICE_LEGACY_PUBLIC_BIOGRAPHIES[0], /third-year at Harvard College/);
   assert.match(NIKA_LEGACY_PUBLIC_BIOGRAPHIES[0], /sophomore studying/);
+  assert.equal(
+    XAVIER_BOOKING_TAGLINE,
+    "Harvard Math, Econ and CS '24, Rhodes Scholar Oxford MA Philosophy '26, Quant Finance",
+  );
+  assert.equal(
+    NIKA_BOOKING_TAGLINE,
+    "Columbia & Sciences Po dual degree, Political Science, Law & Psychology; Goldman Sachs BI",
+  );
+  assert.ok(XAVIER_PUBLIC_BIOGRAPHY.length > XAVIER_BOOKING_TAGLINE.length);
+  assert.ok(NIKA_PUBLIC_BIOGRAPHY.includes("Sciences Po"));
+  assert.ok(!XAVIER_BOOKING_TAGLINE.includes(XAVIER_PUBLIC_BIOGRAPHY));
+  const victoriaPhoto = path.join(publicDir, "media/team/victoria.jpg");
+  assert.equal(existsSync(victoriaPhoto), true);
+  assert.ok(statSync(victoriaPhoto).size < 200_000);
   assert.equal(
     MIRRORED_PORTRAIT_RECONCILIATIONS.find((profile) => profile.name === "Xavier Morales")?.biography,
     XAVIER_PUBLIC_BIOGRAPHY,

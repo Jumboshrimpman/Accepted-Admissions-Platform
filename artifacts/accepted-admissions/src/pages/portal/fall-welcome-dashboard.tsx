@@ -50,6 +50,7 @@ import {
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
   shouldShowSatPaymentReceipts,
+  showsSelfServeCollegeConsulting,
 } from "@/lib/portal-sat";
 import { clientSatCreditAction } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
@@ -176,8 +177,11 @@ export function ClientDashboardView({
   }, [location, setLocation]);
 
   const offPlatformBilling = isOffPlatformProgramClient(dashboard.credits);
+  const collegeConsulting = showsSelfServeCollegeConsulting(dashboard.credits);
   const twelveSessionPlan = dashboard.credits.twelveSessionPlan === true;
-  const showSelfServeBooking = dashboard.credits.selfServeSatBooking === true && !offPlatformBilling;
+  const showSelfServeBooking =
+    collegeConsulting ||
+    (dashboard.credits.selfServeSatBooking === true && !offPlatformBilling);
   // Viewers never get buy/book chrome. Admin preview of a self-serve client stays read-only.
   const showPurchaseCard = showSelfServeBooking && (studentSatCommerce || adminPreview);
   const mirroredStudent = dashboard.user.viewingAs;
@@ -350,11 +354,13 @@ export function ClientDashboardView({
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Target className="h-5 w-5 text-primary" />
-              SAT session credits
+              {collegeConsulting ? "College Consulting credits" : "SAT session credits"}
             </CardTitle>
             <CardDescription>
               Purchased credits unlock after a verified Stripe payment. Booking uses one credit per session.
-              Pay $130 for a single hour or $1,300 for a 10-hour package, then book Xavier or Eunice.
+              {collegeConsulting
+                ? "Nika and Victoria Wijerathnayapa are $130/hour. Xavier is $200/hour. Hours do not transfer between tutors."
+                : "Pay $130 for a single hour or $1,300 for a 10-hour package, then book Xavier or Eunice."}
             </CardDescription>
           </CardHeader>
           <CardContent>

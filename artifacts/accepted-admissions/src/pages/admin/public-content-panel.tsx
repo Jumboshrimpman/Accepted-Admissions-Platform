@@ -107,6 +107,7 @@ export function PublicContentPanel() {
           photoUrl: tutor.photoUrl,
           photoAltText: tutor.photoAltText,
           biography: tutor.biography,
+          tagline: tutor.tagline,
           subjects: tutor.subjects,
           linkedinUrl: tutor.linkedinUrl,
           publicApproved: tutor.publicApproved,
@@ -329,6 +330,14 @@ export function PublicContentPanel() {
                 onPhotoUrlChange={(value) => updateTutor(tutor.id, { photoUrl: value })}
                 onPhotoAltTextChange={(value) => updateTutor(tutor.id, { photoAltText: value })}
               />
+              <Field label="Booking tagline">
+                <Input
+                  value={tutor.tagline ?? ""}
+                  maxLength={240}
+                  onChange={(event) => updateTutor(tutor.id, { tagline: event.target.value || null })}
+                  placeholder="One line on the booking card. Leave blank to hide it."
+                />
+              </Field>
               <Field label="Biography">
                 <Textarea
                   rows={6}

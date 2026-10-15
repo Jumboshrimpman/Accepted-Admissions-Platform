@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import {
+  customFetch,
   getGetAdminOverviewQueryKey,
   useGetAdminCurriculum,
   useGetAdminOverview,
@@ -183,6 +184,8 @@ export default function AdminDashboard() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-in fade-in">
       <UnresolvedFormSubmissionsAlert requests={unresolvedRequests} />
+      <SharedMeetOverlapAlert overlaps={overview?.sharedMeetOverlaps ?? []} />
+      <ConsultingProvisionNotice provision={overview?.consultingProvision} />
       <div>
         <p className="mb-2 text-sm font-medium text-primary">Accepted Admissions · administrator</p>
         <h1 className="text-3xl font-bold tracking-tight">Admin overview</h1>
@@ -457,6 +460,102 @@ export default function AdminDashboard() {
         </details>
       </Card>
     </div>
+  );
+}
+
+function SharedMeetOverlapAlert({
+  overlaps,
+}: {
+  overlaps: NonNullable<AdminOverview["sharedMeetOverlaps"]>;
+}) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState("");
+  const [pendingKey, setPendingKey] = useState("");
+  if (overlaps.length === 0) return null;
+  const resolve = (overlapKey: string) => {
+    setError("");
+    setPendingKey(overlapKey);
+    void customFetch<{ resolved: boolean }>("/api/admin/shared-meet-overlaps/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ overlapKey }),
+    })
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
+      })
+      .catch(() => setError("Could not resolve this overlap. Please try again."))
+      .finally(() => setPendingKey(""));
+  };
+  return (
+    <section
+      role="alert"
+      aria-labelledby="shared-meet-overlap-heading"
+      data-testid="alert-shared-meet-overlaps"
+      className="rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950 shadow-sm"
+    >
+      <h2 id="shared-meet-overlap-heading" className="flex items-center gap-2 text-lg font-semibold">
+        <AlertTriangle className="h-5 w-5" />
+        Shared Meet room overlaps
+      </h2>
+      <p className="mt-1 text-sm text-amber-900">
+        These sessions both use https://meet.google.com/rih-iayt-okb at the same time. The alert stays until you resolve it. Moving a session makes it return.
+      </p>
+      {error ? <p className="mt-2 text-sm">{error}</p> : null}
+      <ul className="mt-4 space-y-3">
+        {overlaps.map((overlap) => (
+          <li key={overlap.overlapKey} className="rounded-xl border border-amber-300 bg-white/80 p-4 text-foreground">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">{overlap.leftTitle}</p>
+                <p className="text-sm">overlaps {overlap.rightTitle}</p>
+                <p className="mt-1 text-xs text-amber-800">
+                  {new Date(overlap.start).toLocaleString()} – {new Date(overlap.end).toLocaleString()}
+                </p>
+              </div>
+              <Button type="button" size="sm" disabled={pendingKey === overlap.overlapKey} onClick={() => resolve(overlap.overlapKey)}>
+                Resolve
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ConsultingProvisionNotice({
+  provision,
+}: {
+  provision: AdminOverview["consultingProvision"];
+}) {
+  if (!provision) return null;
+  const stopped = Boolean(provision.neelStoppedReason || provision.victoriaStoppedReason);
+  return (
+    <Card
+      className={stopped ? "border-amber-300 bg-amber-50 text-amber-950" : undefined}
+      data-testid="consulting-provision-notice"
+    >
+      <CardHeader>
+        <CardTitle className="text-base">College Consulting provisioning</CardTitle>
+        <CardDescription className={stopped ? "text-amber-900" : undefined}>
+          Nika signs in at /login, then connects Google Calendar at /tutor with {provision.nikaEmail}
+          {provision.nikaClerkUserId ? ` (${provision.nikaClerkUserId})` : ""}.{" "}
+          {provision.nikaBookable
+            ? "She is bookable."
+            : `Not bookable (${provision.nikaSkipReason ?? "inactive"}).`}{" "}
+          No invitation was sent.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        <p>
+          Neel: {provision.neelLinked ? `linked as ${provision.neelEmail}` : `not linked (${provision.neelStoppedReason ?? "stopped"})`}.
+        </p>
+        <p>
+          Victoria test login: {provision.victoriaLinked ? `${provision.victoriaEmail} at /login, then /tutor` : `not linked (${provision.victoriaStoppedReason ?? "stopped"})`}.
+          Intended email {provision.victoriaIntendedEmail} is not provisioned.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

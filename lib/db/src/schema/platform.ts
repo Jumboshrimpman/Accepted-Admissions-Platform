@@ -424,6 +424,8 @@ export const tutorProfilesTable = pgTable(
     photoUrl: text("photo_url"),
     photoAltText: text("photo_alt_text"),
     biography: text("biography"),
+    /** One-line booking card summary. Null hides the line. */
+    tagline: text("tagline"),
     subjects: jsonb("subjects").$type<string[]>().notNull().default([]),
     linkedinUrl: text("linkedin_url"),
     publicApproved: boolean("public_approved").notNull().default(false),
@@ -997,6 +999,20 @@ export const remediationRetriesTable = pgTable("remediation_retries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
+
+/** Acknowledged shared-room overlaps. A moved session changes the key and alerts again. */
+export const sharedMeetOverlapResolutionsTable = pgTable(
+  "shared_meet_overlap_resolutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    overlapKey: text("overlap_key").notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedByUserId: uuid("resolved_by_user_id").references(() => usersTable.id),
+  },
+  (table) => [
+    uniqueIndex("shared_meet_overlap_resolutions_key_idx").on(table.overlapKey),
+  ],
+);
 
 export const insertCurriculumBlockSchema =
   createInsertSchema(curriculumBlocksTable).omit({

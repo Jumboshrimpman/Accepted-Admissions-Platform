@@ -743,6 +743,15 @@ export const GetAdminClientDashboardResponse = zod.object({
   "remainingHours": zod.number(),
   "readOnly": zod.boolean(),
   "selfServeSatBooking": zod.boolean(),
+  "selfServeCollegeConsulting": zod.boolean().optional(),
+  "collegeConsultingTutors": zod.array(zod.object({
+  "tutorKey": zod.string(),
+  "name": zod.string(),
+  "hourlyRateCents": zod.number(),
+  "prepaidHours": zod.number(),
+  "productSlug": zod.string(),
+  "calendarConnected": zod.boolean()
+})).optional(),
   "twelveSessionPlan": zod.boolean().describe('True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan \/ twelve focused meetings” copy.\n')
 }),
   "progress": zod.object({
@@ -2451,6 +2460,15 @@ export const GetDashboardResponse = zod.object({
   "remainingHours": zod.number(),
   "readOnly": zod.boolean(),
   "selfServeSatBooking": zod.boolean(),
+  "selfServeCollegeConsulting": zod.boolean().optional(),
+  "collegeConsultingTutors": zod.array(zod.object({
+  "tutorKey": zod.string(),
+  "name": zod.string(),
+  "hourlyRateCents": zod.number(),
+  "prepaidHours": zod.number(),
+  "productSlug": zod.string(),
+  "calendarConnected": zod.boolean()
+})).optional(),
   "twelveSessionPlan": zod.boolean().describe('True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan \/ twelve focused meetings” copy.\n')
 }),
   "progress": zod.object({
@@ -2521,6 +2539,7 @@ export const ListBookingTutorsResponseItem = zod.object({
   "title": zod.string(),
   "photoUrl": zod.string().nullish(),
   "biography": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
   "subjects": zod.array(zod.string()),
   "calendarStatus": zod.string(),
   "providerStatus": zod.enum(['connected', 'disconnected'])
