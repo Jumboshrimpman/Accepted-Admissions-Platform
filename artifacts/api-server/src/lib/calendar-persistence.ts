@@ -22,7 +22,20 @@ export type GoogleCalendarTokens = {
   accessToken: string;
   refreshToken?: string;
   expiresIn?: number;
+  email?: string;
 };
+
+const CALENDAR_GRANT_REVOKED_ERROR =
+  "Google revoked the calendar grant. Reconnect is required.";
+const CALENDAR_TUTOR_DISCONNECTED_ERROR = "The tutor disconnected Google Calendar.";
+const CALENDAR_DISCONNECTED_ERROR =
+  "Google Calendar is disconnected. Reconnect is required.";
+
+function normalizedGoogleAccountEmail(email: string | undefined): string | null {
+  const trimmed = email?.trim().toLowerCase() ?? "";
+  if (!trimmed.includes("@") || trimmed.length > 320) return null;
+  return trimmed;
+}
 
 export async function persistGoogleCalendarConnection(
   tutorProfileId: string,
@@ -53,6 +66,7 @@ export async function persistGoogleCalendarConnection(
     if (!nextRefreshToken) {
       throw new Error(GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING);
     }
+    const googleAccountEmail = normalizedGoogleAccountEmail(tokens.email);
     const insertValues = {
       tutorProfileId,
       provider: "google",
@@ -62,6 +76,9 @@ export async function persistGoogleCalendarConnection(
       encryptedRefreshToken: nextRefreshToken,
       accessTokenExpiresAt,
       connectedAt,
+      googleAccountEmail,
+      lastError: null,
+      lastErrorAt: null,
       updatedAt: connectedAt,
     };
     const updateValues = {
@@ -71,7 +88,10 @@ export async function persistGoogleCalendarConnection(
       encryptedRefreshToken: nextRefreshToken,
       accessTokenExpiresAt,
       connectedAt,
+      lastError: null,
+      lastErrorAt: null,
       updatedAt: connectedAt,
+      ...(googleAccountEmail ? { googleAccountEmail } : {}),
     };
     const [connection] = await tx
       .insert(calendarConnectionsTable)
@@ -138,6 +158,11 @@ export async function adoptGoogleCalendarConnection(
       encryptedRefreshToken: from.encryptedRefreshToken,
       accessTokenExpiresAt: from.accessTokenExpiresAt,
       connectedAt: from.connectedAt ?? adoptedAt,
+      googleAccountEmail: from.googleAccountEmail,
+      lastTokenRefreshAt: from.lastTokenRefreshAt,
+      lastFreeBusyAt: from.lastFreeBusyAt,
+      lastError: from.lastError,
+      lastErrorAt: from.lastErrorAt,
       updatedAt: adoptedAt,
     };
 
@@ -162,6 +187,12 @@ export async function adoptGoogleCalendarConnection(
           encryptedAccessToken: null,
           encryptedRefreshToken: null,
           accessTokenExpiresAt: null,
+          connectedAt: null,
+          googleAccountEmail: null,
+          lastTokenRefreshAt: null,
+          lastFreeBusyAt: null,
+          lastError: null,
+          lastErrorAt: null,
           updatedAt: adoptedAt,
         })
         .where(eq(calendarConnectionsTable.id, from.id));
@@ -193,6 +224,9 @@ export async function saveRefreshedGoogleAccessToken(
         ? { encryptedRefreshToken: encryptCalendarToken(rotatedRefreshToken) }
         : {}),
       accessTokenExpiresAt: googleAccessTokenExpiresAt(expiresIn, refreshedAt),
+      lastTokenRefreshAt: refreshedAt,
+      lastError: null,
+      lastErrorAt: null,
       updatedAt: refreshedAt,
     })
     .where(eq(calendarConnectionsTable.id, connectionId))
@@ -266,7 +300,12 @@ export async function markGoogleCalendarDisconnected(
     }
     await tx
       .update(calendarConnectionsTable)
-      .set({ status: "disconnected", updatedAt: disconnectedAt })
+      .set({
+        status: "disconnected",
+        lastError: CALENDAR_DISCONNECTED_ERROR,
+        lastErrorAt: disconnectedAt,
+        updatedAt: disconnectedAt,
+      })
       .where(
         connectionId
           ? eq(calendarConnectionsTable.id, connectionId)
@@ -296,6 +335,8 @@ export async function revokeGoogleCalendarGrant(
         encryptedAccessToken: null,
         encryptedRefreshToken: null,
         accessTokenExpiresAt: null,
+        lastError: CALENDAR_GRANT_REVOKED_ERROR,
+        lastErrorAt: revokedAt,
         updatedAt: revokedAt,
       })
       .where(
@@ -387,6 +428,8 @@ export async function disconnectGoogleCalendarConnection(
         encryptedAccessToken: null,
         encryptedRefreshToken: null,
         accessTokenExpiresAt: null,
+        lastError: CALENDAR_TUTOR_DISCONNECTED_ERROR,
+        lastErrorAt: disconnectedAt,
         updatedAt: disconnectedAt,
       })
       .where(

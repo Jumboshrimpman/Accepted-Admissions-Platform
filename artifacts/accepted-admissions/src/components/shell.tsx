@@ -17,6 +17,7 @@ import {
   BookOpen,
   FileText,
   LayoutDashboard,
+  Link2,
   LogOut,
   Menu,
   Settings,
@@ -61,6 +62,7 @@ type PortalNavLink = {
     href: string;
     count: number;
     label: string;
+    testId?: string;
   };
 };
 
@@ -155,6 +157,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       case "administrator": {
         const openSubmissions = unresolvedFormSubmissions(adminOverview?.guidanceRequests);
         const submissionHref = unresolvedFormSubmissionHref(openSubmissions);
+        const reconnectAlerts = adminOverview?.calendarReconnectAlerts ?? [];
         return [
           {
             href: "/admin",
@@ -167,6 +170,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   label: unresolvedFormSubmissionLabel(openSubmissions.length),
                 }
               : undefined,
+          },
+          {
+            href: "/admin/connections",
+            label: "Connections",
+            icon: Link2,
+            badge:
+              reconnectAlerts.length > 0
+                ? {
+                    href: "/admin/connections",
+                    count: reconnectAlerts.length,
+                    label:
+                      reconnectAlerts.length === 1
+                        ? "1 tutor needs to reconnect Google Calendar"
+                        : `${reconnectAlerts.length} tutors need to reconnect Google Calendar`,
+                    testId: "nav-calendar-reconnect",
+                  }
+                : undefined,
           },
           { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
           { href: "/admin/content", label: "Content", icon: FileText },
@@ -263,7 +283,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   {link.badge ? (
                     <Link
                       href={link.badge.href}
-                      data-testid="nav-unresolved-form-submissions"
+                      data-testid={link.badge.testId ?? "nav-unresolved-form-submissions"}
                       aria-label={link.badge.label}
                       className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold tabular-nums text-amber-950"
                     >
@@ -379,7 +399,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   {link.badge ? (
                     <Link
                       href={link.badge.href}
-                      data-testid="nav-unresolved-form-submissions-mobile"
+                      data-testid={
+                        link.badge.testId
+                          ? `${link.badge.testId}-mobile`
+                          : "nav-unresolved-form-submissions-mobile"
+                      }
                       aria-label={link.badge.label}
                       className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold tabular-nums text-amber-950"
                     >

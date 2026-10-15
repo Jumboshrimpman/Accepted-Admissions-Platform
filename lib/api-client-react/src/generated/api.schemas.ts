@@ -882,6 +882,11 @@ export interface AdminOverview {
     start: string;
     end: string;
   }[];
+  /** Tutors who still have upcoming bookable time and need Google Calendar reconnected. */
+  calendarReconnectAlerts?: {
+    tutorProfileId: string;
+    name: string;
+  }[];
 }
 
 export type AdminNotificationUpdateStatus = typeof AdminNotificationUpdateStatus[keyof typeof AdminNotificationUpdateStatus];
