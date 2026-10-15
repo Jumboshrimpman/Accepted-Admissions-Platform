@@ -1,4 +1,11 @@
-export type CalendarHealthBadge = "healthy" | "needs_reconnect" | "not_connected";
+export type CalendarHealthBadge =
+  | "healthy"
+  | "needs_attention"
+  | "needs_reconnect"
+  | "not_connected";
+
+export const UNKNOWN_GOOGLE_ACCOUNT_LABEL = "Unknown (reconnect to record)";
+export const CALENDAR_CONNECTION_TEST_COOLDOWN_MS = 45_000;
 
 export type CalendarConnectionHealth = {
   tutorProfileId: string;
@@ -88,12 +95,60 @@ export function calendarHealthBadge(input: {
   connectedAt?: Date | string | null;
   lastError?: string | null;
 }): CalendarHealthBadge {
-  if (input.hasRefreshToken) return "healthy";
+  const error = input.lastError?.trim() ?? "";
+  if (input.hasRefreshToken) return error ? "needs_attention" : "healthy";
   const previouslyConnected = Boolean(input.connectedAt);
-  const error = input.lastError ?? "";
   const reconnectError = /reconnect|revoked|invalid_grant|disconnected/i.test(error);
   if (previouslyConnected || reconnectError) return "needs_reconnect";
   return "not_connected";
+}
+
+export function calendarConnectionTestAdmission(input: {
+  tutorProfileId: string;
+  now: number;
+  lastStartedAt?: number;
+  inFlight: boolean;
+  cooldownMs?: number;
+}): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
+  const cooldownMs = input.cooldownMs ?? CALENDAR_CONNECTION_TEST_COOLDOWN_MS;
+  if (!input.tutorProfileId.trim()) {
+    return { allowed: false, retryAfterSeconds: Math.ceil(cooldownMs / 1000) };
+  }
+  if (input.inFlight) {
+    return { allowed: false, retryAfterSeconds: Math.ceil(cooldownMs / 1000) };
+  }
+  if (input.lastStartedAt != null && input.now - input.lastStartedAt < cooldownMs) {
+    const remainingMs = cooldownMs - (input.now - input.lastStartedAt);
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
+  }
+  return { allowed: true };
+}
+
+export function preserveRevokedCalendarTestReason(
+  existing: string | null | undefined,
+  next: string | null,
+): string | null {
+  const current = existing?.trim() ?? "";
+  if (current && /revoked|invalid_grant/i.test(current)) return current;
+  return next;
+}
+
+function googleAccountRecorded(input: {
+  hasRefreshToken: boolean;
+  connectionStatus?: string | null;
+  calendarId?: string | null;
+  connectedAt?: Date | string | null;
+  lastTokenRefreshAt?: Date | string | null;
+  lastFreeBusyAt?: Date | string | null;
+}): boolean {
+  return (
+    input.hasRefreshToken ||
+    input.connectionStatus === "connected" ||
+    Boolean(input.calendarId?.trim()) ||
+    Boolean(input.connectedAt) ||
+    Boolean(input.lastTokenRefreshAt) ||
+    Boolean(input.lastFreeBusyAt)
+  );
 }
 
 export function buildCalendarConnectionHealth(input: {
@@ -120,7 +175,9 @@ export function buildCalendarConnectionHealth(input: {
     portalEmail: input.portalEmail,
     connectionStatus: input.hasRefreshToken ? "connected" : "disconnected",
     badge: calendarHealthBadge(input),
-    googleAccountMasked: maskSensitiveCalendarValue(input.googleAccountEmail),
+    googleAccountMasked:
+      maskSensitiveCalendarValue(input.googleAccountEmail) ??
+      (googleAccountRecorded(input) ? UNKNOWN_GOOGLE_ACCOUNT_LABEL : null),
     calendarIdMasked: maskSensitiveCalendarValue(input.calendarId),
     hasRefreshToken: input.hasRefreshToken,
     lastTokenRefreshAt: iso(input.lastTokenRefreshAt),

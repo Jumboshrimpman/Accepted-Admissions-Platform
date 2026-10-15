@@ -225,6 +225,8 @@ export async function saveRefreshedGoogleAccessToken(
         : {}),
       accessTokenExpiresAt: googleAccessTokenExpiresAt(expiresIn, refreshedAt),
       lastTokenRefreshAt: refreshedAt,
+      lastError: null,
+      lastErrorAt: null,
       updatedAt: refreshedAt,
     })
     .where(eq(calendarConnectionsTable.id, connectionId))

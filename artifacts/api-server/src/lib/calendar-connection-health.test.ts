@@ -5,12 +5,15 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   buildCalendarConnectionHealth,
+  calendarConnectionTestAdmission,
   calendarHealthBadge,
   calendarReconnectAlerts,
   compareTutorConnectionOrder,
   hasUpcomingBookableTime,
   maskSensitiveCalendarValue,
+  preserveRevokedCalendarTestReason,
   safeCalendarErrorMessage,
+  UNKNOWN_GOOGLE_ACCOUNT_LABEL,
 } from "./calendar-connection-health.ts";
 
 const weekdayHours = { "1": [{ start: "07:00", end: "21:00" }] };
@@ -36,6 +39,70 @@ test("badges distinguish a live grant, a lost grant, and no connection", () => {
   assert.equal(
     calendarHealthBadge({ hasRefreshToken: false, connectedAt: null, lastError: null }),
     "not_connected",
+  );
+  assert.equal(
+    calendarHealthBadge({
+      hasRefreshToken: true,
+      lastError: "The free/busy check failed.",
+    }),
+    "needs_attention",
+  );
+  assert.equal(
+    calendarHealthBadge({ hasRefreshToken: true, lastError: "   " }),
+    "healthy",
+  );
+});
+
+test("a failed test keeps a revoked message and spaces calls 45 seconds apart", () => {
+  const revoked = "Google revoked the calendar grant. Reconnect is required.";
+  assert.equal(preserveRevokedCalendarTestReason(revoked, "not_connected"), revoked);
+  assert.equal(preserveRevokedCalendarTestReason(revoked, "calendar_check_failed"), revoked);
+  assert.equal(
+    preserveRevokedCalendarTestReason("invalid_grant", "CALENDAR_DISCONNECTED"),
+    "invalid_grant",
+  );
+  assert.equal(preserveRevokedCalendarTestReason(null, "not_connected"), "not_connected");
+  assert.equal(
+    preserveRevokedCalendarTestReason("The free/busy check failed.", "CALENDAR_UNAVAILABLE"),
+    "CALENDAR_UNAVAILABLE",
+  );
+
+  const now = 1_000_000;
+  const tutorProfileId = "11111111-1111-4111-8111-111111111111";
+  assert.deepEqual(
+    calendarConnectionTestAdmission({ tutorProfileId, now, inFlight: false }),
+    { allowed: true },
+  );
+  assert.deepEqual(
+    calendarConnectionTestAdmission({
+      tutorProfileId,
+      now,
+      lastStartedAt: now - 10_000,
+      inFlight: false,
+    }),
+    { allowed: false, retryAfterSeconds: 35 },
+  );
+  assert.deepEqual(
+    calendarConnectionTestAdmission({
+      tutorProfileId,
+      now: now + 45_000,
+      lastStartedAt: now,
+      inFlight: false,
+    }),
+    { allowed: true },
+  );
+  assert.deepEqual(
+    calendarConnectionTestAdmission({ tutorProfileId, now, inFlight: true }),
+    { allowed: false, retryAfterSeconds: 45 },
+  );
+  assert.deepEqual(
+    calendarConnectionTestAdmission({
+      tutorProfileId: "22222222-2222-4222-8222-222222222222",
+      now,
+      lastStartedAt: now,
+      inFlight: false,
+    }),
+    { allowed: false, retryAfterSeconds: 45 },
   );
 });
 
@@ -82,6 +149,33 @@ test("Eunice uses the same health rules as Xavier and only alerts when she still
   assert.equal(eunice.hasUpcomingBookableTime, true);
   assert.equal(xavier.badge, "healthy");
   assert.equal(xavier.connectionStatus, "connected");
+  const recentFailure = buildCalendarConnectionHealth({
+    tutorProfileId: "nika-profile",
+    name: "Nika Raiffe",
+    portalEmail: "nika.raiffe@gmail.com",
+    active: true,
+    bookingEligible: true,
+    weeklyHours: weekdayHours,
+    hasRefreshToken: true,
+    calendarId: "primary",
+    connectedAt: "2026-09-01T00:00:00.000Z",
+    lastError: "The free/busy check failed.",
+    lastErrorAt: "2026-10-15T00:00:00.000Z",
+  });
+  assert.equal(recentFailure.badge, "needs_attention");
+  assert.equal(recentFailure.lastError, "The free/busy check failed.");
+  assert.equal(recentFailure.googleAccountMasked, UNKNOWN_GOOGLE_ACCOUNT_LABEL);
+  assert.equal(calendarReconnectAlerts([recentFailure]).length, 0);
+  const neverConnected = buildCalendarConnectionHealth({
+    tutorProfileId: "new-profile",
+    name: "Aurelia Finch",
+    portalEmail: "aurelia@example.com",
+    hasRefreshToken: false,
+    connectionStatus: "disconnected",
+    lastError: "The free/busy check failed.",
+  });
+  assert.equal(neverConnected.badge, "not_connected");
+  assert.equal(neverConnected.googleAccountMasked, null);
   assert.deepEqual(
     calendarReconnectAlerts([eunice, xavier]).map((row) => row.name),
     ["Eunice Chon"],
@@ -157,10 +251,40 @@ test("admin connections stay read-only and Eunice is not on a separate calendar 
     "utf8",
   );
   const adminConnections = platform.slice(platform.indexOf('"/admin/calendar-connections"'));
+  const testRoute = platform.slice(
+    platform.indexOf('"/admin/calendar-connections/:tutorProfileId/test"'),
+  );
+  const googleCall = testRoute.indexOf("listGoogleBusyWindows");
+  const beforeGoogle = testRoute.slice(0, googleCall);
+  const slotsStart = platform.indexOf("async function slotsForTutor");
+  const slotsSlice = platform.slice(
+    slotsStart,
+    platform.indexOf("async function studentCollegeConsultingCourse"),
+  );
+  const refreshStart = persistence.indexOf("export async function saveRefreshedGoogleAccessToken");
+  const refreshSlice = persistence.slice(
+    refreshStart,
+    persistence.indexOf("export async function markGoogleCalendarConnected"),
+  );
   assert.match(platform, /\/admin\/calendar-connections"/);
   assert.match(platform, /\/admin\/calendar-connections\/:tutorProfileId\/test"/);
   assert.match(adminConnections, /listGoogleBusyWindows/);
   assert.equal(/createGoogleEvent|resend|sendEmail|sendInvite/.test(adminConnections), false);
+  assert.ok(beforeGoogle.indexOf("status(429)") !== -1);
+  assert.match(beforeGoogle, /retryAfterSeconds/);
+  assert.ok(
+    beforeGoogle.indexOf("status(429)") <
+      beforeGoogle.indexOf("calendarConnectionTestStartedAt.set"),
+  );
+  assert.ok(
+    beforeGoogle.indexOf("calendarConnectionTestStartedAt.set") <
+      beforeGoogle.indexOf("calendarConnectionTestInFlight.add"),
+  );
+  assert.match(beforeGoogle, /calendarConnectionTestInFlight\.add/);
+  assert.match(testRoute, /preserveRevokedCalendarTestReason/);
+  assert.match(slotsSlice, /recordCalendarFreeBusyCheck\(\{\s*tutorProfileId,\s*ok: true/);
+  assert.match(refreshSlice, /lastError: null/);
+  assert.match(refreshSlice, /lastErrorAt: null/);
   assert.match(persistence, /reconnectStoredGoogleCalendarGrants/);
   assert.equal(persistence.includes("Eunice"), false);
   assert.equal(persistence.includes("Xavier"), false);

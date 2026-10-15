@@ -63,6 +63,10 @@ import {
   saveRefreshedGoogleAccessToken,
 } from "../lib/calendar-persistence";
 import {
+  calendarConnectionTestAdmission,
+  preserveRevokedCalendarTestReason,
+} from "../lib/calendar-connection-health";
+import {
   listCalendarReconnectAlerts,
   listPublicCalendarConnectionHealth,
   publicCalendarConnectionHealth,
@@ -4738,16 +4742,28 @@ async function slotsForTutor(
     return { tutor, rule, access: null, slots: [] as string[] };
   }
   let busyWindows: BusyWindow[];
+  const checkedAt = new Date();
   try {
     busyWindows = await runTutorCalendarCall(access, (token) =>
       listGoogleBusyWindows(token, access.connection.calendarId!, from, to),
     );
   } catch (error) {
+    await recordCalendarFreeBusyCheck({
+      tutorProfileId,
+      ok: false,
+      reason: error instanceof BookingError ? error.code : "calendar_check_failed",
+      checkedAt,
+    });
     if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") {
       return { tutor, rule, access: null, slots: [] as string[] };
     }
     throw error;
   }
+  await recordCalendarFreeBusyCheck({
+    tutorProfileId,
+    ok: true,
+    checkedAt,
+  });
   const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({
@@ -8158,6 +8174,8 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
 const CALENDAR_CONNECTION_TEST_WINDOW_MS = 15 * 60 * 1000;
 const TUTOR_PROFILE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const calendarConnectionTestStartedAt = new Map<string, number>();
+const calendarConnectionTestInFlight = new Set<string>();
 
 router.get(
   "/admin/calendar-connections",
@@ -8182,40 +8200,62 @@ router.post(
       res.status(404).json({ error: "Tutor profile not found" });
       return;
     }
-    const checkedAt = new Date();
-    const windowEnd = new Date(checkedAt.getTime() + CALENDAR_CONNECTION_TEST_WINDOW_MS);
-    let ok = false;
-    let reason: string | null = "not_connected";
-    try {
-      const access = await calendarAccess(tutorProfileId);
-      if (!access) {
-        reason =
-          existing.badge === "needs_reconnect"
-            ? (existing.lastError ?? "freebusy_auth_without_refresh_token")
-            : "not_connected";
-      } else {
-        await runTutorCalendarCall(access, (token) =>
-          listGoogleBusyWindows(
-            token,
-            access.connection.calendarId ?? "primary",
-            checkedAt,
-            windowEnd,
-          ),
-        );
-        ok = true;
-        reason = null;
-      }
-    } catch (error) {
-      ok = false;
-      reason = error instanceof BookingError ? error.code : "calendar_check_failed";
-    }
-    await recordCalendarFreeBusyCheck({ tutorProfileId, ok, reason, checkedAt });
-    const connection = await publicCalendarConnectionHealth(tutorProfileId);
-    if (!connection) {
-      res.status(404).json({ error: "Tutor profile not found" });
+    const now = Date.now();
+    const admission = calendarConnectionTestAdmission({
+      tutorProfileId,
+      now,
+      lastStartedAt: calendarConnectionTestStartedAt.get(tutorProfileId),
+      inFlight: calendarConnectionTestInFlight.has(tutorProfileId),
+    });
+    if (!admission.allowed) {
+      res.status(429).json({ retryAfterSeconds: admission.retryAfterSeconds });
       return;
     }
-    res.json({ connection });
+    calendarConnectionTestStartedAt.set(tutorProfileId, now);
+    calendarConnectionTestInFlight.add(tutorProfileId);
+    const checkedAt = new Date(now);
+    const windowEnd = new Date(checkedAt.getTime() + CALENDAR_CONNECTION_TEST_WINDOW_MS);
+    try {
+      let ok = false;
+      let reason: string | null = "not_connected";
+      try {
+        const access = await calendarAccess(tutorProfileId);
+        if (!access) {
+          reason =
+            existing.badge === "needs_reconnect"
+              ? (existing.lastError ?? "freebusy_auth_without_refresh_token")
+              : "not_connected";
+        } else {
+          await runTutorCalendarCall(access, (token) =>
+            listGoogleBusyWindows(
+              token,
+              access.connection.calendarId ?? "primary",
+              checkedAt,
+              windowEnd,
+            ),
+          );
+          ok = true;
+          reason = null;
+        }
+      } catch (error) {
+        ok = false;
+        reason = error instanceof BookingError ? error.code : "calendar_check_failed";
+      }
+      if (!ok) {
+        const latest = await publicCalendarConnectionHealth(tutorProfileId);
+        reason = preserveRevokedCalendarTestReason(latest?.lastError, reason);
+        reason = preserveRevokedCalendarTestReason(existing.lastError, reason);
+      }
+      await recordCalendarFreeBusyCheck({ tutorProfileId, ok, reason, checkedAt });
+      const connection = await publicCalendarConnectionHealth(tutorProfileId);
+      if (!connection) {
+        res.status(404).json({ error: "Tutor profile not found" });
+        return;
+      }
+      res.json({ connection });
+    } finally {
+      calendarConnectionTestInFlight.delete(tutorProfileId);
+    }
   },
 );
 

@@ -9,7 +9,7 @@ export type CalendarConnectionHealthRow = {
   name: string;
   portalEmail: string;
   connectionStatus: "connected" | "disconnected";
-  badge: "healthy" | "needs_reconnect" | "not_connected";
+  badge: "healthy" | "needs_attention" | "needs_reconnect" | "not_connected";
   googleAccountMasked: string | null;
   calendarIdMasked: string | null;
   hasRefreshToken: boolean;
@@ -23,6 +23,7 @@ export type CalendarConnectionHealthRow = {
 
 const BADGE_LABEL = {
   healthy: "Healthy",
+  needs_attention: "Needs attention",
   needs_reconnect: "Needs reconnect",
   not_connected: "Not connected",
 } as const;
@@ -36,6 +37,7 @@ function formatWhen(value: string | null): string {
 
 function badgeClass(badge: CalendarConnectionHealthRow["badge"]): string {
   if (badge === "healthy") return "border-transparent bg-emerald-600 text-white hover:bg-emerald-600";
+  if (badge === "needs_attention") return "border-transparent bg-amber-600 text-white hover:bg-amber-600";
   if (badge === "needs_reconnect") return "border-transparent bg-amber-500 text-amber-950 hover:bg-amber-500";
   return "border-transparent bg-muted text-muted-foreground hover:bg-muted";
 }

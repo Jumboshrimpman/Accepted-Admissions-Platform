@@ -92,4 +92,65 @@ describe("Admin connections", () => {
     const testCall = customFetch.mock.calls.find((call) => String(call[0]).endsWith("/test"));
     expect(testCall?.[1]?.body).toBeUndefined();
   });
+
+  test("shows Needs attention with the error and does not replace a revoked message", async () => {
+    const nika: CalendarConnectionHealthRow = {
+      tutorProfileId: "nika-profile",
+      name: "Nika Raiffe",
+      portalEmail: "nika.raiffe@gmail.com",
+      connectionStatus: "connected",
+      badge: "needs_attention",
+      googleAccountMasked: "Unknown (reconnect to record)",
+      calendarIdMasked: "primary",
+      hasRefreshToken: true,
+      lastTokenRefreshAt: "2026-10-14T12:00:00.000Z",
+      lastFreeBusyAt: null,
+      lastError: "The free/busy check failed.",
+      lastErrorAt: "2026-10-15T12:00:00.000Z",
+      bookable: true,
+      hasUpcomingBookableTime: true,
+    };
+    const neverConnected: CalendarConnectionHealthRow = {
+      tutorProfileId: "new-profile",
+      name: "Aurelia Finch",
+      portalEmail: "aurelia@example.com",
+      connectionStatus: "disconnected",
+      badge: "not_connected",
+      googleAccountMasked: null,
+      calendarIdMasked: null,
+      hasRefreshToken: false,
+      lastTokenRefreshAt: null,
+      lastFreeBusyAt: null,
+      lastError: null,
+      lastErrorAt: null,
+      bookable: false,
+      hasUpcomingBookableTime: false,
+    };
+    customFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/test")) return { connection: eunice };
+      return { connections: [nika, neverConnected, eunice] };
+    });
+
+    render(<AdminConnections />);
+
+    expect(await screen.findByText("Nika Raiffe")).toBeTruthy();
+    expect(screen.getByTestId("badge-calendar-connection-nika-profile").textContent).toBe(
+      "Needs attention",
+    );
+    expect(screen.getByText("The free/busy check failed.")).toBeTruthy();
+    expect(screen.getByText("Unknown (reconnect to record)")).toBeTruthy();
+    expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId("test-calendar-connection-eunice-profile"));
+    await waitFor(() => {
+      expect(customFetch).toHaveBeenCalledWith(
+        "/api/admin/calendar-connections/eunice-profile/test",
+        { method: "POST" },
+      );
+    });
+    expect(screen.getByTestId("badge-calendar-connection-eunice-profile").textContent).toBe(
+      "Needs reconnect",
+    );
+    expect(screen.getByText("Google revoked the calendar grant. Reconnect is required.")).toBeTruthy();
+  });
 });
