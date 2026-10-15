@@ -596,6 +596,44 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
   assert.match(tutors[2]?.biography ?? "", /Jane Street Capital/);
   assert.equal(tutors.some((tutor) => tutor.name === "Eunice Chon"), false);
 
+  const byEligibility = consultingPreviewTutors({
+    profiles: [
+      {
+        id: "nika-ineligible",
+        email: "nika.raiffe@gmail.com",
+        name: "Nika Raiffe",
+        active: true,
+        bookingEligible: false,
+        calendarStatus: "connected",
+      },
+      {
+        id: "xavier-bookable",
+        email: "xaver.rmz6@gmail.com",
+        name: "Xavier Morales",
+        active: true,
+        bookingEligible: true,
+        calendarStatus: "connected",
+      },
+    ],
+  });
+  assert.equal(byEligibility[0]?.calendarConnected, false);
+  assert.equal(byEligibility[2]?.calendarConnected, true);
+  const fromPortalCredits = consultingPreviewTutors({
+    profiles: [
+      {
+        id: "nika-ineligible",
+        email: "nika.raiffe@gmail.com",
+        name: "Nika Raiffe",
+        active: true,
+        bookingEligible: false,
+        calendarStatus: "connected",
+      },
+    ],
+    calendars: { nika: false, victoria: true },
+  });
+  assert.equal(fromPortalCredits[0]?.calendarConnected, false);
+  assert.equal(fromPortalCredits[1]?.calendarConnected, true);
+
   const synthetic = syntheticNeelPreviewUser();
   assert.equal(synthetic.id, NEEL_DHARNI_USER_ID);
   assert.equal(synthetic.displayName, NEEL_DISPLAY_NAME);
@@ -611,6 +649,7 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
   assert.ok(start > 0);
   assert.equal(slice.includes("slotsForTutor"), false);
   assert.match(slice, /consultingPreviewTutors/);
+  assert.match(slice, /calendars\[tutorKey\] = tutor\.calendarConnected === true/);
   assert.match(platform, /if \(!occupant\) client = syntheticNeelPreviewUser\(\)/);
   assert.match(platform, /Do not insert a user, grant, or email/);
   assert.equal(/createGoogleEvent|resend|sendEmail|sendInvite/.test(slice), false);

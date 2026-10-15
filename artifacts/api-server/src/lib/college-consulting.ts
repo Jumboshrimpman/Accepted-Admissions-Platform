@@ -468,9 +468,11 @@ export function consultingPreviewTutors(input: {
     biography?: string | null;
     photoUrl?: string | null;
     active?: boolean | null;
+    bookingEligible?: boolean | null;
     calendarStatus?: string | null;
   }>;
   prepaidHours?: Partial<Record<CollegeConsultingTutorKey, number>>;
+  calendars?: Partial<Record<CollegeConsultingTutorKey, boolean>>;
 }): ConsultingPreviewTutor[] {
   return CONSULTING_PREVIEW_ORDER.map((tutorKey) => {
     const fallback = CONSULTING_PREVIEW_FALLBACKS[tutorKey];
@@ -478,6 +480,8 @@ export function consultingPreviewTutors(input: {
       (profile) => collegeConsultingTutorKeyForProfile(profile) === tutorKey,
     );
     const profile = matches.find((item) => item.active !== false) ?? matches[0];
+    const bookable = matches.filter((item) => item.bookingEligible === true);
+    const bookableCalendar = bookable.find((item) => item.calendarStatus === "connected") ?? bookable[0];
     const product = collegeConsultingProductForTutorKey(tutorKey);
     if (!product) {
       throw new Error(`Missing College Consulting product for ${tutorKey}`);
@@ -492,7 +496,9 @@ export function consultingPreviewTutors(input: {
       photoUrl: filledPreviewText(profile?.photoUrl, fallback.photoUrl),
       hourlyRateCents: product.hourlyRateCents,
       prepaidHours: input.prepaidHours?.[tutorKey] ?? 0,
-      calendarConnected: profile?.calendarStatus === "connected",
+      calendarConnected: input.calendars
+        ? input.calendars[tutorKey] === true
+        : bookableCalendar?.calendarStatus === "connected",
     };
   });
 }

@@ -10991,15 +10991,18 @@ router.get(
         sessions: previewSessions,
       };
       const prepaidHours: Partial<Record<"nika" | "victoria" | "xavier", number>> = {};
+      const calendars: Partial<Record<"nika" | "victoria" | "xavier", boolean>> = {};
       for (const tutor of dashboard.credits.collegeConsultingTutors ?? []) {
         const tutorKey = String(tutor.tutorKey);
         if (tutorKey === "nika" || tutorKey === "victoria" || tutorKey === "xavier") {
           prepaidHours[tutorKey] = Number(tutor.prepaidHours);
+          calendars[tutorKey] = tutor.calendarConnected === true;
         }
       }
       previewConsultingTutors = consultingPreviewTutors({
         profiles: tutorProfiles,
         prepaidHours,
+        calendars,
       });
     } else if (!previewTutor || !previewTutorShape) {
       previewBooking = {
