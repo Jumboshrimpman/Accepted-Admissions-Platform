@@ -1859,12 +1859,26 @@ export interface AdminClientPreviewBooking {
   sessions: BookingSession[];
 }
 
+export interface AdminClientPreviewConsultingTutor {
+  tutorKey: "nika" | "victoria" | "xavier";
+  id: string;
+  name: string;
+  title: string;
+  tagline: string;
+  biography: string;
+  photoUrl: string | null;
+  hourlyRateCents: number;
+  prepaidHours: number;
+  calendarConnected: boolean;
+}
+
 export type AdminClientDashboard = Dashboard & {
   adminPreview: true;
   previewOffer: AdminClientPreviewOffer;
   previewOffers: AdminClientPreviewOffer[];
   previewFinancials: FinancialSummary;
   previewBooking: AdminClientPreviewBooking;
+  previewConsultingTutors?: AdminClientPreviewConsultingTutor[];
 };
 
 export type CourseDetail = Course & ({

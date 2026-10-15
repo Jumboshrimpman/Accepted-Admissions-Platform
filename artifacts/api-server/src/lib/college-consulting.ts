@@ -4,6 +4,14 @@ import { SAT_HOURLY_RATE_CENTS, isAcceptedSatCatalogProduct } from "./sat-catalo
 import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { remainingCreditHoursForProduct } from "./credit-hours.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
+  APPROVED_PUBLIC_TEAM_PORTRAITS,
+  NIKA_BOOKING_TAGLINE,
+  NIKA_PUBLIC_BIOGRAPHY,
+  XAVIER_BOOKING_TAGLINE,
+  XAVIER_PUBLIC_BIOGRAPHY,
+} from "./public-team-roster.ts";
 
 /** Stable client id. Bookings stay on this id when the login email changes. */
 export const NEEL_DHARNI_USER_ID = "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19";
@@ -395,6 +403,116 @@ export function consultingTutorCredits(input: {
       calendarConnected: input.calendars[product.tutorKey] === true,
     };
   });
+}
+
+export type ConsultingPreviewTutor = {
+  tutorKey: CollegeConsultingTutorKey;
+  id: string;
+  name: string;
+  title: string;
+  tagline: string;
+  biography: string;
+  photoUrl: string | null;
+  hourlyRateCents: number;
+  prepaidHours: number;
+  calendarConnected: boolean;
+};
+
+const CONSULTING_PREVIEW_ORDER: CollegeConsultingTutorKey[] = ["nika", "victoria", "xavier"];
+
+const CONSULTING_PREVIEW_FALLBACKS: Record<
+  CollegeConsultingTutorKey,
+  { name: string; title: string; tagline: string; biography: string; photoUrl: string }
+> = {
+  nika: {
+    name: NIKA_CONSULTING_NAME,
+    title: "College Consulting Tutor",
+    tagline: NIKA_BOOKING_TAGLINE,
+    biography: NIKA_PUBLIC_BIOGRAPHY,
+    photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"],
+  },
+  victoria: {
+    name: VICTORIA_DISPLAY_NAME,
+    title: "College Consulting Tutor",
+    tagline: VICTORIA_BOOKING_TAGLINE,
+    biography: VICTORIA_BIOGRAPHY,
+    photoUrl: VICTORIA_PHOTO_URL,
+  },
+  xavier: {
+    name: "Xavier Morales",
+    title: "College Consulting Tutor",
+    tagline: XAVIER_BOOKING_TAGLINE,
+    biography: XAVIER_PUBLIC_BIOGRAPHY,
+    photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
+  },
+};
+
+function filledPreviewText(value: string | null | undefined, fallback: string): string {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || fallback;
+}
+
+/**
+ * Read-only College Consulting cards for Neel's admin preview.
+ * Missing or inactive profiles still appear, using the public tagline and bio.
+ * This does not read Google Calendar or create a user.
+ */
+export function consultingPreviewTutors(input: {
+  profiles: Array<{
+    id: string;
+    userId?: string | null;
+    email?: string | null;
+    name?: string | null;
+    title?: string | null;
+    tagline?: string | null;
+    biography?: string | null;
+    photoUrl?: string | null;
+    active?: boolean | null;
+    calendarStatus?: string | null;
+  }>;
+  prepaidHours?: Partial<Record<CollegeConsultingTutorKey, number>>;
+}): ConsultingPreviewTutor[] {
+  return CONSULTING_PREVIEW_ORDER.map((tutorKey) => {
+    const fallback = CONSULTING_PREVIEW_FALLBACKS[tutorKey];
+    const matches = input.profiles.filter(
+      (profile) => collegeConsultingTutorKeyForProfile(profile) === tutorKey,
+    );
+    const profile = matches.find((item) => item.active !== false) ?? matches[0];
+    const product = collegeConsultingProductForTutorKey(tutorKey);
+    if (!product) {
+      throw new Error(`Missing College Consulting product for ${tutorKey}`);
+    }
+    return {
+      tutorKey,
+      id: profile?.id ?? `preview-${tutorKey}`,
+      name: filledPreviewText(profile?.name, fallback.name),
+      title: filledPreviewText(profile?.title, fallback.title),
+      tagline: filledPreviewText(profile?.tagline, fallback.tagline),
+      biography: filledPreviewText(profile?.biography, fallback.biography),
+      photoUrl: filledPreviewText(profile?.photoUrl, fallback.photoUrl),
+      hourlyRateCents: product.hourlyRateCents,
+      prepaidHours: input.prepaidHours?.[tutorKey] ?? 0,
+      calendarConnected: profile?.calendarStatus === "connected",
+    };
+  });
+}
+
+/** In-memory student used only to render Neel's preview when no users row exists. */
+export function syntheticNeelPreviewUser(now: Date = new Date()) {
+  return {
+    id: NEEL_DHARNI_USER_ID,
+    clerkUserId: `pending:${NEEL_PLACEHOLDER_EMAIL}`,
+    email: NEEL_PLACEHOLDER_EMAIL,
+    displayName: NEEL_DISPLAY_NAME,
+    title: null,
+    avatarUrl: null,
+    stripeCustomerId: null,
+    role: "student" as const,
+    timezone: "America/New_York",
+    timezoneSource: "default",
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 /** SAT catalog acceptance must ignore consulting slugs and keep Xavier's SAT price. */

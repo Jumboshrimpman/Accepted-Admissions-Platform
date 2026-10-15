@@ -879,4 +879,134 @@ describe("administrator client preview", () => {
     expect(screen.queryByText(/Taito/i)).toBeNull();
     expectPaymentReceiptsLast();
   });
+
+  test("previews Neel's College Consulting portal without booking or checkout", () => {
+    mocks.preview = {
+      user: {
+        id: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+        displayName: "Neel Dharni",
+        email: "samakubba@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      courses: [],
+      upcomingSessions: [
+        {
+          id: "session-nika",
+          courseId: "course-consulting",
+          dateTime: "2026-11-02T15:00:00.000Z",
+          timezone: "America/New_York",
+          durationMinutes: 60,
+          subject: "College Consulting",
+          title: "Neel with Nika",
+          status: "published",
+          tutor: { id: "tutor-nika", name: "Nika Raiffe", specialty: "College Consulting" },
+        },
+      ],
+      curriculumSessions: [],
+      assignments: [],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: false,
+        selfServeCollegeConsulting: true,
+        twelveSessionPlan: false,
+      },
+      progress: {
+        totalSessions: 0,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "College Consulting hour with Nika Raiffe",
+        description: "One prepaid hour.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewOffers: [],
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: { calendarStatus: "unavailable", availability: null, sessions: [] },
+      previewConsultingTutors: [
+        {
+          tutorKey: "nika",
+          id: "preview-nika",
+          name: "Nika Raiffe",
+          title: "College Consulting Tutor",
+          tagline: "Columbia & Sciences Po dual degree, Political Science, Law & Psychology; Goldman Sachs BI",
+          biography: "Nika biography for the preview.",
+          photoUrl: "/media/team/nika-raiffe.png",
+          hourlyRateCents: 13000,
+          prepaidHours: 1,
+          calendarConnected: true,
+        },
+        {
+          tutorKey: "victoria",
+          id: "preview-victoria",
+          name: "Victoria Wijerathnayapa",
+          title: "College Consulting Tutor",
+          tagline: "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
+          biography: "Victoria biography for the preview.",
+          photoUrl: "/media/team/victoria.jpg",
+          hourlyRateCents: 13000,
+          prepaidHours: 0,
+          calendarConnected: false,
+        },
+        {
+          tutorKey: "xavier",
+          id: "preview-xavier",
+          name: "Xavier Morales",
+          title: "College Consulting Tutor",
+          tagline: "Harvard Math, Econ and CS '24, Rhodes Scholar Oxford MA Philosophy '26, Quant Finance",
+          biography: "Xavier biography for the preview.",
+          photoUrl: "/media/team/xavier-morales.jpg",
+          hourlyRateCents: 20000,
+          prepaidHours: 0,
+          calendarConnected: false,
+        },
+      ],
+    };
+
+    render(<AdminClientPreview />);
+
+    expect(screen.getByTestId("consulting-preview-dashboard").textContent).toContain("Welcome back, Neel.");
+    expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).toContain("Nika Raiffe");
+    expect(screen.getByTestId("consulting-preview-tutor-victoria").textContent).toContain("Victoria Wijerathnayapa");
+    expect(screen.getByTestId("consulting-preview-tutor-xavier").textContent).toContain("$200/hr");
+    expect(screen.getByTestId("consulting-preview-credit-nika").textContent).toContain("1");
+    expect(screen.getByTestId("consulting-preview-credit-victoria").textContent).toContain("No prepaid hours yet");
+    expect(screen.getByTestId("consulting-preview-session-session-nika").textContent).toContain("Neel with Nika");
+    expect(screen.queryByTestId("consulting-preview-bio-text-nika")).toBeNull();
+    fireEvent.click(screen.getByTestId("consulting-preview-bio-nika"));
+    expect(screen.getByTestId("consulting-preview-bio-text-nika").textContent).toContain("Nika biography");
+    fireEvent.click(screen.getByTestId("consulting-preview-bio-nika"));
+    expect(screen.queryByTestId("consulting-preview-bio-text-nika")).toBeNull();
+    expect(screen.queryByTestId("portal-curriculum-section")).toBeNull();
+    expect(screen.queryByTestId("client-quizzes")).toBeNull();
+    expect(screen.queryByText("Twelve-session roadmap")).toBeNull();
+    expect(screen.queryByText("Session roadmap")).toBeNull();
+    expect(screen.queryByTestId("portal-payment-receipts")).toBeNull();
+    expect(screen.queryByText(/Stripe/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase|Checkout|Buy /i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reserve|Book a/i })).toBeNull();
+    expect(screen.getByTestId("consulting-preview-readonly").textContent).toContain("Booking, checkout, and email stay off");
+  });
 });

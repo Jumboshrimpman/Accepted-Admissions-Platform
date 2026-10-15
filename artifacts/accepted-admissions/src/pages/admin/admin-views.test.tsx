@@ -564,8 +564,11 @@ describe("administrator overview", () => {
     expect(screen.getByLabelText("Provision role")).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Administrator" })).toBeNull();
     expect(screen.getByRole("button", { name: /Provision access/i })).toBeTruthy();
-    const previewLink = screen.getByRole("link", { name: /Preview client portal/i });
+    const previewLink = screen.getByTestId("link-preview-client-student-1");
     expect(previewLink.getAttribute("href")).toBe("/admin/clients/student-1/preview");
+    expect(screen.getByTestId("link-preview-client-6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19").getAttribute("href")).toBe(
+      "/admin/clients/6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19/preview",
+    );
     expect(screen.getByTestId("hint-michelle-provision").textContent).toMatch(/michaelmakarem@gmail.com/);
     expect(screen.getByLabelText("Timezone for Taito Goto")).toBeTruthy();
     expect((screen.getByTestId("client-timezone-student-1") as HTMLSelectElement).value).toBe(

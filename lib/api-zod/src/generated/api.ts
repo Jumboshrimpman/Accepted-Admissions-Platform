@@ -923,7 +923,19 @@ export const GetAdminClientDashboardResponse = zod.object({
   "cancellationReason": zod.string().nullish(),
   "creditRestored": zod.boolean().nullish()
 }))
-})
+}),
+  "previewConsultingTutors": zod.array(zod.object({
+  "tutorKey": zod.enum(['nika', 'victoria', 'xavier']),
+  "id": zod.string(),
+  "name": zod.string(),
+  "title": zod.string(),
+  "tagline": zod.string(),
+  "biography": zod.string(),
+  "photoUrl": zod.string().nullable(),
+  "hourlyRateCents": zod.number(),
+  "prepaidHours": zod.number(),
+  "calendarConnected": zod.boolean()
+})).optional()
 }))
 
 
