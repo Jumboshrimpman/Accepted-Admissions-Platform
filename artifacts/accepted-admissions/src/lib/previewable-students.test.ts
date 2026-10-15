@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { previewableStudents } from "./previewable-students.ts";
+import { NEEL_DHARNI_PREVIEW_CLIENT, previewableStudents } from "./previewable-students.ts";
 
 test("prefers curriculum clients and falls back to overview students", () => {
   assert.deepEqual(
@@ -8,7 +8,10 @@ test("prefers curriculum clients and falls back to overview students", () => {
       curriculumClients: [{ id: "c1", name: "Taito Goto", email: "taito@example.invalid" }],
       overviewUsers: [{ id: "u1", displayName: "Other", email: "other@example.invalid", role: "student" }],
     }),
-    [{ id: "c1", name: "Taito Goto", email: "taito@example.invalid" }],
+    [
+      { id: "c1", name: "Taito Goto", email: "taito@example.invalid" },
+      NEEL_DHARNI_PREVIEW_CLIENT,
+    ],
   );
   assert.deepEqual(
     previewableStudents({
@@ -18,6 +21,24 @@ test("prefers curriculum clients and falls back to overview students", () => {
         { id: "student-1", displayName: "Taito Goto", email: "taito@example.invalid", role: "student" },
       ],
     }),
-    [{ id: "student-1", name: "Taito Goto", email: "taito@example.invalid" }],
+    [
+      { id: "student-1", name: "Taito Goto", email: "taito@example.invalid" },
+      NEEL_DHARNI_PREVIEW_CLIENT,
+    ],
+  );
+  assert.deepEqual(previewableStudents({ curriculumClients: [], overviewUsers: [] }), [
+    NEEL_DHARNI_PREVIEW_CLIENT,
+  ]);
+  assert.equal(
+    previewableStudents({
+      curriculumClients: [
+        {
+          id: NEEL_DHARNI_PREVIEW_CLIENT.id,
+          name: "Neel Dharni",
+          email: "neel@example.invalid",
+        },
+      ],
+    }).length,
+    1,
   );
 });

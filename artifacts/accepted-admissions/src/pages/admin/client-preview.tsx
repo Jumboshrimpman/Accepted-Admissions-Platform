@@ -7,6 +7,7 @@ import { ArrowLeft, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConsultingClientPreview } from "@/pages/admin/consulting-client-preview";
 import { ClientDashboardView } from "@/pages/portal/fall-welcome-dashboard";
 
 export default function AdminClientPreview() {
@@ -54,7 +55,9 @@ export default function AdminClientPreview() {
           <div>
             <h1 className="font-semibold">Administrator client preview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              This frame uses {preview.data.user.displayName}&apos;s client-scoped data. Open quizzes and session materials to review them. Booking and meeting actions stay disabled. Tutor links are live; assign or remove them under People.
+              {preview.data.previewConsultingTutors
+                ? `This frame uses ${preview.data.user.displayName}'s College Consulting portal. Booking, checkout, and email stay off.`
+                : `This frame uses ${preview.data.user.displayName}'s client-scoped data. Open quizzes and session materials to review them. Booking and meeting actions stay disabled. Tutor links are live; assign or remove them under People.`}
             </p>
           </div>
         </div>
@@ -65,14 +68,18 @@ export default function AdminClientPreview() {
         </Button>
       </div>
       <div className="min-w-0 overflow-x-hidden rounded-3xl border-2 border-dashed border-primary/25 bg-muted/20 p-2 sm:p-4">
-        <ClientDashboardView
-          dashboard={preview.data}
-          adminPreview
-          previewFinancials={preview.data.previewFinancials}
-          previewOffer={preview.data.previewOffer}
-          previewOffers={preview.data.previewOffers}
-          previewBooking={preview.data.previewBooking}
-        />
+        {preview.data.previewConsultingTutors ? (
+          <ConsultingClientPreview dashboard={preview.data} />
+        ) : (
+          <ClientDashboardView
+            dashboard={preview.data}
+            adminPreview
+            previewFinancials={preview.data.previewFinancials}
+            previewOffer={preview.data.previewOffer}
+            previewOffers={preview.data.previewOffers}
+            previewBooking={preview.data.previewBooking}
+          />
+        )}
       </div>
     </div>
   );

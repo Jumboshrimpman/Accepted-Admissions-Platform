@@ -35,14 +35,17 @@ import {
   XAVIER_NEEL_HOURLY_RATE_CENTS,
   checkoutAudienceForSlug,
   clientMayBuyConsultingProduct,
+  consultingPreviewTutors,
   consultingSlugIsSatCatalogProduct,
   consultingTutorCredits,
   decidePlaceholderLink,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
+  NEEL_DISPLAY_NAME,
   NIKA_TEMPORARY_VIEW_EMAIL,
   nikaTemporaryViewDecision,
   nikaTemporaryViewEmail,
+  syntheticNeelPreviewUser,
   temporaryTutorViewAllowsMethod,
 } from "./college-consulting.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -557,4 +560,97 @@ test("revoked Nika and stopped Victoria get no College Consulting membership or 
     victoriaConsultingAssignmentUserId(true, "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63"),
     "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63",
   );
+});
+
+test("Neel admin preview lists Nika, Victoria, and Xavier without a live calendar", async () => {
+  const tutors = consultingPreviewTutors({
+    profiles: [
+      {
+        id: "victoria-profile",
+        userId: "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63",
+        email: "samakubba@icloud.com",
+        name: "Victoria Wijerathnayapa",
+        title: "College Consulting Tutor",
+        tagline: "",
+        biography: "",
+        photoUrl: "",
+        active: false,
+        calendarStatus: "disconnected",
+      },
+    ],
+    prepaidHours: { nika: 2 },
+  });
+  assert.deepEqual(
+    tutors.map((tutor) => tutor.tutorKey),
+    ["nika", "victoria", "xavier"],
+  );
+  assert.equal(tutors[0]?.id, "preview-nika");
+  assert.equal(tutors[0]?.prepaidHours, 2);
+  assert.equal(tutors[0]?.hourlyRateCents, 13_000);
+  assert.match(tutors[0]?.tagline ?? "", /Columbia/);
+  assert.equal(tutors[1]?.id, "victoria-profile");
+  assert.equal(tutors[1]?.tagline, VICTORIA_BOOKING_TAGLINE);
+  assert.equal(tutors[1]?.biography, VICTORIA_BIOGRAPHY);
+  assert.equal(tutors[1]?.calendarConnected, false);
+  assert.equal(tutors[2]?.hourlyRateCents, 20_000);
+  assert.match(tutors[2]?.biography ?? "", /Jane Street Capital/);
+  assert.equal(tutors.some((tutor) => tutor.name === "Eunice Chon"), false);
+
+  const byEligibility = consultingPreviewTutors({
+    profiles: [
+      {
+        id: "nika-ineligible",
+        email: "nika.raiffe@gmail.com",
+        name: "Nika Raiffe",
+        active: true,
+        bookingEligible: false,
+        calendarStatus: "connected",
+      },
+      {
+        id: "xavier-bookable",
+        email: "xaver.rmz6@gmail.com",
+        name: "Xavier Morales",
+        active: true,
+        bookingEligible: true,
+        calendarStatus: "connected",
+      },
+    ],
+  });
+  assert.equal(byEligibility[0]?.calendarConnected, false);
+  assert.equal(byEligibility[2]?.calendarConnected, true);
+  const fromPortalCredits = consultingPreviewTutors({
+    profiles: [
+      {
+        id: "nika-ineligible",
+        email: "nika.raiffe@gmail.com",
+        name: "Nika Raiffe",
+        active: true,
+        bookingEligible: false,
+        calendarStatus: "connected",
+      },
+    ],
+    calendars: { nika: false, victoria: true },
+  });
+  assert.equal(fromPortalCredits[0]?.calendarConnected, false);
+  assert.equal(fromPortalCredits[1]?.calendarConnected, true);
+
+  const synthetic = syntheticNeelPreviewUser();
+  assert.equal(synthetic.id, NEEL_DHARNI_USER_ID);
+  assert.equal(synthetic.displayName, NEEL_DISPLAY_NAME);
+  assert.equal(synthetic.role, "student");
+
+  const platform = await readFile(
+    fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
+    "utf8",
+  );
+  const start = platform.indexOf("Neel preview is read-only and does not call Google Calendar.");
+  const end = platform.indexOf("slotsForTutor", start);
+  const slice = platform.slice(start, end);
+  assert.ok(start > 0);
+  assert.equal(slice.includes("slotsForTutor"), false);
+  assert.match(slice, /consultingPreviewTutors/);
+  assert.match(slice, /calendars\[tutorKey\] = tutor\.calendarConnected === true/);
+  assert.match(platform, /if \(!occupant\) client = syntheticNeelPreviewUser\(\)/);
+  assert.match(platform, /Do not insert a user, grant, or email/);
+  assert.equal(/createGoogleEvent|resend|sendEmail|sendInvite/.test(slice), false);
 });

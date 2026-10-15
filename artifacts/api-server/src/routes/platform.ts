@@ -102,6 +102,7 @@ import {
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_SUBJECT,
+  consultingPreviewTutors,
   consultingTutorCredits,
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
@@ -110,6 +111,7 @@ import {
   NEEL_DHARNI_USER_ID,
   NIKA_CONSULTING_EMAIL,
   nikaTemporaryViewDecision,
+  syntheticNeelPreviewUser,
   temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
@@ -10989,10 +10991,19 @@ router.get(
       res.status(400).json({ error: "Invalid client ID" });
       return;
     }
-    const client = await clientForAdminPreview(
+    let client = await clientForAdminPreview(
       req.appUser!,
       params.data.clientId,
     );
+    if (!client && isNeelDharniUser(params.data.clientId)) {
+      const [occupant] = await db
+        .select({ role: usersTable.role })
+        .from(usersTable)
+        .where(eq(usersTable.id, params.data.clientId))
+        .limit(1);
+      // A missing Neel row is still previewable. Do not insert a user, grant, or email.
+      if (!occupant) client = syntheticNeelPreviewUser();
+    }
     if (!client) {
       res.status(404).json({ error: "Client not found" });
       return;
@@ -11014,6 +11025,9 @@ router.get(
             email: tutorProfilesTable.email,
             name: tutorProfilesTable.name,
             title: tutorProfilesTable.title,
+            tagline: tutorProfilesTable.tagline,
+            biography: tutorProfilesTable.biography,
+            photoUrl: tutorProfilesTable.photoUrl,
             subjects: tutorProfilesTable.subjects,
             active: tutorProfilesTable.active,
             calendarStatus: tutorProfilesTable.calendarStatus,
@@ -11098,7 +11112,31 @@ router.get(
           timezone: SAT_BOOKING_TIMEZONE,
         }
       : null;
-    if (!previewTutor || !previewTutorShape) {
+    let previewConsultingTutors:
+      | ReturnType<typeof consultingPreviewTutors>
+      | undefined;
+    // Neel preview is read-only and does not call Google Calendar.
+    if (isNeelDharniUser(client.id)) {
+      previewBooking = {
+        calendarStatus: "unavailable",
+        availability: null,
+        sessions: previewSessions,
+      };
+      const prepaidHours: Partial<Record<"nika" | "victoria" | "xavier", number>> = {};
+      const calendars: Partial<Record<"nika" | "victoria" | "xavier", boolean>> = {};
+      for (const tutor of dashboard.credits.collegeConsultingTutors ?? []) {
+        const tutorKey = String(tutor.tutorKey);
+        if (tutorKey === "nika" || tutorKey === "victoria" || tutorKey === "xavier") {
+          prepaidHours[tutorKey] = Number(tutor.prepaidHours);
+          calendars[tutorKey] = tutor.calendarConnected === true;
+        }
+      }
+      previewConsultingTutors = consultingPreviewTutors({
+        profiles: tutorProfiles,
+        prepaidHours,
+        calendars,
+      });
+    } else if (!previewTutor || !previewTutorShape) {
       previewBooking = {
         calendarStatus: "unavailable",
         availability: null,
@@ -11157,6 +11195,7 @@ router.get(
             : "connected_webhook_setup_required",
         },
         previewBooking,
+        ...(previewConsultingTutors ? { previewConsultingTutors } : {}),
         credits: {
           ...dashboard.credits,
           readOnly: true,

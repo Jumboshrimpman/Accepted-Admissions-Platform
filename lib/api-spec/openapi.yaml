@@ -3109,6 +3109,9 @@ components:
               items: { $ref: "#/components/schemas/AdminClientPreviewOffer" }
             previewFinancials: { $ref: "#/components/schemas/FinancialSummary" }
             previewBooking: { $ref: "#/components/schemas/AdminClientPreviewBooking" }
+            previewConsultingTutors:
+              type: array
+              items: { $ref: "#/components/schemas/AdminClientPreviewConsultingTutor" }
     AdminClientPreviewOffer:
       type: object
       required: [name, description, priceCents, durationMinutes]
@@ -3119,6 +3122,20 @@ components:
         priceCents: { type: number }
         durationHours: { type: number }
         durationMinutes: { type: number, enum: [60] }
+    AdminClientPreviewConsultingTutor:
+      type: object
+      required: [tutorKey, id, name, title, tagline, biography, hourlyRateCents, prepaidHours, calendarConnected]
+      properties:
+        tutorKey: { type: string, enum: [nika, victoria, xavier] }
+        id: { type: string }
+        name: { type: string }
+        title: { type: string }
+        tagline: { type: string }
+        biography: { type: string }
+        photoUrl: { type: ["string", "null"] }
+        hourlyRateCents: { type: number }
+        prepaidHours: { type: number }
+        calendarConnected: { type: boolean }
     AdminClientPreviewBooking:
       type: object
       required: [calendarStatus, availability, sessions]
