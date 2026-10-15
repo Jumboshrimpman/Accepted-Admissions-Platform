@@ -359,7 +359,7 @@ export function ClientDashboardView({
             <CardDescription>
               Purchased credits unlock after a verified Stripe payment. Booking uses one credit per session.
               {collegeConsulting
-                ? "Nika and Victoria are $130/hour. Xavier is $200/hour. Hours do not transfer between tutors."
+                ? "Nika and Victoria Wijerathnayapa are $130/hour. Xavier is $200/hour. Hours do not transfer between tutors."
                 : "Pay $130 for a single hour or $1,300 for a 10-hour package, then book Xavier or Eunice."}
             </CardDescription>
           </CardHeader>

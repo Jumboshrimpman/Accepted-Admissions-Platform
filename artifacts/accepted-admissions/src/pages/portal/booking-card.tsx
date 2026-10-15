@@ -506,7 +506,7 @@ export function BookingCard({
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
               {collegeConsulting
-                ? "Choose Nika Raiffe ($130/hr), Victoria ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
+                ? "Choose Nika Raiffe ($130/hr), Victoria Wijerathnayapa ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
                 : "Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>

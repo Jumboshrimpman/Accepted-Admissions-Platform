@@ -22,6 +22,9 @@ import {
   COLLEGE_CONSULTING_XAVIER_SLUG,
   NEEL_DHARNI_USER_ID,
   NIKA_HOURLY_RATE_CENTS,
+  VICTORIA_BIOGRAPHY,
+  VICTORIA_BOOKING_TAGLINE,
+  VICTORIA_DISPLAY_NAME,
   VICTORIA_HOURLY_RATE_CENTS,
   VICTORIA_INTENDED_EMAIL,
   VICTORIA_PLACEHOLDER_EMAIL,
@@ -211,9 +214,19 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.match(provision, /No Clerk invitation/);
   assert.equal(provision.includes(VICTORIA_INTENDED_EMAIL), false);
   assert.match(provision, /photoUrl: VICTORIA_PHOTO_URL/);
-  assert.match(provision, /tagline: null/);
+  assert.match(provision, /tagline: VICTORIA_BOOKING_TAGLINE/);
+  assert.match(provision, /biography: VICTORIA_BIOGRAPHY/);
   assert.match(provision, /NIKA_BOOKING_TAGLINE/);
   assert.match(provision, /XAVIER_BOOKING_TAGLINE/);
+  assert.equal(VICTORIA_DISPLAY_NAME, "Victoria Wijerathnayapa");
+  assert.equal(
+    VICTORIA_BOOKING_TAGLINE,
+    "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
+  );
+  assert.match(VICTORIA_BIOGRAPHY, /graduated from Harvard in 2025/);
+  assert.match(VICTORIA_BIOGRAPHY, /Japan-America Academic Center/);
+  assert.match(VICTORIA_BIOGRAPHY, /Todaydream/);
+  assert.equal(provision.includes(VICTORIA_BIOGRAPHY), false);
   const rates = await readFile(
     fileURLToPath(new URL("./college-consulting.ts", import.meta.url)),
     "utf8",

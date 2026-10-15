@@ -235,7 +235,7 @@ describe("client availability calendar", () => {
     });
   });
 
-  test("shows the booking tagline and hides the bio control when Victoria has no bio", () => {
+  test("shows Victoria's tagline and collapsed bio, and hides the control when a bio is empty", () => {
     mocks.tutorsQuery.data = [
       {
         id: "tutor-xavier",
@@ -253,17 +253,32 @@ describe("client availability calendar", () => {
       },
       {
         id: "tutor-victoria",
-        name: "Victoria",
+        name: "Victoria Wijerathnayapa",
         title: "College Consulting Tutor",
         photoUrl: "/media/team/victoria.jpg",
-        biography: "   ",
-        tagline: "",
+        biography:
+          "Victoria Wijerathnayapa graduated from Harvard in 2025 with a degree in Neuroscience and a focus on Education.",
+        tagline: "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
         subjects: ["College Consulting"],
         calendarStatus: "disconnected",
         providerStatus: "disconnected",
         serviceName: "College Consulting",
         hourlyRateCents: 13000,
         bookable: false,
+      },
+      {
+        id: "tutor-blank",
+        name: "Blank Tutor",
+        title: "Tutor",
+        photoUrl: null,
+        biography: "   ",
+        tagline: "",
+        subjects: ["College Consulting"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+        serviceName: "College Consulting",
+        hourlyRateCents: 13000,
+        bookable: true,
       },
     ];
 
@@ -274,9 +289,15 @@ describe("client availability calendar", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/2024 graduate of Harvard/)).toBeNull();
-    expect(screen.queryByTestId("booking-tutor-bio-tutor-victoria")).toBeNull();
+    expect(
+      screen.getByText("Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/graduated from Harvard in 2025/)).toBeNull();
+    fireEvent.click(screen.getByTestId("booking-tutor-bio-tutor-victoria"));
+    expect(screen.getByText(/graduated from Harvard in 2025/)).toBeTruthy();
     expect(screen.getByText(/Not bookable until Google Calendar is connected/)).toBeTruthy();
-    const photo = screen.getByRole("button", { name: /Victoria/i }).querySelector("img");
+    expect(screen.queryByTestId("booking-tutor-bio-tutor-blank")).toBeNull();
+    const photo = screen.getByRole("button", { name: /Victoria Wijerathnayapa/i }).querySelector("img");
     expect(photo?.getAttribute("src")).toBe("/media/team/victoria.jpg");
   });
 

@@ -33,7 +33,7 @@ Xavier payout tracking stays **out** (schema leftovers only; no tutor payout UI)
 In-portal book/pay for **College Consulting** only. No curriculum, quizzes, or pre-work. Sessions use the shared Meet room. Prices are per tutor and do not transfer:
 
 - Nika Raiffe — $130/hour (`college-consulting-nika-hour`)
-- Victoria — $130/hour (`college-consulting-victoria-hour`), hidden from booking until her Google Calendar is connected
+- Victoria Wijerathnayapa — $130/hour (`college-consulting-victoria-hour`), hidden from booking until her Google Calendar is connected
 - Xavier Morales — $200/hour for Neel only (`college-consulting-xavier-hour`)
 
 Michelle’s SAT catalog is unchanged. Startup does not send email or Clerk invites. Neel’s placeholder `samakubba@gmail.com` is linked only when that identity is not an administrator; otherwise admin overview shows the stop reason. Victoria’s temporary tutor login is `samakubba@icloud.com`. `victoriawije7@gmail.com` is the future email and is not provisioned.

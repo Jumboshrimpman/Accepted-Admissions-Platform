@@ -25,10 +25,13 @@ import {
   NEEL_PLACEHOLDER_EMAIL,
   NIKA_CONSULTING_EMAIL,
   NIKA_CONSULTING_NAME,
+  VICTORIA_BIOGRAPHY,
+  VICTORIA_BOOKING_TAGLINE,
   VICTORIA_DISPLAY_NAME,
   VICTORIA_INTENDED_EMAIL,
   VICTORIA_PHOTO_ALT_TEXT,
   VICTORIA_PHOTO_URL,
+  VICTORIA_PLACEHOLDER_DISPLAY_NAME,
   VICTORIA_PLACEHOLDER_EMAIL,
   VICTORIA_USER_ID,
   decidePlaceholderLink,
@@ -416,8 +419,12 @@ async function ensureAssignment(tutorUserId: string, studentUserId: string): Pro
     .onConflictDoNothing();
 }
 
+function blankProfileText(value: string | null | undefined): boolean {
+  return !value?.trim();
+}
+
 async function ensureVictoriaProfile(userId: string, email: string): Promise<void> {
-  const notes = `Temporary tutor login ${VICTORIA_PLACEHOLDER_EMAIL}. Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned and must not be contacted. Swap users.email, portal_access_grants.email, and tutor_profiles.email for ${VICTORIA_USER_ID} later. No Clerk invitation was sent.`;
+  const notes = `Temporary tutor login ${VICTORIA_PLACEHOLDER_EMAIL}. Display name ${VICTORIA_DISPLAY_NAME} (she/her). Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned and must not be contacted. Swap users.email, portal_access_grants.email, and tutor_profiles.email for ${VICTORIA_USER_ID} later. No Clerk invitation was sent.`;
   const [byUser] = await db
     .select()
     .from(tutorProfilesTable)
@@ -446,12 +453,13 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
         calendarStatus: "disconnected",
         photoUrl: VICTORIA_PHOTO_URL,
         photoAltText: VICTORIA_PHOTO_ALT_TEXT,
-        biography: null,
-        tagline: null,
+        biography: VICTORIA_BIOGRAPHY,
+        tagline: VICTORIA_BOOKING_TAGLINE,
         internalNotes: notes,
       })
       .returning();
     if (created) await ensureWeeklyHours(created.id);
+    await renameVictoriaPlaceholder(userId);
     return;
   }
   if (profile.userId && profile.userId !== userId) return;
@@ -460,18 +468,47 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
     .set({
       userId,
       email: normalizeConsultingEmail(email),
-      name: VICTORIA_DISPLAY_NAME,
+      name:
+        blankProfileText(profile.name) || profile.name?.trim() === VICTORIA_PLACEHOLDER_DISPLAY_NAME
+          ? VICTORIA_DISPLAY_NAME
+          : profile.name,
       bookingEligible: true,
       active: true,
       subjects: [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])],
       internalNotes: notes,
+      ...(blankProfileText(profile.tagline) ? { tagline: VICTORIA_BOOKING_TAGLINE } : {}),
+      ...(blankProfileText(profile.biography) ? { biography: VICTORIA_BIOGRAPHY } : {}),
       ...(profile.photoUrl?.trim()
         ? {}
-        : { photoUrl: VICTORIA_PHOTO_URL, photoAltText: profile.photoAltText || VICTORIA_PHOTO_ALT_TEXT }),
+        : { photoUrl: VICTORIA_PHOTO_URL }),
+      ...(!profile.photoUrl?.trim() ||
+      blankProfileText(profile.photoAltText) ||
+      profile.photoAltText === "Victoria, College Consulting Tutor"
+        ? { photoAltText: VICTORIA_PHOTO_ALT_TEXT }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(tutorProfilesTable.id, profile.id));
+  await renameVictoriaPlaceholder(userId);
   await ensureWeeklyHours(profile.id);
+}
+
+async function renameVictoriaPlaceholder(userId: string): Promise<void> {
+  await db
+    .update(usersTable)
+    .set({ displayName: VICTORIA_DISPLAY_NAME, updatedAt: new Date() })
+    .where(
+      and(eq(usersTable.id, userId), eq(usersTable.displayName, VICTORIA_PLACEHOLDER_DISPLAY_NAME)),
+    );
+  await db
+    .update(portalAccessGrantsTable)
+    .set({ displayName: VICTORIA_DISPLAY_NAME, updatedAt: new Date() })
+    .where(
+      and(
+        eq(portalAccessGrantsTable.userId, userId),
+        eq(portalAccessGrantsTable.displayName, VICTORIA_PLACEHOLDER_DISPLAY_NAME),
+      ),
+    );
 }
 
 async function ensureBookingTaglines(): Promise<void> {

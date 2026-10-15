@@ -20,8 +20,10 @@ export const NIKA_CONSULTING_EMAIL = "nika.raiffe@gmail.com";
 
 /** Stable tutor id. The login email can change without touching sessions. */
 export const VICTORIA_USER_ID = "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63";
-/** Last name is unknown and is not invented. */
-export const VICTORIA_DISPLAY_NAME = "Victoria";
+/** Display name. Pronouns are she/her. */
+export const VICTORIA_DISPLAY_NAME = "Victoria Wijerathnayapa";
+/** Name used before the full name was known. Startup replaces only this placeholder. */
+export const VICTORIA_PLACEHOLDER_DISPLAY_NAME = "Victoria";
 /** Temporary tutor login so the tutor portal and Google Calendar can be tested. */
 export const VICTORIA_PLACEHOLDER_EMAIL = "samakubba@icloud.com";
 /**
@@ -31,7 +33,11 @@ export const VICTORIA_PLACEHOLDER_EMAIL = "samakubba@icloud.com";
 export const VICTORIA_INTENDED_EMAIL = "victoriawije7@gmail.com";
 /** First-party portrait, same /media/team path as Nika and Xavier. Not a public-team roster entry. */
 export const VICTORIA_PHOTO_URL = "/media/team/victoria.jpg";
-export const VICTORIA_PHOTO_ALT_TEXT = "Victoria, College Consulting Tutor";
+export const VICTORIA_PHOTO_ALT_TEXT = "Victoria Wijerathnayapa, College Consulting Tutor";
+export const VICTORIA_BOOKING_TAGLINE =
+  "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor";
+export const VICTORIA_BIOGRAPHY =
+  "Victoria Wijerathnayapa graduated from Harvard in 2025 with a degree in Neuroscience and a focus on Education. She is passionate about making learning engaging, inclusive, and impactful through evidence-based strategies, bridging scientific research and instructional design. Since 2023 she has been a Youth Mentor with the Japan-America Academic Center in Boston, and she taught 500+ personalized English lessons to 400+ international students and professionals through Ringle. At Harvard she served on the Institute of Politics Policy Program's Education Team, researching evidence-based graduation requirements, and helped Boston-area high school students lead their own civic engagement initiatives. She is currently an Operations & Business Development Associate at Todaydream, where she onboards and mentors its DreAmbassador professionals.";
 
 export const COLLEGE_CONSULTING_NIKA_SLUG = "college-consulting-nika-hour";
 export const COLLEGE_CONSULTING_XAVIER_SLUG = "college-consulting-xavier-hour";
@@ -64,9 +70,9 @@ export const COLLEGE_CONSULTING_PRODUCTS = [
     tutorKey: "victoria",
     slug: COLLEGE_CONSULTING_VICTORIA_SLUG,
     tutorName: VICTORIA_DISPLAY_NAME,
-    name: "College Consulting hour with Victoria",
+    name: "College Consulting hour with Victoria Wijerathnayapa",
     description:
-      "One prepaid 60-minute College Consulting credit with Victoria at $130/hour. Booking opens after her Google Calendar is connected.",
+      "One prepaid 60-minute College Consulting credit with Victoria Wijerathnayapa at $130/hour. Booking opens after her Google Calendar is connected.",
     hourlyRateCents: VICTORIA_HOURLY_RATE_CENTS,
   },
 ] as const;
