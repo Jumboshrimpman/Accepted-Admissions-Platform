@@ -27,6 +27,7 @@ import {
   NIKA_CONSULTING_NAME,
   VICTORIA_BIOGRAPHY,
   VICTORIA_BOOKING_TAGLINE,
+  VICTORIA_PREVIOUS_BIOGRAPHY,
   VICTORIA_DISPLAY_NAME,
   VICTORIA_INTENDED_EMAIL,
   VICTORIA_PHOTO_ALT_TEXT,
@@ -477,7 +478,9 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
       subjects: [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])],
       internalNotes: notes,
       ...(blankProfileText(profile.tagline) ? { tagline: VICTORIA_BOOKING_TAGLINE } : {}),
-      ...(blankProfileText(profile.biography) ? { biography: VICTORIA_BIOGRAPHY } : {}),
+      ...(blankProfileText(profile.biography) || profile.biography?.trim() === VICTORIA_PREVIOUS_BIOGRAPHY
+        ? { biography: VICTORIA_BIOGRAPHY }
+        : {}),
       ...(profile.photoUrl?.trim()
         ? {}
         : { photoUrl: VICTORIA_PHOTO_URL }),

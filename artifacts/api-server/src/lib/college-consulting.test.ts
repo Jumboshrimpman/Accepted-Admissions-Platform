@@ -223,9 +223,11 @@ test("provisioning and the migration do not send email or create Clerk users", a
     VICTORIA_BOOKING_TAGLINE,
     "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
   );
-  assert.match(VICTORIA_BIOGRAPHY, /graduated from Harvard in 2025/);
-  assert.match(VICTORIA_BIOGRAPHY, /Japan-America Academic Center/);
-  assert.match(VICTORIA_BIOGRAPHY, /Todaydream/);
+  assert.equal(
+    VICTORIA_BIOGRAPHY,
+    "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
+  );
+  assert.doesNotMatch(VICTORIA_BIOGRAPHY, /Ringle|DreAmbassador|Institute of Politics/);
   assert.equal(provision.includes(VICTORIA_BIOGRAPHY), false);
   const rates = await readFile(
     fileURLToPath(new URL("./college-consulting.ts", import.meta.url)),
