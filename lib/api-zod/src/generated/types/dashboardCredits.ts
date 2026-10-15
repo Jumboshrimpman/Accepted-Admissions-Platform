@@ -12,6 +12,15 @@ export interface DashboardCredits {
   remainingHours: number;
   readOnly: boolean;
   selfServeSatBooking: boolean;
+  selfServeCollegeConsulting?: boolean;
+  collegeConsultingTutors?: {
+    tutorKey: string;
+    name: string;
+    hourlyRateCents: number;
+    prepaidHours: number;
+    productSlug: string;
+    calendarConnected: boolean;
+  }[];
   /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }

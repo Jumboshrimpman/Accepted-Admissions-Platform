@@ -22,11 +22,21 @@ The older 5-hour / $175 / $800 / $1,500 / $2,400 package list is retired. Live W
 
 ### Michelle Makarem (client) — prepaid book/pay in scope
 
-- Primary SAT tutor **Xavier Morales**; can also book **Eunice Chon**. Nika is not on the SAT booking roster.
+- Primary SAT tutor **Xavier Morales**; can also book **Eunice Chon**. Nika is not on the SAT booking roster. Michelle’s Xavier price stays **$130/hour** (`single-sat-session` / `ten-sat-session-package`).
 - Path: buy **$130 / 1 credit** or **$1,300 / 10 credits** on `/portal/sat` after sign-in (Stripe Checkout) → spend one credit per hour on the portal booking card against the selected tutor’s live Google Calendar.
 - Curriculum is optional. Shared SAT practice tests / mini-sections can be attached to a booked session from the admin library (same building-block model as Taito).
 
 Xavier payout tracking stays **out** (schema leftovers only; no tutor payout UI).
+
+### Neel Dharni — College Consulting
+
+In-portal book/pay for **College Consulting** only. No curriculum, quizzes, or pre-work. Sessions use the shared Meet room. Prices are per tutor and do not transfer:
+
+- Nika Raiffe — $130/hour (`college-consulting-nika-hour`)
+- Victoria — $130/hour (`college-consulting-victoria-hour`), hidden from booking until her Google Calendar is connected
+- Xavier Morales — $200/hour for Neel only (`college-consulting-xavier-hour`)
+
+Michelle’s SAT catalog is unchanged. Startup does not send email or Clerk invites. Neel’s placeholder `samakubba@gmail.com` is linked only when that identity is not an administrator; otherwise admin overview shows the stop reason. Victoria’s temporary tutor login is `samakubba@icloud.com`. `victoriawije7@gmail.com` is the future email and is not provisioned.
 
 Migration `0026_xavier_email_xaver_rmz6` corrects Xavier’s live email from the 0008 alias `xsfam6@gmail.com` to `xaver.rmz6@gmail.com` on `tutor_profiles`, `users`, and `portal_access_grants`. Historical migration 0008 is left unchanged.
 
@@ -34,7 +44,7 @@ Migration `0034_retire_duplicate_xavier_clerk` soft-retires the duplicate Produc
 
 ## Shared Google Meet collision
 
-The Fall room `https://meet.google.com/rih-iayt-okb` is assigned to Fall 2026 curriculum sessions and to SAT self-serve bookings. Availability omits occupied slots; booking (and admin session create/update) returns `SCHEDULE_CONFLICT` when another active session already claims that room. This covers Michelle booking Xavier/Eunice at the same time as Taito’s Eunice/Nika Fall sessions.
+The room `https://meet.google.com/rih-iayt-okb` is occupied by Fall 2026 sessions, SAT bookings, College Consulting bookings, any session whose Meet URL is that room, and any session with no different Meet URL stored. Availability omits those slots. Booking takes the shared-room advisory lock and returns `SCHEDULE_CONFLICT` on overlap. Admin overview keeps an unresolved banner for overlaps that already exist; resolving one hides that exact pair until a session moves.
 
 ## Curriculum building-block model
 

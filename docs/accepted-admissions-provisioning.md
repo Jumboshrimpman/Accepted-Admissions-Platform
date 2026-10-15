@@ -124,6 +124,16 @@ Expected error states:
 - `403` with `VIEW_ONLY`: the authenticated account is a linked viewer and the
   requested method would modify private portal data.
 
+## College Consulting (Neel, Nika, Victoria, Xavier)
+
+Startup upserts the College Consulting course, the three hour products, and Nika’s booking eligibility. It does **not** call Clerk, send mail, or create calendar events. Google Calendar stickiness is the same global rule as Xavier: a stored refresh token is not disconnected.
+
+Nika (`nika.raiffe@gmail.com`) signs in at `/login` and connects Google Calendar at `/tutor`. Her Production Clerk id is read from `users` / `portal_access_grants` and is not invented. She is not added to the SAT booking roster.
+
+Neel’s user id is `6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19`. The temporary login `samakubba@gmail.com` is attached only when that identity is not an administrator and is not someone else’s user. If startup stops, `/admin` shows the reason. To swap the email later, update `users.email` and `portal_access_grants.email` for that user id only. Do not update `sessions`.
+
+Victoria’s user id is `a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63`. The temporary tutor login is `samakubba@icloud.com` (sign in, then open `/tutor` and connect Google Calendar). She is not bookable until that connection is stored. `victoriawije7@gmail.com` is the intended email and has no grant. To swap later, update `users.email`, `portal_access_grants.email`, and `tutor_profiles.email` for Victoria’s user id only. Do not update `sessions` and do not email that address from this change.
+
 ## Stripe webhook
 
 Production Stripe must deliver to `https://app.acceptedadmissions.org/api/stripe/webhook`. Do not use the retired Replit host. People provisioning still does not send Clerk invitations. See `docs/stripe-webhook.md`.

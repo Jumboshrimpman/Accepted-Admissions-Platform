@@ -23,6 +23,7 @@ import {
   PORTAL_SAT_TUTOR_HREF,
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
+  showsSelfServeCollegeConsulting,
   showsSelfServeSatCommerce,
 } from "@/lib/portal-sat";
 import {
@@ -220,11 +221,13 @@ export default function PortalSat() {
   }
 
   const commerceCredits = dashboard.data?.credits;
-  const showSatCommerce = showsSelfServeSatCommerce(commerceCredits);
+  const collegeConsulting = showsSelfServeCollegeConsulting(commerceCredits);
+  const showSatCommerce = showsSelfServeSatCommerce(commerceCredits) || collegeConsulting;
   if (!canPurchaseOrBookSatCredits(currentUser?.role) || !showSatCommerce) {
     const tutorDenied = currentUser?.role === "tutor";
     const offPlatformStudent =
       currentUser?.role === "student" &&
+      !collegeConsulting &&
       (commerceCredits == null ||
         isOffPlatformProgramClient(commerceCredits) ||
         commerceCredits.selfServeSatBooking !== true);
@@ -447,10 +450,12 @@ export default function PortalSat() {
           <Card data-testid="portal-sat-purchase">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <WalletCards className="h-5 w-5 text-primary" /> Purchase SAT hours
+                <WalletCards className="h-5 w-5 text-primary" /> {collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}
               </CardTitle>
               <CardDescription>
-                Pay $130 for one hour or $1,300 for 10 hours. Then book below. Card details stay on Stripe Checkout.
+                {collegeConsulting
+                  ? "Nika and Victoria are $130/hour. Xavier is $200/hour. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
+                  : "Pay $130 for one hour or $1,300 for 10 hours. Then book below. Card details stay on Stripe Checkout."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

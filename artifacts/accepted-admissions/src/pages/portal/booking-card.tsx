@@ -170,6 +170,10 @@ export function BookingCard({
           subjects: [] as string[],
           calendarStatus: "connected",
           providerStatus: "connected" as const,
+          prepaidHours: undefined,
+          hourlyRateCents: null,
+          bookable: true,
+          serviceName: null,
         }
       : undefined);
   const durationMinutes = Number(activeSession?.durationMinutes) || 60;
@@ -346,18 +350,23 @@ export function BookingCard({
     );
   };
 
+  const collegeConsulting = tutors.some((tutor) => tutor.serviceName === "College Consulting");
+  const selectedTutorHours =
+    collegeConsulting && typeof selectedTutor?.prepaidHours === "number"
+      ? selectedTutor.prepaidHours
+      : remainingHours;
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
   const upcomingReserved = bookedSessionList.upcoming.filter((session) =>
     canCancelOrRescheduleSession(session),
   );
   const creditWall = bookingCreditWallState({
-    remainingHours,
+    remainingHours: selectedTutorHours,
     purchasedHours,
     hasLiveBookedSession: upcomingReserved.length > 0,
     rescheduling: Boolean(reschedulingSessionId),
   });
   const canConfirmSelectedSlot =
-    Boolean(reschedulingSessionId) || remainingHours === null || remainingHours > 0;
+    Boolean(reschedulingSessionId) || selectedTutorHours === null || selectedTutorHours > 0;
   const availableSlots = availabilityQuery.data?.slots ?? [];
   const availableDateKeys = useMemo(
     () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
@@ -386,12 +395,12 @@ export function BookingCard({
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
               <CalendarClock className="h-5 w-5 text-primary" />
-              Book a prepaid SAT session
+              {collegeConsulting ? "Book a College Consulting session" : "Book a prepaid SAT session"}
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
-              Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar.
-              Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking.
-              Cancel at least 24 hours ahead to restore the credit.
+              {collegeConsulting
+                ? "Choose Nika Raiffe ($130/hr), Victoria ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
+                : "Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -488,9 +497,14 @@ export function BookingCard({
                         </div>
                       )}
                       <p className="mt-2 text-xs text-muted-foreground">
+                        {tutor.serviceName === "College Consulting" && typeof tutor.hourlyRateCents === "number"
+                          ? `$${Math.round(tutor.hourlyRateCents / 100)}/hr · `
+                          : ""}
                         {tutor.providerStatus === "connected"
                           ? "Calendar connected — times below"
-                          : "Calendar connection needed before times appear"}
+                          : tutor.bookable === false
+                            ? "Not bookable until Google Calendar is connected"
+                            : "Calendar connection needed before times appear"}
                       </p>
                     </div>
                   </div>
@@ -596,10 +610,12 @@ export function BookingCard({
                 {creditWall === "unpaid" && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p>
-                      You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here.
+                      {collegeConsulting
+                        ? `You need a prepaid hour with ${selectedTutor?.name ?? "this tutor"} before reserving. Hours do not transfer between tutors.`
+                        : "You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here."}
                     </p>
                     <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/portal/sat">Purchase SAT hours</Link>
+                      <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
                     </Button>
                   </div>
                 )}
@@ -640,7 +656,7 @@ export function BookingCard({
                       Buy another hour to book a new time.
                     </p>
                     <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/portal/sat">Purchase SAT hours</Link>
+                      <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
                     </Button>
                   </div>
                 )}

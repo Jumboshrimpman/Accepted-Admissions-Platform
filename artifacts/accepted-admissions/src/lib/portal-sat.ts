@@ -6,6 +6,7 @@ export const PORTAL_SAT_PURCHASE_HREF = "/portal/sat";
 /** Client SAT pages use this to open Change time on the prepaid booking card. */
 export const PORTAL_BEGIN_RESCHEDULE_EVENT = "aa-portal-begin-reschedule";
 export const PORTAL_SAT_BOOK_LABEL = "Book SAT";
+export const PORTAL_COLLEGE_CONSULTING_BOOK_LABEL = "Book College Consulting";
 export const PORTAL_SAT_PURCHASE_LABEL = "Purchase SAT hours";
 export const PORTAL_SAT_TUTOR_HREF = "/tutor";
 export const PORTAL_SAT_TUTOR_DENIED_TITLE = "SAT booking is for students";
@@ -19,10 +20,17 @@ export function canPurchaseOrBookSatCredits(
   return role === "student";
 }
 
+export function showsSelfServeCollegeConsulting(credits?: {
+  selfServeCollegeConsulting?: boolean | null;
+} | null): boolean {
+  return credits?.selfServeCollegeConsulting === true;
+}
+
 /** Stripe book/pay chrome. Missing credits fail closed so off-platform clients never flash a CTA. */
 export function showsSelfServeSatCommerce(credits?: {
   selfServeSatBooking?: boolean | null;
   twelveSessionPlan?: boolean | null;
+  selfServeCollegeConsulting?: boolean | null;
 } | null): boolean {
   if (!credits) return false;
   return credits.selfServeSatBooking === true && !isOffPlatformProgramClient(credits);
@@ -33,17 +41,23 @@ export function canSeePortalSatNav(
   credits?: {
     selfServeSatBooking?: boolean | null;
     twelveSessionPlan?: boolean | null;
+    selfServeCollegeConsulting?: boolean | null;
   } | null,
 ): boolean {
-  return canPurchaseOrBookSatCredits(role) && showsSelfServeSatCommerce(credits);
+  return (
+    canPurchaseOrBookSatCredits(role) &&
+    (showsSelfServeSatCommerce(credits) || showsSelfServeCollegeConsulting(credits))
+  );
 }
 
 /** Taito and other program clients pay outside Stripe and already have scheduled meetings. */
 export function isOffPlatformProgramClient(credits?: {
   selfServeSatBooking?: boolean | null;
   twelveSessionPlan?: boolean | null;
+  selfServeCollegeConsulting?: boolean | null;
 } | null): boolean {
   if (!credits) return false;
+  if (showsSelfServeCollegeConsulting(credits)) return false;
   return credits.selfServeSatBooking === false || credits.twelveSessionPlan === true;
 }
 

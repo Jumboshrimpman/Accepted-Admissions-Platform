@@ -44,11 +44,13 @@ import { PortalProfileEditor } from "@/components/portal-profile-editor";
 import { portalAvatarUrl, portalDisplayName } from "@/lib/portal-profile";
 import {
   PORTAL_BOOKING_SECTION_ID,
+  PORTAL_COLLEGE_CONSULTING_BOOK_LABEL,
   PORTAL_SAT_BOOK_LABEL,
   PORTAL_SAT_HREF,
   PORTAL_SAT_PURCHASE_HREF,
   canSeePortalSatNav,
   goToPortalBooking,
+  showsSelfServeCollegeConsulting,
 } from "@/lib/portal-sat";
 
 type PortalNavLink = {
@@ -175,7 +177,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
         return [
           { href: "/portal/curriculum", label: "Curriculum", icon: BookOpen },
           ...(canSeePortalSatNav(role, dashboard?.credits)
-            ? [{ href: PORTAL_SAT_HREF, label: PORTAL_SAT_BOOK_LABEL, icon: WalletCards }]
+            ? [{
+                href: PORTAL_SAT_HREF,
+                label: showsSelfServeCollegeConsulting(dashboard?.credits)
+                  ? PORTAL_COLLEGE_CONSULTING_BOOK_LABEL
+                  : PORTAL_SAT_BOOK_LABEL,
+                icon: WalletCards,
+              }]
             : []),
         ];
     }

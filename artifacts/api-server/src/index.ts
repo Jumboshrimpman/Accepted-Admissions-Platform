@@ -10,6 +10,7 @@ import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-u
 import { ensureGeometryAreaVolumeFollowUp } from "./lib/geometry-area-volume-follow-up";
 import { ensureMichelleXavierSessionFollowUps } from "./lib/michelle-xavier-session-follow-up";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
+import { ensureCollegeConsultingProvision } from "./lib/college-consulting-provision";
 
 const rawPort = process.env["PORT"];
 
@@ -28,6 +29,9 @@ if (Number.isNaN(port) || port <= 0) {
 void ensureRyoTaitoParentMirror()
   .then((result) => logger.info(result, "Ryo parent mirror ready"))
   .catch((err) => logger.warn({ err }, "Ryo parent mirror upsert skipped"))
+  .then(() => ensureCollegeConsultingProvision())
+  .then((result) => logger.info(result, "College Consulting provisioning ready"))
+  .catch((err) => logger.warn({ err }, "College Consulting provisioning skipped"))
   .then(() => {
     app.listen(port, (err) => {
       if (err) {

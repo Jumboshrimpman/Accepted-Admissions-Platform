@@ -2471,6 +2471,10 @@ components:
           items: { type: string }
         calendarStatus: { type: string }
         providerStatus: { type: string, enum: [connected, disconnected] }
+        hourlyRateCents: { type: ["number", "null"] }
+        prepaidHours: { type: number }
+        bookable: { type: boolean }
+        serviceName: { type: ["string", "null"] }
     BookingAvailability:
       type: object
       required: [tutor, providerStatus, slots]
@@ -3919,6 +3923,19 @@ components:
         remainingHours: { type: number }
         readOnly: { type: boolean }
         selfServeSatBooking: { type: boolean }
+        selfServeCollegeConsulting: { type: boolean }
+        collegeConsultingTutors:
+          type: array
+          items:
+            type: object
+            required: [tutorKey, name, hourlyRateCents, prepaidHours, productSlug, calendarConnected]
+            properties:
+              tutorKey: { type: string }
+              name: { type: string }
+              hourlyRateCents: { type: number }
+              prepaidHours: { type: number }
+              productSlug: { type: string }
+              calendarConnected: { type: boolean }
         twelveSessionPlan:
           type: boolean
           description: >

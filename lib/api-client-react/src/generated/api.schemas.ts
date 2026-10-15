@@ -380,6 +380,10 @@ export interface BookingTutor {
   subjects: string[];
   calendarStatus: string;
   providerStatus: BookingTutorProviderStatus;
+  hourlyRateCents?: number | null;
+  prepaidHours?: number;
+  bookable?: boolean;
+  serviceName?: string | null;
 }
 
 export type BookingAvailabilityTutor = {
@@ -839,6 +843,29 @@ export interface AdminOverview {
   notifications: AdminNotification[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
+  consultingProvision?: {
+    nikaEmail: string;
+    nikaClerkUserId: string | null;
+    neelLinked: boolean;
+    neelUserId: string;
+    neelEmail: string | null;
+    neelStoppedReason: string | null;
+    victoriaLinked: boolean;
+    victoriaUserId: string;
+    victoriaPlaceholderEmail: string;
+    victoriaIntendedEmail: string;
+    victoriaEmail: string | null;
+    victoriaStoppedReason: string | null;
+  };
+  sharedMeetOverlaps?: {
+    overlapKey: string;
+    leftSessionId: string;
+    rightSessionId: string;
+    leftTitle: string;
+    rightTitle: string;
+    start: string;
+    end: string;
+  }[];
 }
 
 export type AdminNotificationUpdateStatus = typeof AdminNotificationUpdateStatus[keyof typeof AdminNotificationUpdateStatus];
@@ -1677,6 +1704,15 @@ export interface DashboardCredits {
   remainingHours: number;
   readOnly: boolean;
   selfServeSatBooking: boolean;
+  selfServeCollegeConsulting?: boolean;
+  collegeConsultingTutors?: {
+    tutorKey: string;
+    name: string;
+    hourlyRateCents: number;
+    prepaidHours: number;
+    productSlug: string;
+    calendarConnected: boolean;
+  }[];
   /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }

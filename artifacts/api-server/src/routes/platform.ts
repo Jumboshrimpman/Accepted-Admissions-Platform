@@ -82,7 +82,22 @@ import {
   sessionScheduleChangeError,
 } from "../lib/booking-service";
 import { summarizeCreditHours } from "../lib/credit-hours";
-import { sessionClaimsSharedFallMeet } from "../lib/shared-meet-conflict";
+import {
+  checkoutAudienceForSlug,
+  COLLEGE_CONSULTING_COURSE_ID,
+  COLLEGE_CONSULTING_PRODUCTS,
+  COLLEGE_CONSULTING_SLUGS,
+  COLLEGE_CONSULTING_SUBJECT,
+  consultingTutorCredits,
+  collegeConsultingTutorKeyForProfile,
+  isNeelDharniUser,
+  NEEL_DHARNI_USER_ID,
+} from "../lib/college-consulting";
+import {
+  collegeConsultingProvisionStatus,
+  ensureCollegeConsultingProvision,
+} from "../lib/college-consulting-provision";
+import { sessionClaimsSharedFallMeet, sharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
   bookingCalendarEventPayload,
   generateAvailableSlots,
@@ -529,6 +544,7 @@ import {
   responsesTable,
   reviewQueueTable,
   satProductsTable,
+  sharedMeetOverlapResolutionsTable,
   sessionArtifactsTable,
   sessionPreworkPlansTable,
   sessionsTable,
@@ -2132,6 +2148,11 @@ async function ensureUpgradeSeedData(): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(publicContentTable.id, page.id));
+  }
+  try {
+    await ensureCollegeConsultingProvision();
+  } catch (err) {
+    logger.warn({ err }, "College Consulting provisioning skipped");
   }
 }
 
@@ -4491,8 +4512,9 @@ async function calendarInviteParty(
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
-  if (!row) return fallback;
+  if (!row) return { ...fallback, userId: userId ?? fallback.userId };
   return {
+    userId,
     email: row.email || fallback.email,
     clerkUserId: row.clerkUserId || fallback.clerkUserId,
   };
@@ -4572,22 +4594,42 @@ async function syncGoogleCalendarForSessionChange(args: {
   };
 }
 
-async function bookingTutor(tutorProfileId: string, allowExistingSessionTutor = false) {
+function consultingTutorAllowed(tutor: {
+  name: string;
+  email: string;
+  userId: string | null;
+  active: boolean;
+  bookingEligible: boolean;
+}): boolean {
+  return (
+    tutor.active &&
+    tutor.bookingEligible &&
+    collegeConsultingTutorKeyForProfile(tutor) !== null
+  );
+}
+
+async function bookingTutor(
+  tutorProfileId: string,
+  allowExistingSessionTutor = false,
+  bookerUserId?: string,
+) {
   const [tutor] = await db
     .select()
     .from(tutorProfilesTable)
-    .where(
-      allowExistingSessionTutor
-        ? eq(tutorProfilesTable.id, tutorProfileId)
-        : and(
-            eq(tutorProfilesTable.id, tutorProfileId),
-            eq(tutorProfilesTable.active, true),
-            eq(tutorProfilesTable.bookingEligible, true),
-            inArray(tutorProfilesTable.name, [...SAT_BOOKING_TUTOR_NAMES]),
-          ),
-    )
+    .where(eq(tutorProfilesTable.id, tutorProfileId))
     .limit(1);
-  if (!tutor) throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
+  if (!tutor || (!allowExistingSessionTutor && !tutor.active)) {
+    throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
+  }
+  if (!allowExistingSessionTutor) {
+    const allowed = isNeelDharniUser(bookerUserId)
+      ? consultingTutorAllowed(tutor)
+      : tutor.bookingEligible &&
+        SAT_BOOKING_TUTOR_NAMES.includes(tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number]);
+    if (!allowed) {
+      throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
+    }
+  }
   const [rule] = await db
     .select()
     .from(availabilityRulesTable)
@@ -4604,11 +4646,16 @@ async function slotsForTutor(
   durationMinutes: number,
   excludeSessionId?: string,
   allowExistingSessionTutor = false,
+  bookerUserId?: string,
 ) {
   if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
     throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
   }
-  const { tutor, rule } = await bookingTutor(tutorProfileId, allowExistingSessionTutor);
+  const { tutor, rule } = await bookingTutor(
+    tutorProfileId,
+    allowExistingSessionTutor,
+    bookerUserId,
+  );
   const access = await calendarAccess(tutorProfileId);
   if (!access) {
     return { tutor, rule, access: null, slots: [] as string[] };
@@ -4675,6 +4722,44 @@ async function slotsForTutor(
       bookedWindows,
     ),
   };
+}
+
+async function studentCollegeConsultingCourse(userId: string): Promise<{ id: string; subject: string }> {
+  const [membership] = await db
+    .select({ id: courseMembershipsTable.courseId, subject: courseMembershipsTable.subject })
+    .from(courseMembershipsTable)
+    .where(
+      and(
+        eq(courseMembershipsTable.userId, userId),
+        eq(courseMembershipsTable.courseId, COLLEGE_CONSULTING_COURSE_ID),
+        eq(courseMembershipsTable.membershipRole, "student"),
+      ),
+    )
+    .limit(1);
+  if (!membership) {
+    throw new BookingError(
+      409,
+      "COLLEGE_CONSULTING_MEMBERSHIP_REQUIRED",
+      "An active College Consulting membership is required to book.",
+    );
+  }
+  return { id: membership.id, subject: COLLEGE_CONSULTING_SUBJECT };
+}
+
+async function consultingProductForTutor(tutor: {
+  name: string;
+  email: string;
+  userId: string | null;
+}) {
+  const tutorKey = collegeConsultingTutorKeyForProfile(tutor);
+  const slug = COLLEGE_CONSULTING_PRODUCTS.find((product) => product.tutorKey === tutorKey)?.slug;
+  if (!slug) return null;
+  const [product] = await db
+    .select()
+    .from(satProductsTable)
+    .where(and(eq(satProductsTable.slug, slug), eq(satProductsTable.active, true)))
+    .limit(1);
+  return product ?? null;
 }
 
 async function studentCourseForBooking(userId: string): Promise<{ id: string; subject: string }> {
@@ -5036,7 +5121,32 @@ router.get(
   },
 );
 
-router.get("/public/products", requireAppUser, async (_req: AuthedRequest, res): Promise<void> => {
+router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): Promise<void> => {
+  if (isNeelDharniUser(req.appUser?.id)) {
+    await ensureCollegeConsultingProvision();
+    const products = await db
+      .select()
+      .from(satProductsTable)
+      .where(
+        and(
+          eq(satProductsTable.active, true),
+          inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]),
+        ),
+      )
+      .orderBy(asc(satProductsTable.effectiveHourlyRateCents), asc(satProductsTable.name));
+    res.json(
+      products.map((product) => ({
+        id: product.id,
+        slug: product.slug,
+        name: product.name,
+        description: product.description,
+        durationHours: product.durationHours,
+        totalPriceCents: product.totalPriceCents,
+        effectiveHourlyRateCents: product.effectiveHourlyRateCents,
+      })),
+    );
+    return;
+  }
   const products = await listActiveAcceptedSatCatalogProducts();
   res.json(
     products.map((product) => ({
@@ -6159,8 +6269,106 @@ router.delete(
   },
 );
 
-router.get("/booking/tutors", async (_req: AuthedRequest, res): Promise<void> => {
+async function consultingTutorList(clientUserId: string) {
+  const tutors = await db
+    .select({
+      id: tutorProfilesTable.id,
+      name: tutorProfilesTable.name,
+      email: tutorProfilesTable.email,
+      userId: tutorProfilesTable.userId,
+      title: tutorProfilesTable.title,
+      photoUrl: tutorProfilesTable.photoUrl,
+      biography: tutorProfilesTable.biography,
+      subjects: tutorProfilesTable.subjects,
+      calendarStatus: tutorProfilesTable.calendarStatus,
+      active: tutorProfilesTable.active,
+      bookingEligible: tutorProfilesTable.bookingEligible,
+    })
+    .from(tutorProfilesTable)
+    .where(
+      and(eq(tutorProfilesTable.active, true), eq(tutorProfilesTable.bookingEligible, true)),
+    )
+    .orderBy(asc(tutorProfilesTable.name));
+  const visible = tutors.filter((tutor) => consultingTutorAllowed(tutor));
+  const [products, entries] = await Promise.all([
+    db
+      .select({ id: satProductsTable.id, slug: satProductsTable.slug })
+      .from(satProductsTable)
+      .where(inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS])),
+    db
+      .select({
+        entryType: creditLedgerTable.entryType,
+        hours: creditLedgerTable.hours,
+        productId: creditLedgerTable.productId,
+      })
+      .from(creditLedgerTable)
+      .where(eq(creditLedgerTable.clientUserId, clientUserId)),
+  ]);
+  const calendars = {
+    nika: false,
+    xavier: false,
+    victoria: false,
+  };
+  for (const tutor of visible) {
+    const key = collegeConsultingTutorKeyForProfile(tutor);
+    if (key) calendars[key] = tutor.calendarStatus === "connected";
+  }
+  const credits = consultingTutorCredits({ entries, products, calendars });
+  return visible.map((tutor) => {
+    const key = collegeConsultingTutorKeyForProfile(tutor);
+    const credit = credits.find((item) => item.tutorKey === key);
+    const connected = tutor.calendarStatus === "connected";
+    return {
+      id: tutor.id,
+      name: tutor.name,
+      title: tutor.title,
+      photoUrl: tutor.photoUrl,
+      biography: tutor.biography,
+      subjects: tutor.subjects,
+      calendarStatus: tutor.calendarStatus,
+      providerStatus: connected ? ("connected" as const) : ("disconnected" as const),
+      hourlyRateCents: credit?.hourlyRateCents ?? null,
+      prepaidHours: credit?.prepaidHours ?? 0,
+      bookable: connected,
+      serviceName: COLLEGE_CONSULTING_SUBJECT,
+    };
+  });
+}
+
+async function unresolvedSharedMeetOverlaps() {
+  const [rows, resolutions] = await Promise.all([
+    db
+      .select({
+        id: sessionsTable.id,
+        title: sessionsTable.title,
+        dateTime: sessionsTable.dateTime,
+        durationMinutes: sessionsTable.durationMinutes,
+        subject: sessionsTable.subject,
+        term: coursesTable.term,
+        courseMeetUrl: coursesTable.meetUrl,
+      })
+      .from(sessionsTable)
+      .innerJoin(coursesTable, eq(sessionsTable.courseId, coursesTable.id))
+      .where(
+        and(
+          sql`${sessionsTable.status} <> 'archived'`,
+          sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
+        ),
+      ),
+    db
+      .select({ overlapKey: sharedMeetOverlapResolutionsTable.overlapKey })
+      .from(sharedMeetOverlapResolutionsTable),
+  ]);
+  const resolved = new Set(resolutions.map((row) => row.overlapKey));
+  return sharedMeetOverlapPairs(rows).filter((pair) => !resolved.has(pair.overlapKey));
+}
+
+router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => {
   await ensureUpgradeSeedData();
+  if (isNeelDharniUser(req.appUser?.id)) {
+    res.json(await consultingTutorList(req.appUser!.id));
+    return;
+  }
   const tutors = await db
     .select({
       id: tutorProfilesTable.id,
@@ -6212,7 +6420,13 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
         throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
       }
     } else if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "SAT sessions must be exactly 60 minutes.");
+      throw new BookingError(
+        400,
+        "INVALID_DURATION",
+        isNeelDharniUser(req.appUser?.id)
+          ? "College Consulting sessions must be exactly 60 minutes."
+          : "SAT sessions must be exactly 60 minutes.",
+      );
     }
     const result = await slotsForTutor(
       tutorProfileId,
@@ -6221,6 +6435,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
       durationMinutes,
       existingSession?.id,
       Boolean(existingSession),
+      req.appUser!.id,
     );
     res.json({
       tutor: {
@@ -6286,20 +6501,40 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     const start = asDate(body.startTime);
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
+    const consulting = isNeelDharniUser(req.appUser!.id);
     if (durationMinutes !== 60) {
-      throw new BookingError(400, "INVALID_DURATION", "SAT sessions must be exactly 60 minutes.");
+      throw new BookingError(
+        400,
+        "INVALID_DURATION",
+        consulting
+          ? "College Consulting sessions must be exactly 60 minutes."
+          : "SAT sessions must be exactly 60 minutes.",
+      );
     }
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
       new Date(start.getTime() - 1),
       new Date(start.getTime() + durationMinutes * 60_000 + 1),
       durationMinutes,
+      undefined,
+      false,
+      req.appUser!.id,
     );
     if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     if (!slots.includes(start.toISOString())) {
       throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
     }
-    const course = await studentCourseForBooking(req.appUser!.id);
+    const course = consulting
+      ? await studentCollegeConsultingCourse(req.appUser!.id)
+      : await studentCourseForBooking(req.appUser!.id);
+    const consultingProduct = consulting ? await consultingProductForTutor(tutor) : null;
+    if (consulting && !consultingProduct) {
+      throw new BookingError(
+        409,
+        "CONSULTING_PRODUCT_MISSING",
+        "College Consulting pricing is not available for this tutor.",
+      );
+    }
     const created = await db.transaction(async (tx) => {
       const participantIds = [tutor.userId, req.appUser!.id].filter(
         (id): id is string => Boolean(id),
@@ -6323,21 +6558,32 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
         throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
       }
-      await lockClientCreditsAndRequireHours(tx, req.appUser!.id, durationMinutes / 60);
+      await lockClientCreditsAndRequireHours(
+        tx,
+        req.appUser!.id,
+        durationMinutes / 60,
+        consultingProduct?.id ?? null,
+      );
       return insertConfirmedBookingWithDebit(tx, {
         courseId: course.id,
         clientUserId: req.appUser!.id,
         tutorUserId: tutor.userId,
         start,
         timezone: rule.timezone,
-        subject: "SAT",
-        title: sessionTitle(req.appUser!.displayName, "SAT", tutor.name),
+        subject: consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+        title: sessionTitle(
+          req.appUser!.displayName,
+          consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+          tutor.name,
+        ),
         durationMinutes,
         tutorName: tutor.name,
+        productId: consultingProduct?.id ?? null,
       });
     });
     try {
       const student = {
+        userId: req.appUser!.id,
         email: req.appUser!.email,
         clerkUserId: req.appUser!.clerkUserId,
       };
@@ -6372,13 +6618,15 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       await notifyAdministratorsOfBooking({
         kind: "booking_confirmed",
         sessionId: confirmed.id,
-        title: "SAT booking confirmed",
+        title: consulting ? "College Consulting booking confirmed" : "SAT booking confirmed",
         message: `${req.appUser!.displayName} booked ${confirmed.title} at ${confirmed.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
       });
-      try {
-        await ensureAutogeneratedSatPrework(confirmed.id, req.appUser!.id);
-      } catch {
-        // Autogen must not roll back a confirmed SAT booking.
+      if (!consulting) {
+        try {
+          await ensureAutogeneratedSatPrework(confirmed.id, req.appUser!.id);
+        } catch {
+          // Autogen must not roll back a confirmed SAT booking.
+        }
       }
       res.status(201).json(await bookingSessionShape(confirmed));
     } catch (error) {
@@ -6647,11 +6895,25 @@ router.post(
         ),
       )
       .limit(1);
-    if (!product || !isAcceptedSatCatalogProduct(product)) {
+    if (!product) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug);
+    if (audience === "forbidden") {
+      res.status(403).json({
+        error: isNeelDharniUser(req.appUser!.id)
+          ? "This account buys College Consulting hours only."
+          : "College Consulting checkout is not available for this account.",
+      });
+      return;
+    }
+    if (audience === "sat" && !isAcceptedSatCatalogProduct(product)) {
       res.status(404).json({ error: "SAT product not found" });
       return;
     }
     if (
+      audience === "sat" &&
       !selfServeSatBookingForAccount({
         role: req.appUser!.role,
         email: req.appUser!.email,
@@ -7888,6 +8150,8 @@ router.get(
        guidanceRequests,
       notifications,
       accessConflicts: configuredAccessConflicts(),
+      consultingProvision: collegeConsultingProvisionStatus(),
+      sharedMeetOverlaps: await unresolvedSharedMeetOverlaps(),
       platform: {
         totalUsers: Number(platform[0][0]?.count ?? 0),
         clients: Number(platform[1][0]?.count ?? 0),
@@ -7912,6 +8176,29 @@ router.get(
         },
       },
     });
+  },
+);
+
+router.post(
+  "/admin/shared-meet-overlaps/resolve",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const overlapKey =
+      typeof (req.body as { overlapKey?: unknown } | null)?.overlapKey === "string"
+        ? (req.body as { overlapKey: string }).overlapKey.trim()
+        : "";
+    if (!overlapKey || overlapKey.length > 500) {
+      res.status(400).json({ error: "An overlap key is required." });
+      return;
+    }
+    await db
+      .insert(sharedMeetOverlapResolutionsTable)
+      .values({
+        overlapKey,
+        resolvedByUserId: req.appUser!.id,
+      })
+      .onConflictDoNothing();
+    res.json({ overlapKey, resolved: true });
   },
 );
 
@@ -10160,10 +10447,45 @@ async function dashboardDataForUser(user: AppUser) {
     .select({
       entryType: creditLedgerTable.entryType,
       hours: creditLedgerTable.hours,
+      productId: creditLedgerTable.productId,
     })
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, subjectUserId));
-  const creditSummary = creditHoursSummary(creditEntries);
+  const consultingProductRows = await db
+    .select({ id: satProductsTable.id, slug: satProductsTable.slug })
+    .from(satProductsTable)
+    .where(inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]));
+  const consultingProductIds = new Set(consultingProductRows.map((product) => product.id));
+  const neelConsulting = isNeelDharniUser(subjectUserId);
+  const summaryEntries = creditEntries.filter((entry) =>
+    neelConsulting
+      ? Boolean(entry.productId && consultingProductIds.has(entry.productId))
+      : !entry.productId || !consultingProductIds.has(entry.productId),
+  );
+  const creditSummary = creditHoursSummary(summaryEntries);
+  const consultingCalendars = { nika: false, xavier: false, victoria: false };
+  if (neelConsulting) {
+    const tutorRows = await db
+      .select({
+        name: tutorProfilesTable.name,
+        email: tutorProfilesTable.email,
+        userId: tutorProfilesTable.userId,
+        calendarStatus: tutorProfilesTable.calendarStatus,
+      })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.bookingEligible, true));
+    for (const tutor of tutorRows) {
+      const key = collegeConsultingTutorKeyForProfile(tutor);
+      if (key) consultingCalendars[key] = tutor.calendarStatus === "connected";
+    }
+  }
+  const collegeConsultingTutors = neelConsulting
+    ? consultingTutorCredits({
+        entries: creditEntries,
+        products: consultingProductRows,
+        calendars: consultingCalendars,
+      })
+    : undefined;
   const visibleSessionIds = scopedSessions.map((session) => session.id);
   const materialBlocks =
     visibleSessionIds.length === 0
@@ -10242,10 +10564,14 @@ async function dashboardDataForUser(user: AppUser) {
         usedHours: creditSummary.usedHours,
         remainingHours: creditSummary.remainingHours,
         readOnly: user.role === "viewer",
-        selfServeSatBooking: selfServeSatBookingForAccount({
-          role: user.role,
-          email: commerceEmail,
-        }),
+        selfServeSatBooking: neelConsulting
+          ? false
+          : selfServeSatBookingForAccount({
+              role: user.role,
+              email: commerceEmail,
+            }),
+        selfServeCollegeConsulting: neelConsulting,
+        ...(collegeConsultingTutors ? { collegeConsultingTutors } : {}),
         twelveSessionPlan: twelveSessionPlanForEmail(commerceEmail),
       },
       progress: {
@@ -10302,6 +10628,7 @@ router.get(
           .select({
             id: tutorProfilesTable.id,
             userId: tutorProfilesTable.userId,
+            email: tutorProfilesTable.email,
             name: tutorProfilesTable.name,
             title: tutorProfilesTable.title,
             subjects: tutorProfilesTable.subjects,
@@ -10318,17 +10645,50 @@ router.get(
           .then((rows) => liveClientBookingSessions(rows)),
         financialSummary(client.id),
       ]);
-    const previewTutor = selectAssignedPreviewBookingTutor(
+    let previewTutor = selectAssignedPreviewBookingTutor(
       assignedSatLinks,
       tutorProfiles,
     );
-    const catalogOffers = previewOffersFromCatalogProducts(catalogProducts);
-    const previewOffers =
-      catalogOffers.length > 0
-        ? catalogOffers
+    let previewOffers =
+      previewOffersFromCatalogProducts(catalogProducts).length > 0
+        ? previewOffersFromCatalogProducts(catalogProducts)
         : previewOffersFromCatalogProducts(
             ACCEPTED_SAT_CATALOG.map((product) => ({ ...product, active: true })),
           );
+    if (isNeelDharniUser(client.id)) {
+      const consultingTutors = tutorProfiles.filter(
+        (tutor) => tutor.active && collegeConsultingTutorKeyForProfile(tutor),
+      );
+      const assigned = consultingTutors.filter((tutor) =>
+        assignedSatLinks.some(
+          (link) =>
+            link.tutorUserId === tutor.userId &&
+            link.subject.trim().toLowerCase() === COLLEGE_CONSULTING_SUBJECT.toLowerCase(),
+        ),
+      );
+      const pool = assigned.length > 0 ? assigned : consultingTutors;
+      const connected = pool.filter((tutor) => tutor.calendarStatus === "connected");
+      previewTutor = connected[0] ?? pool[0];
+      const consultingRows = await db
+        .select()
+        .from(satProductsTable)
+        .where(
+          and(
+            eq(satProductsTable.active, true),
+            inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]),
+          ),
+        );
+      if (consultingRows.length > 0) {
+        previewOffers = consultingRows.map((product) => ({
+          slug: product.slug,
+          name: product.name,
+          description: product.description,
+          priceCents: Number(product.totalPriceCents),
+          durationHours: Number(product.durationHours),
+          durationMinutes: 60 as const,
+        }));
+      }
+    }
     const previewOffer = previewOffers[0]!;
     let previewBooking: {
       calendarStatus: "connected" | "disconnected" | "unavailable";

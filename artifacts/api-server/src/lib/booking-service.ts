@@ -19,7 +19,7 @@ import {
   type SessionScheduleInstant,
 } from "./session-schedule-guard.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { ledgerHours, remainingCreditHours } from "./credit-hours.ts";
+import { ledgerHours, remainingCreditHours, remainingCreditHoursForProduct } from "./credit-hours.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { selfServeSatBookingForAccount } from "./session-schedule.ts";
 
@@ -204,21 +204,41 @@ export async function lockClientCreditsAndRequireHours(
   tx: Tx,
   clientUserId: string,
   requiredHours: number,
+  productId?: string | null,
 ): Promise<void> {
   await tx.execute(
     sql`select id from credit_ledger where client_user_id = ${clientUserId} for update`,
   );
   const entries = await tx
-    .select({ entryType: creditLedgerTable.entryType, hours: creditLedgerTable.hours })
+    .select({
+      entryType: creditLedgerTable.entryType,
+      hours: creditLedgerTable.hours,
+      productId: creditLedgerTable.productId,
+    })
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, clientUserId));
-  if (remainingCreditHours(entries) < requiredHours) {
+  const remaining = productId
+    ? remainingCreditHoursForProduct(entries, productId)
+    : remainingCreditHours(entries);
+  if (remaining < requiredHours) {
     throw new BookingServiceError(
       409,
       "INSUFFICIENT_CREDIT",
       "You do not have enough prepaid hours for this session.",
     );
   }
+}
+
+async function debitProductId(
+  tx: Tx,
+  sessionId: string,
+): Promise<string | null> {
+  const [debit] = await tx
+    .select({ productId: creditLedgerTable.productId })
+    .from(creditLedgerTable)
+    .where(eq(creditLedgerTable.fulfillmentKey, sessionDebitFulfillmentKey(sessionId)))
+    .limit(1);
+  return debit?.productId ?? null;
 }
 
 export async function insertConfirmedBookingWithDebit(
@@ -233,6 +253,7 @@ export async function insertConfirmedBookingWithDebit(
     title: string;
     durationMinutes: number;
     tutorName: string;
+    productId?: string | null;
   },
 ): Promise<typeof sessionsTable.$inferSelect> {
   const [session] = await tx
@@ -254,14 +275,17 @@ export async function insertConfirmedBookingWithDebit(
   const hours = ledgerHours(args.durationMinutes) / 60;
   await tx.insert(creditLedgerTable).values({
     clientUserId: args.clientUserId,
-    productId: null,
+    productId: args.productId ?? null,
     sessionId: session.id,
     entryType: "debit",
     hours,
     fulfillmentKey: sessionDebitFulfillmentKey(session.id),
     referenceType: "session",
     referenceId: session.id,
-    note: `Reserved SAT session with ${args.tutorName}`,
+    note:
+      args.subject === "SAT"
+        ? `Reserved SAT session with ${args.tutorName}`
+        : `Reserved ${args.subject} session with ${args.tutorName}`,
   });
   return session;
 }
@@ -285,10 +309,12 @@ export async function rollbackBookingAfterCalendarFailure(
     })
     .where(eq(sessionsTable.id, args.sessionId));
   const hours = ledgerHours(args.durationMinutes) / 60;
+  const productId = await debitProductId(tx, args.sessionId);
   await tx
     .insert(creditLedgerTable)
     .values({
       clientUserId: args.clientUserId,
+      productId,
       sessionId: args.sessionId,
       entryType: "restored",
       hours,
@@ -354,10 +380,12 @@ export async function cancelBookingWithCreditPolicy(
     .returning();
   const hours = ledgerHours(current.durationMinutes) / 60;
   if (creditRestored && current.clientUserId) {
+    const productId = await debitProductId(tx, current.id);
     await tx
       .insert(creditLedgerTable)
       .values({
         clientUserId: current.clientUserId,
+        productId,
         sessionId: current.id,
         entryType: "restored",
         hours,

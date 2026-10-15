@@ -20,6 +20,14 @@ export function remainingCreditHours(
   return roundCreditHours(remaining);
 }
 
+/** Hours whose ledger rows belong to one product. Other products do not count. */
+export function remainingCreditHoursForProduct(
+  entries: Array<{ entryType: string; hours: unknown; productId?: string | null }>,
+  productId: string,
+): number {
+  return remainingCreditHours(entries.filter((entry) => entry.productId === productId));
+}
+
 export function summarizeCreditHours(
   entries: Array<{ entryType: string; hours: unknown }>,
 ): { purchasedHours: number; usedHours: number; remainingHours: number } {

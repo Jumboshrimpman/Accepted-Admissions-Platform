@@ -99,7 +99,23 @@ test("Michelle SAT self-serve cannot claim the shared Meet during Taito's Fall s
       subject: "IELTS",
       courseMeetUrl: null,
     }),
+    true,
+  );
+  assert.equal(
+    sessionClaimsSharedFallMeet({
+      term: "Spring 2027",
+      subject: "IELTS",
+      courseMeetUrl: "https://meet.google.com/different-room",
+    }),
     false,
+  );
+  assert.equal(
+    sessionClaimsSharedFallMeet({
+      term: "Ongoing",
+      subject: "College Consulting",
+      courseMeetUrl: "https://meet.google.com/different-room",
+    }),
+    true,
   );
   assert.equal(
     sessionClaimsSharedFallMeet({
