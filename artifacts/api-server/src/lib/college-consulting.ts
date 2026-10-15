@@ -135,7 +135,20 @@ export type PlaceholderLinkStopReason =
   | "grant_points_at_other_user"
   | "grant_role_conflict"
   | "clerk_id_owned_by_other_user"
-  | "identity_not_verified";
+  | "identity_not_verified"
+  | "access_revoked";
+
+/** True when an administrator has turned this grant or profile off. */
+export function portalAccessRevoked(
+  record: {
+    active?: boolean | null;
+    revokedAt?: Date | string | null;
+  } | null | undefined,
+): boolean {
+  if (!record) return false;
+  if (record.active === false) return true;
+  return record.revokedAt != null && record.revokedAt !== "";
+}
 
 export type PlaceholderLinkDecision =
   | { action: "link"; clerkUserId: string; mode: "existing" | "create" }

@@ -143,6 +143,41 @@ export async function listSharedMeetBusyWindows(args: {
   return sharedMeetOccupancyWindows(rows);
 }
 
+/**
+ * Serialize a shared-room write with the booking lock, then reject an overlap.
+ * Sessions that do not claim the room skip the lock.
+ */
+export async function guardSharedMeetWrite(
+  tx: Tx,
+  args: {
+    start: Date;
+    end: Date;
+    excludeSessionId?: string;
+    courseId?: string | null;
+    subject?: string | null;
+  },
+): Promise<void> {
+  const [course] = args.courseId
+    ? await tx
+        .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
+        .from(coursesTable)
+        .where(eq(coursesTable.id, args.courseId))
+        .limit(1)
+    : [];
+  const claims = sessionClaimsSharedFallMeet({
+    term: course?.term,
+    courseMeetUrl: course?.meetUrl,
+    subject: args.subject,
+  });
+  if (!claims) return;
+  await acquireSharedMeetLock(tx);
+  await assertNoSharedMeetConflict(tx, {
+    start: args.start,
+    end: args.end,
+    excludeSessionId: args.excludeSessionId,
+  });
+}
+
 export async function assertNoSharedMeetConflict(
   tx: Tx,
   args: {

@@ -28,6 +28,7 @@ import {
   VICTORIA_HOURLY_RATE_CENTS,
   VICTORIA_INTENDED_EMAIL,
   VICTORIA_PLACEHOLDER_EMAIL,
+  portalAccessRevoked,
   VICTORIA_USER_ID,
   XAVIER_NEEL_HOURLY_RATE_CENTS,
   checkoutAudienceForSlug,
@@ -236,4 +237,21 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.match(rates, /VICTORIA_INTENDED_EMAIL = "victoriawije7@gmail.com"/);
   assert.equal(migration.includes("INSERT INTO \"users\""), false);
   assert.equal(migration.includes("INSERT INTO \"portal_access_grants\""), false);
+  assert.equal(provision.includes("english_tutor"), false);
+  assert.equal(provision.includes("revokedAt: null"), false);
+  assert.equal(provision.includes(".update(satProductsTable)"), false);
+  assert.match(provision, /onConflictDoNothing/);
+  assert.match(provision, /pg_advisory_xact_lock\(hashtext\(\$\{PROVISION_LOCK_KEY\}\)\)/);
+  assert.match(provision, /portalAccessRevoked\(grant\)/);
+  assert.match(provision, /portalAccessRevoked\(profile\)/);
+  assert.equal(portalAccessRevoked({ active: true, revokedAt: null }), false);
+  assert.equal(portalAccessRevoked({ active: false, revokedAt: null }), true);
+  assert.equal(portalAccessRevoked({ active: true, revokedAt: new Date() }), true);
+  const platform = await readFile(
+    fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
+    "utf8",
+  );
+  const index = await readFile(fileURLToPath(new URL("../index.ts", import.meta.url)), "utf8");
+  assert.equal(platform.includes("ensureCollegeConsultingProvision("), false);
+  assert.match(index, /ensureCollegeConsultingProvision\(\)/);
 });

@@ -1377,13 +1377,26 @@ export async function listGoogleBusyWindows(
   return data.calendars?.[calendarId]?.busy ?? [];
 }
 
+export type GoogleCalendarSendUpdates = "all" | "none";
+
+/** College Consulting writes stay silent. SAT and every other subject still notify attendees. */
+export function googleCalendarSendUpdatesForSubjects(
+  ...subjects: Array<string | null | undefined>
+): GoogleCalendarSendUpdates {
+  const consulting = subjects.some(
+    (subject) => subject?.trim().toLowerCase() === "college consulting",
+  );
+  return consulting ? "none" : "all";
+}
+
 export function googleCalendarEventWritePath(
   calendarId: string,
   eventId?: string,
+  sendUpdates: GoogleCalendarSendUpdates = "all",
 ): string {
   const base = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
   const path = eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
-  return `${path}?sendUpdates=all`;
+  return `${path}?sendUpdates=${sendUpdates}`;
 }
 
 export function isGoogleCalendarNotFound(error: unknown): boolean {
@@ -1394,10 +1407,11 @@ export async function createGoogleEvent(
   accessToken: string,
   calendarId: string,
   event: Record<string, unknown>,
+  sendUpdates: GoogleCalendarSendUpdates = "all",
 ): Promise<GoogleCalendarEvent> {
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    googleCalendarEventWritePath(calendarId),
+    googleCalendarEventWritePath(calendarId, undefined, sendUpdates),
     { method: "POST", body: JSON.stringify(event) },
   );
 }
@@ -1406,11 +1420,12 @@ export async function deleteGoogleEvent(
   accessToken: string,
   calendarId: string,
   eventId: string,
+  sendUpdates: GoogleCalendarSendUpdates = "all",
 ): Promise<void> {
   try {
     await googleCalendarRequest<void>(
       accessToken,
-      googleCalendarEventWritePath(calendarId, eventId),
+      googleCalendarEventWritePath(calendarId, eventId, sendUpdates),
       { method: "DELETE" },
     );
   } catch (error) {
@@ -1424,10 +1439,11 @@ export async function updateGoogleEvent(
   calendarId: string,
   eventId: string,
   event: Record<string, unknown>,
+  sendUpdates: GoogleCalendarSendUpdates = "all",
 ): Promise<GoogleCalendarEvent> {
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    googleCalendarEventWritePath(calendarId, eventId),
+    googleCalendarEventWritePath(calendarId, eventId, sendUpdates),
     { method: "PATCH", body: JSON.stringify(event) },
   );
 }

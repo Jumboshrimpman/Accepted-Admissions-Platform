@@ -24,7 +24,6 @@ import {
   NEEL_DISPLAY_NAME,
   NEEL_PLACEHOLDER_EMAIL,
   NIKA_CONSULTING_EMAIL,
-  NIKA_CONSULTING_NAME,
   VICTORIA_BIOGRAPHY,
   VICTORIA_BOOKING_TAGLINE,
   VICTORIA_PREVIOUS_BIOGRAPHY,
@@ -38,6 +37,7 @@ import {
   decidePlaceholderLink,
   isProductionClerkUserId,
   normalizeConsultingEmail,
+  portalAccessRevoked,
   type PlaceholderLinkStopReason,
 } from "./college-consulting.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -91,13 +91,17 @@ export function collegeConsultingProvisionStatus(): CollegeConsultingProvisionSt
   return lastStatus;
 }
 
+type ProvisionTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+const PROVISION_LOCK_KEY = "college-consulting-provision";
+
 function pendingClerkUserId(email: string): string {
   return `pending:${normalizeConsultingEmail(email)}`;
 }
 
-async function clerkOwnerId(clerkUserId: string): Promise<string | null> {
+async function clerkOwnerId(tx: ProvisionTx, clerkUserId: string): Promise<string | null> {
   if (!clerkUserId) return null;
-  const [owner] = await db
+  const [owner] = await tx
     .select({ id: usersTable.id })
     .from(usersTable)
     .where(eq(usersTable.clerkUserId, clerkUserId))
@@ -105,15 +109,11 @@ async function clerkOwnerId(clerkUserId: string): Promise<string | null> {
   return owner?.id ?? null;
 }
 
-async function ensureCatalogProducts(): Promise<void> {
+async function ensureCatalogProducts(tx: ProvisionTx): Promise<void> {
   for (const product of COLLEGE_CONSULTING_PRODUCTS) {
-    const [existing] = await db
-      .select({ id: satProductsTable.id })
-      .from(satProductsTable)
-      .where(eq(satProductsTable.slug, product.slug))
-      .limit(1);
-    if (!existing) {
-      await db.insert(satProductsTable).values({
+    await tx
+      .insert(satProductsTable)
+      .values({
         slug: product.slug,
         name: product.name,
         description: product.description,
@@ -121,26 +121,13 @@ async function ensureCatalogProducts(): Promise<void> {
         totalPriceCents: product.hourlyRateCents,
         effectiveHourlyRateCents: product.hourlyRateCents,
         active: true,
-      });
-      continue;
-    }
-    await db
-      .update(satProductsTable)
-      .set({
-        name: product.name,
-        description: product.description,
-        durationHours: 1,
-        totalPriceCents: product.hourlyRateCents,
-        effectiveHourlyRateCents: product.hourlyRateCents,
-        active: true,
-        updatedAt: new Date(),
       })
-      .where(eq(satProductsTable.id, existing.id));
+      .onConflictDoNothing({ target: satProductsTable.slug });
   }
 }
 
-async function ensureCourse(): Promise<void> {
-  await db
+async function ensureCourse(tx: ProvisionTx): Promise<void> {
+  await tx
     .insert(coursesTable)
     .values({
       id: COLLEGE_CONSULTING_COURSE_ID,
@@ -151,8 +138,8 @@ async function ensureCourse(): Promise<void> {
       goalSummary: "College consulting. No curriculum, quizzes, or pre-work.",
       meetUrl: SHARED_FALL_MEETING_URL,
     })
-    .onConflictDoNothing();
-  await db
+    .onConflictDoNothing({ target: coursesTable.id });
+  await tx
     .update(coursesTable)
     .set({ meetUrl: SHARED_FALL_MEETING_URL })
     .where(
@@ -163,14 +150,14 @@ async function ensureCourse(): Promise<void> {
     );
 }
 
-async function ensureWeeklyHours(tutorProfileId: string): Promise<void> {
-  const [rule] = await db
+async function ensureWeeklyHours(tx: ProvisionTx, tutorProfileId: string): Promise<void> {
+  const [rule] = await tx
     .select({ id: availabilityRulesTable.id })
     .from(availabilityRulesTable)
     .where(eq(availabilityRulesTable.tutorProfileId, tutorProfileId))
     .limit(1);
   if (rule) return;
-  await db.insert(availabilityRulesTable).values({
+  await tx.insert(availabilityRulesTable).values({
     tutorProfileId,
     timezone: "America/New_York",
     weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
@@ -180,13 +167,13 @@ async function ensureWeeklyHours(tutorProfileId: string): Promise<void> {
   });
 }
 
-async function ensureNika(): Promise<string | null> {
-  const [user] = await db
+async function ensureNika(tx: ProvisionTx): Promise<string | null> {
+  const [user] = await tx
     .select()
     .from(usersTable)
     .where(eq(usersTable.email, NIKA_CONSULTING_EMAIL))
     .limit(1);
-  const [grant] = await db
+  const [grant] = await tx
     .select()
     .from(portalAccessGrantsTable)
     .where(eq(portalAccessGrantsTable.email, NIKA_CONSULTING_EMAIL))
@@ -202,85 +189,62 @@ async function ensureNika(): Promise<string | null> {
   ) {
     return clerkUserId;
   }
-  let nikaUser = user ?? null;
-  if (!nikaUser) {
-    const owner = clerkUserId ? await clerkOwnerId(clerkUserId) : null;
-    if (!owner) {
-      const [created] = await db
-        .insert(usersTable)
-        .values({
-          clerkUserId: clerkUserId ?? pendingClerkUserId(NIKA_CONSULTING_EMAIL),
-          email: NIKA_CONSULTING_EMAIL,
-          displayName: NIKA_CONSULTING_NAME,
-          role: "tutor",
-          title: "Admissions Tutor",
-        })
-        .returning();
-      nikaUser = created ?? null;
-    }
-  } else if (
+  // Nika already has portal access. Do not create a user or grant, and do not turn a revoked row back on.
+  if (!user || !grant || portalAccessRevoked(grant)) {
+    return clerkUserId;
+  }
+  let nikaUser = user;
+  if (
     clerkUserId &&
     !isProductionClerkUserId(nikaUser.clerkUserId) &&
-    (await clerkOwnerId(clerkUserId)) === null
+    (await clerkOwnerId(tx, clerkUserId)) === null
   ) {
-    const [updated] = await db
+    const [updated] = await tx
       .update(usersTable)
       .set({ clerkUserId, updatedAt: new Date() })
       .where(eq(usersTable.id, nikaUser.id))
       .returning();
     if (updated) nikaUser = updated;
   }
-  const notes =
-    "College Consulting provider. Clerk id is taken from the existing user or grant. No Clerk invitation was sent.";
-  if (!grant) {
-    await db.insert(portalAccessGrantsTable).values({
-      email: NIKA_CONSULTING_EMAIL,
-      clerkUserId: nikaUser?.clerkUserId ?? clerkUserId ?? pendingClerkUserId(NIKA_CONSULTING_EMAIL),
-      displayName: NIKA_CONSULTING_NAME,
-      roleCategory: "english_tutor",
-      active: true,
-      notes,
-      userId: nikaUser?.id ?? null,
-    });
-  } else if (nikaUser) {
-    const nextClerk = isProductionClerkUserId(grant.clerkUserId)
-      ? grant.clerkUserId
-      : nikaUser.clerkUserId;
-    await db
+  if (
+    isProductionClerkUserId(nikaUser.clerkUserId) &&
+    !isProductionClerkUserId(grant.clerkUserId)
+  ) {
+    await tx
       .update(portalAccessGrantsTable)
-      .set({
-        clerkUserId: nextClerk,
-        userId: nikaUser.id,
-        active: true,
-        revokedAt: null,
-        notes: grant.notes?.includes("No Clerk invitation") ? grant.notes : notes,
-        updatedAt: new Date(),
-      })
+      .set({ clerkUserId: nikaUser.clerkUserId, userId: nikaUser.id, updatedAt: new Date() })
+      .where(eq(portalAccessGrantsTable.id, grant.id));
+  } else if (!grant.userId) {
+    await tx
+      .update(portalAccessGrantsTable)
+      .set({ userId: nikaUser.id, updatedAt: new Date() })
       .where(eq(portalAccessGrantsTable.id, grant.id));
   }
-  const [profile] = await db
+  const [profile] = await tx
     .select()
     .from(tutorProfilesTable)
     .where(eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL))
     .limit(1);
-  if (profile) {
-    const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
-    await db
+  if (!profile || portalAccessRevoked(profile)) return clerkUserId;
+  const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
+  const subjectsChanged = subjects.length !== (profile.subjects ?? []).length;
+  const linkUser = !profile.userId;
+  if (subjectsChanged || !profile.bookingEligible || linkUser) {
+    await tx
       .update(tutorProfilesTable)
       .set({
-        subjects,
-        bookingEligible: true,
-        active: true,
-        ...(nikaUser ? { userId: profile.userId ?? nikaUser.id } : {}),
+        ...(subjectsChanged ? { subjects } : {}),
+        ...(!profile.bookingEligible ? { bookingEligible: true } : {}),
+        ...(linkUser ? { userId: nikaUser.id } : {}),
         updatedAt: new Date(),
       })
       .where(eq(tutorProfilesTable.id, profile.id));
-    await ensureWeeklyHours(profile.id);
   }
-  return isProductionClerkUserId(nikaUser?.clerkUserId) ? nikaUser!.clerkUserId : clerkUserId;
+  await ensureWeeklyHours(tx, profile.id);
+  return isProductionClerkUserId(nikaUser.clerkUserId) ? nikaUser.clerkUserId : clerkUserId;
 }
 
-async function ensurePlaceholderClient(input: {
+async function ensurePlaceholderClient(tx: ProvisionTx, input: {
   targetUserId: string;
   placeholderEmail: string;
   displayName: string;
@@ -292,7 +256,7 @@ async function ensurePlaceholderClient(input: {
   notes: string;
 }): Promise<{ linked: boolean; email: string | null; stoppedReason: PlaceholderLinkStopReason | null; userId: string | null }> {
   const email = normalizeConsultingEmail(input.placeholderEmail);
-  const [byId] = await db
+  const [byId] = await tx
     .select()
     .from(usersTable)
     .where(eq(usersTable.id, input.targetUserId))
@@ -301,17 +265,25 @@ async function ensurePlaceholderClient(input: {
   if (loginEmail === VICTORIA_INTENDED_EMAIL && !byId) {
     return { linked: false, email: null, stoppedReason: "identity_not_verified", userId: null };
   }
-  const [byEmail] = await db
+  const [byEmail] = await tx
     .select()
     .from(usersTable)
     .where(eq(usersTable.email, loginEmail))
     .limit(1);
   const existingUser = byId ?? byEmail ?? null;
-  const [grant] = await db
+  const [grant] = await tx
     .select()
     .from(portalAccessGrantsTable)
     .where(eq(portalAccessGrantsTable.email, existingUser ? normalizeConsultingEmail(existingUser.email) : email))
     .limit(1);
+  if (portalAccessRevoked(grant)) {
+    return {
+      linked: false,
+      email: existingUser?.email ?? null,
+      stoppedReason: "access_revoked",
+      userId: existingUser?.id ?? null,
+    };
+  }
   const candidateClerk = [grant?.clerkUserId, existingUser?.clerkUserId].find((id) =>
     isProductionClerkUserId(id),
   );
@@ -334,7 +306,7 @@ async function ensurePlaceholderClient(input: {
     allowedGrantRoles: input.allowedGrantRoles,
     envRoleCategories,
     requireKnownClerkId: input.requireKnownClerkId,
-    clerkIdOwnerUserId: candidateClerk ? await clerkOwnerId(candidateClerk) : null,
+    clerkIdOwnerUserId: candidateClerk ? await clerkOwnerId(tx, candidateClerk) : null,
   });
   if (decision.action === "stop") {
     return {
@@ -350,7 +322,7 @@ async function ensurePlaceholderClient(input: {
       : decision.clerkUserId || pendingClerkUserId(email);
   let user = byId ?? null;
   if (!user && decision.mode === "create") {
-    const [created] = await db
+    await tx
       .insert(usersTable)
       .values({
         id: input.targetUserId,
@@ -360,7 +332,12 @@ async function ensurePlaceholderClient(input: {
         role: input.role,
         title: input.title,
       })
-      .returning();
+      .onConflictDoNothing();
+    const [created] = await tx
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, input.targetUserId))
+      .limit(1);
     user = created ?? null;
   }
   if (!user) {
@@ -368,24 +345,43 @@ async function ensurePlaceholderClient(input: {
   }
   const grantEmail = normalizeConsultingEmail(user.email);
   if (!grant) {
-    await db.insert(portalAccessGrantsTable).values({
-      email: grantEmail,
-      clerkUserId: user.clerkUserId,
-      displayName: input.displayName,
-      roleCategory: input.grantRole,
-      active: true,
-      notes: input.notes,
-      userId: user.id,
-    });
-  } else if (grant.userId === user.id || !grant.userId) {
-    await db
+    await tx
+      .insert(portalAccessGrantsTable)
+      .values({
+        email: grantEmail,
+        clerkUserId: user.clerkUserId,
+        displayName: input.displayName,
+        roleCategory: input.grantRole,
+        active: true,
+        notes: input.notes,
+        userId: user.id,
+      })
+      .onConflictDoNothing({ target: portalAccessGrantsTable.email });
+    const [stored] = await tx
+      .select()
+      .from(portalAccessGrantsTable)
+      .where(eq(portalAccessGrantsTable.email, grantEmail))
+      .limit(1);
+    if (!stored || portalAccessRevoked(stored) || (stored.userId && stored.userId !== user.id)) {
+      return {
+        linked: false,
+        email: user.email,
+        stoppedReason: stored && portalAccessRevoked(stored) ? "access_revoked" : "grant_points_at_other_user",
+        userId: user.id,
+      };
+    }
+    if (!stored.userId) {
+      await tx
+        .update(portalAccessGrantsTable)
+        .set({ userId: user.id, updatedAt: new Date() })
+        .where(eq(portalAccessGrantsTable.id, stored.id));
+    }
+  } else if (!grant.userId) {
+    await tx
       .update(portalAccessGrantsTable)
       .set({
         userId: user.id,
-        displayName: grant.displayName || input.displayName,
-        active: true,
-        revokedAt: null,
-        notes: input.notes,
+        ...(grant.displayName?.trim() ? {} : { displayName: input.displayName }),
         updatedAt: new Date(),
       })
       .where(eq(portalAccessGrantsTable.id, grant.id));
@@ -394,10 +390,11 @@ async function ensurePlaceholderClient(input: {
 }
 
 async function ensureMembership(
+  tx: ProvisionTx,
   userId: string,
   membershipRole: "student" | "tutor",
 ): Promise<void> {
-  await db
+  await tx
     .insert(courseMembershipsTable)
     .values({
       courseId: COLLEGE_CONSULTING_COURSE_ID,
@@ -408,8 +405,12 @@ async function ensureMembership(
     .onConflictDoNothing();
 }
 
-async function ensureAssignment(tutorUserId: string, studentUserId: string): Promise<void> {
-  await db
+async function ensureAssignment(
+  tx: ProvisionTx,
+  tutorUserId: string,
+  studentUserId: string,
+): Promise<void> {
+  await tx
     .insert(tutorAssignmentsTable)
     .values({
       courseId: COLLEGE_CONSULTING_COURSE_ID,
@@ -424,23 +425,23 @@ function blankProfileText(value: string | null | undefined): boolean {
   return !value?.trim();
 }
 
-async function ensureVictoriaProfile(userId: string, email: string): Promise<void> {
+async function ensureVictoriaProfile(tx: ProvisionTx, userId: string, email: string): Promise<void> {
   const notes = `Temporary tutor login ${VICTORIA_PLACEHOLDER_EMAIL}. Display name ${VICTORIA_DISPLAY_NAME} (she/her). Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned and must not be contacted. Swap users.email, portal_access_grants.email, and tutor_profiles.email for ${VICTORIA_USER_ID} later. No Clerk invitation was sent.`;
-  const [byUser] = await db
+  const [byUser] = await tx
     .select()
     .from(tutorProfilesTable)
     .where(eq(tutorProfilesTable.userId, userId))
     .limit(1);
   const [byEmail] = byUser
     ? []
-    : await db
+    : await tx
         .select()
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.email, normalizeConsultingEmail(email)))
         .limit(1);
   const profile = byUser ?? byEmail ?? null;
   if (!profile) {
-    const [created] = await db
+    const [created] = await tx
       .insert(tutorProfilesTable)
       .values({
         userId,
@@ -458,13 +459,16 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
         tagline: VICTORIA_BOOKING_TAGLINE,
         internalNotes: notes,
       })
+      .onConflictDoNothing({ target: tutorProfilesTable.email })
       .returning();
-    if (created) await ensureWeeklyHours(created.id);
-    await renameVictoriaPlaceholder(userId);
+    if (created) await ensureWeeklyHours(tx, created.id);
+    await renameVictoriaPlaceholder(tx, userId);
     return;
   }
   if (profile.userId && profile.userId !== userId) return;
-  await db
+  if (portalAccessRevoked(profile)) return;
+  const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
+  await tx
     .update(tutorProfilesTable)
     .set({
       userId,
@@ -473,9 +477,8 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
         blankProfileText(profile.name) || profile.name?.trim() === VICTORIA_PLACEHOLDER_DISPLAY_NAME
           ? VICTORIA_DISPLAY_NAME
           : profile.name,
-      bookingEligible: true,
-      active: true,
-      subjects: [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])],
+      ...(profile.bookingEligible ? {} : { bookingEligible: true }),
+      subjects,
       internalNotes: notes,
       ...(blankProfileText(profile.tagline) ? { tagline: VICTORIA_BOOKING_TAGLINE } : {}),
       ...(blankProfileText(profile.biography) || profile.biography?.trim() === VICTORIA_PREVIOUS_BIOGRAPHY
@@ -492,34 +495,42 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
       updatedAt: new Date(),
     })
     .where(eq(tutorProfilesTable.id, profile.id));
-  await renameVictoriaPlaceholder(userId);
-  await ensureWeeklyHours(profile.id);
+  await renameVictoriaPlaceholder(tx, userId);
+  await ensureWeeklyHours(tx, profile.id);
 }
 
-async function renameVictoriaPlaceholder(userId: string): Promise<void> {
-  await db
+async function renameVictoriaPlaceholder(tx: ProvisionTx, userId: string): Promise<void> {
+  await tx
     .update(usersTable)
     .set({ displayName: VICTORIA_DISPLAY_NAME, updatedAt: new Date() })
     .where(
       and(eq(usersTable.id, userId), eq(usersTable.displayName, VICTORIA_PLACEHOLDER_DISPLAY_NAME)),
     );
-  await db
+  await tx
     .update(portalAccessGrantsTable)
     .set({ displayName: VICTORIA_DISPLAY_NAME, updatedAt: new Date() })
     .where(
       and(
         eq(portalAccessGrantsTable.userId, userId),
         eq(portalAccessGrantsTable.displayName, VICTORIA_PLACEHOLDER_DISPLAY_NAME),
+        sql`${portalAccessGrantsTable.revokedAt} is null`,
+        eq(portalAccessGrantsTable.active, true),
       ),
     );
 }
 
-async function ensureBookingTaglines(): Promise<void> {
-  await db
+async function ensureBookingTaglines(tx: ProvisionTx): Promise<void> {
+  await tx
     .update(tutorProfilesTable)
     .set({ tagline: NIKA_BOOKING_TAGLINE, updatedAt: new Date() })
-    .where(and(eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL), isNull(tutorProfilesTable.tagline)));
-  const xavierUsers = await db
+    .where(
+      and(
+        eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL),
+        eq(tutorProfilesTable.active, true),
+        isNull(tutorProfilesTable.tagline),
+      ),
+    );
+  const xavierUsers = await tx
     .select({ id: usersTable.id })
     .from(usersTable)
     .where(
@@ -529,7 +540,7 @@ async function ensureBookingTaglines(): Promise<void> {
       ),
     );
   const xavierUserIds = xavierUsers.map((user: { id: string }) => user.id);
-  await db
+  await tx
     .update(tutorProfilesTable)
     .set({ tagline: XAVIER_BOOKING_TAGLINE, updatedAt: new Date() })
     .where(
@@ -538,17 +549,27 @@ async function ensureBookingTaglines(): Promise<void> {
           eq(tutorProfilesTable.email, CANONICAL_XAVIER_EMAIL),
           xavierUserIds.length > 0 ? inArray(tutorProfilesTable.userId, xavierUserIds) : sql`false`,
         ),
+        eq(tutorProfilesTable.active, true),
         isNull(tutorProfilesTable.tagline),
       ),
     );
 }
 
 export async function ensureCollegeConsultingProvision(): Promise<CollegeConsultingProvisionStatus> {
-  await ensureCatalogProducts();
-  await ensureCourse();
-  await ensureBookingTaglines();
-  const nikaClerkUserId = await ensureNika();
-  const neel = await ensurePlaceholderClient({
+  const status = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${PROVISION_LOCK_KEY}))`);
+    return provisionCollegeConsulting(tx);
+  });
+  lastStatus = status;
+  return lastStatus;
+}
+
+async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsultingProvisionStatus> {
+  await ensureCatalogProducts(tx);
+  await ensureCourse(tx);
+  await ensureBookingTaglines(tx);
+  const nikaClerkUserId = await ensureNika(tx);
+  const neel = await ensurePlaceholderClient(tx, {
     targetUserId: NEEL_DHARNI_USER_ID,
     placeholderEmail: NEEL_PLACEHOLDER_EMAIL,
     displayName: NEEL_DISPLAY_NAME,
@@ -560,7 +581,7 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
     notes:
       "Neel Dharni placeholder login. Bookings use this user id. Change users.email and portal_access_grants.email together later. No Clerk invitation was sent.",
   });
-  const victoria = await ensurePlaceholderClient({
+  const victoria = await ensurePlaceholderClient(tx, {
     targetUserId: VICTORIA_USER_ID,
     placeholderEmail: VICTORIA_PLACEHOLDER_EMAIL,
     displayName: VICTORIA_DISPLAY_NAME,
@@ -572,13 +593,13 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
     notes: `Temporary Victoria tutor login for testing. Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned. No Clerk invitation was sent.`,
   });
   if (victoria.linked && victoria.userId && victoria.email) {
-    await ensureVictoriaProfile(victoria.userId, victoria.email);
-    await ensureMembership(victoria.userId, "tutor");
+    await ensureVictoriaProfile(tx, victoria.userId, victoria.email);
+    await ensureMembership(tx, victoria.userId, "tutor");
   }
   if (neel.linked && neel.userId) {
-    await ensureMembership(neel.userId, "student");
+    await ensureMembership(tx, neel.userId, "student");
     const tutorEmails = [NIKA_CONSULTING_EMAIL, CANONICAL_XAVIER_EMAIL];
-    const tutors = await db
+    const tutors = await tx
       .select({ id: usersTable.id, email: usersTable.email })
       .from(usersTable)
       .where(inArray(usersTable.email, tutorEmails));
@@ -588,7 +609,7 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
     )
       ? null
       : (
-          await db
+          await tx
             .select({ id: usersTable.id })
             .from(usersTable)
             .where(eq(usersTable.clerkUserId, CANONICAL_XAVIER_CLERK_USER_ID))
@@ -599,18 +620,44 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
       ...(xavierByClerk ? [xavierByClerk.id] : []),
       ...(victoria.userId ? [victoria.userId] : []),
     ];
-    const [nikaUser] = await db
-      .select({ id: usersTable.id })
+    const [nikaUser] = await tx
+      .select({ id: usersTable.id, role: usersTable.role })
       .from(usersTable)
       .where(eq(usersTable.email, NIKA_CONSULTING_EMAIL))
       .limit(1);
-    if (nikaUser) tutorIds.push(nikaUser.id);
+    const [nikaGrant] = nikaUser
+      ? await tx
+          .select({
+            active: portalAccessGrantsTable.active,
+            revokedAt: portalAccessGrantsTable.revokedAt,
+          })
+          .from(portalAccessGrantsTable)
+          .where(eq(portalAccessGrantsTable.email, NIKA_CONSULTING_EMAIL))
+          .limit(1)
+      : [];
+    const [nikaProfile] = nikaUser
+      ? await tx
+          .select({ active: tutorProfilesTable.active })
+          .from(tutorProfilesTable)
+          .where(eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL))
+          .limit(1)
+      : [];
+    if (
+      nikaUser &&
+      nikaUser.role !== "administrator" &&
+      nikaGrant &&
+      !portalAccessRevoked(nikaGrant) &&
+      nikaProfile &&
+      !portalAccessRevoked(nikaProfile)
+    ) {
+      tutorIds.push(nikaUser.id);
+    }
     for (const tutorUserId of [...new Set(tutorIds)]) {
-      await ensureMembership(tutorUserId, "tutor");
-      await ensureAssignment(tutorUserId, neel.userId);
+      await ensureMembership(tx, tutorUserId, "tutor");
+      await ensureAssignment(tx, tutorUserId, neel.userId);
     }
   }
-  lastStatus = {
+  return {
     nikaEmail: NIKA_CONSULTING_EMAIL,
     nikaClerkUserId,
     neelLinked: neel.linked,
@@ -624,5 +671,4 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
     victoriaEmail: victoria.email,
     victoriaStoppedReason: victoria.stoppedReason,
   };
-  return lastStatus;
 }

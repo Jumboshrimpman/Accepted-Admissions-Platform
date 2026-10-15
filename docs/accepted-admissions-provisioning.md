@@ -126,7 +126,7 @@ Expected error states:
 
 ## College Consulting (Neel, Nika, Victoria, Xavier)
 
-Startup upserts the College Consulting course, the three hour products, and Nika’s booking eligibility. It does **not** call Clerk, send mail, or create calendar events. Google Calendar stickiness is the same global rule as Xavier: a stored refresh token is not disconnected.
+Startup, before the API listens, inserts the College Consulting course and the three hour products only when those rows are missing. It does not overwrite stored prices. Nika stays bookable when her grant and tutor profile are already active: College Consulting is added to that profile and booking eligibility is turned on. A grant or profile with `active = false` or `revoked_at` set is left revoked. Startup does not create Nika’s user or grant. It does **not** call Clerk, send mail, or create calendar events. Google Calendar stickiness is the same global rule as Xavier: a stored refresh token is not disconnected. College Consulting calendar writes use `sendUpdates=none`, so Google does not email the student or `admin@acceptedadmissions.org`; both stay on the event. Michelle and Xavier SAT invites are unchanged.
 
 Nika (`nika.raiffe@gmail.com`) signs in at `/login` and connects Google Calendar at `/tutor`. Her Production Clerk id is read from `users` / `portal_access_grants` and is not invented. She is not added to the SAT booking roster.
 

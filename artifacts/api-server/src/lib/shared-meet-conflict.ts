@@ -147,6 +147,18 @@ export function sharedMeetOverlapPairs(
   return pairs;
 }
 
+/** Pairs whose sessions have not ended. Historical overlaps stay off the admin banner. */
+export function upcomingSharedMeetOverlapPairs(
+  sessions: readonly SharedMeetOverlapSession[],
+  now: Date = new Date(),
+): SharedMeetOverlapPair[] {
+  const upcoming = sessions.filter((session) => {
+    const end = session.dateTime.getTime() + session.durationMinutes * 60_000;
+    return end > now.getTime();
+  });
+  return sharedMeetOverlapPairs(upcoming);
+}
+
 export function sharedMeetOccupancyWindows(
   sessions: Array<{
     dateTime: Date;

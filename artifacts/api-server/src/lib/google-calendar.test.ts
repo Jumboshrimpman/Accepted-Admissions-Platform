@@ -24,6 +24,7 @@ const {
   calendarOAuthStateFailureMessage,
   classifyGoogleCalendarRequestFailure,
   googleCalendarEventWritePath,
+  googleCalendarSendUpdatesForSubjects,
   classifyGoogleProviderError,
   classifyGoogleTokenExchangeFailure,
   createCalendarOAuthState,
@@ -62,6 +63,21 @@ test("event writes notify attendees the same way create does", () => {
   assert.match(
     googleCalendarEventWritePath("primary", "evt-1"),
     /\/calendars\/primary\/events\/evt-1\?sendUpdates=all$/,
+  );
+});
+
+test("College Consulting calendar writes do not email attendees", () => {
+  assert.equal(googleCalendarSendUpdatesForSubjects("College Consulting"), "none");
+  assert.equal(googleCalendarSendUpdatesForSubjects("SAT", "College Consulting"), "none");
+  assert.equal(googleCalendarSendUpdatesForSubjects("SAT"), "all");
+  assert.equal(googleCalendarSendUpdatesForSubjects(null), "all");
+  assert.match(
+    googleCalendarEventWritePath("primary", undefined, "none"),
+    /\/calendars\/primary\/events\?sendUpdates=none$/,
+  );
+  assert.match(
+    googleCalendarEventWritePath("primary", "evt-1", "none"),
+    /\/calendars\/primary\/events\/evt-1\?sendUpdates=none$/,
   );
 });
 

@@ -34,6 +34,7 @@ import {
   createGoogleEvent,
   decryptCalendarToken,
   deleteGoogleEvent,
+  googleCalendarSendUpdatesForSubjects,
   exchangeGoogleCode,
   getGoogleCalendarConfig,
   googleAccessTokenExpiresAt,
@@ -69,6 +70,7 @@ import {
 import {
   acquireBookingLocks,
   assertNoScheduleConflict,
+  guardSharedMeetWrite,
   assertSessionAllowsScheduleChange,
   BookingServiceError,
   cancelBookingWithCreditPolicy,
@@ -93,11 +95,8 @@ import {
   isNeelDharniUser,
   NEEL_DHARNI_USER_ID,
 } from "../lib/college-consulting";
-import {
-  collegeConsultingProvisionStatus,
-  ensureCollegeConsultingProvision,
-} from "../lib/college-consulting-provision";
-import { sessionClaimsSharedFallMeet, sharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
+import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
+import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
   bookingCalendarEventPayload,
   generateAvailableSlots,
@@ -2148,11 +2147,6 @@ async function ensureUpgradeSeedData(): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(publicContentTable.id, page.id));
-  }
-  try {
-    await ensureCollegeConsultingProvision();
-  } catch (err) {
-    logger.warn({ err }, "College Consulting provisioning skipped");
   }
 }
 
@@ -4528,6 +4522,7 @@ async function syncGoogleCalendarForSessionChange(args: {
     timezone: string;
     durationMinutes: number;
     title: string;
+    subject: string;
     bookingStatus: string;
     tutorUserId: string | null;
     clientUserId: string | null;
@@ -4556,9 +4551,15 @@ async function syncGoogleCalendarForSessionChange(args: {
       "The tutor's calendar is disconnected.",
     );
   }
+  const sendUpdates = googleCalendarSendUpdatesForSubjects(args.existing.subject, args.next.subject);
   if (cancelling) {
     await runTutorCalendarCall(access, (token) =>
-      deleteGoogleEvent(token, access.connection.calendarId!, args.existing.providerEventId!),
+      deleteGoogleEvent(
+        token,
+        access.connection.calendarId!,
+        args.existing.providerEventId!,
+        sendUpdates,
+      ),
     );
     return { providerEventId: null, providerEventUrl: null };
   }
@@ -4587,6 +4588,7 @@ async function syncGoogleCalendarForSessionChange(args: {
         student,
         tutor,
       }),
+      sendUpdates,
     ),
   );
   return {
@@ -5124,7 +5126,6 @@ router.get(
 
 router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): Promise<void> => {
   if (isNeelDharniUser(req.appUser?.id)) {
-    await ensureCollegeConsultingProvision();
     const products = await db
       .select()
       .from(satProductsTable)
@@ -5928,28 +5929,68 @@ router.post(
       body.data.subject,
       tutorUserId,
     );
-    const [created] = await db
-      .insert(sessionsTable)
-      .values({
-        courseId: body.data.courseId,
-        clientUserId,
-        tutorUserId,
-        dateTime: body.data.dateTime,
-        timezone: body.data.timezone.trim(),
-        subject: body.data.subject.trim(),
-        title,
-        status: body.data.status ?? (user.role === "tutor" ? "published" : "draft"),
-        durationMinutes: body.data.durationMinutes,
-        bookingStatus: body.data.bookingStatus ?? "confirmed",
-      })
-      .returning();
-    await db.insert(auditLogsTable).values({
-      actorUserId: user.id,
-      action: "session.created",
-      entityType: "session",
-      entityId: created!.id,
-      metadata: { courseId: created!.courseId, status: created!.status, source: "tutor" },
-    });
+    let created: typeof sessionsTable.$inferSelect;
+    try {
+      created = await db.transaction(async (tx) => {
+        const end = new Date(body.data.dateTime.getTime() + body.data.durationMinutes * 60_000);
+        await guardSharedMeetWrite(tx, {
+          start: body.data.dateTime,
+          end,
+          courseId: body.data.courseId,
+          subject: body.data.subject,
+        });
+        const raced = await adminSessionConflicts(
+          {
+            tutorUserId,
+            clientUserId,
+            dateTime: body.data.dateTime,
+            durationMinutes: body.data.durationMinutes,
+            courseId: body.data.courseId,
+            subject: body.data.subject,
+          },
+          undefined,
+          { checkProvider: false },
+          tx,
+        );
+        if (raced.length > 0) {
+          throw new BookingError(
+            409,
+            "SCHEDULE_CONFLICT",
+            "This session conflicts with existing scheduling data.",
+          );
+        }
+        const [row] = await tx
+          .insert(sessionsTable)
+          .values({
+            courseId: body.data.courseId,
+            clientUserId,
+            tutorUserId,
+            dateTime: body.data.dateTime,
+            timezone: body.data.timezone.trim(),
+            subject: body.data.subject.trim(),
+            title,
+            status: body.data.status ?? (user.role === "tutor" ? "published" : "draft"),
+            durationMinutes: body.data.durationMinutes,
+            bookingStatus: body.data.bookingStatus ?? "confirmed",
+          })
+          .returning();
+        if (!row) throw new BookingError(500, "SESSION_CREATE_FAILED", "The session could not be created.");
+        await tx.insert(auditLogsTable).values({
+          actorUserId: user.id,
+          action: "session.created",
+          entityType: "session",
+          entityId: row.id,
+          metadata: { courseId: row.courseId, status: row.status, source: "tutor" },
+        });
+        return row;
+      });
+    } catch (error) {
+      if (error instanceof BookingError || error instanceof BookingServiceError) {
+        res.status(error.status).json({ code: error.code, error: error.message });
+        return;
+      }
+      throw error;
+    }
     try {
       await ensureAutogeneratedSatPrework(created!.id, user.id);
     } catch {
@@ -6365,7 +6406,7 @@ async function unresolvedSharedMeetOverlaps() {
       .from(sharedMeetOverlapResolutionsTable),
   ]);
   const resolved = new Set(resolutions.map((row) => row.overlapKey));
-  return sharedMeetOverlapPairs(rows).filter((pair) => !resolved.has(pair.overlapKey));
+  return upcomingSharedMeetOverlapPairs(rows).filter((pair) => !resolved.has(pair.overlapKey));
 }
 
 router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => {
@@ -6608,6 +6649,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
             student,
             tutor: tutorParty,
           }),
+          googleCalendarSendUpdatesForSubjects(consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT"),
         ),
       );
       const [updated] = await db
@@ -6674,7 +6716,12 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
       const access = profile[0] ? await calendarAccess(profile[0].id) : null;
       if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
       await runTutorCalendarCall(access, (token) =>
-        deleteGoogleEvent(token, access.connection.calendarId!, session.providerEventId!),
+        deleteGoogleEvent(
+          token,
+          access.connection.calendarId!,
+          session.providerEventId!,
+          googleCalendarSendUpdatesForSubjects(session.subject),
+        ),
       );
     }
     const reason = stringField((req.body ?? {}) as Record<string, unknown>, "reason") || "Cancelled by client";
@@ -6731,21 +6778,13 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     const participantIds = [session.clientUserId, session.tutorUserId].filter(
       (id): id is string => Boolean(id),
     );
-    await db.transaction(async (tx) => {
-      await acquireBookingLocks(tx, participantIds, start.toISOString());
-      await assertNoScheduleConflict(tx, {
-        participantIds,
-        start,
-        end,
-        excludeSessionId: session.id,
-      });
-    });
     const previousStart = session.dateTime;
     const [student, tutorParty] = await Promise.all([
       calendarInviteParty(session.clientUserId),
       calendarInviteParty(session.tutorUserId, { email: profile.email }),
     ]);
     const attendeeEmail = student.email ?? "";
+    const sendUpdates = googleCalendarSendUpdatesForSubjects(session.subject);
     const inviteAt = (startTime: Date, timeZone: string) =>
       bookingCalendarEventPayload({
         title: session.title,
@@ -6764,35 +6803,56 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             access.connection.calendarId!,
             session.providerEventId!,
             inviteAt(start, rule.timezone),
+            sendUpdates,
           ),
         )
       : null;
-    const [updated] = await db
-      .update(sessionsTable)
-      .set({
-        dateTime: start,
-        timezone: rule.timezone,
-        bookingStatus: "rescheduled",
-        providerEventId: event?.id ?? session.providerEventId,
-        providerEventUrl: event?.htmlLink ?? session.providerEventUrl,
-        updatedAt: new Date(),
-      })
-      .where(eq(sessionsTable.id, session.id))
-      .returning();
-    if (!updated) {
+    let updated: typeof sessionsTable.$inferSelect;
+    try {
+      updated = await db.transaction(async (tx) => {
+        await acquireBookingLocks(tx, participantIds, start.toISOString());
+        await assertNoScheduleConflict(tx, {
+          participantIds,
+          start,
+          end,
+          excludeSessionId: session.id,
+        });
+        const [row] = await tx
+          .update(sessionsTable)
+          .set({
+            dateTime: start,
+            timezone: rule.timezone,
+            bookingStatus: "rescheduled",
+            providerEventId: event?.id ?? session.providerEventId,
+            providerEventUrl: event?.htmlLink ?? session.providerEventUrl,
+            updatedAt: new Date(),
+          })
+          .where(eq(sessionsTable.id, session.id))
+          .returning();
+        if (!row) {
+          throw new BookingError(500, "RESCHEDULE_FAILED", "The session could not be rescheduled.");
+        }
+        return row;
+      });
+    } catch (error) {
       if (session.providerEventId) {
-        await runTutorCalendarCall(access, (token) =>
-          updateGoogleEvent(
-            token,
-            access.connection.calendarId!,
-            session.providerEventId!,
-            inviteAt(previousStart, session.timezone),
-          ),
-        );
+        try {
+          await runTutorCalendarCall(access, (token) =>
+            updateGoogleEvent(
+              token,
+              access.connection.calendarId!,
+              session.providerEventId!,
+              inviteAt(previousStart, session.timezone),
+              sendUpdates,
+            ),
+          );
+        } catch {
+          // Keep the scheduling error if the calendar rewind fails.
+        }
       }
-      throw new BookingError(500, "RESCHEDULE_FAILED", "The session could not be rescheduled.");
+      throw error;
     }
-    res.json(await bookingSessionShape(updated ?? session));
+    res.json(await bookingSessionShape(updated));
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -8468,6 +8528,10 @@ async function adminProgramShape(course: typeof coursesTable.$inferSelect) {
   };
 }
 
+type SessionConflictReader = {
+  select: typeof db.select;
+};
+
 async function adminSessionConflicts(
   payload: {
     tutorUserId?: string | null;
@@ -8479,9 +8543,10 @@ async function adminSessionConflicts(
   },
   excludeSessionId?: string,
   options: { checkProvider?: boolean; strictProvider?: boolean } = {},
+  query: SessionConflictReader = db,
 ) {
   const end = new Date(payload.dateTime.getTime() + payload.durationMinutes * 60_000);
-  const rows = await db
+  const rows = await query
     .select({
       id: sessionsTable.id,
       title: sessionsTable.title,
@@ -8515,7 +8580,7 @@ async function adminSessionConflicts(
         `${row.title} · ${row.dateTime.toISOString()} (${row.durationMinutes} min)`,
     );
   const [proposedCourse] = payload.courseId
-    ? await db
+    ? await query
         .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
         .from(coursesTable)
         .where(eq(coursesTable.id, payload.courseId))
@@ -9844,26 +9909,66 @@ router.post(
       body.data.subject,
       body.data.tutorUserId,
     );
-    const [created] = await db.insert(sessionsTable).values({
-      courseId: body.data.courseId,
-      clientUserId: body.data.clientUserId ?? null,
-      tutorUserId: body.data.tutorUserId ?? null,
-      dateTime: body.data.dateTime,
-      timezone: body.data.timezone.trim(),
-      subject: body.data.subject.trim(),
-      title,
-      status: body.data.status ?? "draft",
-      durationMinutes: body.data.durationMinutes,
-      bookingStatus: body.data.bookingStatus ?? "confirmed",
-    }).returning();
-    await db.insert(auditLogsTable).values({
-      actorUserId: req.appUser!.id,
-      action: "session.created",
-      entityType: "session",
-      entityId: created!.id,
-      metadata: { courseId: created!.courseId, status: created!.status },
-    });
-    res.status(201).json(CreateAdminSessionResponse.parse(await adminSessionShape(created!)));
+    let created: typeof sessionsTable.$inferSelect;
+    try {
+      created = await db.transaction(async (tx) => {
+        const end = new Date(body.data.dateTime.getTime() + body.data.durationMinutes * 60_000);
+        await guardSharedMeetWrite(tx, {
+          start: body.data.dateTime,
+          end,
+          courseId: body.data.courseId,
+          subject: body.data.subject,
+        });
+        const raced = await adminSessionConflicts(
+          {
+            tutorUserId: body.data.tutorUserId,
+            clientUserId: body.data.clientUserId,
+            dateTime: body.data.dateTime,
+            durationMinutes: body.data.durationMinutes,
+            courseId: body.data.courseId,
+            subject: body.data.subject,
+          },
+          undefined,
+          { checkProvider: false },
+          tx,
+        );
+        if (raced.length > 0) {
+          throw new BookingError(
+            409,
+            "SCHEDULE_CONFLICT",
+            "This session conflicts with existing scheduling data.",
+          );
+        }
+        const [row] = await tx.insert(sessionsTable).values({
+          courseId: body.data.courseId,
+          clientUserId: body.data.clientUserId ?? null,
+          tutorUserId: body.data.tutorUserId ?? null,
+          dateTime: body.data.dateTime,
+          timezone: body.data.timezone.trim(),
+          subject: body.data.subject.trim(),
+          title,
+          status: body.data.status ?? "draft",
+          durationMinutes: body.data.durationMinutes,
+          bookingStatus: body.data.bookingStatus ?? "confirmed",
+        }).returning();
+        if (!row) throw new BookingError(500, "SESSION_CREATE_FAILED", "The session could not be created.");
+        await tx.insert(auditLogsTable).values({
+          actorUserId: req.appUser!.id,
+          action: "session.created",
+          entityType: "session",
+          entityId: row.id,
+          metadata: { courseId: row.courseId, status: row.status },
+        });
+        return row;
+      });
+    } catch (error) {
+      if (error instanceof BookingError || error instanceof BookingServiceError) {
+        res.status(error.status).json({ code: error.code, error: error.message });
+        return;
+      }
+      throw error;
+    }
+    res.status(201).json(CreateAdminSessionResponse.parse(await adminSessionShape(created)));
   },
 );
 
@@ -9950,34 +10055,91 @@ router.patch(
       providerEventId: existing.providerEventId,
       providerEventUrl: existing.providerEventUrl,
     };
+    let calendarMoved = false;
     try {
       calendarFields = await syncGoogleCalendarForSessionChange({ existing, next });
+      calendarMoved =
+        Boolean(existing.providerEventId) &&
+        next.bookingStatus !== "cancelled" &&
+        (existing.dateTime.getTime() !== next.dateTime.getTime() ||
+          existing.durationMinutes !== next.durationMinutes ||
+          existing.timezone !== next.timezone ||
+          existing.title !== next.title ||
+          existing.tutorUserId !== next.tutorUserId ||
+          existing.clientUserId !== next.clientUserId);
+      const updated = await db.transaction(async (tx) => {
+        if (next.status !== "archived" && next.bookingStatus !== "cancelled") {
+          const end = new Date(next.dateTime.getTime() + next.durationMinutes * 60_000);
+          await guardSharedMeetWrite(tx, {
+            start: next.dateTime,
+            end,
+            excludeSessionId: existing.id,
+            courseId: next.courseId,
+            subject: next.subject,
+          });
+          const raced = await adminSessionConflicts(next, existing.id, { checkProvider: false }, tx);
+          if (raced.length > 0) {
+            throw new BookingError(
+              409,
+              "SCHEDULE_CONFLICT",
+              "This session conflicts with existing scheduling data.",
+            );
+          }
+        }
+        const [saved] = await tx
+          .update(sessionsTable)
+          .set({ ...next, ...calendarFields, updatedAt: new Date() })
+          .where(eq(sessionsTable.id, existing.id))
+          .returning();
+        if (!saved) {
+          throw new Error("SESSION_UPDATE_FAILED");
+        }
+        await tx.insert(auditLogsTable).values({
+          actorUserId: req.appUser!.id,
+          action: saved.status === "archived" ? "session.archived" : "session.updated",
+          entityType: "session",
+          entityId: saved.id,
+          metadata: { courseId: saved.courseId, status: saved.status },
+        });
+        return saved;
+      });
+      res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated)));
     } catch (error) {
-      if (error instanceof BookingError) {
+      if (calendarMoved && calendarFields.providerEventId) {
+        try {
+          await syncGoogleCalendarForSessionChange({
+            existing: {
+              ...existing,
+              providerEventId: calendarFields.providerEventId,
+              providerEventUrl: calendarFields.providerEventUrl,
+              dateTime: next.dateTime,
+              timezone: next.timezone,
+              durationMinutes: next.durationMinutes,
+              title: next.title,
+              tutorUserId: next.tutorUserId,
+              clientUserId: next.clientUserId,
+            },
+            next: {
+              dateTime: existing.dateTime,
+              timezone: existing.timezone,
+              durationMinutes: existing.durationMinutes,
+              title: existing.title,
+              subject: existing.subject,
+              bookingStatus: existing.bookingStatus,
+              tutorUserId: existing.tutorUserId,
+              clientUserId: existing.clientUserId,
+            },
+          });
+        } catch {
+          // The scheduling error is the one the admin needs to see.
+        }
+      }
+      if (error instanceof BookingError || error instanceof BookingServiceError) {
         sendBookingError(error, res);
         return;
       }
       throw error;
     }
-    const updated = await db.transaction(async (tx) => {
-      const [saved] = await tx
-        .update(sessionsTable)
-        .set({ ...next, ...calendarFields, updatedAt: new Date() })
-        .where(eq(sessionsTable.id, existing.id))
-        .returning();
-      if (!saved) {
-        throw new Error("SESSION_UPDATE_FAILED");
-      }
-      await tx.insert(auditLogsTable).values({
-        actorUserId: req.appUser!.id,
-        action: saved.status === "archived" ? "session.archived" : "session.updated",
-        entityType: "session",
-        entityId: saved.id,
-        metadata: { courseId: saved.courseId, status: saved.status },
-      });
-      return saved;
-    });
-    res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated)));
   },
 );
 
