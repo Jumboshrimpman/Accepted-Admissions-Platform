@@ -48,6 +48,7 @@ import TutorCurriculum from '@/pages/tutor/curriculum';
 import TutorSession from '@/pages/tutor/session';
 import TutorAttempt from '@/pages/tutor/attempt';
 import AdminDashboard from '@/pages/admin/dashboard';
+import AdminConnections from '@/pages/admin/connections';
 import AdminCurriculum from '@/pages/admin/curriculum';
 import AdminClientPreview from '@/pages/admin/client-preview';
 import { PublicContentPanel } from '@/pages/admin/public-content-panel';
@@ -345,6 +346,19 @@ export function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/admin/connections">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <AdminConnections />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/admin/content">
           <SignedIn>
             <RoleBoundary roles={["administrator"]}>
@@ -368,6 +382,7 @@ export function Router() {
                 <Route path="/admin/financials">
                   <Redirect to="/admin" />
                 </Route>
+                <Route path="/admin/connections" component={AdminConnections} />
                 <Route path="/admin/content">
                   <div className="mx-auto max-w-7xl"><PublicContentPanel /></div>
                 </Route>

@@ -184,6 +184,7 @@ export default function AdminDashboard() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-in fade-in">
       <UnresolvedFormSubmissionsAlert requests={unresolvedRequests} />
+      <CalendarReconnectAlert alerts={overview?.calendarReconnectAlerts ?? []} />
       <SharedMeetOverlapAlert overlaps={overview?.sharedMeetOverlaps ?? []} />
       <ConsultingProvisionNotice provision={overview?.consultingProvision} />
       <div>
@@ -566,6 +567,53 @@ function ConsultingProvisionNotice({
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function CalendarReconnectAlert({
+  alerts,
+}: {
+  alerts: NonNullable<AdminOverview["calendarReconnectAlerts"]>;
+}) {
+  if (alerts.length === 0) return null;
+  return (
+    <section
+      role="alert"
+      aria-labelledby="calendar-reconnect-heading"
+      data-testid="alert-calendar-reconnect"
+      className="rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950 shadow-sm"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="calendar-reconnect-heading" className="flex items-center gap-2 text-lg font-semibold">
+            <AlertTriangle className="h-5 w-5" />
+            Calendar reconnect needed
+          </h2>
+          <p className="mt-1 text-sm text-amber-900">
+            {alerts.length === 1
+              ? "1 tutor with upcoming bookable time needs to reconnect Google Calendar."
+              : `${alerts.length} tutors with upcoming bookable time need to reconnect Google Calendar.`}{" "}
+            This stays until the connection is healthy again.
+          </p>
+        </div>
+        <Badge className="w-fit border-transparent bg-amber-500 text-amber-950 hover:bg-amber-500">
+          {alerts.length} unresolved
+        </Badge>
+      </div>
+      <ul className="mt-4 space-y-2">
+        {alerts.map((alert) => (
+          <li key={alert.tutorProfileId}>
+            <Link
+              href="/admin/connections"
+              className="font-semibold underline-offset-2 hover:underline"
+              data-testid={`link-calendar-reconnect-${alert.tutorProfileId}`}
+            >
+              {alert.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

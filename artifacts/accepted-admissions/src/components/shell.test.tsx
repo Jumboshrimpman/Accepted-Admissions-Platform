@@ -20,6 +20,7 @@ const adminOverview = vi.hoisted(() => ({
   data: undefined as
     | {
         guidanceRequests: Array<{ id: string; resolvedAt: string | null }>;
+        calendarReconnectAlerts?: Array<{ tutorProfileId: string; name: string }>;
       }
     | undefined,
 }));
@@ -145,6 +146,9 @@ describe("Shell", () => {
     };
     const { rerender } = renderShell();
     expect(screen.queryByRole("link", { name: /Finance/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Connections" }).getAttribute("href")).toBe(
+      "/admin/connections",
+    );
     expect(screen.getByRole("link", { name: "Curriculum" })).toBeTruthy();
 
     currentUser.data = {
@@ -163,6 +167,7 @@ describe("Shell", () => {
     expect(screen.getByRole("link", { name: "Book SAT" }).getAttribute("href")).toBe(
       "/portal#booking-schedule",
     );
+    expect(screen.queryByRole("link", { name: "Connections" })).toBeNull();
 
     currentUser.data = {
       role: "student",
@@ -319,5 +324,36 @@ describe("Shell", () => {
     expect(screen.getByTestId("nav-unresolved-form-submissions").getAttribute("aria-label")).toBe(
       "2 unresolved form submissions",
     );
+  });
+
+  it("shows a calendar reconnect count only to administrators", () => {
+    adminOverview.data = {
+      guidanceRequests: [],
+      calendarReconnectAlerts: [{ tutorProfileId: "eunice", name: "Eunice Chon" }],
+    };
+    currentUser.isLoading = false;
+    currentUser.data = {
+      role: "student",
+      displayName: "Neel Dharni",
+      avatarUrl: null,
+    };
+    const { rerender } = renderShell();
+    expect(screen.queryByTestId("nav-calendar-reconnect")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Connections" })).toBeNull();
+
+    currentUser.data = {
+      role: "administrator",
+      displayName: "Sama",
+      avatarUrl: null,
+    };
+    rerender(
+      <ErrorBoundary>
+        <Shell>Portal content</Shell>
+      </ErrorBoundary>,
+    );
+    const badge = screen.getByTestId("nav-calendar-reconnect");
+    expect(badge.getAttribute("href")).toBe("/admin/connections");
+    expect(badge.getAttribute("aria-label")).toBe("1 tutor needs to reconnect Google Calendar");
+    expect(badge.textContent).toBe("1");
   });
 });

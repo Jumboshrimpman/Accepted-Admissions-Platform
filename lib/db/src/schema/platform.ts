@@ -734,6 +734,11 @@ export const calendarConnectionsTable = pgTable(
     encryptedRefreshToken: text("encrypted_refresh_token"),
     accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
     connectedAt: timestamp("connected_at", { withTimezone: true }),
+    googleAccountEmail: text("google_account_email"),
+    lastTokenRefreshAt: timestamp("last_token_refresh_at", { withTimezone: true }),
+    lastFreeBusyAt: timestamp("last_freebusy_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

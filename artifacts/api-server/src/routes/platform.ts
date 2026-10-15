@@ -63,6 +63,12 @@ import {
   saveRefreshedGoogleAccessToken,
 } from "../lib/calendar-persistence";
 import {
+  listCalendarReconnectAlerts,
+  listPublicCalendarConnectionHealth,
+  publicCalendarConnectionHealth,
+  recordCalendarFreeBusyCheck,
+} from "../lib/calendar-connection-health-store";
+import {
   portalEmailsForGoogleMatch,
   resolveCalendarProfileForOAuthState,
   resolveCalendarProfileForUser,
@@ -5116,6 +5122,12 @@ router.get(
             "Google revoked this calendar refresh token. Reconnect from the dashboard.",
           );
         }
+        await recordCalendarFreeBusyCheck({
+          tutorProfileId: profile.id,
+          ok: false,
+          reason,
+          checkedAt: verificationStart,
+        });
         logCallback("warn", "probe_disconnect_kept_grant", {
           outcome: "connected",
           tutorProfileId: profile.id,
@@ -5124,6 +5136,12 @@ router.get(
         });
       }
       if (probeOutcome === "rejected") {
+        await recordCalendarFreeBusyCheck({
+          tutorProfileId: profile.id,
+          ok: false,
+          reason: probe.ok ? "calendar_check_failed" : probe.reason,
+          checkedAt: verificationStart,
+        });
         logCallback("warn", "probe_auth_kept_grant", {
           outcome: "rejected",
           tutorProfileId: profile.id,
@@ -5144,11 +5162,24 @@ router.get(
           probe.rotatedRefreshToken,
         );
       } else if (!probe.ok) {
+        await recordCalendarFreeBusyCheck({
+          tutorProfileId: profile.id,
+          ok: false,
+          reason: probe.reason,
+          checkedAt: verificationStart,
+        });
         logCallback("warn", "probe_transient_kept_grant", {
           outcome: "connected",
           tutorProfileId: profile.id,
           appUserId: stateData.appUserId,
           reason: probe.reason,
+        });
+      }
+      if (probe.ok) {
+        await recordCalendarFreeBusyCheck({
+          tutorProfileId: profile.id,
+          ok: true,
+          checkedAt: verificationStart,
         });
       }
       logCallback("info", "connected", {
@@ -8124,6 +8155,70 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
   });
 });
 
+const CALENDAR_CONNECTION_TEST_WINDOW_MS = 15 * 60 * 1000;
+const TUTOR_PROFILE_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+router.get(
+  "/admin/calendar-connections",
+  ensureRole(["administrator"]),
+  async (_req: AuthedRequest, res): Promise<void> => {
+    const connections = await listPublicCalendarConnectionHealth();
+    res.json({ connections });
+  },
+);
+
+router.post(
+  "/admin/calendar-connections/:tutorProfileId/test",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorProfileId = String(req.params.tutorProfileId ?? "");
+    if (!TUTOR_PROFILE_ID.test(tutorProfileId)) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const existing = await publicCalendarConnectionHealth(tutorProfileId);
+    if (!existing) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const checkedAt = new Date();
+    const windowEnd = new Date(checkedAt.getTime() + CALENDAR_CONNECTION_TEST_WINDOW_MS);
+    let ok = false;
+    let reason: string | null = "not_connected";
+    try {
+      const access = await calendarAccess(tutorProfileId);
+      if (!access) {
+        reason =
+          existing.badge === "needs_reconnect"
+            ? (existing.lastError ?? "freebusy_auth_without_refresh_token")
+            : "not_connected";
+      } else {
+        await runTutorCalendarCall(access, (token) =>
+          listGoogleBusyWindows(
+            token,
+            access.connection.calendarId ?? "primary",
+            checkedAt,
+            windowEnd,
+          ),
+        );
+        ok = true;
+        reason = null;
+      }
+    } catch (error) {
+      ok = false;
+      reason = error instanceof BookingError ? error.code : "calendar_check_failed";
+    }
+    await recordCalendarFreeBusyCheck({ tutorProfileId, ok, reason, checkedAt });
+    const connection = await publicCalendarConnectionHealth(tutorProfileId);
+    if (!connection) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    res.json({ connection });
+  },
+);
+
 router.get(
   "/admin/overview",
   ensureRole(["administrator"]),
@@ -8301,6 +8396,7 @@ router.get(
       accessConflicts: configuredAccessConflicts(),
       consultingProvision: collegeConsultingProvisionStatus(),
       sharedMeetOverlaps: await unresolvedSharedMeetOverlaps(),
+      calendarReconnectAlerts: await listCalendarReconnectAlerts(),
       platform: {
         totalUsers: Number(platform[0][0]?.count ?? 0),
         clients: Number(platform[1][0]?.count ?? 0),

@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => ({
           victoriaEmailOwner: { userId: string; role: string; displayName: string; email: string } | null;
         }
       | undefined,
+    calendarReconnectAlerts: [] as Array<{ tutorProfileId: string; name: string }>,
     guidanceRequests: [] as Array<{
       id: string;
       guardianName: string;
@@ -265,6 +266,7 @@ afterEach(() => {
   mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
   mocks.overview.consultingProvision = undefined;
+  mocks.overview.calendarReconnectAlerts = [];
   mocks.curriculum.clients = [];
   mocks.curriculum.tutors = [];
   mocks.curriculum.programs = [];
@@ -1015,5 +1017,18 @@ describe("administrator overview", () => {
     expect(victoria.textContent).toContain("iCloud Owner");
     expect(victoria.textContent).toContain("samakubba@icloud.com");
     expect(victoria.textContent).toContain("tutor profile");
+  });
+
+  test("keeps a calendar reconnect alert until the tutor is healthy", () => {
+    mocks.overview.calendarReconnectAlerts = [
+      { tutorProfileId: "eunice-profile", name: "Eunice Chon" },
+    ];
+    render(<AdminDashboard />);
+    const alert = screen.getByTestId("alert-calendar-reconnect");
+    expect(alert.textContent).toContain("Eunice Chon");
+    expect(alert.textContent).toContain("upcoming bookable time");
+    expect(screen.getByTestId("link-calendar-reconnect-eunice-profile").getAttribute("href")).toBe(
+      "/admin/connections",
+    );
   });
 });
