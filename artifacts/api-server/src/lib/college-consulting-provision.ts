@@ -37,7 +37,6 @@ import {
   decidePlaceholderLink,
   isProductionClerkUserId,
   nikaConsultingAssignmentUserId,
-  rememberNeelClientUserId,
   nikaConsultingSkipReason,
   normalizeConsultingEmail,
   portalAccessRevoked,
@@ -59,6 +58,13 @@ import {
  * Looks up existing rows only. Does not call Clerk, send mail, or create calendar events.
  */
 
+export type PlaceholderEmailOwner = {
+  userId: string;
+  role: string;
+  displayName: string;
+  email: string;
+};
+
 export type CollegeConsultingProvisionStatus = {
   nikaEmail: string;
   nikaClerkUserId: string | null;
@@ -68,12 +74,14 @@ export type CollegeConsultingProvisionStatus = {
   neelUserId: string;
   neelEmail: string | null;
   neelStoppedReason: PlaceholderLinkStopReason | null;
+  neelEmailOwner: PlaceholderEmailOwner | null;
   victoriaLinked: boolean;
   victoriaUserId: string;
   victoriaPlaceholderEmail: string;
   victoriaIntendedEmail: string;
   victoriaEmail: string | null;
   victoriaStoppedReason: PlaceholderLinkStopReason | null;
+  victoriaEmailOwner: PlaceholderEmailOwner | null;
 };
 
 const EMPTY_STATUS: CollegeConsultingProvisionStatus = {
@@ -85,12 +93,14 @@ const EMPTY_STATUS: CollegeConsultingProvisionStatus = {
   neelUserId: NEEL_DHARNI_USER_ID,
   neelEmail: null,
   neelStoppedReason: null,
+  neelEmailOwner: null,
   victoriaLinked: false,
   victoriaUserId: VICTORIA_USER_ID,
   victoriaPlaceholderEmail: VICTORIA_PLACEHOLDER_EMAIL,
   victoriaIntendedEmail: VICTORIA_INTENDED_EMAIL,
   victoriaEmail: null,
   victoriaStoppedReason: null,
+  victoriaEmailOwner: null,
 };
 
 let lastStatus: CollegeConsultingProvisionStatus = { ...EMPTY_STATUS };
@@ -296,7 +306,13 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
   requireKnownClerkId: boolean;
   title: string | null;
   notes: string;
-}): Promise<{ linked: boolean; email: string | null; stoppedReason: PlaceholderLinkStopReason | null; userId: string | null }> {
+}): Promise<{
+  linked: boolean;
+  email: string | null;
+  stoppedReason: PlaceholderLinkStopReason | null;
+  userId: string | null;
+  emailOwner: PlaceholderEmailOwner | null;
+}> {
   const email = normalizeConsultingEmail(input.placeholderEmail);
   const [byId] = await tx
     .select()
@@ -305,7 +321,7 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
     .limit(1);
   const loginEmail = byId ? normalizeConsultingEmail(byId.email) : email;
   if (loginEmail === VICTORIA_INTENDED_EMAIL && !byId) {
-    return { linked: false, email: null, stoppedReason: "identity_not_verified", userId: null };
+    return { linked: false, email: null, stoppedReason: "identity_not_verified", userId: null, emailOwner: null };
   }
   const [byEmail] = await tx
     .select()
@@ -324,6 +340,7 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
       email: existingUser?.email ?? null,
       stoppedReason: "access_revoked",
       userId: existingUser?.id ?? null,
+      emailOwner: null,
     };
   }
   const candidateClerk = [grant?.clerkUserId, existingUser?.clerkUserId].find((id) =>
@@ -356,38 +373,22 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
       email: existingUser?.email ?? null,
       stoppedReason: decision.reason,
       userId: existingUser?.id ?? null,
+      emailOwner:
+        decision.reason === "email_owned_by_other_user" && existingUser
+          ? {
+              userId: existingUser.id,
+              role: existingUser.role,
+              displayName: existingUser.displayName,
+              email: existingUser.email,
+            }
+          : null,
     };
   }
   const clerkUserId =
-    decision.mode === "existing" || decision.mode === "adopt"
+    decision.mode === "existing"
       ? decision.clerkUserId
       : decision.clerkUserId || pendingClerkUserId(email);
-  let user = decision.mode === "adopt" ? (byEmail ?? null) : (byId ?? null);
-  if (decision.mode === "adopt" && user) {
-    if (user.role === "administrator") {
-      return {
-        linked: false,
-        email: user.email,
-        stoppedReason: "existing_user_administrator",
-        userId: user.id,
-      };
-    }
-    await tx
-      .update(usersTable)
-      .set({
-        role: input.role,
-        displayName: input.displayName,
-        ...(input.title ? { title: input.title } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.id, user.id));
-    user = {
-      ...user,
-      role: input.role,
-      displayName: input.displayName,
-      title: input.title ?? user.title,
-    };
-  }
+  let user = byId ?? null;
   if (!user && decision.mode === "create") {
     await tx
       .insert(usersTable)
@@ -408,7 +409,7 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
     user = created ?? null;
   }
   if (!user) {
-    return { linked: false, email: null, stoppedReason: "identity_not_verified", userId: null };
+    return { linked: false, email: null, stoppedReason: "identity_not_verified", userId: null, emailOwner: null };
   }
   const grantEmail = normalizeConsultingEmail(user.email);
   if (!grant) {
@@ -435,6 +436,7 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
         email: user.email,
         stoppedReason: stored && portalAccessRevoked(stored) ? "access_revoked" : "grant_points_at_other_user",
         userId: user.id,
+        emailOwner: null,
       };
     }
     if (!stored.userId) {
@@ -443,19 +445,17 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
         .set({ userId: user.id, updatedAt: new Date() })
         .where(eq(portalAccessGrantsTable.id, stored.id));
     }
-  } else {
+  } else if (!grant.userId) {
     await tx
       .update(portalAccessGrantsTable)
       .set({
         userId: user.id,
-        roleCategory: input.grantRole,
-        clerkUserId: user.clerkUserId,
         ...(grant.displayName?.trim() ? {} : { displayName: input.displayName }),
         updatedAt: new Date(),
       })
       .where(eq(portalAccessGrantsTable.id, grant.id));
   }
-  return { linked: true, email: user.email, stoppedReason: null, userId: user.id };
+  return { linked: true, email: user.email, stoppedReason: null, userId: user.id, emailOwner: null };
 }
 
 async function ensureMembership(
@@ -534,13 +534,7 @@ async function ensureVictoriaProfile(tx: ProvisionTx, userId: string, email: str
     await renameVictoriaPlaceholder(tx, userId);
     return;
   }
-  if (
-    profile.userId &&
-    profile.userId !== userId &&
-    profile.userId !== VICTORIA_USER_ID
-  ) {
-    return;
-  }
+  if (profile.userId && profile.userId !== userId) return;
   if (portalAccessRevoked(profile)) return;
   const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
   await tx
@@ -635,7 +629,6 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${PROVISION_LOCK_KEY}))`);
     return provisionCollegeConsulting(tx);
   });
-  if (status.neelLinked) rememberNeelClientUserId(status.neelUserId);
   lastStatus = status;
   return lastStatus;
 }
@@ -668,7 +661,7 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     title: "College Consulting Tutor",
     notes: `Temporary Victoria tutor login for testing. Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned. No Clerk invitation was sent.`,
   });
-  if (victoria.linked && victoria.userId && victoria.email) {
+  if (victoria.linked && victoria.userId === VICTORIA_USER_ID && victoria.email) {
     await ensureVictoriaProfile(tx, victoria.userId, victoria.email);
     await ensureMembership(tx, victoria.userId, "tutor");
   }
@@ -738,14 +731,16 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     nikaBookable: nika.bookable,
     nikaSkipReason: nika.skipReason,
     neelLinked: neel.linked,
-    neelUserId: neel.userId ?? NEEL_DHARNI_USER_ID,
+    neelUserId: NEEL_DHARNI_USER_ID,
     neelEmail: neel.email,
     neelStoppedReason: neel.stoppedReason,
+    neelEmailOwner: neel.emailOwner,
     victoriaLinked: victoria.linked,
-    victoriaUserId: victoria.userId ?? VICTORIA_USER_ID,
+    victoriaUserId: VICTORIA_USER_ID,
     victoriaPlaceholderEmail: VICTORIA_PLACEHOLDER_EMAIL,
     victoriaIntendedEmail: VICTORIA_INTENDED_EMAIL,
     victoriaEmail: victoria.email,
     victoriaStoppedReason: victoria.stoppedReason,
+    victoriaEmailOwner: victoria.emailOwner,
   };
 }

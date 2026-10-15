@@ -45,6 +45,26 @@ const mocks = vi.hoisted(() => ({
       outstandingInvoices: 3,
       newRequests: 0,
     },
+    consultingProvision: undefined as
+      | {
+          nikaEmail: string;
+          nikaClerkUserId: string | null;
+          nikaBookable: boolean;
+          nikaSkipReason: string | null;
+          neelLinked: boolean;
+          neelUserId: string;
+          neelEmail: string | null;
+          neelStoppedReason: string | null;
+          neelEmailOwner: { userId: string; role: string; displayName: string; email: string } | null;
+          victoriaLinked: boolean;
+          victoriaUserId: string;
+          victoriaPlaceholderEmail: string;
+          victoriaIntendedEmail: string;
+          victoriaEmail: string | null;
+          victoriaStoppedReason: string | null;
+          victoriaEmailOwner: { userId: string; role: string; displayName: string; email: string } | null;
+        }
+      | undefined,
     guidanceRequests: [] as Array<{
       id: string;
       guardianName: string;
@@ -244,6 +264,7 @@ afterEach(() => {
   mocks.overview.accessConflicts = [];
   mocks.overview.notifications = [];
   mocks.overview.guidanceRequests = [];
+  mocks.overview.consultingProvision = undefined;
   mocks.curriculum.clients = [];
   mocks.curriculum.tutors = [];
   mocks.curriculum.programs = [];
@@ -952,5 +973,47 @@ describe("administrator overview", () => {
       expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
     );
     expect(screen.getByTestId("text-resolution-guidance-request-handled").textContent).toBe("Resolved earlier");
+  });
+
+  test("shows another owner of a placeholder email for Sama to decide", () => {
+    mocks.overview.consultingProvision = {
+      nikaEmail: "nika.raiffe@gmail.com",
+      nikaClerkUserId: null,
+      nikaBookable: true,
+      nikaSkipReason: null,
+      neelLinked: false,
+      neelUserId: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+      neelEmail: "samakubba@gmail.com",
+      neelStoppedReason: "email_owned_by_other_user",
+      neelEmailOwner: {
+        userId: "existing-student",
+        role: "student",
+        displayName: "Existing Student",
+        email: "samakubba@gmail.com",
+      },
+      victoriaLinked: false,
+      victoriaUserId: "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63",
+      victoriaPlaceholderEmail: "samakubba@icloud.com",
+      victoriaIntendedEmail: "victoriawije7@gmail.com",
+      victoriaEmail: "samakubba@icloud.com",
+      victoriaStoppedReason: "email_owned_by_other_user",
+      victoriaEmailOwner: {
+        userId: "icloud-user",
+        role: "viewer",
+        displayName: "iCloud Owner",
+        email: "samakubba@icloud.com",
+      },
+    };
+
+    render(<AdminDashboard />);
+
+    const neel = screen.getByTestId("consulting-neel-email-owner");
+    expect(neel.textContent).toContain("Existing Student");
+    expect(neel.textContent).toContain("samakubba@gmail.com");
+    expect(neel.textContent).toContain("email_owned_by_other_user");
+    const victoria = screen.getByTestId("consulting-victoria-email-owner");
+    expect(victoria.textContent).toContain("iCloud Owner");
+    expect(victoria.textContent).toContain("samakubba@icloud.com");
+    expect(victoria.textContent).toContain("tutor profile");
   });
 });

@@ -94,9 +94,11 @@ import {
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
+  keepProvisionedPlaceholderDisplayName,
   NEEL_DHARNI_USER_ID,
   NIKA_CONSULTING_EMAIL,
   nikaTemporaryViewDecision,
+  temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
@@ -2585,12 +2587,29 @@ async function requireAppUser(
     });
     if (aliasDecision.action === "view" && nikaUser) {
       // View Nika's existing tutor user. Do not write her email, Clerk id,
-      // grant, role, or Google Calendar connection.
+      // grant, role, login activity, or Google Calendar connection.
       req.temporaryTutorAlias = aliasEmail;
+      const readOnly = temporaryTutorViewAllowsMethod(req.method);
+      await db.insert(auditLogsTable).values({
+        actorUserId: null,
+        action: readOnly ? "access.temporary_tutor_view" : "access.denied",
+        entityType: "temporary_tutor_view",
+        entityId: nikaUser.id,
+        metadata: {
+          aliasEmail,
+          method: req.method,
+          code: "TEMPORARY_TUTOR_VIEW",
+        },
+      });
+      if (!readOnly) {
+        res.status(403).json({
+          code: "TEMPORARY_TUTOR_VIEW",
+          error:
+            "This temporary login can view the tutor portal but cannot change it.",
+        });
+        return;
+      }
       req.appUser = nikaUser;
-      const clerkSessionId =
-        auth.sessionId ?? claimString(auth.sessionClaims, "sid");
-      await recordSuccessfulLogin(nikaUser.id, clerkSessionId);
       next();
       return;
     }
@@ -2660,7 +2679,9 @@ async function requireAppUser(
         .update(usersTable)
         .set({
           clerkUserId,
-          displayName,
+          ...(keepProvisionedPlaceholderDisplayName(existingUser.displayName)
+            ? {}
+            : { displayName }),
           role: configured.role,
           updatedAt: new Date(),
         })

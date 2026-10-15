@@ -39,9 +39,11 @@ import {
   consultingTutorCredits,
   decidePlaceholderLink,
   isNeelDharniUser,
+  isNikaTemporaryViewEmail,
   NIKA_TEMPORARY_VIEW_EMAIL,
   nikaTemporaryViewDecision,
-  rememberNeelClientUserId,
+  nikaTemporaryViewEmail,
+  temporaryTutorViewAllowsMethod,
 } from "./college-consulting.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { isRetiredXavierEmail } from "./xavier-identity.ts";
@@ -172,7 +174,7 @@ test("placeholder links stop for administrators and do not provision Victoria's 
   assert.notEqual(VICTORIA_PLACEHOLDER_EMAIL, VICTORIA_INTENDED_EMAIL);
 });
 
-test("placeholder emails link without a known Clerk id and adopt a non-admin owner", () => {
+test("placeholder emails link without a known Clerk id and stop when another user owns the email", () => {
   const created = decidePlaceholderLink({
     targetUserId: NEEL_DHARNI_USER_ID,
     existingUser: null,
@@ -203,12 +205,7 @@ test("placeholder emails link without a known Clerk id and adopt a non-admin own
       requireKnownClerkId: false,
       clerkIdOwnerUserId: "existing-student",
     }),
-    {
-      action: "link",
-      mode: "adopt",
-      clerkUserId: "user_selfsignup",
-      userId: "existing-student",
-    },
+    { action: "stop", reason: "email_owned_by_other_user" },
   );
   assert.deepEqual(
     decidePlaceholderLink({
@@ -225,10 +222,10 @@ test("placeholder emails link without a known Clerk id and adopt a non-admin own
       envRoleCategories: [],
       requireKnownClerkId: false,
       clerkIdOwnerUserId: null,
-    }).action,
-    "link",
+    }),
+    { action: "stop", reason: "email_owned_by_other_user" },
   );
-  assert.equal(
+  assert.deepEqual(
     decidePlaceholderLink({
       targetUserId: NEEL_DHARNI_USER_ID,
       existingUser: { id: "admin-row", role: "administrator", clerkUserId: "user_admin" },
@@ -239,17 +236,65 @@ test("placeholder emails link without a known Clerk id and adopt a non-admin own
       envRoleCategories: [],
       requireKnownClerkId: false,
       clerkIdOwnerUserId: null,
-    }).action,
-    "stop",
+    }),
+    { action: "stop", reason: "existing_user_administrator" },
   );
-  rememberNeelClientUserId("existing-student");
-  assert.equal(isNeelDharniUser("existing-student"), true);
   assert.equal(isNeelDharniUser(NEEL_DHARNI_USER_ID), true);
-  assert.equal(isNeelDharniUser("other-student"), false);
+  assert.equal(isNeelDharniUser("existing-student"), false);
+});
+
+test("sat and english tutor grants stay compatible only for a tutor placeholder", () => {
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: NEEL_DHARNI_USER_ID,
+      existingUser: null,
+      activeGrantUserId: null,
+      grantClerkUserId: "user_neel",
+      grantRoleCategory: "sat_tutor",
+      allowedGrantRoles: ["student"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }),
+    { action: "stop", reason: "grant_role_conflict" },
+  );
+  assert.equal(
+    decidePlaceholderLink({
+      targetUserId: VICTORIA_USER_ID,
+      existingUser: null,
+      activeGrantUserId: null,
+      grantClerkUserId: "user_victoria",
+      grantRoleCategory: "english_tutor",
+      allowedGrantRoles: ["tutor"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }).action,
+    "link",
+  );
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: NEEL_DHARNI_USER_ID,
+      existingUser: null,
+      activeGrantUserId: null,
+      grantClerkUserId: null,
+      grantRoleCategory: null,
+      allowedGrantRoles: ["student"],
+      envRoleCategories: ["sat_tutor"],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }),
+    { action: "stop", reason: "grant_role_conflict" },
+  );
 });
 
 test("xsfam6 views Nika without becoming a user or an administrator", () => {
+  const previousEmail = process.env.TEMP_NIKA_VIEW_EMAIL;
+  const previousUntil = process.env.TEMP_NIKA_VIEW_UNTIL;
+  delete process.env.TEMP_NIKA_VIEW_EMAIL;
+  delete process.env.TEMP_NIKA_VIEW_UNTIL;
   const nika = { id: "nika-user", role: "tutor" };
+  try {
   assert.deepEqual(
     nikaTemporaryViewDecision({
       email: "XSFAM6@gmail.com",
@@ -301,6 +346,37 @@ test("xsfam6 views Nika without becoming a user or an administrator", () => {
     "ignore",
   );
   assert.equal(isRetiredXavierEmail(NIKA_TEMPORARY_VIEW_EMAIL), true);
+  assert.equal(nikaTemporaryViewEmail(), NIKA_TEMPORARY_VIEW_EMAIL);
+  for (const method of ["POST", "PATCH", "DELETE", "PUT"]) {
+    assert.equal(temporaryTutorViewAllowsMethod(method), false);
+  }
+  for (const method of ["GET", "HEAD", "OPTIONS"]) {
+    assert.equal(temporaryTutorViewAllowsMethod(method), true);
+  }
+  process.env.TEMP_NIKA_VIEW_EMAIL = "off";
+  assert.equal(nikaTemporaryViewEmail(), null);
+  assert.equal(isNikaTemporaryViewEmail("xsfam6@gmail.com"), false);
+  assert.equal(
+    nikaTemporaryViewDecision({
+      email: NIKA_TEMPORARY_VIEW_EMAIL,
+      envRoleCategories: [],
+      signedInUserRole: null,
+      nikaUser: nika,
+      nikaGrantActive: true,
+    }).action,
+    "ignore",
+  );
+  process.env.TEMP_NIKA_VIEW_EMAIL = "xsfam6@gmail.com";
+  process.env.TEMP_NIKA_VIEW_UNTIL = "2020-01-01T00:00:00.000Z";
+  assert.equal(nikaTemporaryViewEmail(), null);
+  process.env.TEMP_NIKA_VIEW_UNTIL = "2099-01-01T00:00:00.000Z";
+  assert.equal(nikaTemporaryViewEmail(), NIKA_TEMPORARY_VIEW_EMAIL);
+  } finally {
+    if (previousEmail === undefined) delete process.env.TEMP_NIKA_VIEW_EMAIL;
+    else process.env.TEMP_NIKA_VIEW_EMAIL = previousEmail;
+    if (previousUntil === undefined) delete process.env.TEMP_NIKA_VIEW_UNTIL;
+    else process.env.TEMP_NIKA_VIEW_UNTIL = previousUntil;
+  }
 });
 
 test("shared room overlaps keep a stable key and ignore a different room", () => {
@@ -399,15 +475,33 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.match(provision, /if \(nika\.bookable && nikaAssignmentUserId\)/);
   assert.match(provision, /lower\(\$\{column\}\)/);
   assert.equal(provision.includes("requireKnownClerkId: true"), false);
-  assert.match(provision, /if \(status\.neelLinked\) rememberNeelClientUserId\(status\.neelUserId\)/);
-  assert.match(provision, /profile\.userId !== VICTORIA_USER_ID/);
+  assert.equal(provision.includes("rememberNeelClientUserId"), false);
+  assert.equal(provision.includes('"adopt"'), false);
+  assert.match(provision, /else if \(!grant\.userId\)/);
+  assert.match(provision, /if \(profile\.userId && profile\.userId !== userId\) return;/);
+  assert.equal(/profile\.userId !== VICTORIA_USER_ID/.test(provision), false);
+  assert.match(provision, /victoria\.userId === VICTORIA_USER_ID/);
+  assert.match(provision, /neelUserId: NEEL_DHARNI_USER_ID/);
+  assert.match(provision, /victoriaUserId: VICTORIA_USER_ID/);
+  assert.match(provision, /neelEmailOwner: neel\.emailOwner/);
+  assert.match(provision, /email_owned_by_other_user/);
   assert.equal(provision.includes("xsfam6@gmail.com"), false);
   assert.equal(provision.includes("NIKA_TEMPORARY_VIEW_EMAIL"), false);
   assert.match(platform, /temporaryTutorAlias/);
   assert.match(platform, /nikaTemporaryViewDecision/);
+  assert.match(platform, /temporaryTutorViewAllowsMethod/);
   assert.match(platform, /rejectTemporaryTutorCalendarChange/);
   assert.equal(platform.includes("email: NIKA_TEMPORARY_VIEW_EMAIL"), false);
   assert.match(platform, /Do not write her email, Clerk id/);
+  assert.match(platform, /keepProvisionedPlaceholderDisplayName/);
+  const aliasStart = platform.indexOf("if (!configured && isNikaTemporaryViewEmail");
+  const aliasEnd = platform.indexOf("if (!configured) {", aliasStart);
+  const aliasSlice = platform.slice(aliasStart, aliasEnd);
+  assert.equal(aliasSlice.includes("recordSuccessfulLogin"), false);
+  assert.match(aliasSlice, /TEMPORARY_TUTOR_VIEW/);
+  assert.match(aliasSlice, /access\.temporary_tutor_view/);
+  assert.match(aliasSlice, /actorUserId: null/);
+  assert.match(aliasSlice, /status\(403\)/);
 });
 
 test("revoked Nika and stopped Victoria get no College Consulting membership or assignment", () => {

@@ -854,12 +854,24 @@ export interface AdminOverview {
     neelUserId: string;
     neelEmail: string | null;
     neelStoppedReason: string | null;
+    neelEmailOwner?: {
+      userId: string;
+      role: string;
+      displayName: string;
+      email: string;
+    } | null;
     victoriaLinked: boolean;
     victoriaUserId: string;
     victoriaPlaceholderEmail: string;
     victoriaIntendedEmail: string;
     victoriaEmail: string | null;
     victoriaStoppedReason: string | null;
+    victoriaEmailOwner?: {
+      userId: string;
+      role: string;
+      displayName: string;
+      email: string;
+    } | null;
   };
   sharedMeetOverlaps?: {
     overlapKey: string;

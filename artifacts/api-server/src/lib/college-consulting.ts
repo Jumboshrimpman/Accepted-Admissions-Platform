@@ -97,22 +97,54 @@ export function isProductionClerkUserId(value: string | null | undefined): boole
  * Temporary view of Nika's tutor portal. This is not a second user row:
  * users.email and users.clerk_user_id stay on nika.raiffe@gmail.com.
  * xsfam6@gmail.com remains a retired Xavier address for every other path.
+ *
+ * TEMP_NIKA_VIEW_EMAIL unset uses the default address. Set it to off or
+ * disabled to remove the view without a code change. TEMP_NIKA_VIEW_UNTIL
+ * is an ISO timestamp; after that instant the view is off.
  */
 export const NIKA_TEMPORARY_VIEW_EMAIL = "xsfam6@gmail.com";
 
-const linkedNeelUserIds = new Set<string>([NEEL_DHARNI_USER_ID]);
-
-/** Remember a non-admin user row that owns Neel's placeholder login. */
-export function rememberNeelClientUserId(userId: string | null | undefined): void {
-  if (userId) linkedNeelUserIds.add(userId);
-}
+const TEMP_NIKA_VIEW_DISABLED = new Set(["", "off", "disabled", "none", "false"]);
 
 export function isNeelDharniUser(userId: string | null | undefined): boolean {
-  return typeof userId === "string" && linkedNeelUserIds.has(userId);
+  return userId === NEEL_DHARNI_USER_ID;
+}
+
+/** Keep provisioned client names when Clerk attaches on first sign-in. */
+export function keepProvisionedPlaceholderDisplayName(
+  name: string | null | undefined,
+): boolean {
+  const trimmed = name?.trim() ?? "";
+  return (
+    trimmed === NEEL_DISPLAY_NAME ||
+    trimmed === VICTORIA_DISPLAY_NAME ||
+    trimmed === VICTORIA_PLACEHOLDER_DISPLAY_NAME
+  );
+}
+
+export function nikaTemporaryViewEmail(now: Date = new Date()): string | null {
+  const until = process.env.TEMP_NIKA_VIEW_UNTIL?.trim();
+  if (until) {
+    const end = Date.parse(until);
+    if (Number.isNaN(end) || now.getTime() > end) return null;
+  }
+  const configured = process.env.TEMP_NIKA_VIEW_EMAIL;
+  if (configured === undefined) return NIKA_TEMPORARY_VIEW_EMAIL;
+  const normalized = normalizeConsultingEmail(configured);
+  if (TEMP_NIKA_VIEW_DISABLED.has(normalized)) return null;
+  return normalized;
 }
 
 export function isNikaTemporaryViewEmail(email: string | null | undefined): boolean {
-  return normalizeConsultingEmail(email) === NIKA_TEMPORARY_VIEW_EMAIL;
+  const allowed = nikaTemporaryViewEmail();
+  if (!allowed) return false;
+  return normalizeConsultingEmail(email) === allowed;
+}
+
+/** Alias sessions may read the tutor portal. Writes stay forbidden. */
+export function temporaryTutorViewAllowsMethod(method: string | null | undefined): boolean {
+  const normalized = method?.trim().toUpperCase() ?? "";
+  return normalized === "GET" || normalized === "HEAD" || normalized === "OPTIONS";
 }
 
 /**
@@ -232,12 +264,7 @@ export function victoriaConsultingAssignmentUserId(
 }
 
 export type PlaceholderLinkDecision =
-  | {
-      action: "link";
-      clerkUserId: string;
-      mode: "existing" | "create" | "adopt";
-      userId: string | null;
-    }
+  | { action: "link"; clerkUserId: string; mode: "existing" | "create" }
   | { action: "stop"; reason: PlaceholderLinkStopReason };
 
 function placeholderEnvStop(
@@ -254,9 +281,9 @@ function placeholderEnvStop(
 }
 
 /**
- * Refuse to attach a placeholder login when it would overwrite an administrator.
- * A free email is created with a pending Clerk id and matched on first sign-in.
- * A non-admin user who already owns the email becomes the client or tutor.
+ * Refuse to attach a placeholder login when it would overwrite an administrator
+ * or someone else's user. A free email is created with a pending Clerk id and
+ * matched on first sign-in. Another owner of the email stops the link.
  */
 export function decidePlaceholderLink(input: {
   targetUserId: string;
@@ -281,21 +308,18 @@ export function decidePlaceholderLink(input: {
     return { action: "stop", reason: "grant_role_conflict" };
   }
   if (input.existingUser && input.existingUser.id !== input.targetUserId) {
-    return {
-      action: "link",
-      clerkUserId: input.existingUser.clerkUserId,
-      mode: "adopt",
-      userId: input.existingUser.id,
-    };
+    return { action: "stop", reason: "email_owned_by_other_user" };
   }
   if (input.activeGrantUserId && input.activeGrantUserId !== input.targetUserId) {
     return { action: "stop", reason: "grant_points_at_other_user" };
   }
+  const tutorGrantCompatible =
+    input.allowedGrantRoles.includes("tutor") &&
+    (input.grantRoleCategory === "sat_tutor" || input.grantRoleCategory === "english_tutor");
   if (
     input.grantRoleCategory &&
     !input.allowedGrantRoles.includes(input.grantRoleCategory) &&
-    input.grantRoleCategory !== "sat_tutor" &&
-    input.grantRoleCategory !== "english_tutor"
+    !tutorGrantCompatible
   ) {
     return { action: "stop", reason: "grant_role_conflict" };
   }
@@ -304,7 +328,6 @@ export function decidePlaceholderLink(input: {
       action: "link",
       clerkUserId: input.existingUser.clerkUserId,
       mode: "existing",
-      userId: input.existingUser.id,
     };
   }
   const known = [input.grantClerkUserId].find((id) => isProductionClerkUserId(id));
@@ -315,9 +338,9 @@ export function decidePlaceholderLink(input: {
     if (input.requireKnownClerkId) {
       return { action: "stop", reason: "identity_not_verified" };
     }
-    return { action: "link", clerkUserId: "", mode: "create", userId: null };
+    return { action: "link", clerkUserId: "", mode: "create" };
   }
-  return { action: "link", clerkUserId: known, mode: "create", userId: null };
+  return { action: "link", clerkUserId: known, mode: "create" };
 }
 
 export function clientMayBuyConsultingProduct(
