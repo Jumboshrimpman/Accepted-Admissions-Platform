@@ -93,7 +93,12 @@ import {
   consultingTutorCredits,
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
+  isNikaTemporaryViewEmail,
+  keepProvisionedPlaceholderDisplayName,
   NEEL_DHARNI_USER_ID,
+  NIKA_CONSULTING_EMAIL,
+  nikaTemporaryViewDecision,
+  temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
@@ -558,7 +563,11 @@ import {
   type PortalAccessGrant,
 } from "@workspace/db";
 
-type AuthedRequest = Request & { appUser?: AppUser };
+type AuthedRequest = Request & {
+  appUser?: AppUser;
+  /** Set when this Clerk login is viewing Nika's tutor user without changing it. */
+  temporaryTutorAlias?: string;
+};
 
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
@@ -2160,7 +2169,7 @@ async function loadActiveDatabaseAccessGrants(
       ? [eq(portalAccessGrantsTable.clerkUserId, clerkUserId)]
       : []),
     ...(normalizedEmail
-      ? [eq(portalAccessGrantsTable.email, normalizedEmail)]
+      ? [sql`lower(${portalAccessGrantsTable.email}) = ${normalizedEmail}`]
       : []),
   ];
   if (identityFilters.length === 0) return [];
@@ -2548,6 +2557,63 @@ async function requireAppUser(
     });
     return;
   }
+  const aliasEmail = identity?.email
+    ? normalizeProvisionedEmail(identity.email)
+    : undefined;
+  if (!configured && isNikaTemporaryViewEmail(aliasEmail)) {
+    const [nikaUser] = await db
+      .select()
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${NIKA_CONSULTING_EMAIL}`)
+      .limit(1);
+    const [nikaGrant] = nikaUser
+      ? await db
+          .select({
+            active: portalAccessGrantsTable.active,
+            revokedAt: portalAccessGrantsTable.revokedAt,
+          })
+          .from(portalAccessGrantsTable)
+          .where(sql`lower(${portalAccessGrantsTable.email}) = ${NIKA_CONSULTING_EMAIL}`)
+          .limit(1)
+      : [];
+    const aliasDecision = nikaTemporaryViewDecision({
+      email: aliasEmail,
+      envRoleCategories: envRoleCategoriesForIdentity(clerkUserId, aliasEmail),
+      signedInUserRole: appUser?.role ?? null,
+      nikaUser: nikaUser ? { id: nikaUser.id, role: nikaUser.role } : null,
+      nikaGrantActive: Boolean(
+        nikaGrant && nikaGrant.active !== false && nikaGrant.revokedAt == null,
+      ),
+    });
+    if (aliasDecision.action === "view" && nikaUser) {
+      // View Nika's existing tutor user. Do not write her email, Clerk id,
+      // grant, role, login activity, or Google Calendar connection.
+      req.temporaryTutorAlias = aliasEmail;
+      const readOnly = temporaryTutorViewAllowsMethod(req.method);
+      await db.insert(auditLogsTable).values({
+        actorUserId: null,
+        action: readOnly ? "access.temporary_tutor_view" : "access.denied",
+        entityType: "temporary_tutor_view",
+        entityId: nikaUser.id,
+        metadata: {
+          aliasEmail,
+          method: req.method,
+          code: "TEMPORARY_TUTOR_VIEW",
+        },
+      });
+      if (!readOnly) {
+        res.status(403).json({
+          code: "TEMPORARY_TUTOR_VIEW",
+          error:
+            "This temporary login can view the tutor portal but cannot change it.",
+        });
+        return;
+      }
+      req.appUser = nikaUser;
+      next();
+      return;
+    }
+  }
   if (!configured) {
     if (appUser) {
       await db.insert(auditLogsTable).values({
@@ -2606,14 +2672,16 @@ async function requireAppUser(
     const [existingUser] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, email))
+      .where(sql`lower(${usersTable.email}) = ${email}`)
       .limit(1);
     if (existingUser) {
       [appUser] = await db
         .update(usersTable)
         .set({
           clerkUserId,
-          displayName,
+          ...(keepProvisionedPlaceholderDisplayName(existingUser.displayName)
+            ? {}
+            : { displayName }),
           role: configured.role,
           updatedAt: new Date(),
         })
@@ -6177,10 +6245,24 @@ router.get(
   },
 );
 
+function rejectTemporaryTutorCalendarChange(
+  req: AuthedRequest,
+  res: Response,
+): boolean {
+  if (!req.temporaryTutorAlias) return false;
+  res.status(403).json({
+    code: "TEMPORARY_TUTOR_VIEW",
+    error:
+      "This temporary login can view the tutor portal but cannot change the Google Calendar connection.",
+  });
+  return true;
+}
+
 router.get(
   "/calendar/connect",
   ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    if (rejectTemporaryTutorCalendarChange(req, res)) return;
     const useRedirect = req.query.redirect === "1";
     const returnTo = safeCalendarReturnTo(
       typeof req.query.returnTo === "string" ? req.query.returnTo : undefined,
@@ -6297,6 +6379,7 @@ router.delete(
   "/calendar/connections/:tutorProfileId",
   ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    if (rejectTemporaryTutorCalendarChange(req, res)) return;
     const tutorProfileId =
       typeof req.params.tutorProfileId === "string" ? req.params.tutorProfileId : "";
     const [profile] = await db

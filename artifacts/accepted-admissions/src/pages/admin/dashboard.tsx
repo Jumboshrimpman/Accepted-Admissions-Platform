@@ -550,10 +550,20 @@ function ConsultingProvisionNotice({
         <p>
           Neel: {provision.neelLinked ? `linked as ${provision.neelEmail}` : `not linked (${provision.neelStoppedReason ?? "stopped"})`}.
         </p>
+        {provision.neelEmailOwner ? (
+          <p data-testid="consulting-neel-email-owner">
+            Neel&apos;s placeholder email is already owned by {provision.neelEmailOwner.displayName} ({provision.neelEmailOwner.email}, role {provision.neelEmailOwner.role}). Reason: {provision.neelStoppedReason ?? "email_owned_by_other_user"}. Leave that account unchanged until you decide.
+          </p>
+        ) : null}
         <p>
           Victoria test login: {provision.victoriaLinked ? `${provision.victoriaEmail} at /login, then /tutor` : `not linked (${provision.victoriaStoppedReason ?? "stopped"})`}.
           Intended email {provision.victoriaIntendedEmail} is not provisioned.
         </p>
+        {provision.victoriaEmailOwner ? (
+          <p data-testid="consulting-victoria-email-owner">
+            Victoria&apos;s placeholder email is already owned by {provision.victoriaEmailOwner.displayName} ({provision.victoriaEmailOwner.email}, role {provision.victoriaEmailOwner.role}). Reason: {provision.victoriaStoppedReason ?? "email_owned_by_other_user"}. Leave that account and her tutor profile unchanged until you decide.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

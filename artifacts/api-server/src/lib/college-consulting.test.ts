@@ -38,7 +38,15 @@ import {
   consultingSlugIsSatCatalogProduct,
   consultingTutorCredits,
   decidePlaceholderLink,
+  isNeelDharniUser,
+  isNikaTemporaryViewEmail,
+  NIKA_TEMPORARY_VIEW_EMAIL,
+  nikaTemporaryViewDecision,
+  nikaTemporaryViewEmail,
+  temporaryTutorViewAllowsMethod,
 } from "./college-consulting.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isRetiredXavierEmail } from "./xavier-identity.ts";
 
 test("College Consulting prices are per tutor and SAT catalog stays $130", () => {
   assert.equal(NIKA_HOURLY_RATE_CENTS, 13_000);
@@ -166,6 +174,211 @@ test("placeholder links stop for administrators and do not provision Victoria's 
   assert.notEqual(VICTORIA_PLACEHOLDER_EMAIL, VICTORIA_INTENDED_EMAIL);
 });
 
+test("placeholder emails link without a known Clerk id and stop when another user owns the email", () => {
+  const created = decidePlaceholderLink({
+    targetUserId: NEEL_DHARNI_USER_ID,
+    existingUser: null,
+    activeGrantUserId: null,
+    grantClerkUserId: null,
+    grantRoleCategory: null,
+    allowedGrantRoles: ["student"],
+    envRoleCategories: [],
+    requireKnownClerkId: false,
+    clerkIdOwnerUserId: null,
+  });
+  assert.equal(created.action, "link");
+  if (created.action === "link") assert.equal(created.mode, "create");
+
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: NEEL_DHARNI_USER_ID,
+      existingUser: {
+        id: "existing-student",
+        role: "student",
+        clerkUserId: "user_selfsignup",
+      },
+      activeGrantUserId: "existing-student",
+      grantClerkUserId: "user_selfsignup",
+      grantRoleCategory: "student",
+      allowedGrantRoles: ["student"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: "existing-student",
+    }),
+    { action: "stop", reason: "email_owned_by_other_user" },
+  );
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: VICTORIA_USER_ID,
+      existingUser: {
+        id: "icloud-user",
+        role: "viewer",
+        clerkUserId: "pending:samakubba@icloud.com",
+      },
+      activeGrantUserId: null,
+      grantClerkUserId: null,
+      grantRoleCategory: null,
+      allowedGrantRoles: ["tutor"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }),
+    { action: "stop", reason: "email_owned_by_other_user" },
+  );
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: NEEL_DHARNI_USER_ID,
+      existingUser: { id: "admin-row", role: "administrator", clerkUserId: "user_admin" },
+      activeGrantUserId: null,
+      grantClerkUserId: null,
+      grantRoleCategory: null,
+      allowedGrantRoles: ["student"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }),
+    { action: "stop", reason: "existing_user_administrator" },
+  );
+  assert.equal(isNeelDharniUser(NEEL_DHARNI_USER_ID), true);
+  assert.equal(isNeelDharniUser("existing-student"), false);
+});
+
+test("sat and english tutor grants stay compatible only for a tutor placeholder", () => {
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: NEEL_DHARNI_USER_ID,
+      existingUser: null,
+      activeGrantUserId: null,
+      grantClerkUserId: "user_neel",
+      grantRoleCategory: "sat_tutor",
+      allowedGrantRoles: ["student"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }),
+    { action: "stop", reason: "grant_role_conflict" },
+  );
+  assert.equal(
+    decidePlaceholderLink({
+      targetUserId: VICTORIA_USER_ID,
+      existingUser: null,
+      activeGrantUserId: null,
+      grantClerkUserId: "user_victoria",
+      grantRoleCategory: "english_tutor",
+      allowedGrantRoles: ["tutor"],
+      envRoleCategories: [],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }).action,
+    "link",
+  );
+  assert.deepEqual(
+    decidePlaceholderLink({
+      targetUserId: NEEL_DHARNI_USER_ID,
+      existingUser: null,
+      activeGrantUserId: null,
+      grantClerkUserId: null,
+      grantRoleCategory: null,
+      allowedGrantRoles: ["student"],
+      envRoleCategories: ["sat_tutor"],
+      requireKnownClerkId: false,
+      clerkIdOwnerUserId: null,
+    }),
+    { action: "stop", reason: "grant_role_conflict" },
+  );
+});
+
+test("xsfam6 views Nika without becoming a user or an administrator", () => {
+  const previousEmail = process.env.TEMP_NIKA_VIEW_EMAIL;
+  const previousUntil = process.env.TEMP_NIKA_VIEW_UNTIL;
+  delete process.env.TEMP_NIKA_VIEW_EMAIL;
+  delete process.env.TEMP_NIKA_VIEW_UNTIL;
+  const nika = { id: "nika-user", role: "tutor" };
+  try {
+  assert.deepEqual(
+    nikaTemporaryViewDecision({
+      email: "XSFAM6@gmail.com",
+      envRoleCategories: [],
+      signedInUserRole: null,
+      nikaUser: nika,
+      nikaGrantActive: true,
+    }),
+    { action: "view", userId: "nika-user" },
+  );
+  assert.equal(
+    nikaTemporaryViewDecision({
+      email: NIKA_TEMPORARY_VIEW_EMAIL,
+      envRoleCategories: ["administrator"],
+      signedInUserRole: null,
+      nikaUser: nika,
+      nikaGrantActive: true,
+    }).action,
+    "ignore",
+  );
+  assert.equal(
+    nikaTemporaryViewDecision({
+      email: NIKA_TEMPORARY_VIEW_EMAIL,
+      envRoleCategories: [],
+      signedInUserRole: "administrator",
+      nikaUser: nika,
+      nikaGrantActive: true,
+    }).action,
+    "ignore",
+  );
+  assert.equal(
+    nikaTemporaryViewDecision({
+      email: NIKA_TEMPORARY_VIEW_EMAIL,
+      envRoleCategories: [],
+      signedInUserRole: null,
+      nikaUser: nika,
+      nikaGrantActive: false,
+    }).action,
+    "ignore",
+  );
+  assert.equal(
+    nikaTemporaryViewDecision({
+      email: "nika.raiffe@gmail.com",
+      envRoleCategories: [],
+      signedInUserRole: null,
+      nikaUser: nika,
+      nikaGrantActive: true,
+    }).action,
+    "ignore",
+  );
+  assert.equal(isRetiredXavierEmail(NIKA_TEMPORARY_VIEW_EMAIL), true);
+  assert.equal(nikaTemporaryViewEmail(), NIKA_TEMPORARY_VIEW_EMAIL);
+  for (const method of ["POST", "PATCH", "DELETE", "PUT"]) {
+    assert.equal(temporaryTutorViewAllowsMethod(method), false);
+  }
+  for (const method of ["GET", "HEAD", "OPTIONS"]) {
+    assert.equal(temporaryTutorViewAllowsMethod(method), true);
+  }
+  process.env.TEMP_NIKA_VIEW_EMAIL = "off";
+  assert.equal(nikaTemporaryViewEmail(), null);
+  assert.equal(isNikaTemporaryViewEmail("xsfam6@gmail.com"), false);
+  assert.equal(
+    nikaTemporaryViewDecision({
+      email: NIKA_TEMPORARY_VIEW_EMAIL,
+      envRoleCategories: [],
+      signedInUserRole: null,
+      nikaUser: nika,
+      nikaGrantActive: true,
+    }).action,
+    "ignore",
+  );
+  process.env.TEMP_NIKA_VIEW_EMAIL = "xsfam6@gmail.com";
+  process.env.TEMP_NIKA_VIEW_UNTIL = "2020-01-01T00:00:00.000Z";
+  assert.equal(nikaTemporaryViewEmail(), null);
+  process.env.TEMP_NIKA_VIEW_UNTIL = "2099-01-01T00:00:00.000Z";
+  assert.equal(nikaTemporaryViewEmail(), NIKA_TEMPORARY_VIEW_EMAIL);
+  } finally {
+    if (previousEmail === undefined) delete process.env.TEMP_NIKA_VIEW_EMAIL;
+    else process.env.TEMP_NIKA_VIEW_EMAIL = previousEmail;
+    if (previousUntil === undefined) delete process.env.TEMP_NIKA_VIEW_UNTIL;
+    else process.env.TEMP_NIKA_VIEW_UNTIL = previousUntil;
+  }
+});
+
 test("shared room overlaps keep a stable key and ignore a different room", () => {
   const start = new Date("2026-11-02T15:00:00.000Z");
   const pairs = sharedMeetOverlapPairs([
@@ -261,6 +474,34 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.match(provision, /victoria\.linked && victoria\.userId \? \[victoria\.userId\] : \[\]/);
   assert.match(provision, /if \(nika\.bookable && nikaAssignmentUserId\)/);
   assert.match(provision, /lower\(\$\{column\}\)/);
+  assert.equal(provision.includes("requireKnownClerkId: true"), false);
+  assert.equal(provision.includes("rememberNeelClientUserId"), false);
+  assert.equal(provision.includes('"adopt"'), false);
+  assert.match(provision, /else if \(!grant\.userId\)/);
+  assert.match(provision, /if \(profile\.userId && profile\.userId !== userId\) return;/);
+  assert.equal(/profile\.userId !== VICTORIA_USER_ID/.test(provision), false);
+  assert.match(provision, /victoria\.userId === VICTORIA_USER_ID/);
+  assert.match(provision, /neelUserId: NEEL_DHARNI_USER_ID/);
+  assert.match(provision, /victoriaUserId: VICTORIA_USER_ID/);
+  assert.match(provision, /neelEmailOwner: neel\.emailOwner/);
+  assert.match(provision, /email_owned_by_other_user/);
+  assert.equal(provision.includes("xsfam6@gmail.com"), false);
+  assert.equal(provision.includes("NIKA_TEMPORARY_VIEW_EMAIL"), false);
+  assert.match(platform, /temporaryTutorAlias/);
+  assert.match(platform, /nikaTemporaryViewDecision/);
+  assert.match(platform, /temporaryTutorViewAllowsMethod/);
+  assert.match(platform, /rejectTemporaryTutorCalendarChange/);
+  assert.equal(platform.includes("email: NIKA_TEMPORARY_VIEW_EMAIL"), false);
+  assert.match(platform, /Do not write her email, Clerk id/);
+  assert.match(platform, /keepProvisionedPlaceholderDisplayName/);
+  const aliasStart = platform.indexOf("if (!configured && isNikaTemporaryViewEmail");
+  const aliasEnd = platform.indexOf("if (!configured) {", aliasStart);
+  const aliasSlice = platform.slice(aliasStart, aliasEnd);
+  assert.equal(aliasSlice.includes("recordSuccessfulLogin"), false);
+  assert.match(aliasSlice, /TEMPORARY_TUTOR_VIEW/);
+  assert.match(aliasSlice, /access\.temporary_tutor_view/);
+  assert.match(aliasSlice, /actorUserId: null/);
+  assert.match(aliasSlice, /status\(403\)/);
 });
 
 test("revoked Nika and stopped Victoria get no College Consulting membership or assignment", () => {

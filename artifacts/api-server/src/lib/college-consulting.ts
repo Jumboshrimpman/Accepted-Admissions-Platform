@@ -93,8 +93,78 @@ export function isProductionClerkUserId(value: string | null | undefined): boole
   return trimmed.startsWith("user_");
 }
 
+/**
+ * Temporary view of Nika's tutor portal. This is not a second user row:
+ * users.email and users.clerk_user_id stay on nika.raiffe@gmail.com.
+ * xsfam6@gmail.com remains a retired Xavier address for every other path.
+ *
+ * TEMP_NIKA_VIEW_EMAIL unset uses the default address. Set it to off or
+ * disabled to remove the view without a code change. TEMP_NIKA_VIEW_UNTIL
+ * is an ISO timestamp; after that instant the view is off.
+ */
+export const NIKA_TEMPORARY_VIEW_EMAIL = "xsfam6@gmail.com";
+
+const TEMP_NIKA_VIEW_DISABLED = new Set(["", "off", "disabled", "none", "false"]);
+
 export function isNeelDharniUser(userId: string | null | undefined): boolean {
   return userId === NEEL_DHARNI_USER_ID;
+}
+
+/** Keep provisioned client names when Clerk attaches on first sign-in. */
+export function keepProvisionedPlaceholderDisplayName(
+  name: string | null | undefined,
+): boolean {
+  const trimmed = name?.trim() ?? "";
+  return (
+    trimmed === NEEL_DISPLAY_NAME ||
+    trimmed === VICTORIA_DISPLAY_NAME ||
+    trimmed === VICTORIA_PLACEHOLDER_DISPLAY_NAME
+  );
+}
+
+export function nikaTemporaryViewEmail(now: Date = new Date()): string | null {
+  const until = process.env.TEMP_NIKA_VIEW_UNTIL?.trim();
+  if (until) {
+    const end = Date.parse(until);
+    if (Number.isNaN(end) || now.getTime() > end) return null;
+  }
+  const configured = process.env.TEMP_NIKA_VIEW_EMAIL;
+  if (configured === undefined) return NIKA_TEMPORARY_VIEW_EMAIL;
+  const normalized = normalizeConsultingEmail(configured);
+  if (TEMP_NIKA_VIEW_DISABLED.has(normalized)) return null;
+  return normalized;
+}
+
+export function isNikaTemporaryViewEmail(email: string | null | undefined): boolean {
+  const allowed = nikaTemporaryViewEmail();
+  if (!allowed) return false;
+  return normalizeConsultingEmail(email) === allowed;
+}
+
+/** Alias sessions may read the tutor portal. Writes stay forbidden. */
+export function temporaryTutorViewAllowsMethod(method: string | null | undefined): boolean {
+  const normalized = method?.trim().toUpperCase() ?? "";
+  return normalized === "GET" || normalized === "HEAD" || normalized === "OPTIONS";
+}
+
+/**
+ * Map the temporary Gmail onto Nika's existing tutor user.
+ * Administrators stay administrators. A missing or revoked Nika grant does not
+ * create one. Callers must not write Nika's email, Clerk id, or calendar token.
+ */
+export function nikaTemporaryViewDecision(input: {
+  email?: string | null;
+  envRoleCategories: readonly string[];
+  signedInUserRole?: string | null;
+  nikaUser: { id: string; role: string } | null;
+  nikaGrantActive: boolean;
+}): { action: "view"; userId: string } | { action: "ignore" } {
+  if (!isNikaTemporaryViewEmail(input.email)) return { action: "ignore" };
+  if (input.envRoleCategories.includes("administrator")) return { action: "ignore" };
+  if (input.signedInUserRole === "administrator") return { action: "ignore" };
+  if (!input.nikaUser || input.nikaUser.role !== "tutor") return { action: "ignore" };
+  if (!input.nikaGrantActive) return { action: "ignore" };
+  return { action: "view", userId: input.nikaUser.id };
 }
 
 export function isCollegeConsultingSlug(slug: string | null | undefined): boolean {
@@ -197,10 +267,23 @@ export type PlaceholderLinkDecision =
   | { action: "link"; clerkUserId: string; mode: "existing" | "create" }
   | { action: "stop"; reason: PlaceholderLinkStopReason };
 
+function placeholderEnvStop(
+  envRoleCategories: readonly string[],
+  allowedGrantRoles: readonly string[],
+): PlaceholderLinkStopReason | null {
+  if (envRoleCategories.includes("administrator")) return "environment_administrator";
+  for (const role of envRoleCategories) {
+    const grantRole =
+      role === "sat_tutor" || role === "english_tutor" ? "tutor" : role;
+    if (!allowedGrantRoles.includes(grantRole)) return "grant_role_conflict";
+  }
+  return null;
+}
+
 /**
  * Refuse to attach a placeholder login when it would overwrite an administrator
- * or someone else's user. Neel requires a known production Clerk id. Victoria's
- * temporary tutor login may be created with a pending id when the email is free.
+ * or someone else's user. A free email is created with a pending Clerk id and
+ * matched on first sign-in. Another owner of the email stops the link.
  */
 export function decidePlaceholderLink(input: {
   targetUserId: string;
@@ -213,11 +296,16 @@ export function decidePlaceholderLink(input: {
   requireKnownClerkId: boolean;
   clerkIdOwnerUserId: string | null;
 }): PlaceholderLinkDecision {
-  if (input.envRoleCategories.includes("administrator")) {
-    return { action: "stop", reason: "environment_administrator" };
-  }
+  const envStop = placeholderEnvStop(
+    input.envRoleCategories,
+    input.allowedGrantRoles,
+  );
+  if (envStop) return { action: "stop", reason: envStop };
   if (input.existingUser?.role === "administrator") {
     return { action: "stop", reason: "existing_user_administrator" };
+  }
+  if (input.grantRoleCategory === "administrator") {
+    return { action: "stop", reason: "grant_role_conflict" };
   }
   if (input.existingUser && input.existingUser.id !== input.targetUserId) {
     return { action: "stop", reason: "email_owned_by_other_user" };
@@ -225,9 +313,13 @@ export function decidePlaceholderLink(input: {
   if (input.activeGrantUserId && input.activeGrantUserId !== input.targetUserId) {
     return { action: "stop", reason: "grant_points_at_other_user" };
   }
+  const tutorGrantCompatible =
+    input.allowedGrantRoles.includes("tutor") &&
+    (input.grantRoleCategory === "sat_tutor" || input.grantRoleCategory === "english_tutor");
   if (
     input.grantRoleCategory &&
-    !input.allowedGrantRoles.includes(input.grantRoleCategory)
+    !input.allowedGrantRoles.includes(input.grantRoleCategory) &&
+    !tutorGrantCompatible
   ) {
     return { action: "stop", reason: "grant_role_conflict" };
   }
