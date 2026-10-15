@@ -29,6 +29,9 @@ export const VICTORIA_PLACEHOLDER_EMAIL = "samakubba@icloud.com";
  * for this address, and do not send mail to it.
  */
 export const VICTORIA_INTENDED_EMAIL = "victoriawije7@gmail.com";
+/** First-party portrait, same /media/team path as Nika and Xavier. Not a public-team roster entry. */
+export const VICTORIA_PHOTO_URL = "/media/team/victoria.jpg";
+export const VICTORIA_PHOTO_ALT_TEXT = "Victoria, College Consulting Tutor";
 
 export const COLLEGE_CONSULTING_NIKA_SLUG = "college-consulting-nika-hour";
 export const COLLEGE_CONSULTING_XAVIER_SLUG = "college-consulting-xavier-hour";

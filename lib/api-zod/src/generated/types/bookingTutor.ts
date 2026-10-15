@@ -15,6 +15,8 @@ export interface BookingTutor {
   photoUrl?: string | null;
   /** @nullable */
   biography?: string | null;
+  /** @nullable */
+  tagline?: string | null;
   subjects: string[];
   calendarStatus: string;
   providerStatus: BookingTutorProviderStatus;

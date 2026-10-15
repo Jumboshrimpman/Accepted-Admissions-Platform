@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   availabilityRulesTable,
   courseMembershipsTable,
@@ -27,6 +27,8 @@ import {
   NIKA_CONSULTING_NAME,
   VICTORIA_DISPLAY_NAME,
   VICTORIA_INTENDED_EMAIL,
+  VICTORIA_PHOTO_ALT_TEXT,
+  VICTORIA_PHOTO_URL,
   VICTORIA_PLACEHOLDER_EMAIL,
   VICTORIA_USER_ID,
   decidePlaceholderLink,
@@ -34,6 +36,8 @@ import {
   normalizeConsultingEmail,
   type PlaceholderLinkStopReason,
 } from "./college-consulting.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { NIKA_BOOKING_TAGLINE, XAVIER_BOOKING_TAGLINE } from "./public-team-roster.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SHARED_FALL_MEETING_URL } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -440,6 +444,10 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
         active: true,
         bookingEligible: true,
         calendarStatus: "disconnected",
+        photoUrl: VICTORIA_PHOTO_URL,
+        photoAltText: VICTORIA_PHOTO_ALT_TEXT,
+        biography: null,
+        tagline: null,
         internalNotes: notes,
       })
       .returning();
@@ -457,15 +465,48 @@ async function ensureVictoriaProfile(userId: string, email: string): Promise<voi
       active: true,
       subjects: [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])],
       internalNotes: notes,
+      ...(profile.photoUrl?.trim()
+        ? {}
+        : { photoUrl: VICTORIA_PHOTO_URL, photoAltText: profile.photoAltText || VICTORIA_PHOTO_ALT_TEXT }),
       updatedAt: new Date(),
     })
     .where(eq(tutorProfilesTable.id, profile.id));
   await ensureWeeklyHours(profile.id);
 }
 
+async function ensureBookingTaglines(): Promise<void> {
+  await db
+    .update(tutorProfilesTable)
+    .set({ tagline: NIKA_BOOKING_TAGLINE, updatedAt: new Date() })
+    .where(and(eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL), isNull(tutorProfilesTable.tagline)));
+  const xavierUsers = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(
+      or(
+        eq(usersTable.email, CANONICAL_XAVIER_EMAIL),
+        eq(usersTable.clerkUserId, CANONICAL_XAVIER_CLERK_USER_ID),
+      ),
+    );
+  const xavierUserIds = xavierUsers.map((user: { id: string }) => user.id);
+  await db
+    .update(tutorProfilesTable)
+    .set({ tagline: XAVIER_BOOKING_TAGLINE, updatedAt: new Date() })
+    .where(
+      and(
+        or(
+          eq(tutorProfilesTable.email, CANONICAL_XAVIER_EMAIL),
+          xavierUserIds.length > 0 ? inArray(tutorProfilesTable.userId, xavierUserIds) : sql`false`,
+        ),
+        isNull(tutorProfilesTable.tagline),
+      ),
+    );
+}
+
 export async function ensureCollegeConsultingProvision(): Promise<CollegeConsultingProvisionStatus> {
   await ensureCatalogProducts();
   await ensureCourse();
+  await ensureBookingTaglines();
   const nikaClerkUserId = await ensureNika();
   const neel = await ensurePlaceholderClient({
     targetUserId: NEEL_DHARNI_USER_ID,

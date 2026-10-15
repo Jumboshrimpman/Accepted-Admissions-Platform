@@ -35,6 +35,7 @@ export type TutorProfileEditable = {
   photoUrl?: string | null;
   photoAltText?: string | null;
   biography?: string | null;
+  tagline?: string | null;
   subjects?: string[];
   linkedinUrl?: string | null;
 };
@@ -61,7 +62,7 @@ export function parseTutorProfileEditableFields(
     }
     updates.title = body.title.trim();
   }
-  for (const field of ["photoUrl", "photoAltText", "biography", "linkedinUrl"] as const) {
+  for (const field of ["photoUrl", "photoAltText", "biography", "tagline", "linkedinUrl"] as const) {
     if (!(field in body)) continue;
     if (body[field] === null) {
       updates[field] = null;
@@ -71,6 +72,9 @@ export function parseTutorProfileEditableFields(
       return { updates, error: `${field} must be a string or null.` };
     }
     const value = body[field].trim();
+    if (field === "tagline" && value.length > 240) {
+      return { updates, error: "A booking tagline must be 240 characters or fewer." };
+    }
     updates[field] = value || null;
   }
   if ("subjects" in body) {

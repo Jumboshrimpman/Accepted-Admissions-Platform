@@ -17,6 +17,10 @@ export type PublicTutorName = (typeof PUBLIC_TUTOR_ORDER)[number];
 export const XAVIER_PUBLIC_BIOGRAPHY =
   "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.";
 
+/** One line on the booking card. The expanded bio stays XAVIER_PUBLIC_BIOGRAPHY. */
+export const XAVIER_BOOKING_TAGLINE =
+  "Harvard Math, Econ and CS '24, Rhodes Scholar Oxford MA Philosophy '26, Quant Finance";
+
 export const XAVIER_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He is a 2024 Rhodes Scholar, studying Philosophy for his Masters at Oxford until 2026. Xavier is also an incoming member of the 2029 Harvard Law School class.",
 ] as const;
@@ -30,6 +34,10 @@ export const EUNICE_LEGACY_PUBLIC_BIOGRAPHIES = [
 
 export const NIKA_PUBLIC_BIOGRAPHY =
   "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.";
+
+/** One line on the booking card, drawn from NIKA_PUBLIC_BIOGRAPHY. */
+export const NIKA_BOOKING_TAGLINE =
+  "Columbia & Sciences Po dual degree, Political Science, Law & Psychology; Goldman Sachs BI";
 
 export const NIKA_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",

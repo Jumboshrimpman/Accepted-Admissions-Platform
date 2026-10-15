@@ -24,6 +24,7 @@ type TutorProfile = {
   photoUrl: string | null;
   photoAltText: string | null;
   biography: string | null;
+  tagline: string | null;
   subjects: string[];
   linkedinUrl: string | null;
   publicApproved: boolean;
@@ -66,6 +67,7 @@ export default function TutorProfilePage() {
           photoUrl: profile.photoUrl,
           photoAltText,
           biography: profile.biography,
+          tagline: profile.tagline,
           subjects: profile.subjects,
           linkedinUrl: profile.linkedinUrl,
         }),
@@ -148,6 +150,14 @@ export default function TutorProfilePage() {
             onPhotoUrlChange={(value) => updateField("photoUrl", value)}
             onPhotoAltTextChange={(value) => updateField("photoAltText", value)}
           />
+          <Field label="Booking tagline">
+            <Input
+              value={profile.tagline ?? ""}
+              onChange={(event) => updateField("tagline", event.target.value || null)}
+              placeholder="One line on the booking card"
+              data-testid="tutor-profile-tagline"
+            />
+          </Field>
           <Field label="Biography">
             <Textarea
               rows={6}

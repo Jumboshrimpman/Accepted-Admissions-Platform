@@ -2466,6 +2466,7 @@ components:
         title: { type: string }
         photoUrl: { type: ["string", "null"] }
         biography: { type: ["string", "null"] }
+        tagline: { type: ["string", "null"] }
         subjects:
           type: array
           items: { type: string }

@@ -2539,6 +2539,7 @@ export const ListBookingTutorsResponseItem = zod.object({
   "title": zod.string(),
   "photoUrl": zod.string().nullish(),
   "biography": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
   "subjects": zod.array(zod.string()),
   "calendarStatus": zod.string(),
   "providerStatus": zod.enum(['connected', 'disconnected'])

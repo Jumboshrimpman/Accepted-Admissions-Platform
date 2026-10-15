@@ -424,6 +424,8 @@ export const tutorProfilesTable = pgTable(
     photoUrl: text("photo_url"),
     photoAltText: text("photo_alt_text"),
     biography: text("biography"),
+    /** One-line booking card summary. Null hides the line. */
+    tagline: text("tagline"),
     subjects: jsonb("subjects").$type<string[]>().notNull().default([]),
     linkedinUrl: text("linkedin_url"),
     publicApproved: boolean("public_approved").notNull().default(false),

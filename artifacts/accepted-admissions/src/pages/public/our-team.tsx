@@ -11,6 +11,7 @@ export type Tutor = {
   photoUrl: string | null;
   photoAltText: string | null;
   biography: string | null;
+  tagline?: string | null;
   subjects: string[];
   linkedinUrl: string | null;
 };

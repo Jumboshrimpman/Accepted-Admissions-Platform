@@ -210,6 +210,10 @@ test("provisioning and the migration do not send email or create Clerk users", a
   }
   assert.match(provision, /No Clerk invitation/);
   assert.equal(provision.includes(VICTORIA_INTENDED_EMAIL), false);
+  assert.match(provision, /photoUrl: VICTORIA_PHOTO_URL/);
+  assert.match(provision, /tagline: null/);
+  assert.match(provision, /NIKA_BOOKING_TAGLINE/);
+  assert.match(provision, /XAVIER_BOOKING_TAGLINE/);
   const rates = await readFile(
     fileURLToPath(new URL("./college-consulting.ts", import.meta.url)),
     "utf8",
