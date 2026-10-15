@@ -138,7 +138,7 @@ describe("OurTeam publication gate", () => {
     };
     const approvedBiographies: Record<string, string> = {
       xavier:
-        "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
+        "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He was admitted to multiple Ivy League schools before choosing Harvard. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
       eunice:
         "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.",
       nika:
@@ -205,6 +205,7 @@ describe("OurTeam publication gate", () => {
     expect(kyaImage.getAttribute("src")).toContain("/media/team/kya-brooks.jpg");
     expect(michaelImage.getAttribute("src")).toContain("/media/team/michael-pecorara.jpg");
     expect(within(xavierCard).getByText(/Jane Street Capital/)).toBeTruthy();
+    expect(within(xavierCard).getByText(/multiple Ivy League schools before choosing Harvard/)).toBeTruthy();
     expect(within(xavierCard).queryByText(/2029 Harvard Law School/)).toBeNull();
     expect(within(euniceCard).getByText(/Harvard Medical School\/Massachusetts General Hospital/)).toBeTruthy();
     expect(within(euniceCard).queryByText(/third-year at Harvard College/)).toBeNull();

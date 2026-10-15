@@ -323,6 +323,13 @@
       "when": 1791200000000,
       "tag": "0046_tutor_booking_tagline",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791300000000,
+      "tag": "0047_xavier_ivy_league_bio",
+      "breakpoints": true
     }
   ]
 }

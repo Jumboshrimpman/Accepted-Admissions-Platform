@@ -72,6 +72,7 @@ test("serves first-party portraits instead of Wix CDN URLs", () => {
 
 test("publishes the current Xavier, Eunice, and Nika biographies and retires the stale seed copy", () => {
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /Jane Street Capital/);
+  assert.match(XAVIER_PUBLIC_BIOGRAPHY, /admitted to multiple Ivy League schools before choosing Harvard/);
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /2030 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /2029 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /Oxford until 2026/);
@@ -85,6 +86,8 @@ test("publishes the current Xavier, Eunice, and Nika biographies and retires the
   assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /Stuyvesant High School/);
   assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /at a Research Intern/);
   assert.match(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[0], /2029 Harvard Law School/);
+  assert.match(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Jane Street Capital/);
+  assert.doesNotMatch(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Ivy League/);
   assert.match(EUNICE_LEGACY_PUBLIC_BIOGRAPHIES[0], /third-year at Harvard College/);
   assert.match(NIKA_LEGACY_PUBLIC_BIOGRAPHIES[0], /sophomore studying/);
   assert.equal(

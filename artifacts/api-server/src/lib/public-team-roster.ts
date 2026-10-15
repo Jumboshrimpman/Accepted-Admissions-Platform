@@ -15,7 +15,7 @@ export const PUBLIC_TUTOR_ORDER = [
 export type PublicTutorName = (typeof PUBLIC_TUTOR_ORDER)[number];
 
 export const XAVIER_PUBLIC_BIOGRAPHY =
-  "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.";
+  "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He was admitted to multiple Ivy League schools before choosing Harvard. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.";
 
 /** One line on the booking card. The expanded bio stays XAVIER_PUBLIC_BIOGRAPHY. */
 export const XAVIER_BOOKING_TAGLINE =
@@ -23,6 +23,7 @@ export const XAVIER_BOOKING_TAGLINE =
 
 export const XAVIER_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He is a 2024 Rhodes Scholar, studying Philosophy for his Masters at Oxford until 2026. Xavier is also an incoming member of the 2029 Harvard Law School class.",
+  "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
 ] as const;
 
 export const EUNICE_PUBLIC_BIOGRAPHY =
