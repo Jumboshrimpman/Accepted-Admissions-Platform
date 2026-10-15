@@ -93,7 +93,10 @@ import {
   consultingTutorCredits,
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
+  isNikaTemporaryViewEmail,
   NEEL_DHARNI_USER_ID,
+  NIKA_CONSULTING_EMAIL,
+  nikaTemporaryViewDecision,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
@@ -558,7 +561,11 @@ import {
   type PortalAccessGrant,
 } from "@workspace/db";
 
-type AuthedRequest = Request & { appUser?: AppUser };
+type AuthedRequest = Request & {
+  appUser?: AppUser;
+  /** Set when this Clerk login is viewing Nika's tutor user without changing it. */
+  temporaryTutorAlias?: string;
+};
 
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
@@ -2160,7 +2167,7 @@ async function loadActiveDatabaseAccessGrants(
       ? [eq(portalAccessGrantsTable.clerkUserId, clerkUserId)]
       : []),
     ...(normalizedEmail
-      ? [eq(portalAccessGrantsTable.email, normalizedEmail)]
+      ? [sql`lower(${portalAccessGrantsTable.email}) = ${normalizedEmail}`]
       : []),
   ];
   if (identityFilters.length === 0) return [];
@@ -2548,6 +2555,46 @@ async function requireAppUser(
     });
     return;
   }
+  const aliasEmail = identity?.email
+    ? normalizeProvisionedEmail(identity.email)
+    : undefined;
+  if (!configured && isNikaTemporaryViewEmail(aliasEmail)) {
+    const [nikaUser] = await db
+      .select()
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${NIKA_CONSULTING_EMAIL}`)
+      .limit(1);
+    const [nikaGrant] = nikaUser
+      ? await db
+          .select({
+            active: portalAccessGrantsTable.active,
+            revokedAt: portalAccessGrantsTable.revokedAt,
+          })
+          .from(portalAccessGrantsTable)
+          .where(sql`lower(${portalAccessGrantsTable.email}) = ${NIKA_CONSULTING_EMAIL}`)
+          .limit(1)
+      : [];
+    const aliasDecision = nikaTemporaryViewDecision({
+      email: aliasEmail,
+      envRoleCategories: envRoleCategoriesForIdentity(clerkUserId, aliasEmail),
+      signedInUserRole: appUser?.role ?? null,
+      nikaUser: nikaUser ? { id: nikaUser.id, role: nikaUser.role } : null,
+      nikaGrantActive: Boolean(
+        nikaGrant && nikaGrant.active !== false && nikaGrant.revokedAt == null,
+      ),
+    });
+    if (aliasDecision.action === "view" && nikaUser) {
+      // View Nika's existing tutor user. Do not write her email, Clerk id,
+      // grant, role, or Google Calendar connection.
+      req.temporaryTutorAlias = aliasEmail;
+      req.appUser = nikaUser;
+      const clerkSessionId =
+        auth.sessionId ?? claimString(auth.sessionClaims, "sid");
+      await recordSuccessfulLogin(nikaUser.id, clerkSessionId);
+      next();
+      return;
+    }
+  }
   if (!configured) {
     if (appUser) {
       await db.insert(auditLogsTable).values({
@@ -2606,7 +2653,7 @@ async function requireAppUser(
     const [existingUser] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, email))
+      .where(sql`lower(${usersTable.email}) = ${email}`)
       .limit(1);
     if (existingUser) {
       [appUser] = await db
@@ -6177,10 +6224,24 @@ router.get(
   },
 );
 
+function rejectTemporaryTutorCalendarChange(
+  req: AuthedRequest,
+  res: Response,
+): boolean {
+  if (!req.temporaryTutorAlias) return false;
+  res.status(403).json({
+    code: "TEMPORARY_TUTOR_VIEW",
+    error:
+      "This temporary login can view the tutor portal but cannot change the Google Calendar connection.",
+  });
+  return true;
+}
+
 router.get(
   "/calendar/connect",
   ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    if (rejectTemporaryTutorCalendarChange(req, res)) return;
     const useRedirect = req.query.redirect === "1";
     const returnTo = safeCalendarReturnTo(
       typeof req.query.returnTo === "string" ? req.query.returnTo : undefined,
@@ -6297,6 +6358,7 @@ router.delete(
   "/calendar/connections/:tutorProfileId",
   ensureRole(["student", "tutor", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
+    if (rejectTemporaryTutorCalendarChange(req, res)) return;
     const tutorProfileId =
       typeof req.params.tutorProfileId === "string" ? req.params.tutorProfileId : "";
     const [profile] = await db

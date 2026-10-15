@@ -37,6 +37,7 @@ import {
   decidePlaceholderLink,
   isProductionClerkUserId,
   nikaConsultingAssignmentUserId,
+  rememberNeelClientUserId,
   nikaConsultingSkipReason,
   normalizeConsultingEmail,
   portalAccessRevoked,
@@ -358,10 +359,35 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
     };
   }
   const clerkUserId =
-    decision.mode === "existing"
+    decision.mode === "existing" || decision.mode === "adopt"
       ? decision.clerkUserId
       : decision.clerkUserId || pendingClerkUserId(email);
-  let user = byId ?? null;
+  let user = decision.mode === "adopt" ? (byEmail ?? null) : (byId ?? null);
+  if (decision.mode === "adopt" && user) {
+    if (user.role === "administrator") {
+      return {
+        linked: false,
+        email: user.email,
+        stoppedReason: "existing_user_administrator",
+        userId: user.id,
+      };
+    }
+    await tx
+      .update(usersTable)
+      .set({
+        role: input.role,
+        displayName: input.displayName,
+        ...(input.title ? { title: input.title } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, user.id));
+    user = {
+      ...user,
+      role: input.role,
+      displayName: input.displayName,
+      title: input.title ?? user.title,
+    };
+  }
   if (!user && decision.mode === "create") {
     await tx
       .insert(usersTable)
@@ -417,11 +443,13 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
         .set({ userId: user.id, updatedAt: new Date() })
         .where(eq(portalAccessGrantsTable.id, stored.id));
     }
-  } else if (!grant.userId) {
+  } else {
     await tx
       .update(portalAccessGrantsTable)
       .set({
         userId: user.id,
+        roleCategory: input.grantRole,
+        clerkUserId: user.clerkUserId,
         ...(grant.displayName?.trim() ? {} : { displayName: input.displayName }),
         updatedAt: new Date(),
       })
@@ -506,7 +534,13 @@ async function ensureVictoriaProfile(tx: ProvisionTx, userId: string, email: str
     await renameVictoriaPlaceholder(tx, userId);
     return;
   }
-  if (profile.userId && profile.userId !== userId) return;
+  if (
+    profile.userId &&
+    profile.userId !== userId &&
+    profile.userId !== VICTORIA_USER_ID
+  ) {
+    return;
+  }
   if (portalAccessRevoked(profile)) return;
   const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
   await tx
@@ -601,6 +635,7 @@ export async function ensureCollegeConsultingProvision(): Promise<CollegeConsult
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${PROVISION_LOCK_KEY}))`);
     return provisionCollegeConsulting(tx);
   });
+  if (status.neelLinked) rememberNeelClientUserId(status.neelUserId);
   lastStatus = status;
   return lastStatus;
 }
@@ -617,7 +652,7 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     role: "student",
     grantRole: "student",
     allowedGrantRoles: ["student"],
-    requireKnownClerkId: true,
+    requireKnownClerkId: false,
     title: null,
     notes:
       "Neel Dharni placeholder login. Bookings use this user id. Change users.email and portal_access_grants.email together later. No Clerk invitation was sent.",
@@ -703,11 +738,11 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     nikaBookable: nika.bookable,
     nikaSkipReason: nika.skipReason,
     neelLinked: neel.linked,
-    neelUserId: NEEL_DHARNI_USER_ID,
+    neelUserId: neel.userId ?? NEEL_DHARNI_USER_ID,
     neelEmail: neel.email,
     neelStoppedReason: neel.stoppedReason,
     victoriaLinked: victoria.linked,
-    victoriaUserId: VICTORIA_USER_ID,
+    victoriaUserId: victoria.userId ?? VICTORIA_USER_ID,
     victoriaPlaceholderEmail: VICTORIA_PLACEHOLDER_EMAIL,
     victoriaIntendedEmail: VICTORIA_INTENDED_EMAIL,
     victoriaEmail: victoria.email,
