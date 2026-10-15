@@ -539,7 +539,11 @@ function ConsultingProvisionNotice({
         <CardTitle className="text-base">College Consulting provisioning</CardTitle>
         <CardDescription className={stopped ? "text-amber-900" : undefined}>
           Nika signs in at /login, then connects Google Calendar at /tutor with {provision.nikaEmail}
-          {provision.nikaClerkUserId ? ` (${provision.nikaClerkUserId})` : ""}. No invitation was sent.
+          {provision.nikaClerkUserId ? ` (${provision.nikaClerkUserId})` : ""}.{" "}
+          {provision.nikaBookable
+            ? "She is bookable."
+            : `Not bookable (${provision.nikaSkipReason ?? "inactive"}).`}{" "}
+          No invitation was sent.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">

@@ -28,7 +28,9 @@ import {
   VICTORIA_HOURLY_RATE_CENTS,
   VICTORIA_INTENDED_EMAIL,
   VICTORIA_PLACEHOLDER_EMAIL,
+  nikaConsultingAssignmentUserId,
   portalAccessRevoked,
+  victoriaConsultingAssignmentUserId,
   VICTORIA_USER_ID,
   XAVIER_NEEL_HOURLY_RATE_CENTS,
   checkoutAudienceForSlug,
@@ -254,4 +256,64 @@ test("provisioning and the migration do not send email or create Clerk users", a
   const index = await readFile(fileURLToPath(new URL("../index.ts", import.meta.url)), "utf8");
   assert.equal(platform.includes("ensureCollegeConsultingProvision("), false);
   assert.match(index, /ensureCollegeConsultingProvision\(\)/);
+  assert.match(provision, /const tutorEmails = \[CANONICAL_XAVIER_EMAIL\]/);
+  assert.equal(/tutorEmails = \[[^\]]*NIKA_CONSULTING_EMAIL/.test(provision), false);
+  assert.match(provision, /victoria\.linked && victoria\.userId \? \[victoria\.userId\] : \[\]/);
+  assert.match(provision, /if \(nika\.bookable && nikaAssignmentUserId\)/);
+  assert.match(provision, /lower\(\$\{column\}\)/);
+});
+
+test("revoked Nika and stopped Victoria get no College Consulting membership or assignment", () => {
+  const revokedGrant = { active: false, revokedAt: new Date("2026-01-01T00:00:00.000Z") };
+  const activeGrant = { active: true, revokedAt: null };
+  const nika = { id: "nika-user", role: "tutor" };
+  assert.equal(
+    nikaConsultingAssignmentUserId({
+      user: nika,
+      grant: revokedGrant,
+      profile: { active: true },
+    }),
+    null,
+  );
+  assert.equal(
+    nikaConsultingAssignmentUserId({
+      user: nika,
+      grant: { active: true, revokedAt: new Date("2026-02-01T00:00:00.000Z") },
+      profile: { active: true },
+    }),
+    null,
+  );
+  assert.equal(
+    nikaConsultingAssignmentUserId({
+      user: nika,
+      grant: activeGrant,
+      profile: { active: false },
+    }),
+    null,
+  );
+  assert.equal(victoriaConsultingAssignmentUserId(false, "icloud-owner"), null);
+  assert.equal(victoriaConsultingAssignmentUserId(false, "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63"), null);
+  const tutorIds = [
+    "xavier-user",
+    ...(victoriaConsultingAssignmentUserId(false, "icloud-owner") ? ["icloud-owner"] : []),
+  ];
+  const nikaAssignmentUserId = nikaConsultingAssignmentUserId({
+    user: nika,
+    grant: revokedGrant,
+    profile: { active: false },
+  });
+  if (nikaAssignmentUserId) tutorIds.push(nikaAssignmentUserId);
+  assert.deepEqual(tutorIds, ["xavier-user"]);
+  assert.equal(
+    nikaConsultingAssignmentUserId({
+      user: nika,
+      grant: activeGrant,
+      profile: { active: true },
+    }),
+    "nika-user",
+  );
+  assert.equal(
+    victoriaConsultingAssignmentUserId(true, "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63"),
+    "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63",
+  );
 });

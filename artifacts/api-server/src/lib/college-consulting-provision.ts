@@ -36,8 +36,11 @@ import {
   VICTORIA_USER_ID,
   decidePlaceholderLink,
   isProductionClerkUserId,
+  nikaConsultingAssignmentUserId,
+  nikaConsultingSkipReason,
   normalizeConsultingEmail,
   portalAccessRevoked,
+  type NikaConsultingSkipReason,
   type PlaceholderLinkStopReason,
 } from "./college-consulting.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -58,6 +61,8 @@ import {
 export type CollegeConsultingProvisionStatus = {
   nikaEmail: string;
   nikaClerkUserId: string | null;
+  nikaBookable: boolean;
+  nikaSkipReason: NikaConsultingSkipReason | null;
   neelLinked: boolean;
   neelUserId: string;
   neelEmail: string | null;
@@ -73,6 +78,8 @@ export type CollegeConsultingProvisionStatus = {
 const EMPTY_STATUS: CollegeConsultingProvisionStatus = {
   nikaEmail: NIKA_CONSULTING_EMAIL,
   nikaClerkUserId: null,
+  nikaBookable: false,
+  nikaSkipReason: null,
   neelLinked: false,
   neelUserId: NEEL_DHARNI_USER_ID,
   neelEmail: null,
@@ -97,6 +104,10 @@ const PROVISION_LOCK_KEY = "college-consulting-provision";
 
 function pendingClerkUserId(email: string): string {
   return `pending:${normalizeConsultingEmail(email)}`;
+}
+
+function emailMatches(column: unknown, email: string) {
+  return sql`lower(${column}) = ${normalizeConsultingEmail(email)}`;
 }
 
 async function clerkOwnerId(tx: ProvisionTx, clerkUserId: string): Promise<string | null> {
@@ -167,32 +178,45 @@ async function ensureWeeklyHours(tx: ProvisionTx, tutorProfileId: string): Promi
   });
 }
 
-async function ensureNika(tx: ProvisionTx): Promise<string | null> {
+async function ensureNika(tx: ProvisionTx): Promise<{
+  clerkUserId: string | null;
+  userId: string | null;
+  bookable: boolean;
+  skipReason: NikaConsultingSkipReason | null;
+}> {
   const [user] = await tx
     .select()
     .from(usersTable)
-    .where(eq(usersTable.email, NIKA_CONSULTING_EMAIL))
+    .where(emailMatches(usersTable.email, NIKA_CONSULTING_EMAIL))
     .limit(1);
   const [grant] = await tx
     .select()
     .from(portalAccessGrantsTable)
-    .where(eq(portalAccessGrantsTable.email, NIKA_CONSULTING_EMAIL))
+    .where(emailMatches(portalAccessGrantsTable.email, NIKA_CONSULTING_EMAIL))
     .limit(1);
   const clerkUserId =
     [user?.clerkUserId, grant?.clerkUserId].find((id) => isProductionClerkUserId(id)) ??
     null;
-  if (
-    user?.role === "administrator" ||
-    envRoleCategoriesForIdentity(clerkUserId ?? undefined, NIKA_CONSULTING_EMAIL).includes(
-      "administrator",
-    )
-  ) {
-    return clerkUserId;
+  const environmentAdministrator = envRoleCategoriesForIdentity(
+    clerkUserId ?? undefined,
+    NIKA_CONSULTING_EMAIL,
+  ).includes("administrator");
+  const skipped = (
+    skipReason: NikaConsultingSkipReason,
+    userId: string | null = user?.id ?? null,
+  ) => ({
+    clerkUserId,
+    userId,
+    bookable: false,
+    skipReason,
+  });
+  if (environmentAdministrator || user?.role === "administrator") {
+    return skipped("administrator");
   }
   // Nika already has portal access. Do not create a user or grant, and do not turn a revoked row back on.
-  if (!user || !grant || portalAccessRevoked(grant)) {
-    return clerkUserId;
-  }
+  if (!user) return skipped("missing_user", null);
+  if (!grant) return skipped("missing_grant");
+  if (portalAccessRevoked(grant)) return skipped("grant_revoked");
   let nikaUser = user;
   if (
     clerkUserId &&
@@ -223,9 +247,10 @@ async function ensureNika(tx: ProvisionTx): Promise<string | null> {
   const [profile] = await tx
     .select()
     .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL))
+    .where(emailMatches(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL))
     .limit(1);
-  if (!profile || portalAccessRevoked(profile)) return clerkUserId;
+  if (!profile) return skipped("missing_profile");
+  if (portalAccessRevoked(profile)) return skipped("profile_inactive");
   const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
   const subjectsChanged = subjects.length !== (profile.subjects ?? []).length;
   const linkUser = !profile.userId;
@@ -241,7 +266,23 @@ async function ensureNika(tx: ProvisionTx): Promise<string | null> {
       .where(eq(tutorProfilesTable.id, profile.id));
   }
   await ensureWeeklyHours(tx, profile.id);
-  return isProductionClerkUserId(nikaUser.clerkUserId) ? nikaUser.clerkUserId : clerkUserId;
+  const resolvedClerk = isProductionClerkUserId(nikaUser.clerkUserId) ? nikaUser.clerkUserId : clerkUserId;
+  return {
+    clerkUserId: resolvedClerk,
+    userId: nikaUser.id,
+    bookable: nikaConsultingSkipReason({
+      environmentAdministrator,
+      user: nikaUser,
+      grant,
+      profile,
+    }) === null,
+    skipReason: nikaConsultingSkipReason({
+      environmentAdministrator,
+      user: nikaUser,
+      grant,
+      profile,
+    }),
+  };
 }
 
 async function ensurePlaceholderClient(tx: ProvisionTx, input: {
@@ -268,13 +309,13 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
   const [byEmail] = await tx
     .select()
     .from(usersTable)
-    .where(eq(usersTable.email, loginEmail))
+    .where(emailMatches(usersTable.email, loginEmail))
     .limit(1);
   const existingUser = byId ?? byEmail ?? null;
   const [grant] = await tx
     .select()
     .from(portalAccessGrantsTable)
-    .where(eq(portalAccessGrantsTable.email, existingUser ? normalizeConsultingEmail(existingUser.email) : email))
+    .where(emailMatches(portalAccessGrantsTable.email, existingUser ? existingUser.email : email))
     .limit(1);
   if (portalAccessRevoked(grant)) {
     return {
@@ -360,7 +401,7 @@ async function ensurePlaceholderClient(tx: ProvisionTx, input: {
     const [stored] = await tx
       .select()
       .from(portalAccessGrantsTable)
-      .where(eq(portalAccessGrantsTable.email, grantEmail))
+      .where(emailMatches(portalAccessGrantsTable.email, grantEmail))
       .limit(1);
     if (!stored || portalAccessRevoked(stored) || (stored.userId && stored.userId !== user.id)) {
       return {
@@ -437,7 +478,7 @@ async function ensureVictoriaProfile(tx: ProvisionTx, userId: string, email: str
     : await tx
         .select()
         .from(tutorProfilesTable)
-        .where(eq(tutorProfilesTable.email, normalizeConsultingEmail(email)))
+        .where(emailMatches(tutorProfilesTable.email, email))
         .limit(1);
   const profile = byUser ?? byEmail ?? null;
   if (!profile) {
@@ -525,7 +566,7 @@ async function ensureBookingTaglines(tx: ProvisionTx): Promise<void> {
     .set({ tagline: NIKA_BOOKING_TAGLINE, updatedAt: new Date() })
     .where(
       and(
-        eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL),
+        emailMatches(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL),
         eq(tutorProfilesTable.active, true),
         isNull(tutorProfilesTable.tagline),
       ),
@@ -535,7 +576,7 @@ async function ensureBookingTaglines(tx: ProvisionTx): Promise<void> {
     .from(usersTable)
     .where(
       or(
-        eq(usersTable.email, CANONICAL_XAVIER_EMAIL),
+        emailMatches(usersTable.email, CANONICAL_XAVIER_EMAIL),
         eq(usersTable.clerkUserId, CANONICAL_XAVIER_CLERK_USER_ID),
       ),
     );
@@ -546,7 +587,7 @@ async function ensureBookingTaglines(tx: ProvisionTx): Promise<void> {
     .where(
       and(
         or(
-          eq(tutorProfilesTable.email, CANONICAL_XAVIER_EMAIL),
+          emailMatches(tutorProfilesTable.email, CANONICAL_XAVIER_EMAIL),
           xavierUserIds.length > 0 ? inArray(tutorProfilesTable.userId, xavierUserIds) : sql`false`,
         ),
         eq(tutorProfilesTable.active, true),
@@ -568,7 +609,7 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
   await ensureCatalogProducts(tx);
   await ensureCourse(tx);
   await ensureBookingTaglines(tx);
-  const nikaClerkUserId = await ensureNika(tx);
+  const nika = await ensureNika(tx);
   const neel = await ensurePlaceholderClient(tx, {
     targetUserId: NEEL_DHARNI_USER_ID,
     placeholderEmail: NEEL_PLACEHOLDER_EMAIL,
@@ -598,11 +639,11 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
   }
   if (neel.linked && neel.userId) {
     await ensureMembership(tx, neel.userId, "student");
-    const tutorEmails = [NIKA_CONSULTING_EMAIL, CANONICAL_XAVIER_EMAIL];
+    const tutorEmails = [CANONICAL_XAVIER_EMAIL];
     const tutors = await tx
       .select({ id: usersTable.id, email: usersTable.email })
       .from(usersTable)
-      .where(inArray(usersTable.email, tutorEmails));
+      .where(or(...tutorEmails.map((email) => emailMatches(usersTable.email, email))));
     const xavierByClerk = tutors.some(
       (tutor: { id: string; email: string }) =>
         normalizeConsultingEmail(tutor.email) === normalizeConsultingEmail(CANONICAL_XAVIER_EMAIL),
@@ -618,12 +659,12 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     const tutorIds = [
       ...tutors.map((tutor: { id: string; email: string }) => tutor.id),
       ...(xavierByClerk ? [xavierByClerk.id] : []),
-      ...(victoria.userId ? [victoria.userId] : []),
+      ...(victoria.linked && victoria.userId ? [victoria.userId] : []),
     ];
     const [nikaUser] = await tx
       .select({ id: usersTable.id, role: usersTable.role })
       .from(usersTable)
-      .where(eq(usersTable.email, NIKA_CONSULTING_EMAIL))
+      .where(emailMatches(usersTable.email, NIKA_CONSULTING_EMAIL))
       .limit(1);
     const [nikaGrant] = nikaUser
       ? await tx
@@ -632,25 +673,24 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
             revokedAt: portalAccessGrantsTable.revokedAt,
           })
           .from(portalAccessGrantsTable)
-          .where(eq(portalAccessGrantsTable.email, NIKA_CONSULTING_EMAIL))
+          .where(emailMatches(portalAccessGrantsTable.email, NIKA_CONSULTING_EMAIL))
           .limit(1)
       : [];
     const [nikaProfile] = nikaUser
       ? await tx
           .select({ active: tutorProfilesTable.active })
           .from(tutorProfilesTable)
-          .where(eq(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL))
+          .where(emailMatches(tutorProfilesTable.email, NIKA_CONSULTING_EMAIL))
           .limit(1)
       : [];
-    if (
-      nikaUser &&
-      nikaUser.role !== "administrator" &&
-      nikaGrant &&
-      !portalAccessRevoked(nikaGrant) &&
-      nikaProfile &&
-      !portalAccessRevoked(nikaProfile)
-    ) {
-      tutorIds.push(nikaUser.id);
+    const nikaAssignmentUserId = nikaConsultingAssignmentUserId({
+      environmentAdministrator: nika.skipReason === "administrator",
+      user: nikaUser ?? null,
+      grant: nikaGrant ?? null,
+      profile: nikaProfile ?? null,
+    });
+    if (nika.bookable && nikaAssignmentUserId) {
+      tutorIds.push(nikaAssignmentUserId);
     }
     for (const tutorUserId of [...new Set(tutorIds)]) {
       await ensureMembership(tx, tutorUserId, "tutor");
@@ -659,7 +699,9 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
   }
   return {
     nikaEmail: NIKA_CONSULTING_EMAIL,
-    nikaClerkUserId,
+    nikaClerkUserId: nika.clerkUserId,
+    nikaBookable: nika.bookable,
+    nikaSkipReason: nika.skipReason,
     neelLinked: neel.linked,
     neelUserId: NEEL_DHARNI_USER_ID,
     neelEmail: neel.email,

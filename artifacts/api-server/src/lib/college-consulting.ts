@@ -150,6 +150,49 @@ export function portalAccessRevoked(
   return record.revokedAt != null && record.revokedAt !== "";
 }
 
+export type NikaConsultingSkipReason =
+  | "administrator"
+  | "missing_user"
+  | "missing_grant"
+  | "grant_revoked"
+  | "missing_profile"
+  | "profile_inactive";
+
+/** Null when Nika may receive a College Consulting membership and Neel assignment. */
+export function nikaConsultingSkipReason(input: {
+  environmentAdministrator?: boolean;
+  user: { id: string; role: string } | null;
+  grant: { active?: boolean | null; revokedAt?: Date | string | null } | null;
+  profile: { active?: boolean | null } | null;
+}): NikaConsultingSkipReason | null {
+  if (input.environmentAdministrator || input.user?.role === "administrator") return "administrator";
+  if (!input.user) return "missing_user";
+  if (!input.grant) return "missing_grant";
+  if (portalAccessRevoked(input.grant)) return "grant_revoked";
+  if (!input.profile) return "missing_profile";
+  if (portalAccessRevoked(input.profile)) return "profile_inactive";
+  return null;
+}
+
+/** User id to add, or null when the grant or profile is revoked or missing. */
+export function nikaConsultingAssignmentUserId(input: {
+  environmentAdministrator?: boolean;
+  user: { id: string; role: string } | null;
+  grant: { active?: boolean | null; revokedAt?: Date | string | null } | null;
+  profile: { active?: boolean | null } | null;
+}): string | null {
+  if (nikaConsultingSkipReason(input)) return null;
+  return input.user!.id;
+}
+
+/** Stopped or unlinked Victoria, including another owner of the placeholder email, gets no tutor row. */
+export function victoriaConsultingAssignmentUserId(
+  linked: boolean,
+  userId: string | null,
+): string | null {
+  return linked && userId ? userId : null;
+}
+
 export type PlaceholderLinkDecision =
   | { action: "link"; clerkUserId: string; mode: "existing" | "create" }
   | { action: "stop"; reason: PlaceholderLinkStopReason };

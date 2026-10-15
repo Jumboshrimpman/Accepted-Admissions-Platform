@@ -848,6 +848,8 @@ export interface AdminOverview {
   consultingProvision?: {
     nikaEmail: string;
     nikaClerkUserId: string | null;
+    nikaBookable?: boolean;
+    nikaSkipReason?: string | null;
     neelLinked: boolean;
     neelUserId: string;
     neelEmail: string | null;
