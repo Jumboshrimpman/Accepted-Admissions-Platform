@@ -153,4 +153,23 @@ describe("Admin connections", () => {
     );
     expect(screen.getByText("Google revoked the calendar grant. Reconnect is required.")).toBeTruthy();
   });
+
+  test("shows the server wait message when Test now is cooling down", async () => {
+    const waiting = new Error("HTTP 429 Too Many Requests");
+    Object.assign(waiting, {
+      data: { error: "Wait 35 seconds before testing this calendar again.", retryAfterSeconds: 35 },
+    });
+    customFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/test")) throw waiting;
+      return { connections: [xavier] };
+    });
+
+    render(<AdminConnections />);
+    fireEvent.click(await screen.findByTestId("test-calendar-connection-xavier-profile"));
+
+    expect(
+      await screen.findByText("Wait 35 seconds before testing this calendar again."),
+    ).toBeTruthy();
+    expect(screen.queryByText("HTTP 429 Too Many Requests")).toBeNull();
+  });
 });

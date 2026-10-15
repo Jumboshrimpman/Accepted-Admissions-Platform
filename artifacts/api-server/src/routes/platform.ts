@@ -64,7 +64,9 @@ import {
 } from "../lib/calendar-persistence";
 import {
   calendarConnectionTestAdmission,
+  calendarConnectionTestRetryMessage,
   preserveRevokedCalendarTestReason,
+  readTutorBusyWindows,
 } from "../lib/calendar-connection-health";
 import {
   listCalendarReconnectAlerts,
@@ -4741,29 +4743,20 @@ async function slotsForTutor(
   if (!access) {
     return { tutor, rule, access: null, slots: [] as string[] };
   }
-  let busyWindows: BusyWindow[];
-  const checkedAt = new Date();
-  try {
-    busyWindows = await runTutorCalendarCall(access, (token) =>
-      listGoogleBusyWindows(token, access.connection.calendarId!, from, to),
-    );
-  } catch (error) {
-    await recordCalendarFreeBusyCheck({
-      tutorProfileId,
-      ok: false,
-      reason: error instanceof BookingError ? error.code : "calendar_check_failed",
-      checkedAt,
-    });
-    if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") {
-      return { tutor, rule, access: null, slots: [] as string[] };
-    }
-    throw error;
-  }
-  await recordCalendarFreeBusyCheck({
+  const listed = await readTutorBusyWindows({
     tutorProfileId,
-    ok: true,
-    checkedAt,
+    connection: access.connection,
+    listBusy: () =>
+      runTutorCalendarCall(access, (token) =>
+        listGoogleBusyWindows(token, access.connection.calendarId!, from, to),
+      ),
+    record: recordCalendarFreeBusyCheck,
+    warn: (fields, message) => logger.warn(fields, message),
   });
+  if (listed.disconnected) {
+    return { tutor, rule, access: null, slots: [] as string[] };
+  }
+  const busyWindows = listed.busyWindows;
   const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({
@@ -8208,7 +8201,10 @@ router.post(
       inFlight: calendarConnectionTestInFlight.has(tutorProfileId),
     });
     if (!admission.allowed) {
-      res.status(429).json({ retryAfterSeconds: admission.retryAfterSeconds });
+      res.status(429).json({
+        retryAfterSeconds: admission.retryAfterSeconds,
+        error: calendarConnectionTestRetryMessage(admission.retryAfterSeconds),
+      });
       return;
     }
     calendarConnectionTestStartedAt.set(tutorProfileId, now);

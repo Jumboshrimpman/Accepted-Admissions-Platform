@@ -28,6 +28,18 @@ const BADGE_LABEL = {
   not_connected: "Not connected",
 } as const;
 
+function connectionTestErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "data" in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === "object" && "error" in data) {
+      const message = (data as { error?: unknown }).error;
+      if (typeof message === "string" && message.trim()) return message.trim();
+    }
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return "The free/busy check failed.";
+}
+
 function formatWhen(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -80,7 +92,7 @@ export default function AdminConnections() {
         ),
       );
     } catch (testError) {
-      setError(testError instanceof Error ? testError.message : "The free/busy check failed.");
+      setError(connectionTestErrorMessage(testError));
     } finally {
       setPendingId(null);
     }

@@ -6,6 +6,7 @@ export type CalendarHealthBadge =
 
 export const UNKNOWN_GOOGLE_ACCOUNT_LABEL = "Unknown (reconnect to record)";
 export const CALENDAR_CONNECTION_TEST_COOLDOWN_MS = 45_000;
+export const CALENDAR_FREEBUSY_HEALTH_FRESH_MS = 60_000;
 
 export type CalendarConnectionHealth = {
   tutorProfileId: string;
@@ -131,6 +132,119 @@ export function preserveRevokedCalendarTestReason(
   const current = existing?.trim() ?? "";
   if (current && /revoked|invalid_grant/i.test(current)) return current;
   return next;
+}
+
+export function calendarConnectionTestRetryMessage(retryAfterSeconds: number): string {
+  return `Wait ${retryAfterSeconds} seconds before testing this calendar again.`;
+}
+
+export function shouldWriteCalendarFreeBusySuccess(input: {
+  lastFreeBusyAt?: Date | string | null;
+  lastError?: string | null;
+  now: number;
+  freshMs?: number;
+}): boolean {
+  if (input.lastError?.trim()) return true;
+  if (input.lastFreeBusyAt == null || input.lastFreeBusyAt === "") return true;
+  const at =
+    input.lastFreeBusyAt instanceof Date
+      ? input.lastFreeBusyAt.getTime()
+      : new Date(input.lastFreeBusyAt).getTime();
+  if (Number.isNaN(at)) return true;
+  return input.now - at >= (input.freshMs ?? CALENDAR_FREEBUSY_HEALTH_FRESH_MS);
+}
+
+type CalendarFreeBusyHealthWrite = (input: {
+  tutorProfileId: string;
+  ok: boolean;
+  reason?: string | null;
+  checkedAt?: Date;
+}) => Promise<void>;
+
+type CalendarHealthWarn = (
+  fields: { event: "calendar.health_write_failed"; tutorProfileId: string },
+  message: string,
+) => void;
+
+export function recordCalendarFreeBusyInBackground(input: {
+  tutorProfileId: string;
+  ok: boolean;
+  reason?: string | null;
+  checkedAt: Date;
+  record: CalendarFreeBusyHealthWrite;
+  warn: CalendarHealthWarn;
+}): void {
+  void Promise.resolve()
+    .then(() =>
+      input.record({
+        tutorProfileId: input.tutorProfileId,
+        ok: input.ok,
+        reason: input.reason,
+        checkedAt: input.checkedAt,
+      }),
+    )
+    .catch(() => {
+      try {
+        input.warn(
+          { event: "calendar.health_write_failed", tutorProfileId: input.tutorProfileId },
+          "health write failed",
+        );
+      } catch {
+        // A log failure must not surface on the booking path.
+      }
+    });
+}
+
+function bookingFailureCode(error: unknown): string | null {
+  if (!(error instanceof Error)) return null;
+  if (!("code" in error) || typeof error.code !== "string") return null;
+  if (!("status" in error) || typeof error.status !== "number") return null;
+  return error.code;
+}
+
+export async function readTutorBusyWindows<T>(input: {
+  tutorProfileId: string;
+  connection: {
+    lastFreeBusyAt?: Date | string | null;
+    lastError?: string | null;
+  };
+  checkedAt?: Date;
+  listBusy: () => Promise<T>;
+  record: CalendarFreeBusyHealthWrite;
+  warn: CalendarHealthWarn;
+}): Promise<{ disconnected: false; busyWindows: T } | { disconnected: true }> {
+  const checkedAt = input.checkedAt ?? new Date();
+  try {
+    const busyWindows = await input.listBusy();
+    if (
+      shouldWriteCalendarFreeBusySuccess({
+        lastFreeBusyAt: input.connection.lastFreeBusyAt,
+        lastError: input.connection.lastError,
+        now: checkedAt.getTime(),
+      })
+    ) {
+      recordCalendarFreeBusyInBackground({
+        tutorProfileId: input.tutorProfileId,
+        ok: true,
+        checkedAt,
+        record: input.record,
+        warn: input.warn,
+      });
+    }
+    return { disconnected: false, busyWindows };
+  } catch (error) {
+    const code = bookingFailureCode(error);
+    recordCalendarFreeBusyInBackground({
+      tutorProfileId: input.tutorProfileId,
+      ok: false,
+      reason: code ?? "calendar_check_failed",
+      checkedAt,
+      record: input.record,
+      warn: input.warn,
+    });
+    if (code === "CALENDAR_DISCONNECTED") return { disconnected: true };
+    throw error;
+  }
 }
 
 function googleAccountRecorded(input: {

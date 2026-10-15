@@ -6,13 +6,16 @@ import test from "node:test";
 import {
   buildCalendarConnectionHealth,
   calendarConnectionTestAdmission,
+  calendarConnectionTestRetryMessage,
   calendarHealthBadge,
   calendarReconnectAlerts,
   compareTutorConnectionOrder,
   hasUpcomingBookableTime,
   maskSensitiveCalendarValue,
   preserveRevokedCalendarTestReason,
+  readTutorBusyWindows,
   safeCalendarErrorMessage,
+  shouldWriteCalendarFreeBusySuccess,
   UNKNOWN_GOOGLE_ACCOUNT_LABEL,
 } from "./calendar-connection-health.ts";
 
@@ -103,6 +106,132 @@ test("a failed test keeps a revoked message and spaces calls 45 seconds apart", 
       inFlight: false,
     }),
     { allowed: false, retryAfterSeconds: 45 },
+  );
+});
+
+function stubBookingError(status: number, code: string, message: string): Error {
+  const error = new Error(message);
+  Object.assign(error, { status, code });
+  return error;
+}
+
+async function flushBackground(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+test("a throwing health write does not change slotsForTutor's result or error", async () => {
+  const tutorProfileId = "11111111-1111-4111-8111-111111111111";
+  const windows = [{ start: "2026-10-16T15:00:00.000Z", end: "2026-10-16T16:00:00.000Z" }];
+  const warnings: Array<{ fields: unknown; message: string }> = [];
+  const warn = (
+    fields: { event: "calendar.health_write_failed"; tutorProfileId: string },
+    message: string,
+  ) => {
+    warnings.push({ fields, message });
+  };
+
+  let rejectWrite: (error: Error) => void = () => {};
+  const success = await readTutorBusyWindows({
+    tutorProfileId,
+    connection: { lastFreeBusyAt: null, lastError: null },
+    listBusy: async () => windows,
+    record: () =>
+      new Promise<void>((_, reject) => {
+        rejectWrite = reject;
+      }),
+    warn,
+  });
+  assert.deepEqual(success, { disconnected: false, busyWindows: windows });
+  await flushBackground();
+  rejectWrite(new Error("pool timeout ya29.secret-body"));
+  await flushBackground();
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(warnings[0]?.fields, {
+    event: "calendar.health_write_failed",
+    tutorProfileId,
+  });
+  assert.equal(warnings[0]?.message, "health write failed");
+  assert.equal(/ya29|pool timeout|secret-body/.test(JSON.stringify(warnings)), false);
+
+  warnings.length = 0;
+  const unavailable = stubBookingError(
+    503,
+    "CALENDAR_UNAVAILABLE",
+    "Google Calendar is temporarily unavailable.",
+  );
+  let rejectFailureWrite: (error: Error) => void = () => {};
+  await assert.rejects(
+    () =>
+      readTutorBusyWindows({
+        tutorProfileId,
+        connection: { lastFreeBusyAt: null, lastError: null },
+        listBusy: async () => {
+          throw unavailable;
+        },
+        record: () =>
+          new Promise<void>((_, reject) => {
+            rejectFailureWrite = reject;
+          }),
+        warn,
+      }),
+    (error) => error === unavailable,
+  );
+  await flushBackground();
+  rejectFailureWrite(new Error("lock timeout ya29.other"));
+  await flushBackground();
+  assert.equal(warnings.length, 1);
+  assert.equal(/ya29|lock timeout/.test(JSON.stringify(warnings)), false);
+
+  const disconnected = stubBookingError(
+    409,
+    "CALENDAR_DISCONNECTED",
+    "The tutor's calendar is disconnected.",
+  );
+  const fallback = await readTutorBusyWindows({
+    tutorProfileId,
+    connection: { lastFreeBusyAt: null, lastError: "previous" },
+    listBusy: async () => {
+      throw disconnected;
+    },
+    record: async () => {
+      throw new Error("db blip ya29.disconnected");
+    },
+    warn,
+  });
+  assert.deepEqual(fallback, { disconnected: true });
+  await flushBackground();
+  assert.equal(/ya29|db blip/.test(JSON.stringify(warnings)), false);
+
+  let wrote = false;
+  const freshAt = new Date(Date.now() - 10_000).toISOString();
+  const skipped = await readTutorBusyWindows({
+    tutorProfileId,
+    connection: { lastFreeBusyAt: freshAt, lastError: "  " },
+    listBusy: async () => windows,
+    record: async () => {
+      wrote = true;
+    },
+    warn,
+  });
+  assert.equal(skipped.disconnected, false);
+  if (!skipped.disconnected) assert.deepEqual(skipped.busyWindows, windows);
+  await flushBackground();
+  assert.equal(wrote, false);
+  assert.equal(
+    shouldWriteCalendarFreeBusySuccess({
+      lastFreeBusyAt: new Date(Date.now() - 61_000),
+      lastError: null,
+      now: Date.now(),
+    }),
+    true,
+  );
+  assert.equal(
+    shouldWriteCalendarFreeBusySuccess({
+      lastFreeBusyAt: freshAt,
+      lastError: "The free/busy check failed.",
+      now: Date.now(),
+    }),
+    true,
   );
 });
 
@@ -272,6 +401,8 @@ test("admin connections stay read-only and Eunice is not on a separate calendar 
   assert.equal(/createGoogleEvent|resend|sendEmail|sendInvite/.test(adminConnections), false);
   assert.ok(beforeGoogle.indexOf("status(429)") !== -1);
   assert.match(beforeGoogle, /retryAfterSeconds/);
+  assert.match(beforeGoogle, /calendarConnectionTestRetryMessage/);
+  assert.equal(calendarConnectionTestRetryMessage(35), "Wait 35 seconds before testing this calendar again.");
   assert.ok(
     beforeGoogle.indexOf("status(429)") <
       beforeGoogle.indexOf("calendarConnectionTestStartedAt.set"),
@@ -282,7 +413,21 @@ test("admin connections stay read-only and Eunice is not on a separate calendar 
   );
   assert.match(beforeGoogle, /calendarConnectionTestInFlight\.add/);
   assert.match(testRoute, /preserveRevokedCalendarTestReason/);
-  assert.match(slotsSlice, /recordCalendarFreeBusyCheck\(\{\s*tutorProfileId,\s*ok: true/);
+  assert.match(slotsSlice, /readTutorBusyWindows\(/);
+  assert.equal(/await\s+recordCalendarFreeBusyCheck/.test(slotsSlice), false);
+  assert.match(slotsSlice, /listed\.disconnected/);
+  const healthSource = await readFile(
+    fileURLToPath(new URL("./calendar-connection-health.ts", import.meta.url)),
+    "utf8",
+  );
+  const writer = healthSource.slice(
+    healthSource.indexOf("export function recordCalendarFreeBusyInBackground"),
+    healthSource.indexOf("function bookingFailureCode"),
+  );
+  assert.match(writer, /calendar\.health_write_failed/);
+  assert.match(writer, /health write failed/);
+  assert.match(writer, /\.catch\(\(\) =>/);
+  assert.equal(/catch\(\s*\((?:error|err|reason)\b/.test(writer), false);
   assert.match(refreshSlice, /lastError: null/);
   assert.match(refreshSlice, /lastErrorAt: null/);
   assert.match(persistence, /reconnectStoredGoogleCalendarGrants/);
