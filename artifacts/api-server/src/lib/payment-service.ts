@@ -20,6 +20,8 @@ import { tutorShareForRefund } from "./payment-allocation.ts";
 import { grantPaidPurchaseCredits } from "./payment-fulfillment.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { paymentRequiresCatalogProduct, isStripePaidSuccessEvent, stripeCheckoutObjectIsPaid } from "./payment-fulfillment-rules.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { stripeCatalogProductIdempotencyKey } from "./college-consulting.ts";
 
 type StripeRecord = Record<string, unknown>;
 
@@ -407,7 +409,7 @@ export async function ensureStripePrice(product: typeof satProductsTable.$inferS
   if (!stripeProductId) {
     const stripeProduct = await stripeRequest<StripeRecord>("/v1/products", {
       method: "POST",
-      idempotencyKey: `accepted-admissions-product-${product.id}-catalog-v2`,
+      idempotencyKey: stripeCatalogProductIdempotencyKey(product),
       body: formData({
         name: product.name,
         description: product.description,

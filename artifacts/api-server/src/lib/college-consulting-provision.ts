@@ -26,6 +26,7 @@ import {
   NIKA_CONSULTING_EMAIL,
   VICTORIA_BIOGRAPHY,
   VICTORIA_BOOKING_TAGLINE,
+  VICTORIA_FULL_NAME_BIOGRAPHY,
   VICTORIA_PREVIOUS_BIOGRAPHY,
   VICTORIA_DISPLAY_NAME,
   VICTORIA_INTENDED_EMAIL,
@@ -168,7 +169,9 @@ async function ensureCatalogProducts(tx: ProvisionTx): Promise<void> {
         description: alignment.description,
         totalPriceCents: alignment.totalPriceCents,
         effectiveHourlyRateCents: alignment.effectiveHourlyRateCents,
-        ...(alignment.clearStripePriceId ? { stripePriceId: null } : {}),
+        ...(alignment.clearStripeIds
+          ? { stripeProductId: null, stripePriceId: null }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(satProductsTable.id, stored.id));
@@ -577,7 +580,9 @@ async function ensureVictoriaProfile(tx: ProvisionTx, userId: string, email: str
       subjects,
       internalNotes: notes,
       ...(blankProfileText(profile.tagline) ? { tagline: VICTORIA_BOOKING_TAGLINE } : {}),
-      ...(blankProfileText(profile.biography) || profile.biography?.trim() === VICTORIA_PREVIOUS_BIOGRAPHY
+      ...(blankProfileText(profile.biography) ||
+      profile.biography?.trim() === VICTORIA_PREVIOUS_BIOGRAPHY ||
+      profile.biography?.trim() === VICTORIA_FULL_NAME_BIOGRAPHY
         ? { biography: VICTORIA_BIOGRAPHY }
         : {}),
       ...(profile.photoUrl?.trim()

@@ -135,8 +135,10 @@ import {
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_SUBJECT,
   consultingPreviewTutors,
+  consultingTutorBiography,
   consultingTutorCredits,
   consultingTutorDisplayName,
+  consultingTutorPhotoUrl,
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
@@ -6640,8 +6642,12 @@ async function consultingTutorList(clientUserId: string) {
       id: tutor.id,
       name: key ? consultingTutorDisplayName(key) : tutor.name,
       title: tutor.title,
-      photoUrl: tutor.photoUrl,
-      biography: tutor.biography,
+      photoUrl: key ? consultingTutorPhotoUrl(key, tutor.photoUrl) : tutor.photoUrl,
+      biography: key
+        ? key === "xavier"
+          ? tutor.biography?.trim() || consultingTutorBiography(key)
+          : consultingTutorBiography(key)
+        : tutor.biography,
       tagline: tutor.tagline,
       subjects: tutor.subjects,
       calendarStatus: tutor.calendarStatus,
@@ -7271,6 +7277,15 @@ router.post(
       res.status(404).json({ error: "Product not found" });
       return;
     }
+    const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug);
+    if (audience === "forbidden") {
+      res.status(403).json({
+        error: isNeelDharniUser(req.appUser!.id)
+          ? "This account buys College Consulting hours only."
+          : "College Consulting checkout is not available for this account.",
+      });
+      return;
+    }
     const alignment = consultingCatalogAlignment(product);
     if (alignment) {
       const [aligned] = await db
@@ -7280,21 +7295,14 @@ router.post(
           description: alignment.description,
           totalPriceCents: alignment.totalPriceCents,
           effectiveHourlyRateCents: alignment.effectiveHourlyRateCents,
-          ...(alignment.clearStripePriceId ? { stripePriceId: null } : {}),
+          ...(alignment.clearStripeIds
+            ? { stripeProductId: null, stripePriceId: null }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(satProductsTable.id, product.id))
         .returning();
       if (aligned) Object.assign(product, aligned);
-    }
-    const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug);
-    if (audience === "forbidden") {
-      res.status(403).json({
-        error: isNeelDharniUser(req.appUser!.id)
-          ? "This account buys College Consulting hours only."
-          : "College Consulting checkout is not available for this account.",
-      });
-      return;
     }
     if (audience === "sat" && !isAcceptedSatCatalogProduct(product)) {
       res.status(404).json({ error: "SAT product not found" });

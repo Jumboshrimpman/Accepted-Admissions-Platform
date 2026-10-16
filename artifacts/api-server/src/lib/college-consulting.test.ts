@@ -21,6 +21,8 @@ import {
   COLLEGE_CONSULTING_VICTORIA_SLUG,
   COLLEGE_CONSULTING_XAVIER_SLUG,
   NEEL_DHARNI_USER_ID,
+  NIKA_CONSULTING_BIOGRAPHY,
+  NIKA_CONSULTING_PHOTO_URL,
   NIKA_HOURLY_RATE_CENTS,
   VICTORIA_BIOGRAPHY,
   VICTORIA_BOOKING_TAGLINE,
@@ -38,8 +40,11 @@ import {
   consultingPreviewTutors,
   consultingSlugIsSatCatalogProduct,
   consultingCatalogAlignment,
+  consultingTutorBiography,
   consultingTutorCredits,
   consultingTutorDisplayName,
+  consultingTutorPhotoUrl,
+  stripeCatalogProductIdempotencyKey,
   decidePlaceholderLink,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
@@ -85,8 +90,9 @@ test("College Consulting prices are per tutor and SAT catalog stays $130", () =>
     stripePriceId: "price_old_130",
   });
   assert.equal(nikaCharge?.totalPriceCents, 10_000);
-  assert.equal(nikaCharge?.clearStripePriceId, true);
+  assert.equal(nikaCharge?.clearStripeIds, true);
   assert.match(nikaCharge?.name ?? "", /with Nika$/);
+  assert.doesNotMatch(nikaCharge?.description ?? "", /Raiffe/);
   assert.equal(
     consultingCatalogAlignment({
       slug: COLLEGE_CONSULTING_NIKA_SLUG,
@@ -105,7 +111,8 @@ test("College Consulting prices are per tutor and SAT catalog stays $130", () =>
     stripePriceId: "price_victoria_130",
   });
   assert.equal(victoriaLabel?.totalPriceCents, 13_000);
-  assert.equal(victoriaLabel?.clearStripePriceId, false);
+  assert.equal(victoriaLabel?.clearStripeIds, true);
+  assert.doesNotMatch(victoriaLabel?.name ?? "", /Wijerathnayapa/);
   assert.equal(
     consultingCatalogAlignment({
       slug: "single-sat-session",
@@ -483,6 +490,14 @@ test("provisioning and the migration do not send email or create Clerk users", a
     fileURLToPath(new URL("../../../../lib/db/drizzle/0045_college_consulting_neel_nika.sql", import.meta.url)),
     "utf8",
   );
+  const rateMigration = await readFile(
+    fileURLToPath(new URL("../../../../lib/db/drizzle/0051_nika_college_consulting_100.sql", import.meta.url)),
+    "utf8",
+  );
+  assert.match(rateMigration, /stripe_product_id/);
+  assert.match(rateMigration, /stripe_price_id/);
+  assert.match(rateMigration, /College Consulting hour with Nika/);
+  assert.doesNotMatch(rateMigration, /Nika Raiffe/);
   for (const source of [provision, migration]) {
     assert.equal(/createUser|createGoogleEvent|resend|sendEmail|sendInvite|clerkClient/i.test(source), false);
   }
@@ -500,9 +515,35 @@ test("provisioning and the migration do not send email or create Clerk users", a
   );
   assert.equal(
     VICTORIA_BIOGRAPHY,
-    "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
+    "Victoria graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
   );
-  assert.doesNotMatch(VICTORIA_BIOGRAPHY, /Ringle|DreAmbassador|Institute of Politics/);
+  assert.doesNotMatch(VICTORIA_BIOGRAPHY, /Wijerathnayapa|Ringle|DreAmbassador|Institute of Politics/);
+  assert.match(NIKA_CONSULTING_BIOGRAPHY, /^Nika is a senior/);
+  assert.doesNotMatch(NIKA_CONSULTING_BIOGRAPHY, /Raiffe/);
+  assert.equal(NIKA_CONSULTING_PHOTO_URL, "/media/team/nika.png");
+  assert.equal(consultingTutorBiography("nika"), NIKA_CONSULTING_BIOGRAPHY);
+  assert.equal(consultingTutorPhotoUrl("nika", "/media/team/nika-raiffe.png"), "/media/team/nika.png");
+  assert.equal(consultingTutorPhotoUrl("victoria", "/media/team/victoria.jpg"), "/media/team/victoria.jpg");
+  const sameCatalog = stripeCatalogProductIdempotencyKey({
+    id: "prod-nika",
+    name: "College Consulting hour with Nika",
+    description: "One prepaid 60-minute College Consulting credit with Nika at $100/hour.",
+    totalPriceCents: 10_000,
+  });
+  const renamedCatalog = stripeCatalogProductIdempotencyKey({
+    id: "prod-nika",
+    name: "College Consulting hour with Nika Raiffe",
+    description: "One prepaid 60-minute College Consulting credit with Nika Raiffe at $130/hour.",
+    totalPriceCents: 13_000,
+  });
+  assert.match(sameCatalog, /prod-nika-10000-/);
+  assert.notEqual(sameCatalog, renamedCatalog);
+  assert.equal(sameCatalog, stripeCatalogProductIdempotencyKey({
+    id: "prod-nika",
+    name: "College Consulting hour with Nika",
+    description: "One prepaid 60-minute College Consulting credit with Nika at $100/hour.",
+    totalPriceCents: 10_000,
+  }));
   assert.equal(provision.includes(VICTORIA_BIOGRAPHY), false);
   const rates = await readFile(
     fileURLToPath(new URL("./college-consulting.ts", import.meta.url)),
@@ -515,7 +556,9 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.equal(provision.includes("revokedAt: null"), false);
   assert.match(provision, /consultingCatalogAlignment/);
   assert.match(provision, /\.update\(satProductsTable\)/);
-  assert.match(provision, /clearStripePriceId \? \{ stripePriceId: null \}/);
+  assert.match(provision, /clearStripeIds/);
+  assert.match(provision, /stripeProductId: null, stripePriceId: null/);
+  assert.match(provision, /VICTORIA_FULL_NAME_BIOGRAPHY/);
   assert.match(provision, /onConflictDoNothing/);
   assert.match(provision, /pg_advisory_xact_lock\(hashtext\(\$\{PROVISION_LOCK_KEY\}\)\)/);
   assert.match(provision, /portalAccessRevoked\(grant\)/);
@@ -529,6 +572,20 @@ test("provisioning and the migration do not send email or create Clerk users", a
   );
   const index = await readFile(fileURLToPath(new URL("../index.ts", import.meta.url)), "utf8");
   assert.equal(platform.includes("ensureCollegeConsultingProvision("), false);
+  const checkout = platform.slice(
+    platform.indexOf('"/payments/checkout"'),
+    platform.indexOf('"/admin/products/:productId"'),
+  );
+  const forbiddenAt = checkout.indexOf('audience === "forbidden"');
+  const catalogWriteAt = checkout.indexOf("consultingCatalogAlignment");
+  assert.ok(forbiddenAt >= 0 && catalogWriteAt > forbiddenAt);
+  assert.match(checkout, /stripeProductId: null, stripePriceId: null/);
+  const consultingList = platform.slice(
+    platform.indexOf("async function consultingTutorList"),
+    platform.indexOf("async function unresolvedSharedMeetOverlaps"),
+  );
+  assert.match(consultingList, /consultingTutorBiography/);
+  assert.match(consultingList, /consultingTutorPhotoUrl/);
   assert.match(index, /ensureCollegeConsultingProvision\(\)/);
   assert.match(provision, /const tutorEmails = \[CANONICAL_XAVIER_EMAIL\]/);
   assert.equal(/tutorEmails = \[[^\]]*NIKA_CONSULTING_EMAIL/.test(provision), false);
@@ -651,7 +708,11 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
   assert.match(tutors[0]?.tagline ?? "", /Columbia/);
   assert.equal(tutors[1]?.id, "victoria-profile");
   assert.equal(tutors[1]?.tagline, VICTORIA_BOOKING_TAGLINE);
+  assert.equal(tutors[0]?.biography, NIKA_CONSULTING_BIOGRAPHY);
+  assert.equal(tutors[0]?.photoUrl, "/media/team/nika.png");
+  assert.doesNotMatch(tutors[0]?.biography ?? "", /Raiffe/);
   assert.equal(tutors[1]?.biography, VICTORIA_BIOGRAPHY);
+  assert.doesNotMatch(tutors[1]?.biography ?? "", /Wijerathnayapa/);
   assert.equal(tutors[1]?.calendarConnected, false);
   assert.equal(tutors[2]?.hourlyRateCents, 20_000);
   assert.match(tutors[2]?.biography ?? "", /Jane Street Capital/);
@@ -663,6 +724,9 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
         id: "nika-ineligible",
         email: "nika.raiffe@gmail.com",
         name: "Nika Raiffe",
+        biography:
+          "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris.",
+        photoUrl: "/media/team/nika-raiffe.png",
         active: true,
         bookingEligible: false,
         calendarStatus: "connected",
@@ -678,6 +742,8 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
     ],
   });
   assert.equal(byEligibility[0]?.calendarConnected, false);
+  assert.equal(byEligibility[0]?.biography, NIKA_CONSULTING_BIOGRAPHY);
+  assert.equal(byEligibility[0]?.photoUrl, "/media/team/nika.png");
   assert.equal(byEligibility[2]?.calendarConnected, true);
   const fromPortalCredits = consultingPreviewTutors({
     profiles: [

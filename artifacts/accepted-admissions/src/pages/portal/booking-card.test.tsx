@@ -257,7 +257,7 @@ describe("client availability calendar", () => {
         title: "College Consulting Tutor",
         photoUrl: "/media/team/victoria.jpg",
         biography:
-          "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
+          "Victoria graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
         tagline: "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
         subjects: ["College Consulting"],
         calendarStatus: "disconnected",

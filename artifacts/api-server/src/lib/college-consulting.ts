@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SAT_HOURLY_RATE_CENTS, isAcceptedSatCatalogProduct } from "./sat-catalog.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -8,7 +9,6 @@ import { remainingCreditHoursForProduct } from "./credit-hours.ts";
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   NIKA_BOOKING_TAGLINE,
-  NIKA_PUBLIC_BIOGRAPHY,
   XAVIER_BOOKING_TAGLINE,
   XAVIER_PUBLIC_BIOGRAPHY,
 } from "./public-team-roster.ts";
@@ -44,7 +44,16 @@ export const VICTORIA_PHOTO_URL = "/media/team/victoria.jpg";
 export const VICTORIA_PHOTO_ALT_TEXT = "Victoria Wijerathnayapa, College Consulting Tutor";
 export const VICTORIA_BOOKING_TAGLINE =
   "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor";
+/** Consulting card copy. First name only. The public team roster is a separate bio. */
+export const NIKA_CONSULTING_BIOGRAPHY =
+  "Nika is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.";
+/** Consulting portrait. The public roster keeps /media/team/nika-raiffe.png. */
+export const NIKA_CONSULTING_PHOTO_URL = "/media/team/nika.png";
+
 export const VICTORIA_BIOGRAPHY =
+  "Victoria graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.";
+/** Consulting bio before the surname was removed. Startup replaces only this exact text. */
+export const VICTORIA_FULL_NAME_BIOGRAPHY =
   "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.";
 /** Previous site bio. Startup replaces only this exact text. */
 export const VICTORIA_PREVIOUS_BIOGRAPHY =
@@ -377,6 +386,25 @@ export function consultingRateCentsForTutorKey(
   return collegeConsultingProductForTutorKey(tutorKey)!.hourlyRateCents;
 }
 
+/** Consulting page bio. Nika's public roster biography stays on the team page. */
+export function consultingTutorBiography(tutorKey: CollegeConsultingTutorKey): string {
+  if (tutorKey === "nika") return NIKA_CONSULTING_BIOGRAPHY;
+  if (tutorKey === "victoria") return VICTORIA_BIOGRAPHY;
+  return XAVIER_PUBLIC_BIOGRAPHY;
+}
+
+/** Nika's consulting photo has no surname in the path. Victoria's file stays as it is. */
+export function consultingTutorPhotoUrl(
+  tutorKey: CollegeConsultingTutorKey,
+  storedPhotoUrl?: string | null,
+): string {
+  if (tutorKey === "nika") return NIKA_CONSULTING_PHOTO_URL;
+  const stored = storedPhotoUrl?.trim() ?? "";
+  if (stored) return stored;
+  if (tutorKey === "victoria") return VICTORIA_PHOTO_URL;
+  return APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"];
+}
+
 /** Credits-page label. Nika and Victoria are first name only. Xavier stays his full name. */
 export function consultingTutorDisplayName(tutorKey: CollegeConsultingTutorKey): string {
   if (tutorKey === "nika") return "Nika";
@@ -389,8 +417,11 @@ export type ConsultingCatalogAlignment = {
   description: string;
   totalPriceCents: number;
   effectiveHourlyRateCents: number;
-  /** A stored Stripe Price was created for a different amount and must not be reused. */
-  clearStripePriceId: boolean;
+  /**
+   * Name, description, or price differ, so the stored Stripe Product and Price
+   * must be recreated. Mirrors the admin product edit.
+   */
+  clearStripeIds: boolean;
 };
 
 /**
@@ -415,8 +446,22 @@ export function consultingCatalogAlignment(product: {
     description: catalog.description,
     totalPriceCents: catalog.hourlyRateCents,
     effectiveHourlyRateCents: catalog.hourlyRateCents,
-    clearStripePriceId: priceChanged && Boolean(product.stripePriceId),
+    clearStripeIds: true,
   };
+}
+
+/** Stripe rejects a reused idempotency key when the product body changes inside 24h. */
+export function stripeCatalogProductIdempotencyKey(product: {
+  id: string;
+  name: string;
+  description: string;
+  totalPriceCents: number;
+}): string {
+  const content = createHash("sha256")
+    .update(`${product.totalPriceCents}\n${product.name}\n${product.description}`)
+    .digest("hex")
+    .slice(0, 24);
+  return `accepted-admissions-product-${product.id}-${product.totalPriceCents}-${content}`;
 }
 
 export type ConsultingTutorCredit = {
@@ -471,8 +516,8 @@ const CONSULTING_PREVIEW_FALLBACKS: Record<
     name: NIKA_CONSULTING_NAME,
     title: "College Consulting Tutor",
     tagline: NIKA_BOOKING_TAGLINE,
-    biography: NIKA_PUBLIC_BIOGRAPHY,
-    photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"],
+    biography: NIKA_CONSULTING_BIOGRAPHY,
+    photoUrl: NIKA_CONSULTING_PHOTO_URL,
   },
   victoria: {
     name: VICTORIA_DISPLAY_NAME,
@@ -497,7 +542,7 @@ function filledPreviewText(value: string | null | undefined, fallback: string): 
 
 /**
  * Read-only College Consulting cards for Neel's admin preview.
- * Missing or inactive profiles still appear, using the public tagline and bio.
+ * Missing or inactive profiles still appear. Nika and Victoria use consulting bios.
  * This does not read Google Calendar or create a user.
  */
 export function consultingPreviewTutors(input: {
@@ -535,8 +580,11 @@ export function consultingPreviewTutors(input: {
       name: consultingTutorDisplayName(tutorKey),
       title: filledPreviewText(profile?.title, fallback.title),
       tagline: filledPreviewText(profile?.tagline, fallback.tagline),
-      biography: filledPreviewText(profile?.biography, fallback.biography),
-      photoUrl: filledPreviewText(profile?.photoUrl, fallback.photoUrl),
+      biography:
+        tutorKey === "xavier"
+          ? filledPreviewText(profile?.biography, consultingTutorBiography(tutorKey))
+          : consultingTutorBiography(tutorKey),
+      photoUrl: consultingTutorPhotoUrl(tutorKey, profile?.photoUrl),
       hourlyRateCents: product.hourlyRateCents,
       prepaidHours: input.prepaidHours?.[tutorKey] ?? 0,
       calendarConnected: input.calendars
