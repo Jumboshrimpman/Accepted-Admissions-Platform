@@ -1,6 +1,8 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
+import { CANONICAL_APP_ORIGIN, resolveConfiguredAppOrigin } from "./public-origin.ts";
 
 export type SessionQuestionPdfPhase = "before_session" | "during_session";
 
@@ -48,6 +50,23 @@ export function decideSessionQuestionPdfAccess(input: {
   };
 }
 
+const TEMP_VIEW_DISABLED = new Set(["", "off", "disabled", "none", "false"]);
+
+/**
+ * The xsfam6 alias may open the tutor portal while TEMP_NIKA_VIEW_EMAIL is unset.
+ * Answer-key PDFs stay off unless that variable is explicitly set to a live address.
+ */
+export function temporaryAliasMayDownloadAnswerKey(input: {
+  temporaryTutorAlias?: string | null;
+  includeAnswerKey: boolean;
+  configuredViewEmail?: string | null;
+}): boolean {
+  if (!input.includeAnswerKey) return true;
+  if (!input.temporaryTutorAlias?.trim()) return true;
+  if (typeof input.configuredViewEmail !== "string") return false;
+  return !TEMP_VIEW_DISABLED.has(input.configuredViewEmail.trim().toLowerCase());
+}
+
 const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
 
 export function extractMarkdownFigures(
@@ -70,10 +89,50 @@ export function stripMarkdownFigures(value: string | null | undefined): string {
     .trim();
 }
 
-const MEDIA_ROOT = path.resolve(
-  import.meta.dirname,
-  "../../../../accepted-admissions/public/media",
-);
+const MAX_FIGURE_BYTES = 2_000_000;
+const MAX_PNG_PIXELS = 4096 * 4096;
+const MEDIA_ROOT_ENV = "SESSION_QUESTION_PDF_MEDIA_ROOT";
+
+/** Walk from src or dist up to `<repo>/artifacts/accepted-admissions/public/media`. */
+export function resolveQuizMediaRoot(startDir = import.meta.dirname): string {
+  const override = process.env[MEDIA_ROOT_ENV]?.trim();
+  if (override) return path.resolve(override);
+  let dir = path.resolve(startDir);
+  for (let depth = 0; depth < 10; depth += 1) {
+    const candidates = [
+      path.join(dir, "artifacts", "accepted-admissions", "public", "media"),
+      path.join(dir, "accepted-admissions", "public", "media"),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.resolve(startDir, "../../../../accepted-admissions/public/media");
+}
+
+const MEDIA_ROOT = resolveQuizMediaRoot();
+
+function allowedFigureOrigins(): string[] {
+  const origins = [CANONICAL_APP_ORIGIN];
+  const configured = resolveConfiguredAppOrigin();
+  if (configured && !origins.includes(configured)) origins.push(configured);
+  return origins;
+}
+
+function ownHostFigureUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.username || parsed.password) return null;
+  if (!allowedFigureOrigins().includes(parsed.origin)) return null;
+  return parsed.toString();
+}
 
 function localMediaPath(url: string): string | null {
   let pathname = url;
@@ -92,23 +151,64 @@ function localMediaPath(url: string): string | null {
   return resolved;
 }
 
-/** Read a quiz figure from hosted `/media` files or an https URL. Never writes quiz state. */
+async function readCappedBytes(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const buffered = new Uint8Array(await response.arrayBuffer());
+    if (buffered.byteLength === 0 || buffered.byteLength > maxBytes) return null;
+    return buffered;
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    await reader.cancel().catch(() => undefined);
+    return null;
+  }
+  if (total === 0) return null;
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+/** Read a quiz figure from local `/media` or this site's own origin. Never writes quiz state. */
 export async function readQuizFigure(url: string): Promise<Uint8Array | null> {
   const local = localMediaPath(url);
   if (local) {
     try {
-      return await readFile(local);
+      const bytes = await readFile(local);
+      if (bytes.byteLength === 0 || bytes.byteLength > MAX_FIGURE_BYTES) return null;
+      return bytes;
     } catch {
-      // Fall through to https when the file is not on this host.
+      // Missing local file. Only this site's origin may be fetched.
     }
   }
-  if (!url.startsWith("https://")) return null;
+  const remote = ownHostFigureUrl(url);
+  if (!remote) return null;
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch(remote, {
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
+    });
     if (!response.ok) return null;
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > 2_000_000) return null;
-    return bytes;
+    return await readCappedBytes(response, MAX_FIGURE_BYTES);
   } catch {
     return null;
   }
@@ -131,15 +231,45 @@ const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
 const MARGIN = 54;
 
-function pdfLiteral(value: string): string {
-  const ascii = value
+const OTHER_SUPERSCRIPTS: Record<string, string> = {
+  "\u2070": "^0",
+  "\u00b9": "^1",
+  "\u2074": "^4",
+  "\u2075": "^5",
+  "\u2076": "^6",
+  "\u2077": "^7",
+  "\u2078": "^8",
+  "\u2079": "^9",
+  "\u207a": "^+",
+  "\u207b": "^-",
+  "\u207c": "^=",
+};
+
+/** Helvetica is WinAnsi. Keep ° ² ³ ÷ × ±; map the other math symbols to ASCII. */
+function pdfWinAnsiText(value: string): string {
+  let text = value
     .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
     .replace(/\u2212|\u2013|\u2014/g, "-")
-    .replace(/\u00d7/g, "x")
-    .replace(/\u03c0/g, "pi")
+    .replace(/\u2264/g, "<=")
+    .replace(/\u2265/g, ">=")
+    .replace(/\u2260/g, "!=")
     .replace(/\u221a/g, "sqrt")
-    .replace(/[^\n\x20-\x7e]/g, "");
-  return `(${ascii.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
+    .replace(/\u03c0/g, "pi");
+  text = text.replace(/[\u2070\u00b9\u2074-\u207c]/g, (char) => OTHER_SUPERSCRIPTS[char] ?? "");
+  let encoded = "";
+  for (const char of text) {
+    const code = char.charCodeAt(0);
+    if (code === 0x0a || (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)) {
+      encoded += char;
+    }
+  }
+  return encoded;
+}
+
+function pdfLiteral(value: string): string {
+  const encoded = pdfWinAnsiText(value);
+  return `(${encoded.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
 }
 
 function parseRichText(value: string): TextRun[] {
@@ -220,6 +350,15 @@ function decodePng(bytes: Uint8Array): { width: number; height: number; rgb: Buf
       bitDepth = data[8] ?? 0;
       colorType = data[9] ?? 0;
       if (bitDepth !== 8 || (colorType !== 2 && colorType !== 6) || data[12] !== 0) return null;
+      if (
+        width < 1 ||
+        height < 1 ||
+        width > MAX_PNG_PIXELS ||
+        height > MAX_PNG_PIXELS ||
+        width * height > MAX_PNG_PIXELS
+      ) {
+        return null;
+      }
     } else if (type === "IDAT") {
       idat.push(data);
     } else if (type === "IEND") {
@@ -227,14 +366,25 @@ function decodePng(bytes: Uint8Array): { width: number; height: number; rgb: Buf
     }
     offset = dataStart + length + 4;
   }
-  if (!width || !height || idat.length === 0) return null;
-  let inflated: Buffer;
-  try {
-    inflated = inflateSync(Buffer.concat(idat));
-  } catch {
+  if (
+    width < 1 ||
+    height < 1 ||
+    width > MAX_PNG_PIXELS ||
+    height > MAX_PNG_PIXELS ||
+    width * height > MAX_PNG_PIXELS ||
+    idat.length === 0
+  ) {
     return null;
   }
   const channels = colorType === 6 ? 4 : 3;
+  const maxOutputLength = height * (width * channels + 1);
+  if (!Number.isSafeInteger(maxOutputLength) || maxOutputLength < 1) return null;
+  let inflated: Buffer;
+  try {
+    inflated = inflateSync(Buffer.concat(idat), { maxOutputLength });
+  } catch {
+    return null;
+  }
   const stride = width * channels;
   if (inflated.length < height * (stride + 1)) return null;
   const rgb = Buffer.alloc(width * height * 3);
@@ -447,8 +597,12 @@ class QuestionPdf {
     const contentIds = this.pages.map((page) =>
       add(`<< /Length ${Buffer.byteLength(page, "latin1")} >>\nstream\n${page}\nendstream`),
     );
-    const fontRegular = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-    const fontBold = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+    const fontRegular = add(
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    );
+    const fontBold = add(
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+    );
     const xobjects = this.images
       .map((image, index) => `/${image.name} ${imageIds[index]} 0 R`)
       .join(" ");

@@ -6,6 +6,29 @@ import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { isPostSessionFollowUpQuiz } from "@/lib/student-quiz-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
+
+const PDF_OBJECT_URL_REVOKE_DELAY_MS = 1000;
+
+export function viewerMayDownloadSessionPdfs(input: {
+  role?: string | null;
+  viewerUserId?: string | null;
+  sessionTutor?: { id?: string | null; specialty?: string | null } | null;
+}): boolean {
+  if (input.role === "administrator") return true;
+  if (input.role !== "tutor") return false;
+  const tutor = input.sessionTutor;
+  if (tutor?.specialty === "Assigned tutor" && tutor.id) {
+    return Boolean(input.viewerUserId) && input.viewerUserId === tutor.id;
+  }
+  return true;
+}
+
+function downloadErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : null;
+}
 
 type HomeworkRow = {
   assignmentId: string;
@@ -37,7 +60,7 @@ async function downloadSessionQuestionPdf(
   const part = phase === "before_session" ? "pre-work" : "in-session";
   link.download = `${part}-${answers ? "answer-key" : "questions"}.pdf`;
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), PDF_OBJECT_URL_REVOKE_DELAY_MS);
 }
 
 function PdfDownloadButton({
@@ -63,7 +86,19 @@ function PdfDownloadButton({
       disabled={pending}
       onClick={() => {
         setPending(true);
-        void downloadSessionQuestionPdf(sessionId, phase, answers).finally(() => setPending(false));
+        void downloadSessionQuestionPdf(sessionId, phase, answers)
+          .catch((error: unknown) => {
+            const status = downloadErrorStatus(error);
+            toast({
+              variant: "destructive",
+              title: status === 403 ? "Download not allowed" : "Could not download the PDF",
+              description:
+                status === 403
+                  ? "This account cannot download that PDF."
+                  : "Try again in a moment.",
+            });
+          })
+          .finally(() => setPending(false));
       }}
     >
       <FileDown className="mr-2 h-4 w-4" />
@@ -118,6 +153,7 @@ export function SessionTutorMaterials({
   duringAssignmentId,
   duringTitle,
   duringQuestionCount,
+  canDownloadPdfs = false,
 }: {
   sessionId: string;
   timezone?: string | null;
@@ -127,6 +163,7 @@ export function SessionTutorMaterials({
   duringAssignmentId?: string | null;
   duringTitle?: string | null;
   duringQuestionCount?: number | null;
+  canDownloadPdfs?: boolean;
 }) {
   const phaseFor = (assignmentId: string) =>
     assignments.find((assignment) => assignment.id === assignmentId)?.deliveryPhase ?? "before_session";
@@ -169,7 +206,7 @@ export function SessionTutorMaterials({
           <CompletionRow key={row.assignmentId} kind="Homework" timezone={timezone} row={row} />
         ))}
       </div>
-      {showPreworkPdf || showInSessionPdf ? (
+      {canDownloadPdfs && (showPreworkPdf || showInSessionPdf) ? (
         <div className="mt-4 flex flex-wrap gap-2">
           {showPreworkPdf ? (
             <>

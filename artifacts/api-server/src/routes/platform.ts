@@ -495,6 +495,7 @@ import {
   extractMarkdownFigures,
   readQuizFigure,
   renderSessionQuestionPdf,
+  temporaryAliasMayDownloadAnswerKey,
   type SessionQuestionPdfPhase,
 } from "../lib/session-question-pdf";
 import {
@@ -11353,7 +11354,11 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
   const phase: SessionQuestionPdfPhase | null =
     phaseRaw === "before_session" || phaseRaw === "during_session" ? phaseRaw : null;
   const includeAnswerKey = req.query.answers === "1" || req.query.answers === "true";
-  if (!sessionId || !phase) {
+  if (!UUID_PATTERN.test(sessionId)) {
+    res.status(400).json({ error: "Invalid session id" });
+    return;
+  }
+  if (!phase) {
     res.status(400).json({ error: "phase must be before_session or during_session" });
     return;
   }
@@ -11375,6 +11380,18 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
     res.status(access.status).json({ error: access.error });
     return;
   }
+  if (
+    !temporaryAliasMayDownloadAnswerKey({
+      temporaryTutorAlias: req.temporaryTutorAlias,
+      includeAnswerKey,
+      configuredViewEmail: process.env.TEMP_NIKA_VIEW_EMAIL,
+    })
+  ) {
+    res.status(403).json({
+      error: "This temporary login cannot download answer keys.",
+    });
+    return;
+  }
   const assignments = await db
     .select()
     .from(assignmentsTable)
@@ -11386,19 +11403,39 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
       ),
     )
     .orderBy(asc(assignmentsTable.createdAt));
-  const repairStackedMath = false;
+  const assignmentIds = assignments.map((assignment) => assignment.id);
+  const joined =
+    assignmentIds.length === 0
+      ? []
+      : await db
+          .select({
+            assignmentQuestion: assignmentQuestionsTable,
+            question: questionsTable,
+          })
+          .from(assignmentQuestionsTable)
+          .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+          .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds))
+          .orderBy(asc(assignmentQuestionsTable.position));
+  const questionsByAssignment = new Map<string, typeof joined>();
+  for (const row of joined) {
+    const assignmentId = row.assignmentQuestion.assignmentId;
+    const rows = questionsByAssignment.get(assignmentId) ?? [];
+    rows.push(row);
+    questionsByAssignment.set(assignmentId, rows);
+  }
+  const repairFlags = await Promise.all(
+    assignments.map((assignment) =>
+      michelleQuizMathRepairEnabled({
+        assignmentTitle: assignment.title,
+        sessionId: session.id,
+        sessionTitle: session.title,
+      }),
+    ),
+  );
   const questions: Parameters<typeof renderSessionQuestionPdf>[0]["questions"] = [];
-  for (const assignment of assignments) {
-    const joined = await db
-      .select({
-        assignmentQuestion: assignmentQuestionsTable,
-        question: questionsTable,
-      })
-      .from(assignmentQuestionsTable)
-      .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
-      .where(eq(assignmentQuestionsTable.assignmentId, assignment.id))
-      .orderBy(asc(assignmentQuestionsTable.position));
-    for (const row of joined) {
+  for (const [index, assignment] of assignments.entries()) {
+    const repairStackedMath = repairFlags[index] ?? false;
+    for (const row of questionsByAssignment.get(assignment.id) ?? []) {
       const shaped = assignmentQuestionShape(row.question, row.assignmentQuestion, {
         includeKeys: true,
         repairStackedMath,
@@ -11414,7 +11451,7 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
         choices: shaped.choices,
         figures,
         correctAnswer: "correctAnswer" in shaped ? shaped.correctAnswer : null,
-        explanation: "explanation" in shaped ? shaped.explanation : null,
+        explanation: repairMichelleQuizMathText(row.question.explanation, repairStackedMath),
       });
     }
   }

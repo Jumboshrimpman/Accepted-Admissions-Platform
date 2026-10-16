@@ -14,6 +14,7 @@ import {
   useAttachQuestionToAssignment,
   useCreateCurriculumBlock,
   useUpdateCurriculumBlock,
+  useGetCurrentUser,
   useGetSession,
   useListSessionArtifacts,
   useUpsertSessionArtifact,
@@ -56,12 +57,16 @@ import {
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
-import { SessionTutorMaterials } from "@/components/session-tutor-materials";
+import {
+  SessionTutorMaterials,
+  viewerMayDownloadSessionPdfs,
+} from "@/components/session-tutor-materials";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 
 export default function TutorSession() {
   const params = useParams();
   const sessionId = params.sessionId as string;
+  const { data: currentUser } = useGetCurrentUser();
   const queryClient = useQueryClient();
   const { data: session, isLoading, error } = useGetSession(sessionId, {
     query: {
@@ -470,6 +475,11 @@ export default function TutorSession() {
               adaptive?.sessionPrep?.attachedQuestionCount ??
               0
             }
+            canDownloadPdfs={viewerMayDownloadSessionPdfs({
+              role: currentUser?.role,
+              viewerUserId: currentUser?.id,
+              sessionTutor: session.tutor,
+            })}
           />
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="pb-3">
