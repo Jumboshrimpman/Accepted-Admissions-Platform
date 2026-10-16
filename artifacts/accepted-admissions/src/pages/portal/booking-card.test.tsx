@@ -157,10 +157,10 @@ afterAll(() => {
 describe("client availability calendar", () => {
   test("shows enabled bookable dates, filters times by date, and preserves reserve action", async () => {
     render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Available times with Xavier Morales")).toBeTruthy();
+      expect(screen.getByText("Available times with Xavier")).toBeTruthy();
     });
 
     const unavailableDate = new Date(firstSlotDate);
@@ -191,7 +191,7 @@ describe("client availability calendar", () => {
     };
 
     render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     expect(screen.getByText("This tutor needs to reconnect Google Calendar before times can be displayed.")).toBeTruthy();
     expect(screen.queryByText("Dates with open times are available to select.")).toBeNull();
@@ -227,11 +227,11 @@ describe("client availability calendar", () => {
     expect(screen.queryByText("Eunice coaches scholarship and admissions work.")).toBeNull();
     fireEvent.click(screen.getByTestId("booking-tutor-bio-tutor-eunice"));
     expect(screen.getByText("Eunice coaches scholarship and admissions work.")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Eunice" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Eunice Chon" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Eunice" }));
     await waitFor(() => {
-      expect(screen.getByText("Available times with Eunice Chon")).toBeTruthy();
+      expect(screen.getByText("Available times with Eunice")).toBeTruthy();
     });
   });
 
@@ -257,7 +257,7 @@ describe("client availability calendar", () => {
         title: "College Consulting Tutor",
         photoUrl: "/media/team/victoria.jpg",
         biography:
-          "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
+          "Victoria graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.",
         tagline: "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor",
         subjects: ["College Consulting"],
         calendarStatus: "disconnected",
@@ -297,8 +297,13 @@ describe("client availability calendar", () => {
     expect(screen.getByText(/admitted to Brown and Yale/)).toBeTruthy();
     expect(screen.getByText(/Not bookable until Google Calendar is connected/)).toBeTruthy();
     expect(screen.queryByTestId("booking-tutor-bio-tutor-blank")).toBeNull();
-    const photo = screen.getByRole("button", { name: /Victoria Wijerathnayapa/i }).querySelector("img");
-    expect(photo?.getAttribute("src")).toBe("/media/team/victoria.jpg");
+    const photo = screen.getByRole("button", { name: /^Victoria\b/i }).querySelector("img");
+    expect(photo?.getAttribute("src")).toBe("/media/portal/victoria.jpg");
+    expect(photo?.className).toContain("object-cover");
+    expect(photo?.className).toContain("object-center");
+    expect(photo?.className).toContain("max-w-28");
+    expect(screen.getByRole("tab", { name: "Victoria" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Victoria Wijerathnayapa" })).toBeNull();
   });
 
   test("prompts a zero-credit client to buy a single hour or 10-hour package before booking", async () => {
@@ -331,7 +336,7 @@ describe("client availability calendar", () => {
     ];
 
     render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
       expect(
@@ -339,7 +344,7 @@ describe("client availability calendar", () => {
       ).toBeTruthy();
     });
     expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");
-    expect(screen.getByRole("tab", { name: "Eunice Chon" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Eunice" })).toBeTruthy();
     vi.unstubAllGlobals();
   });
 
@@ -367,7 +372,7 @@ describe("client availability calendar", () => {
     ];
 
     render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("booking-credit-reserved")).toBeTruthy();
@@ -402,7 +407,7 @@ describe("client availability calendar", () => {
     ];
 
     render(<BookingCard initialRemainingHours={0} initialPurchasedHours={1} />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("booking-credit-reserved")).toBeTruthy();
@@ -433,7 +438,7 @@ describe("client availability calendar", () => {
     mocks.sessionsQuery.data = [];
 
     render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("booking-credit-available")).toBeTruthy();
@@ -453,7 +458,7 @@ describe("client availability calendar", () => {
     mocks.sessionsQuery.data = [];
 
     render(<BookingCard initialRemainingHours={1} initialPurchasedHours={1} />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("booking-credit-available")).toBeTruthy();
@@ -473,7 +478,7 @@ describe("client availability calendar", () => {
     mocks.sessionsQuery.data = [];
 
     render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("booking-credit-spent")).toBeTruthy();
@@ -510,7 +515,7 @@ describe("client availability calendar", () => {
     ];
 
     render(<BookingCard initialRemainingHours={0} initialPurchasedHours={1} />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier Morales/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
     fireEvent.click(screen.getByTestId("session-list-show-more"));
 
     await waitFor(() => {
