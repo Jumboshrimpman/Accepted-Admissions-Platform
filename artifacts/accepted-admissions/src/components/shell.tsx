@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { SignInRecoveryButton } from "@/components/sign-in-recovery-button";
 import { ProvisioningReference } from "@/components/provisioning-reference";
+import { ClientIntakeProvider } from "@/components/client-intake-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -444,7 +445,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         ) : null}
         <div key="shell-page" className="contents">
-          {children}
+          {apiUser.role === "student" ? (
+            <ClientIntakeProvider name={apiUser.displayName} email={apiUser.email ?? ""}>
+              {children}
+            </ClientIntakeProvider>
+          ) : (
+            children
+          )}
         </div>
       </main>
     </div>

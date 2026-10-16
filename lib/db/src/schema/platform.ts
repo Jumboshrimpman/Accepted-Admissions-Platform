@@ -884,6 +884,56 @@ export const portalLoginAliasesTable = pgTable(
   ],
 );
 
+/** An admin assigns the reusable intake to a client. Answers live in client_intake_responses. */
+export const clientIntakeAssignmentsTable = pgTable(
+  "client_intake_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    assignedByUserId: uuid("assigned_by_user_id").references(() => usersTable.id),
+    status: text("status").notNull().default("assigned"),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("client_intake_assignments_client_user_id_idx").on(table.clientUserId),
+  ],
+);
+
+export const clientIntakeResponsesTable = pgTable(
+  "client_intake_responses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    assignmentId: uuid("assignment_id")
+      .notNull()
+      .references(() => clientIntakeAssignmentsTable.id),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    respondentName: text("respondent_name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone").notNull(),
+    latestSatScore: integer("latest_sat_score").notNull(),
+    latestGpa: text("latest_gpa").notNull(),
+    school: text("school").notNull(),
+    dreamUniversity1: text("dream_university_1").notNull(),
+    dreamUniversity2: text("dream_university_2").notNull(),
+    dreamUniversity3: text("dream_university_3").notNull(),
+    targetSafetySchool: text("target_safety_school"),
+    mainFocus: text("main_focus").notNull(),
+    targetSatDate: text("target_sat_date"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("client_intake_responses_assignment_id_idx").on(table.assignmentId),
+    index("client_intake_responses_client_user_id_idx").on(table.clientUserId),
+  ],
+);
+
 export const availabilityRulesTable = pgTable("availability_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
   tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
