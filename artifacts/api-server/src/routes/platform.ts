@@ -492,6 +492,14 @@ import {
   updateSessionAssignmentQuestionContent,
 } from "../lib/session-question-edit";
 import {
+  decideSessionQuestionPdfAccess,
+  extractMarkdownFigures,
+  readQuizFigure,
+  renderSessionQuestionPdf,
+  temporaryAliasMayDownloadAnswerKey,
+  type SessionQuestionPdfPhase,
+} from "../lib/session-question-pdf";
+import {
   assignmentDifficulty,
   assignmentQuestionShape,
   courseIdsForAssignmentList,
@@ -11255,6 +11263,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           id: attemptsTable.id,
           status: attemptsTable.status,
           score: attemptsTable.score,
+          submittedAt: attemptsTable.submittedAt,
           result: attemptsTable.result,
           analysis: attemptsTable.analysis,
         })
@@ -11286,6 +11295,10 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
         attemptId: attempt?.id ?? null,
         attemptStatus: attempt?.status ?? null,
         score: attempt?.score ?? null,
+        submittedAt:
+          req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
+            ? attempt?.submittedAt ?? null
+            : null,
         mistakeCount: resultItems.filter((item) => item.correct === false).length,
         analysis: analysis ?? null,
       };
@@ -11336,6 +11349,145 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       homework,
     }),
   );
+});
+
+router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res): Promise<void> => {
+  const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId : "";
+  const phaseRaw = typeof req.query.phase === "string" ? req.query.phase : "";
+  const phase: SessionQuestionPdfPhase | null =
+    phaseRaw === "before_session" || phaseRaw === "during_session" ? phaseRaw : null;
+  const includeAnswerKey = req.query.answers === "1" || req.query.answers === "true";
+  if (!UUID_PATTERN.test(sessionId)) {
+    res.status(400).json({ error: "Invalid session id" });
+    return;
+  }
+  if (!phase) {
+    res.status(400).json({ error: "phase must be before_session or during_session" });
+    return;
+  }
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, sessionId))
+    .limit(1);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  const access = decideSessionQuestionPdfAccess({
+    role: req.appUser!.role,
+    requesterUserId: req.appUser!.id,
+    sessionTutorUserId: session.tutorUserId,
+  });
+  if (!access.ok) {
+    res.status(access.status).json({ error: access.error });
+    return;
+  }
+  if (
+    !temporaryAliasMayDownloadAnswerKey({
+      temporaryTutorAlias: req.temporaryTutorAlias,
+      includeAnswerKey,
+      configuredViewEmail: process.env.TEMP_NIKA_VIEW_EMAIL,
+    })
+  ) {
+    res.status(403).json({
+      error: "This temporary login cannot download answer keys.",
+    });
+    return;
+  }
+  const assignments = await db
+    .select()
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.sessionId, session.id),
+        eq(assignmentsTable.deliveryPhase, phase),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    )
+    .orderBy(asc(assignmentsTable.createdAt));
+  const assignmentIds = assignments.map((assignment) => assignment.id);
+  const joined =
+    assignmentIds.length === 0
+      ? []
+      : await db
+          .select({
+            assignmentQuestion: assignmentQuestionsTable,
+            question: questionsTable,
+          })
+          .from(assignmentQuestionsTable)
+          .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
+          .where(inArray(assignmentQuestionsTable.assignmentId, assignmentIds))
+          .orderBy(asc(assignmentQuestionsTable.position));
+  const questionsByAssignment = new Map<string, typeof joined>();
+  for (const row of joined) {
+    const assignmentId = row.assignmentQuestion.assignmentId;
+    const rows = questionsByAssignment.get(assignmentId) ?? [];
+    rows.push(row);
+    questionsByAssignment.set(assignmentId, rows);
+  }
+  const repairFlags = await Promise.all(
+    assignments.map((assignment) =>
+      michelleQuizMathRepairEnabled({
+        assignmentTitle: assignment.title,
+        sessionId: session.id,
+        sessionTitle: session.title,
+      }),
+    ),
+  );
+  const questions: Parameters<typeof renderSessionQuestionPdf>[0]["questions"] = [];
+  for (const [index, assignment] of assignments.entries()) {
+    const repairStackedMath = repairFlags[index] ?? false;
+    for (const row of questionsByAssignment.get(assignment.id) ?? []) {
+      const shaped = assignmentQuestionShape(row.question, row.assignmentQuestion, {
+        includeKeys: true,
+        repairStackedMath,
+      });
+      const figureRefs = extractMarkdownFigures(`${shaped.stimulus ?? ""}\n${shaped.prompt}`);
+      const figures = [];
+      for (const figure of figureRefs) {
+        figures.push({ alt: figure.alt, bytes: await readQuizFigure(figure.url) });
+      }
+      questions.push({
+        prompt: shaped.prompt,
+        stimulus: shaped.stimulus,
+        choices: shaped.choices,
+        figures,
+        correctAnswer: "correctAnswer" in shaped ? shaped.correctAnswer : null,
+        explanation: repairMichelleQuizMathText(row.question.explanation, repairStackedMath),
+      });
+    }
+  }
+  if (questions.length === 0) {
+    res.status(404).json({ error: "No quiz is attached for this part of the session." });
+    return;
+  }
+  const student = await sessionStudentShape(session);
+  const sessionDateLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: session.timezone || "America/New_York",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(session.dateTime);
+  const pdf = renderSessionQuestionPdf({
+    phase,
+    includeAnswerKey,
+    sessionTitle: session.title,
+    sessionDateLabel,
+    studentName: student?.name ?? "Student",
+    questions,
+  });
+  const part = phase === "before_session" ? "pre-work" : "in-session";
+  const kind = includeAnswerKey ? "answer-key" : "questions";
+  const filename = `${part}-${kind}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
 });
 
 async function listAssignmentsForUser(

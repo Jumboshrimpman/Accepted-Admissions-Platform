@@ -14,6 +14,7 @@ import {
   useAttachQuestionToAssignment,
   useCreateCurriculumBlock,
   useUpdateCurriculumBlock,
+  useGetCurrentUser,
   useGetSession,
   useListSessionArtifacts,
   useUpsertSessionArtifact,
@@ -56,10 +57,16 @@ import {
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
+import {
+  SessionTutorMaterials,
+  viewerMayDownloadSessionPdfs,
+} from "@/components/session-tutor-materials";
+import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 
 export default function TutorSession() {
   const params = useParams();
   const sessionId = params.sessionId as string;
+  const { data: currentUser } = useGetCurrentUser();
   const queryClient = useQueryClient();
   const { data: session, isLoading, error } = useGetSession(sessionId, {
     query: {
@@ -337,7 +344,12 @@ export default function TutorSession() {
                           </p>
                         </div>
                         <Badge variant={homework.attemptStatus === "submitted" || homework.attemptStatus === "expired" ? "default" : "secondary"}>
-                          {homework.attemptStatus === "submitted" || homework.attemptStatus === "expired" ? "Complete" : homework.attemptStatus === "active" || homework.attemptStatus === "paused" ? "In progress" : "Not started"}
+                          {describeAssignmentCompletion({
+                            attemptStatus: homework.attemptStatus,
+                            score: homework.score,
+                            submittedAt: homework.submittedAt,
+                            timezone: session.timezone,
+                          }).label}
                         </Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -450,6 +462,25 @@ export default function TutorSession() {
         </TabsList>
 
         <TabsContent value="curriculum" className="space-y-4">
+          <SessionTutorMaterials
+            sessionId={sessionId}
+            timezone={session.timezone}
+            assignments={session.assignments}
+            homework={visibleHomework}
+            beforeAssignmentId={beforeAssignmentId}
+            duringAssignmentId={duringAssignmentId}
+            duringTitle={duringAssignment?.title}
+            duringQuestionCount={
+              duringAssignment?.questions.length ??
+              adaptive?.sessionPrep?.attachedQuestionCount ??
+              0
+            }
+            canDownloadPdfs={viewerMayDownloadSessionPdfs({
+              role: currentUser?.role,
+              viewerUserId: currentUser?.id,
+              sessionTutor: session.tutor,
+            })}
+          />
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-start justify-between gap-3">

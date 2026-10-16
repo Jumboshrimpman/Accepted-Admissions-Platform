@@ -3,13 +3,14 @@ import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const clearHomework = vi.fn();
+const currentUserState = { id: "tutor-eunice", role: "tutor" };
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
   getGetAdaptiveCurriculumQueryKey: (id: string) => ["/api/adaptive", id],
   getGetAssignmentQueryKey: (id: string) => ["/api/assignments", id],
   getListSessionArtifactsQueryKey: (id: string) => ["/api/artifacts", id],
-  useGetCurrentUser: () => ({ data: { role: "tutor" } }),
+  useGetCurrentUser: () => ({ data: { id: currentUserState.id, role: currentUserState.role } }),
   customFetch: (...args: unknown[]) => clearHomework(...args),
   useGetSession: () => ({
     data: {
@@ -24,6 +25,7 @@ vi.mock("@workspace/api-client-react", () => ({
       meetingUrl: "https://meet.google.com/sat-room",
       calendarEventUrl: null,
       student: { id: "student-1", name: "Taito Goto" },
+      tutor: { id: "tutor-eunice", name: "Eunice Chon", specialty: "Assigned tutor", avatarUrl: null },
       tutorNotes: null,
       assignments: [
         {
@@ -171,6 +173,8 @@ import TutorSession from "./session";
 afterEach(() => {
   cleanup();
   clearHomework.mockReset();
+  currentUserState.id = "tutor-eunice";
+  currentUserState.role = "tutor";
 });
 
 describe("tutor session review page", () => {
@@ -183,6 +187,14 @@ describe("tutor session review page", () => {
     expect(screen.queryByText("Generate original practice drafts")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create drafts" })).toBeNull();
     expect(screen.getByText("Homework status & results")).toBeTruthy();
+    expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
+    expect(screen.getByTestId("tutor-completion-badge-quiz-1").textContent).toMatch(/Submitted · 80%/);
+    expect(screen.getByTestId("tutor-completion-quiz-1").textContent).toMatch(/Review attempt/);
+    expect(screen.getByTestId("download-prework-questions").textContent).toMatch(
+      /Download pre-work questions \(PDF\)/,
+    );
+    expect(screen.getByTestId("download-prework-answer-key").textContent).toMatch(/answer key/);
+    expect(screen.getByTestId("download-in-session-questions")).toBeTruthy();
     expect(screen.getByText("1 assignment")).toBeTruthy();
     expect(screen.queryAllByText("Full-length SAT diagnostic — Taito’s SAT Session with Eunice")).toHaveLength(0);
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
@@ -209,5 +221,14 @@ describe("tutor session review page", () => {
     expect(screen.getByText(/questions stay attached/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(clearHomework).not.toHaveBeenCalled();
+  });
+
+  test("hides PDF downloads for a tutor who is not assigned to the session", () => {
+    currentUserState.id = "tutor-other";
+    render(<TutorSession />);
+    expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
+    expect(screen.queryByTestId("download-prework-questions")).toBeNull();
+    expect(screen.queryByTestId("download-prework-answer-key")).toBeNull();
+    expect(screen.queryByTestId("download-in-session-questions")).toBeNull();
   });
 });

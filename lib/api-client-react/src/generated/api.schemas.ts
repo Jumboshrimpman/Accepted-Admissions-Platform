@@ -2101,6 +2101,8 @@ export interface SessionHomework {
   attemptStatus: SessionHomeworkAttemptStatus;
   /** @nullable */
   score: number | null;
+  /** Present for the assigned tutor and administrators. */
+  submittedAt?: string | null;
   mistakeCount: number;
   analysis: AttemptAnalysis | null;
 }

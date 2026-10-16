@@ -2871,6 +2871,7 @@ export const GetSessionResponse = zod.object({
   "attemptId": zod.string().nullable(),
   "attemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullable(),
   "score": zod.number().nullable(),
+  "submittedAt": zod.coerce.date().nullish(),
   "mistakeCount": zod.number(),
   "analysis": zod.union([zod.object({
   "source": zod.enum(['deterministic', 'provider']),
