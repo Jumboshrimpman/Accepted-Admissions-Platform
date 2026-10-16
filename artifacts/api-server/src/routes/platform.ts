@@ -4636,11 +4636,16 @@ async function writeStoredSessionEvent<T>(
     sessionId: session.id,
     accessToken,
     write,
-    onManualEdit: raiseLegacyCalendarManualEditAlert,
-    onAppCalendarMissing: () =>
-      session.tutorUserId
-        ? markAppCalendarNeedsReconnect(session.tutorUserId)
-        : Promise.resolve(),
+    onManualEdit: (sessionId) => raiseLegacyCalendarManualEditAlert(sessionId),
+    onAppCalendarDeleted: (sessionId) =>
+      raiseLegacyCalendarManualEditAlert(sessionId, "deleted_app_calendar"),
+    onAppCalendarMissing: () => {
+      const deletedCalendarId = sessionEventCalendarId(session.providerCalendarId);
+      if (!session.tutorUserId || deletedCalendarId === PRIMARY_CALENDAR_ID) {
+        return Promise.resolve();
+      }
+      return markAppCalendarNeedsReconnect(session.tutorUserId, deletedCalendarId);
+    },
     log: (fields) => logger.warn(fields, "Legacy calendar event was not changed"),
   });
 }
@@ -6909,23 +6914,40 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         clerkUserId: req.appUser!.clerkUserId,
       };
       const tutorParty = await calendarInviteParty(tutor.userId, { email: tutor.email });
-      const event = await runTutorCalendarCall(access, (token) =>
-        createGoogleEvent(
+      const written = await runTutorCalendarCall(access, (token) =>
+        writeStoredSessionEvent(
+          {
+            id: created.id,
+            providerCalendarId: appCalendarId,
+            tutorUserId: tutor.userId,
+          },
           token,
-          appCalendarId,
-          bookingCalendarEventPayload({
-            title: created.title,
-            start,
-            durationMinutes,
-            timeZone: rule.timezone,
-            attendeeEmail: req.appUser!.email,
-            location: SHARED_FALL_MEETING_URL,
-            student,
-            tutor: tutorParty,
-          }),
-          googleCalendarSendUpdatesForSubjects(consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT"),
+          () =>
+            createGoogleEvent(
+              token,
+              appCalendarId,
+              bookingCalendarEventPayload({
+                title: created.title,
+                start,
+                durationMinutes,
+                timeZone: rule.timezone,
+                attendeeEmail: req.appUser!.email,
+                location: SHARED_FALL_MEETING_URL,
+                student,
+                tutor: tutorParty,
+              }),
+              googleCalendarSendUpdatesForSubjects(consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT"),
+            ),
         ),
       );
+      if (written.status === "manual") {
+        throw new BookingError(
+          503,
+          "CALENDAR_UNAVAILABLE",
+          "The tutor calendar could not be updated. Your credit was not used.",
+        );
+      }
+      const event = written.value;
       const [updated] = await db
         .update(sessionsTable)
         .set({

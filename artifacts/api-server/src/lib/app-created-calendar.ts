@@ -69,6 +69,8 @@ export async function runStoredCalendarWrite<T>(input: {
   sessionId: string;
   write: () => Promise<T>;
   onManualEdit: (sessionId: string) => Promise<void>;
+  /** Alert when the tutor deleted the secondary calendar. Falls back to onManualEdit. */
+  onAppCalendarDeleted?: (sessionId: string) => Promise<void>;
   /** Clears the stored app calendar id so the tutor is shown as needing reconnect. */
   onAppCalendarMissing?: () => Promise<void>;
   /** Present when the write can check whether the tutor deleted the secondary calendar. */
@@ -86,8 +88,12 @@ export async function runStoredCalendarWrite<T>(input: {
       sessionId: input.sessionId,
       status,
     });
-    await input.onManualEdit(input.sessionId);
-    if (appCalendarDeleted) await input.onAppCalendarMissing?.();
+    if (appCalendarDeleted) {
+      await (input.onAppCalendarDeleted ?? input.onManualEdit)(input.sessionId);
+      await input.onAppCalendarMissing?.();
+    } else {
+      await input.onManualEdit(input.sessionId);
+    }
     return { status: "manual" as const };
   };
   const storedAppCalendarDeleted = async (): Promise<boolean> => {

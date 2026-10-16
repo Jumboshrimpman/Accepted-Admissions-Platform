@@ -11,7 +11,7 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { decryptCalendarToken } from "./google-calendar.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { adoptGoogleCalendarConnection, disconnectGoogleCalendarConnection, GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING, markGoogleCalendarDisconnected, persistGoogleCalendarConnection, reconnectStoredGoogleCalendarGrants, revokeGoogleCalendarGrant, saveRefreshedGoogleAccessToken } from "./calendar-persistence.ts";
+import { adoptGoogleCalendarConnection, disconnectGoogleCalendarConnection, GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING, markAppCalendarNeedsReconnect, markGoogleCalendarDisconnected, persistGoogleCalendarConnection, reconnectStoredGoogleCalendarGrants, revokeGoogleCalendarGrant, saveRefreshedGoogleAccessToken } from "./calendar-persistence.ts";
 
 process.env.SESSION_SECRET ??= "calendar-persistence-test-secret";
 
@@ -220,6 +220,65 @@ test("first Google Calendar persist requires a refresh token", async () => {
       .from(calendarConnectionsTable)
       .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
     assert.equal(rows.length, 0);
+  } finally {
+    await db
+      .delete(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
+    await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.id, profile!.id));
+    await db.delete(usersTable).where(eq(usersTable.id, user!.id));
+  }
+});
+
+test("a newer app calendar id stays when an old session still points at a deleted calendar", async () => {
+  const suffix = randomUUID();
+  const email = `calendar-deleted-${suffix}@example.com`;
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId: `calendar-deleted:${suffix}`,
+      email,
+      displayName: "Deleted Calendar",
+      role: "tutor",
+    })
+    .returning();
+  const [profile] = await db
+    .insert(tutorProfilesTable)
+    .values({
+      userId: user!.id,
+      email,
+      name: "Deleted Calendar",
+      title: "Test Tutor",
+      bookingEligible: false,
+    })
+    .returning();
+  try {
+    await persistGoogleCalendarConnection(profile!.id, {
+      accessToken: "deleted-calendar-access",
+      refreshToken: "deleted-calendar-refresh",
+      expiresIn: 3600,
+    });
+    await db
+      .update(calendarConnectionsTable)
+      .set({ appCalendarId: "cal-new" })
+      .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
+
+    await markAppCalendarNeedsReconnect(user!.id, "cal-deleted");
+    const [kept] = await db
+      .select()
+      .from(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
+    assert.equal(kept!.appCalendarId, "cal-new");
+    assert.equal(kept!.status, "connected");
+    assert.equal(decryptCalendarToken(kept!.encryptedRefreshToken!), "deleted-calendar-refresh");
+
+    await markAppCalendarNeedsReconnect(user!.id, "cal-new");
+    const [cleared] = await db
+      .select()
+      .from(calendarConnectionsTable)
+      .where(eq(calendarConnectionsTable.tutorProfileId, profile!.id));
+    assert.equal(cleared!.appCalendarId, null);
+    assert.equal(cleared!.status, "connected");
+    assert.equal(decryptCalendarToken(cleared!.encryptedRefreshToken!), "deleted-calendar-refresh");
   } finally {
     await db
       .delete(calendarConnectionsTable)

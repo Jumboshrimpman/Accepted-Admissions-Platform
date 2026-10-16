@@ -337,6 +337,7 @@ test("session writes use the app calendar and a missing scope does not disconnec
   const cancelStart = platform.indexOf('router.post("/booking/sessions/:sessionId/cancel"');
   const createSlice = platform.slice(createStart, cancelStart);
   assert.match(createSlice, /CALENDAR_RECONNECT_REQUIRED/);
+  assert.match(createSlice, /writeStoredSessionEvent\(/);
   assert.match(createSlice, /createGoogleEvent\(\s*token,\s*appCalendarId,/);
   assert.match(createSlice, /providerCalendarId:\s*appCalendarId/);
   assert.equal(createSlice.includes("connection.calendarId"), false);
@@ -362,6 +363,19 @@ test("session writes use the app calendar and a missing scope does not disconnec
     persistence.indexOf("export async function saveAcceptedAdmissionsCalendarId"),
   );
   assert.match(reconnectSlice, /appCalendarId: null/);
+  assert.match(reconnectSlice, /eq\(calendarConnectionsTable\.appCalendarId,\s*deleted\)/);
+  assert.match(platform, /markAppCalendarNeedsReconnect\(session\.tutorUserId,\s*deletedCalendarId\)/);
+  assert.match(platform, /raiseLegacyCalendarManualEditAlert\(sessionId,\s*"deleted_app_calendar"\)/);
+  const booking = await readFile(
+    fileURLToPath(new URL("./booking-service.ts", import.meta.url)),
+    "utf8",
+  );
+  const deletedAlert = booking.slice(
+    booking.indexOf('source === "deleted_app_calendar"'),
+    booking.indexOf("tutor's primary calendar"),
+  );
+  assert.match(deletedAlert, /calendar the tutor deleted/);
+  assert.equal(deletedAlert.includes("primary calendar"), false);
   assert.equal(
     /markGoogleCalendarDisconnected|revokeGoogleCalendarGrant|status: "disconnected"|encryptedRefreshToken/.test(
       reconnectSlice,

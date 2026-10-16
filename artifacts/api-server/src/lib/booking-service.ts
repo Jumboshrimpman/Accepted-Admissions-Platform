@@ -478,7 +478,10 @@ export async function recordBookingConfirmedAudit(
 }
 
 /** In-app only. The message has no student, tutor, or email. */
-export async function raiseLegacyCalendarManualEditAlert(sessionId: string): Promise<void> {
+export async function raiseLegacyCalendarManualEditAlert(
+  sessionId: string,
+  source: "primary" | "deleted_app_calendar" = "primary",
+): Promise<void> {
   const already = await db
     .select({ id: adminNotificationsTable.id })
     .from(adminNotificationsTable)
@@ -504,7 +507,9 @@ export async function raiseLegacyCalendarManualEditAlert(sessionId: string): Pro
       sessionId,
       title: "Calendar event needs a manual edit",
       message:
-        "This session's Google Calendar event is on the tutor's primary calendar, and the current grant cannot change it. Edit that event by hand.",
+        source === "deleted_app_calendar"
+          ? "This session's Google Calendar event is on a calendar the tutor deleted. Edit that event by hand."
+          : "This session's Google Calendar event is on the tutor's primary calendar, and the current grant cannot change it. Edit that event by hand.",
       status: "unread",
     })),
   );

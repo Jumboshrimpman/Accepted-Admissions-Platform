@@ -248,10 +248,15 @@ export async function saveRefreshedGoogleAccessToken(
 }
 
 /**
- * The tutor deleted the secondary calendar. Clear only its id so the existing
- * health badge shows Needs reconnect. The refresh token and connection stay.
+ * The tutor deleted one secondary calendar. Clear that id only, so a reconnect
+ * that already stored a newer id is left alone. The refresh token stays.
  */
-export async function markAppCalendarNeedsReconnect(tutorUserId: string): Promise<void> {
+export async function markAppCalendarNeedsReconnect(
+  tutorUserId: string,
+  deletedCalendarId: string,
+): Promise<void> {
+  const deleted = deletedCalendarId.trim();
+  if (!deleted || deleted.toLowerCase() === "primary") return;
   const [profile] = await db
     .select({ id: tutorProfilesTable.id })
     .from(tutorProfilesTable)
@@ -265,6 +270,7 @@ export async function markAppCalendarNeedsReconnect(tutorUserId: string): Promis
       and(
         eq(calendarConnectionsTable.tutorProfileId, profile.id),
         eq(calendarConnectionsTable.provider, "google"),
+        eq(calendarConnectionsTable.appCalendarId, deleted),
       ),
     );
 }
