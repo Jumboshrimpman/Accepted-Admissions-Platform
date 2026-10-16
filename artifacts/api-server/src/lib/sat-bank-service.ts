@@ -35,6 +35,7 @@ import {
   type CollectionStub,
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
+import { originalHardSatBankRecords } from "./original-hard-sat.ts";
 import {
   auditQuizItems,
   auditStudentQuizItem,
@@ -327,6 +328,10 @@ async function upsertCollectionForRecord(record: ParsedBankRecord) {
       formCode: record.formCode,
       title: record.collectionTitle,
       slug: record.collectionSlug,
+      notes:
+        record.sourceKind === "original_hard"
+          ? "Session-only. Hidden from tutor browse and tutor assign."
+          : null,
       extractStatus: record.sourceKind === "seed" ? "partial" : "partial",
     })
     .returning();
@@ -551,7 +556,12 @@ function existingReimportRow(row: typeof bankQuestionsTable.$inferSelect): Exist
       difficulty: row.difficulty,
       questionType: row.questionType,
       estimatedSeconds: row.estimatedSeconds,
-      sourceKind: row.sourceKind === "seed" ? "seed" : "official_extract",
+      sourceKind:
+        row.sourceKind === "seed"
+          ? "seed"
+          : row.sourceKind === "original_hard"
+            ? "original_hard"
+            : "official_extract",
       sourceFiles: {},
       assets: [],
       extractGaps: (row.extractGaps ?? {}) as ParsedBankRecord["extractGaps"],
@@ -599,7 +609,7 @@ export type CollegeBoardReimportReport = {
 };
 
 /**
- * Compare the repo JSONL to the bank. Dry run writes nothing.
+ * Compare the repo JSONL and the original hard items to the bank. Dry run writes nothing.
  * Apply upserts only the exact source-key list and does not rewrite a question
  * that already belongs to an attempted set.
  */
@@ -610,9 +620,10 @@ export async function runCollegeBoardReimport(input: {
 }): Promise<CollegeBoardReimportReport> {
   const rootDir = resolveCollegeBoardRoot(input.rootDir ?? SAT_BANK_IMPORT_ROOT);
   const loaded = await loadOfficialExtractRecords(rootDir);
+  const plannedRecords = [...loaded.records, ...originalHardSatBankRecords()];
   const existingRows = await db.select().from(bankQuestionsTable);
   const plan = planBankReimportDiff({
-    records: loaded.records,
+    records: plannedRecords,
     duplicatesInFile: loaded.duplicatesInFile,
     existing: existingRows.map(existingReimportRow),
   });
@@ -653,7 +664,7 @@ export async function runCollegeBoardReimport(input: {
       rejectedIds: decision.rejectedIds,
     });
   }
-  const recordByKey = new Map(loaded.records.map((record) => [record.sourceKey, record]));
+  const recordByKey = new Map(plannedRecords.map((record) => [record.sourceKey, record]));
   const writable = decision.sourceKeys.filter((sourceKey) => changed.has(sourceKey));
   const records = writable.flatMap((sourceKey) => {
     const record = recordByKey.get(sourceKey);
@@ -796,14 +807,18 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
           ? "seed"
           : bank.sourceKind === "original"
             ? "original"
-            : "college_board",
+            : bank.sourceKind === "original_hard"
+              ? "original_hard"
+              : "college_board",
       tags: bankTags,
       generationMethod:
         bank.sourceKind === "seed"
           ? "seed-fixture"
           : bank.sourceKind === "original"
             ? "original-ielts-style"
-            : "college-board-extract",
+            : bank.sourceKind === "original_hard"
+              ? "original-hard-sat"
+              : "college-board-extract",
     })
     .returning({ id: questionsTable.id });
   await db
@@ -1219,6 +1234,9 @@ export async function assignPreworkFromBank(input: {
   );
   pool = pool.filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   const hardMode = homeworkKind === "routine" && input.difficulty === "hard";
+  if (!hardMode) {
+    pool = pool.filter((row) => row.sourceKind !== "original_hard");
+  }
   if (hardMode) {
     const plannedIds = input.bankQuestionIds ?? [];
     if (plannedIds.length !== HARD_SAT_PREWORK_QUESTIONS) {
@@ -1603,7 +1621,7 @@ export async function listBankCollections() {
     .orderBy(asc(examSourceCollectionsTable.examFamily), asc(examSourceCollectionsTable.title));
   const questions = await db.select().from(bankQuestionsTable);
   const assets = await db.select().from(examSourceAssetsTable);
-  return collections.map((collection) => {
+  return collections.filter((collection) => collection.slug !== "original-hard-sat").map((collection) => {
     const collectionQuestions = questions.filter((row) => row.collectionId === collection.id);
     return {
       id: collection.id,
@@ -1673,6 +1691,7 @@ export function bankQuestionShape(
     sourceKind: row.sourceKind,
     extractGaps: row.extractGaps ?? {},
     assignable:
+      row.sourceKind !== "original_hard" &&
       isAssignableBankItem({
         prompt: row.prompt,
         questionType: row.questionType,
@@ -1716,6 +1735,7 @@ export async function listBankQuestions(filters: {
       asc(bankQuestionsTable.practiceTestNumber),
       asc(bankQuestionsTable.position),
     );
+  rows = rows.filter((row) => row.sourceKind !== "original_hard");
   if (filters.examFamily) {
     rows = rows.filter((row) => row.examFamily === filters.examFamily);
   }
@@ -2041,7 +2061,9 @@ export async function requestSimilarRetry(input: {
           .from(bankQuestionsTable)
           .where(ne(bankQuestionsTable.id, sourceBank.id))
       : await db.select().from(bankQuestionsTable)
-  ).filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
+  )
+    .filter((row) => row.sourceKind !== "original_hard" && !row.sourceKey.startsWith("original-hard-"))
+    .filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   const used = session?.clientUserId
     ? await usedSourceKeysForStudent(session.clientUserId)
     : new Set<string>();
@@ -2061,6 +2083,7 @@ export async function requestSimilarRetry(input: {
       module: row.module,
       questionNumber: row.questionNumber,
       difficulty: row.difficulty,
+      sourceKind: row.sourceKind,
     })),
     usedSourceKeys: used,
     env: input.env,

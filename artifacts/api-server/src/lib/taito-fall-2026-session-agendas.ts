@@ -462,7 +462,14 @@ export function findTaitoAgendaSession<T extends TaitoFallSessionCandidate>(
     if (!subjectMatchesSchedule(session.subject, scheduled.subject)) {
       return false;
     }
-    return matchesTaitoScheduledDate(session, scheduled.dateKey);
+    return matchesTaitoScheduledDate(
+      {
+        ...session,
+        clientUserId: session.clientUserId,
+        taitoUserId: options?.taitoUserId,
+      },
+      scheduled.dateKey,
+    );
   });
   return pickTaitoAgendaKeeper(candidates);
 }

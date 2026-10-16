@@ -49,6 +49,9 @@ export async function createReusableQuizFromBank(input: {
           .from(bankQuestionsTable)
           .where(inArray(bankQuestionsTable.id, uniqueIds))
       : [];
+  if (rows.some((row) => row.sourceKind === "original_hard" || row.sourceKey.startsWith("original-hard-"))) {
+    throw Object.assign(new Error("Original hard items cannot be added to a tutor quiz."), { status: 400 });
+  }
   const planned = selectBankQuestionsForTutorQuiz(rows, input.bankQuestionIds);
   if (planned.error || planned.selected.length === 0) {
     throw Object.assign(new Error(planned.error || "Select at least one multiple-choice question."), {

@@ -54,18 +54,33 @@ export function sessionLocalDateKey(dateTime: Date, timezone: string): string {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-/** Oct 2 SAT in JST, including admin-edited clock times on that local date. */
+/**
+ * A Taito fall date. When the session carries a student email or id, it also
+ * has to be Taito; another student's session on the same calendar day does not match.
+ */
 export function matchesTaitoScheduledDate(
-  session: { dateTime: Date; timezone?: string | null },
+  session: {
+    dateTime: Date;
+    timezone?: string | null;
+    email?: string | null;
+    clientUserId?: string | null;
+    taitoUserId?: string | null;
+  },
   dateKey: string,
 ): boolean {
   const zone = session.timezone || TAITO_SESSION_TIMEZONE;
-  return (
+  const dateMatches =
     sessionLocalDateKey(session.dateTime, zone) === dateKey ||
     sessionLocalDateKey(session.dateTime, TAITO_SESSION_TIMEZONE) === dateKey ||
     session.dateTime.toISOString().slice(0, 10) === dateKey ||
-    session.dateTime.getTime() === taitoSessionDateTime(dateKey).getTime()
-  );
+    session.dateTime.getTime() === taitoSessionDateTime(dateKey).getTime();
+  if (!dateMatches) return false;
+  const email = session.email?.trim().toLowerCase() ?? "";
+  if (email && email !== TAITO_STUDENT_EMAIL) return false;
+  if (session.taitoUserId && session.clientUserId && session.clientUserId !== session.taitoUserId) {
+    return false;
+  }
+  return true;
 }
 
 export function isTaitoFirstSatSession(session: {

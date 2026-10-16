@@ -72,6 +72,7 @@ export type HardSatCandidate = {
   module: number;
   questionNumber: number;
   practiceTestNumber: number | null;
+  sourceKind?: string | null;
 };
 
 export type RenderableHardSatInput = HardSatCandidate & {
@@ -245,9 +246,56 @@ export const SAT_RW_ITEM_SHARE = 54;
 export const SAT_MATH_ITEM_SHARE = 44;
 export const SAT_SECTION_ITEM_TOTAL = SAT_RW_ITEM_SHARE + SAT_MATH_ITEM_SHARE;
 
-/** Balanced slot counts for a set of `count` questions. */
-export function hardSatSectionQuotas(count: number): { rw: number; math: number } {
+/** Sessions that use original hard items instead of the official module 2 pool. */
+export const ORIGINAL_HARD_SAT_DATES = ["2026-11-27", "2026-12-11", "2026-12-18"] as const;
+
+export type HardSatBalance = "sat" | "even";
+
+export function originalHardSatDateFromKey(sourceKey: string | null | undefined): string | null {
+  const match = /^original-hard-(\d{4}-\d{2}-\d{2})-/.exec(sourceKey ?? "");
+  const dateKey = match?.[1];
+  if (!dateKey || !(ORIGINAL_HARD_SAT_DATES as readonly string[]).includes(dateKey)) return null;
+  return dateKey;
+}
+
+export function isOriginalHardSatItem(item: {
+  sourceKind?: string | null;
+  sourceKey?: string | null;
+}): boolean {
+  if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return true;
+  return originalHardSatDateFromKey(item.sourceKey) != null;
+}
+
+/** Nov 27, Dec 11, and Dec 18, and only for Taito. Earlier sessions stay on official items. */
+export function originalHardSatDateKeyForSession(
+  session: {
+    dateTime: Date;
+    timezone?: string | null;
+    email?: string | null;
+    clientUserId?: string | null;
+  } | null | undefined,
+): string | null {
+  if (!session) return null;
+  if ((session.email ?? "").trim().toLowerCase() !== TAITO_STUDENT_EMAIL) return null;
+  for (const dateKey of ORIGINAL_HARD_SAT_DATES) {
+    if (matchesTaitoScheduledDate(session, dateKey)) return dateKey;
+  }
+  return null;
+}
+
+/**
+ * Balanced slot counts for a set of `count` questions.
+ * `sat` follows the 54/44 digital mix. `even` is half math and half reading-and-writing.
+ */
+export function hardSatSectionQuotas(
+  count: number,
+  balance: HardSatBalance = "sat",
+): { rw: number; math: number } {
   if (!Number.isFinite(count) || count <= 0) return { rw: 0, math: 0 };
+  if (balance === "even") {
+    const math = Math.floor(count / 2);
+    return { rw: count - math, math };
+  }
   const rw = Math.round((count * SAT_RW_ITEM_SHARE) / SAT_SECTION_ITEM_TOTAL);
   return { rw, math: count - rw };
 }
@@ -257,9 +305,11 @@ export function hardSatSectionQuotas(count: number): { rw: number; math: number 
  * stem, choices, or math still do not render after notation repair.
  */
 export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacing | null {
+  const originalHard = isOriginalHardSatItem(item);
   if (!isOfficialModule2BankItem(item)) return null;
   if (isDeveloperSeededSatItem(item)) return null;
   if (
+    !originalHard &&
     !isOfficialSatExtract({
       examFamily: item.examFamily ?? "sat",
       sourceKind: item.sourceKind ?? "official_extract",
@@ -496,9 +546,11 @@ function dateKeyForSetting(
   if (explicitDateKey?.trim()) return explicitDateKey.trim();
   if (!session) return null;
   const settingEmail = setting.email?.trim().toLowerCase() ?? "";
-  if (settingEmail === TAITO_STUDENT_EMAIL) {
+    if (settingEmail === TAITO_STUDENT_EMAIL) {
     for (const scheduled of TAITO_FALL_2026_SESSIONS) {
-      if (matchesTaitoScheduledDate(session, scheduled.dateKey)) return scheduled.dateKey;
+      if (matchesTaitoScheduledDate({ ...session, email: setting.email }, scheduled.dateKey)) {
+        return scheduled.dateKey;
+      }
     }
   }
   return sessionLocalDateKey(session.dateTime, session.timezone || "UTC");
@@ -573,11 +625,12 @@ function byHardestFirst<T extends HardSatCandidate>(left: T, right: T): number {
 function takeBalancedHardestFirst<T extends HardSatCandidate>(
   items: readonly T[],
   limit: number,
+  balance: HardSatBalance = "sat",
 ): T[] {
   if (limit <= 0) return [];
   const rw = items.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
   const math = items.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
-  const quota = hardSatSectionQuotas(limit);
+  const quota = hardSatSectionQuotas(limit, balance);
   const selectedRw = rw.slice(0, quota.rw);
   const selectedMath = math.slice(0, quota.math);
   const rwShort = quota.rw - selectedRw.length;
@@ -598,6 +651,19 @@ function takeBalancedHardestFirst<T extends HardSatCandidate>(
  * numbers sort first. `seenPracticeTests` does not change the order:
  * repeats are excluded by source key.
  */
+function hardSatPoolEligible(item: HardSatCandidate, originalDateKey: string | null | undefined): boolean {
+  const original = isOriginalHardSatItem(item);
+  if (originalDateKey) {
+    return (
+      original &&
+      originalHardSatDateFromKey(item.sourceKey) === originalDateKey &&
+      isOfficialModule2BankItem(item)
+    );
+  }
+  if (original) return false;
+  return isOfficialModule2BankItem(item);
+}
+
 export function selectHardSatQuestions<T extends HardSatCandidate>(
   items: readonly T[],
   options: {
@@ -606,6 +672,8 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
     maxCount?: number;
     excludeSourceKeys?: ReadonlySet<string>;
     seenPracticeTests?: ReadonlySet<number>;
+    originalDateKey?: string | null;
+    balance?: HardSatBalance;
   } = {},
 ): T[] {
   const maxCount = options.maxCount ?? options.targetCount ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS;
@@ -617,11 +685,11 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
   const seenKeys = new Set<string>();
   for (const item of items) {
     if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
-    if (!isOfficialModule2BankItem(item)) continue;
+    if (!hardSatPoolEligible(item, options.originalDateKey)) continue;
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
-  return takeBalancedHardestFirst(unique, targetCount).slice(0, maxCount);
+  return takeBalancedHardestFirst(unique, targetCount, options.balance ?? "sat").slice(0, maxCount);
 }
 
 function shareScarceSection<T>(
@@ -675,9 +743,10 @@ function allocateHardSatSets<T extends HardSatCandidate>(
   math: readonly T[],
   preCount: number,
   inCount: number,
+  balance: HardSatBalance = "sat",
 ): { prework: T[]; inSession: T[] } {
-  const preQuota = hardSatSectionQuotas(preCount);
-  const inQuota = hardSatSectionQuotas(inCount);
+  const preQuota = hardSatSectionQuotas(preCount, balance);
+  const inQuota = hardSatSectionQuotas(inCount, balance);
   const rwShare = shareScarceSection(rw, preQuota.rw, inQuota.rw, preCount, inCount);
   const mathShare = shareScarceSection(math, preQuota.math, inQuota.math, preCount, inCount);
   const prework = [...rwShare.pre, ...mathShare.pre];
@@ -697,6 +766,9 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
     preworkMin?: number;
     preworkMax?: number;
     inSessionMax?: number;
+    /** When set, draw only original_hard items for this session date. */
+    originalDateKey?: string | null;
+    balance?: HardSatBalance;
   } = {},
 ): {
   prework: T[];
@@ -714,13 +786,13 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
   const seenKeys = new Set<string>();
   for (const item of items) {
     if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
-    if (!isOfficialModule2BankItem(item)) continue;
+    if (!hardSatPoolEligible(item, options.originalDateKey)) continue;
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
   const rw = unique.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
   const math = unique.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
-  const allocated = allocateHardSatSets(rw, math, preCount, inCount);
+  const allocated = allocateHardSatSets(rw, math, preCount, inCount, options.balance ?? "sat");
   return {
     prework: allocated.prework,
     inSession: allocated.inSession,
