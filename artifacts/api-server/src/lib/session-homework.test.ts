@@ -467,7 +467,11 @@ test("publishing or archiving session work does not point the plan at topic home
 
 test("boot seed does not republish intentionally archived SAT homework", () => {
   const source = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const prep = readFileSync(new URL("./session-curriculum-prep.ts", import.meta.url), "utf8");
+  const followUp = readFileSync(new URL("./michelle-xavier-session-follow-up.ts", import.meta.url), "utf8");
   assert.match(source, /shouldRepublishSeededHomework\(assignment\.status\)/);
+  assert.match(prep, /if \(!shouldRepublishSeededHomework\(assignment\?\.status\)\) return 0/);
+  assert.match(followUp, /if \(!shouldRepublishSeededHomework\(already\.assignment\.status\)\)/);
   assert.equal(shouldRepublishSeededHomework("archived"), false);
   assert.equal(shouldRepublishSeededHomework("published"), true);
   assert.equal(shouldRepublishSeededHomework("draft"), true);

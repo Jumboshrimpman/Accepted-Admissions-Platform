@@ -256,16 +256,24 @@ export const QUIZ_PAUSE_EXIT_LABEL = "Pause / Save & exit";
 export const RESPONSES_ONLY_WHILE_ACTIVE = "Responses can only be saved while active";
 
 /**
- * A 409 with this message means the attempt is paused on the server.
- * An in-place visibility pause should resume. Any other pause should show
- * the paused screen instead of dropping the save.
+ * A 409 with this message means the attempt is not active. The same text is
+ * used for paused, submitted, and expired attempts, so the caller must pass
+ * the status from a refetch. An in-place pause resumes only while the tab is
+ * visible; a hidden tab stays paused until the visibility handler returns.
  */
 export function inactiveAttemptSaveRecovery(input: {
   errorMessage: string | null | undefined;
   autoPaused: boolean;
-}): "resume" | "show-paused" | "none" {
+  visible: boolean;
+  attemptStatus?: string | null;
+}): "resume" | "stay-paused" | "show-paused" | "show-finished" | "none" {
   if (input.errorMessage !== RESPONSES_ONLY_WHILE_ACTIVE) return "none";
-  return input.autoPaused ? "resume" : "show-paused";
+  if (input.attemptStatus === "submitted" || input.attemptStatus === "expired") {
+    return "show-finished";
+  }
+  if (input.attemptStatus && input.attemptStatus !== "paused") return "none";
+  if (!input.autoPaused) return "show-paused";
+  return input.visible ? "resume" : "stay-paused";
 }
 
 /**

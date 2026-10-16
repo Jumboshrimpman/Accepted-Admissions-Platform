@@ -54,6 +54,13 @@ export function senderDomain(from: string): string | null {
   return match?.[1]?.toLowerCase() ?? null;
 }
 
+/** Resend rejects example.com. Admin alerts fall back to the verified domain. */
+export function verifiedFromAddress(candidate?: string): string {
+  const from = candidate?.trim() || transactionalFromAddress();
+  if (senderDomain(from) === "example.com") return VERIFIED_TRANSACTIONAL_FROM;
+  return from;
+}
+
 export function resendApiKey(): string | undefined {
   return process.env.RESEND_API_KEY?.trim() || undefined;
 }

@@ -60,6 +60,7 @@ import {
   isInSessionHomeworkCompletion,
   inactiveAttemptSaveRecovery,
   isQuestionFeedbackRevealed,
+  RESPONSES_ONLY_WHILE_ACTIVE,
   shouldAutoSubmitOnExpiry,
   shouldRequestAttemptResult,
   studentSeesFinishedResult,
@@ -633,20 +634,26 @@ export default function PortalAssignment() {
         })
       : null;
   const [attemptId, setAttemptId] = useState<string | null>(null);
-  const { data: attempt, isLoading: loadingAttempt } = useGetAttempt(attemptId ?? "", {
+  const {
+    data: attempt,
+    isLoading: loadingAttempt,
+    refetch: refetchAttempt,
+  } = useGetAttempt(attemptId ?? "", {
     query: {
       enabled: Boolean(attemptId),
       queryKey: getGetAttemptQueryKey(attemptId ?? ""),
       refetchInterval: 5000,
     },
   });
+  const [recoveredStatus, setRecoveredStatus] = useState<string | null>(null);
   const resultAttemptId = isAttemptUuid(attemptId) ? attemptId : "";
   // The second argument is the wrongAnswersOnly query. Hook options, including
   // enabled, are the third argument. Passing them second fetches /attempts/result
   // with the id missing whenever attemptId is still empty.
+  const attemptStatus = recoveredStatus ?? attempt?.status;
   const resultQuery = useGetAttemptResult(resultAttemptId, undefined, {
     query: {
-      enabled: shouldRequestAttemptResult(attemptId, attempt?.status),
+      enabled: shouldRequestAttemptResult(attemptId, attemptStatus),
       queryKey: getGetAttemptResultQueryKey(resultAttemptId || "pending"),
     },
   });
@@ -690,6 +697,8 @@ export default function PortalAssignment() {
   const [surfacePaused, setSurfacePaused] = useState(false);
   const resumeInPlaceRef = useRef<() => void>(() => {});
   const recoverInactiveSaveRef = useRef<(message: string | undefined) => void>(() => {});
+  const refetchAttemptRef = useRef(refetchAttempt);
+  refetchAttemptRef.current = refetchAttempt;
   const leaveRef = useRef({
     status: undefined as string | undefined,
     viewer: false,
@@ -795,10 +804,10 @@ export default function PortalAssignment() {
   }, [assignment?.deliveryPhase, attempt]);
 
   useEffect(() => {
-    if (collaborative || attempt?.status !== "active") return;
+    if (collaborative || autoPaused || attemptStatus !== "active") return;
     const interval = window.setInterval(() => setRemainingSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
     return () => window.clearInterval(interval);
-  }, [attempt?.status, collaborative]);
+  }, [attemptStatus, autoPaused, collaborative]);
 
   useEffect(() => {
     leaveRef.current.status = attempt?.status;
@@ -816,23 +825,38 @@ export default function PortalAssignment() {
   resumeMutateRef.current = resumeAttempt.mutate;
   queryClientRef.current = queryClient;
   recoverInactiveSaveRef.current = (message) => {
-    const action = inactiveAttemptSaveRecovery({
-      errorMessage: message,
-      autoPaused: autoPausedRef.current,
-    });
-    if (action === "resume") {
-      resumeInPlaceRef.current();
-      return;
-    }
-    if (action !== "show-paused") return;
-    leaveRef.current.status = "paused";
-    setSurfacePaused(true);
+    if (message !== RESPONSES_ONLY_WHILE_ACTIVE) return;
     const id = leaveRef.current.attemptId;
     if (!id) return;
-    queryClient.setQueryData(getGetAttemptQueryKey(id), (current: unknown) => {
-      if (!current || typeof current !== "object") return current;
-      return { ...(current as Record<string, unknown>), status: "paused" };
-    });
+    void (async () => {
+      await queryClientRef.current.invalidateQueries({ queryKey: getGetAttemptQueryKey(id) });
+      const refreshed = await refetchAttemptRef.current();
+      const status = refreshed.data?.status ?? null;
+      const action = inactiveAttemptSaveRecovery({
+        errorMessage: message,
+        autoPaused: autoPausedRef.current,
+        visible: document.visibilityState === "visible",
+        attemptStatus: status,
+      });
+      if (action === "resume") {
+        setRecoveredStatus(null);
+        resumeInPlaceRef.current();
+        return;
+      }
+      if (status === "paused" || status === "submitted" || status === "expired") {
+        setRecoveredStatus(status);
+      }
+      if (action === "show-paused") {
+        leaveRef.current.status = "paused";
+        setSurfacePaused(true);
+        return;
+      }
+      if (action === "stay-paused") {
+        leaveRef.current.status = "paused";
+        return;
+      }
+      setSurfacePaused(false);
+    })();
   };
 
   useEffect(() => {
@@ -894,6 +918,7 @@ export default function PortalAssignment() {
       const id = leaveRef.current.attemptId;
       if (!id) return;
       autoPausedRef.current = false;
+      setRecoveredStatus(null);
       setAutoPaused(false);
       resumeMutateRef.current(
         { attemptId: id },
@@ -966,11 +991,7 @@ export default function PortalAssignment() {
         onError: (error) => {
           expirySubmitted.current = false;
           const message = (error as { data?: { error?: string } } | null)?.data?.error;
-          const recovery = inactiveAttemptSaveRecovery({
-            errorMessage: message,
-            autoPaused: autoPausedRef.current,
-          });
-          if (recovery !== "none") {
+          if (message === RESPONSES_ONLY_WHILE_ACTIVE) {
             recoverInactiveSaveRef.current(message);
             return;
           }
@@ -1038,11 +1059,7 @@ export default function PortalAssignment() {
         },
         onError: (error) => {
           const message = (error as { data?: { error?: string } } | null)?.data?.error;
-          const recovery = inactiveAttemptSaveRecovery({
-            errorMessage: message,
-            autoPaused: autoPausedRef.current,
-          });
-          if (recovery !== "none") {
+          if (message === RESPONSES_ONLY_WHILE_ACTIVE) {
             recoverInactiveSaveRef.current(message);
             return;
           }
@@ -1241,9 +1258,9 @@ export default function PortalAssignment() {
       </div>
     );
   }
-  if (attempt.status === "submitted" || attempt.status === "expired") {
+  if (attemptStatus === "submitted" || attemptStatus === "expired") {
     const finished = studentSeesFinishedResult({
-      status: attempt.status,
+      status: attemptStatus,
       hasResult: Boolean(resultQuery.data),
       resultError: resultQuery.isError,
     });
@@ -1291,7 +1308,7 @@ export default function PortalAssignment() {
     }
   }
   const formatMath = quizShowsFormattedMath(assignment.title);
-  if ((attempt.status === "paused" || surfacePaused) && !autoPaused) {
+  if ((attemptStatus === "paused" || surfacePaused) && !autoPaused) {
     return (
       <div
         className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center space-y-5 px-4 text-center"
@@ -1322,6 +1339,7 @@ export default function PortalAssignment() {
                     onSuccess: (data) => {
                       leaveRef.current.status = data.status;
                       autoPausedRef.current = false;
+                      setRecoveredStatus(null);
                       setSurfacePaused(false);
                       queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data);
                     },

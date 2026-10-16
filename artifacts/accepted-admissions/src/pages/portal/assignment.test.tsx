@@ -84,6 +84,9 @@ const mocks = vi.hoisted(() => ({
     durationMinutes: number;
   },
   linkedSessionFetched: true,
+  refetchStatus: null as string | null,
+  invalidateQueries: vi.fn(async () => undefined),
+  setQueryData: vi.fn(),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -122,6 +125,12 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetAttempt: () => ({
     data: mocks.attempt,
     isLoading: false,
+    refetch: async () => ({
+      data: {
+        ...mocks.attempt,
+        status: mocks.refetchStatus ?? mocks.attempt.status,
+      },
+    }),
   }),
   useGetAttemptResult: () => ({
     data: mocks.result,
@@ -136,7 +145,10 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn(), setQueryData: vi.fn() }),
+  useQueryClient: () => ({
+    invalidateQueries: mocks.invalidateQueries,
+    setQueryData: mocks.setQueryData,
+  }),
 }));
 
 vi.mock("wouter", () => ({
@@ -185,6 +197,9 @@ afterEach(() => {
   mocks.timezone = "Asia/Tokyo";
   mocks.linkedSession = null;
   mocks.linkedSessionFetched = true;
+  mocks.refetchStatus = null;
+  mocks.invalidateQueries.mockReset();
+  mocks.setQueryData.mockReset();
   mocks.questions[0]!.stimulus = null;
   mocks.questions[0]!.prompt = "Which transition is best?";
   mocks.questions[0]!.questionType = "multiple_choice";
@@ -1803,39 +1818,115 @@ describe("student attempt UI", () => {
     expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
   });
 
-  test("a 409 while saving shows the paused screen instead of failing silently", () => {
+  test("a 409 while saving shows the paused screen instead of failing silently", async () => {
+    mocks.refetchStatus = "paused";
     render(<PortalAssignment />);
     fireEvent.click(screen.getByRole("button", { name: /However/i }));
     const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
       | ((error: { data: { error: string } }) => void)
       | undefined;
-    act(() => {
+    await act(async () => {
       onError?.({ data: { error: "Responses can only be saved while active" } });
     });
     expect(screen.getByTestId("quiz-paused")).toBeTruthy();
     expect(screen.queryByText("Could not check this answer.")).toBeNull();
     expect(resumeMutate).not.toHaveBeenCalled();
+    expect(mocks.invalidateQueries).toHaveBeenCalled();
+    expect(mocks.setQueryData).not.toHaveBeenCalled();
   });
 
-  test("a 409 after an in-place pause resumes instead of failing silently", () => {
+  test("a 409 while the tab is hidden stays paused, then resumes when the tab is visible", async () => {
+    mocks.refetchStatus = "paused";
     render(<PortalAssignment />);
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       get: () => "hidden",
     });
     fireEvent(document, new Event("visibilitychange"));
+    expect(pauseMutate).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: /However/i }));
     const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
       | ((error: { data: { error: string } }) => void)
       | undefined;
-    act(() => {
+    await act(async () => {
       onError?.({ data: { error: "Responses can only be saved while active" } });
     });
+    expect(resumeMutate).not.toHaveBeenCalled();
+    expect(mocks.setQueryData).not.toHaveBeenCalled();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    fireEvent(document, new Event("visibilitychange"));
     expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
-    expect(screen.queryByTestId("quiz-paused")).toBeNull();
   });
 
-  test("submitting while the attempt is paused shows the paused screen", () => {
+  test("a 409 for a submitted or expired attempt shows that result instead of a paused screen", async () => {
+    mocks.refetchStatus = "submitted";
+    mocks.result = {
+      attemptId: "attempt-1",
+      assignmentId: "asg-1",
+      assignmentTitle: "Practice quiz",
+      studentUserId: "stu",
+      studentName: "Taito",
+      sessionId: "session-1",
+      sessionDateTime: null,
+      status: "submitted",
+      score: 50,
+      correctCount: 1,
+      totalCount: 2,
+      activeSeconds: 30,
+      pausedSeconds: 0,
+      breakdown: [],
+      items: [],
+      analysis: {
+        source: "deterministic",
+        label: "Adaptive skill analysis",
+        provider: null,
+        strengths: [],
+        weaknesses: [],
+        mistakePatterns: [],
+        nextFocus: [],
+        feedback: "Submitted result.",
+      },
+      studentFeedback: "Submitted result.",
+      homeworkKind: "routine",
+      scoreReporting: "none",
+      estimatedSatScore: null,
+    };
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    await act(async () => {
+      onError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(screen.queryByTestId("quiz-paused")).toBeNull();
+    expect(resumeMutate).not.toHaveBeenCalled();
+    expect(screen.getByText("Submitted")).toBeTruthy();
+    expect(mocks.setQueryData).not.toHaveBeenCalled();
+
+    cleanup();
+    resumeMutate.mockClear();
+    mocks.setQueryData.mockClear();
+    mocks.refetchStatus = "expired";
+    mocks.result = { ...mocks.result, status: "expired" };
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const expiredError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    await act(async () => {
+      expiredError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(screen.queryByTestId("quiz-paused")).toBeNull();
+    expect(resumeMutate).not.toHaveBeenCalled();
+    expect(screen.getByText("Time expired")).toBeTruthy();
+  });
+
+  test("submitting while the attempt is paused shows the paused screen", async () => {
+    mocks.refetchStatus = "paused";
     render(<PortalAssignment />);
     fireEvent.click(screen.getByRole("button", { name: /However/i }));
     fireEvent.click(screen.getByRole("button", { name: /^Next$/i }));
@@ -1843,7 +1934,7 @@ describe("student attempt UI", () => {
     const onError = submitMutate.mock.calls.at(-1)?.[1]?.onError as
       | ((error: { data: { error: string } }) => void)
       | undefined;
-    act(() => {
+    await act(async () => {
       onError?.({ data: { error: "Responses can only be saved while active" } });
     });
     expect(screen.getByTestId("quiz-paused")).toBeTruthy();

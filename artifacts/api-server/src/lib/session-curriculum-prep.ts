@@ -32,6 +32,7 @@ import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
   MAX_IN_SESSION_HOMEWORK_QUESTIONS,
   selectInSessionHomeworkQuestionIds,
+  shouldRepublishSeededHomework,
 } from "./session-homework";
 
 function subjectFamily(subject: string): string {
@@ -84,6 +85,12 @@ async function attachQuestions(
   questionIds: string[],
 ): Promise<number> {
   if (questionIds.length === 0) return 0;
+  const [assignment] = await db
+    .select({ status: assignmentsTable.status })
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, assignmentId))
+    .limit(1);
+  if (!shouldRepublishSeededHomework(assignment?.status)) return 0;
   const existing = await db
     .select({ questionId: assignmentQuestionsTable.questionId })
     .from(assignmentQuestionsTable)

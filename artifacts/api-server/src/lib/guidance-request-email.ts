@@ -1,10 +1,8 @@
 import {
   ADMIN_INBOX_EMAIL,
   isAdminInboxEmail,
-  senderDomain,
   sendTransactionalEmail,
-  transactionalFromAddress,
-  VERIFIED_TRANSACTIONAL_FROM,
+  verifiedFromAddress,
   type TransactionalEmail,
   type TransactionalEmailResult,
 } from "./transactional-email.ts";
@@ -42,9 +40,8 @@ export function guidanceRequestAdminInbox(candidate = ADMIN_INBOX_EMAIL): string
  * RESEND_FROM_EMAIL falls back to the verified acceptedadmissions.org sender.
  * This does not add a message to the person who submitted the form.
  */
-export function guidanceRequestFromAddress(candidate = transactionalFromAddress()): string {
-  if (senderDomain(candidate) === "example.com") return VERIFIED_TRANSACTIONAL_FROM;
-  return candidate;
+export function guidanceRequestFromAddress(candidate?: string): string {
+  return verifiedFromAddress(candidate);
 }
 
 export function guidanceRequestEmailSubject(fields: GuidanceRequestEmailFields): string {
