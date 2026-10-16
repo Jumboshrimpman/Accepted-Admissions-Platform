@@ -52,7 +52,7 @@ export default function TermsOfService() {
 
       <LegalSection id="bookings-and-payments" title="Bookings and payments">
         <p>
-          Some sessions are booked with prepaid hourly credits purchased through Stripe. You buy credits in advance, and a credit is used when a session hour is booked. The price is shown before you pay. Accepted Admissions does not store card numbers. Stripe processes the payment. Unused credits are refundable only before that client’s first tutoring session, and they are non-refundable after it, including credits bought later. Unused credits carry over when a session is rescheduled. Rescheduling or cancellation needs at least 24 hours’ notice through the portal.
+          Some sessions are booked with prepaid hourly credits purchased through Stripe. You buy credits in advance, and a credit is used when a session hour is booked. The price is shown before you pay. Accepted Admissions does not store card numbers. Stripe processes the payment. Refunds of unused prepaid credits are available only to new clients, and only if requested before that client’s first tutoring session, using the refund request form. There are no refunds after the first session, including later credit purchases. Unused credits carry over when a session is rescheduled. Rescheduling is subject to tutor availability. Cancelling at least 24 hours in advance through the portal keeps the session credit. A cancellation with less than 24 hours’ notice, or a no-show, uses the session credit.
         </p>
         <p>
           Other engagements may be arranged outside self-serve checkout. Those arrangements are confirmed separately. Visiting the public site does not by itself create a booking or a charge.
@@ -61,14 +61,14 @@ export default function TermsOfService() {
 
       <LegalSection id="cancellation-and-rescheduling" title="Cancellation, rescheduling, and refunds">
         <p>
-          Before a client’s first tutoring session takes place, they may request a refund of unused prepaid credits by emailing <LegalContactLink />.
+          Refunds are available only to new clients, and only if requested before the client’s first tutoring session, using the refund request form.
         </p>
         <p>
           Once that client’s first tutoring session has taken place, all purchases are non-refundable. That includes the original purchase and any later credit purchases.
         </p>
-        <p>Unused credits remain available for rescheduled sessions.</p>
+        <p>Unused credits remain available for rescheduled sessions. Rescheduling is subject to tutor availability.</p>
         <p>
-          Please reschedule or cancel at least 24 hours in advance through the portal. When you do, the credit is kept for a future session. A late cancellation or a no-show may forfeit that session credit, at Accepted Admissions’ discretion.
+          Please cancel at least 24 hours in advance through the portal. When you do, the credit is kept for a future session. A cancellation with less than 24 hours’ notice, or a no-show, uses the session credit.
         </p>
         <p>Nothing in this policy limits any rights consumers have under applicable law.</p>
       </LegalSection>

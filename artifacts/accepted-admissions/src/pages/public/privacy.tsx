@@ -99,10 +99,10 @@ export default function PrivacyPolicy() {
 
       <LegalSection id="how-we-share-information" title="How we share information">
         <p>
-          We share information only with service providers needed to run the service, such as hosting, payments, authentication, calendar, email, and AI service providers. Those providers include Stripe for payments, Clerk for sign-in, Google when a tutor connects a calendar, our email and hosting providers, and OpenAI when a tutor or administrator asks the platform to draft practice questions. They may process information only to perform those services for us.
+          We share information only with service providers needed to run the service, such as hosting, payments, authentication, calendar, email, and AI service providers. Those providers include Stripe for payments, Clerk for sign-in, Google when a tutor connects a calendar, our email and hosting providers, and OpenAI when practice questions are drafted. They may process information only to perform those services for us.
         </p>
         <p>
-          Question generation does not send the student’s name, email, account, or scores. The request sent to the AI service provider is the subject, skill, difficulty, number of questions, and any source text a tutor or administrator chooses to include. Analogous practice items are drafted from the skill and difficulty of an existing question, not from a student’s identity.
+          AI question generation may run when a tutor, administrator, or student requests practice material. Question generation does not send the student’s name, email, account, or scores. The request sent to the AI service provider is the subject, skill, difficulty, number of questions, and any source text included with that request. Analogous practice items are drafted from the skill and difficulty of an existing question, not from a student’s identity.
         </p>
         <p>
           We may also share information if the law requires it, or when it is needed to protect the rights, safety, and integrity of our clients, tutors, and the service.

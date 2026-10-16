@@ -128,9 +128,27 @@ test("vercel.json redirects www and apex auth paths to the app host only", () =>
   };
 
   const redirects = vercel.redirects ?? [];
-  assert.ok(redirects.length > 0, "expected host-conditioned auth redirects");
+  const legalSlashRedirects = redirects.filter(
+    (redirect) => redirect.source === "/privacy/" || redirect.source === "/terms/",
+  );
+  assert.deepEqual(
+    legalSlashRedirects.map((redirect) => ({
+      source: redirect.source,
+      destination: redirect.destination,
+      permanent: redirect.permanent,
+    })),
+    [
+      { source: "/privacy/", destination: "/privacy", permanent: true },
+      { source: "/terms/", destination: "/terms", permanent: true },
+    ],
+  );
 
-  for (const redirect of redirects) {
+  const authRedirects = redirects.filter(
+    (redirect) => redirect.source !== "/privacy/" && redirect.source !== "/terms/",
+  );
+  assert.ok(authRedirects.length > 0, "expected host-conditioned auth redirects");
+
+  for (const redirect of authRedirects) {
     const hosts = (redirect.has ?? [])
       .filter((rule) => rule.type === "host")
       .map((rule) => rule.value ?? "");
@@ -150,10 +168,11 @@ test("vercel.json redirects www and apex auth paths to the app host only", () =>
   }
 
   const expected = vercelMarketingAuthRedirects();
-  assert.equal(redirects.length, expected.length);
+  assert.equal(authRedirects.length, expected.length);
+  assert.equal(redirects.length, authRedirects.length + legalSlashRedirects.length);
   for (const rule of expected) {
     assert.ok(
-      redirects.some(
+      authRedirects.some(
         (redirect) =>
           redirect.source === rule.source &&
           redirect.destination === rule.destination &&
@@ -166,7 +185,7 @@ test("vercel.json redirects www and apex auth paths to the app host only", () =>
   for (const prefix of APP_HOST_AUTH_PATH_PREFIXES) {
     const name = prefix.slice(1);
     assert.ok(
-      redirects.some((redirect) => redirect.source.includes(name)),
+      authRedirects.some((redirect) => redirect.source.includes(name)),
       `vercel redirects should cover ${prefix}`,
     );
   }

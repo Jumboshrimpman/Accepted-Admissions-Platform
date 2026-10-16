@@ -33,10 +33,14 @@ describe("Terms of Service", () => {
     expect(screen.getByText(/provided by Clerk/)).toBeTruthy();
     const bookings = screen.getByRole("heading", { name: "Bookings and payments" }).closest("section");
     expect(bookings?.textContent).toMatch(/prepaid hourly credits purchased through Stripe/);
-    expect(bookings?.textContent).toMatch(/refundable only before that client’s first tutoring session/);
-    expect(bookings?.textContent).toMatch(/non-refundable after it, including credits bought later/);
+    expect(bookings?.textContent).toMatch(/available only to new clients/);
+    expect(bookings?.textContent).toMatch(/before that client’s first tutoring session, using the refund request form/);
+    expect(bookings?.textContent).toMatch(/no refunds after the first session, including later credit purchases/);
     expect(bookings?.textContent).toMatch(/Unused credits carry over when a session is rescheduled/);
-    expect(bookings?.textContent).toMatch(/at least 24 hours’ notice through the portal/);
+    expect(bookings?.textContent).toMatch(/Rescheduling is subject to tutor availability/);
+    expect(bookings?.textContent).toMatch(/Cancelling at least 24 hours in advance through the portal keeps the session credit/);
+    expect(bookings?.textContent).toMatch(/A cancellation with less than 24 hours’ notice, or a no-show, uses the session credit/);
+    expect(bookings?.textContent).not.toMatch(/Rescheduling or cancellation needs at least 24 hours/);
     expect(screen.getByText(/does not store card numbers/i)).toBeTruthy();
     expect(screen.getByText(/does not guarantee admission/i)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Acceptable use" })).toBeTruthy();
@@ -49,13 +53,19 @@ describe("Terms of Service", () => {
     expect(page.textContent).not.toMatch(/arbitration|class action|class-action/i);
 
     const cancellation = screen.getByRole("heading", { name: "Cancellation, rescheduling, and refunds" }).closest("section");
-    expect(cancellation?.textContent).toMatch(/refund of unused prepaid credits/);
+    expect(cancellation?.textContent).toMatch(/only to new clients/);
+    expect(cancellation?.textContent).toMatch(/using the refund request form/);
     expect(cancellation?.textContent).toMatch(/first tutoring session has taken place/);
     expect(cancellation?.textContent).toMatch(/all purchases are non-refundable/);
     expect(cancellation?.textContent).toMatch(/later credit purchases/);
     expect(cancellation?.textContent).toMatch(/Unused credits remain available for rescheduled sessions/);
-    expect(cancellation?.textContent).toMatch(/at least 24 hours in advance through the portal/);
-    expect(cancellation?.textContent).toMatch(/forfeit that session credit/);
+    expect(cancellation?.textContent).toMatch(/Rescheduling is subject to tutor availability/);
+    expect(cancellation?.textContent).toMatch(/cancel at least 24 hours in advance through the portal/);
+    expect(cancellation?.textContent).toMatch(
+      /A cancellation with less than 24 hours’ notice, or a no-show, uses the session credit/,
+    );
+    expect(cancellation?.textContent).not.toMatch(/discretion/);
+    expect(cancellation?.textContent).not.toMatch(/reschedule or cancel at least 24 hours/);
     expect(cancellation?.textContent).toMatch(/rights consumers have under applicable law/);
 
     const governingLaw = screen.getByRole("heading", { name: "Governing law" }).closest("section");

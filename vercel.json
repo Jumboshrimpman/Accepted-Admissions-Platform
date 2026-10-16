@@ -4,7 +4,6 @@
   "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/accepted-admissions run build",
   "outputDirectory": "artifacts/accepted-admissions/dist/public",
-  "trailingSlash": false,
   "headers": [
     {
       "source": "/api/:path*",
@@ -17,6 +16,16 @@
     }
   ],
   "redirects": [
+    {
+      "source": "/privacy/",
+      "destination": "/privacy",
+      "permanent": true
+    },
+    {
+      "source": "/terms/",
+      "destination": "/terms",
+      "permanent": true
+    },
     {
       "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)",
       "has": [

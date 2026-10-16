@@ -45,6 +45,7 @@ describe("Privacy Policy", () => {
     expect(screen.getByText(/third-party meeting or transcription provider/)).toBeTruthy();
     expect(screen.getByText(/used solely for that client/i)).toBeTruthy();
     expect(screen.getByText(/AI service providers/)).toBeTruthy();
+    expect(screen.getByText(/AI question generation may run when a tutor, administrator, or student requests practice material/)).toBeTruthy();
     expect(screen.getByText(/does not send the student’s name, email, account, or scores/)).toBeTruthy();
     expect(screen.getByText(/We never sell personal information/)).toBeTruthy();
     expect(screen.getByText(/parent or guardian should create or authorize the account/i)).toBeTruthy();

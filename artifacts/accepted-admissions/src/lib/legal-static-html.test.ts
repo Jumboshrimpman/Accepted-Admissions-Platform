@@ -72,14 +72,24 @@ test("vercel serves privacy and terms before the homepage fallback", () => {
   assert.equal(rewrites[terms]?.destination, "/terms.html");
 });
 
-test("vercel redirects trailing-slash paths, including privacy and terms, to the slashless page", () => {
+test("vercel redirects only privacy and terms trailing slashes", () => {
   const vercelPath = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../../vercel.json",
   );
   const vercel = JSON.parse(readFileSync(vercelPath, "utf8")) as {
     trailingSlash?: boolean;
+    redirects?: Array<{ source?: string; destination?: string; permanent?: boolean }>;
   };
 
-  assert.equal(vercel.trailingSlash, false);
+  assert.equal(vercel.trailingSlash, undefined);
+  const redirects = vercel.redirects ?? [];
+  assert.equal(redirects.find((rule) => rule.source === "/privacy/")?.destination, "/privacy");
+  assert.equal(redirects.find((rule) => rule.source === "/privacy/")?.permanent, true);
+  assert.equal(redirects.find((rule) => rule.source === "/terms/")?.destination, "/terms");
+  assert.equal(redirects.find((rule) => rule.source === "/terms/")?.permanent, true);
+  assert.equal(
+    redirects.filter((rule) => rule.source?.endsWith("/") && rule.destination?.startsWith("/")).length,
+    2,
+  );
 });
