@@ -28,6 +28,7 @@ import {
 } from "@/lib/form-submissions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { QuestionReportsQueue } from "./question-reports-queue";
+import { ClientIntakeAdmin } from "@/components/client-intake-admin";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import {
@@ -222,6 +223,11 @@ export default function AdminDashboard() {
       )}
 
       <QuestionReportsQueue />
+      <ClientIntakeAdmin
+        students={(overview?.users ?? [])
+          .filter((user) => user.role === "student")
+          .map((user) => ({ id: user.id, displayName: user.displayName }))}
+      />
 
       {notifications.length > 0 && (
         <Card data-testid="card-admin-notifications">
