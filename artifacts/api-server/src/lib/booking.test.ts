@@ -242,6 +242,9 @@ test("event payload contains only the approved session details", () => {
   assert.equal(event.summary, "Michelle’s SAT Session with Xavier");
   assert.equal(event.start.dateTime, "2026-08-31T13:00:00.000Z");
   assert.equal(event.location, "https://meet.google.com/rih-iayt-okb");
-  assert.deepEqual(event.attendees, [{ email: "michelle@example.com" }]);
+  assert.deepEqual(event.attendees, [
+    { email: "michelle@example.com" },
+    { email: "admin@acceptedadmissions.org" },
+  ]);
   assert.equal("privateEventDetails" in event, false);
 });

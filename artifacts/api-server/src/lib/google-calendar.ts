@@ -356,6 +356,7 @@ export type GoogleBusyWindow = {
 export type GoogleCalendarEvent = {
   id?: string;
   htmlLink?: string;
+  attendees?: { email?: string }[];
 };
 
 function signingKey(): Buffer {
@@ -1482,5 +1483,34 @@ export async function updateGoogleEvent(
     accessToken,
     googleCalendarEventWritePath(calendarId, eventId, sendUpdates),
     { method: "PATCH", body: JSON.stringify(event) },
+  );
+}
+
+export async function getGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+): Promise<GoogleCalendarEvent> {
+  return googleCalendarRequest<GoogleCalendarEvent>(
+    accessToken,
+    `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    { method: "GET" },
+  );
+}
+
+/** A write whose only purpose is changing attendees. Always silent. */
+export async function patchGoogleEventAttendees(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  attendees: readonly { email: string }[],
+  sendUpdates: "none",
+): Promise<GoogleCalendarEvent> {
+  return updateGoogleEvent(
+    accessToken,
+    calendarId,
+    eventId,
+    { attendees: attendees.map((attendee) => ({ email: attendee.email })) },
+    sendUpdates,
   );
 }
