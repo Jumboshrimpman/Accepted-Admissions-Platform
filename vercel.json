@@ -4,6 +4,7 @@
   "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/accepted-admissions run build",
   "outputDirectory": "artifacts/accepted-admissions/dist/public",
+  "trailingSlash": false,
   "headers": [
     {
       "source": "/api/:path*",

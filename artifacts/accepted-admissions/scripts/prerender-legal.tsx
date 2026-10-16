@@ -41,7 +41,17 @@ const pages = [
     title: PRIVACY_TITLE,
     description: PRIVACY_DESCRIPTION,
     markup: renderPage("/privacy", createElement(PrivacyPolicy)),
-    required: [GOOGLE_LIMITED_USE_SENTENCE, LEGAL_EFFECTIVE_DATE, "Google user data"],
+    required: [
+      GOOGLE_LIMITED_USE_SENTENCE,
+      LEGAL_EFFECTIVE_DATE,
+      "Google user data",
+      "openid, email, calendar.freebusy, and calendar.events",
+      "third-party meeting or transcription provider",
+      "AI service providers",
+      "does not send the student’s name, email, account, or scores",
+      "should create or authorize the account",
+    ],
+    forbidden: [] as readonly string[],
   },
   {
     path: "/terms",
@@ -49,7 +59,16 @@ const pages = [
     title: TERMS_TITLE,
     description: TERMS_DESCRIPTION,
     markup: renderPage("/terms", createElement(TermsOfService)),
-    required: [LEGAL_EFFECTIVE_DATE, "Placeholder — owner to complete", "prepaid hourly credits"],
+    required: [
+      LEGAL_EFFECTIVE_DATE,
+      "prepaid hourly credits",
+      "refundable only before that client’s first tutoring session",
+      "all purchases are non-refundable",
+      "at least 24 hours in advance",
+      "laws of the State of New Jersey",
+      "30 days after written notice",
+    ],
+    forbidden: ["Placeholder — owner to complete", "arbitration", "class action", "class-action"],
   },
 ] as const;
 
@@ -59,6 +78,11 @@ for (const page of pages) {
   for (const snippet of page.required) {
     if (!text.includes(snippet)) {
       throw new Error(`${page.file} is missing required text: ${snippet}`);
+    }
+  }
+  for (const snippet of page.forbidden) {
+    if (text.toLowerCase().includes(snippet.toLowerCase())) {
+      throw new Error(`${page.file} still contains forbidden text: ${snippet}`);
     }
   }
   if (html.includes("Your next step, made clear") || text.includes("Your next step, made clear")) {

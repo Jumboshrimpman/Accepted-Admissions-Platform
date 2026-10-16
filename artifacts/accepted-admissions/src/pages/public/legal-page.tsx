@@ -81,28 +81,6 @@ export function LegalSection({
   );
 }
 
-export function LegalPlaceholder({
-  id,
-  title,
-  testId,
-  children,
-}: {
-  id: string;
-  title: string;
-  testId: string;
-  children: ReactNode;
-}) {
-  return (
-    <section id={id} className="scroll-mt-28" data-testid={testId}>
-      <div className="rounded-lg border border-dashed border-accent bg-accent/10 p-5">
-        <p className="font-metadata text-accent">Placeholder — owner to complete</p>
-        <h2 className="font-display mt-3 text-2xl tracking-tight text-foreground sm:text-3xl">{title}</h2>
-        <div className="mt-3 space-y-3 leading-relaxed text-muted-foreground">{children}</div>
-      </div>
-    </section>
-  );
-}
-
 export function LegalList({ children }: { children: ReactNode }) {
   return <ul className="list-disc space-y-2 pl-5">{children}</ul>;
 }

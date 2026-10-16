@@ -71,3 +71,15 @@ test("vercel serves privacy and terms before the homepage fallback", () => {
   assert.equal(rewrites[privacy]?.destination, "/privacy.html");
   assert.equal(rewrites[terms]?.destination, "/terms.html");
 });
+
+test("vercel redirects trailing-slash paths, including privacy and terms, to the slashless page", () => {
+  const vercelPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../../vercel.json",
+  );
+  const vercel = JSON.parse(readFileSync(vercelPath, "utf8")) as {
+    trailingSlash?: boolean;
+  };
+
+  assert.equal(vercel.trailingSlash, false);
+});

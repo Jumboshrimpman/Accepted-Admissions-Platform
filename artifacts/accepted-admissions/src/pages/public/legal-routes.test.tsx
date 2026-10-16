@@ -66,12 +66,28 @@ describe("public legal routes", () => {
     expect(screen.queryByTestId("status-not-found")).toBeNull();
   });
 
+  test("trailing-slash /privacy/ serves the same policy", () => {
+    renderAt("/privacy/", false);
+
+    expect(screen.getByTestId("privacy-policy-page")).toBeTruthy();
+    expect(screen.queryByTestId("status-not-found")).toBeNull();
+    expect(document.title).toBe("Privacy Policy | Accepted Admissions");
+  });
+
   test("signed-out /terms is the terms, not the homepage", () => {
     renderAt("/terms", false);
 
     expect(screen.getByTestId("terms-of-service-page")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: "Terms of Service" })).toBeTruthy();
     expect(screen.queryByTestId("link-home-guidance")).toBeNull();
+    expect(screen.queryByTestId("status-not-found")).toBeNull();
+    expect(document.title).toBe("Terms of Service | Accepted Admissions");
+  });
+
+  test("trailing-slash /terms/ serves the same terms", () => {
+    renderAt("/terms/", false);
+
+    expect(screen.getByTestId("terms-of-service-page")).toBeTruthy();
     expect(screen.queryByTestId("status-not-found")).toBeNull();
     expect(document.title).toBe("Terms of Service | Accepted Admissions");
   });

@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe("Terms of Service", () => {
-  it("covers the service terms and leaves cancellation and governing law as placeholders", () => {
+  it("covers refunds, the 24-hour reschedule rule, and New Jersey governing law", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("offline", { status: 503 })),
@@ -31,7 +31,12 @@ describe("Terms of Service", () => {
     expect(screen.getByText(/Effective October 16, 2026/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Services" })).toBeTruthy();
     expect(screen.getByText(/provided by Clerk/)).toBeTruthy();
-    expect(screen.getByText(/prepaid hourly credits purchased through Stripe/)).toBeTruthy();
+    const bookings = screen.getByRole("heading", { name: "Bookings and payments" }).closest("section");
+    expect(bookings?.textContent).toMatch(/prepaid hourly credits purchased through Stripe/);
+    expect(bookings?.textContent).toMatch(/refundable only before that client’s first tutoring session/);
+    expect(bookings?.textContent).toMatch(/non-refundable after it, including credits bought later/);
+    expect(bookings?.textContent).toMatch(/Unused credits carry over when a session is rescheduled/);
+    expect(bookings?.textContent).toMatch(/at least 24 hours’ notice through the portal/);
     expect(screen.getByText(/does not store card numbers/i)).toBeTruthy();
     expect(screen.getByText(/does not guarantee admission/i)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Acceptable use" })).toBeTruthy();
@@ -39,15 +44,30 @@ describe("Terms of Service", () => {
     expect(screen.getByRole("heading", { name: "Limitation of liability" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Changes to these terms" })).toBeTruthy();
 
-    const cancellation = screen.getByTestId("terms-cancellation-placeholder");
-    expect(cancellation.textContent).toMatch(/Placeholder — owner to complete/);
-    expect(cancellation.textContent).toMatch(/not a promise that a credit will be returned/);
-    expect(cancellation.textContent).not.toMatch(/Virginia|24 hours|\$\d/);
+    const page = screen.getByTestId("terms-of-service-page");
+    expect(page.textContent).not.toMatch(/Placeholder — owner to complete/);
+    expect(page.textContent).not.toMatch(/arbitration|class action|class-action/i);
 
-    const governingLaw = screen.getByTestId("terms-governing-law-placeholder");
-    expect(governingLaw.textContent).toMatch(/Placeholder — owner to complete/);
-    expect(governingLaw.textContent).toMatch(/do not name a governing law/);
-    expect(governingLaw.textContent).not.toMatch(/Virginia|Delaware|California|New York/);
+    const cancellation = screen.getByRole("heading", { name: "Cancellation, rescheduling, and refunds" }).closest("section");
+    expect(cancellation?.textContent).toMatch(/refund of unused prepaid credits/);
+    expect(cancellation?.textContent).toMatch(/first tutoring session has taken place/);
+    expect(cancellation?.textContent).toMatch(/all purchases are non-refundable/);
+    expect(cancellation?.textContent).toMatch(/later credit purchases/);
+    expect(cancellation?.textContent).toMatch(/Unused credits remain available for rescheduled sessions/);
+    expect(cancellation?.textContent).toMatch(/at least 24 hours in advance through the portal/);
+    expect(cancellation?.textContent).toMatch(/forfeit that session credit/);
+    expect(cancellation?.textContent).toMatch(/rights consumers have under applicable law/);
+
+    const governingLaw = screen.getByRole("heading", { name: "Governing law" }).closest("section");
+    expect(governingLaw?.textContent).toMatch(/laws of the State of New Jersey/);
+    expect(governingLaw?.textContent).toMatch(/without regard to conflict-of-law principles/);
+    expect(governingLaw?.textContent).toMatch(/state and federal courts located in New Jersey/);
+    expect(governingLaw?.textContent).toMatch(/personal jurisdiction/);
+    expect(governingLaw?.textContent).toMatch(/30 days after written notice/);
+
+    expect(screen.getByRole("heading", { name: "Severability" }).closest("section")?.textContent).toMatch(
+      /the rest of the terms still apply/,
+    );
 
     expect(screen.getByTestId("link-terms-contact").getAttribute("href")).toBe(
       "mailto:admin@acceptedadmissions.org",

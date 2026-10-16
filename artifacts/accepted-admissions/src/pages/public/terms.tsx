@@ -3,7 +3,6 @@ import {
   LegalContactLink,
   LegalList,
   LegalPage,
-  LegalPlaceholder,
   LegalSection,
   LegalTextLink,
 } from "@/pages/public/legal-page";
@@ -25,12 +24,13 @@ export default function TermsOfService() {
         { href: "#services", label: "Services" },
         { href: "#accounts", label: "Accounts" },
         { href: "#bookings-and-payments", label: "Bookings and payments" },
-        { href: "#cancellation-and-rescheduling", label: "Cancellation" },
+        { href: "#cancellation-and-rescheduling", label: "Cancellation and refunds" },
         { href: "#no-guarantee", label: "No guarantee of outcomes" },
         { href: "#acceptable-use", label: "Acceptable use" },
         { href: "#intellectual-property", label: "Intellectual property" },
         { href: "#limitation-of-liability", label: "Limitation of liability" },
         { href: "#governing-law", label: "Governing law" },
+        { href: "#severability", label: "Severability" },
         { href: "#changes", label: "Changes" },
         { href: "#contact", label: "Contact" },
       ]}
@@ -52,25 +52,26 @@ export default function TermsOfService() {
 
       <LegalSection id="bookings-and-payments" title="Bookings and payments">
         <p>
-          Some sessions are booked with prepaid hourly credits purchased through Stripe. You buy credits in advance, and a credit is used when a session hour is booked. The price is shown before you pay. Accepted Admissions does not store card numbers. Stripe processes the payment.
+          Some sessions are booked with prepaid hourly credits purchased through Stripe. You buy credits in advance, and a credit is used when a session hour is booked. The price is shown before you pay. Accepted Admissions does not store card numbers. Stripe processes the payment. Unused credits are refundable only before that client’s first tutoring session, and they are non-refundable after it, including credits bought later. Unused credits carry over when a session is rescheduled. Rescheduling or cancellation needs at least 24 hours’ notice through the portal.
         </p>
         <p>
           Other engagements may be arranged outside self-serve checkout. Those arrangements are confirmed separately. Visiting the public site does not by itself create a booking or a charge.
         </p>
       </LegalSection>
 
-      <LegalPlaceholder
-        id="cancellation-and-rescheduling"
-        testId="terms-cancellation-placeholder"
-        title="Cancellation and rescheduling"
-      >
+      <LegalSection id="cancellation-and-rescheduling" title="Cancellation, rescheduling, and refunds">
         <p>
-          Contact <LegalContactLink /> before a session if you need to cancel or reschedule it.
+          Before a client’s first tutoring session takes place, they may request a refund of unused prepaid credits by emailing <LegalContactLink />.
         </p>
         <p>
-          This section is a placeholder. The notice period, whether a prepaid credit is restored, and whether a payment is refunded are not set in these terms yet. It is not a promise that a credit will be returned or that a charge will be refunded. The owner will replace this section with the final cancellation and rescheduling rules.
+          Once that client’s first tutoring session has taken place, all purchases are non-refundable. That includes the original purchase and any later credit purchases.
         </p>
-      </LegalPlaceholder>
+        <p>Unused credits remain available for rescheduled sessions.</p>
+        <p>
+          Please reschedule or cancel at least 24 hours in advance through the portal. When you do, the credit is kept for a future session. A late cancellation or a no-show may forfeit that session credit, at Accepted Admissions’ discretion.
+        </p>
+        <p>Nothing in this policy limits any rights consumers have under applicable law.</p>
+      </LegalSection>
 
       <LegalSection id="no-guarantee" title="No guarantee of admissions outcomes or scores">
         <p>
@@ -106,14 +107,23 @@ export default function TermsOfService() {
         </p>
       </LegalSection>
 
-      <LegalPlaceholder id="governing-law" testId="terms-governing-law-placeholder" title="Governing law">
+      <LegalSection id="governing-law" title="Governing law">
         <p>
-          This section is a placeholder for the owner to fill in. These terms do not name a governing law, venue, or court. No jurisdiction is stated here. The owner of Accepted Admissions will replace this section with the law and courts that apply.
+          These terms are governed by the laws of the State of New Jersey, without regard to conflict-of-law principles.
         </p>
         <p>
-          Until that update is published, questions about these terms can be sent to <LegalContactLink />.
+          Disputes go exclusively to the state and federal courts located in New Jersey. You and Accepted Admissions consent to personal jurisdiction there.
         </p>
-      </LegalPlaceholder>
+        <p>
+          Before filing, both sides agree to try in good faith to resolve the dispute informally for 30 days after written notice to <LegalContactLink />.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="severability" title="Severability">
+        <p>
+          If a court finds that one part of these terms cannot be enforced, the rest of the terms still apply. That part is limited only as far as needed to make it valid, or it is removed if it cannot be limited.
+        </p>
+      </LegalSection>
 
       <LegalSection id="changes" title="Changes to these terms">
         <p>

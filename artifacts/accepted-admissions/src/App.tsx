@@ -127,7 +127,9 @@ export function Router() {
         <Route path="/past-success" component={PastSuccess} />
         <Route path="/client-request" component={ClientRequest} />
         <Route path="/privacy" component={PrivacyPolicy} />
+        <Route path="/privacy/" component={PrivacyPolicy} />
         <Route path="/terms" component={TermsOfService} />
+        <Route path="/terms/" component={TermsOfService} />
         {LEGACY_PUBLIC_REDIRECTS.map(({ from, to }) => (
           <Route key={from} path={from}>
             <Redirect to={to} />

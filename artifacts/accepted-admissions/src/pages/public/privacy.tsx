@@ -75,7 +75,7 @@ export default function PrivacyPolicy() {
           </li>
           <li>Quiz and homework results from work completed on the platform.</li>
           <li>
-            Session recordings and AI-assisted transcriptions only with the client’s explicit consent. Notes from those sessions are shared back with the client and used solely for that client’s tutoring.
+            Sessions may be recorded and transcribed with AI-assisted tools only with the client’s explicit consent. A third-party meeting or transcription provider may process those recordings and transcriptions. Notes from those sessions are shared back with the client and used solely for that client’s tutoring.
           </li>
         </LegalList>
         <p>
@@ -99,7 +99,10 @@ export default function PrivacyPolicy() {
 
       <LegalSection id="how-we-share-information" title="How we share information">
         <p>
-          We share information only with service providers needed to run the service, such as hosting, payments, authentication, calendar, and email. Those providers include Stripe for payments, Clerk for sign-in, Google when a tutor connects a calendar, and our email and hosting providers. They may process information only to perform those services for us.
+          We share information only with service providers needed to run the service, such as hosting, payments, authentication, calendar, email, and AI service providers. Those providers include Stripe for payments, Clerk for sign-in, Google when a tutor connects a calendar, our email and hosting providers, and OpenAI when a tutor or administrator asks the platform to draft practice questions. They may process information only to perform those services for us.
+        </p>
+        <p>
+          Question generation does not send the student’s name, email, account, or scores. The request sent to the AI service provider is the subject, skill, difficulty, number of questions, and any source text a tutor or administrator chooses to include. Analogous practice items are drafted from the skill and difficulty of an existing question, not from a student’s identity.
         </p>
         <p>
           We may also share information if the law requires it, or when it is needed to protect the rights, safety, and integrity of our clients, tutors, and the service.
@@ -109,7 +112,7 @@ export default function PrivacyPolicy() {
 
       <LegalSection id="google-user-data" title="Google user data">
         <p>
-          Tutors can connect Google Calendar so the platform can read free/busy availability and create, update, and delete session events. Those events can include Google Meet links and attendees. A tutor chooses to connect. We do not receive that tutor’s Google Calendar data unless they connect.
+          Tutors can connect Google Calendar so the platform can read free/busy availability and create, update, and delete session events. The connection uses the Google scopes openid, email, calendar.freebusy, and calendar.events. We receive the Google account email to match it to the tutor’s portal account. Those events can include Google Meet links and attendees. We read and update the guest lists of events the platform creates, for example by adding the business’s admin address. A tutor chooses to connect. We do not receive that tutor’s Google Calendar data unless they connect.
         </p>
         <p>
           Google data is used only to provide scheduling. It is not sold. It is not used for advertising. It is not used to train AI models.
@@ -131,7 +134,7 @@ export default function PrivacyPolicy() {
 
       <LegalSection id="children-and-students" title="Children and students under 18">
         <p>
-          Accepted Admissions works with students, including students under 18. A parent or guardian consents to the collection and use of a minor student’s information before we provide services to that student. Parents and guardians can contact us to review that information or to ask us to delete it.
+          Accepted Admissions works with students, including students under 18. If a student is under 18, a parent or guardian should create or authorize the account and consent on the student’s behalf. Parents and guardians can contact us to review that information or to ask us to delete it.
         </p>
       </LegalSection>
 
