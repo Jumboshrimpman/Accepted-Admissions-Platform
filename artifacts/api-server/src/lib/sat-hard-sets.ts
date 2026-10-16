@@ -39,13 +39,32 @@ function hardInSessionInstructions(target: number, original: boolean): string {
   return `${target} hard module 2 questions from official SAT practice tests the student has not already been assigned. 30 minutes. Work through them with your tutor.`;
 }
 
-function hardPlanOptionsForSession(session: { dateTime?: Date; timezone?: string | null }): {
+async function hardPlanOptionsForSession(session: {
+  dateTime?: Date;
+  timezone?: string | null;
+  clientUserId?: string | null;
+}): Promise<{
   originalDateKey: string | null;
   balance: "sat" | "even";
-} {
-  const originalDateKey = session.dateTime
-    ? originalHardSatDateKeyForSession({ dateTime: session.dateTime, timezone: session.timezone })
-    : null;
+}> {
+  let email: string | null = null;
+  if (session.clientUserId) {
+    const [user] = await db
+      .select({ email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, session.clientUserId))
+      .limit(1);
+    email = user?.email ?? null;
+  }
+  const originalDateKey =
+    session.dateTime && email
+      ? originalHardSatDateKeyForSession({
+          dateTime: session.dateTime,
+          timezone: session.timezone,
+          email,
+          clientUserId: session.clientUserId,
+        })
+      : null;
   return { originalDateKey, balance: originalDateKey ? "even" : "sat" };
 }
 
@@ -491,7 +510,7 @@ export async function ensureHardSatPrework(
       preworkMin: HARD_SAT_PREWORK_QUESTIONS,
       preworkMax: HARD_SAT_PREWORK_QUESTIONS,
       inSessionMax: target,
-      ...hardPlanOptionsForSession(session),
+      ...(await hardPlanOptionsForSession(session)),
     });
     const duringRows = await liveDuringAssignments(session.id);
     let duringIsFullHard = false;
@@ -584,7 +603,7 @@ export async function officialHardInSessionItems(
     preworkMin: 0,
     preworkMax: 0,
     inSessionMax: target,
-    ...hardPlanOptionsForSession(session),
+    ...(await hardPlanOptionsForSession(session)),
   }).inSession;
 }
 
@@ -635,7 +654,7 @@ async function ensureDuringAssignment(session: SessionRow, target: number) {
       deliveryPhase: "during_session",
       title: `${HARD_IN_SESSION_TITLE} (${target}) — ${session.title}`,
       subject: session.subject,
-      instructions: hardInSessionInstructions(target, hardPlanOptionsForSession(session).originalDateKey != null),
+      instructions: hardInSessionInstructions(target, (await hardPlanOptionsForSession(session)).originalDateKey != null),
       status: "published",
       timeLimitMinutes: HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
       maxAttempts: 1,
@@ -743,7 +762,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       during.id,
       session.title,
       target,
-      hardPlanOptionsForSession(session).originalDateKey != null,
+      (await hardPlanOptionsForSession(session)).originalDateKey != null,
     );
     return {
       status: written,

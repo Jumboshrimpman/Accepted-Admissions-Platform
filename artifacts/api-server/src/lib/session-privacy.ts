@@ -138,7 +138,10 @@ export async function reconcileTaitoSessions(courseId: string): Promise<void> {
       if (!subjectMatchesTaitoSchedule(session.subject, scheduled.subject)) {
         return false;
       }
-      return matchesTaitoScheduledDate(session, scheduled.dateKey);
+      return matchesTaitoScheduledDate(
+        { ...session, clientUserId: session.clientUserId, email: student?.email, taitoUserId: student?.id },
+        scheduled.dateKey,
+      );
     });
     const existing = pickTaitoScheduledKeeper(candidates);
     const extras = candidates.filter((session) => session.id !== existing?.id);

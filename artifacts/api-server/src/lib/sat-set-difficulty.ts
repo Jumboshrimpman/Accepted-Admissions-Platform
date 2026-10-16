@@ -266,11 +266,17 @@ export function isOriginalHardSatItem(item: {
   return originalHardSatDateFromKey(item.sourceKey) != null;
 }
 
-/** Nov 27, Dec 11, and Dec 18 only. Earlier hard sessions stay on official items. */
+/** Nov 27, Dec 11, and Dec 18, and only for Taito. Earlier sessions stay on official items. */
 export function originalHardSatDateKeyForSession(
-  session: { dateTime: Date; timezone?: string | null } | null | undefined,
+  session: {
+    dateTime: Date;
+    timezone?: string | null;
+    email?: string | null;
+    clientUserId?: string | null;
+  } | null | undefined,
 ): string | null {
   if (!session) return null;
+  if ((session.email ?? "").trim().toLowerCase() !== TAITO_STUDENT_EMAIL) return null;
   for (const dateKey of ORIGINAL_HARD_SAT_DATES) {
     if (matchesTaitoScheduledDate(session, dateKey)) return dateKey;
   }
@@ -540,9 +546,11 @@ function dateKeyForSetting(
   if (explicitDateKey?.trim()) return explicitDateKey.trim();
   if (!session) return null;
   const settingEmail = setting.email?.trim().toLowerCase() ?? "";
-  if (settingEmail === TAITO_STUDENT_EMAIL) {
+    if (settingEmail === TAITO_STUDENT_EMAIL) {
     for (const scheduled of TAITO_FALL_2026_SESSIONS) {
-      if (matchesTaitoScheduledDate(session, scheduled.dateKey)) return scheduled.dateKey;
+      if (matchesTaitoScheduledDate({ ...session, email: setting.email }, scheduled.dateKey)) {
+        return scheduled.dateKey;
+      }
     }
   }
   return sessionLocalDateKey(session.dateTime, session.timezone || "UTC");

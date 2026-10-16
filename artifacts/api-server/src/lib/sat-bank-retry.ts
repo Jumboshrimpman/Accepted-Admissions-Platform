@@ -9,7 +9,13 @@ export type RetryCandidate = {
   module: number;
   questionNumber: number;
   difficulty?: string | null;
+  sourceKind?: string | null;
 };
+
+function isOriginalHardRetry(item: { sourceKey?: string | null; sourceKind?: string | null }): boolean {
+  if ((item.sourceKind ?? "").trim().toLowerCase() === "original_hard") return true;
+  return (item.sourceKey ?? "").startsWith("original-hard-");
+}
 
 export type RetryDecision =
   | { kind: "bank"; candidate: RetryCandidate; reason: string }
@@ -61,7 +67,8 @@ export function decideRetrySource(input: {
     (item) =>
       item.id !== input.source.id &&
       item.sourceKey !== input.source.sourceKey &&
-      !used.has(item.sourceKey),
+      !used.has(item.sourceKey) &&
+      !isOriginalHardRetry(item),
   );
   const sourceSkill = (input.source.skill ?? "").trim();
   const sameSkill = sourceSkill

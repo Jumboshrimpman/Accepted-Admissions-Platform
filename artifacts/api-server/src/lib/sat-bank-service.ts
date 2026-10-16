@@ -328,6 +328,10 @@ async function upsertCollectionForRecord(record: ParsedBankRecord) {
       formCode: record.formCode,
       title: record.collectionTitle,
       slug: record.collectionSlug,
+      notes:
+        record.sourceKind === "original_hard"
+          ? "Session-only. Hidden from tutor browse and tutor assign."
+          : null,
       extractStatus: record.sourceKind === "seed" ? "partial" : "partial",
     })
     .returning();
@@ -1230,6 +1234,9 @@ export async function assignPreworkFromBank(input: {
   );
   pool = pool.filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   const hardMode = homeworkKind === "routine" && input.difficulty === "hard";
+  if (!hardMode) {
+    pool = pool.filter((row) => row.sourceKind !== "original_hard");
+  }
   if (hardMode) {
     const plannedIds = input.bankQuestionIds ?? [];
     if (plannedIds.length !== HARD_SAT_PREWORK_QUESTIONS) {
@@ -1614,7 +1621,7 @@ export async function listBankCollections() {
     .orderBy(asc(examSourceCollectionsTable.examFamily), asc(examSourceCollectionsTable.title));
   const questions = await db.select().from(bankQuestionsTable);
   const assets = await db.select().from(examSourceAssetsTable);
-  return collections.map((collection) => {
+  return collections.filter((collection) => collection.slug !== "original-hard-sat").map((collection) => {
     const collectionQuestions = questions.filter((row) => row.collectionId === collection.id);
     return {
       id: collection.id,
@@ -1684,6 +1691,7 @@ export function bankQuestionShape(
     sourceKind: row.sourceKind,
     extractGaps: row.extractGaps ?? {},
     assignable:
+      row.sourceKind !== "original_hard" &&
       isAssignableBankItem({
         prompt: row.prompt,
         questionType: row.questionType,
@@ -1727,6 +1735,7 @@ export async function listBankQuestions(filters: {
       asc(bankQuestionsTable.practiceTestNumber),
       asc(bankQuestionsTable.position),
     );
+  rows = rows.filter((row) => row.sourceKind !== "original_hard");
   if (filters.examFamily) {
     rows = rows.filter((row) => row.examFamily === filters.examFamily);
   }
@@ -2052,7 +2061,9 @@ export async function requestSimilarRetry(input: {
           .from(bankQuestionsTable)
           .where(ne(bankQuestionsTable.id, sourceBank.id))
       : await db.select().from(bankQuestionsTable)
-  ).filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
+  )
+    .filter((row) => row.sourceKind !== "original_hard" && !row.sourceKey.startsWith("original-hard-"))
+    .filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   const used = session?.clientUserId
     ? await usedSourceKeysForStudent(session.clientUserId)
     : new Set<string>();
@@ -2072,6 +2083,7 @@ export async function requestSimilarRetry(input: {
       module: row.module,
       questionNumber: row.questionNumber,
       difficulty: row.difficulty,
+      sourceKind: row.sourceKind,
     })),
     usedSourceKeys: used,
     env: input.env,

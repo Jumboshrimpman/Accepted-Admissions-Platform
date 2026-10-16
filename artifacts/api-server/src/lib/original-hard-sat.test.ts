@@ -11,13 +11,16 @@ import {
   originalHardRwItems,
   originalHardSatBankRecords,
 } from "./original-hard-sat.ts";
+import { decideRetrySource } from "./sat-bank-retry.ts";
 import {
   ORIGINAL_HARD_SAT_DATES,
   hardSatSectionQuotas,
   isRenderableHardSatItem,
+  originalHardSatDateKeyForSession,
   planHardSatSessionSets,
   type HardSatCandidate,
 } from "./sat-set-difficulty.ts";
+import { TAITO_STUDENT_EMAIL, taitoSessionDateTime } from "./session-schedule.ts";
 
 function norm(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -42,6 +45,29 @@ function candidate(record: {
   };
 }
 
+const STOP = new Set(
+  `which what when where that this with from have were been into over after before about their there these those would could should every other only than then them they your each such some more most also does did not but and for the are was has had its his her you our who how all any can may one two per both same just like will onto upon while through between among within without under above being using used make makes made find give gives given must very across during another because choice completes conforms conventions standard english logical precise phrase transition supported strongly based author respond texts effectively information writer emphasize notes following question data best uses percent percentage points dollars dollar meters meter squared equals minus plus equation equations solution positive value number numbers radius center output input hours hour years year seconds second margin error sample price prices final included replaced similar corresponds corresponding larger smaller horizontal central angle radians radian length square exactly times three start multiply subtract result lines worth keeps loses grows current satisfies circular round total cost costs ticket tickets score scores`.split(
+    /\s+/,
+  ),
+);
+
+function contentWords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length >= 5 && !STOP.has(word)),
+  );
+}
+
+function jaccard(left: Set<string>, right: Set<string>): number {
+  let intersection = 0;
+  for (const word of left) if (right.has(word)) intersection += 1;
+  const union = left.size + right.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
 async function walkJsonl(dir: string): Promise<string[]> {
   const found: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
@@ -55,7 +81,7 @@ async function walkJsonl(dir: string): Promise<string[]> {
 
 test("original hard math solves to the keyed choice and no other choice", () => {
   const items = originalHardMathItems();
-  assert.equal(items.length, 90);
+  assert.equal(items.length, 105);
   let passed = 0;
   for (const item of items) {
     const solved = item.solve();
@@ -64,17 +90,18 @@ test("original hard math solves to the keyed choice and no other choice", () => 
     assert.equal(keyed.text, String(solved), item.sourceKey);
     const matches = item.choices.filter((choice) => Number(choice.text) === solved);
     assert.equal(matches.length, 1, item.sourceKey);
-    assert.ok(item.explanation.includes(String(solved)), item.sourceKey);
+    assert.match(item.explanation, new RegExp(`\\b${solved}\\b`), item.sourceKey);
+    assert.ok(item.difficultyNote.length >= 40, item.sourceKey);
     passed += 1;
   }
-  assert.equal(passed, 90);
+  assert.equal(passed, 105);
 });
 
 test("original hard reading items agree with an independent second pass", () => {
   const answerer = readFileSync(new URL("./original-hard-sat-rw-answer.ts", import.meta.url), "utf8");
   assert.doesNotMatch(answerer, /correctAnswer/);
   const items = originalHardRwItems();
-  assert.equal(items.length, 90);
+  assert.equal(items.length, 105);
   let agreed = 0;
   for (const item of items) {
     const letter = answerOriginalHardRw({
@@ -84,18 +111,47 @@ test("original hard reading items agree with an independent second pass", () => 
     });
     assert.equal(letter, item.correctAnswer, `${item.sourceKey} ${item.stimulus}`);
     assert.ok(item.explanation.trim().length > 20, item.sourceKey);
+    assert.ok(item.difficultyNote.length >= 40, item.sourceKey);
     agreed += 1;
   }
-  assert.equal(agreed, 90);
+  assert.equal(agreed, 105);
   assert.equal(agreed / items.length, 1);
 });
 
 test("original hard items render, stay unique, and fill only the three shortfall sessions", async () => {
   const records = originalHardSatBankRecords();
-  assert.equal(records.length, 180);
+  const math = originalHardMathItems();
+  const reading = originalHardRwItems();
+  assert.equal(records.length, 210);
   assert.ok(records.every((record) => record.sourceKind === "original_hard"));
   assert.ok(records.every((record) => record.questionType === "mcq"));
-  assert.equal(new Set(records.map((record) => record.sourceKey)).size, 180);
+  assert.equal(new Set(records.map((record) => record.sourceKey)).size, 210);
+  const notes = [...math, ...reading].map((item) => item.difficultyNote);
+  assert.equal(new Set(notes).size, 210);
+  assert.ok(records.every((record) => String(record.sourceFiles.difficultyNote).length >= 40));
+
+  const letters = { a: 0, b: 0, c: 0, d: 0 };
+  for (const item of [...math, ...reading]) letters[item.correctAnswer as "a" | "b" | "c" | "d"] += 1;
+  assert.deepEqual(letters, { a: 52, b: 54, c: 52, d: 52 });
+  console.log(`key distribution a=${letters.a} b=${letters.b} c=${letters.c} d=${letters.d}`);
+
+  const bags = [...math, ...reading].map((item) => ({
+    key: item.sourceKey,
+    words: contentWords(`${item.stimulus ?? ""} ${item.prompt}`),
+  }));
+  let maxSimilarity = 0;
+  let maxPair = "";
+  for (let left = 0; left < bags.length; left += 1) {
+    for (let right = left + 1; right < bags.length; right += 1) {
+      const score = jaccard(bags[left]!.words, bags[right]!.words);
+      if (score > maxSimilarity) {
+        maxSimilarity = score;
+        maxPair = `${bags[left]!.key} | ${bags[right]!.key}`;
+      }
+    }
+  }
+  console.log(`max content-word Jaccard ${maxSimilarity.toFixed(3)} on ${maxPair}`);
+  assert.ok(maxSimilarity <= 0.6, `${maxSimilarity} ${maxPair}`);
 
   const stems = new Set<string>();
   for (const record of records) {
@@ -152,9 +208,14 @@ test("original hard items render, stay unique, and fill only the three shortfall
     const parsed = parseCollegeBoardPayload(await readFile(file, "utf8"), file);
     for (const record of parsed.records) {
       officialKeys.add(record.sourceKey);
-      officialStems.add(norm(record.prompt));
-      if (record.stimulus) officialStems.add(norm(record.stimulus));
-      officialStems.add(norm(`${record.stimulus ?? ""} ${record.prompt}`));
+      const prompt = norm(record.prompt);
+      if (prompt) officialStems.add(prompt);
+      if (record.stimulus) {
+        const stimulus = norm(record.stimulus);
+        if (stimulus) officialStems.add(stimulus);
+      }
+      const combined = norm(`${record.stimulus ?? ""} ${record.prompt}`);
+      if (combined) officialStems.add(combined);
     }
   }
   assert.ok(officialStems.size > 100);
@@ -197,14 +258,44 @@ test("original hard items render, stay unique, and fill only the three shortfall
       assert.equal(used.has(item.sourceKey), false, item.sourceKey);
       used.add(item.sourceKey);
     }
-    const rw = records.filter((record) => record.sourceKey.includes(dateKey) && record.section === "rw");
-    const domains = {
-      craft: rw.filter((record) => record.domain === "Craft and Structure").length,
-      info: rw.filter((record) => record.domain === "Information and Ideas").length,
-      conventions: rw.filter((record) => record.domain === "Standard English Conventions").length,
-      expression: rw.filter((record) => record.domain === "Expression of Ideas").length,
-    };
-    assert.deepEqual(domains, { craft: 8, info: 8, conventions: 7, expression: 7 }, dateKey);
+    for (const section of ["rw", "math"] as const) {
+      const sectionRows = records.filter((record) => record.sourceKey.includes(dateKey) && record.section === section);
+      assert.equal(sectionRows.length, 35, `${dateKey} ${section}`);
+      const unusedNumbers = sectionRows
+        .filter((record) => !selected.some((item) => item.sourceKey === record.sourceKey))
+        .map((record) => record.questionNumber)
+        .sort((left, right) => left - right);
+      assert.deepEqual(unusedNumbers, [1, 2, 3, 4, 5], `${dateKey} ${section}`);
+    }
+    const selectedRw = records.filter(
+      (record) => selected.some((item) => item.sourceKey === record.sourceKey) && record.section === "rw",
+    );
+    for (const domain of [
+      "Craft and Structure",
+      "Information and Ideas",
+      "Standard English Conventions",
+      "Expression of Ideas",
+    ]) {
+      assert.ok(selectedRw.some((record) => record.domain === domain), `${dateKey} ${domain}`);
+    }
+    const exclude = new Set<string>();
+    for (const section of ["rw", "math"] as const) {
+      const highest = records
+        .filter((record) => record.sourceKey.includes(dateKey) && record.section === section)
+        .sort((left, right) => right.questionNumber - left.questionNumber)
+        .slice(0, 5);
+      for (const row of highest) exclude.add(row.sourceKey);
+    }
+    const spared = planHardSatSessionSets(pool, {
+      originalDateKey: dateKey,
+      balance: "even",
+      preworkTarget: 40,
+      preworkMax: 40,
+      inSessionMax: 20,
+      excludeSourceKeys: exclude,
+    });
+    assert.equal(spared.prework.length, 40, `${dateKey} spares`);
+    assert.equal(spared.inSession.length, 20, `${dateKey} spares`);
   }
   assert.equal(used.size, 180);
 
@@ -225,6 +316,47 @@ test("original hard items render, stay unique, and fill only the three shortfall
   assert.equal(mixed.prework[0]?.sourceKey, "sat-pt4-rw-m2-q27");
   assert.deepEqual(hardSatSectionQuotas(40), { rw: 22, math: 18 });
   assert.deepEqual(hardSatSectionQuotas(40, "even"), { rw: 20, math: 20 });
+
+  const when = taitoSessionDateTime("2026-11-27");
+  assert.equal(originalHardSatDateKeyForSession({ dateTime: when, email: "other@example.com" }), null);
+  assert.equal(
+    originalHardSatDateKeyForSession({ dateTime: when, email: TAITO_STUDENT_EMAIL }),
+    "2026-11-27",
+  );
+
+  const retry = decideRetrySource({
+    source: {
+      id: "miss",
+      sourceKey: "sat-pt4-rw-m2-q27",
+      skill: "Inferences",
+      section: "rw",
+      difficulty: "H",
+    },
+    unusedBank: [
+      {
+        id: "hard",
+        sourceKey: "original-hard-2026-11-27-rw-30",
+        skill: "Inferences",
+        section: "rw",
+        module: 2,
+        questionNumber: 30,
+        difficulty: "H",
+        sourceKind: "original_hard",
+      },
+      {
+        id: "official",
+        sourceKey: "sat-pt5-rw-m2-q20",
+        skill: "Inferences",
+        section: "rw",
+        module: 2,
+        questionNumber: 20,
+        difficulty: "H",
+      },
+    ],
+    env: {},
+  });
+  assert.equal(retry.kind, "bank");
+  if (retry.kind === "bank") assert.equal(retry.candidate.sourceKey, "sat-pt5-rw-m2-q20");
 
   const boot = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
   assert.doesNotMatch(boot, /original-hard-sat|originalHardSatBankRecords|runCollegeBoardReimport/);
@@ -247,4 +379,8 @@ test("original hard items render, stay unique, and fill only the three shortfall
   assert.match(materialize, /original_hard/);
   assert.match(materialize, /original-hard-sat/);
   assert.match(shared, /row\.sourceKind === "original_hard"/);
+  assert.match(shared, /sourceKind !== "original_hard"/);
+  assert.match(shared, /slug !== "original-hard-sat"/);
+  const retrySource = readFileSync(new URL("./sat-bank-retry.ts", import.meta.url), "utf8");
+  assert.match(retrySource, /isOriginalHardRetry/);
 });
