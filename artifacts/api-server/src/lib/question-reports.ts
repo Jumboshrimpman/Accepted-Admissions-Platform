@@ -12,6 +12,7 @@ import {
 import {
   QUESTION_REPORT_ADMIN_EMAIL,
   sendTransactionalEmail,
+  verifiedFromAddress,
   type TransactionalEmailResult,
 } from "./transactional-email.ts";
 import {
@@ -120,6 +121,7 @@ export async function createQuestionReport(input: {
 
   const emailDelivery = await sendTransactionalEmail({
     to: QUESTION_REPORT_ADMIN_EMAIL,
+    from: verifiedFromAddress(),
     subject: `Question report: ${attempt.assignment.title} Q${Number(link.position ?? 0) + 1}`,
     text: questionReportEmailBody({
       studentName: attempt.student.displayName,

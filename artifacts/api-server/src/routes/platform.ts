@@ -436,6 +436,7 @@ import {
   hydrateMistakePrompts,
   selectActivePrework,
   selectStatusHomework,
+  shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "../lib/session-homework";
 import {
@@ -1191,6 +1192,8 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
       });
       if (!created) return;
       assignment = created;
+    } else if (!shouldRepublishSeededHomework(assignment.status)) {
+      return;
     } else {
       [assignment] = await db
         .update(assignmentsTable)

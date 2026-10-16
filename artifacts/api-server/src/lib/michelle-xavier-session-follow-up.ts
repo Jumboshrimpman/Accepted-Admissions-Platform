@@ -36,6 +36,7 @@ import {
   MICHELLE_GEOMETRY_CLIENT_EMAIL,
 } from "./michelle-geometry-follow-up.ts";
 import { libraryAssetBlockKind, libraryAssetToBlockConfig } from "./curriculum-library.ts";
+import { shouldRepublishSeededHomework } from "./session-homework.ts";
 import { reopenBrokenEmptyAttemptsForAssignment } from "./heal-empty-attempt.ts";
 import {
   attemptHasRecordedWork,
@@ -574,6 +575,12 @@ async function assignQuiz(input: {
     if (input.sessionMode === "completed" && !sessionId) {
       return {
         result: emptyAssignee(minutes, `No completed Xavier session was found for ${input.label}.`),
+        questionIds: input.questionIds,
+      };
+    }
+    if (!shouldRepublishSeededHomework(already.assignment.status)) {
+      return {
+        result: emptyAssignee(minutes, `${input.spec.title} is archived and was left unchanged.`),
         questionIds: input.questionIds,
       };
     }

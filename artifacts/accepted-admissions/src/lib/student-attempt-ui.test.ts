@@ -14,8 +14,10 @@ import {
   inSessionPracticeHref,
   resolveInSessionPracticeLink,
   studentAssignmentActionLabel,
+  inactiveAttemptSaveRecovery,
   quizResponsesForPause,
   quizTimerLeaveAction,
+  RESPONSES_ONLY_WHILE_ACTIVE,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
   isAttemptUuid,
@@ -165,6 +167,63 @@ test("leaving a timed quiz pauses, and a tab switch resumes", () => {
       status: "submitted",
       intentionalExit: false,
       autoPaused: false,
+    }),
+    "none",
+  );
+});
+
+test("a save rejected while the attempt is paused resumes only when the tab is visible", () => {
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: true,
+      visible: true,
+      attemptStatus: "paused",
+    }),
+    "resume",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: true,
+      visible: false,
+      attemptStatus: "paused",
+    }),
+    "stay-paused",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: false,
+      visible: true,
+      attemptStatus: "paused",
+    }),
+    "show-paused",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: true,
+      visible: true,
+      attemptStatus: "submitted",
+    }),
+    "show-finished",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: false,
+      visible: true,
+      attemptStatus: "expired",
+    }),
+    "show-finished",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: "Prediction is locked",
+      autoPaused: true,
+      visible: true,
+      attemptStatus: "paused",
     }),
     "none",
   );

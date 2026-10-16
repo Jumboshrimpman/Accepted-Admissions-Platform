@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
@@ -7,9 +8,12 @@ import {
   allowsInSessionPerQuestionFeedback,
   isDuplicateSessionPrework,
   isInSessionHomeworkCompletion,
+  planAssignmentIdAfterPreworkArchive,
+  planAssignmentIdAfterPreworkPublish,
   selectActivePrework,
   selectInSessionHomeworkQuestionIds,
   selectStatusHomework,
+  shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "./session-homework.ts";
 
@@ -164,10 +168,18 @@ test("plan-chosen bank SAT pre-work stays beside grammar; other bank copies coll
       { ...bank, planAssignmentId: "bank" },
       { ...ielts, planAssignmentId: "bank" },
     ]).map((item) => item.id),
-    ["grammar", "ielts", "bank"],
+    ["grammar", "bank", "ielts"],
   );
   assert.deepEqual(
     selectStatusHomework([grammar, bank, ielts]).map((item) => item.id),
+    ["grammar", "bank", "ielts"],
+  );
+  assert.deepEqual(
+    selectStatusHomework([
+      grammar,
+      { ...bank, id: "empty-bank", questionCount: 0 },
+      ielts,
+    ]).map((item) => item.id),
     ["grammar", "ielts"],
   );
   assert.equal(
@@ -190,7 +202,7 @@ test("plan-chosen bank SAT pre-work stays beside grammar; other bank copies coll
   );
 });
 
-test("Taito sees the Oct 9 plan bank pre-work beside one Grammar set, and no extra bank copies", () => {
+test("Taito sees the Oct 9 plan bank pre-work beside one Grammar set, and each other session keeps its own bank pre-work", () => {
   const planId = "3483abbd-e1e0-410f-8e38-e88940444ef7";
   const bankTitle = "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice";
   const grammarTitle = "SAT Homework — Grammar and Boundaries";
@@ -284,14 +296,14 @@ test("Taito sees the Oct 9 plan bank pre-work beside one Grammar set, and no ext
   const extraIds = otherTopics.map((_, index) => `zzzz-bank-extra-${index}`);
   assert.deepEqual(
     listed.filter((row) => extraIds.includes(row.id)).map((row) => row.id),
-    [],
+    extraIds,
   );
-  for (const [sessionId] of otherTopics) {
+  otherTopics.forEach(([sessionId], index) => {
     assert.deepEqual(
       listed.filter((row) => row.sessionId === sessionId).map((row) => row.id),
-      [`topic-${sessionId}`],
+      [`topic-${sessionId}`, `zzzz-bank-extra-${index}`],
     );
-  }
+  });
 
   const piledOnOct9 = [
     ...otherTopics.map((_, index) =>
@@ -316,6 +328,154 @@ test("Taito sees the Oct 9 plan bank pre-work beside one Grammar set, and no ext
     selectStatusHomework(piledOnOct9).map((row) => row.id).sort(),
     [planId, "gb-newer"].sort(),
   );
+});
+
+test("Oct 16 session 37062b4f lists the untouched bank pre-work beside submitted homework for every plan pointer", () => {
+  const sessionId = "37062b4f";
+  const preworkId = "910009f3";
+  const homeworkId = "f00b3046";
+  const homework = (planAssignmentId: string | null) => ({
+    id: homeworkId,
+    sessionId,
+    title: "SAT Homework — Evidence and Inference",
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "SAT Reading & Writing",
+    homeworkKind: "routine" as const,
+    questionCount: 4,
+    attemptCount: 1,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    planAssignmentId,
+  });
+  const prework = (planAssignmentId: string | null) => ({
+    id: preworkId,
+    sessionId,
+    title: "SAT pre-work (30–50 q)",
+    status: "published" as const,
+    deliveryPhase: "before_session" as const,
+    subject: "SAT",
+    homeworkKind: "routine" as const,
+    questionCount: 40,
+    attemptCount: 0,
+    createdAt: "2026-10-15T00:00:00.000Z",
+    planAssignmentId,
+  });
+  // Student assignments, admin client preview, and the session page all list
+  // through selectStatusHomework (preview uses the client's student role).
+  for (const planAssignmentId of [null, homeworkId, preworkId]) {
+    const ids = selectStatusHomework([
+      homework(planAssignmentId),
+      prework(planAssignmentId),
+    ]).map((item) => item.id);
+    assert.ok(ids.includes(preworkId), `pre-work hidden when plan is ${planAssignmentId}`);
+    assert.ok(ids.includes(homeworkId), `homework hidden when plan is ${planAssignmentId}`);
+  }
+  assert.deepEqual(
+    selectStatusHomework([
+      homework(homeworkId),
+      { ...prework(homeworkId), questionCount: 0 },
+    ]).map((item) => item.id),
+    [homeworkId],
+  );
+  const sameKind = selectStatusHomework([
+    homework(preworkId),
+    prework(preworkId),
+    {
+      id: "bank-copy",
+      sessionId,
+      title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+      status: "published" as const,
+      deliveryPhase: "before_session" as const,
+      subject: "SAT",
+      homeworkKind: "routine" as const,
+      questionCount: 40,
+      attemptCount: 0,
+      planAssignmentId: preworkId,
+    },
+  ]).map((item) => item.id);
+  assert.deepEqual(sameKind, [homeworkId, preworkId]);
+});
+
+test("student list, admin preview, and the session page share selectStatusHomework", () => {
+  const source = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  assert.match(source, /const assignments = selectStatusHomework\(listedAssignments\)/);
+  assert.match(source, /return \[\.\.\.bySession\.values\(\)\]\.flatMap\(\(group\) => selectStatusHomework\(group\)\)/);
+  assert.match(source, /const assignmentSummaries = await listAssignmentsForUser\(user\)/);
+  assert.match(source, /const dashboard = await dashboardDataForUser\(client\)/);
+  const studentFacing = source.slice(
+    source.indexOf("const studentFacing = user.role === \"student\" || user.role === \"viewer\""),
+    source.indexOf("async function ensureDuringSessionAssignment"),
+  );
+  assert.match(studentFacing, /if \(!studentFacing\) return listed/);
+  assert.match(studentFacing, /selectStatusHomework\(group\)/);
+});
+
+test("publishing or archiving session work does not point the plan at topic homework", () => {
+  const sync = readFileSync(new URL("./sat-bank-service.ts", import.meta.url), "utf8");
+  assert.match(sync, /planAssignmentIdAfterPreworkPublish\(/);
+  assert.match(sync, /planAssignmentIdAfterPreworkArchive\(/);
+  assert.match(sync, /sessionPreworkDedupeSlot\(row\.title\) !== "sat-topic-homework"/);
+  assert.deepEqual(
+    planAssignmentIdAfterPreworkPublish({
+      publishedId: "f00b3046",
+      publishedTitle: "SAT Homework — Evidence and Inference",
+      existingPlanAssignmentId: "910009f3",
+    }),
+    { assignmentId: "910009f3", retarget: false },
+  );
+  assert.deepEqual(
+    planAssignmentIdAfterPreworkPublish({
+      publishedId: "f00b3046",
+      publishedTitle: "SAT Homework — Evidence and Inference",
+      existingPlanAssignmentId: null,
+    }),
+    { assignmentId: null, retarget: false },
+  );
+  assert.deepEqual(
+    planAssignmentIdAfterPreworkPublish({
+      publishedId: "910009f3",
+      publishedTitle: "SAT pre-work (30–50 q)",
+      existingPlanAssignmentId: "f00b3046",
+    }),
+    { assignmentId: "910009f3", retarget: true },
+  );
+  assert.equal(
+    planAssignmentIdAfterPreworkArchive({
+      archivedId: "910009f3",
+      currentPlanAssignmentId: "910009f3",
+      nextLive: { id: "f00b3046", title: "SAT Homework — Evidence and Inference" },
+    }),
+    "910009f3",
+  );
+  assert.equal(
+    planAssignmentIdAfterPreworkArchive({
+      archivedId: "old-bank",
+      currentPlanAssignmentId: "old-bank",
+      nextLive: { id: "910009f3", title: "SAT pre-work (30–50 q)" },
+    }),
+    "910009f3",
+  );
+  assert.equal(
+    planAssignmentIdAfterPreworkArchive({
+      archivedId: "910009f3",
+      currentPlanAssignmentId: "other",
+      nextLive: { id: "f00b3046", title: "SAT Homework — Evidence and Inference" },
+    }),
+    "other",
+  );
+});
+
+test("boot seed does not republish intentionally archived SAT homework", () => {
+  const source = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const prep = readFileSync(new URL("./session-curriculum-prep.ts", import.meta.url), "utf8");
+  const followUp = readFileSync(new URL("./michelle-xavier-session-follow-up.ts", import.meta.url), "utf8");
+  assert.match(source, /shouldRepublishSeededHomework\(assignment\.status\)/);
+  assert.match(prep, /if \(!shouldRepublishSeededHomework\(assignment\?\.status\)\) return 0/);
+  assert.match(followUp, /if \(!shouldRepublishSeededHomework\(already\.assignment\.status\)\)/);
+  assert.equal(shouldRepublishSeededHomework("archived"), false);
+  assert.equal(shouldRepublishSeededHomework("published"), true);
+  assert.equal(shouldRepublishSeededHomework("draft"), true);
+  assert.equal(shouldRepublishSeededHomework(null), true);
 });
 
 test("duplicate routine SAT pre-work collapses to the copy with attempts", () => {

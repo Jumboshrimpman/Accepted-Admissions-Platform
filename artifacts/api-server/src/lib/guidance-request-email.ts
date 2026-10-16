@@ -2,6 +2,7 @@ import {
   ADMIN_INBOX_EMAIL,
   isAdminInboxEmail,
   sendTransactionalEmail,
+  verifiedFromAddress,
   type TransactionalEmail,
   type TransactionalEmailResult,
 } from "./transactional-email.ts";
@@ -32,6 +33,15 @@ export function guidanceRequestAdminInbox(candidate = ADMIN_INBOX_EMAIL): string
     throw new Error(`Guidance request email must go to ${ADMIN_INBOX_EMAIL}`);
   }
   return ADMIN_INBOX_EMAIL;
+}
+
+/**
+ * Admin alert sender. Resend rejects an example.com From domain, so a bad
+ * RESEND_FROM_EMAIL falls back to the verified acceptedadmissions.org sender.
+ * This does not add a message to the person who submitted the form.
+ */
+export function guidanceRequestFromAddress(candidate?: string): string {
+  return verifiedFromAddress(candidate);
 }
 
 export function guidanceRequestEmailSubject(fields: GuidanceRequestEmailFields): string {
@@ -119,6 +129,7 @@ export async function sendGuidanceRequestAdminEmail(
   const to = guidanceRequestAdminInbox();
   const message: TransactionalEmail = {
     to,
+    from: guidanceRequestFromAddress(),
     replyTo: fields.email,
     subject: guidanceRequestEmailSubject(fields),
     text: guidanceRequestEmailText(fields),

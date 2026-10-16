@@ -37,13 +37,28 @@ export function isAdminInboxEmail(email: string): boolean {
   return normalizeEmailAddress(email) === ADMIN_INBOX_EMAIL;
 }
 
+export const VERIFIED_TRANSACTIONAL_FROM =
+  "Accepted Admissions <noreply@acceptedadmissions.org>";
+
 export function transactionalFromAddress(override?: string): string {
   return (
     override?.trim() ||
     process.env.RESEND_FROM_EMAIL?.trim() ||
     process.env.TRANSACTIONAL_FROM_EMAIL?.trim() ||
-    "Accepted Admissions <noreply@acceptedadmissions.org>"
+    VERIFIED_TRANSACTIONAL_FROM
   );
+}
+
+export function senderDomain(from: string): string | null {
+  const match = from.match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+/** Resend rejects example.com. Admin alerts fall back to the verified domain. */
+export function verifiedFromAddress(candidate?: string): string {
+  const from = candidate?.trim() || transactionalFromAddress();
+  if (senderDomain(from) === "example.com") return VERIFIED_TRANSACTIONAL_FROM;
+  return from;
 }
 
 export function resendApiKey(): string | undefined {
