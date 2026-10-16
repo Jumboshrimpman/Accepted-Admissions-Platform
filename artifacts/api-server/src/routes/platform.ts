@@ -129,12 +129,16 @@ import {
 import { summarizeCreditHours } from "../lib/credit-hours";
 import {
   checkoutAudienceForSlug,
+  consultingCatalogAlignment,
   COLLEGE_CONSULTING_COURSE_ID,
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_SUBJECT,
   consultingPreviewTutors,
+  consultingTutorBiography,
   consultingTutorCredits,
+  consultingTutorDisplayName,
+  consultingTutorPhotoUrl,
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
@@ -6636,10 +6640,14 @@ async function consultingTutorList(clientUserId: string) {
     const connected = tutor.calendarStatus === "connected";
     return {
       id: tutor.id,
-      name: tutor.name,
+      name: key ? consultingTutorDisplayName(key) : tutor.name,
       title: tutor.title,
-      photoUrl: tutor.photoUrl,
-      biography: tutor.biography,
+      photoUrl: key ? consultingTutorPhotoUrl(key, tutor.photoUrl) : tutor.photoUrl,
+      biography: key
+        ? key === "xavier"
+          ? tutor.biography?.trim() || consultingTutorBiography(key)
+          : consultingTutorBiography(key)
+        : tutor.biography,
       tagline: tutor.tagline,
       subjects: tutor.subjects,
       calendarStatus: tutor.calendarStatus,
@@ -7277,6 +7285,24 @@ router.post(
           : "College Consulting checkout is not available for this account.",
       });
       return;
+    }
+    const alignment = consultingCatalogAlignment(product);
+    if (alignment) {
+      const [aligned] = await db
+        .update(satProductsTable)
+        .set({
+          name: alignment.name,
+          description: alignment.description,
+          totalPriceCents: alignment.totalPriceCents,
+          effectiveHourlyRateCents: alignment.effectiveHourlyRateCents,
+          ...(alignment.clearStripeIds
+            ? { stripeProductId: null, stripePriceId: null }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(satProductsTable.id, product.id))
+        .returning();
+      if (aligned) Object.assign(product, aligned);
     }
     if (audience === "sat" && !isAcceptedSatCatalogProduct(product)) {
       res.status(404).json({ error: "SAT product not found" });

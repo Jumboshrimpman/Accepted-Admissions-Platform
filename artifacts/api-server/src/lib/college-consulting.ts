@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SAT_HOURLY_RATE_CENTS, isAcceptedSatCatalogProduct } from "./sat-catalog.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -8,7 +9,6 @@ import { remainingCreditHoursForProduct } from "./credit-hours.ts";
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   NIKA_BOOKING_TAGLINE,
-  NIKA_PUBLIC_BIOGRAPHY,
   XAVIER_BOOKING_TAGLINE,
   XAVIER_PUBLIC_BIOGRAPHY,
 } from "./public-team-roster.ts";
@@ -44,7 +44,16 @@ export const VICTORIA_PHOTO_URL = "/media/team/victoria.jpg";
 export const VICTORIA_PHOTO_ALT_TEXT = "Victoria Wijerathnayapa, College Consulting Tutor";
 export const VICTORIA_BOOKING_TAGLINE =
   "Harvard Neuroscience & Education '25, Instructional Design, Youth Mentor";
+/** Consulting card copy. First name only. The public team roster is a separate bio. */
+export const NIKA_CONSULTING_BIOGRAPHY =
+  "Nika is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.";
+/** Consulting portrait. The public roster keeps /media/team/nika-raiffe.png. */
+export const NIKA_CONSULTING_PHOTO_URL = "/media/team/nika.png";
+
 export const VICTORIA_BIOGRAPHY =
+  "Victoria graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.";
+/** Consulting bio before the surname was removed. Startup replaces only this exact text. */
+export const VICTORIA_FULL_NAME_BIOGRAPHY =
   "Victoria Wijerathnayapa graduated from Harvard in 2025 in Neuroscience and Education, after also being admitted to Brown and Yale. She makes learning engaging through evidence-based strategies, and has mentored students with the Japan-America Academic Center in Boston since 2023 and taught 500+ English lessons to international students. She is now an Operations & Business Development Associate at Todaydream.";
 /** Previous site bio. Startup replaces only this exact text. */
 export const VICTORIA_PREVIOUS_BIOGRAPHY =
@@ -54,7 +63,8 @@ export const COLLEGE_CONSULTING_NIKA_SLUG = "college-consulting-nika-hour";
 export const COLLEGE_CONSULTING_XAVIER_SLUG = "college-consulting-xavier-hour";
 export const COLLEGE_CONSULTING_VICTORIA_SLUG = "college-consulting-victoria-hour";
 
-export const NIKA_HOURLY_RATE_CENTS = SAT_HOURLY_RATE_CENTS;
+/** Neel's College Consulting rate. Michelle's SAT hours with Xavier stay on the SAT catalog. */
+export const NIKA_HOURLY_RATE_CENTS = 10_000;
 export const XAVIER_NEEL_HOURLY_RATE_CENTS = 20_000;
 export const VICTORIA_HOURLY_RATE_CENTS = SAT_HOURLY_RATE_CENTS;
 
@@ -63,9 +73,9 @@ export const COLLEGE_CONSULTING_PRODUCTS = [
     tutorKey: "nika",
     slug: COLLEGE_CONSULTING_NIKA_SLUG,
     tutorName: NIKA_CONSULTING_NAME,
-    name: "College Consulting hour with Nika Raiffe",
+    name: "College Consulting hour with Nika",
     description:
-      "One prepaid 60-minute College Consulting credit with Nika Raiffe at $130/hour.",
+      "One prepaid 60-minute College Consulting credit with Nika at $100/hour.",
     hourlyRateCents: NIKA_HOURLY_RATE_CENTS,
   },
   {
@@ -81,9 +91,9 @@ export const COLLEGE_CONSULTING_PRODUCTS = [
     tutorKey: "victoria",
     slug: COLLEGE_CONSULTING_VICTORIA_SLUG,
     tutorName: VICTORIA_DISPLAY_NAME,
-    name: "College Consulting hour with Victoria Wijerathnayapa",
+    name: "College Consulting hour with Victoria",
     description:
-      "One prepaid 60-minute College Consulting credit with Victoria Wijerathnayapa at $130/hour. Booking opens after her Google Calendar is connected.",
+      "One prepaid 60-minute College Consulting credit with Victoria at $130/hour. Booking opens after her Google Calendar is connected.",
     hourlyRateCents: VICTORIA_HOURLY_RATE_CENTS,
   },
 ] as const;
@@ -376,6 +386,84 @@ export function consultingRateCentsForTutorKey(
   return collegeConsultingProductForTutorKey(tutorKey)!.hourlyRateCents;
 }
 
+/** Consulting page bio. Nika's public roster biography stays on the team page. */
+export function consultingTutorBiography(tutorKey: CollegeConsultingTutorKey): string {
+  if (tutorKey === "nika") return NIKA_CONSULTING_BIOGRAPHY;
+  if (tutorKey === "victoria") return VICTORIA_BIOGRAPHY;
+  return XAVIER_PUBLIC_BIOGRAPHY;
+}
+
+/** Nika's consulting photo has no surname in the path. Victoria's file stays as it is. */
+export function consultingTutorPhotoUrl(
+  tutorKey: CollegeConsultingTutorKey,
+  storedPhotoUrl?: string | null,
+): string {
+  if (tutorKey === "nika") return NIKA_CONSULTING_PHOTO_URL;
+  const stored = storedPhotoUrl?.trim() ?? "";
+  if (stored) return stored;
+  if (tutorKey === "victoria") return VICTORIA_PHOTO_URL;
+  return APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"];
+}
+
+/** Credits-page label. Nika and Victoria are first name only. Xavier stays his full name. */
+export function consultingTutorDisplayName(tutorKey: CollegeConsultingTutorKey): string {
+  if (tutorKey === "nika") return "Nika";
+  if (tutorKey === "victoria") return "Victoria";
+  return "Xavier Morales";
+}
+
+export type ConsultingCatalogAlignment = {
+  name: string;
+  description: string;
+  totalPriceCents: number;
+  effectiveHourlyRateCents: number;
+  /**
+   * Name, description, or price differ, so the stored Stripe Product and Price
+   * must be recreated. Mirrors the admin product edit.
+   */
+  clearStripeIds: boolean;
+};
+
+/**
+ * Catalog charge for checkout. Null when the stored row already matches.
+ * SAT products, including Michelle's $130 Xavier hour, are not consulting slugs.
+ */
+export function consultingCatalogAlignment(product: {
+  slug: string;
+  name?: string | null;
+  description?: string | null;
+  totalPriceCents: number;
+  stripePriceId?: string | null;
+}): ConsultingCatalogAlignment | null {
+  const catalog = collegeConsultingProductBySlug(product.slug);
+  if (!catalog) return null;
+  const priceChanged = Number(product.totalPriceCents) !== catalog.hourlyRateCents;
+  const nameChanged = (product.name ?? "") !== catalog.name;
+  const descriptionChanged = (product.description ?? "") !== catalog.description;
+  if (!priceChanged && !nameChanged && !descriptionChanged) return null;
+  return {
+    name: catalog.name,
+    description: catalog.description,
+    totalPriceCents: catalog.hourlyRateCents,
+    effectiveHourlyRateCents: catalog.hourlyRateCents,
+    clearStripeIds: true,
+  };
+}
+
+/** Stripe rejects a reused idempotency key when the product body changes inside 24h. */
+export function stripeCatalogProductIdempotencyKey(product: {
+  id: string;
+  name: string;
+  description: string;
+  totalPriceCents: number;
+}): string {
+  const content = createHash("sha256")
+    .update(`${product.totalPriceCents}\n${product.name}\n${product.description}`)
+    .digest("hex")
+    .slice(0, 24);
+  return `accepted-admissions-product-${product.id}-${product.totalPriceCents}-${content}`;
+}
+
 export type ConsultingTutorCredit = {
   tutorKey: CollegeConsultingTutorKey;
   name: string;
@@ -394,7 +482,7 @@ export function consultingTutorCredits(input: {
     const row = input.products.find((item) => item.slug === product.slug);
     return {
       tutorKey: product.tutorKey,
-      name: product.tutorName,
+      name: consultingTutorDisplayName(product.tutorKey),
       hourlyRateCents: product.hourlyRateCents,
       prepaidHours: row
         ? remainingCreditHoursForProduct(input.entries, row.id)
@@ -428,8 +516,8 @@ const CONSULTING_PREVIEW_FALLBACKS: Record<
     name: NIKA_CONSULTING_NAME,
     title: "College Consulting Tutor",
     tagline: NIKA_BOOKING_TAGLINE,
-    biography: NIKA_PUBLIC_BIOGRAPHY,
-    photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"],
+    biography: NIKA_CONSULTING_BIOGRAPHY,
+    photoUrl: NIKA_CONSULTING_PHOTO_URL,
   },
   victoria: {
     name: VICTORIA_DISPLAY_NAME,
@@ -454,7 +542,7 @@ function filledPreviewText(value: string | null | undefined, fallback: string): 
 
 /**
  * Read-only College Consulting cards for Neel's admin preview.
- * Missing or inactive profiles still appear, using the public tagline and bio.
+ * Missing or inactive profiles still appear. Nika and Victoria use consulting bios.
  * This does not read Google Calendar or create a user.
  */
 export function consultingPreviewTutors(input: {
@@ -489,11 +577,14 @@ export function consultingPreviewTutors(input: {
     return {
       tutorKey,
       id: profile?.id ?? `preview-${tutorKey}`,
-      name: filledPreviewText(profile?.name, fallback.name),
+      name: consultingTutorDisplayName(tutorKey),
       title: filledPreviewText(profile?.title, fallback.title),
       tagline: filledPreviewText(profile?.tagline, fallback.tagline),
-      biography: filledPreviewText(profile?.biography, fallback.biography),
-      photoUrl: filledPreviewText(profile?.photoUrl, fallback.photoUrl),
+      biography:
+        tutorKey === "xavier"
+          ? filledPreviewText(profile?.biography, consultingTutorBiography(tutorKey))
+          : consultingTutorBiography(tutorKey),
+      photoUrl: consultingTutorPhotoUrl(tutorKey, profile?.photoUrl),
       hourlyRateCents: product.hourlyRateCents,
       prepaidHours: input.prepaidHours?.[tutorKey] ?? 0,
       calendarConnected: input.calendars
