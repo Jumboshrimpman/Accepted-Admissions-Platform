@@ -7,8 +7,11 @@ import {
   guidanceRequestAdminInbox,
   guidanceRequestEmailSubject,
   guidanceRequestEmailText,
+  guidanceRequestFromAddress,
   sendGuidanceRequestAdminEmail,
 } from "./guidance-request-email.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { VERIFIED_TRANSACTIONAL_FROM } from "./transactional-email.ts";
 
 const sample = {
   guardianName: "Jordan Parent",
@@ -73,7 +76,7 @@ test("guidance notify is optional and does not fail closed when mail is missing 
 });
 
 test("guidance notify sends only to the admin inbox through a mock transport", async () => {
-  let captured: { to?: string | string[]; replyTo?: string; required?: boolean; text?: string; html?: string } | undefined;
+  let captured: { to?: string | string[]; from?: string; replyTo?: string; required?: boolean; text?: string; html?: string } | undefined;
   const result = await sendGuidanceRequestAdminEmail(sample, async (input) => {
     captured = input;
     return { status: "sent", id: "email_guidance_1" };
@@ -83,6 +86,34 @@ test("guidance notify sends only to the admin inbox through a mock transport", a
   assert.equal(captured?.replyTo, sample.email);
   assert.equal(captured?.required, false);
   assert.notEqual(captured?.to, sample.email);
+  assert.notEqual(captured?.to, captured?.replyTo);
   assert.match(captured?.text ?? "", /Alex Student/);
   assert.match(captured?.html ?? "", /Lincoln High/);
+  assert.doesNotMatch(captured?.from ?? "", /@example\.com/i);
+});
+
+test("guidance admin alert replaces an example.com From domain with the verified sender", async () => {
+  const previousFrom = process.env.RESEND_FROM_EMAIL;
+  process.env.RESEND_FROM_EMAIL = "Alerts <notify@example.com>";
+  try {
+    assert.equal(guidanceRequestFromAddress(), VERIFIED_TRANSACTIONAL_FROM);
+    assert.match(VERIFIED_TRANSACTIONAL_FROM, /@acceptedadmissions\.org>/);
+    let capturedFrom: string | undefined;
+    await sendGuidanceRequestAdminEmail(sample, async (input) => {
+      capturedFrom = input.from;
+      return { status: "sent", id: "email_guidance_from" };
+    });
+    assert.equal(capturedFrom, VERIFIED_TRANSACTIONAL_FROM);
+  } finally {
+    if (previousFrom === undefined) delete process.env.RESEND_FROM_EMAIL;
+    else process.env.RESEND_FROM_EMAIL = previousFrom;
+  }
+  assert.equal(
+    guidanceRequestFromAddress("Accepted Admissions <noreply@acceptedadmissions.org>"),
+    VERIFIED_TRANSACTIONAL_FROM,
+  );
+  assert.equal(
+    guidanceRequestFromAddress("Accepted Admissions <hello@acceptedadmissions.org>"),
+    "Accepted Admissions <hello@acceptedadmissions.org>",
+  );
 });

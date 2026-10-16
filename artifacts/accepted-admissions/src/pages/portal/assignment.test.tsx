@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const submitMutate = vi.fn();
@@ -1784,6 +1784,70 @@ describe("student attempt UI", () => {
     expect(screen.getByText("Which transition is best?")).toBeTruthy();
     expect(screen.getByTestId("report-question-status").textContent).toMatch(/this question isn’t scored/);
     expect(screen.getByTestId("report-question").textContent).toMatch(/Reported/);
+  });
+
+  test("an in-place pause is marked paused immediately so a visible tab resumes", () => {
+    render(<PortalAssignment />);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    expect(pauseMutate).toHaveBeenCalled();
+    expect(resumeMutate).not.toHaveBeenCalled();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
+  });
+
+  test("a 409 while saving shows the paused screen instead of failing silently", () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    act(() => {
+      onError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(screen.getByTestId("quiz-paused")).toBeTruthy();
+    expect(screen.queryByText("Could not check this answer.")).toBeNull();
+    expect(resumeMutate).not.toHaveBeenCalled();
+  });
+
+  test("a 409 after an in-place pause resumes instead of failing silently", () => {
+    render(<PortalAssignment />);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    act(() => {
+      onError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(resumeMutate).toHaveBeenCalledWith({ attemptId: "attempt-1" }, expect.any(Object));
+    expect(screen.queryByTestId("quiz-paused")).toBeNull();
+  });
+
+  test("submitting while the attempt is paused shows the paused screen", () => {
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Next$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit assignment/i }));
+    const onError = submitMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    act(() => {
+      onError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(screen.getByTestId("quiz-paused")).toBeTruthy();
+    expect(screen.queryByText(/Responses can only be saved while active/)).toBeNull();
   });
 
   test("paused overlay offers Resume, and ?resume=1 auto-resumes", () => {

@@ -58,6 +58,7 @@ import {
   isAnsweredValue,
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
+  inactiveAttemptSaveRecovery,
   isQuestionFeedbackRevealed,
   shouldAutoSubmitOnExpiry,
   shouldRequestAttemptResult,
@@ -686,6 +687,9 @@ export default function PortalAssignment() {
   const intentionalExitRef = useRef(false);
   const autoPausedRef = useRef(false);
   const [autoPaused, setAutoPaused] = useState(false);
+  const [surfacePaused, setSurfacePaused] = useState(false);
+  const resumeInPlaceRef = useRef<() => void>(() => {});
+  const recoverInactiveSaveRef = useRef<(message: string | undefined) => void>(() => {});
   const leaveRef = useRef({
     status: undefined as string | undefined,
     viewer: false,
@@ -811,6 +815,25 @@ export default function PortalAssignment() {
   pauseMutateRef.current = pauseAttempt.mutate;
   resumeMutateRef.current = resumeAttempt.mutate;
   queryClientRef.current = queryClient;
+  recoverInactiveSaveRef.current = (message) => {
+    const action = inactiveAttemptSaveRecovery({
+      errorMessage: message,
+      autoPaused: autoPausedRef.current,
+    });
+    if (action === "resume") {
+      resumeInPlaceRef.current();
+      return;
+    }
+    if (action !== "show-paused") return;
+    leaveRef.current.status = "paused";
+    setSurfacePaused(true);
+    const id = leaveRef.current.attemptId;
+    if (!id) return;
+    queryClient.setQueryData(getGetAttemptQueryKey(id), (current: unknown) => {
+      if (!current || typeof current !== "object") return current;
+      return { ...(current as Record<string, unknown>), status: "paused" };
+    });
+  };
 
   useEffect(() => {
     const snapshot = () => ({
@@ -848,6 +871,7 @@ export default function PortalAssignment() {
       const id = leaveRef.current.attemptId;
       if (!id) return;
       autoPausedRef.current = true;
+      leaveRef.current.status = "paused";
       setAutoPaused(true);
       pauseMutateRef.current(
         {
@@ -859,6 +883,7 @@ export default function PortalAssignment() {
         },
         {
           onSuccess: (data) => {
+            if (!autoPausedRef.current) return;
             leaveRef.current.status = data.status;
             queryClientRef.current.setQueryData(getGetAttemptQueryKey(id), data);
           },
@@ -875,11 +900,13 @@ export default function PortalAssignment() {
         {
           onSuccess: (data) => {
             leaveRef.current.status = data.status;
+            setSurfacePaused(false);
             queryClientRef.current.setQueryData(getGetAttemptQueryKey(id), data);
           },
         },
       );
     };
+    resumeInPlaceRef.current = resumeInPlace;
     const onVisibility = () => {
       const action = quizTimerLeaveAction({
         ...snapshot(),
@@ -939,6 +966,14 @@ export default function PortalAssignment() {
         onError: (error) => {
           expirySubmitted.current = false;
           const message = (error as { data?: { error?: string } } | null)?.data?.error;
+          const recovery = inactiveAttemptSaveRecovery({
+            errorMessage: message,
+            autoPaused: autoPausedRef.current,
+          });
+          if (recovery !== "none") {
+            recoverInactiveSaveRef.current(message);
+            return;
+          }
           setSubmitError(message || EMPTY_SUBMIT_MESSAGE);
         },
       },
@@ -1003,6 +1038,14 @@ export default function PortalAssignment() {
         },
         onError: (error) => {
           const message = (error as { data?: { error?: string } } | null)?.data?.error;
+          const recovery = inactiveAttemptSaveRecovery({
+            errorMessage: message,
+            autoPaused: autoPausedRef.current,
+          });
+          if (recovery !== "none") {
+            recoverInactiveSaveRef.current(message);
+            return;
+          }
           if (options?.checkAnswer) {
             setCheckError(message || "Could not check this answer.");
           }
@@ -1021,18 +1064,26 @@ export default function PortalAssignment() {
     const question = questions[index];
     if (!attemptId || viewer || !question || attempt?.status !== "active") return;
     const current = localResponses[question.id] ?? {};
-    saveResponse.mutate({
-      attemptId,
-      data: {
-        questionId: question.id,
-        prediction: null,
-        lockPrediction: false,
-        finalAnswer: current.finalAnswer ?? null,
-        flagged: current.flagged,
-        timeSpentSeconds: 0,
-        currentQuestionIndex: index,
+    saveResponse.mutate(
+      {
+        attemptId,
+        data: {
+          questionId: question.id,
+          prediction: null,
+          lockPrediction: false,
+          finalAnswer: current.finalAnswer ?? null,
+          flagged: current.flagged,
+          timeSpentSeconds: 0,
+          currentQuestionIndex: index,
+        },
       },
-    });
+      {
+        onError: (error) => {
+          const message = (error as { data?: { error?: string } } | null)?.data?.error;
+          recoverInactiveSaveRef.current(message);
+        },
+      },
+    );
   };
 
   const goToQuestion = (index: number) => {
@@ -1240,7 +1291,7 @@ export default function PortalAssignment() {
     }
   }
   const formatMath = quizShowsFormattedMath(assignment.title);
-  if (attempt.status === "paused" && !autoPaused) {
+  if ((attempt.status === "paused" || surfacePaused) && !autoPaused) {
     return (
       <div
         className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center space-y-5 px-4 text-center"
@@ -1271,6 +1322,7 @@ export default function PortalAssignment() {
                     onSuccess: (data) => {
                       leaveRef.current.status = data.status;
                       autoPausedRef.current = false;
+                      setSurfacePaused(false);
                       queryClient.setQueryData(getGetAttemptQueryKey(attemptId), data);
                     },
                   },

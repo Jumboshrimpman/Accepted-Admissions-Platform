@@ -32,7 +32,9 @@ export type StatusHomeworkCandidate = {
   createdAt?: Date | string | number | null;
   /**
    * `session_prework_plans.assignmentId` for this row's session.
-   * A bank pre-work stays beside seeded topic homework only when it is this id.
+   * Used to prefer the plan's bank copy when two bank pre-works tie.
+   * A published bank pre-work with questions stays listed even when this is missing
+   * or points at topic homework.
    */
   planAssignmentId?: string | null;
 };
@@ -94,17 +96,25 @@ function listedCreatedAtMs(value: StatusHomeworkCandidate["createdAt"]): number 
   return 0;
 }
 
-/** The plan's chosen bank pre-work. It stays listed beside seeded topic homework. */
+/** The plan's chosen bank pre-work. Prefer it when same-kind bank copies tie. */
 function isPlanChosenBankPrework(item: StatusHomeworkCandidate): boolean {
   const id = statusHomeworkId(item);
   if (!id || !item.planAssignmentId || id !== item.planAssignmentId) return false;
   return sessionPreworkDedupeSlot(item.title) === "sat-bank-prework";
 }
 
+/** Published bank pre-work that actually has questions. Empty copies are not protected. */
+function publishedBankPreworkWithQuestions(item: StatusHomeworkCandidate): boolean {
+  if (item.status === "archived") return false;
+  if ((item.questionCount ?? 0) <= 0) return false;
+  return sessionPreworkDedupeSlot(item.title) === "sat-bank-prework";
+}
+
 /**
- * List collapse. Same-slot copies still collapse. A bank pre-work that is not
- * the session plan also collapses with seeded topic homework (the pre-slot rule),
- * so extra bank copies stay hidden.
+ * List collapse. Same-slot copies still collapse, including duplicate bank
+ * pre-work and empty bank copies. A published bank pre-work that has questions
+ * does not collapse into seeded topic homework, whether or not the session plan
+ * points at it.
  */
 function collapsesWithListedHomework(
   keeper: StatusHomeworkCandidate,
@@ -115,6 +125,12 @@ function collapsesWithListedHomework(
   if (
     candidate.deliveryPhase === "during_session" ||
     keeper.deliveryPhase === "during_session"
+  ) {
+    return false;
+  }
+  if (
+    publishedBankPreworkWithQuestions(keeper) ||
+    publishedBankPreworkWithQuestions(candidate)
   ) {
     return false;
   }
@@ -143,6 +159,9 @@ function pickListedStatusKeeper<T extends StatusHomeworkCandidate>(current: T, i
   }
   const attemptDelta = (incoming.attemptCount ?? 0) - (current.attemptCount ?? 0);
   if (attemptDelta !== 0) return attemptDelta > 0 ? incoming : current;
+  const currentChosen = isPlanChosenBankPrework(current) ? 1 : 0;
+  const incomingChosen = isPlanChosenBankPrework(incoming) ? 1 : 0;
+  if (incomingChosen !== currentChosen) return incomingChosen > currentChosen ? incoming : current;
   const createdDelta = listedCreatedAtMs(incoming.createdAt) - listedCreatedAtMs(current.createdAt);
   if (createdDelta !== 0) return createdDelta > 0 ? incoming : current;
   const currentId = statusHomeworkId(current) ?? "";
@@ -193,17 +212,8 @@ export function selectStatusHomework<T extends StatusHomeworkCandidate>(
       return !isDiagnostic || statusHomeworkId(item) === keeperId;
     });
   })();
-  const planChosenBanks = afterDiagnostics.filter(isPlanChosenBankPrework);
-  const planChosenIds = new Set(
-    planChosenBanks
-      .map((item) => statusHomeworkId(item))
-      .filter((id): id is string => Boolean(id)),
-  );
-  const collapsible = afterDiagnostics.filter(
-    (item) => !planChosenIds.has(statusHomeworkId(item) ?? ""),
-  );
   const kept: T[] = [];
-  for (const item of collapsible) {
+  for (const item of afterDiagnostics) {
     const duplicateOf = kept.find((keeper) => collapsesWithListedHomework(keeper, item));
     if (!duplicateOf) {
       kept.push(item);
@@ -214,12 +224,48 @@ export function selectStatusHomework<T extends StatusHomeworkCandidate>(
       kept.splice(index, 1, item);
     }
   }
-  for (const pinned of planChosenBanks) {
-    const id = statusHomeworkId(pinned);
-    if (!id || kept.some((item) => statusHomeworkId(item) === id)) continue;
-    kept.push(pinned);
-  }
   return kept;
+}
+
+/**
+ * Publishing topic homework must not retarget `session_prework_plans` onto that
+ * row. Bank pre-work and diagnostics still own the plan.
+ */
+export function planAssignmentIdAfterPreworkPublish(input: {
+  publishedId: string;
+  publishedTitle: string;
+  existingPlanAssignmentId: string | null;
+}): { assignmentId: string | null; retarget: boolean } {
+  if (sessionPreworkDedupeSlot(input.publishedTitle) === "sat-topic-homework") {
+    return { assignmentId: input.existingPlanAssignmentId, retarget: false };
+  }
+  return { assignmentId: input.publishedId, retarget: true };
+}
+
+/**
+ * Archiving the plan's assignment may move the plan to another live bank
+ * pre-work. It must not move the plan onto topic homework.
+ */
+export function planAssignmentIdAfterPreworkArchive(input: {
+  archivedId: string;
+  currentPlanAssignmentId: string | null;
+  nextLive: { id: string; title: string } | null;
+}): string | null {
+  if (!input.currentPlanAssignmentId || input.currentPlanAssignmentId !== input.archivedId) {
+    return input.currentPlanAssignmentId;
+  }
+  if (
+    input.nextLive &&
+    sessionPreworkDedupeSlot(input.nextLive.title) !== "sat-topic-homework"
+  ) {
+    return input.nextLive.id;
+  }
+  return input.currentPlanAssignmentId;
+}
+
+/** Boot seed must leave an intentionally archived SAT homework set archived. */
+export function shouldRepublishSeededHomework(status: string | null | undefined): boolean {
+  return status !== "archived";
 }
 
 export type WrongAnswerCandidate = {

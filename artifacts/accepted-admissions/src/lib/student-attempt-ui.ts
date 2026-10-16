@@ -253,6 +253,21 @@ export function quizResponsesForPause(
 
 export const QUIZ_PAUSE_EXIT_LABEL = "Pause / Save & exit";
 
+export const RESPONSES_ONLY_WHILE_ACTIVE = "Responses can only be saved while active";
+
+/**
+ * A 409 with this message means the attempt is paused on the server.
+ * An in-place visibility pause should resume. Any other pause should show
+ * the paused screen instead of dropping the save.
+ */
+export function inactiveAttemptSaveRecovery(input: {
+  errorMessage: string | null | undefined;
+  autoPaused: boolean;
+}): "resume" | "show-paused" | "none" {
+  if (input.errorMessage !== RESPONSES_ONLY_WHILE_ACTIVE) return "none";
+  return input.autoPaused ? "resume" : "show-paused";
+}
+
 /**
  * The attempt clock advances only while status is active. Remaining time is
  * timeLimit minus those active seconds, so a paused attempt does not burn

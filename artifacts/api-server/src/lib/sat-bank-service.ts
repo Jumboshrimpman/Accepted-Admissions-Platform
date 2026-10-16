@@ -75,7 +75,12 @@ import {
   isFullLengthDiagnosticAssignment,
   pickDiagnosticKeeper,
 } from "./assignment-visibility.ts";
-import { isDuplicateSessionPrework } from "./session-homework.ts";
+import {
+  isDuplicateSessionPrework,
+  planAssignmentIdAfterPreworkArchive,
+  planAssignmentIdAfterPreworkPublish,
+} from "./session-homework.ts";
+import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
 import { reuseLivePreworkIfPresent } from "./session-prework-live.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import {
@@ -2292,25 +2297,32 @@ export async function syncSessionPreworkAfterAssignmentUpdate(assignment: {
       .from(sessionPreworkPlansTable)
       .where(eq(sessionPreworkPlansTable.sessionId, sessionId))
       .limit(1);
-    const targetMinutes =
-      assignment.timeLimitMinutes ??
-      existingPlan?.targetMinutes ??
-      (homeworkKind === "diagnostic" ? 164 : 60);
-    const planValues = {
-      assignmentId: assignment.id,
-      homeworkKind: existingPlan?.homeworkKind ?? homeworkKind,
-      targetMinutes,
-      estimatedSeconds: existingPlan?.estimatedSeconds ?? targetMinutes * 60,
-      status: "assigned",
-      updatedAt: new Date(),
-    };
-    if (existingPlan) {
-      await db
-        .update(sessionPreworkPlansTable)
-        .set(planValues)
-        .where(eq(sessionPreworkPlansTable.id, existingPlan.id));
-    } else {
-      await db.insert(sessionPreworkPlansTable).values({ sessionId, ...planValues });
+    const nextPlan = planAssignmentIdAfterPreworkPublish({
+      publishedId: assignment.id,
+      publishedTitle: assignment.title,
+      existingPlanAssignmentId: existingPlan?.assignmentId ?? null,
+    });
+    if (nextPlan.retarget && nextPlan.assignmentId) {
+      const targetMinutes =
+        assignment.timeLimitMinutes ??
+        existingPlan?.targetMinutes ??
+        (homeworkKind === "diagnostic" ? 164 : 60);
+      const planValues = {
+        assignmentId: nextPlan.assignmentId,
+        homeworkKind: existingPlan?.homeworkKind ?? homeworkKind,
+        targetMinutes,
+        estimatedSeconds: existingPlan?.estimatedSeconds ?? targetMinutes * 60,
+        status: "assigned" as const,
+        updatedAt: new Date(),
+      };
+      if (existingPlan) {
+        await db
+          .update(sessionPreworkPlansTable)
+          .set(planValues)
+          .where(eq(sessionPreworkPlansTable.id, existingPlan.id));
+      } else {
+        await db.insert(sessionPreworkPlansTable).values({ sessionId, ...planValues });
+      }
     }
     await db
       .update(sessionsTable)
@@ -2325,7 +2337,7 @@ export async function syncSessionPreworkAfterAssignmentUpdate(assignment: {
     .where(eq(sessionPreworkPlansTable.sessionId, sessionId))
     .limit(1);
   if (!plan || plan.assignmentId !== assignment.id) return;
-  const [next] = await db
+  const liveSiblings = await db
     .select()
     .from(assignmentsTable)
     .where(
@@ -2335,12 +2347,20 @@ export async function syncSessionPreworkAfterAssignmentUpdate(assignment: {
         ne(assignmentsTable.id, assignment.id),
         ne(assignmentsTable.status, "archived"),
       ),
-    )
-    .limit(1);
-  if (next) {
+    );
+  const next =
+    liveSiblings.find((row) => sessionPreworkDedupeSlot(row.title) === "sat-bank-prework") ??
+    liveSiblings.find((row) => sessionPreworkDedupeSlot(row.title) !== "sat-topic-homework") ??
+    null;
+  const nextPlanId = planAssignmentIdAfterPreworkArchive({
+    archivedId: assignment.id,
+    currentPlanAssignmentId: plan.assignmentId,
+    nextLive: next ? { id: next.id, title: next.title } : null,
+  });
+  if (nextPlanId && nextPlanId !== plan.assignmentId) {
     await db
       .update(sessionPreworkPlansTable)
-      .set({ assignmentId: next.id, updatedAt: new Date() })
+      .set({ assignmentId: nextPlanId, updatedAt: new Date() })
       .where(eq(sessionPreworkPlansTable.id, plan.id));
   }
 }

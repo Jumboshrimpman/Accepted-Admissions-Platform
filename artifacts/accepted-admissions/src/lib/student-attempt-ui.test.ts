@@ -14,8 +14,10 @@ import {
   inSessionPracticeHref,
   resolveInSessionPracticeLink,
   studentAssignmentActionLabel,
+  inactiveAttemptSaveRecovery,
   quizResponsesForPause,
   quizTimerLeaveAction,
+  RESPONSES_ONLY_WHILE_ACTIVE,
   studentAssignmentHref,
   studentCanSeeAnswerChoices,
   isAttemptUuid,
@@ -165,6 +167,30 @@ test("leaving a timed quiz pauses, and a tab switch resumes", () => {
       status: "submitted",
       intentionalExit: false,
       autoPaused: false,
+    }),
+    "none",
+  );
+});
+
+test("a save rejected while the attempt is paused resumes in place or shows the paused screen", () => {
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: true,
+    }),
+    "resume",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: false,
+    }),
+    "show-paused",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: "Prediction is locked",
+      autoPaused: true,
     }),
     "none",
   );
