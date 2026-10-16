@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingCard } from "@/pages/portal/booking-card";
+import { portalCheckoutCopy } from "@/lib/consulting-tutor-display";
 import {
   PORTAL_BEGIN_RESCHEDULE_EVENT,
   PORTAL_BOOKING_SECTION_ID,
@@ -483,10 +484,10 @@ export default function PortalSat() {
                   return (
                     <div key={product.id} className="rounded-xl border p-4" data-testid={`portal-sat-offer-${product.id}`}>
                       <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold">{product.name}</p>
+                        <p className="font-semibold">{portalCheckoutCopy(product.name)}</p>
                         <Badge variant="secondary">{credits} credit{credits === 1 ? "" : "s"}</Badge>
                       </div>
-                      <p className="mt-2 text-sm text-muted-foreground">{product.description}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">{portalCheckoutCopy(product.description)}</p>
                       <p className="mt-3 font-display text-3xl">{price}</p>
                       <Button
                         className="mt-4 w-full"

@@ -9,3 +9,30 @@ export function consultingCreditsTutorLabel(name: string): string {
   if (/^victoria\b/i.test(trimmed)) return "Victoria";
   return trimmed;
 }
+
+/** Portal booking cards show the first name only. Stored names stay unchanged. */
+export function portalTutorFirstName(storedName: string): string {
+  const trimmed = storedName.trim();
+  const first = trimmed.split(/\s+/)[0] ?? "";
+  return first || trimmed;
+}
+
+/** Sama's square headshot. The public site keeps /media/team/victoria.jpg. */
+export const PORTAL_VICTORIA_PHOTO_URL = "/media/portal/victoria.jpg";
+
+export function portalBookingTutorPhoto(
+  storedName: string,
+  photoUrl: string | null | undefined,
+): string | null {
+  if (/^victoria\b/i.test(storedName.trim())) return PORTAL_VICTORIA_PHOTO_URL;
+  const stored = photoUrl?.trim() ?? "";
+  return stored || null;
+}
+
+/** Checkout copy on the booking flow. Catalog rows are not rewritten. */
+export function portalCheckoutCopy(text: string): string {
+  return text.replace(
+    /\b(Nika Raiffe|Victoria Wijerathnayapa|Xavier Morales|Eunice Chon)\b/g,
+    (fullName) => portalTutorFirstName(fullName),
+  );
+}

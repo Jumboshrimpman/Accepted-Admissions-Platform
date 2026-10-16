@@ -29,7 +29,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import {
   CONSULTING_TUTOR_PHOTO_CLASS,
-  consultingCreditsTutorLabel,
+  portalBookingTutorPhoto,
+  portalTutorFirstName,
 } from "@/lib/consulting-tutor-display";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
@@ -94,6 +95,8 @@ function BookingTutorOption({
   const [bioOpen, setBioOpen] = useState(false);
   const tagline = tutor.tagline?.trim() ?? "";
   const biography = tutor.biography?.trim() ?? "";
+  const displayName = portalTutorFirstName(tutor.name);
+  const photoUrl = portalBookingTutorPhoto(tutor.name, tutor.photoUrl);
   return (
     <div
       className={`rounded-2xl border transition-colors ${
@@ -108,9 +111,9 @@ function BookingTutorOption({
         className="w-full p-4 text-left"
       >
         <div className="flex items-start gap-4">
-          {tutor.photoUrl ? (
+          {photoUrl ? (
             <img
-              src={tutor.photoUrl}
+              src={photoUrl}
               alt=""
               width={112}
               height={112}
@@ -118,21 +121,13 @@ function BookingTutorOption({
             />
           ) : (
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-semibold text-muted-foreground">
-              {tutor.name
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((part) => part[0] ?? "")
-                .join("")}
+              {displayName.slice(0, 1)}
             </div>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold">
-                  {tutor.serviceName === "College Consulting"
-                    ? consultingCreditsTutorLabel(tutor.name)
-                    : tutor.name}
-                </p>
+                <p className="font-semibold">{displayName}</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">{tutor.title}</p>
               </div>
               <span
@@ -516,8 +511,8 @@ export function BookingCard({
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
               {collegeConsulting
-                ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
-                : "Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
+                ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
+                : "Choose Xavier or Eunice and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -550,9 +545,7 @@ export function BookingCard({
                         : "hover:border-primary/40 hover:bg-muted/40"
                     }`}
                   >
-                    {tutor.serviceName === "College Consulting"
-                      ? consultingCreditsTutorLabel(tutor.name)
-                      : tutor.name}
+                    {portalTutorFirstName(tutor.name)}
                   </button>
                 ))}
               </div>
@@ -574,7 +567,7 @@ export function BookingCard({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-semibold">
-                     {reschedulingSessionId ? `Choose a new time with ${selectedTutor.name}` : `Available times with ${selectedTutor.name}`}
+                     {reschedulingSessionId ? `Choose a new time with ${portalTutorFirstName(selectedTutor.name)}` : `Available times with ${portalTutorFirstName(selectedTutor.name)}`}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Showing times through {format(rangeEnd, "MMM d")} in {clientTimezoneCaption(displayTimezone)}.
@@ -592,7 +585,7 @@ export function BookingCard({
                     <span>This tutor needs to reconnect Google Calendar before times can be displayed.</span>
                   </div>
                 ) : availableSlots.length === 0 ? (
-                   <p className="mt-4 text-sm text-muted-foreground">{selectedTutor.name} has no open times in this window. Please check again soon.</p>
+                   <p className="mt-4 text-sm text-muted-foreground">{portalTutorFirstName(selectedTutor.name)} has no open times in this window. Please check again soon.</p>
                 ) : (
                   <div className="mt-4 grid items-start gap-5 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(16rem,1fr)]">
                     <div

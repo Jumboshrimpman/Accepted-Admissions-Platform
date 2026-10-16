@@ -58,10 +58,10 @@ describe("OurTeam publication gate", () => {
               },
               {
                 id: "nika",
-                name: "Nika",
+                name: "Nika Raiffe",
                 title: "Admissions Tutor",
                 photoUrl: "https://example.com/nika.png",
-                photoAltText: "Nika, Admissions Tutor",
+                photoAltText: "Nika Raiffe, Admissions Tutor",
                 biography: "Approved admissions biography",
                 subjects: ["College admissions"],
                 linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
@@ -99,12 +99,12 @@ describe("OurTeam publication gate", () => {
       within(roster)
         .getAllByRole("heading", { level: 2 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Rosanna Kataja", "Xavier Morales", "Nika"]);
+    ).toEqual(["Rosanna Kataja", "Xavier Morales", "Nika Raiffe"]);
     expect(
       screen.getByAltText("Rosanna Kataja, Admissions Tutor"),
     ).toBeTruthy();
-    expect(screen.getByAltText("Nika, Admissions Tutor")).toBeTruthy();
-    expect(screen.getByAltText("Nika, Admissions Tutor").getAttribute("src")).toBe("https://example.com/nika.png");
+    expect(screen.getByAltText("Nika Raiffe, Admissions Tutor")).toBeTruthy();
+    expect(screen.getByAltText("Nika Raiffe, Admissions Tutor").getAttribute("src")).toBe("https://example.com/nika.png");
     expect(
       screen
         .getByRole("link", { name: "View Xavier Morales on LinkedIn" })
@@ -119,7 +119,7 @@ describe("OurTeam publication gate", () => {
       ["Eunice Chon", "eunice"],
       ["Sophia Lamas", "sophia"],
       ["Aurelia Finch", "aurelia"],
-      ["Nika", "nika"],
+      ["Nika Raiffe", "nika"],
       ["Kya Brooks", "kya"],
       ["Michael Pecorara", "michael"],
       ["Kyle Englander", "kyle"],
@@ -142,7 +142,7 @@ describe("OurTeam publication gate", () => {
       eunice:
         "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.",
       nika:
-        "Nika is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.",
+        "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.",
       kya: "Kya is a senior at Harvard studying economics and the History of Art and Literature.",
     };
     const tutors = [...approvedRoster].reverse().map(([name, id]) => ({
@@ -196,7 +196,7 @@ describe("OurTeam publication gate", () => {
     const michaelCard = screen.getByTestId("card-team-michael");
     const xavierImage = within(xavierCard).getByAltText("Xavier Morales, Tutor");
     const euniceImage = within(euniceCard).getByAltText("Eunice Chon, Tutor");
-    const nikaImage = within(nikaCard).getByAltText("Nika, Tutor");
+    const nikaImage = within(nikaCard).getByAltText("Nika Raiffe, Tutor");
     const kyaImage = within(kyaCard).getByAltText("Kya Brooks, Admissions Tutor");
     const michaelImage = within(michaelCard).getByAltText("Michael Pecorara, Tutor");
     expect(xavierImage.getAttribute("src")).toContain("/media/team/xavier-morales.jpg");
