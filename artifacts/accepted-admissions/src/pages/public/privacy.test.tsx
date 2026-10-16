@@ -55,7 +55,11 @@ describe("Privacy Policy", () => {
     const policyLink = screen.getByRole("link", { name: /Google API Services User Data Policy/i });
     expect(policyLink.getAttribute("href")).toBe(GOOGLE_API_USER_DATA_POLICY_URL);
     const google = screen.getByRole("heading", { name: "Google user data" }).closest("section");
-    expect(google?.textContent).toMatch(/openid, email, calendar\.freebusy, and calendar\.events/);
+    expect(google?.textContent).toMatch(
+      /openid, email, calendar\.freebusy, and calendar\.app\.created/,
+    );
+    expect(google?.textContent).toMatch(/Accepted Admissions Sessions/);
+    expect(google?.textContent).toMatch(/primary calendar/);
     expect(google?.textContent).toMatch(/Google account email to match it to the tutor/);
     expect(google?.textContent).toMatch(/read and update the guest lists/);
     expect(google?.textContent).toMatch(/business’s admin address/);

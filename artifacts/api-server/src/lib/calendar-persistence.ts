@@ -23,6 +23,7 @@ export type GoogleCalendarTokens = {
   refreshToken?: string;
   expiresIn?: number;
   email?: string;
+  scope?: string;
 };
 
 const CALENDAR_GRANT_REVOKED_ERROR =
@@ -67,11 +68,13 @@ export async function persistGoogleCalendarConnection(
       throw new Error(GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING);
     }
     const googleAccountEmail = normalizedGoogleAccountEmail(tokens.email);
+    const grantedScopes = tokens.scope?.trim() || null;
     const insertValues = {
       tutorProfileId,
       provider: "google",
       status: "connected",
       calendarId: "primary",
+      ...(grantedScopes ? { grantedScopes } : {}),
       encryptedAccessToken: encryptCalendarToken(tokens.accessToken),
       encryptedRefreshToken: nextRefreshToken,
       accessTokenExpiresAt,
@@ -92,6 +95,7 @@ export async function persistGoogleCalendarConnection(
       lastErrorAt: null,
       updatedAt: connectedAt,
       ...(googleAccountEmail ? { googleAccountEmail } : {}),
+      ...(grantedScopes ? { grantedScopes } : {}),
     };
     const [connection] = await tx
       .insert(calendarConnectionsTable)
@@ -159,6 +163,8 @@ export async function adoptGoogleCalendarConnection(
       accessTokenExpiresAt: from.accessTokenExpiresAt,
       connectedAt: from.connectedAt ?? adoptedAt,
       googleAccountEmail: from.googleAccountEmail,
+      appCalendarId: from.appCalendarId,
+      grantedScopes: from.grantedScopes,
       lastTokenRefreshAt: from.lastTokenRefreshAt,
       lastFreeBusyAt: from.lastFreeBusyAt,
       lastError: from.lastError,
@@ -189,6 +195,8 @@ export async function adoptGoogleCalendarConnection(
           accessTokenExpiresAt: null,
           connectedAt: null,
           googleAccountEmail: null,
+          appCalendarId: null,
+          grantedScopes: null,
           lastTokenRefreshAt: null,
           lastFreeBusyAt: null,
           lastError: null,
@@ -236,6 +244,26 @@ export async function saveRefreshedGoogleAccessToken(
     .update(tutorProfilesTable)
     .set({ calendarStatus: "connected", updatedAt: refreshedAt })
     .where(eq(tutorProfilesTable.id, connection.tutorProfileId));
+  return connection;
+}
+
+export async function saveAcceptedAdmissionsCalendarId(
+  connectionId: string,
+  appCalendarId: string,
+  savedAt = new Date(),
+  grantedScopes?: string | null,
+) {
+  const scopes = grantedScopes?.trim() || null;
+  const [connection] = await db
+    .update(calendarConnectionsTable)
+    .set({
+      appCalendarId,
+      ...(scopes ? { grantedScopes: scopes } : {}),
+      updatedAt: savedAt,
+    })
+    .where(eq(calendarConnectionsTable.id, connectionId))
+    .returning();
+  if (!connection) throw new Error("Calendar connection no longer exists");
   return connection;
 }
 

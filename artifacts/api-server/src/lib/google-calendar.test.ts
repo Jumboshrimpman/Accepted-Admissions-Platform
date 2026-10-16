@@ -88,12 +88,16 @@ test("requests the configured least-privilege Google Calendar scopes", () => {
     "openid",
     "email",
     "https://www.googleapis.com/auth/calendar.freebusy",
-    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.app.created",
   ]);
   assert.deepEqual(GOOGLE_CALENDAR_DATA_SCOPES, [
     "https://www.googleapis.com/auth/calendar.freebusy",
-    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.app.created",
   ]);
+  assert.equal(
+    GOOGLE_CALENDAR_SCOPES.includes("https://www.googleapis.com/auth/calendar.events"),
+    false,
+  );
   assert.equal(
     JSON.stringify(GOOGLE_CALENDAR_SCOPES).includes("calendar.events.freebusy"),
     false,
@@ -409,7 +413,7 @@ test("getGoogleCalendarConfig uses environment-provided HTTPS redirect", () => {
   assert.equal(parsed.searchParams.get("prompt"), "consent select_account");
   assert.equal(
     parsed.searchParams.get("scope"),
-    "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+    "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.app.created",
   );
   process.env.GOOGLE_CALENDAR_CLIENT_ID = previous.id;
   process.env.GOOGLE_CALENDAR_CLIENT_SECRET = previous.secret;
@@ -508,9 +512,15 @@ test("classifies cancelled, rejected, and redirect-mismatch Google failures", ()
 test("granted Google scopes accept userinfo.email aliases and require calendar data scopes", () => {
   assert.equal(
     grantedScopesIncludeRequired(
-      "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+      "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.app.created",
     ),
     true,
+  );
+  assert.equal(
+    grantedScopesIncludeRequired(
+      "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+    ),
+    false,
   );
   assert.equal(
     grantedScopesIncludeRequired(

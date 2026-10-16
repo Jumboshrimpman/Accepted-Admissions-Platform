@@ -18,12 +18,16 @@ export { resolvePublicRequestOrigin };
 export const GOOGLE_CALENDAR_IDENTITY_SCOPES = ["openid", "email"] as const;
 
 /**
- * Calendar data scopes. `calendar.events.freebusy` is not a valid Google scope;
- * freeBusy requires `calendar.freebusy`, and event create/update uses `calendar.events`.
+ * freeBusy.query accepts calendar.freebusy (and also calendar.events.freebusy).
+ * This app requests calendar.freebusy only.
+ * Events are created on a secondary calendar via calendar.app.created, not calendar.events.
  */
+export const GOOGLE_CALENDAR_FREEBUSY_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
+export const GOOGLE_CALENDAR_APP_CREATED_SCOPE =
+  "https://www.googleapis.com/auth/calendar.app.created";
 export const GOOGLE_CALENDAR_DATA_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.freebusy",
-  "https://www.googleapis.com/auth/calendar.events",
+  GOOGLE_CALENDAR_FREEBUSY_SCOPE,
+  GOOGLE_CALENDAR_APP_CREATED_SCOPE,
 ] as const;
 
 export const GOOGLE_CALENDAR_SCOPES = [
@@ -340,7 +344,7 @@ export function calendarConnectProbeFailure(error: unknown): CalendarOAuthError 
   if (isGoogleCalendarAuthFailure(error)) {
     return new CalendarOAuthError(
       "rejected",
-      "Google Calendar is missing required free/busy or event permissions. Reconnect and grant the requested access.",
+      "Google Calendar is missing free/busy or Accepted Admissions calendar access. Reconnect and grant the requested access.",
     );
   }
   return new CalendarOAuthError(
@@ -1034,6 +1038,7 @@ export async function exchangeGoogleCode(
   expiresIn?: number;
   googleAccountId: string;
   email: string;
+  scope?: string;
 }> {
   const config = getGoogleCalendarConfig();
   if (!config) {
@@ -1068,7 +1073,7 @@ export async function exchangeGoogleCode(
   if (data.scope !== undefined && !grantedScopesIncludeRequired(data.scope)) {
     throw new CalendarOAuthError(
       "rejected",
-      "Google Calendar is missing required free/busy or event permissions. Reconnect and grant the requested access.",
+      "Google Calendar is missing free/busy or Accepted Admissions calendar access. Reconnect and grant the requested access.",
     );
   }
   if (!data.access_token) {
@@ -1120,6 +1125,7 @@ export async function exchangeGoogleCode(
     expiresIn: data.expires_in,
     googleAccountId: claims.googleAccountId,
     email: claims.email,
+    scope: data.scope,
   };
 }
 
@@ -1435,10 +1441,13 @@ export async function googleCalendarRequest<T>(
 
 export async function listGoogleBusyWindows(
   accessToken: string,
-  calendarId: string,
+  calendarId: string | readonly string[],
   timeMin: Date,
   timeMax: Date,
 ): Promise<GoogleBusyWindow[]> {
+  const calendarIds = (typeof calendarId === "string" ? [calendarId] : [...calendarId])
+    .map((id) => id.trim())
+    .filter(Boolean);
   const data = await googleCalendarRequest<{
     calendars?: Record<string, { busy?: GoogleBusyWindow[] }>;
   }>(accessToken, "/calendar/v3/freeBusy", {
@@ -1446,10 +1455,14 @@ export async function listGoogleBusyWindows(
     body: JSON.stringify({
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
-      items: [{ id: calendarId }],
+      items: calendarIds.map((id) => ({ id })),
     }),
   });
-  return data.calendars?.[calendarId]?.busy ?? [];
+  const busy: GoogleBusyWindow[] = [];
+  for (const id of calendarIds) {
+    busy.push(...(data.calendars?.[id]?.busy ?? []));
+  }
+  return busy;
 }
 
 export type GoogleCalendarSendUpdates = "all" | "none";
@@ -1478,6 +1491,32 @@ export function isGoogleCalendarNotFound(error: unknown): boolean {
   return error instanceof GoogleCalendarRequestError && error.status === 404;
 }
 
+export function isGoogleCalendarForbidden(error: unknown): boolean {
+  return error instanceof GoogleCalendarRequestError && error.status === 403;
+}
+
+export async function getGoogleCalendar(
+  accessToken: string,
+  calendarId: string,
+): Promise<{ id?: string; summary?: string }> {
+  return googleCalendarRequest<{ id?: string; summary?: string }>(
+    accessToken,
+    `/calendar/v3/calendars/${encodeURIComponent(calendarId)}`,
+    { method: "GET" },
+  );
+}
+
+export async function createSecondaryGoogleCalendar(
+  accessToken: string,
+  summary: string,
+): Promise<{ id?: string; summary?: string }> {
+  return googleCalendarRequest<{ id?: string; summary?: string }>(
+    accessToken,
+    "/calendar/v3/calendars",
+    { method: "POST", body: JSON.stringify({ summary }) },
+  );
+}
+
 export async function createGoogleEvent(
   accessToken: string,
   calendarId: string,
@@ -1496,15 +1535,16 @@ export async function deleteGoogleEvent(
   calendarId: string,
   eventId: string,
   sendUpdates: GoogleCalendarSendUpdates = "all",
-): Promise<void> {
+): Promise<{ missing: boolean }> {
   try {
     await googleCalendarRequest<void>(
       accessToken,
       googleCalendarEventWritePath(calendarId, eventId, sendUpdates),
       { method: "DELETE" },
     );
+    return { missing: false };
   } catch (error) {
-    if (isGoogleCalendarNotFound(error)) return;
+    if (isGoogleCalendarNotFound(error)) return { missing: true };
     throw error;
   }
 }

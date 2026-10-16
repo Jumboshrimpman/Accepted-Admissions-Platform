@@ -477,6 +477,39 @@ export async function recordBookingConfirmedAudit(
   });
 }
 
+/** In-app only. The message has no student, tutor, or email. */
+export async function raiseLegacyCalendarManualEditAlert(sessionId: string): Promise<void> {
+  const already = await db
+    .select({ id: adminNotificationsTable.id })
+    .from(adminNotificationsTable)
+    .where(
+      and(
+        eq(adminNotificationsTable.sessionId, sessionId),
+        eq(adminNotificationsTable.kind, "legacy_calendar_event"),
+        eq(adminNotificationsTable.status, "unread"),
+      ),
+    )
+    .limit(1);
+  if (already.length > 0) return;
+  const administrators = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.role, "administrator"));
+  if (administrators.length === 0) return;
+  await db.insert(adminNotificationsTable).values(
+    administrators.map((admin) => ({
+      recipientUserId: admin.id,
+      kind: "legacy_calendar_event",
+      guidanceRequestId: null,
+      sessionId,
+      title: "Calendar event needs a manual edit",
+      message:
+        "This session's Google Calendar event is on the tutor's primary calendar, and the current grant cannot change it. Edit that event by hand.",
+      status: "unread",
+    })),
+  );
+}
+
 export async function notifyAdministratorsOfBooking(args: {
   kind: "booking_confirmed" | "booking_cancelled";
   sessionId: string;

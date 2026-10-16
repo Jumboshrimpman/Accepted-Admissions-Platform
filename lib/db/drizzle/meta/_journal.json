@@ -351,6 +351,13 @@
       "when": 1791600000000,
       "tag": "0050_calendar_oauth_nonces",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791900000000,
+      "tag": "0054_app_created_calendar",
+      "breakpoints": true
     }
   ]
 }
