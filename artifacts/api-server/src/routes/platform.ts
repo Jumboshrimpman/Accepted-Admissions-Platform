@@ -11423,14 +11423,41 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
     rows.push(row);
     questionsByAssignment.set(assignmentId, rows);
   }
+  const attemptCounts = new Map<string, number>();
+  const [planRows, attemptRows] = await Promise.all([
+    db
+      .select({ assignmentId: sessionPreworkPlansTable.assignmentId })
+      .from(sessionPreworkPlansTable)
+      .where(eq(sessionPreworkPlansTable.sessionId, session.id))
+      .limit(1),
+    session.clientUserId && assignmentIds.length > 0
+      ? db
+          .select({ assignmentId: attemptsTable.assignmentId })
+          .from(attemptsTable)
+          .where(
+            and(
+              eq(attemptsTable.userId, session.clientUserId),
+              inArray(attemptsTable.assignmentId, assignmentIds),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+  for (const row of attemptRows) {
+    attemptCounts.set(row.assignmentId, (attemptCounts.get(row.assignmentId) ?? 0) + 1);
+  }
+  const planAssignmentId = planRows[0]?.assignmentId ?? null;
   const sectionPlans = selectSessionPdfSections({
     phase,
     assignments: activeAssignments.map((assignment) => ({
       id: assignment.id,
       title: assignment.title,
+      subject: assignment.subject,
       deliveryPhase: assignment.deliveryPhase,
       status: assignment.status,
       createdAt: assignment.createdAt,
+      questionCount: (questionsByAssignment.get(assignment.id) ?? []).length,
+      attemptCount: attemptCounts.get(assignment.id) ?? 0,
+      planAssignmentId,
       questions: (questionsByAssignment.get(assignment.id) ?? []).map((row) => ({
         id: row.question.id,
         position: row.assignmentQuestion.position,

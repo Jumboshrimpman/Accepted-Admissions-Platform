@@ -166,6 +166,9 @@ test("the download route is read-only and uses the tutor access check", async ()
   assert.match(slice, /status\(400\)/);
   assert.match(slice, /decideSessionQuestionPdfAccess/);
   assert.match(slice, /selectSessionPdfSections/);
+  assert.match(slice, /session\.clientUserId/);
+  assert.match(slice, /attemptCount/);
+  assert.match(slice, /planAssignmentId/);
   assert.match(slice, /temporaryAliasMayDownloadAnswerKey/);
   assert.match(slice, /inArray\(assignmentQuestionsTable\.assignmentId/);
   assert.match(slice, /michelleQuizMathRepairEnabled/);
@@ -576,4 +579,109 @@ test("session 37062b4f PDFs keep the bank, topic homework, and hard set apart", 
   assert.doesNotMatch(duringText, /best supported by the survey/);
   assert.doesNotMatch(duringText, /Evidence and Inference/);
   assertLinesFit(pdfTextRuns(duringPdf).filter((run) => run.size === 12));
+});
+
+test("pre-work keeps the attempted plan bank and prints duplicate topic homework once", () => {
+  const planId = "bank-attempted";
+  const questions = (prefix: string, count: number) =>
+    Array.from({ length: count }, (_, index) => ({ id: `${prefix}-${index}`, position: index }));
+  const sections = selectSessionPdfSections({
+    phase: "before_session",
+    assignments: [
+      {
+        id: "bank-newer",
+        title: "SAT pre-work (30–50 q)",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-10-16T00:00:00.000Z",
+        questionCount: 40,
+        attemptCount: 0,
+        planAssignmentId: planId,
+        questions: questions("newer", 40),
+      },
+      {
+        id: planId,
+        title: "SAT pre-work (30–50 questions)",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-10-01T00:00:00.000Z",
+        questionCount: 40,
+        attemptCount: 1,
+        planAssignmentId: planId,
+        questions: questions("attempted", 40),
+      },
+      {
+        id: "topic-older",
+        title: "SAT Homework — Evidence and Inference",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        questionCount: 4,
+        attemptCount: 1,
+        planAssignmentId: planId,
+        questions: questions("topic-a", 4),
+      },
+      {
+        id: "topic-newer",
+        title: "SAT Homework — Evidence and Inference",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-10-02T00:00:00.000Z",
+        questionCount: 4,
+        attemptCount: 0,
+        planAssignmentId: planId,
+        questions: questions("topic-b", 4),
+      },
+    ],
+  });
+  assert.deepEqual(
+    sections.map((section) => section.assignmentId),
+    [planId, "topic-older"],
+  );
+  assert.deepEqual(sections[0]?.questionIds, questions("attempted", 40).map((item) => item.id));
+  assert.equal(sections.filter((section) => section.title.includes("Evidence")).length, 1);
+});
+
+test("WinAnsi fractions and accents use Helvetica AFM widths, and bold titles wrap", () => {
+  assert.equal(helveticaTextWidth("\u00bc", 1000), 834);
+  assert.equal(helveticaTextWidth("\u00bd", 1000), 834);
+  assert.equal(helveticaTextWidth("\u00be", 1000), 834);
+  assert.equal(helveticaTextWidth("\u00a9", 1000), 737);
+  assert.equal(helveticaTextWidth("\u00ae", 1000), 737);
+  assert.equal(helveticaTextWidth("\u00c6", 1000), 1000);
+  assert.equal(helveticaTextWidth("\u00e6", 1000), 889);
+  assert.equal(helveticaTextWidth("\u00c9", 1000), 667);
+  assert.equal(helveticaTextWidth("\u00e9", 1000), 556);
+  assert.equal(helveticaTextWidth("\u00bd", 1000, true), 834);
+  assert.equal(helveticaTextWidth("\u00c6", 1000, true), 1000);
+  assert.equal(helveticaTextWidth("M", 1000, true), 833);
+  assert.ok(helveticaTextWidth("W", 1000, true) > helveticaTextWidth("i", 1000, true));
+  for (let code = 0xa0; code <= 0xff; code += 1) {
+    const width = helveticaTextWidth(String.fromCharCode(code), 1000);
+    assert.notEqual(width, 600, `U+${code.toString(16)} still uses the 600 default`);
+    assert.ok(width > 0);
+  }
+
+  const title =
+    "SAT Homework — Evidence and Inference for the October session with a very long assignment title that cannot fit on one line of this page";
+  assert.ok(helveticaTextWidth(title, 13, true) > SESSION_PDF_CONTENT_WIDTH);
+  const pdf = renderSessionQuestionPdf({
+    phase: "before_session",
+    includeAnswerKey: false,
+    sessionTitle: "Taito's SAT Session with Eunice",
+    sessionDateLabel: "Fri, Oct 16, 2026",
+    studentName: "Taito Goto",
+    sections: [{ title, questions: [{ prompt: "Only question" }] }],
+  });
+  const titles = pdfTextRuns(pdf).filter((run) => run.size === 13);
+  assert.ok(titles.length >= 2, `bold title should wrap, saw ${titles.length} lines`);
+  const rightLimit = SESSION_PDF_MARGIN + SESSION_PDF_CONTENT_WIDTH + 1;
+  for (const run of titles) {
+    const right = run.x + helveticaTextWidth(run.text, run.size, true);
+    assert.ok(right <= rightLimit, `"${run.text}" ends at ${right}`);
+  }
 });

@@ -4,6 +4,7 @@ import path from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
 import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import { CANONICAL_APP_ORIGIN, resolveConfiguredAppOrigin } from "./public-origin.ts";
+import { selectStatusHomework, type StatusHomeworkCandidate } from "./session-homework.ts";
 import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
 
 export type SessionQuestionPdfPhase = "before_session" | "during_session";
@@ -48,6 +49,14 @@ export type SessionPdfAssignment = {
   title: string;
   deliveryPhase: string;
   status: string;
+  subject?: string | null;
+  homeworkKind?: string | null;
+  /** Override when the attached question list is not the count students see. */
+  questionCount?: number | null;
+  /** Attempts by the session's client, the same count selectStatusHomework uses. */
+  attemptCount?: number | null;
+  /** session_prework_plans.assignment_id for this session. */
+  planAssignmentId?: string | null;
   createdAt?: Date | string | number | null;
   questions: readonly SessionPdfAssignmentQuestion[];
 };
@@ -118,9 +127,24 @@ function isHardQuestionBankTitle(title: string): boolean {
   return /hard-question bank/i.test(title.trim());
 }
 
+function statusHomeworkCandidate(assignment: SessionPdfAssignment): StatusHomeworkCandidate {
+  return {
+    id: assignment.id,
+    title: assignment.title,
+    status: assignment.status,
+    subject: assignment.subject ?? null,
+    homeworkKind: assignment.homeworkKind ?? null,
+    questionCount: assignment.questionCount ?? assignment.questions.length,
+    attemptCount: assignment.attemptCount ?? 0,
+    deliveryPhase: assignment.deliveryPhase,
+    createdAt: assignment.createdAt,
+    planAssignmentId: assignment.planAssignmentId ?? null,
+  };
+}
+
 /**
- * Pre-work PDFs lead with the bank set (the 30–50 question copy), then any
- * other live before-session homework as its own labeled section.
+ * Pre-work PDFs use the same collapse as the student homework list, then
+ * put the bank section first and any other surviving homework after it.
  * In-session PDFs use the hard-question bank when that assignment exists,
  * and never repeat a question that is already on pre-work.
  */
@@ -140,21 +164,20 @@ export function selectSessionPdfSections(input: {
 
   if (input.phase === "before_session") {
     const before = live.filter((assignment) => assignment.deliveryPhase === "before_session");
-    const banks = before.filter(
+    const byId = new Map(before.map((assignment) => [assignment.id, assignment]));
+    const listed = selectStatusHomework(before.map(statusHomeworkCandidate));
+    const selected = listed.flatMap((item) => {
+      const id = item.id ?? item.assignmentId;
+      const assignment = id ? byId.get(id) : undefined;
+      return assignment ? [assignment] : [];
+    });
+    const banks = selected.filter(
       (assignment) => sessionPreworkDedupeSlot(assignment.title) === "sat-bank-prework",
     );
-    const bank = [...banks].sort((left, right) => {
-      const countDelta = orderedQuestionIds(right).length - orderedQuestionIds(left).length;
-      if (countDelta !== 0) return countDelta;
-      return assignmentCreatedMs(right.createdAt) - assignmentCreatedMs(left.createdAt);
-    })[0];
-    const others = before
-      .filter((assignment) => assignment.id !== bank?.id)
-      .filter((assignment) => sessionPreworkDedupeSlot(assignment.title) !== "sat-bank-prework")
-      .sort(
-        (left, right) => assignmentCreatedMs(left.createdAt) - assignmentCreatedMs(right.createdAt),
-      );
-    return [...(bank ? [bank] : []), ...others]
+    const others = selected.filter(
+      (assignment) => sessionPreworkDedupeSlot(assignment.title) !== "sat-bank-prework",
+    );
+    return [...banks, ...others]
       .map((assignment) => ({
         assignmentId: assignment.id,
         title: assignment.title.trim() || "Pre-work",
@@ -415,145 +438,43 @@ function parseRichText(value: string): TextRun[] {
 }
 
 /**
- * Adobe Helvetica AFM widths in 1000-unit ems. The old average (0.52em)
- * was narrower than m/w and wider than i/l, so long lines overprinted
- * and pdftotext glued words like "mapsand".
+ * Adobe Helvetica AFM widths in 1000-unit ems, including WinAnsi Latin-1.
+ * The old 0.52em average was narrower than m/w, so long lines overprinted.
  */
+function fillWinAnsiWidths(target: Uint16Array, pairs: readonly number[]) {
+  for (let index = 0; index < pairs.length; index += 2) {
+    target[pairs[index]!] = pairs[index + 1]!;
+  }
+}
 const HELVETICA_UNITS = new Uint16Array(256);
-for (let code = 0; code < HELVETICA_UNITS.length; code += 1) HELVETICA_UNITS[code] = 600;
-const HELVETICA_ASCII: Record<string, number> = {
-  " ": 278,
-  "!": 278,
-  '"': 355,
-  "#": 556,
-  $: 556,
-  "%": 889,
-  "&": 667,
-  "'": 191,
-  "(": 333,
-  ")": 333,
-  "*": 389,
-  "+": 584,
-  ",": 278,
-  "-": 333,
-  ".": 278,
-  "/": 278,
-  "0": 556,
-  "1": 556,
-  "2": 556,
-  "3": 556,
-  "4": 556,
-  "5": 556,
-  "6": 556,
-  "7": 556,
-  "8": 556,
-  "9": 556,
-  ":": 278,
-  ";": 278,
-  "<": 584,
-  "=": 584,
-  ">": 584,
-  "?": 556,
-  "@": 1015,
-  A: 667,
-  B: 667,
-  C: 722,
-  D: 722,
-  E: 667,
-  F: 611,
-  G: 778,
-  H: 722,
-  I: 278,
-  J: 500,
-  K: 667,
-  L: 556,
-  M: 833,
-  N: 722,
-  O: 778,
-  P: 667,
-  Q: 778,
-  R: 722,
-  S: 667,
-  T: 611,
-  U: 722,
-  V: 667,
-  W: 944,
-  X: 667,
-  Y: 667,
-  Z: 611,
-  "[": 278,
-  "\\": 278,
-  "]": 278,
-  "^": 469,
-  _: 556,
-  "`": 333,
-  a: 556,
-  b: 556,
-  c: 500,
-  d: 556,
-  e: 556,
-  f: 278,
-  g: 556,
-  h: 556,
-  i: 222,
-  j: 222,
-  k: 500,
-  l: 222,
-  m: 833,
-  n: 556,
-  o: 556,
-  p: 556,
-  q: 556,
-  r: 333,
-  s: 500,
-  t: 278,
-  u: 556,
-  v: 500,
-  w: 722,
-  x: 500,
-  y: 500,
-  z: 500,
-  "{": 334,
-  "|": 260,
-  "}": 334,
-  "~": 584,
-};
-for (const [char, width] of Object.entries(HELVETICA_ASCII)) {
-  HELVETICA_UNITS[char.charCodeAt(0)] = width;
-}
-for (const [code, width] of [
-  [0xa0, 278],
-  [0xb0, 400],
-  [0xb1, 584],
-  [0xb2, 333],
-  [0xb3, 333],
-  [0xb7, 278],
-  [0xd7, 584],
-  [0xf7, 584],
-] as const) {
-  HELVETICA_UNITS[code] = width;
-}
+fillWinAnsiWidths(HELVETICA_UNITS, [32,278,33,278,34,355,35,556,36,556,37,889,38,667,39,191,40,333,41,333,42,389,43,584,44,278,45,333,46,278,47,278,48,556,49,556,50,556,51,556,52,556,53,556,54,556,55,556,56,556,57,556,58,278,59,278,60,584,61,584,62,584,63,556,64,1015,65,667,66,667,67,722,68,722,69,667,70,611,71,778,72,722,73,278,74,500,75,667,76,556,77,833,78,722,79,778,80,667,81,778,82,722,83,667,84,611,85,722,86,667,87,944,88,667,89,667,90,611,91,278,92,278,93,278,94,469,95,556,96,333,97,556,98,556,99,500,100,556,101,556,102,278,103,556,104,556,105,222,106,222,107,500,108,222,109,833,110,556,111,556,112,556,113,556,114,333,115,500,116,278,117,556,118,500,119,722,120,500,121,500,122,500,123,334,124,260,125,334,126,584,128,556,130,222,131,556,132,333,133,1000,134,556,135,556,136,333,137,1000,138,667,139,333,140,1000,142,611,145,222,146,222,147,333,148,333,149,350,150,556,151,1000,152,333,153,1000,154,500,155,333,156,944,158,500,159,667,160,278,161,333,162,556,163,556,164,556,165,556,166,260,167,556,168,333,169,737,170,370,171,556,172,584,173,333,174,737,175,333,176,400,177,584,178,333,179,333,180,333,181,556,182,537,183,278,184,333,185,333,186,365,187,556,188,834,189,834,190,834,191,611,192,667,193,667,194,667,195,667,196,667,197,667,198,1000,199,722,200,667,201,667,202,667,203,667,204,278,205,278,206,278,207,278,208,722,209,722,210,778,211,778,212,778,213,778,214,778,215,584,216,778,217,722,218,722,219,722,220,722,221,667,222,667,223,611,224,556,225,556,226,556,227,556,228,556,229,556,230,889,231,500,232,556,233,556,234,556,235,556,236,278,237,278,238,278,239,278,240,556,241,556,242,556,243,556,244,556,245,556,246,556,247,584,248,611,249,556,250,556,251,556,252,556,253,500,254,556,255,500]);
+
+const HELVETICA_BOLD_UNITS = new Uint16Array(256);
+fillWinAnsiWidths(HELVETICA_BOLD_UNITS, [32,278,33,333,34,474,35,556,36,556,37,889,38,722,39,238,40,333,41,333,42,389,43,584,44,278,45,333,46,278,47,278,48,556,49,556,50,556,51,556,52,556,53,556,54,556,55,556,56,556,57,556,58,333,59,333,60,584,61,584,62,584,63,611,64,975,65,722,66,722,67,722,68,722,69,667,70,611,71,778,72,722,73,278,74,556,75,722,76,611,77,833,78,722,79,778,80,667,81,778,82,722,83,667,84,611,85,722,86,667,87,944,88,667,89,667,90,611,91,333,92,278,93,333,94,584,95,556,96,333,97,556,98,611,99,556,100,611,101,556,102,333,103,611,104,611,105,278,106,278,107,556,108,278,109,889,110,611,111,611,112,611,113,611,114,389,115,556,116,333,117,611,118,556,119,778,120,556,121,556,122,500,123,389,124,280,125,389,126,584,128,556,130,278,131,556,132,500,133,1000,134,556,135,556,136,333,137,1000,138,667,139,333,140,1000,142,611,145,278,146,278,147,500,148,500,149,350,150,556,151,1000,152,333,153,1000,154,556,155,333,156,944,158,500,159,667,160,278,161,333,162,556,163,556,164,556,165,556,166,280,167,556,168,333,169,737,170,370,171,556,172,584,173,333,174,737,175,333,176,400,177,584,178,333,179,333,180,333,181,611,182,556,183,278,184,333,185,333,186,365,187,556,188,834,189,834,190,834,191,611,192,722,193,722,194,722,195,722,196,722,197,722,198,1000,199,722,200,667,201,667,202,667,203,667,204,278,205,278,206,278,207,278,208,722,209,722,210,778,211,778,212,778,213,778,214,778,215,584,216,778,217,722,218,722,219,722,220,722,221,667,222,667,223,611,224,556,225,556,226,556,227,556,228,556,229,556,230,889,231,556,232,556,233,556,234,556,235,556,236,278,237,278,238,278,239,278,240,611,241,611,242,611,243,611,244,611,245,611,246,611,247,584,248,611,249,611,250,611,251,611,252,611,253,556,254,611,255,556]);
 
 export const SESSION_PDF_PAGE_WIDTH = PAGE_WIDTH;
 export const SESSION_PDF_MARGIN = MARGIN;
 export const SESSION_PDF_CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
 /** Width of text after the same WinAnsi mapping the PDF page uses. */
-export function helveticaTextWidth(text: string, size: number): number {
-  let units = 0;
+export function helveticaTextWidth(text: string, size: number, bold = false): number {
+  const units = bold ? HELVETICA_BOLD_UNITS : HELVETICA_UNITS;
+  let total = 0;
   for (const char of pdfWinAnsiText(text)) {
-    units += HELVETICA_UNITS[char.charCodeAt(0)] ?? 600;
+    const code = char.charCodeAt(0);
+    const width = units[code];
+    total += width || units[0x3f] || 0;
   }
-  return (units * size) / 1000;
+  return (total * size) / 1000;
 }
 
-function splitPdfWord(word: string, size: number, maxWidth: number): string[] {
-  if (maxWidth <= 0 || helveticaTextWidth(word, size) <= maxWidth) return [word];
+function splitPdfWord(word: string, size: number, maxWidth: number, bold = false): string[] {
+  if (maxWidth <= 0 || helveticaTextWidth(word, size, bold) <= maxWidth) return [word];
   const parts: string[] = [];
   let chunk = "";
   for (const char of word) {
     const next = chunk + char;
-    if (chunk && helveticaTextWidth(next, size) > maxWidth) {
+    if (chunk && helveticaTextWidth(next, size, bold) > maxWidth) {
       parts.push(chunk);
       chunk = char;
     } else {
@@ -564,10 +485,10 @@ function splitPdfWord(word: string, size: number, maxWidth: number): string[] {
   return parts.length > 0 ? parts : [word];
 }
 
-function wrapText(text: string, size: number, width: number): string[] {
+function wrapText(text: string, size: number, width: number, bold = false): string[] {
   const lines: string[] = [];
   for (const paragraph of text.split(/\n/)) {
-    const words = paragraph.split(/\s+/).filter(Boolean).flatMap((word) => splitPdfWord(word, size, width));
+    const words = paragraph.split(/\s+/).filter(Boolean).flatMap((word) => splitPdfWord(word, size, width, bold));
     if (words.length === 0) {
       lines.push("");
       continue;
@@ -575,7 +496,7 @@ function wrapText(text: string, size: number, width: number): string[] {
     let line = "";
     for (const word of words) {
       const next = line ? `${line} ${word}` : word;
-      if (helveticaTextWidth(next, size) > width && line) {
+      if (helveticaTextWidth(next, size, bold) > width && line) {
         lines.push(line);
         line = word;
       } else {
@@ -733,7 +654,7 @@ class QuestionPdf {
 
   private drawPlain(text: string, size: number, bold = false) {
     const font = bold ? "/F2" : "/F1";
-    for (const line of wrapText(text, size, PAGE_WIDTH - MARGIN * 2)) {
+    for (const line of wrapText(text, size, PAGE_WIDTH - MARGIN * 2, bold)) {
       this.ensure(size + 4);
       this.current.push(
         `BT ${font} ${size} Tf ${MARGIN} ${Math.round(this.y - size)} Td ${pdfLiteral(line)} Tj ET`,
