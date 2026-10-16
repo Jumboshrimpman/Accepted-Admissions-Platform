@@ -183,6 +183,14 @@ describe("tutor session review page", () => {
     expect(screen.queryByText("Generate original practice drafts")).toBeNull();
     expect(screen.queryByRole("button", { name: "Create drafts" })).toBeNull();
     expect(screen.getByText("Homework status & results")).toBeTruthy();
+    expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
+    expect(screen.getByTestId("tutor-completion-badge-quiz-1").textContent).toMatch(/Submitted · 80%/);
+    expect(screen.getByTestId("tutor-completion-quiz-1").textContent).toMatch(/Review attempt/);
+    expect(screen.getByTestId("download-prework-questions").textContent).toMatch(
+      /Download pre-work questions \(PDF\)/,
+    );
+    expect(screen.getByTestId("download-prework-answer-key").textContent).toMatch(/answer key/);
+    expect(screen.getByTestId("download-in-session-questions")).toBeTruthy();
     expect(screen.getByText("1 assignment")).toBeTruthy();
     expect(screen.queryAllByText("Full-length SAT diagnostic — Taito’s SAT Session with Eunice")).toHaveLength(0);
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
