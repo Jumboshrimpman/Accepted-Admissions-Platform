@@ -153,6 +153,69 @@ test("original hard items render, stay unique, and fill only the three shortfall
   console.log(`max content-word Jaccard ${maxSimilarity.toFixed(3)} on ${maxPair}`);
   assert.ok(maxSimilarity <= 0.6, `${maxSimilarity} ${maxPair}`);
 
+  const functionStop = new Set(
+    `a an the of to and or in on for with from by at as is was are were be been being that this these those it its their his her they them which what when where who how not but if than then into over after before about would could should each such some more most also does did have has had can may will just like while through between among within without under above during because both same other only very across another there here all any per`.split(
+      /\s+/,
+    ),
+  );
+  const slotWords = (text: string) =>
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/)
+        .filter((word) => word.length >= 5 && !functionStop.has(word)),
+    );
+  const slotGroups = new Map<string, Set<string>[]>();
+  for (const item of [...math, ...reading]) {
+    const slot = `${item.section}-${item.questionNumber}`;
+    const group = slotGroups.get(slot) ?? [];
+    group.push(slotWords(`${item.stimulus ?? ""} ${item.prompt}`));
+    slotGroups.set(slot, group);
+  }
+  assert.equal(slotGroups.size, 70);
+  let slotTotal = 0;
+  for (const [slot, group] of slotGroups) {
+    assert.equal(group.length, 3, slot);
+    const pair =
+      (jaccard(group[0]!, group[1]!) + jaccard(group[0]!, group[2]!) + jaccard(group[1]!, group[2]!)) / 3;
+    slotTotal += pair;
+  }
+  const sameSlotAverage = slotTotal / slotGroups.size;
+  console.log(`same-slot average ${sameSlotAverage.toFixed(3)}`);
+  assert.ok(sameSlotAverage < 0.35, `same-slot average ${sameSlotAverage}`);
+
+  const bareTransition = /^(?:Therefore|However|Consequently|Meanwhile|For example)$/;
+  for (const item of reading) {
+    for (const choice of item.choices) {
+      const text = choice.text ?? "";
+      assert.equal(/^\s{2}/.test(text), false, `${item.sourceKey} leading double space`);
+      assert.equal(/\s,/.test(text), false, `${item.sourceKey} space before comma`);
+      assert.equal(bareTransition.test(text.trim()), false, `${item.sourceKey} bare transition`);
+      const joined = item.stimulus.includes("___") ? item.stimulus.replace("___", text) : `${item.stimulus} ${text}`;
+      assert.equal(/\s{2}/.test(joined), false, `${item.sourceKey} doubled space`);
+      assert.equal(/\s,/.test(joined), false, `${item.sourceKey} rendered space-comma`);
+      assert.equal(
+        /(?:^|[^.!?;])\s(?:Therefore|However|Consequently|Meanwhile|For example)\b/.test(joined),
+        false,
+        `${item.sourceKey} mid-sentence transition`,
+      );
+    }
+    if (/accomplish this goal/i.test(item.prompt)) {
+      const goal = /wants to (?:emphasize|highlight|stress|center) ([^.]+)/i.exec(item.prompt);
+      assert.ok(goal, item.sourceKey);
+      const words = goal![1]!.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((word) => word.length >= 8);
+      words.sort((left, right) => right.length - left.length);
+      const keyed = item.choices.find((choice) => choice.id === item.correctAnswer);
+      assert.ok(keyed, item.sourceKey);
+      assert.equal(keyed!.text.toLowerCase().includes(words[0]!), false, `${item.sourceKey} repeats ${words[0]}`);
+    }
+  }
+
+  const quiz = readFileSync(new URL("./tutor-reusable-quiz.ts", import.meta.url), "utf8");
+  assert.match(quiz, /sourceKind === "original_hard"/);
+  assert.match(quiz, /Original hard items cannot be added to a tutor quiz/);
+
   const stems = new Set<string>();
   for (const record of records) {
     const stem = norm(`${record.stimulus ?? ""} ${record.prompt}`);
