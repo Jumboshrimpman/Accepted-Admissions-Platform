@@ -561,6 +561,14 @@ test("admin reconnect links are signed, single-use, and still reject a mismatche
   assert.ok(mismatchAt > consumeAt);
   assert.match(callback, /purpose === "admin_reconnect"/);
   assert.match(callback, /googleAccountMatchesPortalEmails/);
+  assert.match(callback, /calendarGoogleAccountMismatchMessage\(/);
+  assert.match(callback, /stateData\.purpose/);
+  const google = await readFile(
+    fileURLToPath(new URL("./google-calendar.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(google, /Ask an admin for a new reconnect link/);
+  assert.match(google, /timingSafeEqual\(received, expected\)/);
   assert.match(reconnect, /ensureRole\(\["administrator"\]\)/);
   assert.match(reconnect, /purpose:\s*"admin_reconnect"/);
   assert.match(reconnect, /persistCalendarOAuthNonce/);

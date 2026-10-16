@@ -1,7 +1,7 @@
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { mergeCalendarAttendees } from "./calendar-pair-attendees.ts";
-// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { ADMIN_INBOX_EMAIL } from "./transactional-email.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import type { GoogleCalendarAttendee } from "./google-calendar.ts";
 
 /** Do not patch an event that starts this soon. Google would still be a write on a live session. */
 export const ADMIN_ATTENDEE_BACKFILL_GUARD_MS = 60 * 60 * 1000;
@@ -49,13 +49,16 @@ export function googleEventHasAdminAttendee(
   );
 }
 
-export function attendeesIncludingAdmin(
-  attendees: readonly { email?: string | null }[] | null | undefined,
-): { email: string }[] {
-  const existing = (attendees ?? [])
-    .map((attendee) => ({ email: attendee.email?.trim() ?? "" }))
-    .filter((attendee) => attendee.email.length > 0);
-  return mergeCalendarAttendees(existing, [ADMIN_INBOX_EMAIL]);
+/**
+ * Keep every existing guest object, including RSVP, name, and optional.
+ * Google's attendees PATCH replaces the whole list.
+ */
+export function attendeesIncludingAdmin<T extends GoogleCalendarAttendee>(
+  attendees: readonly T[] | null | undefined,
+): Array<T | { email: string }> {
+  const existing = [...(attendees ?? [])];
+  if (googleEventHasAdminAttendee(existing)) return existing;
+  return [...existing, { email: ADMIN_INBOX_EMAIL }];
 }
 
 /**
@@ -63,16 +66,16 @@ export function attendeesIncludingAdmin(
  * The patch callback only accepts sendUpdates "none" so this path cannot notify guests.
  * It does not run on its own; an administrator must POST the backfill route.
  */
-export async function backfillAdminCalendarAttendees(input: {
+export async function backfillAdminCalendarAttendees<T extends GoogleCalendarAttendee>(input: {
   dryRun: boolean;
   now?: Date;
   sessions: readonly AdminAttendeeBackfillSession[];
   readAttendees: (
     session: AdminAttendeeBackfillSession,
-  ) => Promise<readonly { email?: string | null }[] | null>;
+  ) => Promise<readonly T[] | null>;
   patchAttendees: (
     session: AdminAttendeeBackfillSession,
-    attendees: readonly { email: string }[],
+    attendees: ReadonlyArray<T | { email: string }>,
     sendUpdates: "none",
   ) => Promise<void>;
 }): Promise<AdminAttendeeBackfillReport> {
@@ -86,7 +89,7 @@ export async function backfillAdminCalendarAttendees(input: {
     skipped: [],
   };
   for (const session of input.sessions) {
-    let attendees: readonly { email?: string | null }[] | null;
+    let attendees: readonly T[] | null;
     try {
       attendees = await input.readAttendees(session);
     } catch {

@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 import {
   isPlatformInternalHost,
   resolvePublicRequestOrigin,
@@ -353,10 +360,24 @@ export type GoogleBusyWindow = {
   end: string;
 };
 
+/** Guest fields Google replaces wholesale on an attendees PATCH. */
+export type GoogleCalendarAttendee = {
+  email?: string | null;
+  displayName?: string | null;
+  responseStatus?: string | null;
+  optional?: boolean | null;
+  organizer?: boolean | null;
+  self?: boolean | null;
+  resource?: boolean | null;
+  comment?: string | null;
+  additionalGuests?: number | null;
+  id?: string | null;
+};
+
 export type GoogleCalendarEvent = {
   id?: string;
   htmlLink?: string;
-  attendees?: { email?: string }[];
+  attendees?: GoogleCalendarAttendee[];
 };
 
 function signingKey(): Buffer {
@@ -413,6 +434,22 @@ export function googleAccountMatchesPortalEmails(
 ): boolean {
   const needle = googleEmail.trim().toLowerCase();
   return portalEmails.some((email) => email?.trim().toLowerCase() === needle);
+}
+
+/**
+ * Wrong-account copy for the OAuth completion page.
+ * An admin reconnect nonce is already burned by the time this check runs.
+ */
+export function calendarGoogleAccountMismatchMessage(
+  portalEmail: string,
+  purpose: CalendarOAuthPurpose,
+): string {
+  const email = portalEmail.trim();
+  const choose = email
+    ? `Choose the Google account that matches your portal sign-in email (${email}).`
+    : "Choose the Google account that matches your portal sign-in email.";
+  if (purpose !== "admin_reconnect") return choose;
+  return `${choose} This reconnect link was already used. Ask an admin for a new reconnect link.`;
 }
 
 export function firstCalendarQueryValue(value: unknown): string {
@@ -664,7 +701,7 @@ export function inspectCalendarOAuthState(state: string): CalendarOAuthStateInsp
   }
   const expected = createHmac("sha256", signingKey()).update(payload).digest();
   const received = fromBase64Url(encodedSignature);
-  if (received.length !== expected.length || !received.equals(expected)) {
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
     return { ok: false, reason: "hmac" };
   }
   const parsed = parseCalendarOAuthPayload(payload);
@@ -1498,19 +1535,22 @@ export async function getGoogleCalendarEvent(
   );
 }
 
-/** A write whose only purpose is changing attendees. Always silent. */
+/**
+ * A write whose only purpose is changing attendees.
+ * sendUpdates is hard-coded to none. updateGoogleEvent defaults to all,
+ * which would email every guest.
+ */
 export async function patchGoogleEventAttendees(
   accessToken: string,
   calendarId: string,
   eventId: string,
-  attendees: readonly { email: string }[],
-  sendUpdates: "none",
+  attendees: readonly GoogleCalendarAttendee[],
 ): Promise<GoogleCalendarEvent> {
   return updateGoogleEvent(
     accessToken,
     calendarId,
     eventId,
-    { attendees: attendees.map((attendee) => ({ email: attendee.email })) },
-    sendUpdates,
+    { attendees: attendees.map((attendee) => ({ ...attendee })) },
+    "none",
   );
 }

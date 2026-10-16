@@ -41,6 +41,7 @@ import {
   getGoogleCalendarEvent,
   getGoogleCalendarConfig,
   googleAccessTokenExpiresAt,
+  calendarGoogleAccountMismatchMessage,
   googleAccountMatchesPortalEmails,
   googleCalendarCompletionHtml,
   googleCalendarAuthorizationUrl,
@@ -5127,7 +5128,10 @@ router.get(
         sendCalendarOAuthPage(res, 403, {
           success: false,
           outcome: "rejected",
-          message: `Choose the Google account that matches your portal sign-in email (${profile.userEmail || profile.email}).`,
+          message: calendarGoogleAccountMismatchMessage(
+            profile.userEmail || profile.email,
+            stateData.purpose,
+          ),
           returnTo: stateData.returnTo,
           redirectUri: exchangeRedirectUri,
         });
@@ -8281,7 +8285,7 @@ router.post(
           throw error;
         }
       },
-      patchAttendees: async (session, attendees, sendUpdates) => {
+      patchAttendees: async (session, attendees) => {
         if (!session.tutorUserId) throw new Error("Session has no tutor");
         const access = await calendarAccessForUser(session.tutorUserId);
         if (!access?.connection.calendarId) throw new Error("Tutor calendar is disconnected");
@@ -8291,7 +8295,6 @@ router.post(
             access.connection.calendarId!,
             session.providerEventId,
             attendees,
-            sendUpdates,
           ),
         );
       },
