@@ -45,7 +45,7 @@ const pages = [
       GOOGLE_LIMITED_USE_SENTENCE,
       LEGAL_EFFECTIVE_DATE,
       "Google user data",
-      "openid, email, calendar.freebusy, and calendar.events",
+      "openid, email, calendar.freebusy, and calendar.app.created",
       "third-party meeting or transcription provider",
       "AI service providers",
       "does not send the student’s name, email, account, or scores",

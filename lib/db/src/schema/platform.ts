@@ -114,6 +114,8 @@ export const sessionsTable = pgTable("sessions", {
   bookingStatus: text("booking_status").notNull().default("confirmed"),
   providerEventId: text("provider_event_id"),
   providerEventUrl: text("provider_event_url"),
+  /** Google calendar that owns providerEventId. Null means a legacy primary-calendar event. */
+  providerCalendarId: text("provider_calendar_id"),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancellationReason: text("cancellation_reason"),
   hasHomework: boolean("has_homework").notNull().default(false),
@@ -730,6 +732,10 @@ export const calendarConnectionsTable = pgTable(
     provider: text("provider").notNull().default("google"),
     status: text("status").notNull().default("disconnected"),
     calendarId: text("calendar_id"),
+    /** Secondary calendar created for Accepted Admissions sessions. */
+    appCalendarId: text("app_calendar_id"),
+    /** Space-separated scopes from the last OAuth grant. Null is a legacy token. */
+    grantedScopes: text("granted_scopes"),
     encryptedAccessToken: text("encrypted_access_token"),
     encryptedRefreshToken: text("encrypted_refresh_token"),
     accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),

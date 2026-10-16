@@ -12,6 +12,8 @@ export type AdminAttendeeBackfillSession = {
   start: Date;
   tutorUserId: string | null;
   providerEventId: string;
+  /** Null means the event still lives on the tutor's primary calendar. */
+  providerCalendarId?: string | null;
 };
 
 export type AdminAttendeeBackfillReport = {

@@ -1,3 +1,6 @@
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { calendarGrantNeedsReconnect } from "./app-created-calendar.ts";
+
 export type CalendarHealthBadge =
   | "healthy"
   | "needs_attention"
@@ -102,7 +105,18 @@ export function calendarHealthBadge(input: {
   hasRefreshToken: boolean;
   connectedAt?: Date | string | null;
   lastError?: string | null;
+  grantedScopes?: string | null;
+  appCalendarId?: string | null;
 }): CalendarHealthBadge {
+  if (
+    calendarGrantNeedsReconnect({
+      hasRefreshToken: input.hasRefreshToken,
+      grantedScopes: input.grantedScopes,
+      appCalendarId: input.appCalendarId,
+    })
+  ) {
+    return "needs_reconnect";
+  }
   const error = input.lastError?.trim() ?? "";
   if (input.hasRefreshToken) return error ? "needs_attention" : "healthy";
   const previouslyConnected = Boolean(input.connectedAt);
@@ -327,6 +341,8 @@ export function buildCalendarConnectionHealth(input: {
   hasRefreshToken: boolean;
   googleAccountEmail?: string | null;
   calendarId?: string | null;
+  grantedScopes?: string | null;
+  appCalendarId?: string | null;
   connectedAt?: Date | string | null;
   lastTokenRefreshAt?: Date | string | null;
   lastFreeBusyAt?: Date | string | null;

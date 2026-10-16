@@ -112,7 +112,7 @@ export default function PrivacyPolicy() {
 
       <LegalSection id="google-user-data" title="Google user data">
         <p>
-          Tutors can connect Google Calendar so the platform can read free/busy availability and create, update, and delete session events. The connection uses the Google scopes openid, email, calendar.freebusy, and calendar.events. We receive the Google account email to match it to the tutor’s portal account. Those events can include Google Meet links and attendees. We read and update the guest lists of events the platform creates, for example by adding the business’s admin address. Google emails calendar invites to guests for SAT sessions. A tutor chooses to connect. We do not receive that tutor’s Google Calendar data unless they connect.
+          Tutors can connect Google Calendar so the platform can read free/busy availability and create, update, and delete session events on a secondary calendar named Accepted Admissions Sessions. The connection uses the Google scopes openid, email, calendar.freebusy, and calendar.app.created. Free/busy is also read from the tutor’s primary calendar. We receive the Google account email to match it to the tutor’s portal account. Those events can include Google Meet links and attendees. We read and update the guest lists of events the platform creates, for example by adding the business’s admin address. Google emails calendar invites to guests for SAT sessions. A tutor chooses to connect. We do not receive that tutor’s Google Calendar data unless they connect.
         </p>
         <p>
           Google data is used only to provide scheduling. It is not sold. It is not used for advertising. It is not used to train AI models.
