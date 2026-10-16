@@ -56,6 +56,7 @@ import { clientSatCreditAction } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { studentAssignmentHref } from "@/lib/student-attempt-ui";
 import { adminCurriculumHref } from "@/lib/admin-curriculum-location";
+import { ClientIntakeAction } from "@/components/client-intake-modal";
 
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
@@ -258,6 +259,7 @@ export function ClientDashboardView({
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
+      {!adminPreview && dashboard.user.role === "student" ? <ClientIntakeAction /> : null}
       <section
         className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
         data-testid="portal-curriculum-section"
