@@ -27,6 +27,7 @@ const {
   googleCalendarSendUpdatesForSubjects,
   classifyGoogleProviderError,
   classifyGoogleTokenExchangeFailure,
+  ADMIN_CALENDAR_RECONNECT_TTL_MS,
   createCalendarOAuthState,
   decryptCalendarToken,
   encryptCalendarToken,
@@ -103,20 +104,75 @@ test("OAuth state is signed and scoped to the tutor profile, return path, and ca
     returnTo: "/tutor",
     redirectUri: "https://app.example.com/api/calendar/oauth/callback",
   });
-  assert.deepEqual(readCalendarOAuthState(state), {
-    tutorProfileId: "tutor-profile-xavier",
-    appUserId: "app-user-xavier",
-    returnTo: "/tutor",
-    redirectUri: "https://app.example.com/api/calendar/oauth/callback",
-  });
+  const parsed = readCalendarOAuthState(state);
+  assert.equal(parsed?.tutorProfileId, "tutor-profile-xavier");
+  assert.equal(parsed?.appUserId, "app-user-xavier");
+  assert.equal(parsed?.returnTo, "/tutor");
+  assert.equal(parsed?.redirectUri, "https://app.example.com/api/calendar/oauth/callback");
+  assert.equal(parsed?.purpose, "tutor_connect");
+  assert.equal(typeof parsed?.nonce, "string");
+  assert.ok((parsed?.nonce.length ?? 0) > 8);
+  assert.ok((parsed?.exp ?? 0) > Date.now());
 
   const [payload, signature] = state.split(".");
   assert.equal(readCalendarOAuthState(`${payload}.tampered`), null);
   assert.equal(readCalendarOAuthState(`tampered.${signature}`), null);
 });
 
+test("admin reconnect state is signed to one tutor and expires", () => {
+  const now = Date.parse("2026-10-16T10:39:00.000Z");
+  const state = createCalendarOAuthState("tutor-xavier", "user-xavier", {
+    purpose: "admin_reconnect",
+    expiresInMs: ADMIN_CALENDAR_RECONNECT_TTL_MS,
+    now,
+    returnTo: "/tutor",
+    redirectUri: "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
+  });
+  const parsed = readCalendarOAuthState(state);
+  assert.equal(parsed?.tutorProfileId, "tutor-xavier");
+  assert.equal(parsed?.appUserId, "user-xavier");
+  assert.equal(parsed?.purpose, "admin_reconnect");
+  assert.equal(parsed?.exp, now + ADMIN_CALENDAR_RECONNECT_TTL_MS);
+  const expired = createCalendarOAuthState("tutor-xavier", "user-xavier", {
+    purpose: "admin_reconnect",
+    expiresInMs: ADMIN_CALENDAR_RECONNECT_TTL_MS,
+    now: Date.now() - ADMIN_CALENDAR_RECONNECT_TTL_MS - 5_000,
+  });
+  const inspected = inspectCalendarOAuthState(expired);
+  assert.equal(inspected.ok, false);
+  if (!inspected.ok) assert.equal(inspected.reason, "expired");
+  const [payload, signature] = state.split(".");
+  const swapped = Buffer.from(
+    Buffer.from(payload, "base64url").toString("utf8").replace("tutor-xavier", "tutor-eunice"),
+  ).toString("base64url");
+  assert.equal(readCalendarOAuthState(`${swapped}.${signature}`), null);
+
+  const previous = {
+    id: process.env.GOOGLE_CALENDAR_CLIENT_ID,
+    secret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
+    redirect: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+  };
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = "client-id";
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = "client-secret";
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI =
+    "https://app.acceptedadmissions.org/api/calendar/oauth/callback";
+  const authorizationUrl = googleCalendarAuthorizationUrl("tutor-xavier", "user-xavier", {
+    state,
+    loginHint: "xaver.rmz6@gmail.com",
+    redirectUri: "https://app.acceptedadmissions.org/api/calendar/oauth/callback",
+  });
+  const params = new URL(authorizationUrl).searchParams;
+  assert.equal(params.get("state"), state);
+  assert.equal(params.get("login_hint"), "xaver.rmz6@gmail.com");
+  assert.equal(readCalendarOAuthState(params.get("state") ?? "")?.tutorProfileId, "tutor-xavier");
+  process.env.GOOGLE_CALENDAR_CLIENT_ID = previous.id;
+  process.env.GOOGLE_CALENDAR_CLIENT_SECRET = previous.secret;
+  process.env.GOOGLE_CALENDAR_REDIRECT_URI = previous.redirect;
+});
+
 test("legacy dotted OAuth state still resolves the tutor and app user", () => {
-  const payload = `tutor-profile-xavier.app-user-xavier.${Date.now() + 60_000}.nonce`;
+  const expiresAt = Date.now() + 60_000;
+  const payload = `tutor-profile-xavier.app-user-xavier.${expiresAt}.nonce`;
   const key = createHash("sha256").update("booking-test-session-secret").digest();
   const signature = createHmac("sha256", key).update(payload).digest();
   const state = `${Buffer.from(payload).toString("base64url")}.${Buffer.from(signature).toString("base64url")}`;
@@ -125,6 +181,9 @@ test("legacy dotted OAuth state still resolves the tutor and app user", () => {
     appUserId: "app-user-xavier",
     returnTo: "/tutor",
     redirectUri: "",
+    nonce: "nonce",
+    purpose: "tutor_connect",
+    exp: expiresAt,
   });
 });
 

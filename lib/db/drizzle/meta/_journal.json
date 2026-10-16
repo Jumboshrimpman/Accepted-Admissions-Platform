@@ -344,6 +344,13 @@
       "when": 1791500000000,
       "tag": "0049_calendar_connection_health",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0050_calendar_oauth_nonces",
+      "breakpoints": true
     }
   ]
 }

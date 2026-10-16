@@ -7,6 +7,11 @@ export type CalendarHealthBadge =
 export const UNKNOWN_GOOGLE_ACCOUNT_LABEL = "Unknown (reconnect to record)";
 export const CALENDAR_CONNECTION_TEST_COOLDOWN_MS = 45_000;
 export const CALENDAR_FREEBUSY_HEALTH_FRESH_MS = 60_000;
+/** Warn once a Testing-mode refresh grant is this old. Google expires those grants at 7 days. */
+export const TESTING_MODE_TOKEN_WARNING_MS = 6 * 24 * 60 * 60 * 1000;
+export const TESTING_MODE_TOKEN_LIFETIME_DAYS = 7;
+export const TESTING_MODE_EXPIRY_WARNING =
+  "Google Calendar grants from an OAuth consent screen in Testing mode expire after 7 days. This token is at least 6 days old and the last error matches that expiry. Reconnect this tutor.";
 
 export type CalendarConnectionHealth = {
   tutorProfileId: string;
@@ -23,6 +28,8 @@ export type CalendarConnectionHealth = {
   lastErrorAt: string | null;
   bookable: boolean;
   hasUpcomingBookableTime: boolean;
+  estimatedTokenAgeDays: number | null;
+  testingModeExpiryWarning: string | null;
 };
 
 const FEATURED_TUTOR_NAMES = [
@@ -123,6 +130,50 @@ export function calendarConnectionTestAdmission(input: {
     return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
   }
   return { allowed: true };
+}
+
+export function estimatedTokenAgeMs(
+  connectedAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (!connectedAt) return null;
+  const issued = connectedAt instanceof Date ? connectedAt : new Date(connectedAt);
+  const issuedMs = issued.getTime();
+  if (Number.isNaN(issuedMs)) return null;
+  return Math.max(0, now.getTime() - issuedMs);
+}
+
+export function estimatedTokenAgeDays(
+  connectedAt: Date | string | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  const ageMs = estimatedTokenAgeMs(connectedAt, now);
+  if (ageMs == null) return null;
+  return Math.floor(ageMs / (24 * 60 * 60 * 1000));
+}
+
+/** invalid_grant after about a week is the Testing-mode refresh-token expiry, not a deploy. */
+export function errorPointsToTestingMode(error: string | null | undefined): boolean {
+  const value = error?.trim().toLowerCase() ?? "";
+  if (!value) return false;
+  return (
+    value.includes("invalid_grant") ||
+    value.includes("expired or revoked") ||
+    value.includes("revoked the calendar grant") ||
+    value.includes("testing mode")
+  );
+}
+
+export function testingModeExpiryWarning(input: {
+  connectedAt?: Date | string | null;
+  lastError?: string | null;
+  now?: Date;
+}): string | null {
+  const now = input.now ?? new Date();
+  const ageMs = estimatedTokenAgeMs(input.connectedAt, now);
+  if (ageMs == null || ageMs < TESTING_MODE_TOKEN_WARNING_MS) return null;
+  if (!errorPointsToTestingMode(input.lastError)) return null;
+  return TESTING_MODE_EXPIRY_WARNING;
 }
 
 export function preserveRevokedCalendarTestReason(
@@ -281,7 +332,9 @@ export function buildCalendarConnectionHealth(input: {
   lastFreeBusyAt?: Date | string | null;
   lastError?: string | null;
   lastErrorAt?: Date | string | null;
+  now?: Date;
 }): CalendarConnectionHealth {
+  const now = input.now ?? new Date();
   const bookable = input.active !== false && input.bookingEligible === true;
   const row: CalendarConnectionHealth = {
     tutorProfileId: input.tutorProfileId,
@@ -300,6 +353,12 @@ export function buildCalendarConnectionHealth(input: {
     lastErrorAt: iso(input.lastErrorAt),
     bookable,
     hasUpcomingBookableTime: hasUpcomingBookableTime(input),
+    estimatedTokenAgeDays: estimatedTokenAgeDays(input.connectedAt, now),
+    testingModeExpiryWarning: testingModeExpiryWarning({
+      connectedAt: input.connectedAt,
+      lastError: input.lastError,
+      now,
+    }),
   };
   return row;
 }

@@ -19,6 +19,8 @@ export type CalendarConnectionHealthRow = {
   lastErrorAt: string | null;
   bookable: boolean;
   hasUpcomingBookableTime: boolean;
+  estimatedTokenAgeDays: number | null;
+  testingModeExpiryWarning: string | null;
 };
 
 const BADGE_LABEL = {
@@ -47,6 +49,19 @@ function formatWhen(value: string | null): string {
   return date.toLocaleString();
 }
 
+export function formatEstimatedTokenAge(days: number | null): string {
+  if (days == null) return "Unknown";
+  if (days < 1) return "Less than 1 day";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
+function reconnectIndicator(row: CalendarConnectionHealthRow): "Connected" | "Needs reconnect" | "Not connected" {
+  if (row.badge === "needs_reconnect") return "Needs reconnect";
+  if (row.badge === "not_connected" || row.connectionStatus === "disconnected") return "Not connected";
+  return "Connected";
+}
+
 function badgeClass(badge: CalendarConnectionHealthRow["badge"]): string {
   if (badge === "healthy") return "border-transparent bg-emerald-600 text-white hover:bg-emerald-600";
   if (badge === "needs_attention") return "border-transparent bg-amber-600 text-white hover:bg-amber-600";
@@ -59,6 +74,9 @@ export default function AdminConnections() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [linkPendingId, setLinkPendingId] = useState<string | null>(null);
+  const [reconnectLinks, setReconnectLinks] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const refresh = async () => {
     try {
@@ -95,6 +113,29 @@ export default function AdminConnections() {
       setError(connectionTestErrorMessage(testError));
     } finally {
       setPendingId(null);
+    }
+  };
+
+  const createReconnectLink = async (tutorProfileId: string) => {
+    setLinkPendingId(tutorProfileId);
+    setError("");
+    setCopiedId(null);
+    try {
+      const payload = await customFetch<{ url: string; expiresAt: string }>(
+        `/api/admin/calendar-connections/${tutorProfileId}/reconnect-link`,
+        { method: "POST" },
+      );
+      setReconnectLinks((current) => ({ ...current, [tutorProfileId]: payload.url }));
+      try {
+        await navigator.clipboard.writeText(payload.url);
+        setCopiedId(tutorProfileId);
+      } catch {
+        setCopiedId(null);
+      }
+    } catch (linkError) {
+      setError(connectionTestErrorMessage(linkError));
+    } finally {
+      setLinkPendingId(null);
     }
   };
 
@@ -135,7 +176,9 @@ export default function AdminConnections() {
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-muted-foreground">Connection status</dt>
-                  <dd>{row.connectionStatus === "connected" ? "Connected" : "Disconnected"}</dd>
+                  <dd data-testid={`status-calendar-connection-${row.tutorProfileId}`}>
+                    {reconnectIndicator(row)}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Google account</dt>
@@ -150,9 +193,15 @@ export default function AdminConnections() {
                   <dd>{row.hasRefreshToken ? "Yes" : "No"}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Last token refresh</dt>
+                  <dt className="text-muted-foreground">Last successful refresh</dt>
                   <dd>
                     <time dateTime={row.lastTokenRefreshAt ?? undefined}>{formatWhen(row.lastTokenRefreshAt)}</time>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Estimated token age</dt>
+                  <dd data-testid={`token-age-${row.tutorProfileId}`}>
+                    {formatEstimatedTokenAge(row.estimatedTokenAgeDays)}
                   </dd>
                 </div>
                 <div>
@@ -185,16 +234,54 @@ export default function AdminConnections() {
                   "None"
                 )}
               </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pendingId === row.tutorProfileId}
-                onClick={() => void testConnection(row.tutorProfileId)}
-                data-testid={`test-calendar-connection-${row.tutorProfileId}`}
-              >
-                {pendingId === row.tutorProfileId ? "Testing…" : "Test now"}
-              </Button>
+              {row.testingModeExpiryWarning ? (
+                <p
+                  role="status"
+                  className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+                  data-testid={`warning-testing-mode-${row.tutorProfileId}`}
+                >
+                  {row.testingModeExpiryWarning}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pendingId === row.tutorProfileId}
+                  onClick={() => void testConnection(row.tutorProfileId)}
+                  data-testid={`test-calendar-connection-${row.tutorProfileId}`}
+                >
+                  {pendingId === row.tutorProfileId ? "Testing…" : "Test now"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={linkPendingId === row.tutorProfileId}
+                  onClick={() => void createReconnectLink(row.tutorProfileId)}
+                  data-testid={`copy-reconnect-link-${row.tutorProfileId}`}
+                >
+                  {linkPendingId === row.tutorProfileId
+                    ? "Creating link…"
+                    : copiedId === row.tutorProfileId
+                      ? "Copied reconnect link"
+                      : "Copy reconnect link"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Text this link to the tutor. It is signed to their account, expires in 24 hours, and works once.
+              </p>
+              {reconnectLinks[row.tutorProfileId] ? (
+                <input
+                  readOnly
+                  value={reconnectLinks[row.tutorProfileId]}
+                  aria-label={`Reconnect link for ${row.name}`}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-xs"
+                  data-testid={`reconnect-link-${row.tutorProfileId}`}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              ) : null}
             </CardContent>
           </Card>
         ))}

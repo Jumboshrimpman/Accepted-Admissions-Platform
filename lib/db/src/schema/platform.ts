@@ -749,6 +749,25 @@ export const calendarConnectionsTable = pgTable(
   ],
 );
 
+/** Single-use nonces for admin-generated Google Calendar reconnect links. */
+export const calendarOauthNoncesTable = pgTable(
+  "calendar_oauth_nonces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nonce: text("nonce").notNull(),
+    tutorProfileId: uuid("tutor_profile_id")
+      .notNull()
+      .references(() => tutorProfilesTable.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("calendar_oauth_nonces_nonce_idx").on(table.nonce),
+    index("calendar_oauth_nonces_tutor_profile_idx").on(table.tutorProfileId),
+  ],
+);
+
 export const availabilityRulesTable = pgTable("availability_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
   tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),

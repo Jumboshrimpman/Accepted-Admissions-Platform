@@ -886,6 +886,8 @@ export interface AdminOverview {
   calendarReconnectAlerts?: {
     tutorProfileId: string;
     name: string;
+    estimatedTokenAgeDays?: number | null;
+    testingModeExpiryWarning?: string | null;
   }[];
 }
 

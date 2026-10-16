@@ -57,11 +57,22 @@ export type CalendarOAuthOutcome =
   | "unavailable"
   | "expired";
 
+export type CalendarOAuthPurpose = "tutor_connect" | "admin_reconnect";
+
+/** Interactive Connect from the tutor dashboard. */
+export const TUTOR_CALENDAR_OAUTH_TTL_MS = 10 * 60 * 1000;
+/** Admin-copied link Sama can text. Long enough to open, short enough to expire. */
+export const ADMIN_CALENDAR_RECONNECT_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_CALENDAR_OAUTH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export type CalendarOAuthState = {
   tutorProfileId: string;
   appUserId: string;
   returnTo: string;
   redirectUri: string;
+  nonce: string;
+  purpose: CalendarOAuthPurpose;
+  exp: number;
 };
 
 export type CalendarOAuthStateFailure =
@@ -563,28 +574,37 @@ export function isAcceptableCalendarRedirectUri(
 export function createCalendarOAuthState(
   tutorProfileId: string,
   appUserId: string,
-  options: { returnTo?: string; redirectUri?: string } = {},
+  options: {
+    returnTo?: string;
+    redirectUri?: string;
+    purpose?: CalendarOAuthPurpose;
+    expiresInMs?: number;
+    now?: number;
+  } = {},
 ): string {
+  const now = options.now ?? Date.now();
+  const requested = options.expiresInMs ?? TUTOR_CALENDAR_OAUTH_TTL_MS;
+  const ttl = Math.min(Math.max(requested, 1_000), MAX_CALENDAR_OAUTH_TTL_MS);
+  const purpose: CalendarOAuthPurpose =
+    options.purpose === "admin_reconnect" ? "admin_reconnect" : "tutor_connect";
   const payload = JSON.stringify({
     tutorProfileId,
     appUserId,
-    exp: Date.now() + 10 * 60 * 1000,
+    exp: now + ttl,
     nonce: base64Url(randomBytes(16)),
     returnTo: safeCalendarReturnTo(options.returnTo),
     redirectUri: options.redirectUri ?? "",
+    purpose,
   });
   const signature = createHmac("sha256", signingKey()).update(payload).digest();
   return `${base64Url(payload)}.${base64Url(signature)}`;
 }
 
-function parseCalendarOAuthPayload(payload: string): {
-  tutorProfileId: string;
-  appUserId: string;
-  exp: number;
-  nonce: string;
-  returnTo: string;
-  redirectUri: string;
-} | null {
+function calendarOAuthPurpose(value: unknown): CalendarOAuthPurpose {
+  return value === "admin_reconnect" ? "admin_reconnect" : "tutor_connect";
+}
+
+function parseCalendarOAuthPayload(payload: string): CalendarOAuthState | null {
   if (payload.startsWith("{")) {
     try {
       const parsed = JSON.parse(payload) as {
@@ -594,6 +614,7 @@ function parseCalendarOAuthPayload(payload: string): {
         nonce?: unknown;
         returnTo?: unknown;
         redirectUri?: unknown;
+        purpose?: unknown;
       };
       if (
         typeof parsed.tutorProfileId !== "string" ||
@@ -612,6 +633,7 @@ function parseCalendarOAuthPayload(payload: string): {
           typeof parsed.returnTo === "string" ? parsed.returnTo : undefined,
         ),
         redirectUri: typeof parsed.redirectUri === "string" ? parsed.redirectUri : "",
+        purpose: calendarOAuthPurpose(parsed.purpose),
       };
     } catch {
       return null;
@@ -626,6 +648,7 @@ function parseCalendarOAuthPayload(payload: string): {
     nonce,
     returnTo: "/tutor",
     redirectUri: "",
+    purpose: "tutor_connect",
   };
 }
 
@@ -659,6 +682,9 @@ export function inspectCalendarOAuthState(state: string): CalendarOAuthStateInsp
       appUserId: parsed.appUserId,
       returnTo: parsed.returnTo,
       redirectUri,
+      nonce: parsed.nonce,
+      purpose: parsed.purpose,
+      exp: parsed.exp,
     },
   };
 }
@@ -718,7 +744,14 @@ export function decryptCalendarToken(value: string): string {
 export function googleCalendarAuthorizationUrl(
   tutorProfileId: string,
   appUserId: string,
-  options: { loginHint?: string; returnTo?: string; redirectUri?: string } = {},
+  options: {
+    loginHint?: string;
+    returnTo?: string;
+    redirectUri?: string;
+    purpose?: CalendarOAuthPurpose;
+    expiresInMs?: number;
+    state?: string;
+  } = {},
 ): string {
   const config = getGoogleCalendarConfig();
   if (!config) {
@@ -742,10 +775,14 @@ export function googleCalendarAuthorizationUrl(
     include_granted_scopes: "true",
     prompt: "consent select_account",
     scope: GOOGLE_CALENDAR_SCOPES.join(" "),
-    state: createCalendarOAuthState(tutorProfileId, appUserId, {
-      returnTo: options.returnTo,
-      redirectUri,
-    }),
+    state:
+      options.state ??
+      createCalendarOAuthState(tutorProfileId, appUserId, {
+        returnTo: options.returnTo,
+        redirectUri,
+        purpose: options.purpose,
+        expiresInMs: options.expiresInMs,
+      }),
   });
   if (options.loginHint) params.set("login_hint", options.loginHint);
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;

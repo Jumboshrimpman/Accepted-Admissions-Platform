@@ -610,6 +610,11 @@ function CalendarReconnectAlert({
             >
               {alert.name}
             </Link>
+            {alert.testingModeExpiryWarning ? (
+              <p className="mt-1 text-sm" data-testid={`warning-testing-mode-alert-${alert.tutorProfileId}`}>
+                {alert.testingModeExpiryWarning}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
