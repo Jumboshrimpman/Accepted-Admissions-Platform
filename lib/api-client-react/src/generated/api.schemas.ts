@@ -805,6 +805,9 @@ export const AdminNotificationKind = {
   guidance_request_assigned: 'guidance_request_assigned',
   booking_confirmed: 'booking_confirmed',
   booking_cancelled: 'booking_cancelled',
+  legacy_calendar_event: 'legacy_calendar_event',
+  client_intake_submitted: 'client_intake_submitted',
+  hard_sat_shortfall: 'hard_sat_shortfall',
 } as const;
 
 export type AdminNotificationStatus = typeof AdminNotificationStatus[keyof typeof AdminNotificationStatus];

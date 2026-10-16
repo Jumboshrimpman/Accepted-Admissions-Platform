@@ -191,17 +191,21 @@ test("a 403 or 404 on a legacy primary event alerts without throwing or logging 
   assert.equal(serialized.includes("tutor"), false);
 });
 
-test("a 403 on the app calendar still throws, and a missing app event does not alert", async () => {
+test("a 403 on the app calendar still throws, and a missing event on a live app calendar does not alert", async () => {
   let manual = 0;
   await assert.rejects(
     () =>
       runStoredCalendarWrite({
         calendarId: "cal-app",
         sessionId: "session-2",
+        accessToken: "token",
         write: async () => {
           throw new GoogleCalendarRequestError(403, "forbidden", "forbidden");
         },
         onManualEdit: async () => {
+          manual += 1;
+        },
+        onAppCalendarMissing: async () => {
           manual += 1;
         },
         log: () => {
@@ -210,19 +214,74 @@ test("a 403 on the app calendar still throws, and a missing app event does not a
       }),
     (error: unknown) => error instanceof GoogleCalendarRequestError && error.status === 403,
   );
-  const gone = await runStoredCalendarWrite({
-    calendarId: "cal-app",
-    sessionId: "session-2",
-    write: async () => ({ missing: true, id: "evt-2" }),
-    onManualEdit: async () => {
-      manual += 1;
-    },
-    log: () => {
-      throw new Error("legacy log should not run");
-    },
+  await withFetch(async () => jsonResponse(200, { id: "cal-app" }), async () => {
+    const gone = await runStoredCalendarWrite({
+      calendarId: "cal-app",
+      sessionId: "session-2",
+      accessToken: "token",
+      write: async () => ({ missing: true, id: "evt-2" }),
+      onManualEdit: async () => {
+        manual += 1;
+      },
+      onAppCalendarMissing: async () => {
+        manual += 1;
+      },
+      log: () => {
+        throw new Error("legacy log should not run");
+      },
+    });
+    assert.equal(gone.status, "updated");
   });
-  assert.equal(gone.status, "updated");
   assert.equal(manual, 0);
+});
+
+test("a deleted app calendar alerts and asks the connection to reconnect", async () => {
+  const logs: unknown[] = [];
+  let manual = 0;
+  let reconnects = 0;
+  await withFetch(async (input) => {
+    assert.match(String(input), /\/calendar\/v3\/calendars\/cal-app$/);
+    return jsonResponse(404, { error: { code: 404, message: "Not Found" } });
+  }, async () => {
+    const removed = await runStoredCalendarWrite({
+      calendarId: "cal-app",
+      sessionId: "session-3",
+      accessToken: "token",
+      write: async () => ({ missing: true }),
+      onManualEdit: async (sessionId) => {
+        assert.equal(sessionId, "session-3");
+        manual += 1;
+      },
+      onAppCalendarMissing: async () => {
+        reconnects += 1;
+      },
+      log: (fields) => logs.push(fields),
+    });
+    assert.deepEqual(removed, { status: "manual" });
+    const updated = await runStoredCalendarWrite({
+      calendarId: "cal-app",
+      sessionId: "session-3",
+      accessToken: "token",
+      write: async () => {
+        throw new GoogleCalendarRequestError(404, "notFound", "Not Found tutor@example.com");
+      },
+      onManualEdit: async () => {
+        manual += 1;
+      },
+      onAppCalendarMissing: async () => {
+        reconnects += 1;
+      },
+      log: (fields) => logs.push(fields),
+    });
+    assert.deepEqual(updated, { status: "manual" });
+  });
+  assert.equal(manual, 2);
+  assert.equal(reconnects, 2);
+  assert.deepEqual(logs, [
+    { event: "calendar.legacy_event_unwritable", sessionId: "session-3", status: 404 },
+    { event: "calendar.legacy_event_unwritable", sessionId: "session-3", status: 404 },
+  ]);
+  assert.equal(JSON.stringify(logs).includes("@"), false);
 });
 
 test("a stored grant without calendar.app.created needs reconnect and stays connected", () => {
@@ -291,6 +350,24 @@ test("session writes use the app calendar and a missing scope does not disconnec
   assert.match(ensureSlice, /saveAcceptedAdmissionsCalendarId/);
   assert.equal(/markGoogleCalendarDisconnected|revokeGoogleCalendarGrant|disconnectGoogleCalendarConnection/.test(ensureSlice), false);
   assert.equal(/markGoogleCalendarDisconnected|revokeGoogleCalendarGrant|disconnectGoogleCalendar/.test(health), false);
+  assert.match(platform, /writeStoredSessionEvent\([^,]+,\s*token,/);
+  assert.match(platform, /markAppCalendarNeedsReconnect/);
+  const persistence = await readFile(
+    fileURLToPath(new URL("./calendar-persistence.ts", import.meta.url)),
+    "utf8",
+  );
+  const reconnectStart = persistence.indexOf("export async function markAppCalendarNeedsReconnect");
+  const reconnectSlice = persistence.slice(
+    reconnectStart,
+    persistence.indexOf("export async function saveAcceptedAdmissionsCalendarId"),
+  );
+  assert.match(reconnectSlice, /appCalendarId: null/);
+  assert.equal(
+    /markGoogleCalendarDisconnected|revokeGoogleCalendarGrant|status: "disconnected"|encryptedRefreshToken/.test(
+      reconnectSlice,
+    ),
+    false,
+  );
   assert.match(platform, /tutorFreeBusyCalendarIds\(access\.connection\)/);
   assert.match(platform, /listGoogleBusyWindows\(\s*token,\s*"primary"/);
 });

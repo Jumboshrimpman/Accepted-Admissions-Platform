@@ -69,6 +69,10 @@ export async function runStoredCalendarWrite<T>(input: {
   sessionId: string;
   write: () => Promise<T>;
   onManualEdit: (sessionId: string) => Promise<void>;
+  /** Clears the stored app calendar id so the tutor is shown as needing reconnect. */
+  onAppCalendarMissing?: () => Promise<void>;
+  /** Present when the write can check whether the tutor deleted the secondary calendar. */
+  accessToken?: string;
   log: (fields: {
     event: "calendar.legacy_event_unwritable";
     sessionId: string;
@@ -76,31 +80,51 @@ export async function runStoredCalendarWrite<T>(input: {
   }) => void;
 }): Promise<StoredCalendarWriteResult<T>> {
   const calendarId = sessionEventCalendarId(input.calendarId);
-  const manual = async (status: number) => {
+  const manual = async (status: number, appCalendarDeleted = false) => {
     input.log({
       event: "calendar.legacy_event_unwritable",
       sessionId: input.sessionId,
       status,
     });
     await input.onManualEdit(input.sessionId);
+    if (appCalendarDeleted) await input.onAppCalendarMissing?.();
     return { status: "manual" as const };
   };
+  const storedAppCalendarDeleted = async (): Promise<boolean> => {
+    if (calendarId === PRIMARY_CALENDAR_ID || !input.accessToken) return false;
+    try {
+      const calendar = await getGoogleCalendar(input.accessToken, calendarId);
+      return !calendar.id;
+    } catch (error) {
+      if (isGoogleCalendarNotFound(error)) return true;
+      throw error;
+    }
+  };
+  const writeMissing = (value: T): boolean =>
+    Boolean(
+      value &&
+        typeof value === "object" &&
+        "missing" in value &&
+        (value as { missing?: boolean }).missing === true,
+    );
   try {
     const value = await input.write();
-    if (
-      calendarId === PRIMARY_CALENDAR_ID &&
-      value &&
-      typeof value === "object" &&
-      "missing" in value &&
-      (value as { missing?: boolean }).missing === true
-    ) {
-      return manual(404);
+    if (writeMissing(value)) {
+      if (calendarId === PRIMARY_CALENDAR_ID) return manual(404);
+      if (await storedAppCalendarDeleted()) return manual(404, true);
     }
     return { status: "updated", value };
   } catch (error) {
     if (calendarId === PRIMARY_CALENDAR_ID && isLegacyCalendarWriteDenied(error)) {
       const status = error instanceof GoogleCalendarRequestError ? error.status : 0;
       return manual(status);
+    }
+    if (
+      calendarId !== PRIMARY_CALENDAR_ID &&
+      isGoogleCalendarNotFound(error) &&
+      (await storedAppCalendarDeleted())
+    ) {
+      return manual(404, true);
     }
     throw error;
   }

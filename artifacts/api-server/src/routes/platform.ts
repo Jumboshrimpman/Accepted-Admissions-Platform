@@ -67,6 +67,7 @@ import {
   GOOGLE_CALENDAR_REFRESH_TOKEN_MISSING,
   markGoogleCalendarConnected,
   markGoogleCalendarDisconnected,
+  markAppCalendarNeedsReconnect,
   persistGoogleCalendarConnection,
   saveAcceptedAdmissionsCalendarId,
   revokeGoogleCalendarGrant,
@@ -4622,14 +4623,24 @@ function tutorFreeBusyCalendarIds(connection: { appCalendarId?: string | null })
 }
 
 async function writeStoredSessionEvent<T>(
-  session: { id: string; providerCalendarId?: string | null },
+  session: {
+    id: string;
+    providerCalendarId?: string | null;
+    tutorUserId?: string | null;
+  },
+  accessToken: string,
   write: () => Promise<T>,
 ) {
   return runStoredCalendarWrite({
     calendarId: session.providerCalendarId,
     sessionId: session.id,
+    accessToken,
     write,
     onManualEdit: raiseLegacyCalendarManualEditAlert,
+    onAppCalendarMissing: () =>
+      session.tutorUserId
+        ? markAppCalendarNeedsReconnect(session.tutorUserId)
+        : Promise.resolve(),
     log: (fields) => logger.warn(fields, "Legacy calendar event was not changed"),
   });
 }
@@ -4702,7 +4713,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   if (cancelling) {
     const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
     const removed = await runTutorCalendarCall(access, (token) =>
-      writeStoredSessionEvent(args.existing, () =>
+      writeStoredSessionEvent(args.existing, token, () =>
         deleteGoogleEvent(token, calendarId, args.existing.providerEventId!, sendUpdates),
       ),
     );
@@ -4726,7 +4737,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   ]);
   const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
   const written = await runTutorCalendarCall(access, (token) =>
-    writeStoredSessionEvent(args.existing, () =>
+    writeStoredSessionEvent(args.existing, token, () =>
       updateGoogleEvent(
         token,
         calendarId,
@@ -6980,7 +6991,7 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
       const access = profile[0] ? await calendarAccess(profile[0].id) : null;
       if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
       await runTutorCalendarCall(access, (token) =>
-        writeStoredSessionEvent(session, () =>
+        writeStoredSessionEvent(session, token, () =>
           deleteGoogleEvent(
             token,
             sessionEventCalendarId(session.providerCalendarId),
@@ -7064,7 +7075,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       });
     const eventWrite = session.providerEventId
       ? await runTutorCalendarCall(access, (token) =>
-          writeStoredSessionEvent(session, () =>
+          writeStoredSessionEvent(session, token, () =>
             updateGoogleEvent(
               token,
               sessionEventCalendarId(session.providerCalendarId),
@@ -7107,7 +7118,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       if (session.providerEventId) {
         try {
           await runTutorCalendarCall(access, (token) =>
-            writeStoredSessionEvent(session, () =>
+            writeStoredSessionEvent(session, token, () =>
               updateGoogleEvent(
                 token,
                 sessionEventCalendarId(session.providerCalendarId),

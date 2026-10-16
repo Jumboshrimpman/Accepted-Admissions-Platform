@@ -247,6 +247,28 @@ export async function saveRefreshedGoogleAccessToken(
   return connection;
 }
 
+/**
+ * The tutor deleted the secondary calendar. Clear only its id so the existing
+ * health badge shows Needs reconnect. The refresh token and connection stay.
+ */
+export async function markAppCalendarNeedsReconnect(tutorUserId: string): Promise<void> {
+  const [profile] = await db
+    .select({ id: tutorProfilesTable.id })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, tutorUserId))
+    .limit(1);
+  if (!profile) return;
+  await db
+    .update(calendarConnectionsTable)
+    .set({ appCalendarId: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(calendarConnectionsTable.tutorProfileId, profile.id),
+        eq(calendarConnectionsTable.provider, "google"),
+      ),
+    );
+}
+
 export async function saveAcceptedAdmissionsCalendarId(
   connectionId: string,
   appCalendarId: string,
