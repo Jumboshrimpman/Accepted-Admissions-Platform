@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { readFileSync } from "node:fs";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
+import express from "express";
 import { NEEL_DHARNI_USER_ID, VICTORIA_USER_ID } from "./college-consulting.ts";
 import {
   LOGIN_ALIAS_FAILURE,
   REFUSED_LOGIN_ALIAS_EMAILS,
   SOPHIA_SLEIMAN_USER_ID,
   aliasLoginAccessOutcome,
+  aliasSessionRole,
   decideStoredClerkAlias,
   decideVerifiedLoginAlias,
   isRefusedLoginAliasEmail,
+  requireAppRole,
   loginAliasSelectRows,
   planPortalLoginAliasRollback,
   planPortalLoginAliases,
@@ -300,6 +305,8 @@ test("runtime and the script do not rewrite users or call Clerk or email", () =>
   assert.match(finish, /aliasLoginAccessOutcome/);
   assert.match(finish, /ROLE_PROVISIONING_MISMATCH/);
   assert.match(finish, /IDENTITY_NOT_PROVISIONED/);
+  assert.match(finish, /aliasSessionRole/);
+  assert.match(platform, /return requireAppRole\(roles\)/);
   const hook = platform.slice(
     platform.indexOf("async function acceptLoginAlias"),
     platform.indexOf("async function requireAppUser"),
@@ -368,6 +375,80 @@ test("pins Sophia by user id and refuses an alias to an admin", () => {
     }).action,
     "refuse",
   );
+});
+
+test("a client alias keeps the student role and cannot open tutor or admin routes", async () => {
+  const neelAction = planPortalLoginAliases({
+    users,
+    aliases: [],
+    mappings: sophiaMappings,
+  }).actions.find((action) => action.email === "samakubba@gmail.com");
+  const sophiaAction = planPortalLoginAliases({
+    users,
+    aliases: [],
+    mappings: sophiaMappings,
+  }).actions.find((action) => action.email === "kubbasama@gmail.com");
+  const victoriaAction = planPortalLoginAliases({
+    users,
+    aliases: [],
+    mappings: sophiaMappings,
+  }).actions.find((action) => action.email === "samakubba@icloud.com");
+  assert.equal(neelAction?.role, "student");
+  assert.equal(sophiaAction?.role, "student");
+  assert.equal(victoriaAction?.role, "tutor");
+  assert.equal(aliasSessionRole({ userRole: "student", accessRole: "student" }), "student");
+  assert.equal(aliasSessionRole({ userRole: "student", accessRole: "tutor" }), null);
+  assert.equal(aliasSessionRole({ userRole: "student", accessRole: "administrator" }), null);
+  assert.equal(aliasSessionRole({ userRole: "tutor", accessRole: "tutor" }), "tutor");
+  assert.equal(aliasSessionRole({ userRole: "tutor", accessRole: "administrator" }), null);
+  assert.equal(aliasSessionRole({ userRole: "administrator", accessRole: "administrator" }), null);
+
+  const app = express();
+  app.use((req, _res, next) => {
+    (req as { appUser?: { role: string } }).appUser = { role: "student" };
+    next();
+  });
+  app.get(
+    "/tutor/curriculum",
+    requireAppRole(["tutor", "administrator"]),
+    (_req, res) => {
+      res.json({ ok: true });
+    },
+  );
+  app.get(
+    "/tutor/profile",
+    requireAppRole(["tutor", "administrator"]),
+    (_req, res) => {
+      res.json({ ok: true });
+    },
+  );
+  app.patch(
+    "/admin/notifications/:notificationId",
+    requireAppRole(["administrator"]),
+    (_req, res) => {
+      res.json({ ok: true });
+    },
+  );
+  const server = app.listen(0);
+  await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const tutor = await fetch(`http://127.0.0.1:${port}/tutor/curriculum`);
+    const profile = await fetch(`http://127.0.0.1:${port}/tutor/profile`);
+    const admin = await fetch(`http://127.0.0.1:${port}/admin/notifications/1`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(tutor.status, 403);
+    assert.equal(profile.status, 403);
+    assert.equal(admin.status, 403);
+    assert.equal(((await tutor.json()) as { error: string }).error, "Insufficient permission");
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
 });
 
 test("revoking the real user's access blocks the alias login", () => {

@@ -325,6 +325,35 @@ export function aliasLoginAccessOutcome(input: {
   return { outcome: "allow" };
 }
 
+/**
+ * The alias session uses the target user's role. A client stays a student.
+ * A higher grant or allowlist role is not applied.
+ */
+export function aliasSessionRole(input: {
+  userRole: string;
+  accessRole: string | null;
+}): "student" | "tutor" | null {
+  if (input.userRole !== "student" && input.userRole !== "tutor") return null;
+  if (input.accessRole !== input.userRole) return null;
+  return input.userRole;
+}
+
+export function requireAppRole(
+  roles: readonly string[],
+): (
+  req: { appUser?: { role: string } | null },
+  res: { status: (code: number) => { json: (body: unknown) => void } },
+  next: () => void,
+) => void {
+  return (req, res, next) => {
+    if (!req.appUser || !roles.includes(req.appUser.role)) {
+      res.status(403).json({ error: "Insufficient permission" });
+      return;
+    }
+    next();
+  };
+}
+
 export type LoginAliasSelectRow = {
   userId: string;
   role: string;

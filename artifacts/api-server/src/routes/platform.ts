@@ -151,7 +151,7 @@ import {
   establishedAliasUser,
   missingLoginAliasRelation,
 } from "../lib/portal-login-alias-store";
-import { aliasLoginAccessOutcome } from "../lib/portal-login-aliases";
+import { aliasLoginAccessOutcome, aliasSessionRole, requireAppRole } from "../lib/portal-login-aliases";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
   bookingCalendarEventPayload,
@@ -2599,7 +2599,19 @@ async function finishAliasLogin(
     });
     return;
   }
-  await acceptLoginAlias(req, user, next);
+  const sessionRole = aliasSessionRole({
+    userRole: user.role,
+    accessRole: accessDecision.access?.role ?? null,
+  });
+  if (sessionRole !== user.role) {
+    res.status(403).json({
+      code: "ROLE_PROVISIONING_MISMATCH",
+      error:
+        "Portal role provisioning is out of sync; contact an administrator",
+    });
+    return;
+  }
+  await acceptLoginAlias(req, { ...user, role: sessionRole }, next);
 }
 
 async function acceptLoginAlias(
@@ -2964,13 +2976,7 @@ async function requireAppUser(
 function ensureRole(
   roles: AppUser["role"][],
 ): (req: AuthedRequest, res: Response, next: () => void) => void {
-  return (req, res, next) => {
-    if (!req.appUser || !roles.includes(req.appUser.role)) {
-      res.status(403).json({ error: "Insufficient permission" });
-      return;
-    }
-    next();
-  };
+  return requireAppRole(roles);
 }
 
 async function visibleCourseIds(user: AppUser): Promise<string[]> {
