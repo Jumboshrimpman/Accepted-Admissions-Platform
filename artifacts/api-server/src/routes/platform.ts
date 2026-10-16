@@ -151,6 +151,7 @@ import {
   establishedAliasUser,
   missingLoginAliasRelation,
 } from "../lib/portal-login-alias-store";
+import { aliasLoginAccessOutcome } from "../lib/portal-login-aliases";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
   bookingCalendarEventPayload,
@@ -2548,22 +2549,83 @@ async function clerkIdentity(
   return { email, displayName };
 }
 
+async function finishAliasLogin(
+  req: AuthedRequest,
+  res: Response,
+  user: AppUser,
+  next: () => void,
+): Promise<void> {
+  const accessDecision = await resolveIdentityAccess(
+    user.clerkUserId,
+    normalizeProvisionedEmail(user.email),
+  );
+  const outcome = aliasLoginAccessOutcome({
+    userRole: user.role,
+    access: accessDecision.access,
+    conflict: accessDecision.conflict,
+  });
+  if (outcome.outcome === "deny") {
+    const reason =
+      outcome.code === "PORTAL_ACCESS_CONFIGURATION_ERROR"
+        ? "conflicting_email_provisioning"
+        : outcome.code === "ROLE_PROVISIONING_MISMATCH"
+          ? "role_provisioning_mismatch"
+          : "identity_not_provisioned";
+    await db.insert(auditLogsTable).values({
+      actorUserId: user.id,
+      action: "access.denied",
+      entityType: "portal",
+      entityId: req.path,
+      metadata: { method: req.method, reason },
+    });
+    if (outcome.code === "PORTAL_ACCESS_CONFIGURATION_ERROR") {
+      res.status(503).json({
+        code: "PORTAL_ACCESS_CONFIGURATION_ERROR",
+        error: "Portal access configuration is invalid; contact an administrator",
+      });
+      return;
+    }
+    if (outcome.code === "ROLE_PROVISIONING_MISMATCH") {
+      res.status(403).json({
+        code: "ROLE_PROVISIONING_MISMATCH",
+        error:
+          "Portal role provisioning is out of sync; contact an administrator",
+      });
+      return;
+    }
+    res.status(403).json({
+      code: "IDENTITY_NOT_PROVISIONED",
+      error: "Portal access has not been provisioned for this account",
+    });
+    return;
+  }
+  await acceptLoginAlias(req, user, next);
+}
+
 async function acceptLoginAlias(
   req: AuthedRequest,
   user: AppUser,
   next: () => void,
 ): Promise<void> {
-  await db.insert(auditLogsTable).values({
-    actorUserId: user.id,
-    action: "access.login_alias",
-    entityType: "portal_login_alias",
-    entityId: user.id,
-    metadata: { method: req.method, code: "LOGIN_ALIAS" },
-  });
   const auth = getAuth(req);
   const clerkSessionId =
     auth.sessionId ?? claimString(auth.sessionClaims, "sid");
-  await recordSuccessfulLogin(user.id, clerkSessionId);
+  const inserted = clerkSessionId
+    ? await db
+        .insert(loginActivityTable)
+        .values({ userId: user.id, clerkSessionId })
+        .onConflictDoNothing({ target: loginActivityTable.clerkSessionId })
+        .returning({ id: loginActivityTable.id })
+    : [];
+  if (inserted.length > 0) {
+    await db.insert(auditLogsTable).values({
+      actorUserId: user.id,
+      action: "access.login_alias",
+      entityType: "portal_login_alias",
+      entityId: user.id,
+      metadata: { method: req.method, code: "LOGIN_ALIAS" },
+    });
+  }
   req.appUser = user;
   next();
 }
@@ -2583,7 +2645,7 @@ async function requireAppUser(
   try {
     const aliased = await establishedAliasUser(clerkUserId);
     if (aliased) {
-      await acceptLoginAlias(req, aliased, next);
+      await finishAliasLogin(req, res, aliased, next);
       return;
     }
   } catch (error) {
@@ -2661,7 +2723,7 @@ async function requireAppUser(
         email: aliasEmail,
       });
       if (linked) {
-        await acceptLoginAlias(req, linked, next);
+        await finishAliasLogin(req, res, linked, next);
         return;
       }
     } catch (error) {

@@ -8,11 +8,13 @@ import {
 import {
   decideStoredClerkAlias,
   decideVerifiedLoginAlias,
+  isPortalAliasRole,
   loginAliasSelectRows,
   normalizeLoginAliasEmail,
   planPortalLoginAliasRollback,
   planPortalLoginAliases,
   previewAliasesAfterPlan,
+  type LoginAliasMapping,
   type LoginAliasPlan,
   type LoginAliasRowSnapshot,
   type LoginAliasSelectRow,
@@ -164,7 +166,9 @@ export async function establishedAliasUser(clerkUserId: string): Promise<AppUser
     user,
   });
   if (decision.action !== "use") return null;
-  return appUserById(decision.userId);
+  const appUser = await appUserById(decision.userId);
+  if (!appUser || !isPortalAliasRole(appUser.role)) return null;
+  return appUser;
 }
 
 export async function attachVerifiedEmailAlias(input: {
@@ -197,6 +201,8 @@ export async function attachVerifiedEmailAlias(input: {
     user,
   });
   if (decision.action !== "use") return null;
+  const appUser = await appUserById(decision.userId);
+  if (!appUser || !isPortalAliasRole(appUser.role)) return null;
   if (decision.storeClerkUserId) {
     await db
       .update(portalLoginAliasesTable)
@@ -209,7 +215,7 @@ export async function attachVerifiedEmailAlias(input: {
         ),
       );
   }
-  return appUserById(decision.userId);
+  return appUser;
 }
 
 export function missingLoginAliasRelation(error: unknown): boolean {
@@ -226,8 +232,9 @@ export function missingLoginAliasRelation(error: unknown): boolean {
 export function dryRunPreview(
   users: LoginAliasUserSnapshot[],
   aliases: LoginAliasRowSnapshot[],
+  mappings?: readonly LoginAliasMapping[],
 ): { plan: LoginAliasPlan; after: LoginAliasSelectRow[] } {
-  const plan = planPortalLoginAliases({ users, aliases });
+  const plan = planPortalLoginAliases({ users, aliases, mappings });
   return {
     plan,
     after: loginAliasSelectRows(users, previewAliasesAfterPlan(aliases, plan)),

@@ -4,14 +4,16 @@ import test from "node:test";
 import { NEEL_DHARNI_USER_ID, VICTORIA_USER_ID } from "./college-consulting.ts";
 import {
   LOGIN_ALIAS_FAILURE,
-  PORTAL_LOGIN_ALIAS_MAPPINGS,
   REFUSED_LOGIN_ALIAS_EMAILS,
+  SOPHIA_SLEIMAN_USER_ID,
+  aliasLoginAccessOutcome,
   decideStoredClerkAlias,
   decideVerifiedLoginAlias,
   isRefusedLoginAliasEmail,
   loginAliasSelectRows,
   planPortalLoginAliasRollback,
   planPortalLoginAliases,
+  portalLoginAliasMappings,
   previewAliasesAfterPlan,
   type LoginAliasRowSnapshot,
   type LoginAliasUserSnapshot,
@@ -50,6 +52,7 @@ const samaPostgrad: LoginAliasUserSnapshot = {
 };
 
 const users = [neel, victoria, sophia, samaPostgrad];
+const sophiaMappings = portalLoginAliasMappings(sophia.id);
 
 test("login failure is the unprovisioned portal session, not a renamed account", () => {
   assert.equal(LOGIN_ALIAS_FAILURE.clerkMessage, "Couldn't find your account.");
@@ -58,7 +61,11 @@ test("login failure is the unprovisioned portal session, not a renamed account",
 });
 
 test("plans the three logins and leaves contact email, role, and name alone", () => {
-  const plan = planPortalLoginAliases({ users, aliases: [] });
+  const plan = planPortalLoginAliases({
+    users,
+    aliases: [],
+    mappings: sophiaMappings,
+  });
   assert.equal(plan.ok, true);
   assert.deepEqual(
     plan.actions.map((action) => action.email),
@@ -84,18 +91,13 @@ test("plans the three logins and leaves contact email, role, and name alone", ()
 });
 
 test("is idempotent when the alias already points at the same user", () => {
-  const aliases: LoginAliasRowSnapshot[] = PORTAL_LOGIN_ALIAS_MAPPINGS.map((mapping) => ({
+  const aliases: LoginAliasRowSnapshot[] = sophiaMappings.map((mapping) => ({
     email: mapping.email,
-    userId:
-      mapping.email === "kubbasama@gmail.com"
-        ? sophia.id
-        : mapping.match.kind === "userId"
-          ? mapping.match.userId
-          : sophia.id,
+    userId: mapping.match.userId,
     clerkUserId: null,
     revokedAt: null,
   }));
-  const plan = planPortalLoginAliases({ users, aliases });
+  const plan = planPortalLoginAliases({ users, aliases, mappings: sophiaMappings });
   assert.equal(plan.ok, true);
   assert.deepEqual(
     plan.actions.map((action) => action.operation),
@@ -158,6 +160,7 @@ test("does not re-role Victoria or rename Sophia when the stored role is wrong",
   const plan = planPortalLoginAliases({
     users: [{ ...victoria, role: "student" }, neel, sophia],
     aliases: [],
+    mappings: sophiaMappings,
   });
   assert.equal(plan.ok, false);
   assert.match(plan.blocked.join("\n"), /will not re-role/);
@@ -245,7 +248,11 @@ test("verified alias use stores the clerk id on the alias and not by rewriting t
 });
 
 test("dry-run preview and SELECT keep Sophia's contact email", () => {
-  const plan = planPortalLoginAliases({ users, aliases: [] });
+  const plan = planPortalLoginAliases({
+    users,
+    aliases: [],
+    mappings: sophiaMappings,
+  });
   const preview = previewAliasesAfterPlan([], plan);
   assert.equal(preview.length, 3);
   const rows = loginAliasSelectRows(users, preview);
@@ -278,15 +285,28 @@ test("runtime and the script do not rewrite users or call Clerk or email", () =>
   }
   assert.match(store, /portalLoginAliasesTable/);
   assert.match(store, /decideVerifiedLoginAlias/);
+  assert.match(store, /isPortalAliasRole/);
   assert.match(script, /--apply/);
   assert.match(script, /--rollback/);
+  assert.match(script, /--sophia-id/);
+  assert.match(script, /SOPHIA_SLEIMAN_USER_ID/);
   assert.match(script, /BEFORE/);
   assert.match(script, /AFTER/);
+  const finish = platform.slice(
+    platform.indexOf("async function finishAliasLogin"),
+    platform.indexOf("async function acceptLoginAlias"),
+  );
+  assert.match(finish, /resolveIdentityAccess/);
+  assert.match(finish, /aliasLoginAccessOutcome/);
+  assert.match(finish, /ROLE_PROVISIONING_MISMATCH/);
+  assert.match(finish, /IDENTITY_NOT_PROVISIONED/);
   const hook = platform.slice(
     platform.indexOf("async function acceptLoginAlias"),
     platform.indexOf("async function requireAppUser"),
   );
   assert.match(hook, /code: "LOGIN_ALIAS"/);
+  assert.match(hook, /onConflictDoNothing/);
+  assert.match(hook, /loginActivityTable/);
   assert.equal(/email/i.test(hook), false);
   const gate = platform.slice(
     platform.indexOf("async function requireAppUser"),
@@ -294,5 +314,101 @@ test("runtime and the script do not rewrite users or call Clerk or email", () =>
   );
   assert.match(gate, /establishedAliasUser/);
   assert.match(gate, /attachVerifiedEmailAlias/);
+  assert.match(gate, /finishAliasLogin/);
   assert.match(gate, /missingLoginAliasRelation/);
+});
+
+test("pins Sophia by user id and refuses an alias to an admin", () => {
+  assert.equal(SOPHIA_SLEIMAN_USER_ID, "");
+  const unnamed = planPortalLoginAliases({ users, aliases: [] });
+  assert.equal(unnamed.ok, false);
+  assert.match(unnamed.blocked.join("\n"), /Sophia Sleiman/);
+  assert.equal(
+    unnamed.actions.some((action) => action.email === "kubbasama@gmail.com"),
+    false,
+  );
+  const pinned = planPortalLoginAliases({
+    users,
+    aliases: [],
+    mappings: sophiaMappings,
+  });
+  assert.equal(pinned.ok, true);
+  assert.equal(
+    pinned.actions.find((action) => action.email === "kubbasama@gmail.com")?.userId,
+    sophia.id,
+  );
+
+  const admin: LoginAliasUserSnapshot = {
+    id: "33333333-3333-4333-8333-333333333333",
+    email: "admin@example.com",
+    displayName: "Admin",
+    role: "administrator",
+    clerkUserId: "user_admin",
+  };
+  const alias = {
+    email: "admin-login@example.com",
+    userId: admin.id,
+    clerkUserId: "user_admin_login",
+    revokedAt: null,
+  };
+  assert.equal(
+    decideVerifiedLoginAlias({
+      email: alias.email,
+      clerkUserId: "user_admin_login",
+      alias: { ...alias, clerkUserId: null },
+      user: admin,
+    }).action,
+    "refuse",
+  );
+  assert.equal(
+    decideStoredClerkAlias({
+      clerkUserId: "user_admin_login",
+      alias,
+      user: admin,
+    }).action,
+    "refuse",
+  );
+});
+
+test("revoking the real user's access blocks the alias login", () => {
+  assert.deepEqual(
+    aliasLoginAccessOutcome({
+      userRole: "student",
+      access: null,
+      conflict: false,
+    }),
+    { outcome: "deny", code: "IDENTITY_NOT_PROVISIONED" },
+  );
+  assert.deepEqual(
+    aliasLoginAccessOutcome({
+      userRole: "student",
+      access: { role: "student" },
+      conflict: true,
+    }),
+    { outcome: "deny", code: "PORTAL_ACCESS_CONFIGURATION_ERROR" },
+  );
+  assert.deepEqual(
+    aliasLoginAccessOutcome({
+      userRole: "student",
+      access: { role: "tutor" },
+      conflict: false,
+    }),
+    { outcome: "deny", code: "ROLE_PROVISIONING_MISMATCH" },
+  );
+  assert.deepEqual(
+    aliasLoginAccessOutcome({
+      userRole: "tutor",
+      access: { role: "tutor" },
+      conflict: false,
+    }),
+    { outcome: "allow" },
+  );
+  assert.deepEqual(
+    aliasLoginAccessOutcome({
+      userRole: "administrator",
+      access: { role: "administrator" },
+      conflict: false,
+    }),
+    { outcome: "deny", code: "IDENTITY_NOT_PROVISIONED" },
+  );
 });

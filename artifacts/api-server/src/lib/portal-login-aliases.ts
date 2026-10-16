@@ -29,6 +29,13 @@ export const LOGIN_ALIAS_FAILURE = {
 
 export const SOPHIA_SLEIMAN_DISPLAY_NAME = "Sophia Sleiman";
 
+/**
+ * Sophia is pinned by user id, not display name. Leave this empty until the
+ * production dry run shows her id, then paste it here. Until then, --apply
+ * requires --sophia-id.
+ */
+export const SOPHIA_SLEIMAN_USER_ID = "";
+
 /** Explicitly never linked. xsfam6 stays a retired Xavier address. */
 export const REFUSED_LOGIN_ALIAS_EMAILS = [
   "xsfam6@gmail.com",
@@ -38,28 +45,37 @@ export const REFUSED_LOGIN_ALIAS_EMAILS = [
 export type LoginAliasMapping = {
   email: string;
   label: string;
-  match:
-    | { kind: "userId"; userId: string; role: "student" | "tutor" }
-    | { kind: "studentDisplayName"; displayName: string };
+  match: { kind: "userId"; userId: string; role: "student" | "tutor" };
 };
 
-export const PORTAL_LOGIN_ALIAS_MAPPINGS: readonly LoginAliasMapping[] = [
-  {
-    email: "samakubba@gmail.com",
-    label: "Neel Dharni client portal",
-    match: { kind: "userId", userId: NEEL_DHARNI_USER_ID, role: "student" },
-  },
-  {
-    email: "samakubba@icloud.com",
-    label: "Victoria tutor profile",
-    match: { kind: "userId", userId: VICTORIA_USER_ID, role: "tutor" },
-  },
-  {
-    email: "kubbasama@gmail.com",
-    label: "Sophia Sleiman client record",
-    match: { kind: "studentDisplayName", displayName: SOPHIA_SLEIMAN_DISPLAY_NAME },
-  },
-];
+export function isPortalAliasRole(role: string | null | undefined): boolean {
+  return role === "student" || role === "tutor";
+}
+
+export function portalLoginAliasMappings(
+  sophiaUserId = SOPHIA_SLEIMAN_USER_ID,
+): readonly LoginAliasMapping[] {
+  return [
+    {
+      email: "samakubba@gmail.com",
+      label: "Neel Dharni client portal",
+      match: { kind: "userId", userId: NEEL_DHARNI_USER_ID, role: "student" },
+    },
+    {
+      email: "samakubba@icloud.com",
+      label: "Victoria tutor profile",
+      match: { kind: "userId", userId: VICTORIA_USER_ID, role: "tutor" },
+    },
+    {
+      email: "kubbasama@gmail.com",
+      label: "Sophia Sleiman client record",
+      match: { kind: "userId", userId: sophiaUserId.trim(), role: "student" },
+    },
+  ];
+}
+
+export const PORTAL_LOGIN_ALIAS_MAPPINGS: readonly LoginAliasMapping[] =
+  portalLoginAliasMappings();
 
 export type LoginAliasUserSnapshot = {
   id: string;
@@ -109,34 +125,33 @@ function findTarget(
   mapping: LoginAliasMapping,
   users: readonly LoginAliasUserSnapshot[],
 ): { user: LoginAliasUserSnapshot | null; blocked: string | null } {
-  if (mapping.match.kind === "userId") {
-    const matches = users.filter((user) => user.id === mapping.match.userId);
-    if (matches.length !== 1) {
-      return {
-        user: null,
-        blocked: `${mapping.email}: expected one user ${mapping.match.userId} for ${mapping.label}`,
-      };
-    }
-    const user = matches[0]!;
-    if (user.role !== mapping.match.role) {
-      return {
-        user: null,
-        blocked: `${mapping.email}: ${mapping.label} has role ${user.role}; expected ${mapping.match.role} and will not re-role`,
-      };
-    }
-    return { user, blocked: null };
+  if (!mapping.match.userId) {
+    return {
+      user: null,
+      blocked: `${mapping.email}: ${mapping.label} needs a user id (set SOPHIA_SLEIMAN_USER_ID or pass --sophia-id)`,
+    };
   }
-  const matches = users.filter(
-    (user) =>
-      user.displayName === mapping.match.displayName && user.role === "student",
-  );
+  const matches = users.filter((user) => user.id === mapping.match.userId);
   if (matches.length !== 1) {
     return {
       user: null,
-      blocked: `${mapping.email}: expected exactly one student named ${mapping.match.displayName}, found ${matches.length}`,
+      blocked: `${mapping.email}: expected one user ${mapping.match.userId} for ${mapping.label}`,
     };
   }
-  return { user: matches[0]!, blocked: null };
+  const user = matches[0]!;
+  if (user.role !== mapping.match.role) {
+    return {
+      user: null,
+      blocked: `${mapping.email}: ${mapping.label} has role ${user.role}; expected ${mapping.match.role} and will not re-role`,
+    };
+  }
+  if (!isPortalAliasRole(user.role)) {
+    return {
+      user: null,
+      blocked: `${mapping.email}: ${mapping.label} role ${user.role} cannot be an alias target`,
+    };
+  }
+  return { user, blocked: null };
 }
 
 export function planPortalLoginAliases(input: {
@@ -261,6 +276,7 @@ export function decideVerifiedLoginAlias(input: {
   if (!input.alias || input.alias.revokedAt) return { action: "skip" };
   if (normalizeLoginAliasEmail(input.alias.email) !== email) return { action: "skip" };
   if (!input.user || input.user.id !== input.alias.userId) return { action: "skip" };
+  if (!isPortalAliasRole(input.user.role)) return { action: "refuse" };
   return {
     action: "use",
     userId: input.user.id,
@@ -277,7 +293,36 @@ export function decideStoredClerkAlias(input: {
   if (input.alias.clerkUserId !== input.clerkUserId) return { action: "skip" };
   if (isRefusedLoginAliasEmail(input.alias.email)) return { action: "refuse" };
   if (!input.user || input.user.id !== input.alias.userId) return { action: "skip" };
+  if (!isPortalAliasRole(input.user.role)) return { action: "refuse" };
   return { action: "use", userId: input.user.id, storeClerkUserId: false };
+}
+
+export function aliasLoginAccessOutcome(input: {
+  userRole: string;
+  access: { role: string } | null;
+  conflict: boolean;
+}):
+  | { outcome: "allow" }
+  | {
+      outcome: "deny";
+      code:
+        | "IDENTITY_NOT_PROVISIONED"
+        | "ROLE_PROVISIONING_MISMATCH"
+        | "PORTAL_ACCESS_CONFIGURATION_ERROR";
+    } {
+  if (!isPortalAliasRole(input.userRole)) {
+    return { outcome: "deny", code: "IDENTITY_NOT_PROVISIONED" };
+  }
+  if (input.conflict) {
+    return { outcome: "deny", code: "PORTAL_ACCESS_CONFIGURATION_ERROR" };
+  }
+  if (!input.access) {
+    return { outcome: "deny", code: "IDENTITY_NOT_PROVISIONED" };
+  }
+  if (input.userRole !== input.access.role) {
+    return { outcome: "deny", code: "ROLE_PROVISIONING_MISMATCH" };
+  }
+  return { outcome: "allow" };
 }
 
 export type LoginAliasSelectRow = {

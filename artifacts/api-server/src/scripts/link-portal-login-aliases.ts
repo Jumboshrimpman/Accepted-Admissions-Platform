@@ -10,11 +10,17 @@
  *
  *   cd artifacts/api-server
  *   node --experimental-strip-types src/scripts/link-portal-login-aliases.ts
- *   node --experimental-strip-types src/scripts/link-portal-login-aliases.ts --apply
+ *   node --experimental-strip-types src/scripts/link-portal-login-aliases.ts --apply --sophia-id <uuid>
  *   node --experimental-strip-types src/scripts/link-portal-login-aliases.ts --rollback
+ *
+ * --sophia-id is required for --apply until SOPHIA_SLEIMAN_USER_ID is filled.
  */
 import { pool } from "@workspace/db";
-import { planPortalLoginAliases } from "../lib/portal-login-aliases.ts";
+import {
+  SOPHIA_SLEIMAN_USER_ID,
+  planPortalLoginAliases,
+  portalLoginAliasMappings,
+} from "../lib/portal-login-aliases.ts";
 import {
   applyLoginAliasPlan,
   dryRunPreview,
@@ -24,6 +30,21 @@ import {
 
 const apply = process.argv.includes("--apply");
 const rollback = process.argv.includes("--rollback");
+
+function flag(name: string): string {
+  const prefix = `--${name}=`;
+  const inline = process.argv.find((arg) => arg.startsWith(prefix));
+  if (inline) return inline.slice(prefix.length).trim();
+  const index = process.argv.indexOf(`--${name}`);
+  if (index >= 0) {
+    const value = process.argv[index + 1];
+    if (value && !value.startsWith("--")) return value.trim();
+  }
+  return "";
+}
+
+const sophiaUserId = flag("sophia-id") || SOPHIA_SLEIMAN_USER_ID;
+const mappings = portalLoginAliasMappings(sophiaUserId);
 
 function printSection(label: string, value: unknown) {
   console.log(`\n${label}`);
@@ -47,8 +68,13 @@ try {
     console.log(
       "\nRollback deleted alias rows for the mapped logins only. User rows were not updated.",
     );
+  } else if (apply && !sophiaUserId) {
+    console.error(
+      "\n--sophia-id is required for --apply until SOPHIA_SLEIMAN_USER_ID is filled.",
+    );
+    process.exitCode = 1;
   } else {
-    const preview = dryRunPreview(before.users, before.aliases);
+    const preview = dryRunPreview(before.users, before.aliases, mappings);
     printSection("PLAN", preview.plan);
     if (!preview.plan.ok) {
       printSection("AFTER SELECT (not written)", before.select);
@@ -61,6 +87,7 @@ try {
       await applyLoginAliasPlan(planPortalLoginAliases({
         users: before.users,
         aliases: before.aliases,
+        mappings,
       }));
       const after = await loadLoginAliasSnapshot();
       printSection("AFTER SELECT", after.select);
