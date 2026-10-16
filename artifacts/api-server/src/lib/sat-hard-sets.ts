@@ -460,18 +460,13 @@ export async function ensureHardSatPrework(
   if (fullHard) {
     return { action: "unchanged", assignmentId: fullHard.row.id };
   }
-  const shortHard = classified.find((item) => item.everyKeyIsHard);
-  if (shortHard) {
-    await raiseHardSatShortfallAlert(
-      session,
-      `Pre-work has ${shortHard.keys.length} hard questions and was left unchanged. A full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`,
-    );
-    return { action: "unchanged", assignmentId: shortHard.row.id };
-  }
+  const shortHard = classified.find(
+    (item) => item.everyKeyIsHard && item.keys.length < HARD_SAT_PREWORK_QUESTIONS,
+  );
   const replaceableIds = classified.map((item) => item.row.id);
   try {
     const seen = session.clientUserId
-      ? await loadSeenSatBankUsage(session.clientUserId, [])
+      ? await loadSeenSatBankUsage(session.clientUserId, replaceableIds)
       : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
     const pool = await loadRenderableHardBank();
     const planned = planHardSatSessionSets(pool, {
@@ -490,6 +485,13 @@ export async function ensureHardSatPrework(
     }
     const inSessionReady = duringIsFullHard || planned.inSession.length === target;
     if (planned.prework.length !== HARD_SAT_PREWORK_QUESTIONS || !inSessionReady) {
+      if (shortHard) {
+        await raiseHardSatShortfallAlert(
+          session,
+          `Pre-work has ${shortHard.keys.length} hard questions and was left unchanged. A full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`,
+        );
+        return { action: "unchanged", assignmentId: shortHard.row.id };
+      }
       await raiseHardSatShortfallAlert(
         session,
         `The renderable hard pool has ${planned.prework.length} pre-work and ${planned.inSession.length} in-session items available. A full set is ${HARD_SAT_PREWORK_QUESTIONS} and ${target}. No partial set was assigned.`,
@@ -678,21 +680,26 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       duringAssignmentId: fullHard.row.id,
     };
   }
-  const shortHard = classified.find((item) => item.everyKeyIsHard);
-  if (shortHard) {
-    await raiseHardSatShortfallAlert(
-      session,
-      `In-session has ${shortHard.keys.length} hard questions and was left unchanged. The target is ${target}.`,
-    );
-    return {
-      status: "unchanged",
-      questionCount: shortHard.keys.length,
-      duringAssignmentId: shortHard.row.id,
-    };
-  }
+  const shortHard = classified.find(
+    (item) => item.everyKeyIsHard && item.keys.length < target,
+  );
   try {
-    const inSession = await officialHardInSessionItems(session, []);
+    const inSession = await officialHardInSessionItems(
+      session,
+      shortHard ? [shortHard.row.id] : [],
+    );
     if (inSession.length !== target) {
+      if (shortHard) {
+        await raiseHardSatShortfallAlert(
+          session,
+          `In-session has ${shortHard.keys.length} hard questions and was left unchanged. The target is ${target}.`,
+        );
+        return {
+          status: "unchanged",
+          questionCount: shortHard.keys.length,
+          duringAssignmentId: shortHard.row.id,
+        };
+      }
       await raiseHardSatShortfallAlert(
         session,
         `The renderable hard pool can supply ${inSession.length} in-session questions. The target is ${target}. No partial in-session set was assigned.`,
@@ -702,6 +709,9 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
         questionCount: 0,
         duringAssignmentId: null,
       };
+    }
+    if (shortHard) {
+      await archiveUnattemptedAssignment(session.id, shortHard.row.id);
     }
     const during = (await liveDuringAssignments(session.id))[0] ?? (await ensureDuringAssignment(session, target));
     const written = await writeOfficialHardInSession(during.id, inSession);
