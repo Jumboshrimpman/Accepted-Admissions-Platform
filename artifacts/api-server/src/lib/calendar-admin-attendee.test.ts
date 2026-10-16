@@ -105,30 +105,70 @@ test("backfill patches only later events and passes sendUpdates none", async () 
   );
 });
 
-test("the attendee patch path uses sendUpdates=none", async () => {
+test("backfill keeps RSVP, display name, and optional, and appends admin only when missing", async () => {
+  const student = {
+    email: "student@example.com",
+    displayName: "Michelle Makarem",
+    responseStatus: "accepted",
+    optional: false,
+    comment: "Bring the packet",
+  };
+  const tutor = {
+    email: "tutor@example.com",
+    displayName: "Xavier Morales",
+    responseStatus: "needsAction",
+    optional: true,
+    additionalGuests: 0,
+  };
+  const later = session("later", new Date(NOW.getTime() + 2 * 60 * 60 * 1000));
+  const patches: Array<{ attendees: readonly object[] }> = [];
+  await backfillAdminCalendarAttendees({
+    dryRun: false,
+    now: NOW,
+    sessions: [later],
+    readAttendees: async () => [student, tutor],
+    patchAttendees: async (_row, attendees) => {
+      patches.push({ attendees });
+    },
+  });
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0]?.attendees[0], student);
+  assert.equal(patches[0]?.attendees[1], tutor);
+  assert.deepEqual(patches[0]?.attendees[2], { email: ADMIN });
+
+  const already = attendeesIncludingAdmin([
+    { email: "Admin@AcceptedAdmissions.org", responseStatus: "accepted", displayName: "Admin" },
+    student,
+  ]);
+  assert.equal(already.length, 2);
+  assert.equal(already[0]?.responseStatus, "accepted");
+  assert.equal(already[0]?.displayName, "Admin");
+  assert.equal(already[1], student);
+});
+
+test("the attendee patch path uses sendUpdates=none and keeps guest fields", async () => {
   const urls: string[] = [];
   const methods: string[] = [];
+  const bodies: Array<{ attendees?: Array<Record<string, unknown>> }> = [];
   const previous = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
     urls.push(String(input));
     methods.push(init?.method ?? "GET");
-    const body = JSON.parse(String(init?.body));
+    const body = JSON.parse(String(init?.body)) as { attendees?: Array<Record<string, unknown>> };
+    bodies.push(body);
     return new Response(JSON.stringify({ id: "evt-1", attendees: body.attendees }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
   };
+  const student = {
+    email: "student@example.com",
+    displayName: "Michelle Makarem",
+    responseStatus: "accepted",
+    optional: false,
+  };
   try {
-    await patchGoogleEventAttendees(
-      "token",
-      "primary",
-      "evt-1",
-      [
-        { email: "student@example.com" },
-        { email: ADMIN },
-      ],
-      "none",
-    );
+    await patchGoogleEventAttendees("token", "primary", "evt-1", [student, { email: ADMIN }]);
   } finally {
     globalThis.fetch = previous;
   }
@@ -136,6 +176,7 @@ test("the attendee patch path uses sendUpdates=none", async () => {
   assert.equal(urls.length, 1);
   assert.match(urls[0] ?? "", /\/calendar\/v3\/calendars\/primary\/events\/evt-1\?sendUpdates=none$/);
   assert.equal((urls[0] ?? "").includes("sendUpdates=all"), false);
+  assert.deepEqual(bodies[0]?.attendees, [student, { email: ADMIN }]);
 });
 
 test("admin backfill is an explicit route and does not run at boot", async () => {
@@ -162,10 +203,12 @@ test("admin backfill is an explicit route and does not run at boot", async () =>
   assert.match(route, /ensureRole\(\["administrator"\]\)/);
   assert.match(route, /dryRun/);
   assert.match(route, /patchGoogleEventAttendees\(/);
-  assert.match(route, /sendUpdates/);
+  assert.doesNotMatch(route, /sendUpdates/);
   assert.match(backfill, /patchAttendees\(session, nextAttendees, "none"\)/);
-  assert.match(google, /export async function patchGoogleEventAttendees/);
-  assert.match(google, /sendUpdates: "none"/);
+  const patchFn = google.slice(google.indexOf("export async function patchGoogleEventAttendees"));
+  assert.match(patchFn, /"none"/);
+  assert.doesNotMatch(patchFn.slice(0, patchFn.indexOf("{")), /sendUpdates/);
+  assert.doesNotMatch(patchFn, /email:\s*attendee\.email/);
   assert.equal(indexSource.includes("backfillAdminCalendarAttendees"), false);
   assert.equal(indexSource.includes("calendar-attendees/backfill"), false);
   assert.match(indexSource, /Stored Google Calendar refresh tokens kept connected/);

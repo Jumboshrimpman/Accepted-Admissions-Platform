@@ -37,6 +37,7 @@ const {
   GoogleCalendarRequestError,
   grantedScopesIncludeRequired,
   isGoogleCalendarAuthFailure,
+  calendarGoogleAccountMismatchMessage,
   googleAccountMatchesPortalEmails,
   googleCalendarAuthorizationUrl,
   googleCalendarCompletionHtml,
@@ -210,6 +211,28 @@ test("calendar completion page notifies the opener, broadcasts, and returns to t
   assert.match(html, /https:\/\/app\.example\.com\/tutor\?calendar=connected/);
   assert.match(html, /window\.location\.replace\(returnHref\)/);
   assert.match(html, /window\.close/);
+});
+
+test("a burned admin reconnect tells the tutor to ask for a new link", () => {
+  const message = calendarGoogleAccountMismatchMessage(
+    "xaver.rmz6@gmail.com",
+    "admin_reconnect",
+  );
+  assert.match(message, /xaver\.rmz6@gmail\.com/);
+  assert.match(message, /Ask an admin for a new reconnect link/);
+  assert.equal(
+    calendarGoogleAccountMismatchMessage("xaver.rmz6@gmail.com", "tutor_connect").includes(
+      "new reconnect link",
+    ),
+    false,
+  );
+  const html = googleCalendarCompletionHtml({
+    success: false,
+    outcome: "rejected",
+    message,
+  });
+  assert.match(html, /Ask an admin for a new reconnect link/);
+  assert.match(html, /Google Calendar connection not completed/);
 });
 
 test("calendar completion page renders a safe rejected-authorization message", () => {
