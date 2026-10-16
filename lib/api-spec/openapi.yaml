@@ -3415,6 +3415,7 @@ components:
         summary: { type: string }
         duringAssignmentId: { type: ["string", "null"] }
         attachedQuestionCount: { type: number }
+        needsQuestions: { type: boolean }
     AdaptiveCurriculum:
       type: object
       required: [sessionId, homework, mistakes, recommendations, hardQuestions, tutorNotes, publishedBlocks]

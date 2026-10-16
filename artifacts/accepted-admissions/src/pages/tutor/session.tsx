@@ -287,6 +287,11 @@ export default function TutorSession() {
                   Prepared live plan
                 </p>
                 <p className="mt-1 text-sm font-medium">{adaptive.sessionPrep.summary}</p>
+                {adaptive.sessionPrep.needsQuestions ? (
+                  <p className="mt-2 text-sm font-medium text-destructive" data-testid="session-needs-questions">
+                    This session still needs questions. The hard SAT bank could not fill a full set, so no partial set was assigned.
+                  </p>
+                ) : null}
                 <p className="mt-1 text-xs text-muted-foreground">
                   Mode: {adaptive.sessionPrep.mode.replaceAll("_", " ")}
                   {adaptive.sessionPrep.attachedQuestionCount > 0

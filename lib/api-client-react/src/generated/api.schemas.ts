@@ -2230,6 +2230,7 @@ export interface SessionPrepSummary {
   /** @nullable */
   duringAssignmentId: string | null;
   attachedQuestionCount: number;
+  needsQuestions?: boolean;
 }
 
 export interface AdaptiveCurriculum {

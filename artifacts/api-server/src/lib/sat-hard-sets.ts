@@ -104,6 +104,29 @@ async function attemptCount(assignmentId: string): Promise<number> {
   return Number(count ?? 0);
 }
 
+async function assignmentQuestionCount(assignmentId: string): Promise<number> {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  return Number(count ?? 0);
+}
+
+/** Archive a live pre-work row that has no attempts. Attempt rows are not rewritten. */
+async function archiveUnattemptedAssignment(sessionId: string, assignmentId: string): Promise<void> {
+  if ((await attemptCount(assignmentId)) > 0) return;
+  await db
+    .update(assignmentsTable)
+    .set({ status: "archived" })
+    .where(
+      and(
+        eq(assignmentsTable.id, assignmentId),
+        eq(assignmentsTable.sessionId, sessionId),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    );
+}
+
 async function sourceKeysForAssignment(assignmentId: string): Promise<string[]> {
   const rows = await db
     .select({ sourceKey: bankQuestionsTable.sourceKey })
@@ -349,8 +372,10 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
 }
 
 /**
- * Fill an empty hard pre-work set from the same renderable pool used for planning.
- * A set that already has questions is left alone, including its attempt rows.
+ * Fill hard pre-work from the same renderable pool used for planning.
+ * A live unattempted routine set stays only when every question's source key
+ * is in that pool. Anything else with no attempts is archived and refilled,
+ * or flagged as a shortfall when the pool cannot fill a full set.
  */
 export async function ensureHardSatPrework(
   session: SessionRow,
@@ -379,14 +404,23 @@ export async function ensureHardSatPrework(
   const replaceable = replaceableRoutinePrework(routine);
   const keeper = replaceable[0] ?? null;
   const assignedKeys = keeper ? await sourceKeysForAssignment(keeper.id) : [];
-  if (assignedKeys.length > 0) {
-    if (assignedKeys.length !== HARD_SAT_PREWORK_QUESTIONS) {
-      await raiseHardSatShortfallAlert(
-        session,
-        `Pre-work has ${assignedKeys.length} questions and was left unchanged. A full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`,
-      );
+  const assignedCount = keeper ? await assignmentQuestionCount(keeper.id) : 0;
+  if (assignedCount > 0) {
+    const pool = await loadRenderableHardBank();
+    const hardKeys = new Set(pool.map((item) => item.sourceKey));
+    const everyKeyIsHard =
+      assignedKeys.length === assignedCount &&
+      assignedKeys.every((sourceKey) => hardKeys.has(sourceKey));
+    if (everyKeyIsHard) {
+      if (assignedKeys.length !== HARD_SAT_PREWORK_QUESTIONS) {
+        await raiseHardSatShortfallAlert(
+          session,
+          `Pre-work has ${assignedKeys.length} hard questions and was left unchanged. A full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`,
+        );
+      }
+      return { action: "unchanged", assignmentId: keeper!.id };
     }
-    return { action: "unchanged", assignmentId: keeper!.id };
+    await archiveUnattemptedAssignment(session.id, keeper!.id);
   }
   const duringRows = await liveDuringAssignments(session.id);
   const duringKeys = duringRows[0] ? await sourceKeysForAssignment(duringRows[0].id) : [];

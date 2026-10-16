@@ -26,6 +26,7 @@ import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   HARD_SAT_PREWORK_QUESTIONS,
   SAT_DIFFICULTY_SETTINGS,
+  hardSatFacingTextIsGarbled,
   hardSatSetIsComplete,
   inSessionQuestionTargetForStudent,
   isHardSatBankItem,
@@ -364,7 +365,8 @@ test("attempted pre-work is not refreshed, and garbled math is not renderable", 
       },
     ],
   };
-  assert.equal(isRenderableHardSatItem(cropBacked), true);
+  assert.equal(isRenderableHardSatItem(cropBacked), false);
+  assert.equal(hardSatFacingTextIsGarbled(cropBacked.prompt), true);
   assert.equal(
     isRenderableHardSatItem({
       ...cropBacked,
@@ -431,8 +433,8 @@ test("hard assign path does not email or rewrite attempt rows", () => {
     prep.indexOf("async function attachHardBank"),
     prep.indexOf("export type SessionPrepResult"),
   );
-  assert.match(leftover, /fillUnattemptedOfficialHardInSession/);
-  assert.doesNotMatch(leftover, /sourceType/);
+  assert.doesNotMatch(leftover, /fillUnattemptedOfficialHardInSession|materializeHardSatQuestion/);
+  assert.match(leftover, /questionsTable\.sourceType, "original"/);
   assert.doesNotMatch(leftover, /difficulty", "hard"/);
   const route = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
   const sessionGet = route.slice(
@@ -440,16 +442,29 @@ test("hard assign path does not email or rewrite attempt rows", () => {
     route.indexOf("async function listAssignmentsForUser"),
   );
   assert.doesNotMatch(sessionGet, /ensureHardSatSessionSets/);
+  const adaptiveFn = route.slice(
+    route.indexOf("async function adaptiveCurriculumForSession"),
+    route.indexOf('"/sessions/:sessionId/adaptive-curriculum"'),
+  );
+  assert.doesNotMatch(adaptiveFn, /prepareSessionCurriculum|deriveAdaptiveRecommendations|materializeHardSatQuestion|fillUnattemptedOfficialHardInSession/);
   const adaptiveMarker = '"/sessions/:sessionId/adaptive-curriculum"';
   const adaptiveGetAt = route.indexOf(adaptiveMarker);
   const adaptivePostAt = route.indexOf(adaptiveMarker, adaptiveGetAt + adaptiveMarker.length);
   const adaptiveGet = route.slice(route.lastIndexOf("router.get(", adaptiveGetAt), adaptivePostAt);
   assert.doesNotMatch(adaptiveGet, /ensureHardSatSessionSets/);
   assert.doesNotMatch(adaptiveGet, /prepareSessionCurriculum/);
+  const attemptGet = route.slice(
+    route.indexOf('router.get("/attempts/:attemptId"'),
+    route.indexOf('router.post(\n  "/attempts/:attemptId/pause"'),
+  );
+  assert.equal(attemptGet.match(/prepareCurriculum: false/g)?.length, 2);
+  assert.doesNotMatch(attemptGet, /prepareCurriculum: true/);
   const postHandler = route.slice(route.lastIndexOf("router.post(", adaptivePostAt), route.indexOf('router.get("/assignments"'));
   assert.match(postHandler, /ensureRole\(\["administrator", "tutor"\]\)/);
   assert.match(postHandler, /withSessionPreworkLock/);
   assert.match(postHandler, /ensureHardSatSessionSets\(session, req\.appUser\?\.id/);
+  const submitAttempt = route.slice(route.indexOf('router.post(\n  "/attempts/:attemptId/submit"'));
+  assert.match(submitAttempt, /prepareCurriculum: true/);
   const shared = readFileSync(new URL("./sat-bank-service.ts", import.meta.url), "utf8");
   assert.match(shared, /toRenderableHardSatInput/);
   assert.match(hardSets, /toRenderableHardSatInput/);
@@ -703,6 +718,66 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
   assert.equal(sets.preworkTimeLimitMinutes, routinePreworkTimeLimitMinutes(preworkIds.length));
   assert.equal(sets.inSessionTimeLimitMinutes, 30);
 
+  for (const record of hardPool) {
+    const facing = hardSatStudentFacing({
+      id: record.sourceKey,
+      sourceKey: record.sourceKey,
+      examFamily: record.examFamily,
+      sourceKind: record.sourceKind,
+      section: record.section,
+      module: record.module,
+      questionNumber: record.questionNumber,
+      practiceTestNumber: record.practiceTestNumber,
+      prompt: record.prompt,
+      stimulus: record.stimulus,
+      choices: record.choices,
+      figures: record.figures,
+      questionType: record.questionType,
+      correctAnswer: record.correctAnswer,
+      officialExplanation: record.officialExplanation,
+      extractGaps: record.extractGaps,
+      domain: record.domain,
+      skill: record.skill,
+      difficulty: record.difficulty,
+    });
+    assert.ok(facing, record.sourceKey);
+    assert.equal(hardSatFacingTextIsGarbled(facing.prompt), false, record.sourceKey);
+    for (const choice of facing.choices) {
+      assert.equal(hardSatFacingTextIsGarbled(choice.text), false, `${record.sourceKey} ${choice.label}`);
+    }
+  }
+  const pt11q26 = records.find((record) => record.sourceKey === "sat-pt11-math-m2-q26");
+  assert.ok(pt11q26);
+  assert.deepEqual(pt11q26.choices.map((choice) => choice.text), ["3/5", "3/4", "4/5", "4/3"]);
+  assert.equal(pt11q26.correctAnswer.trim().toUpperCase(), "D");
+  const droppedImageOnly = records.find((record) => record.sourceKey === "sat-pt8-math-m2-q26");
+  assert.ok(droppedImageOnly);
+  assert.equal(
+    isRenderableHardSatItem(
+      toRenderableHardSatInput({
+        id: droppedImageOnly.sourceKey,
+        sourceKey: droppedImageOnly.sourceKey,
+        examFamily: droppedImageOnly.examFamily,
+        sourceKind: droppedImageOnly.sourceKind,
+        section: droppedImageOnly.section,
+        module: droppedImageOnly.module,
+        questionNumber: droppedImageOnly.questionNumber,
+        practiceTestNumber: droppedImageOnly.practiceTestNumber,
+        prompt: droppedImageOnly.prompt,
+        stimulus: droppedImageOnly.stimulus,
+        choices: droppedImageOnly.choices,
+        figures: droppedImageOnly.figures,
+        questionType: droppedImageOnly.questionType,
+        correctAnswer: droppedImageOnly.correctAnswer,
+        officialExplanation: droppedImageOnly.officialExplanation,
+        extractGaps: droppedImageOnly.extractGaps,
+        domain: droppedImageOnly.domain,
+        skill: droppedImageOnly.skill,
+        difficulty: droppedImageOnly.difficulty,
+      }),
+    ),
+    false,
+  );
   const rwCount = hardPool.filter((record) => record.section === "rw").length;
   const mathCount = hardPool.filter((record) => record.section === "math").length;
   const dates = ["2026-10-30", "2026-11-06", "2026-11-20", "2026-11-27", "2026-12-11", "2026-12-18"];
@@ -740,7 +815,7 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
   const covered = coverage.filter((row) => row.full).length;
   console.log(JSON.stringify({ usableHardRw: rwCount, usableHardMath: mathCount, covered, coverage }, null, 2));
   assert.equal(rwCount, 133);
-  assert.equal(mathCount, 35);
+  assert.equal(mathCount, 33);
   assert.equal(covered, 2);
   assert.equal(coverage[0]?.full, true);
   assert.equal(coverage[1]?.full, true);

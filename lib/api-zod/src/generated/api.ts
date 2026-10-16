@@ -3085,7 +3085,8 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
   "summary": zod.string(),
   "duringAssignmentId": zod.string().nullable(),
-  "attachedQuestionCount": zod.number()
+  "attachedQuestionCount": zod.number(),
+  "needsQuestions": zod.boolean().optional()
 }).nullish()
 })
 
@@ -3196,7 +3197,8 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
   "summary": zod.string(),
   "duringAssignmentId": zod.string().nullable(),
-  "attachedQuestionCount": zod.number()
+  "attachedQuestionCount": zod.number(),
+  "needsQuestions": zod.boolean().optional()
 }).nullish()
 })
 

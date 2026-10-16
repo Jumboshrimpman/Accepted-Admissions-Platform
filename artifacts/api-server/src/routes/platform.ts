@@ -3614,6 +3614,7 @@ function attemptSubjectFromAssignment(title?: string | null): string {
 async function finalizeAttemptResult(
   attemptId: string,
   status: "submitted" | "expired",
+  options?: { prepareCurriculum?: boolean },
 ): Promise<AttemptResultPayload | null> {
   const [attempt] = await db
     .select({
@@ -3823,7 +3824,9 @@ async function finalizeAttemptResult(
         correct: item.correct,
       })),
     });
-    await prepareSessionCurriculum(attempt.session);
+    if (options?.prepareCurriculum) {
+      await prepareSessionCurriculum(attempt.session);
+    }
   }
   return result;
 }
@@ -11760,6 +11763,7 @@ async function adaptiveCurriculumForSession(
     summary: string;
     duringAssignmentId: string | null;
     attachedQuestionCount: number;
+    needsQuestions: boolean;
   } | null = null;
   const sessionStudent =
     Boolean(session.clientUserId) && subjectUserId === session.clientUserId;
@@ -11769,42 +11773,59 @@ async function adaptiveCurriculumForSession(
       (item.latestAttemptStatus === "submitted" || item.latestAttemptStatus === "expired"),
   );
   const hardSession = (await satDifficultyForSession(session)) === "hard";
+  const [storedPrep] = await db
+    .select()
+    .from(curriculumBlocksTable)
+    .where(
+      and(
+        eq(curriculumBlocksTable.sessionId, session.id),
+        eq(curriculumBlocksTable.kind, "adaptive_prep"),
+      ),
+    )
+    .limit(1);
+  const storedConfig =
+    storedPrep?.config && typeof storedPrep.config === "object"
+      ? (storedPrep.config as { mode?: string; text?: string; needsQuestions?: boolean })
+      : null;
   if (hardSession) {
     const described = await describeHardSatSessionPrep(session);
-    const [storedPrep] = await db
-      .select()
-      .from(curriculumBlocksTable)
-      .where(
-        and(
-          eq(curriculumBlocksTable.sessionId, session.id),
-          eq(curriculumBlocksTable.kind, "adaptive_prep"),
-        ),
-      )
-      .limit(1);
-    const storedConfig =
-      storedPrep?.config && typeof storedPrep.config === "object"
-        ? (storedPrep.config as { mode?: string; text?: string })
-        : null;
+    const summary = storedConfig?.text || described.summary;
     sessionPrep = {
       mode: storedConfig?.mode || "hard_bank",
-      summary: storedConfig?.text || described.summary,
+      summary,
       duringAssignmentId: described.duringAssignmentId,
       attachedQuestionCount: described.questionCount,
+      needsQuestions: storedConfig?.needsQuestions === true || described.needsQuestions,
     };
-  } else if (isStaff || (sessionStudent && (completed || homeworkHasResults))) {
-    if (isStaff && completed && latestAttempt) {
-      await deriveAdaptiveRecommendations(latestAttempt.id);
-    }
-    const prep = await prepareSessionCurriculum(session);
+  } else if (storedConfig && (isStaff || (sessionStudent && (completed || homeworkHasResults)))) {
+    const [during] = await db
+      .select({ id: assignmentsTable.id })
+      .from(assignmentsTable)
+      .where(
+        and(
+          eq(assignmentsTable.sessionId, session.id),
+          eq(assignmentsTable.deliveryPhase, "during_session"),
+          ne(assignmentsTable.status, "archived"),
+        ),
+      )
+      .orderBy(asc(assignmentsTable.createdAt))
+      .limit(1);
+    const [{ count }] = during
+      ? await db
+          .select({ count: sql<number>`count(*)` })
+          .from(assignmentQuestionsTable)
+          .where(eq(assignmentQuestionsTable.assignmentId, during.id))
+      : [{ count: 0 }];
     const summary =
-      !isStaff && isUnfinishedHomeworkClientCopy(prep.summary)
+      !isStaff && storedConfig.text && isUnfinishedHomeworkClientCopy(storedConfig.text)
         ? "Work through the in-session set with your tutor."
-        : prep.summary;
+        : storedConfig.text || "";
     sessionPrep = {
-      mode: prep.mode,
+      mode: storedConfig.mode || "awaiting_homework",
       summary,
-      duringAssignmentId: prep.duringAssignmentId,
-      attachedQuestionCount: prep.attachedQuestionCount,
+      duringAssignmentId: during?.id ?? null,
+      attachedQuestionCount: Number(count ?? 0),
+      needsQuestions: storedConfig.needsQuestions === true,
     };
   }
   const rawMistakes =
@@ -12324,7 +12345,7 @@ router.get("/attempts/:attemptId", async (req: AuthedRequest, res): Promise<void
         answeredCount,
       })
     ) {
-      await finalizeAttemptResult(attempt.id, "expired");
+      await finalizeAttemptResult(attempt.id, "expired", { prepareCurriculum: false });
     } else {
       await reopenBrokenEmptyAttempt(attempt.id);
     }
@@ -12356,7 +12377,7 @@ router.get(
           answeredCount: countRecordedAnswers(expiredResponses),
         })
       ) {
-        await finalizeAttemptResult(access.attempt.id, "expired");
+        await finalizeAttemptResult(access.attempt.id, "expired", { prepareCurriculum: false });
       }
     }
     const result = await storedAttemptResult(
@@ -12816,7 +12837,7 @@ router.post(
       return;
     }
     const resultStatus = currentAttempt.status === "expired" ? "expired" : "submitted";
-    const result = await finalizeAttemptResult(attempt.id, resultStatus);
+    const result = await finalizeAttemptResult(attempt.id, resultStatus, { prepareCurriculum: true });
     if (!result) {
       res.status(409).json({ error: "Attempt result could not be created" });
       return;

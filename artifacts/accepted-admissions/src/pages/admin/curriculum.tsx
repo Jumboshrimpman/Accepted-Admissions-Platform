@@ -34,6 +34,7 @@ import type {
   AdminSessionInput,
   AdminSessionUpdate,
   AdminSubmission,
+  CurriculumBlock,
   CurriculumLibraryAsset,
   CurriculumLibraryAssetInput,
   ProvisionableRoleCategory,
@@ -842,6 +843,7 @@ function SessionsSection({
             session={session}
             assignments={data.assignments}
             submissions={data.submissions}
+            blocks={data.blocks}
             libraryAssets={data.libraryAssets ?? []}
             bankCollections={bankCollections.data ?? []}
             onChanged={onChanged}
@@ -882,6 +884,7 @@ function SessionCard({
   session,
   assignments,
   submissions,
+  blocks,
   libraryAssets,
   bankCollections,
   onChanged,
@@ -890,11 +893,16 @@ function SessionCard({
   session: AdminSession;
   assignments: AdminAssignment[];
   submissions: AdminSubmission[];
+  blocks: CurriculumBlock[];
   libraryAssets: CurriculumLibraryAsset[];
   bankCollections: Array<{ id: string; title: string; questionCount: number; examFamily?: string }>;
   onChanged: () => void;
   onEdit: () => void;
 }) {
+  const needsQuestions = blocks.some((block) => {
+    if (block.sessionId !== session.id || block.kind !== "adaptive_prep") return false;
+    return block.config?.needsQuestions === true;
+  });
   const prework = sessionPreworkQuizzes(assignments, session);
   const inventory = sessionHomeworkInventory(assignments, session);
   const reviews = submissions.filter((item) => inventory.some((quiz) => quiz.id === item.assignmentId));
@@ -924,6 +932,11 @@ function SessionCard({
               {session.conflict && (
                 <Badge variant="destructive">
                   <AlertTriangle className="mr-1 h-3 w-3" /> Conflict
+                </Badge>
+              )}
+              {needsQuestions && (
+                <Badge variant="destructive" data-testid={`session-needs-questions-${session.id}`}>
+                  Needs questions
                 </Badge>
               )}
             </div>

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   adaptiveRecommendationsTable,
   assignmentQuestionsTable,
@@ -20,6 +20,7 @@ import {
   IN_SESSION_PRACTICE_INSTRUCTIONS,
   IN_SESSION_PRACTICE_TITLE,
   deterministicPracticeQuestion,
+  practiceSubjectFamily,
   samePracticeQuestionSet,
   selectHomeworkForPracticePrep,
   selectPracticeQuestionsFromHomeworkMisses,
@@ -27,13 +28,17 @@ import {
   type PracticeSkillMapping,
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
-import { describeHardSatSessionPrep, fillUnattemptedOfficialHardInSession, satDifficultyForSession } from "./sat-hard-sets";
+import { describeHardSatSessionPrep, satDifficultyForSession } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
   MAX_IN_SESSION_HOMEWORK_QUESTIONS,
   selectInSessionHomeworkQuestionIds,
   shouldRepublishSeededHomework,
 } from "./session-homework";
+
+function subjectFamily(subject: string): string {
+  return practiceSubjectFamily(subject);
+}
 
 async function ensureDuringSessionAssignment(
   session: typeof sessionsTable.$inferSelect,
@@ -76,10 +81,52 @@ async function assignmentQuestionCount(assignmentId: string): Promise<number> {
   return Number(count ?? 0);
 }
 
+async function attachQuestions(
+  assignmentId: string,
+  questionIds: string[],
+): Promise<number> {
+  if (questionIds.length === 0) return 0;
+  const [assignment] = await db
+    .select({ status: assignmentsTable.status })
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, assignmentId))
+    .limit(1);
+  if (!shouldRepublishSeededHomework(assignment?.status)) return 0;
+  const existing = await db
+    .select({ questionId: assignmentQuestionsTable.questionId })
+    .from(assignmentQuestionsTable)
+    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
+  const already = new Set(existing.map((row) => row.questionId));
+  let position = existing.length;
+  let attached = 0;
+  for (const questionId of questionIds) {
+    if (already.has(questionId)) continue;
+    await db
+      .insert(assignmentQuestionsTable)
+      .values({
+        assignmentId,
+        questionId,
+        position,
+      })
+      .onConflictDoNothing();
+    already.add(questionId);
+    position += 1;
+    attached += 1;
+  }
+  if (attached > 0) {
+    await db
+      .update(assignmentsTable)
+      .set({ status: "published" })
+      .where(eq(assignmentsTable.id, assignmentId));
+  }
+  return attached;
+}
+
 async function ensurePrepBlock(
   sessionId: string,
   mode: SessionPrepMode,
   summary: string,
+  needsQuestions?: boolean,
 ) {
   const [existing] = await db
     .select()
@@ -91,10 +138,17 @@ async function ensurePrepBlock(
       ),
     )
     .limit(1);
+  const previous =
+    existing?.config && typeof existing.config === "object"
+      ? (existing.config as { needsQuestions?: unknown })
+      : null;
+  const persistedNeedsQuestions =
+    typeof needsQuestions === "boolean" ? needsQuestions : previous?.needsQuestions === true;
   const config = {
     title: "AI-native session plan",
     mode,
     text: summary,
+    needsQuestions: persistedNeedsQuestions,
   };
   if (existing) {
     await db
@@ -395,21 +449,47 @@ async function attachHardBank(
     .where(eq(assignmentsTable.id, duringId))
     .limit(1);
   if (!shouldRepublishSeededHomework(assignment?.status)) return 0;
-  const attached = await fillUnattemptedOfficialHardInSession(
-    { ...session, clientUserId: studentUserId },
-    duringId,
-  );
-  if (attached === 0) return 0;
-  await db
-    .update(assignmentsTable)
-    .set({
-      status: "published",
-      instructions:
-        "Homework was complete with no misses. These are official SAT module 2 questions from the hardest part of the test. They do not repeat this session's pre-work or questions already assigned to this student. 30 minutes.",
-      title: "Hard-question bank — leftover time",
-      timeLimitMinutes: 30,
-    })
-    .where(eq(assignmentsTable.id, duringId));
+  const usedRows = await db
+    .select({ questionId: assignmentQuestionsTable.questionId })
+    .from(assignmentQuestionsTable)
+    .innerJoin(
+      attemptsTable,
+      eq(attemptsTable.assignmentId, assignmentQuestionsTable.assignmentId),
+    )
+    .where(eq(attemptsTable.userId, studentUserId));
+  const used = new Set(usedRows.map((row) => row.questionId));
+  const hardPool = await db
+    .select()
+    .from(questionsTable)
+    .where(
+      and(
+        inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
+        eq(questionsTable.sourceType, "original"),
+        eq(questionsTable.difficulty, "hard"),
+      ),
+    );
+  const candidates = hardPool
+    .filter(
+      (question) =>
+        subjectFamily(question.subject) === subjectFamily(session.subject) &&
+        !used.has(question.id),
+    )
+    .slice(0, 6)
+    .map((question) => question.id);
+  const attached = await attachQuestions(duringId, candidates);
+  if (attached > 0 || (await assignmentQuestionCount(duringId)) > 0) {
+    await db
+      .update(assignmentsTable)
+      .set({
+        status: "published",
+        instructions:
+          "Homework was complete with no misses. Use these harder originals if you have leftover session time. Review every answer and explanation together.",
+        title: "Hard-question bank — leftover time",
+      })
+      .where(
+        and(eq(assignmentsTable.id, duringId), ne(assignmentsTable.status, "archived")),
+      );
+  }
   return attached;
 }
 
@@ -426,7 +506,7 @@ export async function prepareSessionCurriculum(
   if ((await satDifficultyForSession(session)) === "hard") {
     const described = await describeHardSatSessionPrep(session);
     const mode: SessionPrepMode = "hard_bank";
-    await ensurePrepBlock(session.id, mode, described.summary);
+    await ensurePrepBlock(session.id, mode, described.summary, described.needsQuestions);
     return {
       mode,
       summary: described.summary,

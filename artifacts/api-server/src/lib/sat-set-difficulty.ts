@@ -6,7 +6,6 @@ import {
 import { isOfficialSatExtract, isStudentUsableQuizItem } from "./sat-bank-diagnostic-quality.ts";
 import { materializedQuestionContent } from "./sat-bank-figures.ts";
 import {
-  hasFullQuestionCrop,
   hasWrongFigureForStem,
   looksGarbledExtractText,
 } from "./sat-bank-figure-primary.ts";
@@ -164,46 +163,21 @@ export function repairHardSatNotation(text: string | null | undefined): string {
     .replace(/([A-Za-z0-9)])([−–-])(\d+)/g, "$1 $2 $3");
 }
 
-/** Answer-key sentence from the College Board explanation, e.g. "Choice B is correct." */
-export function explanationAgreesWithAnswerKey(
-  explanation: string | null | undefined,
-  correctAnswer: string | null | undefined,
-): boolean {
-  const key = (correctAnswer ?? "").trim().toUpperCase();
-  if (!/^[A-D]$/.test(key)) return false;
-  const match = (explanation ?? "").match(/Choice\s+([A-D])\s+is\s+(?:the\s+best\s+answer|correct)\b/i);
-  if (!match?.[1]) return false;
-  return match[1].toUpperCase() === key;
-}
-
 /**
- * A garbled extract may still be assigned when the student sees the official
- * full-question crop, every choice is readable, and the explanation names the
- * same letter as the answer key. An unverified crop does not qualify.
+ * Stem and choice text the student would read. A full-question crop does not
+ * waive this: garbled extracted answers stay out until the text itself is repaired.
+ * A blank stem counts as unusable, so an image-only item is not assigned.
  */
-export function hardSatFullQuestionCropSalvage(
-  item: RenderableHardSatInput,
-  facing: {
-    prompt?: string | null;
-    stimulus?: string | null;
-    choices: Array<{ text?: string | null }>;
-    correctAnswer?: string | null;
-  },
-): boolean {
-  if (
-    !hasFullQuestionCrop({
-      figures: Array.isArray(item.figures) ? item.figures : [],
-      prompt: facing.prompt ?? item.prompt,
-      stimulus: facing.stimulus ?? item.stimulus,
-    })
-  ) {
-    return false;
-  }
-  if (!explanationAgreesWithAnswerKey(item.officialExplanation, facing.correctAnswer || item.correctAnswer)) {
-    return false;
-  }
-  if (facing.choices.length < 4) return false;
-  return facing.choices.every((choice) => choice.text && !looksGarbledExtractText(choice.text));
+export function hardSatFacingTextIsGarbled(text: string | null | undefined): boolean {
+  const value = (text ?? "").replace(/\s+/g, " ").trim();
+  if (!value) return true;
+  if (looksGarbledExtractText(value)) return true;
+  if (/[✓]|-{4,}|\.{6,}/.test(value)) return true;
+  if (/\d{2,} \d{3,},/.test(value)) return true;
+  if (/\bkg\s+days\b/i.test(value)) return true;
+  if (/\(90\s*[−–-]\s*\(\s*t\s*[−–-]\s*\)\)/.test(value)) return true;
+  if (/^\s*-?\s*\d{1,2}\s*-{2,}/.test(value)) return true;
+  return false;
 }
 
 export type HardSatFacing = {
@@ -334,30 +308,23 @@ export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacin
   };
   const accept = (facing: HardSatFacing | null): HardSatFacing | null => {
     if (!facing) return null;
-    const cropBacked = hardSatFullQuestionCropSalvage(item, facing);
-    const rawParts = [item.prompt, item.stimulus, ...(item.choices ?? []).map((choice) => choice?.text)];
-    const stillGarbled = rawParts.some((part) => {
-      if (!part) return false;
-      return looksGarbledExtractText(part) && looksGarbledExtractText(repairHardSatNotation(part));
-    });
-    if (stillGarbled && !cropBacked) return null;
-    if (
-      !cropBacked &&
-      (looksGarbledExtractText(facing.prompt) || looksGarbledExtractText(facing.stimulus))
-    ) {
-      return null;
+    let prompt = facing.prompt;
+    if (hardSatFacingTextIsGarbled(prompt)) {
+      const raw = repairHardSatNotation(item.prompt ?? "").trim();
+      if (!hardSatFacingTextIsGarbled(raw)) prompt = raw;
+      else return null;
     }
-    if (facing.choices.some((choice) => looksGarbledExtractText(choice.text))) return null;
+    if (facing.choices.some((choice) => hardSatFacingTextIsGarbled(choice.text))) return null;
     if (
       hasWrongFigureForStem({
-        prompt: facing.prompt || item.prompt,
+        prompt: prompt || item.prompt,
         stimulus: facing.stimulus ?? item.stimulus,
         figures: item.figures,
       })
     ) {
       return null;
     }
-    return facing;
+    return { ...facing, prompt };
   };
   const original = accept(
     asFacing(materialized.prompt, materialized.stimulus, materialized.choices ?? [], false),
