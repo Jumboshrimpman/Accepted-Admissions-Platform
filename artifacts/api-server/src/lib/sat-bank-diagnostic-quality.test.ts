@@ -615,6 +615,7 @@ test("rejects scrambled f(x) and smashed vertex crops; keeps 21px no-solution an
     }),
     false,
   );
+  // These fixtures are the old OCR. The diagnostic filter is unchanged and still rejects them.
   assert.equal(
     isStudentUsableDiagnosticItem({
       sourceKey: "sat-pt4-math-m2-q19",
@@ -1289,8 +1290,6 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q9",
     "sat-pt4-math-m2-q15",
     "sat-pt4-math-m2-q18",
-    "sat-pt4-math-m2-q19",
-    "sat-pt4-math-m2-q24",
     "sat-pt4-math-m1-q9",
     "sat-pt4-rw-m1-q8",
     "sat-pt9-math-m1-q10",
@@ -1351,9 +1350,14 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "21px juxtaposition no-solution item must stay usable",
   );
   assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q19"),
+    false,
+    "diagnostic filter is unchanged; PT4 M2 Q19 passes because its stored stem was repaired",
+  );
+  assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q24"),
-    true,
-    "dot-plot axis ticks OCR'd into the stem must drop even when A–D text exists",
+    false,
+    "diagnostic filter is unchanged; PT4 M2 Q24 passes because its stored stem was repaired, not because a crop waives garbled text",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-rw-m1-q8"),
@@ -1464,8 +1468,6 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q9",
     "sat-pt4-math-m2-q15",
     "sat-pt4-math-m2-q18",
-    "sat-pt4-math-m2-q19",
-    "sat-pt4-math-m2-q24",
     "sat-pt4-math-m1-q9",
     "sat-pt4-rw-m1-q8",
     "sat-pt9-math-m1-q10",

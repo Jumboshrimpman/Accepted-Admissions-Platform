@@ -2222,6 +2222,7 @@ export const SessionPrepSummaryMode = {
   mistake_focus: 'mistake_focus',
   hard_bank: 'hard_bank',
   ready: 'ready',
+  not_prepared: 'not_prepared',
 } as const;
 
 export interface SessionPrepSummary {
@@ -2230,6 +2231,7 @@ export interface SessionPrepSummary {
   /** @nullable */
   duringAssignmentId: string | null;
   attachedQuestionCount: number;
+  needsQuestions?: boolean;
 }
 
 export interface AdaptiveCurriculum {

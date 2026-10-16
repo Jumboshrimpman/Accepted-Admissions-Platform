@@ -4,6 +4,7 @@ import {
 } from "./sat-bank-figure-primary.ts";
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
+import { repairKnownSatBankQuestion } from "./sat-bank-display-repair.ts";
 import { repairMichelleQuizMathText } from "./stacked-math-notation.ts";
 
 export function isAssignmentListedForRole(
@@ -205,6 +206,7 @@ export function assignmentQuestionShape(
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
   options?: { includeKeys?: boolean; repairStackedMath?: boolean },
 ) {
+  question = repairKnownSatBankQuestion(question);
   const repairMath = (text: string) =>
     repairMichelleQuizMathText(text, Boolean(options?.repairStackedMath));
   const existingChoices = assignmentChoices(question.choices);

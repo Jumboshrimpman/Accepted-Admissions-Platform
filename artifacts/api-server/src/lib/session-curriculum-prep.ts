@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   adaptiveRecommendationsTable,
   assignmentQuestionsTable,
@@ -28,6 +28,7 @@ import {
   type PracticeSkillMapping,
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
+import { describeHardSatSessionPrep, satDifficultyForSession } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
   MAX_IN_SESSION_HOMEWORK_QUESTIONS,
@@ -125,6 +126,7 @@ async function ensurePrepBlock(
   sessionId: string,
   mode: SessionPrepMode,
   summary: string,
+  needsQuestions?: boolean,
 ) {
   const [existing] = await db
     .select()
@@ -136,10 +138,17 @@ async function ensurePrepBlock(
       ),
     )
     .limit(1);
+  const previous =
+    existing?.config && typeof existing.config === "object"
+      ? (existing.config as { needsQuestions?: unknown })
+      : null;
+  const persistedNeedsQuestions =
+    typeof needsQuestions === "boolean" ? needsQuestions : previous?.needsQuestions === true;
   const config = {
     title: "AI-native session plan",
     mode,
     text: summary,
+    needsQuestions: persistedNeedsQuestions,
   };
   if (existing) {
     await db
@@ -434,6 +443,12 @@ async function attachHardBank(
   duringId: string,
   studentUserId: string,
 ): Promise<number> {
+  const [assignment] = await db
+    .select({ status: assignmentsTable.status })
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, duringId))
+    .limit(1);
+  if (!shouldRepublishSeededHomework(assignment?.status)) return 0;
   const usedRows = await db
     .select({ questionId: assignmentQuestionsTable.questionId })
     .from(assignmentQuestionsTable)
@@ -471,7 +486,9 @@ async function attachHardBank(
           "Homework was complete with no misses. Use these harder originals if you have leftover session time. Review every answer and explanation together.",
         title: "Hard-question bank — leftover time",
       })
-      .where(eq(assignmentsTable.id, duringId));
+      .where(
+        and(eq(assignmentsTable.id, duringId), ne(assignmentsTable.status, "archived")),
+      );
   }
   return attached;
 }
@@ -479,13 +496,24 @@ async function attachHardBank(
 export type SessionPrepResult = {
   mode: SessionPrepMode;
   summary: string;
-  duringAssignmentId: string;
+  duringAssignmentId: string | null;
   attachedQuestionCount: number;
 };
 
 export async function prepareSessionCurriculum(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<SessionPrepResult> {
+  if ((await satDifficultyForSession(session)) === "hard") {
+    const described = await describeHardSatSessionPrep(session);
+    const mode: SessionPrepMode = "hard_bank";
+    await ensurePrepBlock(session.id, mode, described.summary, described.needsQuestions);
+    return {
+      mode,
+      summary: described.summary,
+      duringAssignmentId: described.duringAssignmentId,
+      attachedQuestionCount: described.questionCount,
+    };
+  }
   const during = await ensureDuringSessionAssignment(session);
   const homeworkRows = await db
     .select()

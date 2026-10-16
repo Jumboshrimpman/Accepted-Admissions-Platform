@@ -183,6 +183,14 @@ export default function PortalSession() {
       <Card className="border-primary/25">
         <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-primary" />During the session</CardTitle><CardDescription>Work through misses and similar problems together — teaching practice, not a solo quiz.</CardDescription></CardHeader>
         <CardContent className="space-y-5">
+          {adaptive?.sessionPrep?.mode === "not_prepared" ? (
+            <p
+              className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground"
+              data-testid="session-not-prepared"
+            >
+              This session has not been prepared yet.
+            </p>
+          ) : null}
           <SessionLessonDashboard sessionId={sessionId} audience="student" />
           {studentBlocks.map((block) => <div key={block.id} className="rounded-xl border p-4"><RenderBlock block={block} /></div>)}
           {generatedPracticeReady && practiceLink ? (

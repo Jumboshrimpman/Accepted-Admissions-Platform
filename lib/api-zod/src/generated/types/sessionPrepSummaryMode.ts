@@ -15,4 +15,5 @@ export const SessionPrepSummaryMode = {
   mistake_focus: 'mistake_focus',
   hard_bank: 'hard_bank',
   ready: 'ready',
+  not_prepared: 'not_prepared',
 } as const;
