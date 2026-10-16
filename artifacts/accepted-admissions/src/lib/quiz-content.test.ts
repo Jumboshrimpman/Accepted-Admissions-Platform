@@ -4,6 +4,7 @@ import {
   FIGURE_PRIMARY_PRESENTATION,
   isLiveListedSession,
   isUnfinishedHomeworkClientCopy,
+  prepSummaryBeforeMeeting,
   studentFacingCopy,
   letterOnlyChoices,
   normalizeQuizProse,
@@ -11,6 +12,26 @@ import {
   readFigurePrimaryPresentation,
   stripQuizHtmlComments,
 } from "./quiz-content.ts";
+
+test("does not call homework unfinished before the meeting starts", () => {
+  const unfinished =
+    "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";
+  const before = prepSummaryBeforeMeeting({
+    mode: "complete_homework_in_session",
+    summary: unfinished,
+    sessionDateTime: "2026-10-23T16:00:00.000Z",
+    now: new Date("2026-10-16T12:00:00.000Z"),
+  });
+  assert.equal(before.mode, "awaiting_homework");
+  assert.equal(/not finished/i.test(before.summary), false);
+  const after = prepSummaryBeforeMeeting({
+    mode: "complete_homework_in_session",
+    summary: unfinished,
+    sessionDateTime: "2026-10-23T16:00:00.000Z",
+    now: new Date("2026-10-23T17:00:00.000Z"),
+  });
+  assert.equal(after.summary, unfinished);
+});
 
 test("strips sat-bank figure comments and renders markdown images", () => {
   const segments = parseQuizContent(

@@ -535,10 +535,13 @@ export function ClientDashboardView({
             <div className="rounded-xl bg-muted/40 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
               <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="featured-prework-summary">
                 {nextSession.preparation
                   ? [
                       studentFacingCopy(nextSession.preparation.title),
+                      (nextSession.preparation.questionCount ?? 0) > 0
+                        ? `${nextSession.preparation.questionCount} questions`
+                        : null,
                       featuredQuizSettled ? "Complete" : readinessLabel(nextSession),
                     ]
                       .filter(Boolean)
@@ -631,7 +634,12 @@ export function ClientDashboardView({
                       ) : null}
                       <Badge variant="outline">{quiz.status}</Badge>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {quiz.assignment.subject}
+                      {(quiz.assignment.questionCount ?? 0) > 0
+                        ? ` · ${quiz.assignment.questionCount} questions`
+                        : ""}
+                    </p>
                     <PreworkDeadlineNote
                       label={studentPreworkDeadlineCopy({
                         assignment: quiz.assignment,

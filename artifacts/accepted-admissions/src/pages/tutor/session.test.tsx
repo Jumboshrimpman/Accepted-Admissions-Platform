@@ -4,6 +4,15 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 const clearHomework = vi.fn();
 const currentUserState = { id: "tutor-eunice", role: "tutor" };
+const sessionState = { dateTime: "2026-10-02T16:00:00.000Z" };
+const homeworkState = {
+  title: "October pre-session mini-section",
+  questionCount: 3,
+  latestAttemptStatus: "submitted" as string | null,
+  latestAttemptId: "attempt-1" as string | null,
+  deadline: null as string | null,
+  deliveryPhase: "before_session" as const,
+};
 const adaptiveState: {
   sessionPrep: null | {
     mode: string;
@@ -35,7 +44,7 @@ vi.mock("@workspace/api-client-react", () => ({
       title: "Taito SAT with Eunice",
       subject: "SAT",
       status: "published",
-      dateTime: "2026-10-02T16:00:00.000Z",
+      dateTime: sessionState.dateTime,
       timezone: "America/New_York",
       durationMinutes: 60,
       meetingUrl: "https://meet.google.com/sat-room",
@@ -110,12 +119,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetAssignment: () => ({ data: null }),
   useGetAdaptiveCurriculum: () => ({
     data: {
-      homework: {
-        title: "October pre-session mini-section",
-        questionCount: 3,
-        latestAttemptStatus: "submitted",
-        latestAttemptId: "attempt-1",
-      },
+      homework: homeworkState,
       mistakes: [{ skill: "Transitions" }],
       recommendations: [],
       hardQuestions: [],
@@ -192,6 +196,12 @@ afterEach(() => {
     duringAssignmentId: "practice-from-homework",
     attachedQuestionCount: 3,
   };
+  sessionState.dateTime = "2026-10-02T16:00:00.000Z";
+  homeworkState.title = "October pre-session mini-section";
+  homeworkState.questionCount = 3;
+  homeworkState.latestAttemptStatus = "submitted";
+  homeworkState.latestAttemptId = "attempt-1";
+  homeworkState.deadline = null;
 });
 
 describe("tutor session review page", () => {
@@ -252,6 +262,29 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("session-not-prepared").textContent).toMatch(/not been prepared yet/i);
     expect(screen.getByTestId("session-not-prepared").textContent).toMatch(/Auto-prepare/i);
     expect(screen.queryByText("Prepared live plan")).toBeNull();
+  });
+
+  test("Oct 23 English pre-work shows 24 questions and a due date, not an unfinished banner", () => {
+    sessionState.dateTime = "2026-10-23T16:00:00.000Z";
+    homeworkState.title = "IELTS-style diagnostic reading — Taito’s English Session with Nika";
+    homeworkState.questionCount = 24;
+    homeworkState.latestAttemptStatus = null;
+    homeworkState.latestAttemptId = null;
+    homeworkState.deadline = null;
+    adaptiveState.sessionPrep = {
+      mode: "complete_homework_in_session",
+      summary:
+        "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.",
+      duringAssignmentId: "during-1",
+      attachedQuestionCount: 0,
+      needsQuestions: false,
+    };
+    render(<TutorSession />);
+    expect(screen.getByTestId("before-session-homework").textContent).toContain("24 questions");
+    expect(screen.getByTestId("tutor-prework-deadline").textContent).toMatch(/Due before your session/i);
+    expect(screen.getByTestId("tutor-prework-deadline").textContent).toMatch(/October 23, 2026/);
+    expect(screen.getByTestId("prepared-live-plan").textContent).not.toMatch(/Homework was not finished/i);
+    expect(screen.getByTestId("prepared-live-plan").textContent).toMatch(/Waiting on the before-session assignment/i);
   });
 
   test("hides PDF downloads for a tutor who is not assigned to the session", () => {

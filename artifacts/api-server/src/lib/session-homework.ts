@@ -13,9 +13,14 @@ export const IN_SESSION_HOMEWORK_COMPLETION_TITLE = "In-session homework complet
 export const MAX_IN_SESSION_HOMEWORK_QUESTIONS = 15;
 
 export type SessionHomeworkCandidate = {
+  id?: string | null;
+  assignmentId?: string | null;
   deliveryPhase?: string | null;
   status?: string | null;
   title?: string | null;
+  questionCount?: number | null;
+  /** `session_prework_plans.assignmentId` for this row's session. */
+  planAssignmentId?: string | null;
 };
 
 /** Session homework status lists: one row per assignment, no archived leftovers. */
@@ -313,18 +318,40 @@ export function selectInSessionHomeworkQuestionIds(
   return [...unanswered, ...rest].slice(0, remainingSlots);
 }
 
-/** Prefer the live session pre-work copy. Archived replace/remove leftovers must not hide missed items. */
+function preworkIdentity(item: SessionHomeworkCandidate): string | null {
+  return item.assignmentId ?? item.id ?? null;
+}
+
+/**
+ * Prefer the live session pre-work copy. Archived replace/remove leftovers must not hide missed items.
+ * An empty shell listed ahead of the real set must not win: a plan row with questions wins,
+ * otherwise the live before-session copy with the most questions.
+ */
 export function selectActivePrework<T extends SessionHomeworkCandidate>(
   assignments: readonly T[],
 ): T | null {
-  return (
-    assignments.find(
-      (item) =>
-        item.deliveryPhase === "before_session" &&
-        item.status !== "archived" &&
-        !isPostSessionFollowUpTitle(item.title),
-    ) ?? null
+  const live = assignments.filter(
+    (item) =>
+      item.deliveryPhase === "before_session" &&
+      item.status !== "archived" &&
+      !isPostSessionFollowUpTitle(item.title),
   );
+  if (live.length === 0) return null;
+  const questioned = live.filter((item) => (item.questionCount ?? 0) > 0);
+  const pool = questioned.length > 0 ? questioned : live;
+  const planned = pool.find((item) => {
+    const id = preworkIdentity(item);
+    return Boolean(
+      id &&
+        item.planAssignmentId &&
+        id === item.planAssignmentId &&
+        (item.questionCount ?? 0) > 0,
+    );
+  });
+  if (planned) return planned;
+  return [...pool].sort(
+    (left, right) => (right.questionCount ?? 0) - (left.questionCount ?? 0),
+  )[0] ?? null;
 }
 
 /** Show Clear & redo for live homework that has any attempt, including empty/glitched in-session work. */

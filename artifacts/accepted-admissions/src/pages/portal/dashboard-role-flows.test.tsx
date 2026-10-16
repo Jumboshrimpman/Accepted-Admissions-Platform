@@ -369,6 +369,116 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
 
+  test("upcoming English pre-work sits at the top with its real count, due date, and start link", () => {
+    const base = dashboardForRole("student");
+    const fillers = ["Algebra drill", "Biology drill", "Chemistry drill", "History drill"].map(
+      (title, index) => ({
+        id: `filler-${index}`,
+        title,
+        subject: "SAT",
+        status: "published" as const,
+        deadline: null,
+        questionCount: 2,
+        timeLimitMinutes: 10,
+        attemptCount: 0,
+        maxAttempts: 1,
+        latestScore: null,
+        latestAttemptId: null,
+        latestAttemptStatus: null,
+      }),
+    );
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false },
+      curriculumSessions: [
+        {
+          id: "english-oct-23",
+          courseId: "course-fall",
+          dateTime: "2099-10-23T16:00:00.000Z",
+          timezone: "America/New_York",
+          durationMinutes: 60,
+          subject: "IELTS",
+          title: "Taito’s English Session with Nika",
+          status: "published",
+          meetingUrl: "https://meet.google.com/ielts-room",
+          calendarEventUrl: null,
+          tutor: { id: "nika", name: "Nika Raiffe", specialty: "English Tutor", avatarUrl: null },
+          student: { id: "student-user", name: "Taito Goto" },
+          readiness: "not_started",
+          nextAction: "Take quiz",
+          currentFocus: "English communication.",
+          preparation: {
+            id: "english-24",
+            sessionId: "english-oct-23",
+            deliveryPhase: "before_session",
+            title: "IELTS-style diagnostic reading",
+            subject: "IELTS",
+            status: "published",
+            deadline: null,
+            questionCount: 24,
+            timeLimitMinutes: 42,
+            attemptCount: 0,
+            maxAttempts: 1,
+            latestScore: null,
+            latestAttemptId: null,
+            latestAttemptStatus: null,
+          },
+          latestResult: null,
+        },
+      ],
+      assignments: [
+        ...fillers,
+        {
+          id: "empty-english",
+          sessionId: "english-oct-23",
+          title: "IELTS-style diagnostic reading",
+          subject: "IELTS",
+          status: "published",
+          deadline: null,
+          questionCount: 0,
+          timeLimitMinutes: 42,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+        {
+          id: "english-24",
+          sessionId: "english-oct-23",
+          deliveryPhase: "before_session",
+          title: "IELTS-style diagnostic reading",
+          subject: "IELTS",
+          status: "published",
+          deadline: null,
+          questionCount: 24,
+          timeLimitMinutes: 42,
+          attemptCount: 0,
+          maxAttempts: 1,
+          latestScore: null,
+          latestAttemptId: null,
+          latestAttemptStatus: null,
+        },
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    const quizzes = screen.getByTestId("client-quizzes");
+    expect(quizzes.querySelector("[data-testid^='client-quiz-']")?.getAttribute("data-testid")).toBe(
+      "client-quiz-english-24",
+    );
+    const english = screen.getByTestId("client-quiz-english-24");
+    expect(english.textContent).toContain("24 questions");
+    expect(english.textContent).toMatch(/Due before your session/i);
+    expect(english.textContent).toContain("Start pre-work");
+    expect(english.querySelector("a")?.getAttribute("href")).toBe("/portal/assignments/english-24");
+    expect(screen.queryByTestId("client-quiz-empty-english")).toBeNull();
+    expect(screen.getByTestId("featured-prework-summary").textContent).toContain("24 questions");
+    expect(screen.getByTestId("featured-prework-deadline").textContent).toMatch(/Due before your session/i);
+    expect(screen.getByTestId("prework-deadline-english-24").textContent).toBe(
+      screen.getByTestId("featured-prework-deadline").textContent,
+    );
+  });
+
   test("off-platform student and parent mirror omit billing and deferred-prep lines", () => {
     const deferredPrep =
       "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";

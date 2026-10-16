@@ -510,6 +510,27 @@ test("duplicate routine SAT pre-work collapses to the copy with attempts", () =>
   );
 });
 
+test("selectActivePrework prefers the questioned set over an empty shell", () => {
+  const empty = {
+    id: "empty-shell",
+    title: "IELTS-style diagnostic reading — Oct 23",
+    deliveryPhase: "before_session" as const,
+    status: "published",
+    questionCount: 0,
+    planAssignmentId: "english-24",
+  };
+  const diagnostic = {
+    id: "english-24",
+    title: "IELTS-style diagnostic reading — Oct 23",
+    deliveryPhase: "before_session" as const,
+    status: "published",
+    questionCount: 24,
+    planAssignmentId: "english-24",
+  };
+  assert.equal(selectActivePrework([empty, diagnostic])?.id, "english-24");
+  assert.equal(selectActivePrework([diagnostic, empty])?.questionCount, 24);
+});
+
 test("selectActivePrework ignores archived session copies left by replace/remove", () => {
   const archived = {
     id: "old-clone",
