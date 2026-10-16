@@ -12,6 +12,8 @@ import {
   normalizeFocusKey,
   usefulFocusLabels,
 } from "./sat-bank-skill.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isUnfinishedHomeworkClientCopy } from "./assignment-visibility.ts";
 
 export type SkillBreakdown = {
   skill: string;
@@ -641,6 +643,42 @@ export type SessionPrepMode =
   | "mistake_focus"
   | "hard_bank"
   | "ready";
+
+/** True once the meeting start instant has been reached. */
+export function sessionMeetingHasStarted(
+  dateTime: Date | string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (dateTime == null || dateTime === "") return false;
+  const start = dateTime instanceof Date ? dateTime : new Date(dateTime);
+  if (Number.isNaN(start.getTime())) return false;
+  return start.getTime() <= now.getTime();
+}
+
+/**
+ * "Homework was not finished" is only true after the meeting has started.
+ * Before that, unfinished pre-work is still due.
+ */
+export function prepCopyBeforeTheMeeting(input: {
+  mode: string;
+  summary: string;
+  sessionDateTime: Date | string | null | undefined;
+  now?: Date;
+}): { mode: string; summary: string } {
+  if (sessionMeetingHasStarted(input.sessionDateTime, input.now)) {
+    return { mode: input.mode, summary: input.summary };
+  }
+  if (
+    input.mode === "complete_homework_in_session" ||
+    isUnfinishedHomeworkClientCopy(input.summary)
+  ) {
+    return {
+      mode: "awaiting_homework",
+      summary: describeSessionPrepMode("awaiting_homework"),
+    };
+  }
+  return { mode: input.mode, summary: input.summary };
+}
 
 export function describeSessionPrepMode(mode: SessionPrepMode): string {
   switch (mode) {

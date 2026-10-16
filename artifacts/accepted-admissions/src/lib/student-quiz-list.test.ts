@@ -156,7 +156,7 @@ test("past-session quizzes are completed and collapsed; today and future stay pr
   });
   assert.deepEqual(
     collapsed.visible.map((item) => item.assignment.id),
-    ["unlinked", "future-quiz", "today-quiz"],
+    ["today-quiz", "future-quiz", "unlinked"],
   );
   assert.equal(collapsed.canToggle, true);
 
@@ -167,8 +167,56 @@ test("past-session quizzes are completed and collapsed; today and future stay pr
   });
   assert.deepEqual(
     expanded.visible.map((item) => item.assignment.id),
-    ["unlinked", "future-quiz", "today-quiz", "past-live", "past-prework"],
+    ["today-quiz", "future-quiz", "unlinked", "past-live", "past-prework"],
   );
+});
+
+test("upcoming session pre-work stays at the top with its real question count", () => {
+  const now = new Date("2026-10-16T14:00:00.000Z");
+  const fillers = ["Algebra drill", "Biology drill", "Chemistry drill", "History drill"].map(
+    (title, index) =>
+      quiz({
+        id: `filler-${index}`,
+        title,
+        sessionId: null,
+        questionCount: 2,
+      }),
+  );
+  const collapsed = collapsedStudentQuizzes(
+    [
+      ...fillers,
+      quiz({
+        id: "empty-english",
+        title: "IELTS-style diagnostic reading",
+        sessionId: "english-oct-23",
+        subject: "IELTS",
+        questionCount: 0,
+      }),
+      quiz({
+        id: "english-24",
+        title: "IELTS-style diagnostic reading",
+        sessionId: "english-oct-23",
+        subject: "IELTS",
+        questionCount: 24,
+      }),
+    ],
+    [
+      session({
+        id: "english-oct-23",
+        dateTime: "2026-10-23T16:00:00.000Z",
+        timezone: "America/New_York",
+        preparation: { id: "english-24" },
+      }),
+    ],
+    { expanded: false, now, clientTimezone: "Asia/Tokyo" },
+  );
+  assert.equal(collapsed.visible[0]?.assignment.id, "english-24");
+  assert.equal(collapsed.visible[0]?.assignment.questionCount, 24);
+  assert.equal(
+    collapsed.visible.some((item) => item.assignment.id === "empty-english"),
+    false,
+  );
+  assert.equal(collapsed.ordered.some((item) => item.assignment.id === "empty-english"), false);
 });
 
 test("Geometry SAT Questions stays open after the linked session day", () => {

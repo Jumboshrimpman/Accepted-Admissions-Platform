@@ -14,6 +14,7 @@ import {
 } from "@workspace/db";
 import {
   describeSessionPrepMode,
+  sessionMeetingHasStarted,
   type SessionPrepMode,
 } from "./assessment-analysis";
 import {
@@ -572,6 +573,17 @@ export async function prepareSessionCurriculum(
     .limit(1);
 
   if (!latestAttempt) {
+    if (!sessionMeetingHasStarted(session.dateTime)) {
+      const mode: SessionPrepMode = "awaiting_homework";
+      const summary = describeSessionPrepMode(mode);
+      await ensurePrepBlock(session.id, mode, summary);
+      return {
+        mode,
+        summary,
+        duringAssignmentId: during.id,
+        attachedQuestionCount: await assignmentQuestionCount(during.id),
+      };
+    }
     const attached = await copyHomeworkIntoDuringSession(homework.id, during.id);
     const mode: SessionPrepMode = "complete_homework_in_session";
     const summary = describeSessionPrepMode(mode);

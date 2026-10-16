@@ -62,6 +62,9 @@ import {
   viewerMayDownloadSessionPdfs,
 } from "@/components/session-tutor-materials";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
+import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
+import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
+import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
 
 export default function TutorSession() {
   const params = useParams();
@@ -85,11 +88,19 @@ export default function TutorSession() {
       (assignment) => assignment.deliveryPhase === "during_session",
     )?.id ?? "";
   const visibleHomework = sessionStatusHomework(session?.homework ?? []);
+  const liveBeforeAssignments = (session?.assignments ?? []).filter(
+    (assignment) =>
+      assignment.deliveryPhase === "before_session" &&
+      assignment.status !== "archived" &&
+      !isPostSessionFollowUpQuiz(assignment),
+  );
+  const questionedBefore = liveBeforeAssignments.filter(
+    (assignment) => (assignment.questionCount ?? 0) > 0,
+  );
   const beforeAssignmentId =
-    session?.assignments.find(
-      (assignment) =>
-        assignment.deliveryPhase === "before_session" && assignment.status !== "archived",
-    )?.id ??
+    [...(questionedBefore.length > 0 ? questionedBefore : liveBeforeAssignments)].sort(
+      (left, right) => (right.questionCount ?? 0) - (left.questionCount ?? 0),
+    )[0]?.id ??
     session?.assignments.find((assignment) => assignment.deliveryPhase === "before_session")
       ?.id ??
     "";
@@ -150,6 +161,14 @@ export default function TutorSession() {
   }
 
   if (error || !session) return <div>Session not found</div>;
+
+  const shownPrep = adaptive?.sessionPrep
+    ? prepSummaryBeforeMeeting({
+        mode: adaptive.sessionPrep.mode,
+        summary: adaptive.sessionPrep.summary,
+        sessionDateTime: session.dateTime,
+      })
+    : null;
 
   const refreshArtifacts = () =>
     queryClient.invalidateQueries({
@@ -287,26 +306,26 @@ export default function TutorSession() {
             </p>
           </div>
         ) : adaptive?.sessionPrep ? (
-          <div className="border-b bg-accent/5 px-6 py-4">
+          <div className="border-b bg-accent/5 px-6 py-4" data-testid="prepared-live-plan">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
                   Prepared live plan
                 </p>
-                <p className="mt-1 text-sm font-medium">{adaptive.sessionPrep.summary}</p>
+                <p className="mt-1 text-sm font-medium">{shownPrep?.summary}</p>
                 {adaptive.sessionPrep.needsQuestions ? (
                   <p className="mt-2 text-sm font-medium text-destructive" data-testid="session-needs-questions">
                     This session is not a complete hard set.
                   </p>
                 ) : null}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Mode: {adaptive.sessionPrep.mode.replaceAll("_", " ")}
+                  Mode: {shownPrep?.mode.replaceAll("_", " ")}
                   {adaptive.sessionPrep.attachedQuestionCount > 0
                     ? ` · ${adaptive.sessionPrep.attachedQuestionCount} in-session questions ready`
                     : ""}
                 </p>
               </div>
-              <Badge variant="outline">{adaptive.sessionPrep.mode.replaceAll("_", " ")}</Badge>
+              <Badge variant="outline">{shownPrep?.mode.replaceAll("_", " ")}</Badge>
             </div>
           </div>
         ) : null}
@@ -343,7 +362,25 @@ export default function TutorSession() {
               </div>
               {visibleHomework.length > 0 ? (
                 <div className="mt-3 space-y-3">
-                  {visibleHomework.map((homework) => (
+                  {visibleHomework.map((homework) => {
+                    const beforeSession = isBeforeSessionHomework(
+                      session.assignments,
+                      homework.assignmentId,
+                    );
+                    const deadlineLabel = beforeSession
+                      ? studentPreworkDeadlineCopy({
+                          assignment: {
+                            title: homework.title,
+                            deliveryPhase: "before_session",
+                            deadline: homework.deadline,
+                            latestAttemptStatus: homework.attemptStatus,
+                          },
+                          session,
+                        })
+                      : homework.deadline
+                        ? `Due ${format(parseISO(homework.deadline), "MMM d, yyyy")}`
+                        : "No due date";
+                    return (
                     <div key={homework.assignmentId} className="rounded-lg border p-3">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -351,9 +388,14 @@ export default function TutorSession() {
                           {isPostSessionFollowUpQuiz(homework) ? (
                             <p className="mt-1 text-xs font-medium text-primary">Follow-up after this session</p>
                           ) : null}
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {homework.deadline ? `Due ${format(parseISO(homework.deadline), "MMM d, yyyy")}` : "No due date"}
-                          </p>
+                          {deadlineLabel ? (
+                            <p
+                              className="mt-1 text-xs text-muted-foreground"
+                              data-testid={`tutor-homework-deadline-${homework.assignmentId}`}
+                            >
+                              {deadlineLabel}
+                            </p>
+                          ) : null}
                         </div>
                         <Badge variant={homework.attemptStatus === "submitted" || homework.attemptStatus === "expired" ? "default" : "secondary"}>
                           {describeAssignmentCompletion({
@@ -432,7 +474,8 @@ export default function TutorSession() {
                         ) : null}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-muted-foreground">No homework is linked to this session yet.</p>
@@ -535,11 +578,25 @@ export default function TutorSession() {
                         : "Incomplete"}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground" data-testid="before-session-homework">
                     {adaptive?.homework
                       ? `${adaptive.homework.title} · ${adaptive.homework.questionCount} questions`
                       : "No homework assignment is linked to this session yet."}
                   </p>
+                  {adaptive?.homework ? (
+                    <PreworkDeadlineNote
+                      label={studentPreworkDeadlineCopy({
+                        assignment: {
+                          title: adaptive.homework.title,
+                          deliveryPhase: adaptive.homework.deliveryPhase ?? "before_session",
+                          deadline: adaptive.homework.deadline,
+                          latestAttemptStatus: adaptive.homework.latestAttemptStatus,
+                        },
+                        session,
+                      })}
+                      testId="tutor-prework-deadline"
+                    />
+                  ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {adaptive?.homework?.latestAttemptId ? (
                       <>

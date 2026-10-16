@@ -33,6 +33,35 @@ export function stripQuizHtmlComments(value: string | null | undefined): string 
   return value.replace(FIGURE_COMMENT, "").replace(HTML_COMMENT, "");
 }
 
+const AWAITING_HOMEWORK_SUMMARY =
+  "Waiting on the before-session assignment. Once it is submitted, the live plan will auto-adapt.";
+
+/** "Homework was not finished" is only true after the meeting has started. */
+export function prepSummaryBeforeMeeting(input: {
+  mode?: string | null;
+  summary?: string | null;
+  sessionDateTime?: string | Date | null;
+  now?: Date;
+}): { mode: string; summary: string } {
+  const mode = input.mode ?? "";
+  const summary = input.summary ?? "";
+  const now = input.now ?? new Date();
+  const start =
+    input.sessionDateTime == null || input.sessionDateTime === ""
+      ? null
+      : new Date(input.sessionDateTime);
+  const started = Boolean(
+    start && !Number.isNaN(start.getTime()) && start.getTime() <= now.getTime(),
+  );
+  if (
+    !started &&
+    (mode === "complete_homework_in_session" || isUnfinishedHomeworkClientCopy(summary))
+  ) {
+    return { mode: "awaiting_homework", summary: AWAITING_HOMEWORK_SUMMARY };
+  }
+  return { mode, summary };
+}
+
 export function isUnfinishedHomeworkClientCopy(value: string | null | undefined): boolean {
   const text = value?.trim() ?? "";
   if (!text) return false;

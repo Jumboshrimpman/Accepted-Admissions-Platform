@@ -147,6 +147,7 @@ import {
   buildAttemptAnalysis,
   clientCurrentFocusLine,
   hasExtractPlaceholder,
+  prepCopyBeforeTheMeeting,
   toClientAdaptiveGuidance,
   tutorAlertFields,
   type AttemptAnalysis,
@@ -10676,12 +10677,12 @@ async function dashboardDataForUser(user: AppUser) {
   const curriculumSessions = await Promise.all(
     scopedSessions.map(async (session) => {
       const preparation =
-        assignmentSummaries.find(
-          (assignment) =>
-            assignment.sessionId === session.id &&
-            assignment.deliveryPhase === "before_session" &&
-            !isPostSessionFollowUpTitle(assignment.title) &&
-            subjectFamily(assignment.subject) === subjectFamily(session.subject),
+        selectActivePrework(
+          assignmentSummaries.filter(
+            (assignment) =>
+              assignment.sessionId === session.id &&
+              subjectFamily(assignment.subject) === subjectFamily(session.subject),
+          ),
         ) ?? null;
       const latestAttempt = preparation
         ? attempts.find((attempt) => attempt.assignmentId === preparation.id)
@@ -11838,6 +11839,18 @@ async function adaptiveCurriculumForSession(
       duringAssignmentId: during?.id ?? null,
       attachedQuestionCount: Number(count ?? 0),
       needsQuestions: storedConfig.needsQuestions === true,
+    };
+  }
+  if (sessionPrep && sessionPrep.mode !== "not_prepared") {
+    const timed = prepCopyBeforeTheMeeting({
+      mode: sessionPrep.mode,
+      summary: sessionPrep.summary,
+      sessionDateTime: session.dateTime,
+    });
+    sessionPrep = {
+      ...sessionPrep,
+      mode: timed.mode,
+      summary: timed.summary,
     };
   }
   const rawMistakes =

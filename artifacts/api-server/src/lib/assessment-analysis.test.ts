@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { buildAttemptAnalysis, describeSessionPrepMode, hasExtractPlaceholder, projectSatScores, projectSatSectionScore, qualitativeClientCopy, toClientAdaptiveGuidance, tutorAlertFields } from "./assessment-analysis.ts";
+import { buildAttemptAnalysis, describeSessionPrepMode, hasExtractPlaceholder, prepCopyBeforeTheMeeting, projectSatScores, projectSatSectionScore, qualitativeClientCopy, toClientAdaptiveGuidance, tutorAlertFields } from "./assessment-analysis.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { FULL_SAT_DIAGNOSTIC_QUESTIONS } from "./sat-assessment-content.ts";
 
@@ -89,6 +89,27 @@ test("routine 60-minute pre-work does not invent an official SAT score", () => {
   );
   assert.doesNotMatch(analysis.feedback, /Estimated SAT projection/);
   assert.doesNotMatch(analysis.label, /diagnostic/i);
+});
+
+test("unfinished-homework copy waits until the meeting has started", () => {
+  const unfinished =
+    "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";
+  const before = prepCopyBeforeTheMeeting({
+    mode: "complete_homework_in_session",
+    summary: unfinished,
+    sessionDateTime: "2026-10-23T16:00:00.000Z",
+    now: new Date("2026-10-16T12:00:00.000Z"),
+  });
+  assert.equal(before.mode, "awaiting_homework");
+  assert.doesNotMatch(before.summary, /not finished/i);
+  const after = prepCopyBeforeTheMeeting({
+    mode: "complete_homework_in_session",
+    summary: unfinished,
+    sessionDateTime: "2026-10-23T16:00:00.000Z",
+    now: new Date("2026-10-23T16:05:00.000Z"),
+  });
+  assert.equal(after.mode, "complete_homework_in_session");
+  assert.match(after.summary, /not finished/i);
 });
 
 test("session prep modes explain the live curriculum behavior", () => {

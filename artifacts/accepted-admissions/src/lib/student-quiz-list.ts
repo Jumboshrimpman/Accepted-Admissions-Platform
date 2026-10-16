@@ -43,6 +43,8 @@ type QuizAttempt = {
   title: string;
   subject: string;
   sessionId?: string | null;
+  deliveryPhase?: string | null;
+  questionCount?: number | null;
   latestAttemptStatus?: string | null;
   latestScore?: number | null;
   deadline?: string | Date | null;
@@ -148,6 +150,47 @@ export function classifyStudentQuizzes<T extends QuizAttempt>(
   return { open, archived, ordered: [...open, ...archived] };
 }
 
+function isBeforeSessionQuiz(assignment: QuizAttempt): boolean {
+  return (assignment.deliveryPhase ?? "before_session") !== "during_session";
+}
+
+/**
+ * Upcoming session pre-work stays at the top of the student list.
+ * An empty shell is dropped when that session already has a set with questions.
+ */
+function preferQuestionedUpcomingPrework<T extends QuizAttempt>(
+  items: readonly ClassifiedStudentQuiz<T>[],
+  sessions: readonly QuizSessionRef[],
+): ClassifiedStudentQuiz<T>[] {
+  const sessionsWithQuestions = new Set<string>();
+  for (const item of items) {
+    if (item.pastSessionDay || isPostSessionFollowUpQuiz(item.assignment)) continue;
+    if (!isBeforeSessionQuiz(item.assignment)) continue;
+    if ((item.assignment.questionCount ?? 0) <= 0) continue;
+    const session = sessionForStudentQuiz(item.assignment, sessions);
+    if (session) sessionsWithQuestions.add(session.id);
+  }
+  return items.filter((item) => {
+    if ((item.assignment.questionCount ?? 0) > 0) return true;
+    if (isPostSessionFollowUpQuiz(item.assignment) || !isBeforeSessionQuiz(item.assignment)) {
+      return true;
+    }
+    const session = sessionForStudentQuiz(item.assignment, sessions);
+    if (!session || item.pastSessionDay) return true;
+    return !sessionsWithQuestions.has(session.id);
+  });
+}
+
+function isUpcomingSessionPrework<T extends QuizAttempt>(
+  item: ClassifiedStudentQuiz<T>,
+  sessions: readonly QuizSessionRef[],
+): boolean {
+  if (item.pastSessionDay || isPostSessionFollowUpQuiz(item.assignment)) return false;
+  if (!isBeforeSessionQuiz(item.assignment)) return false;
+  if ((item.assignment.questionCount ?? 0) <= 0) return false;
+  return Boolean(sessionForStudentQuiz(item.assignment, sessions));
+}
+
 export function collapsedStudentQuizzes<T extends QuizAttempt>(
   assignments: readonly T[],
   sessions: readonly QuizSessionRef[],
@@ -159,19 +202,34 @@ export function collapsedStudentQuizzes<T extends QuizAttempt>(
   },
 ) {
   const classified = classifyStudentQuizzes(assignments, sessions, options);
+  const open = preferQuestionedUpcomingPrework(classified.open, sessions);
+  const upcoming = open
+    .filter((item) => isUpcomingSessionPrework(item, sessions))
+    .sort((left, right) => {
+      const leftSession = sessionForStudentQuiz(left.assignment, sessions);
+      const rightSession = sessionForStudentQuiz(right.assignment, sessions);
+      const leftTime = leftSession ? new Date(leftSession.dateTime).getTime() : 0;
+      const rightTime = rightSession ? new Date(rightSession.dateTime).getTime() : 0;
+      return leftTime - rightTime;
+    });
+  const upcomingIds = new Set(upcoming.map((item) => item.assignment.id));
+  const restOpen = open.filter((item) => !upcomingIds.has(item.assignment.id));
+  const ordered = [...upcoming, ...restOpen, ...classified.archived];
   const initialCount = options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT;
   let otherOpenShown = 0;
-  const collapsedVisible: ClassifiedStudentQuiz<T>[] = [];
-  for (const item of classified.open) {
+  const collapsedVisible: ClassifiedStudentQuiz<T>[] = [...upcoming];
+  for (const item of restOpen) {
     const followUp = isPostSessionFollowUpQuiz(item.assignment);
     if (!followUp && otherOpenShown >= initialCount) continue;
     collapsedVisible.push(item);
     if (!followUp) otherOpenShown += 1;
   }
-  const hiddenCount = classified.ordered.length - collapsedVisible.length;
+  const hiddenCount = ordered.length - collapsedVisible.length;
   return {
     ...classified,
-    visible: options.expanded ? [...classified.ordered] : collapsedVisible,
+    open,
+    ordered,
+    visible: options.expanded ? ordered : collapsedVisible,
     hiddenCount,
     canToggle: hiddenCount > 0,
   };
