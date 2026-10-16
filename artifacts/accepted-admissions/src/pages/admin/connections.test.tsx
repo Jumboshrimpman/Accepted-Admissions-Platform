@@ -223,4 +223,118 @@ describe("Admin connections", () => {
     );
     expect(document.body.textContent).not.toMatch(/mailto:/i);
   });
+
+  test("previews missing admin attendees and adds them only after confirmation", async () => {
+    const later = {
+      sessionId: "later",
+      title: "Michelle's SAT Session with Xavier",
+      start: "2026-10-18T18:00:00.000Z",
+      studentName: "Michelle Makarem",
+      tutorName: "Xavier Morales",
+      sessionType: "SAT",
+      eventId: "evt-michelle",
+    };
+    const soon = {
+      sessionId: "soon",
+      start: "2026-10-16T15:00:00.000Z",
+      studentName: "Taito Goto",
+      tutorName: "Eunice Chon",
+      sessionType: "SAT",
+      eventId: "evt-taito",
+      reason: "starts_within_60_minutes",
+    };
+    const present = {
+      sessionId: "present",
+      start: "2026-10-19T18:00:00.000Z",
+      studentName: "Neel Dharni",
+      tutorName: "Nika Raiffe",
+      sessionType: "College Consulting",
+      eventId: "evt-neel",
+    };
+    const unread = {
+      sessionId: "unread",
+      start: "2026-10-20T18:00:00.000Z",
+      studentName: "Aurelia Finch",
+      tutorName: "Victoria Wijerathnayapa",
+      sessionType: "SAT",
+      eventId: "evt-aurelia",
+      reason: "event_unreadable",
+    };
+    const preview = {
+      dryRun: true,
+      missing: [later],
+      refused: [soon],
+      alreadyPresent: 1,
+      alreadyPresentSessions: [present],
+      skipped: [unread],
+      patched: [],
+    };
+    const applied = {
+      dryRun: false,
+      missing: [later],
+      refused: [soon],
+      alreadyPresent: 1,
+      alreadyPresentSessions: [present],
+      skipped: [unread],
+      patched: ["later"],
+    };
+    customFetch.mockImplementation(async (url: string, options?: { body?: string }) => {
+      if (String(url).includes("/api/admin/calendar-attendees/backfill")) {
+        const body = JSON.parse(String(options?.body ?? "{}")) as { dryRun?: boolean };
+        return body.dryRun ? preview : applied;
+      }
+      return { connections: [xavier] };
+    });
+
+    render(<AdminConnections />);
+    expect(await screen.findByTestId("preview-admin-attendees")).toBeTruthy();
+    expect(screen.queryByTestId("add-admin-attendees")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("preview-admin-attendees"));
+
+    expect(await screen.findByTestId("backfill-missing-later")).toBeTruthy();
+    expect(customFetch).toHaveBeenCalledWith("/api/admin/calendar-attendees/backfill", {
+      method: "POST",
+      body: JSON.stringify({ dryRun: true }),
+    });
+    expect(screen.getByTestId("backfill-missing-later").textContent).toMatch(/Sun, Oct 18, 2026/);
+    expect(screen.getByTestId("backfill-missing-later").textContent).toMatch(/2:00 PM EDT/);
+    expect(screen.getByTestId("backfill-missing-later").textContent).toMatch(/Michelle Makarem/);
+    expect(screen.getByTestId("backfill-missing-later").textContent).toMatch(/Xavier Morales/);
+    expect(screen.getByTestId("backfill-missing-later").textContent).toMatch(/SAT/);
+    expect(screen.getByTestId("backfill-missing-later").textContent).toMatch(/evt-michelle/);
+    expect(screen.getByTestId("backfill-refused-soon").textContent).toMatch(/Taito Goto/);
+    expect(screen.getByTestId("backfill-refused-soon").textContent).toMatch(/Starts within 60 minutes/);
+    expect(screen.getByTestId("backfill-already-present-present").textContent).toMatch(/Neel Dharni/);
+    expect(screen.getByTestId("backfill-already-present-present").textContent).toMatch(/College Consulting/);
+    expect(screen.getByTestId("backfill-skipped-unread").textContent).toMatch(/Event could not be read/);
+    expect(screen.getByTestId("add-admin-attendees")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("add-admin-attendees"));
+    expect(screen.getByText(/Guests are not emailed/)).toBeTruthy();
+    expect(
+      customFetch.mock.calls.filter((call) => String(call[0]).includes("calendar-attendees/backfill")),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      customFetch.mock.calls.filter((call) => String(call[0]).includes("calendar-attendees/backfill")),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId("add-admin-attendees"));
+    fireEvent.click(screen.getByTestId("confirm-add-admin-attendees"));
+
+    expect(await screen.findByTestId("backfill-outcomes-later")).toBeTruthy();
+    expect(customFetch).toHaveBeenCalledWith("/api/admin/calendar-attendees/backfill", {
+      method: "POST",
+      body: JSON.stringify({ dryRun: false }),
+    });
+    expect(screen.getByTestId("backfill-outcomes-later").textContent).toMatch(/Added/);
+    expect(screen.getByTestId("backfill-outcomes-later").textContent).toMatch(/evt-michelle/);
+    expect(screen.getByTestId("backfill-outcomes-soon").textContent).toMatch(/Refused/);
+    expect(screen.getByTestId("backfill-outcomes-present").textContent).toMatch(/Already present/);
+    expect(screen.getByTestId("backfill-outcomes-unread").textContent).toMatch(/Skipped/);
+    expect(screen.queryByTestId("add-admin-attendees")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/mailto:/i);
+  });
 });

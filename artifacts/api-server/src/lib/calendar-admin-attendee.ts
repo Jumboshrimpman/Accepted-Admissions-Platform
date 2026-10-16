@@ -30,7 +30,35 @@ export type AdminAttendeeBackfillReport = {
   }>;
   patched: string[];
   alreadyPresent: number;
+  alreadyPresentSessions: Array<{
+    sessionId: string;
+    title: string;
+    start: string;
+    tutorUserId: string | null;
+  }>;
   skipped: Array<{ sessionId: string; reason: string }>;
+};
+
+export type AdminAttendeeBackfillDisplay = {
+  studentName: string | null;
+  tutorName: string | null;
+  sessionType: string | null;
+  eventId: string | null;
+  start: string | null;
+  title: string | null;
+  tutorUserId: string | null;
+};
+
+export type AdminAttendeeBackfillPresentedEvent = {
+  sessionId: string;
+  title: string | null;
+  start: string | null;
+  tutorUserId: string | null;
+  studentName: string | null;
+  tutorName: string | null;
+  sessionType: string | null;
+  eventId: string | null;
+  reason?: string;
 };
 
 export function eventWithinAdminBackfillGuard(
@@ -86,6 +114,7 @@ export async function backfillAdminCalendarAttendees<T extends GoogleCalendarAtt
     refused: [],
     patched: [],
     alreadyPresent: 0,
+    alreadyPresentSessions: [],
     skipped: [],
   };
   for (const session of input.sessions) {
@@ -102,6 +131,12 @@ export async function backfillAdminCalendarAttendees<T extends GoogleCalendarAtt
     }
     if (googleEventHasAdminAttendee(attendees)) {
       report.alreadyPresent += 1;
+      report.alreadyPresentSessions.push({
+        sessionId: session.sessionId,
+        title: session.title,
+        start: session.start.toISOString(),
+        tutorUserId: session.tutorUserId,
+      });
       continue;
     }
     if (eventWithinAdminBackfillGuard(session.start, now)) {
@@ -129,4 +164,51 @@ export async function backfillAdminCalendarAttendees<T extends GoogleCalendarAtt
     }
   }
   return report;
+}
+
+function presentedEvent(
+  row: {
+    sessionId: string;
+    title?: string;
+    start?: string;
+    tutorUserId?: string | null;
+    reason?: string;
+  },
+  displays: ReadonlyMap<string, AdminAttendeeBackfillDisplay>,
+): AdminAttendeeBackfillPresentedEvent {
+  const display = displays.get(row.sessionId);
+  const presented: AdminAttendeeBackfillPresentedEvent = {
+    sessionId: row.sessionId,
+    title: row.title ?? display?.title ?? null,
+    start: row.start ?? display?.start ?? null,
+    tutorUserId: row.tutorUserId ?? display?.tutorUserId ?? null,
+    studentName: display?.studentName ?? null,
+    tutorName: display?.tutorName ?? null,
+    sessionType: display?.sessionType ?? null,
+    eventId: display?.eventId ?? null,
+  };
+  if (row.reason) presented.reason = row.reason;
+  return presented;
+}
+
+/** Adds names, session type, and event id for the admin table. Patch decisions stay on the report. */
+export function presentAdminAttendeeBackfillReport(
+  report: AdminAttendeeBackfillReport,
+  displays: ReadonlyMap<string, AdminAttendeeBackfillDisplay>,
+) {
+  return {
+    ...report,
+    missing: report.missing.map((row) => presentedEvent(row, displays)),
+    refused: report.refused.map((row) => ({
+      ...presentedEvent(row, displays),
+      reason: row.reason,
+    })),
+    skipped: report.skipped.map((row) => ({
+      ...presentedEvent(row, displays),
+      reason: row.reason,
+    })),
+    alreadyPresentSessions: report.alreadyPresentSessions.map((row) =>
+      presentedEvent(row, displays),
+    ),
+  };
 }

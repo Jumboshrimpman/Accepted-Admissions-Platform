@@ -92,6 +92,8 @@ import {
 } from "../lib/calendar-oauth-nonce-store";
 import {
   backfillAdminCalendarAttendees,
+  presentAdminAttendeeBackfillReport,
+  type AdminAttendeeBackfillDisplay,
   type AdminAttendeeBackfillSession,
 } from "../lib/calendar-admin-attendee";
 import {
@@ -8239,6 +8241,8 @@ router.post(
         id: sessionsTable.id,
         title: sessionsTable.title,
         dateTime: sessionsTable.dateTime,
+        subject: sessionsTable.subject,
+        clientUserId: sessionsTable.clientUserId,
         tutorUserId: sessionsTable.tutorUserId,
         providerEventId: sessionsTable.providerEventId,
       })
@@ -8251,6 +8255,41 @@ router.post(
           sql`${sessionsTable.status} <> 'archived'`,
         ),
       );
+    const userIds = [
+      ...new Set(
+        rows.flatMap((row) =>
+          [row.clientUserId, row.tutorUserId].filter((id): id is string => Boolean(id)),
+        ),
+      ),
+    ];
+    const people =
+      userIds.length === 0
+        ? []
+        : await db
+            .select({ id: usersTable.id, displayName: usersTable.displayName })
+            .from(usersTable)
+            .where(inArray(usersTable.id, userIds));
+    const names = new Map(people.map((person) => [person.id, person.displayName]));
+    const displays = new Map<string, AdminAttendeeBackfillDisplay>(
+      rows.flatMap((row) =>
+        row.providerEventId
+          ? [
+              [
+                row.id,
+                {
+                  studentName: row.clientUserId ? names.get(row.clientUserId) ?? null : null,
+                  tutorName: row.tutorUserId ? names.get(row.tutorUserId) ?? null : null,
+                  sessionType: row.subject,
+                  eventId: row.providerEventId,
+                  start: row.dateTime.toISOString(),
+                  title: row.title,
+                  tutorUserId: row.tutorUserId,
+                },
+              ] as const,
+            ]
+          : [],
+      ),
+    );
     const sessions: AdminAttendeeBackfillSession[] = rows.flatMap((row) =>
       row.providerEventId
         ? [
@@ -8299,7 +8338,7 @@ router.post(
         );
       },
     });
-    res.json(report);
+    res.json(presentAdminAttendeeBackfillReport(report, displays));
   },
 );
 
