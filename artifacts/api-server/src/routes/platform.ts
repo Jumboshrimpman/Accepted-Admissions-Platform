@@ -434,8 +434,10 @@ import {
 import { conceptsForTemplateDrafts, validateExtractedSourceText } from "../lib/content-source-text";
 import {
   hydrateMistakePrompts,
+  placeholderSatHomeworkAction,
   selectActivePrework,
   selectStatusHomework,
+  sessionHasBankPrework,
   shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "../lib/session-homework";
@@ -1285,17 +1287,33 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
   }
   for (const homework of SAT_HOMEWORK_SETS) {
     const session = satSessions.get(taitoSessionDateTime(homework.dateKey).getTime());
-    if (session) {
-      await ensureAssignment(
-        session,
-        homework.title,
-        homework.instructions,
-        15,
-        new Date(session.dateTime.getTime() - 24 * 60 * 60 * 1000),
-        2,
-        homework.questions,
-      );
-    }
+    if (!session) continue;
+    const live = await listLiveBeforeSessionHomework(session.id);
+    const [existingPlaceholder] = await db
+      .select({ id: assignmentsTable.id, status: assignmentsTable.status })
+      .from(assignmentsTable)
+      .where(
+        and(
+          eq(assignmentsTable.sessionId, session.id),
+          eq(assignmentsTable.title, homework.title),
+        ),
+      )
+      .limit(1);
+    const action = placeholderSatHomeworkAction({
+      hasBankPrework: sessionHasBankPrework(live),
+      placeholderExists:
+        existingPlaceholder != null && existingPlaceholder.status !== "archived",
+    });
+    if (action !== "attach") continue;
+    await ensureAssignment(
+      session,
+      homework.title,
+      homework.instructions,
+      15,
+      new Date(session.dateTime.getTime() - 24 * 60 * 60 * 1000),
+      2,
+      homework.questions,
+    );
   }
   for (const session of satSessions.values()) {
     await ensureDuringSessionAssignment(session);

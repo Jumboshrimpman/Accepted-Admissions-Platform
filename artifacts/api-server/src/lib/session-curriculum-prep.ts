@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   adaptiveRecommendationsTable,
   assignmentQuestionsTable,
@@ -471,7 +471,9 @@ async function attachHardBank(
           "Homework was complete with no misses. Use these harder originals if you have leftover session time. Review every answer and explanation together.",
         title: "Hard-question bank — leftover time",
       })
-      .where(eq(assignmentsTable.id, duringId));
+      .where(
+        and(eq(assignmentsTable.id, duringId), ne(assignmentsTable.status, "archived")),
+      );
   }
   return attached;
 }

@@ -260,20 +260,40 @@ export const RESPONSES_ONLY_WHILE_ACTIVE = "Responses can only be saved while ac
  * used for paused, submitted, and expired attempts, so the caller must pass
  * the status from a refetch. An in-place pause resumes only while the tab is
  * visible; a hidden tab stays paused until the visibility handler returns.
+ * Active means another tab already resumed it: drop a local paused recovery.
  */
 export function inactiveAttemptSaveRecovery(input: {
   errorMessage: string | null | undefined;
   autoPaused: boolean;
   visible: boolean;
   attemptStatus?: string | null;
-}): "resume" | "stay-paused" | "show-paused" | "show-finished" | "none" {
+}): "resume" | "stay-paused" | "show-paused" | "show-finished" | "use-active" | "none" {
   if (input.errorMessage !== RESPONSES_ONLY_WHILE_ACTIVE) return "none";
   if (input.attemptStatus === "submitted" || input.attemptStatus === "expired") {
     return "show-finished";
   }
+  if (input.attemptStatus === "active") return "use-active";
   if (input.attemptStatus && input.attemptStatus !== "paused") return "none";
   if (!input.autoPaused) return "show-paused";
   return input.visible ? "resume" : "stay-paused";
+}
+
+/**
+ * A local paused recovery is stale once a refetch shows the attempt is active
+ * again, including when another tab resumed it. The first active reading can
+ * be older than the recovery, so only a later change to active clears it.
+ */
+export function recoveredStatusAfterServerChange(input: {
+  recoveredStatus: string | null;
+  previousServerStatus?: string | null;
+  serverStatus?: string | null;
+}): string | null {
+  if (input.recoveredStatus !== "paused") return input.recoveredStatus;
+  if (input.serverStatus !== "active") return input.recoveredStatus;
+  if (!input.previousServerStatus || input.previousServerStatus === "active") {
+    return input.recoveredStatus;
+  }
+  return null;
 }
 
 /**
