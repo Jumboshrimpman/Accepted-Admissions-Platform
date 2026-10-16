@@ -544,6 +544,12 @@ async function assignQuiz(input: {
         questionIds: input.questionIds,
       };
     }
+    if (!shouldRepublishSeededHomework(already.assignment.status)) {
+      return {
+        result: emptyAssignee(minutes, `${input.spec.title} is archived and was left unchanged.`),
+        questionIds: input.questionIds,
+      };
+    }
     if (input.sessionMode === "preview") {
       await ensureStudentCourseMembership(already.assignment.courseId, input.user.id);
     }
@@ -575,12 +581,6 @@ async function assignQuiz(input: {
     if (input.sessionMode === "completed" && !sessionId) {
       return {
         result: emptyAssignee(minutes, `No completed Xavier session was found for ${input.label}.`),
-        questionIds: input.questionIds,
-      };
-    }
-    if (!shouldRepublishSeededHomework(already.assignment.status)) {
-      return {
-        result: emptyAssignee(minutes, `${input.spec.title} is archived and was left unchanged.`),
         questionIds: input.questionIds,
       };
     }
@@ -836,7 +836,7 @@ async function ensureQuizPair(input: {
   for (const user of [input.michelle, input.sama]) {
     if (!user) continue;
     const existing = await existingFollowUp(user.id, input.spec.title);
-    if (!existing) continue;
+    if (!existing || !shouldRepublishSeededHomework(existing.assignment.status)) continue;
     await ensureTimeLimit(existing.assignment.id, input.spec.timeLimitMinutes);
     await reopenBrokenEmptyAttemptsForAssignment(existing.assignment.id);
     if (!(await assignmentHasRecordedWork(existing.assignment.id))) continue;

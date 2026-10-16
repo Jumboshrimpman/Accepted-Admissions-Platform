@@ -28,6 +28,7 @@ import {
   type PracticeSkillMapping,
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
+import { raisePreworkVisibilityAlertForSession } from "./prework-visibility";
 import { describeHardSatSessionPrep, satDifficultyForSession } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
@@ -503,6 +504,7 @@ export type SessionPrepResult = {
 export async function prepareSessionCurriculum(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<SessionPrepResult> {
+  await raisePreworkVisibilityAlertForSession(session);
   if ((await satDifficultyForSession(session)) === "hard") {
     const described = await describeHardSatSessionPrep(session);
     const mode: SessionPrepMode = "hard_bank";
