@@ -146,6 +146,11 @@ import {
   temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
+import {
+  attachVerifiedEmailAlias,
+  establishedAliasUser,
+  missingLoginAliasRelation,
+} from "../lib/portal-login-alias-store";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
   bookingCalendarEventPayload,
@@ -2543,6 +2548,26 @@ async function clerkIdentity(
   return { email, displayName };
 }
 
+async function acceptLoginAlias(
+  req: AuthedRequest,
+  user: AppUser,
+  next: () => void,
+): Promise<void> {
+  await db.insert(auditLogsTable).values({
+    actorUserId: user.id,
+    action: "access.login_alias",
+    entityType: "portal_login_alias",
+    entityId: user.id,
+    metadata: { method: req.method, code: "LOGIN_ALIAS" },
+  });
+  const auth = getAuth(req);
+  const clerkSessionId =
+    auth.sessionId ?? claimString(auth.sessionClaims, "sid");
+  await recordSuccessfulLogin(user.id, clerkSessionId);
+  req.appUser = user;
+  next();
+}
+
 async function requireAppUser(
   req: AuthedRequest,
   res: Response,
@@ -2554,6 +2579,15 @@ async function requireAppUser(
   if (!clerkUserId) {
     res.status(401).json({ error: "Authentication required" });
     return;
+  }
+  try {
+    const aliased = await establishedAliasUser(clerkUserId);
+    if (aliased) {
+      await acceptLoginAlias(req, aliased, next);
+      return;
+    }
+  } catch (error) {
+    if (!missingLoginAliasRelation(error)) throw error;
   }
   if (isRetiredXavierClerkUserId(clerkUserId)) {
     res.status(403).json({
@@ -2620,6 +2654,20 @@ async function requireAppUser(
   const aliasEmail = identity?.email
     ? normalizeProvisionedEmail(identity.email)
     : undefined;
+  if (!appUser && aliasEmail) {
+    try {
+      const linked = await attachVerifiedEmailAlias({
+        clerkUserId,
+        email: aliasEmail,
+      });
+      if (linked) {
+        await acceptLoginAlias(req, linked, next);
+        return;
+      }
+    } catch (error) {
+      if (!missingLoginAliasRelation(error)) throw error;
+    }
+  }
   if (!configured && isNikaTemporaryViewEmail(aliasEmail)) {
     const [nikaUser] = await db
       .select()
