@@ -20,6 +20,7 @@ import {
   coercePracticeTestNumber,
   inSessionQuestionTargetForStudent,
   isRenderableHardSatItem,
+  originalHardSatDateKeyForSession,
   planHardSatSessionSets,
   satBankUsageCountsAsSeen,
   satDifficultyForStudent,
@@ -31,8 +32,21 @@ import { normalizedSessionSubject } from "./session-schedule.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
 
-function hardInSessionInstructions(target: number): string {
+function hardInSessionInstructions(target: number, original: boolean): string {
+  if (original) {
+    return `${target} hard module 2 questions written for this session. 30 minutes. Work through them with your tutor.`;
+  }
   return `${target} hard module 2 questions from official SAT practice tests the student has not already been assigned. 30 minutes. Work through them with your tutor.`;
+}
+
+function hardPlanOptionsForSession(session: { dateTime?: Date; timezone?: string | null }): {
+  originalDateKey: string | null;
+  balance: "sat" | "even";
+} {
+  const originalDateKey = session.dateTime
+    ? originalHardSatDateKeyForSession({ dateTime: session.dateTime, timezone: session.timezone })
+    : null;
+  return { originalDateKey, balance: originalDateKey ? "even" : "sat" };
 }
 
 export const HARD_SAT_NEEDS_QUESTIONS_SUMMARY =
@@ -248,6 +262,7 @@ async function loadRenderableHardBank(): Promise<Array<HardSatCandidate & { bank
       module: Number(row.module),
       questionNumber: Number(row.questionNumber),
       practiceTestNumber: item.practiceTestNumber ?? null,
+      sourceKind: row.sourceKind,
     });
   }
   return selected;
@@ -476,6 +491,7 @@ export async function ensureHardSatPrework(
       preworkMin: HARD_SAT_PREWORK_QUESTIONS,
       preworkMax: HARD_SAT_PREWORK_QUESTIONS,
       inSessionMax: target,
+      ...hardPlanOptionsForSession(session),
     });
     const duringRows = await liveDuringAssignments(session.id);
     let duringIsFullHard = false;
@@ -568,6 +584,7 @@ export async function officialHardInSessionItems(
     preworkMin: 0,
     preworkMax: 0,
     inSessionMax: target,
+    ...hardPlanOptionsForSession(session),
   }).inSession;
 }
 
@@ -618,7 +635,7 @@ async function ensureDuringAssignment(session: SessionRow, target: number) {
       deliveryPhase: "during_session",
       title: `${HARD_IN_SESSION_TITLE} (${target}) — ${session.title}`,
       subject: session.subject,
-      instructions: hardInSessionInstructions(target),
+      instructions: hardInSessionInstructions(target, hardPlanOptionsForSession(session).originalDateKey != null),
       status: "published",
       timeLimitMinutes: HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
       maxAttempts: 1,
@@ -722,7 +739,12 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
         duringAssignmentId: written === "archived" ? null : during.id,
       };
     }
-    await publishHardInSession(during.id, session.title, target);
+    await publishHardInSession(
+      during.id,
+      session.title,
+      target,
+      hardPlanOptionsForSession(session).originalDateKey != null,
+    );
     return {
       status: written,
       questionCount: inSession.length,
@@ -760,7 +782,12 @@ export async function fillUnattemptedOfficialHardInSession(
   return items.length;
 }
 
-async function publishHardInSession(assignmentId: string, sessionTitle: string, target: number) {
+async function publishHardInSession(
+  assignmentId: string,
+  sessionTitle: string,
+  target: number,
+  original: boolean,
+) {
   const [assignment] = await db
     .select({ status: assignmentsTable.status })
     .from(assignmentsTable)
@@ -772,7 +799,7 @@ async function publishHardInSession(assignmentId: string, sessionTitle: string, 
     .set({
       status: "published",
       title: `${HARD_IN_SESSION_TITLE} (${target}) — ${sessionTitle}`,
-      instructions: hardInSessionInstructions(target),
+      instructions: hardInSessionInstructions(target, original),
       timeLimitMinutes: HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
     })
     .where(and(eq(assignmentsTable.id, assignmentId), ne(assignmentsTable.status, "archived")));

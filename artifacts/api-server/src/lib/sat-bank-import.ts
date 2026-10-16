@@ -65,7 +65,7 @@ export type ParsedBankRecord = {
   difficulty: string | null;
   questionType: string;
   estimatedSeconds: number;
-  sourceKind: "official_extract" | "seed";
+  sourceKind: "official_extract" | "seed" | "original_hard";
   sourceFiles: Record<string, unknown>;
   assets: Array<{ kind: string; title: string; resourceUrl: string }>;
   extractGaps: ExtractGaps;

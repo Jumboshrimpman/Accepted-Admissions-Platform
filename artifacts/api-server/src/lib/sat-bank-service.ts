@@ -35,6 +35,7 @@ import {
   type CollectionStub,
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
+import { originalHardSatBankRecords } from "./original-hard-sat.ts";
 import {
   auditQuizItems,
   auditStudentQuizItem,
@@ -551,7 +552,12 @@ function existingReimportRow(row: typeof bankQuestionsTable.$inferSelect): Exist
       difficulty: row.difficulty,
       questionType: row.questionType,
       estimatedSeconds: row.estimatedSeconds,
-      sourceKind: row.sourceKind === "seed" ? "seed" : "official_extract",
+      sourceKind:
+        row.sourceKind === "seed"
+          ? "seed"
+          : row.sourceKind === "original_hard"
+            ? "original_hard"
+            : "official_extract",
       sourceFiles: {},
       assets: [],
       extractGaps: (row.extractGaps ?? {}) as ParsedBankRecord["extractGaps"],
@@ -599,7 +605,7 @@ export type CollegeBoardReimportReport = {
 };
 
 /**
- * Compare the repo JSONL to the bank. Dry run writes nothing.
+ * Compare the repo JSONL and the original hard items to the bank. Dry run writes nothing.
  * Apply upserts only the exact source-key list and does not rewrite a question
  * that already belongs to an attempted set.
  */
@@ -610,9 +616,10 @@ export async function runCollegeBoardReimport(input: {
 }): Promise<CollegeBoardReimportReport> {
   const rootDir = resolveCollegeBoardRoot(input.rootDir ?? SAT_BANK_IMPORT_ROOT);
   const loaded = await loadOfficialExtractRecords(rootDir);
+  const plannedRecords = [...loaded.records, ...originalHardSatBankRecords()];
   const existingRows = await db.select().from(bankQuestionsTable);
   const plan = planBankReimportDiff({
-    records: loaded.records,
+    records: plannedRecords,
     duplicatesInFile: loaded.duplicatesInFile,
     existing: existingRows.map(existingReimportRow),
   });
@@ -653,7 +660,7 @@ export async function runCollegeBoardReimport(input: {
       rejectedIds: decision.rejectedIds,
     });
   }
-  const recordByKey = new Map(loaded.records.map((record) => [record.sourceKey, record]));
+  const recordByKey = new Map(plannedRecords.map((record) => [record.sourceKey, record]));
   const writable = decision.sourceKeys.filter((sourceKey) => changed.has(sourceKey));
   const records = writable.flatMap((sourceKey) => {
     const record = recordByKey.get(sourceKey);
@@ -796,14 +803,18 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
           ? "seed"
           : bank.sourceKind === "original"
             ? "original"
-            : "college_board",
+            : bank.sourceKind === "original_hard"
+              ? "original_hard"
+              : "college_board",
       tags: bankTags,
       generationMethod:
         bank.sourceKind === "seed"
           ? "seed-fixture"
           : bank.sourceKind === "original"
             ? "original-ielts-style"
-            : "college-board-extract",
+            : bank.sourceKind === "original_hard"
+              ? "original-hard-sat"
+              : "college-board-extract",
     })
     .returning({ id: questionsTable.id });
   await db
