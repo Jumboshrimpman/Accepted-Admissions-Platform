@@ -65,7 +65,11 @@ const mocks = vi.hoisted(() => ({
           victoriaEmailOwner: { userId: string; role: string; displayName: string; email: string } | null;
         }
       | undefined,
-    calendarReconnectAlerts: [] as Array<{ tutorProfileId: string; name: string }>,
+    calendarReconnectAlerts: [] as Array<{
+      tutorProfileId: string;
+      name: string;
+      testingModeExpiryWarning?: string | null;
+    }>,
     guidanceRequests: [] as Array<{
       id: string;
       guardianName: string;
@@ -1024,12 +1028,21 @@ describe("administrator overview", () => {
 
   test("keeps a calendar reconnect alert until the tutor is healthy", () => {
     mocks.overview.calendarReconnectAlerts = [
-      { tutorProfileId: "eunice-profile", name: "Eunice Chon" },
+      {
+        tutorProfileId: "eunice-profile",
+        name: "Eunice Chon",
+        testingModeExpiryWarning:
+          "Google Calendar grants from an OAuth consent screen in Testing mode expire after 7 days.",
+      },
     ];
     render(<AdminDashboard />);
     const alert = screen.getByTestId("alert-calendar-reconnect");
     expect(alert.textContent).toContain("Eunice Chon");
     expect(alert.textContent).toContain("upcoming bookable time");
+    expect(screen.getByTestId("warning-testing-mode-alert-eunice-profile").textContent).toMatch(
+      /Testing mode/,
+    );
+    expect(screen.getByTestId("warning-testing-mode-alert-eunice-profile").textContent).toMatch(/7 days/);
     expect(screen.getByTestId("link-calendar-reconnect-eunice-profile").getAttribute("href")).toBe(
       "/admin/connections",
     );

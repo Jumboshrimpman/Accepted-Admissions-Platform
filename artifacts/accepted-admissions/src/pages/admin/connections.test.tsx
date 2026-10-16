@@ -25,6 +25,9 @@ const eunice: CalendarConnectionHealthRow = {
   lastErrorAt: "2026-10-01T12:00:00.000Z",
   bookable: true,
   hasUpcomingBookableTime: true,
+  estimatedTokenAgeDays: 7,
+  testingModeExpiryWarning:
+    "Google Calendar grants from an OAuth consent screen in Testing mode expire after 7 days. This token is at least 6 days old and the last error matches that expiry. Reconnect this tutor.",
 };
 
 const xavier: CalendarConnectionHealthRow = {
@@ -42,6 +45,8 @@ const xavier: CalendarConnectionHealthRow = {
   lastErrorAt: null,
   bookable: true,
   hasUpcomingBookableTime: true,
+  estimatedTokenAgeDays: 1,
+  testingModeExpiryWarning: null,
 };
 
 afterEach(() => {
@@ -77,7 +82,17 @@ describe("Admin connections", () => {
     );
     expect(screen.getByText("e***@berkeley.edu")).toBeTruthy();
     expect(screen.getByText("Google revoked the calendar grant. Reconnect is required.")).toBeTruthy();
+    expect(screen.getByTestId("status-calendar-connection-eunice-profile").textContent).toBe(
+      "Needs reconnect",
+    );
+    expect(screen.getByTestId("status-calendar-connection-xavier-profile").textContent).toBe("Connected");
+    expect(screen.getByTestId("token-age-eunice-profile").textContent).toBe("7 days");
+    expect(screen.getByTestId("token-age-xavier-profile").textContent).toBe("1 day");
+    expect(screen.getByTestId("warning-testing-mode-eunice-profile").textContent).toMatch(/Testing mode/);
+    expect(screen.getByTestId("warning-testing-mode-eunice-profile").textContent).toMatch(/7 days/);
+    expect(screen.queryByTestId("warning-testing-mode-xavier-profile")).toBeNull();
     expect(screen.getByText(/read-only free\/busy check/i)).toBeTruthy();
+    expect(screen.getAllByText(/Text this link to the tutor/).length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/ya29|refresh_token|encrypted/i);
 
     fireEvent.click(screen.getByTestId("test-calendar-connection-eunice-profile"));
@@ -109,6 +124,8 @@ describe("Admin connections", () => {
       lastErrorAt: "2026-10-15T12:00:00.000Z",
       bookable: true,
       hasUpcomingBookableTime: true,
+      estimatedTokenAgeDays: 2,
+      testingModeExpiryWarning: null,
     };
     const neverConnected: CalendarConnectionHealthRow = {
       tutorProfileId: "new-profile",
@@ -125,6 +142,8 @@ describe("Admin connections", () => {
       lastErrorAt: null,
       bookable: false,
       hasUpcomingBookableTime: false,
+      estimatedTokenAgeDays: null,
+      testingModeExpiryWarning: null,
     };
     customFetch.mockImplementation(async (url: string) => {
       if (String(url).endsWith("/test")) return { connection: eunice };
@@ -140,6 +159,7 @@ describe("Admin connections", () => {
     expect(screen.getByText("The free/busy check failed.")).toBeTruthy();
     expect(screen.getByText("Unknown (reconnect to record)")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("token-age-new-profile").textContent).toBe("Unknown");
 
     fireEvent.click(screen.getByTestId("test-calendar-connection-eunice-profile"));
     await waitFor(() => {
@@ -171,5 +191,36 @@ describe("Admin connections", () => {
       await screen.findByText("Wait 35 seconds before testing this calendar again."),
     ).toBeTruthy();
     expect(screen.queryByText("HTTP 429 Too Many Requests")).toBeNull();
+  });
+
+  test("copies an admin reconnect link for the tutor without sending email", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    customFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith("/reconnect-link")) {
+        return {
+          url: "https://accounts.google.com/o/oauth2/v2/auth?state=signed-xavier",
+          expiresAt: "2026-10-17T10:39:00.000Z",
+        };
+      }
+      return { connections: [xavier, eunice] };
+    });
+
+    render(<AdminConnections />);
+    fireEvent.click(await screen.findByTestId("copy-reconnect-link-xavier-profile"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reconnect-link-xavier-profile").getAttribute("value")).toBe(
+        "https://accounts.google.com/o/oauth2/v2/auth?state=signed-xavier",
+      );
+    });
+    expect(customFetch).toHaveBeenCalledWith(
+      "/api/admin/calendar-connections/xavier-profile/reconnect-link",
+      { method: "POST" },
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      "https://accounts.google.com/o/oauth2/v2/auth?state=signed-xavier",
+    );
+    expect(document.body.textContent).not.toMatch(/mailto:/i);
   });
 });

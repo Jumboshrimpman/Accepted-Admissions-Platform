@@ -23,6 +23,7 @@ import {
   shouldSelfHealGoogleCalendarConnection,
 } from "../lib/calendar-connection-adopt";
 import {
+  ADMIN_CALENDAR_RECONNECT_TTL_MS,
   CalendarOAuthError,
   CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI,
   calendarCredentialFailureAction,
@@ -31,6 +32,7 @@ import {
   calendarOAuthStateFailureMessage,
   callGoogleCalendarRecovering,
   classifyGoogleProviderError,
+  createCalendarOAuthState,
   createGoogleEvent,
   decryptCalendarToken,
   deleteGoogleEvent,
@@ -79,6 +81,11 @@ import {
   resolveCalendarProfileForOAuthState,
   resolveCalendarProfileForUser,
 } from "../lib/calendar-profile";
+import { calendarOAuthNonceFailureMessage } from "../lib/calendar-oauth-nonce";
+import {
+  consumeCalendarOAuthNonce,
+  persistCalendarOAuthNonce,
+} from "../lib/calendar-oauth-nonce-store";
 import {
   acquireBookingLocks,
   assertNoScheduleConflict,
@@ -5023,6 +5030,27 @@ router.get(
       stateData.redirectUri ||
       resolveGoogleCalendarRedirectUri() ||
       CANONICAL_GOOGLE_CALENDAR_REDIRECT_URI;
+    if (stateData.purpose === "admin_reconnect") {
+      const consumed = await consumeCalendarOAuthNonce({
+        nonce: stateData.nonce,
+        tutorProfileId: stateData.tutorProfileId,
+      });
+      if (!consumed.ok) {
+        const failure = calendarOAuthNonceFailureMessage(consumed.reason);
+        logCallback("warn", `nonce_${consumed.reason}`, {
+          outcome: failure.outcome,
+          tutorProfileId: stateData.tutorProfileId,
+        });
+        sendCalendarOAuthPage(res, 400, {
+          success: false,
+          outcome: failure.outcome,
+          message: failure.message,
+          returnTo: stateData.returnTo,
+          redirectUri: exchangeRedirectUri,
+        });
+        return;
+      }
+    }
     if (providerError) {
       const classified = classifyGoogleProviderError(
         providerError,
@@ -8271,6 +8299,90 @@ router.post(
     } finally {
       calendarConnectionTestInFlight.delete(tutorProfileId);
     }
+  },
+);
+
+router.post(
+  "/admin/calendar-connections/:tutorProfileId/reconnect-link",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorProfileId = String(req.params.tutorProfileId ?? "");
+    if (!TUTOR_PROFILE_ID.test(tutorProfileId)) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const existing = await publicCalendarConnectionHealth(tutorProfileId);
+    if (!existing) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const [profile] = await db
+      .select({
+        id: tutorProfilesTable.id,
+        userId: tutorProfilesTable.userId,
+        email: tutorProfilesTable.email,
+      })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.id, tutorProfileId))
+      .limit(1);
+    if (!profile?.userId) {
+      res.status(409).json({
+        error: "This tutor has no portal user to bind a reconnect link to.",
+      });
+      return;
+    }
+    const requestOrigin = resolvePublicRequestOrigin({
+      host: req.get("host"),
+      forwardedHost: req.get("x-forwarded-host"),
+      forwardedProto: req.get("x-forwarded-proto"),
+      protocol: req.protocol,
+    });
+    const redirectUri = resolveOAuthRedirectUriForRequest(requestOrigin);
+    if (!getGoogleCalendarConfig() || !redirectUri) {
+      res.status(503).json({ error: "Google Calendar is not configured for this workspace." });
+      return;
+    }
+    let state: string;
+    let url: string;
+    try {
+      state = createCalendarOAuthState(profile.id, profile.userId, {
+        purpose: "admin_reconnect",
+        expiresInMs: ADMIN_CALENDAR_RECONNECT_TTL_MS,
+        returnTo: "/tutor",
+        redirectUri,
+      });
+      url = googleCalendarAuthorizationUrl(profile.id, profile.userId, {
+        loginHint: profile.email,
+        returnTo: "/tutor",
+        redirectUri,
+        purpose: "admin_reconnect",
+        expiresInMs: ADMIN_CALENDAR_RECONNECT_TTL_MS,
+        state,
+      });
+    } catch (error) {
+      const message =
+        error instanceof CalendarOAuthError
+          ? error.message
+          : "Google Calendar is not configured for this workspace.";
+      res.status(503).json({ error: message });
+      return;
+    }
+    const signed = inspectCalendarOAuthState(state);
+    if (!signed.ok || signed.data.purpose !== "admin_reconnect" || signed.data.tutorProfileId !== profile.id) {
+      res.status(500).json({ error: "Could not sign a reconnect link." });
+      return;
+    }
+    const expiresAt = new Date(signed.data.exp);
+    await persistCalendarOAuthNonce({
+      nonce: signed.data.nonce,
+      tutorProfileId: profile.id,
+      expiresAt,
+    });
+    res.json({
+      url,
+      expiresAt: expiresAt.toISOString(),
+      tutorProfileId: profile.id,
+    });
   },
 );
 

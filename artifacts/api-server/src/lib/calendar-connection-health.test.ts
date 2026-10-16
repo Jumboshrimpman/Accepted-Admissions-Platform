@@ -10,12 +10,16 @@ import {
   calendarHealthBadge,
   calendarReconnectAlerts,
   compareTutorConnectionOrder,
+  errorPointsToTestingMode,
+  estimatedTokenAgeDays,
   hasUpcomingBookableTime,
   maskSensitiveCalendarValue,
   preserveRevokedCalendarTestReason,
   readTutorBusyWindows,
   safeCalendarErrorMessage,
   shouldWriteCalendarFreeBusySuccess,
+  TESTING_MODE_EXPIRY_WARNING,
+  testingModeExpiryWarning,
   UNKNOWN_GOOGLE_ACCOUNT_LABEL,
 } from "./calendar-connection-health.ts";
 
@@ -436,4 +440,136 @@ test("admin connections stay read-only and Eunice is not on a separate calendar 
   assert.equal(/bookingEligible:\s*(true|false)/.test(store), false);
   assert.match(tutorDashboard, /<CalendarConnectionCard/);
   assert.equal(tutorDashboard.includes("Eunice"), false);
+});
+
+const revoked = "Google revoked the calendar grant. Reconnect is required.";
+
+test("a 6-day invalid_grant warns about the 7-day Testing-mode expiry for every tutor", () => {
+  const now = new Date("2026-10-16T10:39:00.000Z");
+  const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const almostSixDays = new Date(sixDaysAgo.getTime() + 60_000);
+  assert.equal(errorPointsToTestingMode("invalid_grant"), true);
+  assert.equal(errorPointsToTestingMode("Token has been expired or revoked."), true);
+  assert.equal(errorPointsToTestingMode(revoked), true);
+  assert.equal(errorPointsToTestingMode("The free/busy check failed."), false);
+  assert.equal(errorPointsToTestingMode("The tutor disconnected Google Calendar."), false);
+  assert.equal(
+    testingModeExpiryWarning({
+      connectedAt: almostSixDays,
+      lastError: "invalid_grant",
+      now,
+    }),
+    null,
+  );
+  assert.equal(estimatedTokenAgeDays(almostSixDays, now), 5);
+  assert.match(
+    testingModeExpiryWarning({
+      connectedAt: sixDaysAgo,
+      lastError: "invalid_grant",
+      now,
+    }) ?? "",
+    /Testing mode/,
+  );
+  assert.match(TESTING_MODE_EXPIRY_WARNING, /7 days/);
+  for (const name of ["Xavier Morales", "Eunice Chon", "Nika Raiffe", "Victoria Wijerathnayapa"]) {
+    const row = buildCalendarConnectionHealth({
+      tutorProfileId: name,
+      name,
+      portalEmail: "tutor@example.com",
+      active: true,
+      bookingEligible: true,
+      weeklyHours: weekdayHours,
+      hasRefreshToken: false,
+      connectedAt: sixDaysAgo,
+      lastTokenRefreshAt: new Date("2026-10-16T10:39:00.000Z"),
+      lastError: revoked,
+      lastErrorAt: now,
+      now,
+    });
+    assert.equal(row.badge, "needs_reconnect");
+    assert.equal(row.connectionStatus, "disconnected");
+    assert.equal(row.estimatedTokenAgeDays, 6);
+    assert.equal(row.lastTokenRefreshAt, "2026-10-16T10:39:00.000Z");
+    assert.equal(row.lastError, revoked);
+    assert.match(row.testingModeExpiryWarning ?? "", /7 days/);
+  }
+  const young = buildCalendarConnectionHealth({
+    tutorProfileId: "xavier",
+    name: "Xavier Morales",
+    portalEmail: "xaver.rmz6@gmail.com",
+    hasRefreshToken: false,
+    connectedAt: almostSixDays,
+    lastError: "invalid_grant",
+    now,
+  });
+  assert.equal(young.testingModeExpiryWarning, null);
+  assert.equal(young.estimatedTokenAgeDays, 5);
+  const transient = buildCalendarConnectionHealth({
+    tutorProfileId: "nika",
+    name: "Nika Raiffe",
+    portalEmail: "nika.raiffe@gmail.com",
+    hasRefreshToken: true,
+    connectedAt: sixDaysAgo,
+    lastError: "The free/busy check failed.",
+    now,
+  });
+  assert.equal(transient.badge, "needs_attention");
+  assert.equal(transient.testingModeExpiryWarning, null);
+  assert.deepEqual(
+    calendarReconnectAlerts([
+      buildCalendarConnectionHealth({
+        tutorProfileId: "eunice",
+        name: "Eunice Chon",
+        portalEmail: "eunice_chon@berkeley.edu",
+        active: true,
+        bookingEligible: true,
+        weeklyHours: weekdayHours,
+        hasRefreshToken: false,
+        connectedAt: sixDaysAgo,
+        lastError: revoked,
+        now,
+      }),
+    ]).map((row) => row.testingModeExpiryWarning),
+    [TESTING_MODE_EXPIRY_WARNING],
+  );
+});
+
+test("admin reconnect links are signed, single-use, and still reject a mismatched Google account", async () => {
+  const platform = await readFile(
+    fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
+    "utf8",
+  );
+  const connections = await readFile(
+    fileURLToPath(new URL("../../../accepted-admissions/src/pages/admin/connections.tsx", import.meta.url)),
+    "utf8",
+  );
+  const store = await readFile(
+    fileURLToPath(new URL("./calendar-oauth-nonce-store.ts", import.meta.url)),
+    "utf8",
+  );
+  const callback = platform.slice(
+    platform.indexOf('"/calendar/oauth/callback"'),
+    platform.indexOf('"/calendar/connections"'),
+  );
+  const reconnect = platform.slice(
+    platform.indexOf('"/admin/calendar-connections/:tutorProfileId/reconnect-link"'),
+    platform.indexOf('"/admin/overview"'),
+  );
+  const consumeAt = callback.indexOf("consumeCalendarOAuthNonce");
+  const mismatchAt = callback.indexOf("email_mismatch");
+  assert.ok(consumeAt > 0);
+  assert.ok(mismatchAt > consumeAt);
+  assert.match(callback, /purpose === "admin_reconnect"/);
+  assert.match(callback, /googleAccountMatchesPortalEmails/);
+  assert.match(reconnect, /ensureRole\(\["administrator"\]\)/);
+  assert.match(reconnect, /purpose:\s*"admin_reconnect"/);
+  assert.match(reconnect, /persistCalendarOAuthNonce/);
+  assert.match(reconnect, /profile\.userId/);
+  assert.doesNotMatch(reconnect, /sendEmail|mailto:|resend|nodemailer/);
+  assert.match(connections, /copy-reconnect-link-/);
+  assert.match(connections, /Text this link to the tutor/);
+  assert.doesNotMatch(connections, /mailto:/);
+  assert.match(store, /usedAt: now/);
+  assert.match(store, /isNull\(calendarOauthNoncesTable\.usedAt\)/);
+  assert.match(store, /calendarOauthNoncesTable\.tutorProfileId/);
 });

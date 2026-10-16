@@ -105,12 +105,19 @@ export async function publicCalendarConnectionHealth(
 }
 
 export async function listCalendarReconnectAlerts(): Promise<
-  Array<{ tutorProfileId: string; name: string }>
+  Array<{
+    tutorProfileId: string;
+    name: string;
+    estimatedTokenAgeDays: number | null;
+    testingModeExpiryWarning: string | null;
+  }>
 > {
   const rows = await listPublicCalendarConnectionHealth();
   return calendarReconnectAlerts(rows).map((row) => ({
     tutorProfileId: row.tutorProfileId,
     name: row.name,
+    estimatedTokenAgeDays: row.estimatedTokenAgeDays,
+    testingModeExpiryWarning: row.testingModeExpiryWarning,
   }));
 }
 
