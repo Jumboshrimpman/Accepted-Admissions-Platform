@@ -6,10 +6,15 @@ import test from "node:test";
 import { repairMichelleQuizMathText } from "./stacked-math-notation.ts";
 import {
   decideSessionQuestionPdfAccess,
+  helveticaTextWidth,
   readQuizFigure,
   renderSessionQuestionPdf,
   resolveQuizMediaRoot,
+  selectSessionPdfSections,
+  SESSION_PDF_CONTENT_WIDTH,
+  SESSION_PDF_MARGIN,
   temporaryAliasMayDownloadAnswerKey,
+  type SessionPdfAssignment,
 } from "./session-question-pdf.ts";
 
 function crc32(buffer: Buffer): number {
@@ -160,6 +165,10 @@ test("the download route is read-only and uses the tutor access check", async ()
   assert.match(slice, /UUID_PATTERN\.test\(sessionId\)/);
   assert.match(slice, /status\(400\)/);
   assert.match(slice, /decideSessionQuestionPdfAccess/);
+  assert.match(slice, /selectSessionPdfSections/);
+  assert.match(slice, /session\.clientUserId/);
+  assert.match(slice, /attemptCount/);
+  assert.match(slice, /planAssignmentId/);
   assert.match(slice, /temporaryAliasMayDownloadAnswerKey/);
   assert.match(slice, /inArray\(assignmentQuestionsTable\.assignmentId/);
   assert.match(slice, /michelleQuizMathRepairEnabled/);
@@ -357,4 +366,322 @@ test("answer keys keep WinAnsi math symbols and repair real stacked bank strings
   assert.match(text, /\^4/);
   assert.match(text, /x \+ 45 = 48|(\(x\).{0,200}\(\+\).{0,80}\(45\).{0,80}\(=\).{0,80}\(48\))/s);
   assert.match(text, /36 inches|(\(36\).{0,80}\(inches\))/s);
+});
+
+function pdfTextRuns(pdf: Buffer): Array<{ page: number; x: number; y: number; size: number; text: string }> {
+  const source = pdf.toString("latin1");
+  const runs: Array<{ page: number; x: number; y: number; size: number; text: string }> = [];
+  const pages = source.matchAll(/stream\n([\s\S]*?)\nendstream/g);
+  let page = 0;
+  for (const stream of pages) {
+    const body = stream[1] ?? "";
+    if (!body.includes("BT")) continue;
+    page += 1;
+    const pattern = /BT \/F\d+ ([\d.]+) Tf ([-\d.]+) ([-\d.]+) Td \(((?:\\.|[^\\)])*)\) Tj ET/g;
+    for (const match of body.matchAll(pattern)) {
+      runs.push({
+        page,
+        size: Number(match[1]),
+        x: Number(match[2]),
+        y: Number(match[3]),
+        text: (match[4] ?? "").replace(/\\([()\\])/g, "$1"),
+      });
+    }
+  }
+  return runs;
+}
+
+function assertLinesFit(runs: Array<{ page: number; x: number; y: number; size: number; text: string }>) {
+  const byLine = new Map<string, typeof runs>();
+  for (const run of runs) {
+    const key = `${run.page}:${run.y}`;
+    const line = byLine.get(key) ?? [];
+    line.push(run);
+    byLine.set(key, line);
+  }
+  const rightLimit = SESSION_PDF_MARGIN + SESSION_PDF_CONTENT_WIDTH + 1;
+  for (const line of byLine.values()) {
+    const ordered = [...line].sort((left, right) => left.x - right.x);
+    for (let index = 0; index < ordered.length; index += 1) {
+      const run = ordered[index]!;
+      const right = run.x + helveticaTextWidth(run.text, run.size);
+      assert.ok(right <= rightLimit, `"${run.text}" ends at ${right}`);
+      const next = ordered[index + 1];
+      if (!next) continue;
+      const end = run.x + helveticaTextWidth(run.text, run.size);
+      assert.ok(next.x + 0.75 >= end, `"${run.text}" overlaps "${next.text}"`);
+    }
+  }
+  return byLine.size;
+}
+
+test("a 1000-character passage wraps inside the content width without overprinting", () => {
+  assert.equal(helveticaTextWidth("m", 1000), 833);
+  assert.equal(helveticaTextWidth("i", 1000), 222);
+  assert.equal(helveticaTextWidth("w", 1000), 722);
+  const sentence = "A small archive digitized its handwritten maps and added searchable labels. ";
+  let passage = "";
+  while (passage.length < 1000) passage += sentence;
+  passage = passage.slice(0, 1000);
+  const pdf = renderSessionQuestionPdf({
+    phase: "before_session",
+    includeAnswerKey: false,
+    sessionTitle: "Taito's SAT Session with Eunice",
+    sessionDateLabel: "Fri, Oct 16, 2026",
+    studentName: "Taito Goto",
+    questions: [
+      {
+        prompt: "Read the passage.",
+        stimulus: `${passage}\nLine two must not overprint line one.`,
+      },
+    ],
+  });
+  const body = pdfTextRuns(pdf).filter((run) => run.size === 11);
+  const lineCount = assertLinesFit(body);
+  assert.ok(lineCount >= 8, `expected the passage to wrap, saw ${lineCount} lines`);
+  const maps = body.find((run) => run.text === "maps");
+  const and = body.find((run) => run.text === "and" && maps && run.y === maps.y);
+  assert.ok(maps);
+  assert.ok(and);
+  assert.ok(and!.x >= maps!.x + helveticaTextWidth("maps", maps!.size) - 0.2);
+  const stays = body.find((run) => run.text === "searchable");
+  const second = body.find((run) => run.text === "overprint");
+  assert.ok(stays && second);
+  assert.notEqual(stays!.y, second!.y);
+});
+
+test("session 37062b4f PDFs keep the bank, topic homework, and hard set apart", () => {
+  const homeworkIds = ["hw-1", "hw-2", "hw-3", "hw-4"];
+  const bankIds = Array.from({ length: 40 }, (_, index) => `bank-${index + 1}`);
+  const hardIds = Array.from({ length: 21 }, (_, index) => `hard-${index + 1}`);
+  const assignments: SessionPdfAssignment[] = [
+    {
+      id: "f00b3046",
+      title: "SAT Homework — Evidence and Inference",
+      deliveryPhase: "before_session",
+      status: "published",
+      createdAt: "2026-10-01T00:00:00.000Z",
+      questions: homeworkIds.map((id, position) => ({ id, position })),
+    },
+    {
+      id: "910009f3",
+      title: "SAT pre-work (30–50 q)",
+      deliveryPhase: "before_session",
+      status: "published",
+      createdAt: "2026-10-15T00:00:00.000Z",
+      questions: bankIds.map((id, position) => ({ id, position })),
+    },
+    {
+      id: "copied-prework",
+      title: "In-session homework completion",
+      deliveryPhase: "during_session",
+      status: "published",
+      createdAt: "2026-10-16T00:00:00.000Z",
+      questions: [...homeworkIds, ...bankIds.slice(0, 11)].map((id, position) => ({ id, position })),
+    },
+    {
+      id: "hard-bank",
+      title: "Hard-question bank — leftover time",
+      deliveryPhase: "during_session",
+      status: "published",
+      createdAt: "2026-10-16T01:00:00.000Z",
+      questions: hardIds.map((id, position) => ({ id, position })),
+    },
+    {
+      id: "geometry-follow-up",
+      title: "Geometry Area and Volume",
+      deliveryPhase: "before_session",
+      status: "published",
+      createdAt: "2026-10-16T02:00:00.000Z",
+      questions: [{ id: "geom-1", position: 0 }],
+    },
+  ];
+  const prework = selectSessionPdfSections({ phase: "before_session", assignments });
+  assert.deepEqual(
+    prework.map((section) => [section.assignmentId, section.questionIds.length]),
+    [
+      ["910009f3", 40],
+      ["f00b3046", 4],
+    ],
+  );
+  const during = selectSessionPdfSections({ phase: "during_session", assignments });
+  assert.deepEqual(during, [
+    {
+      assignmentId: "hard-bank",
+      title: "Hard-question bank — leftover time",
+      questionIds: hardIds,
+    },
+  ]);
+
+  const homeworkPrompts = [
+    "Which conclusion is best supported by the survey?",
+    "Which choice best states the central idea of the text?",
+    "What does the phrase measured optimism most nearly suggest?",
+    "Which choice most logically completes the text?",
+  ];
+  const longPassage =
+    "The general store was essential to daily life in the rural United States during the 1800s because it provided the supplies that the people living in nearby communities needed. Also, the store was a source of information. People socializing at the general store would share news and help spread it throughout their communities.";
+  const questionById = new Map<string, { prompt: string; stimulus?: string }>();
+  homeworkIds.forEach((id, index) => questionById.set(id, { prompt: homeworkPrompts[index]! }));
+  bankIds.forEach((id, index) =>
+    questionById.set(id, {
+      prompt: `Bank question ${index + 1}`,
+      stimulus: index === 4 ? longPassage : undefined,
+    }),
+  );
+  hardIds.forEach((id, index) => questionById.set(id, { prompt: `Hard question ${index + 1}` }));
+
+  const toSections = (
+    plans: ReturnType<typeof selectSessionPdfSections>,
+  ) =>
+    plans.map((plan) => ({
+      title: plan.title,
+      questions: plan.questionIds.map((id) => questionById.get(id)!),
+    }));
+  const preworkPdf = renderSessionQuestionPdf({
+    phase: "before_session",
+    includeAnswerKey: false,
+    sessionTitle: "Taito's SAT Session with Eunice",
+    sessionDateLabel: "Fri, Oct 16, 2026, 9:00 PM GMT+9",
+    studentName: "Taito Goto",
+    sections: toSections(prework),
+  });
+  const preworkText = preworkPdf.toString("latin1");
+  assert.ok(preworkText.indexOf("SAT pre-work") < preworkText.indexOf("Evidence and Inference"));
+  assert.match(preworkText, /\(1\.\)/);
+  assert.match(preworkText, /\(40\.\)/);
+  assert.match(preworkText, /\(41\.\)/);
+  assert.match(preworkText, /\(44\.\)/);
+  assert.doesNotMatch(preworkText, /Hard question/);
+  assert.doesNotMatch(preworkText, /Geometry Area/);
+  const preworkRuns = pdfTextRuns(preworkPdf).filter((run) => run.size === 11 || run.size === 12);
+  assertLinesFit(preworkRuns);
+  const maps = preworkRuns.find((run) => run.text === "maps");
+  assert.equal(maps, undefined);
+  const news = preworkRuns.find((run) => run.text === "news");
+  const andAfterNews = preworkRuns.find((run) => run.text === "and" && news && Math.abs(run.y - news.y) < 0.5);
+  assert.ok(news && andAfterNews);
+  assert.ok(andAfterNews!.x > news!.x + helveticaTextWidth("news", news!.size));
+
+  const duringPdf = renderSessionQuestionPdf({
+    phase: "during_session",
+    includeAnswerKey: false,
+    sessionTitle: "Taito's SAT Session with Eunice",
+    sessionDateLabel: "Fri, Oct 16, 2026, 9:00 PM GMT+9",
+    studentName: "Taito Goto",
+    sections: toSections(during),
+  });
+  const duringText = duringPdf.toString("latin1");
+  assert.match(duringText, /Hard-question bank/);
+  assert.match(duringText, /\(1\.\)/);
+  assert.match(duringText, /\(21\.\)/);
+  assert.doesNotMatch(duringText, /Bank question/);
+  assert.doesNotMatch(duringText, /best supported by the survey/);
+  assert.doesNotMatch(duringText, /Evidence and Inference/);
+  assertLinesFit(pdfTextRuns(duringPdf).filter((run) => run.size === 12));
+});
+
+test("pre-work keeps the attempted plan bank and prints duplicate topic homework once", () => {
+  const planId = "bank-attempted";
+  const questions = (prefix: string, count: number) =>
+    Array.from({ length: count }, (_, index) => ({ id: `${prefix}-${index}`, position: index }));
+  const sections = selectSessionPdfSections({
+    phase: "before_session",
+    assignments: [
+      {
+        id: "bank-newer",
+        title: "SAT pre-work (30–50 q)",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-10-16T00:00:00.000Z",
+        questionCount: 40,
+        attemptCount: 0,
+        planAssignmentId: planId,
+        questions: questions("newer", 40),
+      },
+      {
+        id: planId,
+        title: "SAT pre-work (30–50 questions)",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-10-01T00:00:00.000Z",
+        questionCount: 40,
+        attemptCount: 1,
+        planAssignmentId: planId,
+        questions: questions("attempted", 40),
+      },
+      {
+        id: "topic-older",
+        title: "SAT Homework — Evidence and Inference",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        questionCount: 4,
+        attemptCount: 1,
+        planAssignmentId: planId,
+        questions: questions("topic-a", 4),
+      },
+      {
+        id: "topic-newer",
+        title: "SAT Homework — Evidence and Inference",
+        deliveryPhase: "before_session",
+        status: "published",
+        subject: "SAT",
+        createdAt: "2026-10-02T00:00:00.000Z",
+        questionCount: 4,
+        attemptCount: 0,
+        planAssignmentId: planId,
+        questions: questions("topic-b", 4),
+      },
+    ],
+  });
+  assert.deepEqual(
+    sections.map((section) => section.assignmentId),
+    [planId, "topic-older"],
+  );
+  assert.deepEqual(sections[0]?.questionIds, questions("attempted", 40).map((item) => item.id));
+  assert.equal(sections.filter((section) => section.title.includes("Evidence")).length, 1);
+});
+
+test("WinAnsi fractions and accents use Helvetica AFM widths, and bold titles wrap", () => {
+  assert.equal(helveticaTextWidth("\u00bc", 1000), 834);
+  assert.equal(helveticaTextWidth("\u00bd", 1000), 834);
+  assert.equal(helveticaTextWidth("\u00be", 1000), 834);
+  assert.equal(helveticaTextWidth("\u00a9", 1000), 737);
+  assert.equal(helveticaTextWidth("\u00ae", 1000), 737);
+  assert.equal(helveticaTextWidth("\u00c6", 1000), 1000);
+  assert.equal(helveticaTextWidth("\u00e6", 1000), 889);
+  assert.equal(helveticaTextWidth("\u00c9", 1000), 667);
+  assert.equal(helveticaTextWidth("\u00e9", 1000), 556);
+  assert.equal(helveticaTextWidth("\u00bd", 1000, true), 834);
+  assert.equal(helveticaTextWidth("\u00c6", 1000, true), 1000);
+  assert.equal(helveticaTextWidth("M", 1000, true), 833);
+  assert.ok(helveticaTextWidth("W", 1000, true) > helveticaTextWidth("i", 1000, true));
+  for (let code = 0xa0; code <= 0xff; code += 1) {
+    const width = helveticaTextWidth(String.fromCharCode(code), 1000);
+    assert.notEqual(width, 600, `U+${code.toString(16)} still uses the 600 default`);
+    assert.ok(width > 0);
+  }
+
+  const title =
+    "SAT Homework — Evidence and Inference for the October session with a very long assignment title that cannot fit on one line of this page";
+  assert.ok(helveticaTextWidth(title, 13, true) > SESSION_PDF_CONTENT_WIDTH);
+  const pdf = renderSessionQuestionPdf({
+    phase: "before_session",
+    includeAnswerKey: false,
+    sessionTitle: "Taito's SAT Session with Eunice",
+    sessionDateLabel: "Fri, Oct 16, 2026",
+    studentName: "Taito Goto",
+    sections: [{ title, questions: [{ prompt: "Only question" }] }],
+  });
+  const titles = pdfTextRuns(pdf).filter((run) => run.size === 13);
+  assert.ok(titles.length >= 2, `bold title should wrap, saw ${titles.length} lines`);
+  const rightLimit = SESSION_PDF_MARGIN + SESSION_PDF_CONTENT_WIDTH + 1;
+  for (const run of titles) {
+    const right = run.x + helveticaTextWidth(run.text, run.size, true);
+    assert.ok(right <= rightLimit, `"${run.text}" ends at ${right}`);
+  }
 });

@@ -95,7 +95,9 @@ function PdfDownloadButton({
               description:
                 status === 403
                   ? "This account cannot download that PDF."
-                  : "Try again in a moment.",
+                  : status === 404
+                    ? "No questions for this part yet."
+                    : "Try again in a moment.",
             });
           })
           .finally(() => setPending(false));

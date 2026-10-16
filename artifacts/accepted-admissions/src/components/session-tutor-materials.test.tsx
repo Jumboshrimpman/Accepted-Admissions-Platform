@@ -160,11 +160,26 @@ describe("session tutor materials", () => {
     });
 
     toast.mockClear();
-    vi.mocked(customFetch).mockRejectedValue(new Error("offline"));
+    vi.mocked(customFetch).mockRejectedValue(Object.assign(new Error("missing"), { status: 404 }));
     fireEvent.click(screen.getByTestId("download-prework-questions"));
     await waitFor(() => {
       expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Could not download the PDF" }),
+        expect.objectContaining({
+          title: "Could not download the PDF",
+          description: "No questions for this part yet.",
+        }),
+      );
+    });
+
+    toast.mockClear();
+    vi.mocked(customFetch).mockRejectedValue(new Error("offline"));
+    fireEvent.click(screen.getByTestId("download-prework-answer-key"));
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Could not download the PDF",
+          description: "Try again in a moment.",
+        }),
       );
     });
   });
