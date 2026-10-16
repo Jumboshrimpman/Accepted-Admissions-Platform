@@ -64,7 +64,7 @@ const pages = [
       LEGAL_EFFECTIVE_DATE,
       "prepaid hourly credits",
       "available only to new clients",
-      "using the refund request form",
+      "who request one before their first tutoring session by emailing",
       "no refunds after the first session",
       "all purchases are non-refundable",
       "at least 24 hours in advance",

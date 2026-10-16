@@ -34,7 +34,8 @@ describe("Terms of Service", () => {
     const bookings = screen.getByRole("heading", { name: "Bookings and payments" }).closest("section");
     expect(bookings?.textContent).toMatch(/prepaid hourly credits purchased through Stripe/);
     expect(bookings?.textContent).toMatch(/available only to new clients/);
-    expect(bookings?.textContent).toMatch(/before that client’s first tutoring session, using the refund request form/);
+    expect(bookings?.textContent).toMatch(/who request one before their first tutoring session by emailing/);
+    expect(bookings?.textContent).toMatch(/admin@acceptedadmissions.org/);
     expect(bookings?.textContent).toMatch(/no refunds after the first session, including later credit purchases/);
     expect(bookings?.textContent).toMatch(/Unused credits carry over when a session is rescheduled/);
     expect(bookings?.textContent).toMatch(/Rescheduling is subject to tutor availability/);
@@ -54,7 +55,8 @@ describe("Terms of Service", () => {
 
     const cancellation = screen.getByRole("heading", { name: "Cancellation, rescheduling, and refunds" }).closest("section");
     expect(cancellation?.textContent).toMatch(/only to new clients/);
-    expect(cancellation?.textContent).toMatch(/using the refund request form/);
+    expect(cancellation?.textContent).toMatch(/who request one before their first tutoring session by emailing/);
+    expect(cancellation?.querySelector('a[href="mailto:admin@acceptedadmissions.org"]')).toBeTruthy();
     expect(cancellation?.textContent).toMatch(/first tutoring session has taken place/);
     expect(cancellation?.textContent).toMatch(/all purchases are non-refundable/);
     expect(cancellation?.textContent).toMatch(/later credit purchases/);
