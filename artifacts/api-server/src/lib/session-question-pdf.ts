@@ -2,7 +2,9 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
+import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import { CANONICAL_APP_ORIGIN, resolveConfiguredAppOrigin } from "./public-origin.ts";
+import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
 
 export type SessionQuestionPdfPhase = "before_session" | "during_session";
 
@@ -20,13 +22,40 @@ export type SessionQuestionPdfQuestion = {
   explanation?: string | null;
 };
 
+export type SessionQuestionPdfSection = {
+  title: string;
+  questions: SessionQuestionPdfQuestion[];
+};
+
 export type SessionQuestionPdfInput = {
   phase: SessionQuestionPdfPhase;
   includeAnswerKey: boolean;
   sessionTitle: string;
   sessionDateLabel: string;
   studentName: string;
-  questions: SessionQuestionPdfQuestion[];
+  /** One untitled block. Prefer `sections` when the session has more than one assignment. */
+  questions?: SessionQuestionPdfQuestion[];
+  sections?: SessionQuestionPdfSection[];
+};
+
+export type SessionPdfAssignmentQuestion = {
+  id: string;
+  position: number;
+};
+
+export type SessionPdfAssignment = {
+  id: string;
+  title: string;
+  deliveryPhase: string;
+  status: string;
+  createdAt?: Date | string | number | null;
+  questions: readonly SessionPdfAssignmentQuestion[];
+};
+
+export type SessionPdfSectionPlan = {
+  assignmentId: string;
+  title: string;
+  questionIds: string[];
 };
 
 /** Assigned tutor and administrators only. Students never receive question or answer-key PDFs. */
@@ -65,6 +94,98 @@ export function temporaryAliasMayDownloadAnswerKey(input: {
   if (!input.temporaryTutorAlias?.trim()) return true;
   if (typeof input.configuredViewEmail !== "string") return false;
   return !TEMP_VIEW_DISABLED.has(input.configuredViewEmail.trim().toLowerCase());
+}
+
+function assignmentCreatedMs(value: SessionPdfAssignment["createdAt"]): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function orderedQuestionIds(assignment: SessionPdfAssignment): string[] {
+  return [...assignment.questions]
+    .sort(
+      (left, right) => left.position - right.position || left.id.localeCompare(right.id),
+    )
+    .map((question) => question.id);
+}
+
+function isHardQuestionBankTitle(title: string): boolean {
+  return /hard-question bank/i.test(title.trim());
+}
+
+/**
+ * Pre-work PDFs lead with the bank set (the 30–50 question copy), then any
+ * other live before-session homework as its own labeled section.
+ * In-session PDFs use the hard-question bank when that assignment exists,
+ * and never repeat a question that is already on pre-work.
+ */
+export function selectSessionPdfSections(input: {
+  phase: SessionQuestionPdfPhase;
+  assignments: readonly SessionPdfAssignment[];
+}): SessionPdfSectionPlan[] {
+  const live = input.assignments.filter(
+    (assignment) =>
+      assignment.status !== "archived" && !isPostSessionFollowUpTitle(assignment.title),
+  );
+  const preworkQuestionIds = new Set<string>();
+  for (const assignment of live) {
+    if (assignment.deliveryPhase !== "before_session") continue;
+    for (const question of assignment.questions) preworkQuestionIds.add(question.id);
+  }
+
+  if (input.phase === "before_session") {
+    const before = live.filter((assignment) => assignment.deliveryPhase === "before_session");
+    const banks = before.filter(
+      (assignment) => sessionPreworkDedupeSlot(assignment.title) === "sat-bank-prework",
+    );
+    const bank = [...banks].sort((left, right) => {
+      const countDelta = orderedQuestionIds(right).length - orderedQuestionIds(left).length;
+      if (countDelta !== 0) return countDelta;
+      return assignmentCreatedMs(right.createdAt) - assignmentCreatedMs(left.createdAt);
+    })[0];
+    const others = before
+      .filter((assignment) => assignment.id !== bank?.id)
+      .filter((assignment) => sessionPreworkDedupeSlot(assignment.title) !== "sat-bank-prework")
+      .sort(
+        (left, right) => assignmentCreatedMs(left.createdAt) - assignmentCreatedMs(right.createdAt),
+      );
+    return [...(bank ? [bank] : []), ...others]
+      .map((assignment) => ({
+        assignmentId: assignment.id,
+        title: assignment.title.trim() || "Pre-work",
+        questionIds: orderedQuestionIds(assignment),
+      }))
+      .filter((section) => section.questionIds.length > 0);
+  }
+
+  const during = live
+    .filter((assignment) => assignment.deliveryPhase === "during_session")
+    .sort(
+      (left, right) => assignmentCreatedMs(left.createdAt) - assignmentCreatedMs(right.createdAt),
+    );
+  const hardBanks = during.filter((assignment) => isHardQuestionBankTitle(assignment.title));
+  const pool = hardBanks.length > 0 ? hardBanks : during;
+  const seen = new Set<string>();
+  const sections: SessionPdfSectionPlan[] = [];
+  for (const assignment of pool) {
+    const questionIds = orderedQuestionIds(assignment).filter((id) => {
+      if (preworkQuestionIds.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (questionIds.length === 0) continue;
+    sections.push({
+      assignmentId: assignment.id,
+      title: assignment.title.trim() || "In-session questions",
+      questionIds,
+    });
+  }
+  return sections;
 }
 
 const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
@@ -293,21 +414,160 @@ function parseRichText(value: string): TextRun[] {
   return runs.length > 0 ? runs : [{ kind: "text", text: value }];
 }
 
-function approxWidth(text: string, size: number): number {
+/**
+ * Adobe Helvetica AFM widths in 1000-unit ems. The old average (0.52em)
+ * was narrower than m/w and wider than i/l, so long lines overprinted
+ * and pdftotext glued words like "mapsand".
+ */
+const HELVETICA_UNITS = new Uint16Array(256);
+for (let code = 0; code < HELVETICA_UNITS.length; code += 1) HELVETICA_UNITS[code] = 600;
+const HELVETICA_ASCII: Record<string, number> = {
+  " ": 278,
+  "!": 278,
+  '"': 355,
+  "#": 556,
+  $: 556,
+  "%": 889,
+  "&": 667,
+  "'": 191,
+  "(": 333,
+  ")": 333,
+  "*": 389,
+  "+": 584,
+  ",": 278,
+  "-": 333,
+  ".": 278,
+  "/": 278,
+  "0": 556,
+  "1": 556,
+  "2": 556,
+  "3": 556,
+  "4": 556,
+  "5": 556,
+  "6": 556,
+  "7": 556,
+  "8": 556,
+  "9": 556,
+  ":": 278,
+  ";": 278,
+  "<": 584,
+  "=": 584,
+  ">": 584,
+  "?": 556,
+  "@": 1015,
+  A: 667,
+  B: 667,
+  C: 722,
+  D: 722,
+  E: 667,
+  F: 611,
+  G: 778,
+  H: 722,
+  I: 278,
+  J: 500,
+  K: 667,
+  L: 556,
+  M: 833,
+  N: 722,
+  O: 778,
+  P: 667,
+  Q: 778,
+  R: 722,
+  S: 667,
+  T: 611,
+  U: 722,
+  V: 667,
+  W: 944,
+  X: 667,
+  Y: 667,
+  Z: 611,
+  "[": 278,
+  "\\": 278,
+  "]": 278,
+  "^": 469,
+  _: 556,
+  "`": 333,
+  a: 556,
+  b: 556,
+  c: 500,
+  d: 556,
+  e: 556,
+  f: 278,
+  g: 556,
+  h: 556,
+  i: 222,
+  j: 222,
+  k: 500,
+  l: 222,
+  m: 833,
+  n: 556,
+  o: 556,
+  p: 556,
+  q: 556,
+  r: 333,
+  s: 500,
+  t: 278,
+  u: 556,
+  v: 500,
+  w: 722,
+  x: 500,
+  y: 500,
+  z: 500,
+  "{": 334,
+  "|": 260,
+  "}": 334,
+  "~": 584,
+};
+for (const [char, width] of Object.entries(HELVETICA_ASCII)) {
+  HELVETICA_UNITS[char.charCodeAt(0)] = width;
+}
+for (const [code, width] of [
+  [0xa0, 278],
+  [0xb0, 400],
+  [0xb1, 584],
+  [0xb2, 333],
+  [0xb3, 333],
+  [0xb7, 278],
+  [0xd7, 584],
+  [0xf7, 584],
+] as const) {
+  HELVETICA_UNITS[code] = width;
+}
+
+export const SESSION_PDF_PAGE_WIDTH = PAGE_WIDTH;
+export const SESSION_PDF_MARGIN = MARGIN;
+export const SESSION_PDF_CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+
+/** Width of text after the same WinAnsi mapping the PDF page uses. */
+export function helveticaTextWidth(text: string, size: number): number {
   let units = 0;
-  for (const char of text) {
-    if (char === " ") units += 0.34;
-    else if (char >= "A" && char <= "Z") units += 0.7;
-    else if (char >= "0" && char <= "9") units += 0.56;
-    else units += 0.52;
+  for (const char of pdfWinAnsiText(text)) {
+    units += HELVETICA_UNITS[char.charCodeAt(0)] ?? 600;
   }
-  return units * size;
+  return (units * size) / 1000;
+}
+
+function splitPdfWord(word: string, size: number, maxWidth: number): string[] {
+  if (maxWidth <= 0 || helveticaTextWidth(word, size) <= maxWidth) return [word];
+  const parts: string[] = [];
+  let chunk = "";
+  for (const char of word) {
+    const next = chunk + char;
+    if (chunk && helveticaTextWidth(next, size) > maxWidth) {
+      parts.push(chunk);
+      chunk = char;
+    } else {
+      chunk = next;
+    }
+  }
+  if (chunk) parts.push(chunk);
+  return parts.length > 0 ? parts : [word];
 }
 
 function wrapText(text: string, size: number, width: number): string[] {
   const lines: string[] = [];
   for (const paragraph of text.split(/\n/)) {
-    const words = paragraph.split(/\s+/).filter(Boolean);
+    const words = paragraph.split(/\s+/).filter(Boolean).flatMap((word) => splitPdfWord(word, size, width));
     if (words.length === 0) {
       lines.push("");
       continue;
@@ -315,7 +575,7 @@ function wrapText(text: string, size: number, width: number): string[] {
     let line = "";
     for (const word of words) {
       const next = line ? `${line} ${word}` : word;
-      if (approxWidth(next, size) > width && line) {
+      if (helveticaTextWidth(next, size) > width && line) {
         lines.push(line);
         line = word;
       } else {
@@ -482,10 +742,16 @@ class QuestionPdf {
     }
   }
 
+  sectionTitle(text: string) {
+    this.drawPlain(text, 13, true);
+    this.y -= 4;
+  }
+
   paragraph(text: string, size = 11) {
     const clean = stripMarkdownFigures(text);
     if (!clean) return;
     const maxX = PAGE_WIDTH - MARGIN;
+    const contentWidth = maxX - MARGIN;
     let x = MARGIN;
     let lineHeight = size + 6;
     this.ensure(lineHeight + 8);
@@ -507,6 +773,8 @@ class QuestionPdf {
       if (x > MARGIN) this.y -= lineHeight;
       x = MARGIN;
       lineHeight = size + 6;
+      this.ensure(lineHeight + 8);
+      baseline = Math.round(this.y - size);
     };
     for (const block of clean.split("\n")) {
       for (const run of parseRichText(block.length > 0 ? block : " ")) {
@@ -514,21 +782,23 @@ class QuestionPdf {
           const words = run.text.split(/(\s+)/).filter((part) => part.length > 0);
           for (const word of words) {
             if (/^\s+$/.test(word)) {
-              if (x > MARGIN) x += approxWidth(" ", size);
+              if (x > MARGIN) x += helveticaTextWidth(" ", size);
               continue;
             }
-            const width = Math.ceil(approxWidth(word, size));
-            const placed = advance(width, size + 6);
-            this.current.push(
-              `BT /F1 ${size} Tf ${Math.round(placed.at)} ${placed.baseline} Td ${pdfLiteral(word)} Tj ET`,
-            );
+            for (const piece of splitPdfWord(word, size, contentWidth)) {
+              const width = helveticaTextWidth(piece, size);
+              const placed = advance(width, size + 6);
+              this.current.push(
+                `BT /F1 ${size} Tf ${Math.round(placed.at)} ${placed.baseline} Td ${pdfLiteral(piece)} Tj ET`,
+              );
+            }
           }
           continue;
         }
         if (run.kind === "sup") {
           const expSize = Math.max(7, Math.round(size * 0.65));
-          const baseWidth = Math.ceil(approxWidth(run.base, size));
-          const expWidth = Math.ceil(approxWidth(run.exp, expSize));
+          const baseWidth = helveticaTextWidth(run.base, size);
+          const expWidth = helveticaTextWidth(run.exp, expSize);
           const placed = advance(baseWidth + expWidth, size + 8);
           this.current.push(
             `BT /F1 ${size} Tf ${Math.round(placed.at)} ${placed.baseline} Td ${pdfLiteral(run.base)} Tj ET`,
@@ -537,7 +807,7 @@ class QuestionPdf {
           continue;
         }
         const small = Math.max(8, size - 2);
-        const width = Math.ceil(Math.max(approxWidth(run.num, small), approxWidth(run.den, small), 12)) + 4;
+        const width = Math.max(helveticaTextWidth(run.num, small), helveticaTextWidth(run.den, small), 12) + 4;
         const placed = advance(width + 4, small * 2 + 8);
         const bar = placed.baseline + 2;
         this.current.push(
@@ -645,6 +915,32 @@ function phaseTitle(phase: SessionQuestionPdfPhase, includeAnswerKey: boolean): 
   return includeAnswerKey ? `${part} — answer key` : part;
 }
 
+function drawQuestion(
+  pdf: QuestionPdf,
+  question: SessionQuestionPdfQuestion,
+  number: number,
+  includeAnswerKey: boolean,
+) {
+  pdf.paragraph(`${number}. ${stripMarkdownFigures(question.prompt) || "Question"}`, 12);
+  if (question.stimulus) pdf.paragraph(question.stimulus, 11);
+  const figures =
+    question.figures && question.figures.length > 0
+      ? question.figures
+      : extractMarkdownFigures(`${question.stimulus ?? ""}\n${question.prompt}`).map((figure) => ({
+          alt: figure.alt,
+          bytes: null,
+        }));
+  for (const figure of figures) pdf.figure(figure);
+  for (const choice of question.choices ?? []) {
+    pdf.paragraph(`${choice.label}. ${stripMarkdownFigures(choice.text)}`, 11);
+  }
+  if (includeAnswerKey) {
+    pdf.paragraph(`Answer: ${(question.correctAnswer ?? "").trim() || "—"}`, 11);
+    if (question.explanation?.trim()) pdf.paragraph(question.explanation, 10);
+  }
+  pdf.paragraph(" ", 8);
+}
+
 export function renderSessionQuestionPdf(input: SessionQuestionPdfInput): Buffer {
   const pdf = new QuestionPdf([
     phaseTitle(input.phase, input.includeAnswerKey),
@@ -652,25 +948,17 @@ export function renderSessionQuestionPdf(input: SessionQuestionPdfInput): Buffer
     input.sessionDateLabel,
     `Student: ${input.studentName}`,
   ]);
-  input.questions.forEach((question, index) => {
-    pdf.paragraph(`${index + 1}. ${stripMarkdownFigures(question.prompt) || "Question"}`, 12);
-    if (question.stimulus) pdf.paragraph(question.stimulus, 11);
-    const figures =
-      question.figures && question.figures.length > 0
-        ? question.figures
-        : extractMarkdownFigures(`${question.stimulus ?? ""}\n${question.prompt}`).map((figure) => ({
-            alt: figure.alt,
-            bytes: null,
-          }));
-    for (const figure of figures) pdf.figure(figure);
-    for (const choice of question.choices ?? []) {
-      pdf.paragraph(`${choice.label}. ${stripMarkdownFigures(choice.text)}`, 11);
+  const sections =
+    input.sections && input.sections.length > 0
+      ? input.sections
+      : [{ title: "", questions: input.questions ?? [] }];
+  let number = 1;
+  for (const section of sections) {
+    if (section.title.trim()) pdf.sectionTitle(section.title);
+    for (const question of section.questions) {
+      drawQuestion(pdf, question, number, input.includeAnswerKey);
+      number += 1;
     }
-    if (input.includeAnswerKey) {
-      pdf.paragraph(`Answer: ${(question.correctAnswer ?? "").trim() || "—"}`, 11);
-      if (question.explanation?.trim()) pdf.paragraph(question.explanation, 10);
-    }
-    pdf.paragraph(" ", 8);
-  });
+  }
   return pdf.finish();
 }

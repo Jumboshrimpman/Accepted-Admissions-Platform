@@ -496,8 +496,10 @@ import {
   extractMarkdownFigures,
   readQuizFigure,
   renderSessionQuestionPdf,
+  selectSessionPdfSections,
   temporaryAliasMayDownloadAnswerKey,
   type SessionQuestionPdfPhase,
+  type SessionQuestionPdfQuestion,
 } from "../lib/session-question-pdf";
 import {
   assignmentDifficulty,
@@ -11398,15 +11400,10 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
   const assignments = await db
     .select()
     .from(assignmentsTable)
-    .where(
-      and(
-        eq(assignmentsTable.sessionId, session.id),
-        eq(assignmentsTable.deliveryPhase, phase),
-        ne(assignmentsTable.status, "archived"),
-      ),
-    )
+    .where(eq(assignmentsTable.sessionId, session.id))
     .orderBy(asc(assignmentsTable.createdAt));
-  const assignmentIds = assignments.map((assignment) => assignment.id);
+  const activeAssignments = assignments.filter((assignment) => assignment.status !== "archived");
+  const assignmentIds = activeAssignments.map((assignment) => assignment.id);
   const joined =
     assignmentIds.length === 0
       ? []
@@ -11426,19 +11423,43 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
     rows.push(row);
     questionsByAssignment.set(assignmentId, rows);
   }
-  const repairFlags = await Promise.all(
-    assignments.map((assignment) =>
-      michelleQuizMathRepairEnabled({
-        assignmentTitle: assignment.title,
-        sessionId: session.id,
-        sessionTitle: session.title,
+  const sectionPlans = selectSessionPdfSections({
+    phase,
+    assignments: activeAssignments.map((assignment) => ({
+      id: assignment.id,
+      title: assignment.title,
+      deliveryPhase: assignment.deliveryPhase,
+      status: assignment.status,
+      createdAt: assignment.createdAt,
+      questions: (questionsByAssignment.get(assignment.id) ?? []).map((row) => ({
+        id: row.question.id,
+        position: row.assignmentQuestion.position,
+      })),
+    })),
+  });
+  const repairByAssignment = new Map(
+    await Promise.all(
+      sectionPlans.map(async (plan) => {
+        const assignment = activeAssignments.find((item) => item.id === plan.assignmentId);
+        const enabled = await michelleQuizMathRepairEnabled({
+          assignmentTitle: assignment?.title,
+          sessionId: session.id,
+          sessionTitle: session.title,
+        });
+        return [plan.assignmentId, enabled] as const;
       }),
     ),
   );
-  const questions: Parameters<typeof renderSessionQuestionPdf>[0]["questions"] = [];
-  for (const [index, assignment] of assignments.entries()) {
-    const repairStackedMath = repairFlags[index] ?? false;
-    for (const row of questionsByAssignment.get(assignment.id) ?? []) {
+  const sections: Array<{ title: string; questions: SessionQuestionPdfQuestion[] }> = [];
+  for (const plan of sectionPlans) {
+    const repairStackedMath = repairByAssignment.get(plan.assignmentId) ?? false;
+    const rowsByQuestionId = new Map(
+      (questionsByAssignment.get(plan.assignmentId) ?? []).map((row) => [row.question.id, row]),
+    );
+    const questions: SessionQuestionPdfQuestion[] = [];
+    for (const questionId of plan.questionIds) {
+      const row = rowsByQuestionId.get(questionId);
+      if (!row) continue;
       const shaped = assignmentQuestionShape(row.question, row.assignmentQuestion, {
         includeKeys: true,
         repairStackedMath,
@@ -11457,8 +11478,9 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
         explanation: repairMichelleQuizMathText(row.question.explanation, repairStackedMath),
       });
     }
+    if (questions.length > 0) sections.push({ title: plan.title, questions });
   }
-  if (questions.length === 0) {
+  if (sections.every((section) => section.questions.length === 0)) {
     res.status(404).json({ error: "No quiz is attached for this part of the session." });
     return;
   }
@@ -11479,7 +11501,7 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
     sessionTitle: session.title,
     sessionDateLabel,
     studentName: student?.name ?? "Student",
-    questions,
+    sections,
   });
   const part = phase === "before_session" ? "pre-work" : "in-session";
   const kind = includeAnswerKey ? "answer-key" : "questions";
