@@ -34,6 +34,7 @@ import {
   VICTORIA_PLACEHOLDER_DISPLAY_NAME,
   VICTORIA_PLACEHOLDER_EMAIL,
   VICTORIA_USER_ID,
+  consultingCatalogAlignment,
   decidePlaceholderLink,
   isProductionClerkUserId,
   nikaConsultingAssignmentUserId,
@@ -145,6 +146,32 @@ async function ensureCatalogProducts(tx: ProvisionTx): Promise<void> {
         active: true,
       })
       .onConflictDoNothing({ target: satProductsTable.slug });
+    const [stored] = await tx
+      .select({
+        id: satProductsTable.id,
+        slug: satProductsTable.slug,
+        name: satProductsTable.name,
+        description: satProductsTable.description,
+        totalPriceCents: satProductsTable.totalPriceCents,
+        stripePriceId: satProductsTable.stripePriceId,
+      })
+      .from(satProductsTable)
+      .where(eq(satProductsTable.slug, product.slug))
+      .limit(1);
+    if (!stored) continue;
+    const alignment = consultingCatalogAlignment(stored);
+    if (!alignment) continue;
+    await tx
+      .update(satProductsTable)
+      .set({
+        name: alignment.name,
+        description: alignment.description,
+        totalPriceCents: alignment.totalPriceCents,
+        effectiveHourlyRateCents: alignment.effectiveHourlyRateCents,
+        ...(alignment.clearStripePriceId ? { stripePriceId: null } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(satProductsTable.id, stored.id));
   }
 }
 

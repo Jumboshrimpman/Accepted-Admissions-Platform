@@ -954,7 +954,7 @@ describe("administrator client preview", () => {
           tagline: "Columbia & Sciences Po dual degree, Political Science, Law & Psychology; Goldman Sachs BI",
           biography: "Nika biography for the preview.",
           photoUrl: "/media/team/nika-raiffe.png",
-          hourlyRateCents: 13000,
+          hourlyRateCents: 10000,
           prepaidHours: 1,
           calendarConnected: true,
         },
@@ -988,8 +988,14 @@ describe("administrator client preview", () => {
     render(<AdminClientPreview />);
 
     expect(screen.getByTestId("consulting-preview-dashboard").textContent).toContain("Welcome back, Neel.");
-    expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).toContain("Nika Raiffe");
-    expect(screen.getByTestId("consulting-preview-tutor-victoria").textContent).toContain("Victoria Wijerathnayapa");
+    expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).toContain("Nika");
+    expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).not.toContain("Nika Raiffe");
+    expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).toContain("$100/hr");
+    expect(screen.getByTestId("consulting-preview-tutor-victoria").textContent).toContain("Victoria");
+    expect(screen.getByTestId("consulting-preview-tutor-victoria").textContent).not.toContain("Wijerathnayapa");
+    expect(screen.getByTestId("consulting-preview-credit-nika").textContent).toContain("$100/hr");
+    const victoriaPhoto = screen.getByTestId("consulting-preview-tutor-victoria").querySelector("img");
+    expect(victoriaPhoto?.className).toContain("object-center");
     expect(screen.getByTestId("consulting-preview-tutor-xavier").textContent).toContain("$200/hr");
     expect(screen.getByTestId("consulting-preview-credit-nika").textContent).toContain("1");
     expect(screen.getByTestId("consulting-preview-credit-victoria").textContent).toContain("No prepaid hours yet");

@@ -297,8 +297,13 @@ describe("client availability calendar", () => {
     expect(screen.getByText(/admitted to Brown and Yale/)).toBeTruthy();
     expect(screen.getByText(/Not bookable until Google Calendar is connected/)).toBeTruthy();
     expect(screen.queryByTestId("booking-tutor-bio-tutor-blank")).toBeNull();
-    const photo = screen.getByRole("button", { name: /Victoria Wijerathnayapa/i }).querySelector("img");
+    const photo = screen.getByRole("button", { name: /^Victoria\b/i }).querySelector("img");
     expect(photo?.getAttribute("src")).toBe("/media/team/victoria.jpg");
+    expect(photo?.className).toContain("object-cover");
+    expect(photo?.className).toContain("object-center");
+    expect(photo?.className).toContain("max-w-28");
+    expect(screen.getByRole("tab", { name: "Victoria" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Victoria Wijerathnayapa" })).toBeNull();
   });
 
   test("prompts a zero-credit client to buy a single hour or 10-hour package before booking", async () => {

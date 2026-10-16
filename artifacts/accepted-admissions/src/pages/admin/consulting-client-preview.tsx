@@ -1,6 +1,10 @@
 import { useState } from "react";
 import type { AdminClientDashboard } from "@workspace/api-client-react";
 import { CalendarClock, Eye } from "lucide-react";
+import {
+  CONSULTING_TUTOR_PHOTO_CLASS,
+  consultingCreditsTutorLabel,
+} from "@/lib/consulting-tutor-display";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -26,7 +30,13 @@ function TutorPreviewCard({ tutor }: { tutor: ConsultingPreviewTutorCard }) {
     >
       <div className="flex items-start gap-4">
         {tutor.photoUrl ? (
-          <img src={tutor.photoUrl} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
+          <img
+            src={tutor.photoUrl}
+            alt=""
+            width={112}
+            height={112}
+            className={CONSULTING_TUTOR_PHOTO_CLASS}
+          />
         ) : (
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-semibold">
             {tutor.name
@@ -39,7 +49,7 @@ function TutorPreviewCard({ tutor }: { tutor: ConsultingPreviewTutorCard }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-semibold">{tutor.name}</p>
+              <p className="font-semibold">{consultingCreditsTutorLabel(tutor.name)}</p>
               <p className="mt-0.5 text-sm text-muted-foreground">{tutor.title}</p>
             </div>
             <Badge variant="secondary" className="rounded-full">
@@ -106,7 +116,7 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">College Consulting credits</CardTitle>
           <CardDescription>
-            Nika and Victoria are $130/hour. Xavier is $200/hour. Hours do not transfer between tutors.
+            Nika is $100/hour. Victoria is $130/hour. Xavier is $200/hour. Hours do not transfer between tutors.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -116,7 +126,9 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
             <div className="grid gap-3 sm:grid-cols-3">
               {tutors.map((tutor: ConsultingPreviewTutorCard) => (
                 <div key={tutor.tutorKey} className="rounded-xl border p-4" data-testid={`consulting-preview-credit-${tutor.tutorKey}`}>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{tutor.name}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {consultingCreditsTutorLabel(tutor.name)}
+                  </p>
                   <p className="mt-1 text-2xl font-semibold">{tutor.prepaidHours}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {tutor.prepaidHours === 0 ? "No prepaid hours yet" : "Prepaid hours"} · {dollars(tutor.hourlyRateCents)}/hr

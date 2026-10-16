@@ -27,6 +27,10 @@ import {
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  CONSULTING_TUTOR_PHOTO_CLASS,
+  consultingCreditsTutorLabel,
+} from "@/lib/consulting-tutor-display";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 import { SessionJoinActions } from "@/components/session-join-actions";
@@ -108,7 +112,9 @@ function BookingTutorOption({
             <img
               src={tutor.photoUrl}
               alt=""
-              className="h-16 w-16 shrink-0 rounded-2xl object-cover"
+              width={112}
+              height={112}
+              className={CONSULTING_TUTOR_PHOTO_CLASS}
             />
           ) : (
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-semibold text-muted-foreground">
@@ -122,7 +128,11 @@ function BookingTutorOption({
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-semibold">{tutor.name}</p>
+                <p className="font-semibold">
+                  {tutor.serviceName === "College Consulting"
+                    ? consultingCreditsTutorLabel(tutor.name)
+                    : tutor.name}
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">{tutor.title}</p>
               </div>
               <span
@@ -506,7 +516,7 @@ export function BookingCard({
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
               {collegeConsulting
-                ? "Choose Nika Raiffe ($130/hr), Victoria Wijerathnayapa ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
+                ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier Morales ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
                 : "Choose Xavier Morales or Eunice Chon and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>
@@ -540,7 +550,9 @@ export function BookingCard({
                         : "hover:border-primary/40 hover:bg-muted/40"
                     }`}
                   >
-                    {tutor.name}
+                    {tutor.serviceName === "College Consulting"
+                      ? consultingCreditsTutorLabel(tutor.name)
+                      : tutor.name}
                   </button>
                 ))}
               </div>

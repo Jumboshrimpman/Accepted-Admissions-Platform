@@ -37,7 +37,9 @@ import {
   clientMayBuyConsultingProduct,
   consultingPreviewTutors,
   consultingSlugIsSatCatalogProduct,
+  consultingCatalogAlignment,
   consultingTutorCredits,
+  consultingTutorDisplayName,
   decidePlaceholderLink,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
@@ -52,7 +54,7 @@ import {
 import { isRetiredXavierEmail } from "./xavier-identity.ts";
 
 test("College Consulting prices are per tutor and SAT catalog stays $130", () => {
-  assert.equal(NIKA_HOURLY_RATE_CENTS, 13_000);
+  assert.equal(NIKA_HOURLY_RATE_CENTS, 10_000);
   assert.equal(VICTORIA_HOURLY_RATE_CENTS, 13_000);
   assert.equal(XAVIER_NEEL_HOURLY_RATE_CENTS, 20_000);
   assert.equal(SAT_HOURLY_RATE_CENTS, 13_000);
@@ -61,7 +63,7 @@ test("College Consulting prices are per tutor and SAT catalog stays $130", () =>
   assert.deepEqual(
     COLLEGE_CONSULTING_PRODUCTS.map((product) => [product.slug, product.hourlyRateCents]),
     [
-      [COLLEGE_CONSULTING_NIKA_SLUG, 13_000],
+      [COLLEGE_CONSULTING_NIKA_SLUG, 10_000],
       [COLLEGE_CONSULTING_XAVIER_SLUG, 20_000],
       [COLLEGE_CONSULTING_VICTORIA_SLUG, 13_000],
     ],
@@ -74,6 +76,56 @@ test("College Consulting prices are per tutor and SAT catalog stays $130", () =>
   assert.equal(
     ACCEPTED_SAT_CATALOG.find((product) => product.slug === "single-sat-session")?.totalPriceCents,
     13_000,
+  );
+  const nikaCharge = consultingCatalogAlignment({
+    slug: COLLEGE_CONSULTING_NIKA_SLUG,
+    name: "College Consulting hour with Nika Raiffe",
+    description: "One prepaid 60-minute College Consulting credit with Nika Raiffe at $130/hour.",
+    totalPriceCents: 13_000,
+    stripePriceId: "price_old_130",
+  });
+  assert.equal(nikaCharge?.totalPriceCents, 10_000);
+  assert.equal(nikaCharge?.clearStripePriceId, true);
+  assert.match(nikaCharge?.name ?? "", /with Nika$/);
+  assert.equal(
+    consultingCatalogAlignment({
+      slug: COLLEGE_CONSULTING_NIKA_SLUG,
+      name: "College Consulting hour with Nika",
+      description: "One prepaid 60-minute College Consulting credit with Nika at $100/hour.",
+      totalPriceCents: 10_000,
+      stripePriceId: "price_100",
+    }),
+    null,
+  );
+  const victoriaLabel = consultingCatalogAlignment({
+    slug: COLLEGE_CONSULTING_VICTORIA_SLUG,
+    name: "College Consulting hour with Victoria Wijerathnayapa",
+    description: "old",
+    totalPriceCents: 13_000,
+    stripePriceId: "price_victoria_130",
+  });
+  assert.equal(victoriaLabel?.totalPriceCents, 13_000);
+  assert.equal(victoriaLabel?.clearStripePriceId, false);
+  assert.equal(
+    consultingCatalogAlignment({
+      slug: "single-sat-session",
+      name: "Single SAT Session",
+      description: "Michelle's hour with Xavier",
+      totalPriceCents: 13_000,
+      stripePriceId: "price_sat",
+    }),
+    null,
+  );
+  assert.equal(
+    consultingCatalogAlignment({
+      slug: COLLEGE_CONSULTING_XAVIER_SLUG,
+      name: "College Consulting hour with Xavier Morales",
+      description:
+        "One prepaid 60-minute College Consulting credit with Xavier Morales at $200/hour for Neel Dharni.",
+      totalPriceCents: 20_000,
+      stripePriceId: "price_xavier",
+    }),
+    null,
   );
 });
 
@@ -107,6 +159,10 @@ test("only Neel can buy consulting hours, and a Nika hour does not pay for Xavie
   assert.equal(credits.find((credit) => credit.tutorKey === "xavier")?.prepaidHours, 0);
   assert.equal(credits.find((credit) => credit.tutorKey === "xavier")?.hourlyRateCents, 20_000);
   assert.equal(credits.find((credit) => credit.tutorKey === "nika")?.prepaidHours, 1);
+  assert.equal(credits.find((credit) => credit.tutorKey === "nika")?.hourlyRateCents, 10_000);
+  assert.equal(credits.find((credit) => credit.tutorKey === "nika")?.name, "Nika");
+  assert.equal(consultingTutorDisplayName("victoria"), "Victoria");
+  assert.equal(consultingTutorDisplayName("xavier"), "Xavier Morales");
   assert.equal(credits.find((credit) => credit.tutorKey === "victoria")?.calendarConnected, false);
   assert.equal(credits.find((credit) => credit.tutorKey === "victoria")?.hourlyRateCents, 13_000);
 });
@@ -457,7 +513,9 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.equal(migration.includes("INSERT INTO \"portal_access_grants\""), false);
   assert.equal(provision.includes("english_tutor"), false);
   assert.equal(provision.includes("revokedAt: null"), false);
-  assert.equal(provision.includes(".update(satProductsTable)"), false);
+  assert.match(provision, /consultingCatalogAlignment/);
+  assert.match(provision, /\.update\(satProductsTable\)/);
+  assert.match(provision, /clearStripePriceId \? \{ stripePriceId: null \}/);
   assert.match(provision, /onConflictDoNothing/);
   assert.match(provision, /pg_advisory_xact_lock\(hashtext\(\$\{PROVISION_LOCK_KEY\}\)\)/);
   assert.match(provision, /portalAccessRevoked\(grant\)/);
@@ -586,7 +644,10 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
   );
   assert.equal(tutors[0]?.id, "preview-nika");
   assert.equal(tutors[0]?.prepaidHours, 2);
-  assert.equal(tutors[0]?.hourlyRateCents, 13_000);
+  assert.equal(tutors[0]?.hourlyRateCents, 10_000);
+  assert.equal(tutors[0]?.name, "Nika");
+  assert.equal(tutors[1]?.name, "Victoria");
+  assert.equal(tutors[2]?.name, "Xavier Morales");
   assert.match(tutors[0]?.tagline ?? "", /Columbia/);
   assert.equal(tutors[1]?.id, "victoria-profile");
   assert.equal(tutors[1]?.tagline, VICTORIA_BOOKING_TAGLINE);

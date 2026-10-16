@@ -454,7 +454,7 @@ export default function PortalSat() {
               </CardTitle>
               <CardDescription>
                 {collegeConsulting
-                  ? "Nika and Victoria Wijerathnayapa are $130/hour. Xavier is $200/hour. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
+                  ? "Nika is $100/hour. Victoria is $130/hour. Xavier is $200/hour. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
                   : "Pay $130 for one hour or $1,300 for 10 hours. Then book below. Card details stay on Stripe Checkout."}
               </CardDescription>
             </CardHeader>
