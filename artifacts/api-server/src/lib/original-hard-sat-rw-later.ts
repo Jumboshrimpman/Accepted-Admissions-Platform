@@ -162,8 +162,8 @@ export const DEC11: readonly OriginalHardRwDraft[] = [
     "The clerk kept the oath through the hearing___",
     STANDARD,
     "; the bench remained closed until the appeal.",
-    [": a quiet bench and a closed book.", ", the bench remained closed until the appeal.", "the bench remained closed until the appeal."],
-    "The oath and the closed bench are separate independent clauses, so a semicolon joins them. A colon would need the second part to explain the oath, the comma splices the clauses, and the bare wording runs on.",
+    ["; a quiet bench and a closed book.", ", the bench remained closed until the appeal.", "the bench remained closed until the appeal."],
+    "The oath and the closed bench are separate independent clauses, so a semicolon joins them. A semicolon before a noun phrase is a fragment, the comma splices the clauses, and the bare wording runs on.",
     "RW module 2 boundaries: the closed bench is a second clause, so only a semicolon joins it to the oath.",
     CONV,
     "Boundaries",
@@ -355,7 +355,7 @@ export const DEC11: readonly OriginalHardRwDraft[] = [
     "Command of Evidence",
   ),
   r(
-    "A beekeeper claims that from 2015 to 2017 bloom declined while nectar increased.\nHive checks across three summers.\nRegion 2011 2015 2017\nBloom 14 20 11\nNectar 9 9 15\nPollen 4 7 7\nCounts are whole numbers.",
+    "A beekeeper claims that from 2015 to 2017 bloom declined while nectar increased.\nHive checks across three summers.\nSource 2011 2015 2017\nBloom 14 20 11\nNectar 9 9 15\nPollen 4 7 7\nCounts are whole numbers.",
     "Which choice most effectively uses data from the table to support the beekeeper's claim?",
     "From 2015 to 2017, Bloom fell from 20 to 11, and Nectar rose from 9 to 15.",
     [
@@ -717,8 +717,8 @@ export const DEC18: readonly OriginalHardRwDraft[] = [
     "The metal kept its weight through the assay___",
     STANDARD,
     "; the scale was checked again the next morning.",
-    [": a clean scale and a quiet room.", ", the scale was checked again the next morning.", "the scale was checked again the next morning."],
-    "Keeping the weight and checking the scale the next morning are two independent clauses, and the morning check does not define the weight. A semicolon joins them. The colon phrase does not explain the weight, the comma splices the clauses, and the bare wording runs on.",
+    ["; a clean scale and a quiet room.", ", the scale was checked again the next morning.", "the scale was checked again the next morning."],
+    "Keeping the weight and checking the scale the next morning are two independent clauses, and the morning check does not define the weight. A semicolon joins them. A semicolon before a noun phrase is a fragment, the comma splices the clauses, and the bare wording runs on.",
     "RW module 2 boundaries: the morning check is a second clause, so only a semicolon joins it to the weight.",
     CONV,
     "Boundaries",
@@ -800,7 +800,7 @@ export const DEC18: readonly OriginalHardRwDraft[] = [
     "Command of Evidence",
   ),
   r(
-    "An editor claims that from 1936 to 1940 the news pages held steady while the advertising pages increased.\nPress runs during the paper shortage.\nRegion 1932 1936 1940\nNews 40 33 33\nAds 18 22 29\nArt 6 6 4\nCounts are whole numbers.",
+    "An editor claims that from 1936 to 1940 the news pages held steady while the advertising pages increased.\nPress runs during the paper shortage.\nSection 1932 1936 1940\nNews 40 33 33\nAds 18 22 29\nArt 6 6 4\nCounts are whole numbers.",
     "Which choice most effectively uses data from the table to support the editor's claim?",
     "From 1936 to 1940, News held from 33 to 33, and Ads rose from 22 to 29.",
     [

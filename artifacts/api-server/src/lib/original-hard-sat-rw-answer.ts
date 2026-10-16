@@ -68,7 +68,7 @@ const MOVES: ReadonlyArray<{ detect: RegExp; signature: string }> = [
   { detect: /hypothesized that the brown band/i, signature: "a proposed explanation" },
   { detect: /ran against the tannery account/i, signature: "a result that cuts against it" },
   { detect: /mechanism remains unresolved/i, signature: "an open question" },
-  { detect: /long assumed that guilds kept/i, signature: "a familiar assumption" },
+  { detect: /assumed that guilds kept/i, signature: "a familiar assumption" },
   { detect: /one case broke that assumption/i, signature: "a case that breaks the assumption" },
   { detect: /offers a revised account/i, signature: "a replacement account" },
   { detect: /the procedure was simple/i, signature: "a described procedure" },

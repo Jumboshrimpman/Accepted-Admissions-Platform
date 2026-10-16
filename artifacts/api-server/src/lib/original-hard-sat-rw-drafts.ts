@@ -208,7 +208,7 @@ export const RW_BY_DATE: readonly (readonly OriginalHardRwDraft[])[] = [
       "Words in Context",
     ),
     r(
-      "For years, archivists long assumed that guilds kept apprenticeship inside a single port and nowhere else. The rolls were cited as if the absence of a second harbor proved the limit. In Bristol, one case broke that assumption: the same master signed boys in two harbors in one season, and the second harbor's book uses his mark. The second harbor's book is dated to the same season and lists the same fee for each boy. The article offers a revised account in which the route, not the port, organized the training. The article does not ask the city to rewrite its festival or follow one apprentice from childhood.",
+      "For years, archivists assumed that guilds kept apprenticeship inside a single port and nowhere else. The rolls were cited as if the absence of a second harbor proved the limit. In Bristol, one case broke that assumption: the same master signed boys in two harbors in one season, and the second harbor's book uses his mark. The second harbor's book is dated to the same season and lists the same fee for each boy. The article offers a revised account in which the route, not the port, organized the training. The article does not ask the city to rewrite its festival or follow one apprentice from childhood.",
       PURPOSE,
       "The text sets a familiar assumption beside a case that breaks the assumption and a replacement account.",
       [
@@ -378,7 +378,7 @@ export const RW_BY_DATE: readonly (readonly OriginalHardRwDraft[])[] = [
       "Command of Evidence",
     ),
     r(
-      "A historian argues that from 1804 to 1809 the northern dock lost traffic while the southern dock gained it.\nDock tallies during the embargo years.\nRegion 1801 1804 1809\nNorth 12 19 9\nSouth 7 7 14\nWest 4 6 6\nCounts are whole numbers.",
+      "A historian argues that from 1804 to 1809 the northern dock lost traffic while the southern dock gained it.\nDock tallies during the embargo years.\nDock 1801 1804 1809\nNorth 12 19 9\nSouth 7 7 14\nWest 4 6 6\nCounts are whole numbers.",
       "Which choice most effectively uses data from the table to support the historian's claim?",
       "From 1804 to 1809, North fell from 19 to 9, and South rose from 7 to 14.",
       [
@@ -409,8 +409,8 @@ export const RW_BY_DATE: readonly (readonly OriginalHardRwDraft[])[] = [
       "The restorers had planned to keep the south aisle closed for the whole month because the plaster was damp. ___ visitors were admitted on the last weekend, after that plaster had set.",
       TRANS,
       "However,",
-      ["Even so,", "Specifically,", "Moreover,"],
-      "The admission contrasts with the plan to stay closed, and it happened only after the plaster had set, not while the plaster was still damp. Even so would concede the dampness as still in force. The weekend is not a narrower case of staying closed, and it is not a fact added in the same direction.",
+      ["Similarly,", "Specifically,", "Moreover,"],
+      "The admission contrasts with the plan to stay closed, and it happened only after the plaster had set, not while the plaster was still damp. Similarly would claim the admission resembles the plan to stay closed. The weekend is not a narrower case of staying closed, and it is not a fact added in the same direction.",
       "RW module 2 in-session transition for Nov 27: opening after the plaster set contrasts with the plan, so the link is However.",
       EXPR,
       "Transitions",
