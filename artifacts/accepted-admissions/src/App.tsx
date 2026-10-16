@@ -57,6 +57,8 @@ import PortalSat from '@/pages/portal/sat';
 import OurTeam from '@/pages/public/our-team';
 import PastSuccess from '@/pages/public/past-success';
 import ClientRequest from '@/pages/public/client-request';
+import PrivacyPolicy from '@/pages/public/privacy';
+import TermsOfService from '@/pages/public/terms';
 import { LEGACY_PUBLIC_REDIRECTS } from '@/lib/legacy-public-routes';
 import { Shell } from '@/components/shell';
 import { SignInRecoveryButton } from '@/components/sign-in-recovery-button';
@@ -124,6 +126,10 @@ export function Router() {
         <Route path="/our-team" component={OurTeam} />
         <Route path="/past-success" component={PastSuccess} />
         <Route path="/client-request" component={ClientRequest} />
+        <Route path="/privacy" component={PrivacyPolicy} />
+        <Route path="/privacy/" component={PrivacyPolicy} />
+        <Route path="/terms" component={TermsOfService} />
+        <Route path="/terms/" component={TermsOfService} />
         {LEGACY_PUBLIC_REDIRECTS.map(({ from, to }) => (
           <Route key={from} path={from}>
             <Redirect to={to} />

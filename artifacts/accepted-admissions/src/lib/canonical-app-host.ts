@@ -8,7 +8,7 @@ export const MARKETING_AUTH_REDIRECT_HOSTS = [
 ] as const;
 
 /**
- * Portal / auth entry paths. Marketing pages (`/`, `/sat`, `/our-team`, …)
+ * Portal / auth entry paths. Marketing pages (`/`, `/sat`, `/our-team`, `/privacy`, `/terms`, …)
  * stay on www; only these need the app host for Clerk.
  */
 export const APP_HOST_AUTH_PATH_PREFIXES = [

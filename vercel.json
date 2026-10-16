@@ -17,6 +17,16 @@
   ],
   "redirects": [
     {
+      "source": "/privacy/",
+      "destination": "/privacy",
+      "permanent": true
+    },
+    {
+      "source": "/terms/",
+      "destination": "/terms",
+      "permanent": true
+    },
+    {
       "source": "/:path(login|sign-in|portal|tutor|admin|t-g|sso-callback|account|user)",
       "has": [
         {
@@ -65,6 +75,14 @@
     {
       "source": "/api/:path*",
       "destination": "https://accepted-admissions-platform-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
     },
     {
       "source": "/((?!api/).*)",

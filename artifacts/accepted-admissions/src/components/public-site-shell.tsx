@@ -206,6 +206,8 @@ export function PublicSiteShell({
             <Link href="/past-success" className="hover:text-foreground">Student stories</Link>
             <Link href="/client-request" className="hover:text-foreground">Get guidance</Link>
             <Link href="/login" data-testid="link-footer-sign-in" className="hover:text-foreground">Sign in</Link>
+            <Link href="/privacy" data-testid="link-footer-privacy" className="hover:text-foreground">Privacy Policy</Link>
+            <Link href="/terms" data-testid="link-footer-terms" className="hover:text-foreground">Terms of Service</Link>
             <a href={`mailto:${contactEmail}`} className="hover:text-foreground" data-testid="link-footer-contact-email">
               {contactEmail}
             </a>
