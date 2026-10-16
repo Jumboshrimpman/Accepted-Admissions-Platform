@@ -1941,6 +1941,44 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/Responses can only be saved while active/)).toBeNull();
   });
 
+  test("a 409 refetch that shows another tab resumed the attempt keeps the quiz active", async () => {
+    mocks.refetchStatus = "active";
+    render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    await act(async () => {
+      onError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(screen.queryByTestId("quiz-paused")).toBeNull();
+    expect(resumeMutate).not.toHaveBeenCalled();
+    expect(screen.getByText("Which transition is best?")).toBeTruthy();
+  });
+
+  test("a paused recovery clears after a later refetch shows the attempt is active", async () => {
+    mocks.refetchStatus = "paused";
+    const view = render(<PortalAssignment />);
+    fireEvent.click(screen.getByRole("button", { name: /However/i }));
+    const onError = saveMutate.mock.calls.at(-1)?.[1]?.onError as
+      | ((error: { data: { error: string } }) => void)
+      | undefined;
+    await act(async () => {
+      onError?.({ data: { error: "Responses can only be saved while active" } });
+    });
+    expect(screen.getByTestId("quiz-paused")).toBeTruthy();
+    mocks.attempt.status = "paused";
+    await act(async () => {
+      view.rerender(<PortalAssignment />);
+    });
+    mocks.attempt.status = "active";
+    await act(async () => {
+      view.rerender(<PortalAssignment />);
+    });
+    expect(screen.queryByTestId("quiz-paused")).toBeNull();
+    expect(resumeMutate).not.toHaveBeenCalled();
+  });
+
   test("paused overlay offers Resume, and ?resume=1 auto-resumes", () => {
     mocks.attempt.status = "paused";
     mocks.attempt.currentQuestionIndex = 1;

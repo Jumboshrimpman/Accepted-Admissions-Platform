@@ -273,6 +273,149 @@ export function shouldRepublishSeededHomework(status: string | null | undefined)
   return status !== "archived";
 }
 
+export type PlaceholderSatHomeworkAction = "attach" | "leave-existing" | "skip-new";
+
+/** A live bank pre-work with questions. Empty or archived copies do not count. */
+export function sessionHasBankPrework(
+  rows: readonly {
+    title?: string | null;
+    status?: string | null;
+    questionCount?: number | null;
+  }[],
+): boolean {
+  return rows.some(
+    (row) =>
+      row.status !== "archived" &&
+      (row.questionCount ?? 0) > 0 &&
+      sessionPreworkDedupeSlot(row.title) === "sat-bank-prework",
+  );
+}
+
+/**
+ * Boot seed must not create another generic SAT Homework set.
+ * An existing placeholder stays as-is until an admin archives it by id.
+ * `hasBankPrework` is retained so callers can record why a new row was refused.
+ */
+export function placeholderSatHomeworkAction(input: {
+  hasBankPrework: boolean;
+  placeholderExists: boolean;
+}): PlaceholderSatHomeworkAction {
+  void input.hasBankPrework;
+  return input.placeholderExists ? "leave-existing" : "skip-new";
+}
+
+/** Generic seeded SAT homework, not a bank pre-work set. */
+export function isPlaceholderSatHomeworkTitle(title: string | null | undefined): boolean {
+  return (title ?? "").trim().startsWith("SAT Homework —");
+}
+
+export const PLACEHOLDER_SAT_ARCHIVE_FROM_DATE = "2026-10-30";
+
+export type PlaceholderArchiveCandidate = {
+  id: string;
+  title?: string | null;
+  status?: string | null;
+  questionCount?: number | null;
+  attemptCount?: number | null;
+  sessionDateKey: string;
+};
+
+/** Unattempted Taito placeholder rows from Oct 30 onward. Archived rows are omitted. */
+export function eligiblePlaceholderArchiveIds(
+  rows: readonly PlaceholderArchiveCandidate[],
+  fromDate = PLACEHOLDER_SAT_ARCHIVE_FROM_DATE,
+  allowedTitles?: ReadonlySet<string>,
+): string[] {
+  return rows
+    .filter(
+      (row) =>
+        isPlaceholderSatHomeworkTitle(row.title) &&
+        (allowedTitles == null || allowedTitles.has((row.title ?? "").trim())) &&
+        row.status !== "archived" &&
+        (row.attemptCount ?? 0) <= 0 &&
+        row.sessionDateKey >= fromDate,
+    )
+    .map((row) => row.id);
+}
+
+/**
+ * Apply archives only ids from the dry-run list that are still eligible.
+ * Any other id rejects the whole apply so nothing is archived.
+ */
+export function placeholderArchiveApplyIds(input: {
+  candidates: readonly PlaceholderArchiveCandidate[];
+  requestedIds: readonly string[];
+  allowedTitles?: ReadonlySet<string>;
+}): { ok: true; archiveIds: string[] } | { ok: false; rejectedIds: string[] } {
+  const eligible = new Set(
+    eligiblePlaceholderArchiveIds(input.candidates, PLACEHOLDER_SAT_ARCHIVE_FROM_DATE, input.allowedTitles),
+  );
+  const rejectedIds = input.requestedIds.filter((id) => !eligible.has(id));
+  if (rejectedIds.length > 0) return { ok: false, rejectedIds };
+  return { ok: true, archiveIds: [...input.requestedIds] };
+}
+
+export type PreworkVisibilityAssignment = {
+  id?: string | null;
+  title?: string | null;
+  status?: string | null;
+  deliveryPhase?: string | null;
+  questionCount?: number | null;
+};
+
+/**
+ * Student-facing pre-work is visible and startable when a published
+ * before-session set with questions is the active pre-work.
+ */
+export function preworkStartabilityProblem(
+  assignments: readonly PreworkVisibilityAssignment[],
+): string | null {
+  const published = assignments.filter(
+    (item) =>
+      item.status === "published" &&
+      item.deliveryPhase !== "during_session" &&
+      !isPostSessionFollowUpTitle(item.title),
+  );
+  if (published.length === 0) {
+    return "No published before-session pre-work is listed for the student.";
+  }
+  if (!published.some((item) => (item.questionCount ?? 0) > 0)) {
+    return "The listed pre-work has no questions, so it cannot be started.";
+  }
+  return null;
+}
+
+export type FuturePlaceholderSatHomework = {
+  dateKey: string;
+  placeholderTitle: string;
+  placeholderStatus: string;
+  questionCount: number;
+};
+
+/** Future sessions whose generic SAT Homework row is still attached. Archived rows are omitted. */
+export function futurePlaceholderSatHomework(
+  sessions: readonly {
+    dateKey: string;
+    placeholderTitle?: string | null;
+    placeholderStatus?: string | null;
+    questionCount?: number | null;
+  }[],
+  today: string,
+): FuturePlaceholderSatHomework[] {
+  return sessions.flatMap((session) => {
+    if (!session.placeholderTitle || session.placeholderStatus === "archived") return [];
+    if (session.dateKey <= today) return [];
+    return [
+      {
+        dateKey: session.dateKey,
+        placeholderTitle: session.placeholderTitle,
+        placeholderStatus: session.placeholderStatus ?? "published",
+        questionCount: session.questionCount ?? 0,
+      },
+    ];
+  });
+}
+
 export type WrongAnswerCandidate = {
   correct: boolean;
 };

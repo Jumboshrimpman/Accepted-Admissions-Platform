@@ -12,7 +12,13 @@ import {
   planAssignmentIdAfterPreworkPublish,
   selectActivePrework,
   selectInSessionHomeworkQuestionIds,
+  eligiblePlaceholderArchiveIds,
+  futurePlaceholderSatHomework,
+  placeholderArchiveApplyIds,
+  placeholderSatHomeworkAction,
+  preworkStartabilityProblem,
   selectStatusHomework,
+  sessionHasBankPrework,
   shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "./session-homework.ts";
@@ -471,11 +477,232 @@ test("boot seed does not republish intentionally archived SAT homework", () => {
   const followUp = readFileSync(new URL("./michelle-xavier-session-follow-up.ts", import.meta.url), "utf8");
   assert.match(source, /shouldRepublishSeededHomework\(assignment\.status\)/);
   assert.match(prep, /if \(!shouldRepublishSeededHomework\(assignment\?\.status\)\) return 0/);
-  assert.match(followUp, /if \(!shouldRepublishSeededHomework\(already\.assignment\.status\)\)/);
+  assert.match(prep, /ne\(assignmentsTable\.status, "archived"\)/);
+  const assignQuiz = followUp.slice(
+    followUp.indexOf("async function assignQuiz"),
+    followUp.indexOf("async function clearNotesFromOtherSessions"),
+  );
+  const archivedAt = assignQuiz.indexOf("shouldRepublishSeededHomework(already.assignment.status)");
+  const timeLimitAt = assignQuiz.indexOf("ensureTimeLimit(already.assignment.id");
+  assert.ok(archivedAt > 0);
+  assert.ok(timeLimitAt > archivedAt);
+  const seed = source.slice(
+    source.indexOf("async function ensureSatAssessmentSeed"),
+    source.indexOf("async function ensureSeedData"),
+  );
+  assert.doesNotMatch(seed, /for \(const homework of SAT_HOMEWORK_SETS\)/);
+  assert.doesNotMatch(seed, /await ensureAssignment\(/);
+  assert.match(source, /placeholder-sat-homework/);
+  assert.match(source, /dryRun !== false/);
+  assert.doesNotMatch(
+    source.slice(source.indexOf('"/admin/placeholder-sat-homework"'), source.indexOf('"/admin/placeholder-sat-homework"') + 2200),
+    /sendMail|resend|nodemailer|clerk/i,
+  );
   assert.equal(shouldRepublishSeededHomework("archived"), false);
   assert.equal(shouldRepublishSeededHomework("published"), true);
   assert.equal(shouldRepublishSeededHomework("draft"), true);
   assert.equal(shouldRepublishSeededHomework(null), true);
+});
+
+test("bank pre-work stops a new generic SAT Homework attachment and leaves an existing one", () => {
+  const bank = {
+    title: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+    status: "published",
+    questionCount: 40,
+  };
+  assert.equal(sessionHasBankPrework([bank]), true);
+  assert.equal(sessionHasBankPrework([{ ...bank, questionCount: 0 }]), false);
+  assert.equal(sessionHasBankPrework([{ ...bank, status: "archived" }]), false);
+  assert.equal(
+    placeholderSatHomeworkAction({ hasBankPrework: true, placeholderExists: false }),
+    "skip-new",
+  );
+  assert.equal(
+    placeholderSatHomeworkAction({ hasBankPrework: true, placeholderExists: true }),
+    "leave-existing",
+  );
+  assert.equal(
+    placeholderSatHomeworkAction({ hasBankPrework: false, placeholderExists: false }),
+    "skip-new",
+  );
+  const future = futurePlaceholderSatHomework(
+    [
+      {
+        dateKey: "2026-10-16",
+        placeholderTitle: "SAT Homework — Evidence and Inference",
+        placeholderStatus: "published",
+        questionCount: 4,
+      },
+      {
+        dateKey: "2026-10-30",
+        placeholderTitle: "SAT Homework — Transitions and Purpose",
+        placeholderStatus: "published",
+        questionCount: 4,
+      },
+      {
+        dateKey: "2026-11-06",
+        placeholderTitle: "SAT Homework — Sentence Structure Check",
+        placeholderStatus: "published",
+        questionCount: 2,
+      },
+      {
+        dateKey: "2026-11-20",
+        placeholderTitle: "SAT Homework — Main Ideas and Evidence",
+        placeholderStatus: "published",
+        questionCount: 2,
+      },
+      {
+        dateKey: "2026-11-27",
+        placeholderTitle: "SAT Homework — Words in Context",
+        placeholderStatus: "published",
+        questionCount: 2,
+      },
+      {
+        dateKey: "2026-12-11",
+        placeholderTitle: "SAT Homework — Rhetorical Synthesis",
+        placeholderStatus: "published",
+        questionCount: 2,
+      },
+      {
+        dateKey: "2026-12-18",
+        placeholderTitle: "SAT Homework — Fall Mixed Review",
+        placeholderStatus: "published",
+        questionCount: 2,
+      },
+      {
+        dateKey: "2026-12-18",
+        placeholderTitle: "SAT Homework — Fall Mixed Review",
+        placeholderStatus: "archived",
+        questionCount: 2,
+      },
+    ],
+    "2026-10-16",
+  );
+  assert.deepEqual(
+    future.map((session) => `${session.dateKey} ${session.placeholderTitle} (${session.questionCount})`),
+    [
+      "2026-10-30 SAT Homework — Transitions and Purpose (4)",
+      "2026-11-06 SAT Homework — Sentence Structure Check (2)",
+      "2026-11-20 SAT Homework — Main Ideas and Evidence (2)",
+      "2026-11-27 SAT Homework — Words in Context (2)",
+      "2026-12-11 SAT Homework — Rhetorical Synthesis (2)",
+      "2026-12-18 SAT Homework — Fall Mixed Review (2)",
+    ],
+  );
+});
+
+test("admin archive accepts only unattempted Oct 30+ placeholder ids", () => {
+  const titles = new Set([
+    "SAT Homework — Transitions and Purpose",
+    "SAT Homework — Evidence and Inference",
+  ]);
+  const rows = [
+    {
+      id: "oct-16",
+      title: "SAT Homework — Evidence and Inference",
+      status: "published",
+      questionCount: 4,
+      attemptCount: 0,
+      sessionDateKey: "2026-10-16",
+    },
+    {
+      id: "oct-30",
+      title: "SAT Homework — Transitions and Purpose",
+      status: "published",
+      questionCount: 4,
+      attemptCount: 0,
+      sessionDateKey: "2026-10-30",
+    },
+    {
+      id: "attempted",
+      title: "SAT Homework — Transitions and Purpose",
+      status: "published",
+      questionCount: 4,
+      attemptCount: 1,
+      sessionDateKey: "2026-11-06",
+    },
+    {
+      id: "archived",
+      title: "SAT Homework — Transitions and Purpose",
+      status: "archived",
+      questionCount: 4,
+      attemptCount: 0,
+      sessionDateKey: "2026-11-20",
+    },
+    {
+      id: "bank",
+      title: "SAT pre-work (30–50 questions) — Taito",
+      status: "published",
+      questionCount: 40,
+      attemptCount: 0,
+      sessionDateKey: "2026-10-30",
+    },
+  ];
+  assert.deepEqual(eligiblePlaceholderArchiveIds(rows, "2026-10-30", titles), ["oct-30"]);
+  assert.deepEqual(
+    placeholderArchiveApplyIds({ candidates: rows, requestedIds: ["oct-30"], allowedTitles: titles }),
+    { ok: true, archiveIds: ["oct-30"] },
+  );
+  const rejected = placeholderArchiveApplyIds({
+    candidates: rows,
+    requestedIds: ["oct-30", "oct-16"],
+    allowedTitles: titles,
+  });
+  assert.equal(rejected.ok, false);
+  if (!rejected.ok) assert.deepEqual(rejected.rejectedIds, ["oct-16"]);
+  assert.equal(
+    preworkStartabilityProblem([
+      {
+        id: "empty",
+        title: "IELTS-style diagnostic reading",
+        status: "published",
+        deliveryPhase: "before_session",
+        questionCount: 0,
+      },
+    ]),
+    "The listed pre-work has no questions, so it cannot be started.",
+  );
+  assert.equal(
+    preworkStartabilityProblem([
+      {
+        id: "empty",
+        title: "IELTS-style diagnostic reading",
+        status: "published",
+        deliveryPhase: "before_session",
+        questionCount: 0,
+      },
+      {
+        id: "english-24",
+        title: "IELTS-style diagnostic reading",
+        status: "published",
+        deliveryPhase: "before_session",
+        questionCount: 24,
+      },
+    ]),
+    null,
+  );
+  assert.match(
+    preworkStartabilityProblem([
+      {
+        id: "draft",
+        title: "SAT Homework — Transitions and Purpose",
+        status: "draft",
+        deliveryPhase: "before_session",
+        questionCount: 4,
+      },
+    ]) ?? "",
+    /No published before-session pre-work/,
+  );
+  const visibility = readFileSync(new URL("./prework-visibility.ts", import.meta.url), "utf8");
+  const prep = readFileSync(new URL("./session-curriculum-prep.ts", import.meta.url), "utf8");
+  assert.match(visibility, /prework_not_startable/);
+  assert.doesNotMatch(visibility, /sendMail|resend|nodemailer|@clerk/i);
+  assert.match(prep, /raisePreworkVisibilityAlertForSession\(session\)/);
+  const adaptiveGet = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  const getStart = adaptiveGet.indexOf('router.get(\n  "/sessions/:sessionId/adaptive-curriculum"');
+  const getEnd = adaptiveGet.indexOf('router.post(\n  "/sessions/:sessionId/adaptive-curriculum"');
+  assert.ok(getStart > 0 && getEnd > getStart);
+  assert.doesNotMatch(adaptiveGet.slice(getStart, getEnd), /raisePreworkVisibilityAlert/);
 });
 
 test("duplicate routine SAT pre-work collapses to the copy with attempts", () => {

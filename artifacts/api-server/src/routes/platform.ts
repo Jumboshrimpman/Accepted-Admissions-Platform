@@ -175,6 +175,12 @@ import {
 } from "../lib/sat-assessment-content";
 import { selectHomeworkForPracticePrep } from "../lib/in-session-practice";
 import {
+  archivePlaceholderAssignments,
+  listUpcomingPreworkProblems,
+  loadTaitoPlaceholderCandidates,
+  raisePreworkVisibilityAlerts,
+} from "../lib/prework-visibility";
+import {
   enqueueMissedReviewItems,
   prepareSessionCurriculum,
 } from "../lib/session-curriculum-prep";
@@ -451,7 +457,9 @@ import {
 } from "../lib/question-single-quiz";
 import { conceptsForTemplateDrafts, validateExtractedSourceText } from "../lib/content-source-text";
 import {
+  eligiblePlaceholderArchiveIds,
   hydrateMistakePrompts,
+  placeholderArchiveApplyIds,
   selectActivePrework,
   selectStatusHomework,
   shouldRepublishSeededHomework,
@@ -660,6 +668,10 @@ function creditHoursSummary(
   return summarizeCreditHours(entries);
 }
 
+
+function seededPlaceholderSatHomeworkTitles(): string[] {
+  return SAT_HOMEWORK_SETS.map((item) => item.title);
+}
 
 const SAT_HOMEWORK_SETS = [
   {
@@ -1304,20 +1316,8 @@ async function ensureSatAssessmentSeed(courseId: string): Promise<void> {
       // Bank extract import may still be pending; keep later seed homework intact.
     }
   }
-  for (const homework of SAT_HOMEWORK_SETS) {
-    const session = satSessions.get(taitoSessionDateTime(homework.dateKey).getTime());
-    if (session) {
-      await ensureAssignment(
-        session,
-        homework.title,
-        homework.instructions,
-        15,
-        new Date(session.dateTime.getTime() - 24 * 60 * 60 * 1000),
-        2,
-        homework.questions,
-      );
-    }
-  }
+  // Generic SAT Homework placeholders are not created on boot.
+  // Existing Oct 30+ rows are archived only by the admin dry-run endpoint.
   for (const session of satSessions.values()) {
     await ensureDuringSessionAssignment(session);
   }
@@ -8719,6 +8719,54 @@ router.get(
           otter: "disconnected",
         },
       },
+    });
+  },
+);
+
+router.post(
+  "/admin/placeholder-sat-homework",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = (req.body ?? {}) as { dryRun?: unknown; assignmentIds?: unknown };
+    const dryRun = body.dryRun !== false;
+    const allowedTitles = new Set(seededPlaceholderSatHomeworkTitles());
+    const candidates = await loadTaitoPlaceholderCandidates(allowedTitles);
+    const assignmentIds = eligiblePlaceholderArchiveIds(candidates, undefined, allowedTitles);
+    if (dryRun) {
+      res.json({
+        dryRun: true,
+        assignmentIds,
+        assignments: candidates.filter((row) => assignmentIds.includes(row.id)),
+        visibility: await listUpcomingPreworkProblems(new Date(), new Set(assignmentIds)),
+      });
+      return;
+    }
+    if (
+      !Array.isArray(body.assignmentIds) ||
+      body.assignmentIds.some((id) => typeof id !== "string" || id.trim() === "")
+    ) {
+      res.status(400).json({ error: "Pass assignmentIds from the dry run." });
+      return;
+    }
+    const requestedIds = body.assignmentIds as string[];
+    const decision = placeholderArchiveApplyIds({
+      candidates,
+      requestedIds,
+      allowedTitles,
+    });
+    if (!decision.ok) {
+      res.status(400).json({
+        error: "Those ids are not unattempted placeholder sets from Oct 30 onward.",
+        rejectedIds: decision.rejectedIds,
+      });
+      return;
+    }
+    await archivePlaceholderAssignments(decision.archiveIds);
+    const visibilityAlerts = await raisePreworkVisibilityAlerts(await listUpcomingPreworkProblems());
+    res.json({
+      dryRun: false,
+      archivedIds: decision.archiveIds,
+      visibilityAlerts,
     });
   },
 );
