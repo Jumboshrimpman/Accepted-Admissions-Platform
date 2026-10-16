@@ -258,8 +258,12 @@ import {
   MIRRORED_PORTRAIT_RECONCILIATIONS,
   NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
   NIKA_PUBLIC_BIOGRAPHY,
+  NIKA_PUBLIC_PHOTO_ALT,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
+  publicTutorDisplayName,
+  publicTutorPhotoAlt,
+  publicTutorSortIndex,
   rewriteLegacyWixMediaUrl,
   mergeApprovedSchoolLogos,
   XAVIER_LEGACY_PUBLIC_BIOGRAPHIES,
@@ -648,10 +652,10 @@ const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME] as const;
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
-const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
+const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika"];
 const NIKA_LEGACY_SEED_PHOTO_URL = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
 const NIKA_LEGACY_APPROVED_WIX_PHOTO_URL =
-  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
+  LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika"];
 const TAITO_VIEWER_RELATIONSHIP = TAITO_PARENT_MIRROR_RELATIONSHIP;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -1595,8 +1599,8 @@ async function ensureUpgradeSeedData(): Promise<void> {
         email: "nika.raiffe@gmail.com",
         name: "Nika Raiffe",
         title: "Admissions Tutor",
-        photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"],
-        photoAltText: "Nika Raiffe, Admissions Tutor",
+        photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Nika"],
+        photoAltText: NIKA_PUBLIC_PHOTO_ALT,
         subjects: ["College admissions"],
         linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
         publicApproved: true,
@@ -1723,7 +1727,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
     .set({
       title: "Admissions Tutor",
       photoUrl: NIKA_APPROVED_PHOTO_URL,
-      photoAltText: "Nika Raiffe, Admissions Tutor",
+      photoAltText: NIKA_PUBLIC_PHOTO_ALT,
       biography: NIKA_PUBLIC_BIOGRAPHY,
       subjects: ["College admissions"],
       linkedinUrl: "https://www.linkedin.com/in/nika-raiffe",
@@ -1758,12 +1762,16 @@ async function ensureUpgradeSeedData(): Promise<void> {
     );
   await db
     .update(tutorProfilesTable)
-    .set({ photoAltText: "Nika Raiffe, Admissions Tutor", updatedAt: new Date() })
+    .set({ photoAltText: NIKA_PUBLIC_PHOTO_ALT, updatedAt: new Date() })
     .where(
       and(
         eq(tutorProfilesTable.email, NIKA_EMAIL),
         isNull(tutorProfilesTable.userId),
-        or(isNull(tutorProfilesTable.photoAltText), eq(tutorProfilesTable.photoAltText, "")),
+        or(
+          isNull(tutorProfilesTable.photoAltText),
+          eq(tutorProfilesTable.photoAltText, ""),
+          eq(tutorProfilesTable.photoAltText, "Nika Raiffe, Admissions Tutor"),
+        ),
       ),
     );
 
@@ -5461,8 +5469,8 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
   res.json(
     [...tutors]
       .sort((a, b) => {
-        const aIndex = PUBLIC_TUTOR_ORDER.indexOf(a.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
-        const bIndex = PUBLIC_TUTOR_ORDER.indexOf(b.name as (typeof PUBLIC_TUTOR_ORDER)[number]);
+        const aIndex = publicTutorSortIndex(a.name);
+        const bIndex = publicTutorSortIndex(b.name);
         if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name);
         if (aIndex === -1) return 1;
         if (bIndex === -1) return -1;
@@ -5470,6 +5478,8 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       })
       .map((tutor) => ({
         ...tutor,
+        name: publicTutorDisplayName(tutor.name),
+        photoAltText: publicTutorPhotoAlt(tutor.name, tutor.photoAltText),
         photoUrl: publicTeamPortrait(tutor.name, tutor.photoUrl),
       })),
   );
@@ -5517,12 +5527,8 @@ router.get(
       .from(tutorProfilesTable)
       .orderBy(asc(tutorProfilesTable.name));
     const ordered = [...tutors].sort((left, right) => {
-      const leftIndex = PUBLIC_TUTOR_ORDER.indexOf(
-        left.name as (typeof PUBLIC_TUTOR_ORDER)[number],
-      );
-      const rightIndex = PUBLIC_TUTOR_ORDER.indexOf(
-        right.name as (typeof PUBLIC_TUTOR_ORDER)[number],
-      );
+      const leftIndex = publicTutorSortIndex(left.name);
+      const rightIndex = publicTutorSortIndex(right.name);
       if (leftIndex === -1 && rightIndex === -1) return left.name.localeCompare(right.name);
       if (leftIndex === -1) return 1;
       if (rightIndex === -1) return -1;

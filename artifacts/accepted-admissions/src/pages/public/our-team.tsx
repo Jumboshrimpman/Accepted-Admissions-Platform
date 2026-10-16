@@ -70,7 +70,7 @@ const liveTeamOrder = [
   "Eunice Chon",
   "Sophia Lamas",
   "Aurelia Finch",
-  "Nika Raiffe",
+  "Nika",
   "Kya Brooks",
   "Michael Pecorara",
   "Kyle Englander",

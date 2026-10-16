@@ -491,7 +491,7 @@ test("provisioning and the migration do not send email or create Clerk users", a
     "utf8",
   );
   const rateMigration = await readFile(
-    fileURLToPath(new URL("../../../../lib/db/drizzle/0051_nika_college_consulting_100.sql", import.meta.url)),
+    fileURLToPath(new URL("../../../../lib/db/drizzle/0055_nika_college_consulting_100.sql", import.meta.url)),
     "utf8",
   );
   assert.match(rateMigration, /stripe_product_id/);

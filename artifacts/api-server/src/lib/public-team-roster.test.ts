@@ -18,8 +18,12 @@ const {
   NIKA_BOOKING_TAGLINE,
   NIKA_LEGACY_PUBLIC_BIOGRAPHIES,
   NIKA_PUBLIC_BIOGRAPHY,
+  NIKA_PUBLIC_PHOTO_ALT,
   PUBLIC_TUTOR_ORDER,
   publicTeamPortrait,
+  publicTutorDisplayName,
+  publicTutorPhotoAlt,
+  publicTutorSortIndex,
   rewriteLegacyWixMediaUrl,
   rewriteLegacyWixSchoolLogos,
   mergeApprovedSchoolLogos,
@@ -39,7 +43,7 @@ test("defines the complete approved public roster in display order", () => {
     "Eunice Chon",
     "Sophia Lamas",
     "Aurelia Finch",
-    "Nika Raiffe",
+    "Nika",
     "Kya Brooks",
     "Michael Pecorara",
     "Kyle Englander",
@@ -62,7 +66,7 @@ test("serves first-party portraits instead of Wix CDN URLs", () => {
   }
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"], "/media/team/xavier-morales.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Eunice Chon"], "/media/team/eunice-chon.jpg");
-  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"], "/media/team/nika-raiffe.png");
+  assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Nika"], "/media/team/nika-raiffe.png");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"], "/media/team/kya-brooks.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"], "/media/team/michael-pecorara.jpg");
   assert.equal(APPROVED_PUBLIC_TEAM_PORTRAITS["Kyle Englander"], "/media/team/kyle-englander.jpg");
@@ -80,6 +84,12 @@ test("publishes the current Xavier, Eunice, and Nika biographies and retires the
   assert.match(EUNICE_PUBLIC_BIOGRAPHY, /Harvard Medical School\/Massachusetts General Hospital/);
   assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /third-year at Harvard College/);
   assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /Coca-Cola Scholar/);
+  assert.match(NIKA_PUBLIC_BIOGRAPHY, /^Nika is a senior/);
+  assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /Raiffe/);
+  assert.equal(NIKA_PUBLIC_PHOTO_ALT, "Nika, Admissions Tutor");
+  assert.equal(publicTutorDisplayName("Nika Raiffe"), "Nika");
+  assert.equal(publicTutorPhotoAlt("Nika Raiffe", "Nika Raiffe, Admissions Tutor"), NIKA_PUBLIC_PHOTO_ALT);
+  assert.equal(publicTutorSortIndex("Nika Raiffe"), PUBLIC_TUTOR_ORDER.indexOf("Nika"));
   assert.match(NIKA_PUBLIC_BIOGRAPHY, /Goldman Sachs Business Intelligence Group/);
   assert.match(NIKA_PUBLIC_BIOGRAPHY, /as a Research Intern on Relational Health/);
   assert.doesNotMatch(NIKA_PUBLIC_BIOGRAPHY, /sophomore studying/);
@@ -90,6 +100,7 @@ test("publishes the current Xavier, Eunice, and Nika biographies and retires the
   assert.doesNotMatch(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Ivy League/);
   assert.match(EUNICE_LEGACY_PUBLIC_BIOGRAPHIES[0], /third-year at Harvard College/);
   assert.match(NIKA_LEGACY_PUBLIC_BIOGRAPHIES[0], /sophomore studying/);
+  assert.match(NIKA_LEGACY_PUBLIC_BIOGRAPHIES[1], /Nika Raiffe is a senior studying/);
   assert.equal(
     XAVIER_BOOKING_TAGLINE,
     "Harvard Math, Econ and CS '24, Rhodes Scholar Oxford MA Philosophy '26, Quant Finance",

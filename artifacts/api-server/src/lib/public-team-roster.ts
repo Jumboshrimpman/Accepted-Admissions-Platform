@@ -4,7 +4,7 @@ export const PUBLIC_TUTOR_ORDER = [
   "Eunice Chon",
   "Sophia Lamas",
   "Aurelia Finch",
-  "Nika Raiffe",
+  "Nika",
   "Kya Brooks",
   "Michael Pecorara",
   "Kyle Englander",
@@ -34,14 +34,16 @@ export const EUNICE_LEGACY_PUBLIC_BIOGRAPHIES = [
 ] as const;
 
 export const NIKA_PUBLIC_BIOGRAPHY =
-  "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.";
+  "Nika is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.";
 
 /** One line on the booking card, drawn from NIKA_PUBLIC_BIOGRAPHY. */
 export const NIKA_BOOKING_TAGLINE =
   "Columbia & Sciences Po dual degree, Political Science, Law & Psychology; Goldman Sachs BI";
 
+/** Exact stored bios. Startup replaces only these strings. They are not shown publicly. */
 export const NIKA_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Nika Raiffe is a sophomore studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She grew up in Eastern Europe, before graduating from Stuyvesant High School.",
+  "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.",
 ] as const;
 
 /** First-party public portraits served from this app (not Wix CDN). */
@@ -51,7 +53,7 @@ export const APPROVED_PUBLIC_TEAM_PORTRAITS: Record<PublicTutorName, string> = {
   "Eunice Chon": "/media/team/eunice-chon.jpg",
   "Sophia Lamas": "/media/team/sophia-lamas.jpg",
   "Aurelia Finch": "/media/team/aurelia-finch.png",
-  "Nika Raiffe": "/media/team/nika-raiffe.png",
+  "Nika": "/media/team/nika-raiffe.png",
   "Kya Brooks": "/media/team/kya-brooks.jpg",
   "Michael Pecorara": "/media/team/michael-pecorara.jpg",
   "Kyle Englander": "/media/team/kyle-englander.jpg",
@@ -74,7 +76,7 @@ export const LEGACY_WIX_PUBLIC_TEAM_PORTRAITS: Record<PublicTutorName, string> =
     "https://static.wixstatic.com/media/2c8654_1e5008d296ca4b20bd2f46a6a483de2e~mv2.jpg/v1/fill/w_457,h_711,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_1e5008d296ca4b20bd2f46a6a483de2e~mv2.jpg",
   "Aurelia Finch":
     "https://static.wixstatic.com/media/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png/v1/fill/w_457,h_685,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_9871b4a8b0604ba99d334b0dc6deb64d~mv2.png",
-  "Nika Raiffe":
+  "Nika":
     "https://static.wixstatic.com/media/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png/v1/fill/w_457,h_685,al_c,lg_1,q_85,enc_avif,quality_auto/2c8654_da5409cc20ab493681683b7e30932b60~mv2.png",
   "Kya Brooks":
     "https://static.wixstatic.com/media/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg/v1/fill/w_457,h_685,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/2c8654_99fefc7159a4424fa7e6fb36ed6cbb86~mv2.jpg",
@@ -298,6 +300,26 @@ export function rewriteLegacyWixMediaUrl(url: string): string {
   return LEGACY_WIX_MEDIA_REWRITES[url] ?? url;
 }
 
+/** Profile rows keep the full name. The public Our Team page shows the first name. */
+export const NIKA_STORED_NAME = "Nika Raiffe";
+export const NIKA_PUBLIC_NAME = "Nika";
+export const NIKA_PUBLIC_PHOTO_ALT = "Nika, Admissions Tutor";
+
+export function publicTutorDisplayName(storedName: string): string {
+  return storedName === NIKA_STORED_NAME ? NIKA_PUBLIC_NAME : storedName;
+}
+
+export function publicTutorPhotoAlt(storedName: string, alt: string | null): string | null {
+  if (storedName !== NIKA_STORED_NAME || !alt) return alt;
+  return alt.replace(/^Nika Raiffe\b/, NIKA_PUBLIC_NAME);
+}
+
+export function publicTutorSortIndex(storedName: string): number {
+  return PUBLIC_TUTOR_ORDER.indexOf(
+    publicTutorDisplayName(storedName) as PublicTutorName,
+  );
+}
+
 export function publicTeamPortrait(name: string, storedPhotoUrl: string | null) {
   if (name === "Kya Brooks") {
     return APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
@@ -338,7 +360,7 @@ export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
   {
     email: "public-aurelia-finch@seed.invalid",
     name: "Aurelia Finch" as const,
-    previousPhotoUrl: LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"],
+    previousPhotoUrl: LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Nika"],
     photoAltText: "Aurelia Finch, Admissions Tutor - UK",
   },
   {
