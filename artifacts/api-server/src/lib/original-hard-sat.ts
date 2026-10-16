@@ -55,11 +55,20 @@ function sourceKey(dateKey: string, section: "rw" | "math", questionNumber: numb
   return `original-hard-${dateKey}-${section}-${String(questionNumber).padStart(2, "0")}`;
 }
 
-function keySlot(index: number, dateIndex: number): number {
-  return (index * 3 + dateIndex + 1) % 4;
+/** FNV-1a of the item id, then a mixer so nearby question numbers do not share a cycle. */
+function hashSeed(id: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  let mixed = hash >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x7feb352d);
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x846ca68b);
+  return (mixed ^ (mixed >>> 16)) >>> 0;
 }
 
-function placeTexts(correct: string, distractors: readonly string[], slot: number): {
+function shuffledChoices(correct: string, distractors: readonly string[], id: string): {
   choices: BankChoice[];
   correctAnswer: string;
 } {
@@ -67,12 +76,22 @@ function placeTexts(correct: string, distractors: readonly string[], slot: numbe
   if (distractors.includes(correct) || new Set(distractors).size !== 3) {
     throw new Error(`Distractors collided with ${correct}.`);
   }
+  const slot = hashSeed(id) >>> 30;
+  const rest = [distractors[0]!, distractors[1]!, distractors[2]!];
+  let state = hashSeed(`${id}:choices`) || 1;
+  for (let index = rest.length - 1; index > 0; index -= 1) {
+    state = hashSeed(`${state}:${index}`) || 1;
+    const swap = Math.floor((state / 4294967296) * (index + 1));
+    const hold = rest[index]!;
+    rest[index] = rest[swap]!;
+    rest[swap] = hold;
+  }
   const texts = ["", "", "", ""];
   texts[slot] = correct;
   let next = 0;
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < texts.length; index += 1) {
     if (texts[index]) continue;
-    texts[index] = distractors[next]!;
+    texts[index] = rest[next]!;
     next += 1;
   }
   return {
@@ -85,7 +104,7 @@ function placeTexts(correct: string, distractors: readonly string[], slot: numbe
   };
 }
 
-function buildMath(dateKey: string, dateIndex: number, drafts: readonly OriginalHardMathDraft[]): OriginalHardMathItem[] {
+function buildMath(dateKey: string, drafts: readonly OriginalHardMathDraft[]): OriginalHardMathItem[] {
   if (drafts.length !== 35) throw new Error(`Expected 35 math items for ${dateKey}.`);
   return drafts.map((draft, index) => {
     const questionNumber = 35 - index;
@@ -96,7 +115,7 @@ function buildMath(dateKey: string, dateIndex: number, drafts: readonly Original
     if (draft.wrong.includes(solved) || new Set(draft.wrong).size !== 3) {
       throw new Error(`${dateKey} math ${questionNumber} distractors collided.`);
     }
-    const placed = placeTexts(String(solved), draft.wrong.map(String), keySlot(index, dateIndex));
+    const placed = shuffledChoices(String(solved), draft.wrong.map(String), sourceKey(dateKey, "math", questionNumber));
     const explanation = `${draft.because} The result is ${solved}.`;
     if (!explanation.includes(String(solved))) throw new Error("Explanation missed the result.");
     return {
@@ -117,13 +136,13 @@ function buildMath(dateKey: string, dateIndex: number, drafts: readonly Original
   });
 }
 
-function buildRw(dateKey: string, dateIndex: number, drafts: readonly OriginalHardRwDraft[]): OriginalHardRwItem[] {
+function buildRw(dateKey: string, drafts: readonly OriginalHardRwDraft[]): OriginalHardRwItem[] {
   if (drafts.length !== 35) throw new Error(`Expected 35 reading items for ${dateKey}.`);
   return drafts.map((draft, index) => {
     const questionNumber = 35 - index;
     const blanks = draft.stimulus.split("___").length - 1;
     if (blanks > 1) throw new Error(`${dateKey} rw ${questionNumber} has ${blanks} blanks.`);
-    const placed = placeTexts(draft.correct, draft.wrong, keySlot(index, dateIndex));
+    const placed = shuffledChoices(draft.correct, draft.wrong, sourceKey(dateKey, "rw", questionNumber));
     return {
       dateKey,
       section: "rw",
@@ -142,11 +161,11 @@ function buildRw(dateKey: string, dateIndex: number, drafts: readonly OriginalHa
 }
 
 export function originalHardMathItems(): OriginalHardMathItem[] {
-  return MATH_BY_DATE.flatMap((drafts, dateIndex) => buildMath(DATES[dateIndex]!, dateIndex, drafts));
+  return MATH_BY_DATE.flatMap((drafts, dateIndex) => buildMath(DATES[dateIndex]!, drafts));
 }
 
 export function originalHardRwItems(): OriginalHardRwItem[] {
-  return RW_BY_DATE.flatMap((drafts, dateIndex) => buildRw(DATES[dateIndex]!, dateIndex, drafts));
+  return RW_BY_DATE.flatMap((drafts, dateIndex) => buildRw(DATES[dateIndex]!, drafts));
 }
 
 function toRecord(item: {

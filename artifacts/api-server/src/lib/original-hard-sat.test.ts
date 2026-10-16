@@ -131,9 +131,19 @@ test("original hard items render, stay unique, and fill only the three shortfall
   assert.ok(records.every((record) => String(record.sourceFiles.difficultyNote).length >= 40));
 
   const letters = { a: 0, b: 0, c: 0, d: 0 };
-  for (const item of [...math, ...reading]) letters[item.correctAnswer as "a" | "b" | "c" | "d"] += 1;
-  assert.deepEqual(letters, { a: 52, b: 54, c: 52, d: 52 });
+  let oldCycle = 0;
+  for (const item of [...math, ...reading]) {
+    letters[item.correctAnswer as "a" | "b" | "c" | "d"] += 1;
+    const index = 35 - item.questionNumber;
+    const dateIndex = ORIGINAL_HARD_SAT_DATES.indexOf(item.dateKey as (typeof ORIGINAL_HARD_SAT_DATES)[number]);
+    const cyclic = "abcd"[(index * 3 + dateIndex + 1) % 4];
+    if (item.correctAnswer === cyclic) oldCycle += 1;
+  }
   console.log(`key distribution a=${letters.a} b=${letters.b} c=${letters.c} d=${letters.d}`);
+  for (const count of Object.values(letters)) {
+    assert.ok(count >= 45 && count <= 60, `key balance ${JSON.stringify(letters)}`);
+  }
+  assert.ok(oldCycle < 90, `keys still follow the index cycle (${oldCycle} of 210)`);
 
   const bags = [...math, ...reading].map((item) => ({
     key: item.sourceKey,

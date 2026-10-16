@@ -240,47 +240,74 @@ function answerPunctuation(stimulus: string, choices: OriginalHardRwAttempt["cho
 }
 
 function answerQuant(stimulus: string, choices: OriginalHardRwAttempt["choices"]): string {
-  const claims: string[] = [];
-  const rest = /Of the (\d+) [^.]{0,80}, (\d+) [^.]{0,50} and (\d+) /.exec(stimulus);
-  if (rest) {
-    const total = Number(rest[1]);
-    const first = Number(rest[2]);
-    const second = Number(rest[3]);
-    const left = total - first - second;
-    if (left > 0 && (100 * left) % total === 0) claims.push(`${(100 * left) / total} percent`);
-  }
-  const climbed = /climbed from (\d+) to (\d+)[\s\S]{0,120}climbed from (\d+) to (\d+)/.exec(stimulus);
-  if (climbed) {
-    const rise = Number(climbed[2]) - Number(climbed[1]);
-    const base = Number(climbed[4]) - Number(climbed[3]);
-    if (base > 0 && rise % base === 0) claims.push(`${(100 * rise) / base} percent of`);
-  }
-  const averaged = /(\d+) [a-z]+ averaged (\d+)\. (\d+) [a-z]+ averaged (\d+)/.exec(stimulus);
-  if (averaged) {
-    const countA = Number(averaged[1]);
-    const meanA = Number(averaged[2]);
-    const countB = Number(averaged[3]);
-    const meanB = Number(averaged[4]);
-    const denom = countA + countB;
-    const sum = countA * meanA + countB * meanB;
-    if (denom > 0 && sum % denom === 0) claims.push(`combined average of ${sum / denom}`);
-  }
-  const grew = /grew from (\d+) to (\d+) across (\d+) years/.exec(stimulus);
-  if (grew) {
+  let claim = "";
+  const piles =
+    /Of the (\d+) [a-z]+, (\d+) were [a-z]+, (\d+) were [a-z]+, and (\d+) were [a-z]+\. These three groups include every [a-z]+ and do not overlap\. Each of the third group took (\d+) minutes and each of the second group took (\d+) minutes\./i.exec(
+      stimulus,
+    );
+  const climbed = /climbed from (\d+) to (\d+) and then that new price was reduced by (\d+) percent\./.exec(stimulus);
+  const averaged =
+    /(\d+) [a-z]+ averaged (\d+)\. (\d+) [a-z]+ averaged (\d+)\. The second group is removed and (\d+) [a-z]+ averaging (\d+) are added\./.exec(
+      stimulus,
+    );
+  const grew = /grew from (\d+) to (\d+) across (\d+) years and then grew by that same yearly amount for (\d+) more years/.exec(
+    stimulus,
+  );
+  const restocked =
+    /started at (\d+) units, lost (\d+) percent, then lost (\d+) percent of what remained, and then (\d+) units were restocked/.exec(
+      stimulus,
+    );
+  const matched = [piles, climbed, averaged, grew, restocked].filter(Boolean);
+  if (matched.length !== 1) throw new Error("The quantitative claim is ambiguous.");
+  if (piles) {
+    const total = Number(piles[1]);
+    const second = Number(piles[3]);
+    const third = Number(piles[4]);
+    const thirdMinutes = Number(piles[5]);
+    const secondMinutes = Number(piles[6]);
+    const first = Number(piles[2]);
+    const ratioBase = second * secondMinutes;
+    const pct = ratioBase === 0 ? NaN : (100 * third * thirdMinutes) / ratioBase;
+    if (first + second + third !== total || !Number.isInteger(pct)) {
+      throw new Error("The quantitative claim is ambiguous.");
+    }
+    claim = `${pct} percent of the minutes`;
+  } else if (climbed) {
+    const from = Number(climbed[1]);
+    const to = Number(climbed[2]);
+    const cut = Number(climbed[3]);
+    const finalPrice = (to * (100 - cut)) / 100;
+    const above = from === 0 ? NaN : (100 * (finalPrice - from)) / from;
+    if (!Number.isInteger(finalPrice) || !Number.isInteger(above)) {
+      throw new Error("The quantitative claim is ambiguous.");
+    }
+    claim = `${above} percent above the starting fare`;
+  } else if (averaged) {
+    const keptCount = Number(averaged[1]);
+    const keptMean = Number(averaged[2]);
+    const addedCount = Number(averaged[5]);
+    const addedMean = Number(averaged[6]);
+    const denom = keptCount + addedCount;
+    const total = keptCount * keptMean + addedCount * addedMean;
+    if (denom === 0 || total % denom !== 0) throw new Error("The quantitative claim is ambiguous.");
+    claim = `new combined average is ${total / denom}`;
+  } else if (grew) {
     const delta = Number(grew[2]) - Number(grew[1]);
     const years = Number(grew[3]);
-    if (years > 0 && delta % years === 0) claims.push(`average of ${delta / years} per year`);
+    const extra = Number(grew[4]);
+    if (years === 0 || delta % years !== 0) throw new Error("The quantitative claim is ambiguous.");
+    claim = `later stretch added ${((delta / years) * extra)}`;
+  } else if (restocked) {
+    const start = Number(restocked[1]);
+    const firstCut = Number(restocked[2]);
+    const secondCut = Number(restocked[3]);
+    const restock = Number(restocked[4]);
+    const afterCuts = (start * (100 - firstCut) * (100 - secondCut)) / 10000;
+    const result = afterCuts + restock;
+    if (!Number.isInteger(result)) throw new Error("The quantitative claim is ambiguous.");
+    claim = `${result} units were on hand`;
   }
-  const lost = /started at (\d+) units, lost (\d+) percent, and then lost (\d+) percent of what remained/.exec(stimulus);
-  if (lost) {
-    const start = Number(lost[1]);
-    const firstCut = Number(lost[2]);
-    const secondCut = Number(lost[3]);
-    const result = (start * (100 - firstCut) * (100 - secondCut)) / 10000;
-    if (Number.isInteger(result)) claims.push(`${result} units remained`);
-  }
-  if (claims.length !== 1) throw new Error("The quantitative claim is ambiguous.");
-  const claim = claims[0]!;
+  if (!claim) throw new Error("The quantitative claim is ambiguous.");
   return unique(choices, (text) => text.includes(claim), "The quantitative choice is ambiguous.");
 }
 
@@ -294,6 +321,10 @@ function leadWords(sentence: string): Set<string> {
   );
 }
 
+function hasWord(text: string, word: string): boolean {
+  return new RegExp(`\\b${word}\\b`, "i").test(text);
+}
+
 function answerSynthesis(prompt: string, stimulus: string, choices: OriginalHardRwAttempt["choices"]): string {
   const goal = /wants to (?:emphasize|highlight|stress|center) ([^.]+)/i.exec(prompt);
   if (!goal) throw new Error("The synthesis goal is ambiguous.");
@@ -305,25 +336,31 @@ function answerSynthesis(prompt: string, stimulus: string, choices: OriginalHard
   if (words.length === 0) throw new Error("The synthesis goal has no distinctive word.");
   words.sort((left, right) => right.length - left.length || left.localeCompare(right));
   const target = words[0]!;
-  const lead = leadWords((stimulus.split(/[.!?]/)[0] ?? "").trim());
-  let bestScore = 0;
-  let best: OriginalHardRwAttempt["choices"][number] | null = null;
-  let ties = 0;
-  for (const choice of choices) {
-    const text = (choice.text ?? "").trim();
-    if (text.toLowerCase().includes(target)) continue;
-    let score = 0;
-    for (const word of lead) if (text.toLowerCase().includes(word)) score += 1;
-    if (score > bestScore) {
-      bestScore = score;
-      best = choice;
-      ties = 1;
-    } else if (score === bestScore && score > 0) {
-      ties += 1;
-    }
-  }
-  if (!best || ties !== 1 || bestScore < 2) throw new Error("The synthesis choice is ambiguous.");
-  return letterOf(best);
+  const sentences = stimulus
+    .split(/[.!?]/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  if (sentences.length < 2) throw new Error("The synthesis notes are ambiguous.");
+  const lead = leadWords(sentences[0]!);
+  const second = leadWords(sentences[1]!);
+  for (const word of lead) second.delete(word);
+  if (lead.size < 2 || second.size < 1) throw new Error("The synthesis notes are ambiguous.");
+  const copied = sentences[0]!.toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  return unique(
+    choices,
+    (text) => {
+      const lower = text.toLowerCase();
+      if (lower.includes(target)) return false;
+      const normalized = lower.replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+      if (normalized === copied) return false;
+      let leadHits = 0;
+      for (const word of lead) if (hasWord(lower, word)) leadHits += 1;
+      let secondHits = 0;
+      for (const word of second) if (hasWord(lower, word)) secondHits += 1;
+      return leadHits >= 2 && secondHits >= 1;
+    },
+    "The synthesis choice is ambiguous.",
+  );
 }
 
 function answerInference(stimulus: string, choices: OriginalHardRwAttempt["choices"]): string {
