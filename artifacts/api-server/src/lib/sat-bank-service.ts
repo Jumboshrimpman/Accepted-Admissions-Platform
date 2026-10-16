@@ -36,9 +36,11 @@ import {
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
 import {
+  auditQuizItems,
   auditStudentQuizItem,
   canAssignCleanStudentQuizSet,
   canAssignDiagnostic,
+  isTrueSprQuizItem,
   diagnosticAssignmentCopy,
   composeDiagnosticItems,
   isOfficialSatExtract,
@@ -68,6 +70,12 @@ import {
   selectQuestionsForCountBudget,
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
+import {
+  planBankReimportDiff,
+  reimportApplySourceKeys,
+  reimportContentFromRecord,
+  type ExistingBankReimportRow,
+} from "./sat-bank-reimport.ts";
 import {
   HARD_SAT_PREWORK_QUESTIONS,
   hardSatStudentFacing,
@@ -496,6 +504,198 @@ export async function importCollegeBoardExtracts(input: {
     duplicatesInFile: parsed.duplicatesInFile.length + (parsed.records.length - unique.size),
     collectionsEnsured,
     linkedRefresh,
+  };
+}
+
+async function loadOfficialExtractRecords(rootDir: string): Promise<{
+  filesScanned: number;
+  records: ParsedBankRecord[];
+  duplicatesInFile: string[];
+}> {
+  const files = await walkExtractFiles(rootDir);
+  const records: ParsedBankRecord[] = [];
+  const duplicatesInFile: string[] = [];
+  for (const file of files) {
+    const text = await readFile(file, "utf8");
+    const fileParsed = parseCollegeBoardPayload(text, file);
+    records.push(...fileParsed.records);
+    duplicatesInFile.push(...fileParsed.duplicatesInFile);
+  }
+  return { filesScanned: files.length, records, duplicatesInFile };
+}
+
+function existingReimportRow(row: typeof bankQuestionsTable.$inferSelect): ExistingBankReimportRow {
+  return {
+    ...reimportContentFromRecord({
+      sourceKey: row.sourceKey,
+      dedupKey: row.sourceKey,
+      examFamily: row.examFamily as ParsedBankRecord["examFamily"],
+      examVariant: row.examVariant ?? "",
+      practiceTestNumber: row.practiceTestNumber,
+      formCode: row.formCode,
+      section: row.section as ParsedBankRecord["section"],
+      module: row.module,
+      questionNumber: row.questionNumber,
+      position: row.position,
+      collectionSlug: "",
+      collectionTitle: "",
+      prompt: row.prompt,
+      stimulus: row.stimulus,
+      choices: Array.isArray(row.choices) ? row.choices : [],
+      correctAnswer: row.correctAnswer,
+      officialExplanation: row.officialExplanation ?? "",
+      figures: Array.isArray(row.figures) ? row.figures : [],
+      scoring: {},
+      skill: row.skill,
+      domain: row.domain,
+      difficulty: row.difficulty,
+      questionType: row.questionType,
+      estimatedSeconds: row.estimatedSeconds,
+      sourceKind: row.sourceKind === "seed" ? "seed" : "official_extract",
+      sourceFiles: {},
+      assets: [],
+      extractGaps: (row.extractGaps ?? {}) as ParsedBankRecord["extractGaps"],
+      assignable: false,
+    }),
+    linkedQuestionId: row.linkedQuestionId,
+  };
+}
+
+async function questionIdsOnAttemptedSets(questionIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(questionIds.filter((id) => id.trim() !== ""))];
+  if (ids.length === 0) return new Set();
+  const fromAttempts = await db
+    .select({ questionId: assignmentQuestionsTable.questionId })
+    .from(assignmentQuestionsTable)
+    .innerJoin(attemptsTable, eq(attemptsTable.assignmentId, assignmentQuestionsTable.assignmentId))
+    .where(inArray(assignmentQuestionsTable.questionId, ids));
+  const fromResponses = await db
+    .select({ questionId: responsesTable.questionId })
+    .from(responsesTable)
+    .where(inArray(responsesTable.questionId, ids));
+  return new Set(
+    [...fromAttempts, ...fromResponses]
+      .map((row) => row.questionId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
+}
+
+export type CollegeBoardReimportReport = {
+  dryRun: boolean;
+  filesScanned: number;
+  inserts: string[];
+  updates: string[];
+  unchanged: number;
+  duplicatesSkipped: string[];
+  duplicateBankSourceKeys: string[];
+  skippedSeeds: string[];
+  hardMathTailUpdates: string[];
+  /** Source keys whose linked question sits on an attempted set. The question row is not rewritten. */
+  attemptedSetsUntouched: string[];
+  questionRewrites: string[];
+  inserted?: number;
+  updated?: number;
+  questionsRewritten?: number;
+};
+
+/**
+ * Compare the repo JSONL to the bank. Dry run writes nothing.
+ * Apply upserts only the exact source-key list and does not rewrite a question
+ * that already belongs to an attempted set.
+ */
+export async function runCollegeBoardReimport(input: {
+  dryRun: boolean;
+  rootDir?: string;
+  sourceKeys?: readonly string[];
+}): Promise<CollegeBoardReimportReport> {
+  const rootDir = resolveCollegeBoardRoot(input.rootDir ?? SAT_BANK_IMPORT_ROOT);
+  const loaded = await loadOfficialExtractRecords(rootDir);
+  const existingRows = await db.select().from(bankQuestionsTable);
+  const plan = planBankReimportDiff({
+    records: loaded.records,
+    duplicatesInFile: loaded.duplicatesInFile,
+    existing: existingRows.map(existingReimportRow),
+  });
+  const linkedBySource = new Map(
+    existingRows
+      .filter((row) => row.linkedQuestionId)
+      .map((row) => [row.sourceKey, row.linkedQuestionId!]),
+  );
+  const attemptedQuestions = await questionIdsOnAttemptedSets([...linkedBySource.values()]);
+  const changed = new Set([...plan.inserts, ...plan.updates]);
+  const attemptedSetsUntouched = [...changed].filter((sourceKey) => {
+    const linked = linkedBySource.get(sourceKey);
+    return Boolean(linked && attemptedQuestions.has(linked));
+  });
+  const questionRewrites = plan.updates.filter((sourceKey) => {
+    const linked = linkedBySource.get(sourceKey);
+    return Boolean(linked && !attemptedQuestions.has(linked));
+  });
+  const report: CollegeBoardReimportReport = {
+    dryRun: input.dryRun !== false,
+    filesScanned: loaded.filesScanned,
+    inserts: plan.inserts,
+    updates: plan.updates,
+    unchanged: plan.unchanged.length,
+    duplicatesSkipped: plan.duplicatesSkipped,
+    duplicateBankSourceKeys: plan.duplicateBankSourceKeys,
+    skippedSeeds: plan.skippedSeeds,
+    hardMathTailUpdates: plan.hardMathTailUpdates,
+    attemptedSetsUntouched,
+    questionRewrites,
+  };
+  if (input.dryRun !== false) return report;
+
+  const decision = reimportApplySourceKeys(input.sourceKeys ?? [], plan);
+  if (!decision.ok) {
+    throw Object.assign(new Error("Reimport source keys must match the JSONL exactly."), {
+      status: 400,
+      rejectedIds: decision.rejectedIds,
+    });
+  }
+  const recordByKey = new Map(loaded.records.map((record) => [record.sourceKey, record]));
+  const writable = decision.sourceKeys.filter((sourceKey) => changed.has(sourceKey));
+  const records = writable.flatMap((sourceKey) => {
+    const record = recordByKey.get(sourceKey);
+    return record ? [record] : [];
+  });
+  const written = records.length > 0 ? await upsertBankRecords(records) : { inserted: 0, updated: 0 };
+  let questionsRewritten = 0;
+  const refreshed = await db
+    .select({
+      id: bankQuestionsTable.id,
+      sourceKey: bankQuestionsTable.sourceKey,
+      linkedQuestionId: bankQuestionsTable.linkedQuestionId,
+    })
+    .from(bankQuestionsTable)
+    .where(inArray(bankQuestionsTable.sourceKey, decision.sourceKeys));
+  const stillAttempted = await questionIdsOnAttemptedSets(
+    refreshed.flatMap((row) => (row.linkedQuestionId ? [row.linkedQuestionId] : [])),
+  );
+  for (const row of refreshed) {
+    if (!writable.includes(row.sourceKey) || !row.linkedQuestionId) continue;
+    if (stillAttempted.has(row.linkedQuestionId)) continue;
+    if (await questionHasResponses(row.linkedQuestionId)) continue;
+    await materializeBankQuestionInternal(row.id);
+    questionsRewritten += 1;
+  }
+  return {
+    ...report,
+    dryRun: false,
+    inserted: written.inserted,
+    updated: written.updated,
+    questionsRewritten,
+    questionRewrites: refreshed
+      .filter(
+        (row) =>
+          writable.includes(row.sourceKey) &&
+          Boolean(row.linkedQuestionId) &&
+          !stillAttempted.has(row.linkedQuestionId!),
+      )
+      .map((row) => row.sourceKey),
+    attemptedSetsUntouched: refreshed
+      .filter((row) => row.linkedQuestionId && stillAttempted.has(row.linkedQuestionId))
+      .map((row) => row.sourceKey),
   };
 }
 
@@ -1124,7 +1324,26 @@ export async function assignPreworkFromBank(input: {
       { status: 409, shortfall: true },
     );
   }
-  if (homeworkKind === "routine" && !canAssignCleanStudentQuizSet(routineItems)) {
+  if (
+    hardMode &&
+    (auditQuizItems(routineItems).residualJunk > 0 ||
+      routineItems.some((item) => isTrueSprQuizItem(item) || !auditStudentQuizItem(item).ok))
+  ) {
+    throw Object.assign(
+      new Error(
+        formatDiagnosticAssignBlock(routineComposition ?? summarizeDiagnosticComposition([])).replace(
+          "Diagnostic assign blocked",
+          "SAT pre-work assign blocked",
+        ),
+      ),
+      {
+        status: 409,
+        composition: routineComposition,
+        assignBlocked: true,
+      },
+    );
+  }
+  if (homeworkKind === "routine" && !hardMode && !canAssignCleanStudentQuizSet(routineItems)) {
     throw Object.assign(
       new Error(
         formatDiagnosticAssignBlock(routineComposition ?? summarizeDiagnosticComposition([])).replace(

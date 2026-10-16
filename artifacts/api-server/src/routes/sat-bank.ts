@@ -39,6 +39,7 @@ import {
   getSessionLesson,
   importCollegeBoardExtracts,
   listBankCollections,
+  runCollegeBoardReimport,
   listBankQuestions,
   recordRetryOutcome,
   refreshLinkedQuestionsFromBank,
@@ -138,6 +139,45 @@ router.post(
       ...ImportSatBankResponse.parse(result),
       linkedRefresh: result.linkedRefresh,
     });
+  },
+);
+
+router.post(
+  "/admin/sat-bank/reimport",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const body = req.body ?? {};
+    if (body == null || typeof body !== "object" || Array.isArray(body)) {
+      res.status(400).json({ error: "Invalid reimport request" });
+      return;
+    }
+    const record = body as Record<string, unknown>;
+    const dryRun = record.dryRun !== false;
+    if (!dryRun) {
+      if (!Array.isArray(record.sourceKeys) || record.sourceKeys.some((key) => typeof key !== "string")) {
+        res.status(400).json({ error: "sourceKeys must be an array of source keys" });
+        return;
+      }
+    }
+    try {
+      const result = await runCollegeBoardReimport({
+        dryRun,
+        sourceKeys: Array.isArray(record.sourceKeys)
+          ? record.sourceKeys.filter((key): key is string => typeof key === "string")
+          : undefined,
+      });
+      res.json(result);
+    } catch (error) {
+      const rejectedIds = (error as { rejectedIds?: string[] }).rejectedIds;
+      if (rejectedIds) {
+        res.status(400).json({
+          error: error instanceof Error ? error.message : "Reimport rejected",
+          rejectedIds,
+        });
+        return;
+      }
+      serviceError(res, error, "Could not reimport the SAT bank");
+    }
   },
 );
 

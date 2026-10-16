@@ -27,9 +27,11 @@ import {
   HARD_SAT_PREWORK_QUESTIONS,
   SAT_DIFFICULTY_SETTINGS,
   hardSatFacingTextIsGarbled,
+  hardSatSectionQuotas,
   hardSatSetIsComplete,
   inSessionQuestionTargetForStudent,
   isHardSatBankItem,
+  isOfficialModule2BankItem,
   hardSatStudentFacing,
   isDeveloperSeededSatItem,
   isRenderableHardSatItem,
@@ -140,7 +142,7 @@ test("hard difficulty starts the session after Oct 16 and stays reusable", () =>
   );
 });
 
-test("hard selection stays on module 2 tails, skips repeats, and prefers unseen tests", () => {
+test("hard selection takes the hardest official module 2 items and balances sections", () => {
   const items = [4, 5, 6].flatMap((testNumber) => [
     candidate(testNumber, "rw", 14),
     candidate(testNumber, "rw", 15),
@@ -148,11 +150,15 @@ test("hard selection stays on module 2 tails, skips repeats, and prefers unseen 
     candidate(testNumber, "math", 17),
     candidate(testNumber, "math", 18),
     candidate(testNumber, "math", 19),
-    { ...candidate(testNumber, "rw", 20), module: 1 },
+    { ...candidate(testNumber, "rw", 20), module: 1, sourceKey: `sat-pt${testNumber}-rw-m1-q20`, id: `m1-${testNumber}` },
   ]);
   assert.equal(isHardSatBankItem(candidate(5, "rw", 14)), false);
   assert.equal(isHardSatBankItem(candidate(5, "math", 17)), false);
   assert.equal(isHardSatBankItem({ ...candidate(5, "rw", 20), module: 1 }), false);
+  assert.equal(isOfficialModule2BankItem(candidate(5, "rw", 14)), true);
+  assert.equal(isOfficialModule2BankItem({ ...candidate(5, "rw", 20), module: 1 }), false);
+  assert.deepEqual(hardSatSectionQuotas(40), { rw: 22, math: 18 });
+  assert.deepEqual(hardSatSectionQuotas(20), { rw: 11, math: 9 });
   const selected = selectHardSatQuestions(items, {
     targetCount: 4,
     minCount: 4,
@@ -163,20 +169,42 @@ test("hard selection stays on module 2 tails, skips repeats, and prefers unseen 
   assert.deepEqual(
     selected.map((item) => item.sourceKey),
     [
+      "sat-pt4-rw-m2-q16",
       "sat-pt5-rw-m2-q16",
-      "sat-pt5-math-m2-q18",
+      "sat-pt4-math-m2-q19",
       "sat-pt5-math-m2-q19",
-      "sat-pt6-rw-m2-q15",
     ],
   );
-  const backfill = selectHardSatQuestions(items, {
+  const seenTestsDoNotOutrankDifficulty = selectHardSatQuestions(items, {
     targetCount: 4,
     minCount: 4,
     maxCount: 4,
     seenPracticeTests: new Set([5, 6]),
   });
-  assert.equal(backfill[0]?.practiceTestNumber, 4);
-  assert.equal(backfill.length, 4);
+  assert.deepEqual(
+    seenTestsDoNotOutrankDifficulty.map((item) => item.sourceKey),
+    [
+      "sat-pt4-rw-m2-q16",
+      "sat-pt5-rw-m2-q16",
+      "sat-pt4-math-m2-q19",
+      "sat-pt5-math-m2-q19",
+    ],
+  );
+  const shortMath = selectHardSatQuestions(
+    [
+      candidate(4, "rw", 23),
+      candidate(4, "rw", 22),
+      candidate(4, "rw", 21),
+      candidate(4, "rw", 20),
+      candidate(4, "math", 22),
+      { ...candidate(4, "rw", 27), module: 1, sourceKey: "module-1", id: "module-1" },
+    ],
+    { targetCount: 4, minCount: 4, maxCount: 4 },
+  );
+  assert.deepEqual(
+    shortMath.map((item) => item.sourceKey),
+    ["sat-pt4-rw-m2-q23", "sat-pt4-rw-m2-q22", "sat-pt4-rw-m2-q21", "sat-pt4-math-m2-q22"],
+  );
   const sets = planHardSatSessionSets(items, {
     excludeSourceKeys: new Set(["sat-pt4-rw-m2-q15"]),
     seenPracticeTests: new Set([4]),
@@ -193,6 +221,21 @@ test("hard selection stays on module 2 tails, skips repeats, and prefers unseen 
   assert.equal(sets.preworkTimeLimitMinutes, routinePreworkTimeLimitMinutes(4));
   assert.equal(sets.inSessionTimeLimitMinutes, HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES);
   assert.equal(sets.inSessionTimeLimitMinutes, 30);
+  const scarceMath = planHardSatSessionSets(
+    [
+      candidate(5, "rw", 30),
+      candidate(5, "rw", 29),
+      candidate(5, "rw", 28),
+      candidate(5, "rw", 27),
+      candidate(5, "math", 22),
+    ],
+    { preworkTarget: 4, preworkMin: 4, preworkMax: 4, inSessionMax: 2 },
+  );
+  assert.deepEqual(
+    scarceMath.prework.map((item) => item.sourceKey),
+    ["sat-pt5-rw-m2-q30", "sat-pt5-rw-m2-q29", "sat-pt5-math-m2-q22", "sat-pt5-rw-m2-q27"],
+  );
+  assert.deepEqual(scarceMath.inSession.map((item) => item.sourceKey), ["sat-pt5-rw-m2-q28"]);
 });
 
 test("attempted pre-work is not refreshed, and garbled math is not renderable", () => {
@@ -295,6 +338,8 @@ test("attempted pre-work is not refreshed, and garbled math is not renderable", 
     correctAnswer: "A",
   };
   assert.equal(isRenderableHardSatItem(clean), true);
+  assert.equal(isRenderableHardSatItem({ ...clean, questionNumber: 10 }), true);
+  assert.equal(isHardSatBankItem({ ...clean, questionNumber: 10 }), false);
   assert.equal(isRenderableHardSatItem({ ...clean, module: 1, questionNumber: 20 }), false);
   const repairedMath: RenderableHardSatInput = {
     ...candidate(5, "math", 24),
@@ -484,6 +529,32 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   assert.match(submitAttempt, /prepareCurriculum: true/);
   const shared = readFileSync(new URL("./sat-bank-service.ts", import.meta.url), "utf8");
   assert.match(shared, /toRenderableHardSatInput/);
+  const reimportFn = shared.slice(
+    shared.indexOf("export async function runCollegeBoardReimport"),
+    shared.indexOf("let officialImportPromise"),
+  );
+  assert.match(reimportFn, /if \(input\.dryRun !== false\) return report/);
+  const upsertAt = reimportFn.indexOf("upsertBankRecords");
+  const dryReturnAt = reimportFn.indexOf("if (input.dryRun !== false) return report");
+  assert.ok(dryReturnAt >= 0 && upsertAt > dryReturnAt);
+  assert.doesNotMatch(reimportFn, /refreshLinkedQuestionsFromBank|dropUnusableQuestionsFromLiveAssignments/);
+  assert.match(reimportFn, /questionIdsOnAttemptedSets|stillAttempted/);
+  const boot = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(boot, /runCollegeBoardReimport/);
+  const bankRoute = readFileSync(new URL("../routes/sat-bank.ts", import.meta.url), "utf8");
+  const reimportRoute = bankRoute.slice(
+    bankRoute.indexOf('"/admin/sat-bank/reimport"'),
+    bankRoute.indexOf('"/admin/sat-bank/rescore-usable"'),
+  );
+  assert.match(reimportRoute, /dryRun !== false/);
+  assert.match(reimportRoute, /ensureRole\(\["administrator"\]\)/);
+  assert.doesNotMatch(reimportRoute, /sendEmail|sendMail|resend|nodemailer|clerk/i);
+  const officialBoot = shared.slice(
+    shared.indexOf("export async function ensureOfficialExtractsImported"),
+    shared.indexOf("async function materializeBankQuestionInternal"),
+  );
+  assert.match(officialBoot, /officialCount > 0/);
+  assert.doesNotMatch(officialBoot, /runCollegeBoardReimport/);
   assert.match(hardSets, /toRenderableHardSatInput/);
   assert.equal(
     toRenderableHardSatInput({
@@ -801,8 +872,20 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
   );
   const rwCount = hardPool.filter((record) => record.section === "rw").length;
   const mathCount = hardPool.filter((record) => record.section === "math").length;
+  const tailRw = hardPool.filter((record) => record.section === "rw" && record.questionNumber >= 15).length;
+  const tailMath = hardPool.filter((record) => record.section === "math" && record.questionNumber >= 18).length;
   const dates = ["2026-10-30", "2026-11-06", "2026-11-20", "2026-11-27", "2026-12-11", "2026-12-18"];
   const used = new Set(seenKeys);
+  const sectionMix = (items: ReadonlyArray<{ section: string; questionNumber: number }>) => {
+    const rw = items.filter((item) => item.section === "rw");
+    const math = items.filter((item) => item.section === "math");
+    return {
+      rw: rw.length,
+      math: math.length,
+      minRw: rw.length ? Math.min(...rw.map((item) => item.questionNumber)) : null,
+      minMath: math.length ? Math.min(...math.map((item) => item.questionNumber)) : null,
+    };
+  };
   const coverage = [];
   for (const sessionDateKey of dates) {
     const target = inSessionQuestionTargetForStudent({
@@ -824,27 +907,80 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       inSessionCount: planned.inSession.length,
       inSessionTarget: target,
     });
+    for (const item of [...planned.prework, ...planned.inSession]) {
+      assert.equal(item.module, 2, item.sourceKey);
+      assert.equal(used.has(item.sourceKey), false, item.sourceKey);
+    }
+    const keys = new Set([...planned.prework, ...planned.inSession].map((item) => item.sourceKey));
+    assert.equal(keys.size, planned.prework.length + planned.inSession.length, sessionDateKey);
     coverage.push({
       sessionDateKey,
       full,
-      prework: planned.prework.length,
-      inSession: planned.inSession.length,
+      prework: sectionMix(planned.prework),
+      inSession: sectionMix(planned.inSession),
     });
-    if (!full) break;
+    if (!full) continue;
     for (const item of [...planned.prework, ...planned.inSession]) used.add(item.sourceKey);
   }
   const covered = coverage.filter((row) => row.full).length;
-  console.log(JSON.stringify({ usableHardRw: rwCount, usableHardMath: mathCount, covered, coverage }, null, 2));
-  assert.equal(rwCount, 133);
-  assert.equal(mathCount, 33);
-  assert.equal(covered, 2);
-  assert.equal(coverage[0]?.full, true);
-  assert.equal(coverage[1]?.full, true);
-  assert.equal(hardSatSetIsComplete({
-    preworkCount: coverage[2]?.prework ?? 0,
-    inSessionCount: coverage[2]?.inSession ?? 0,
-    inSessionTarget: 20,
-  }), false);
+  console.log(
+    JSON.stringify(
+      { usableModule2Rw: rwCount, usableModule2Math: mathCount, tailRw, tailMath, covered, coverage },
+      null,
+      2,
+    ),
+  );
+  assert.equal(tailRw, 133);
+  assert.equal(tailMath, 33);
+  assert.equal(rwCount, 208);
+  assert.equal(mathCount, 48);
+  assert.deepEqual(
+    coverage.map((row) => ({
+      sessionDateKey: row.sessionDateKey,
+      full: row.full,
+      prework: row.prework,
+      inSession: row.inSession,
+    })),
+    [
+      {
+        sessionDateKey: "2026-10-30",
+        full: true,
+        prework: { rw: 30, math: 10, minRw: 27, minMath: 24 },
+        inSession: { rw: 15, math: 5, minRw: 27, minMath: 23 },
+      },
+      {
+        sessionDateKey: "2026-11-06",
+        full: true,
+        prework: { rw: 40, math: 0, minRw: 19, minMath: null },
+        inSession: { rw: 20, math: 0, minRw: 17, minMath: null },
+      },
+      {
+        sessionDateKey: "2026-11-20",
+        full: true,
+        prework: { rw: 40, math: 0, minRw: 4, minMath: null },
+        inSession: { rw: 20, math: 0, minRw: 3, minMath: null },
+      },
+      {
+        sessionDateKey: "2026-11-27",
+        full: false,
+        prework: { rw: 7, math: 0, minRw: 2, minMath: null },
+        inSession: { rw: 3, math: 0, minRw: 1, minMath: null },
+      },
+      {
+        sessionDateKey: "2026-12-11",
+        full: false,
+        prework: { rw: 7, math: 0, minRw: 2, minMath: null },
+        inSession: { rw: 3, math: 0, minRw: 1, minMath: null },
+      },
+      {
+        sessionDateKey: "2026-12-18",
+        full: false,
+        prework: { rw: 7, math: 0, minRw: 2, minMath: null },
+        inSession: { rw: 3, math: 0, minRw: 1, minMath: null },
+      },
+    ],
+  );
+  assert.equal(covered, 3);
   const pt5 = records.find((record) => record.sourceKey === "sat-pt5-math-m2-q18");
   assert.ok(pt5);
   assert.match(pt5.prompt, /4√\(2x\) = 16/);

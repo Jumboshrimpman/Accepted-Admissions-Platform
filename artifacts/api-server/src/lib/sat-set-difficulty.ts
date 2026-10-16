@@ -12,7 +12,6 @@ import {
 import {
   DEFAULT_ROUTINE_PREWORK_QUESTIONS,
   ROUTINE_PREWORK_MAX_QUESTIONS,
-  ROUTINE_PREWORK_MIN_QUESTIONS,
   routinePreworkTimeLimitMinutes,
 } from "./sat-bank-timing.ts";
 import { MAX_IN_SESSION_HOMEWORK_QUESTIONS } from "./session-homework.ts";
@@ -229,11 +228,36 @@ function facingPasses(item: RenderableHardSatInput, facing: {
 }
 
 /**
- * Student-facing text for a hard item. Returns null when the stem, choices,
- * or math still do not render after notation repair.
+ * Official module 2, any question number. The hard tail
+ * (`isHardSatBankItem`) is the top of this pool; lower module 2 numbers are
+ * the next-hardest band. Module 1 stays out.
+ */
+export function isOfficialModule2BankItem(item: {
+  section?: string | null;
+  module?: number | null;
+}): boolean {
+  if (Number(item.module) !== HARD_SAT_MODULE) return false;
+  return satSection(item.section) != null;
+}
+
+/** Digital SAT section mix: 54 reading-and-writing and 44 math out of 98. */
+export const SAT_RW_ITEM_SHARE = 54;
+export const SAT_MATH_ITEM_SHARE = 44;
+export const SAT_SECTION_ITEM_TOTAL = SAT_RW_ITEM_SHARE + SAT_MATH_ITEM_SHARE;
+
+/** Balanced slot counts for a set of `count` questions. */
+export function hardSatSectionQuotas(count: number): { rw: number; math: number } {
+  if (!Number.isFinite(count) || count <= 0) return { rw: 0, math: 0 };
+  const rw = Math.round((count * SAT_RW_ITEM_SHARE) / SAT_SECTION_ITEM_TOTAL);
+  return { rw, math: count - rw };
+}
+
+/**
+ * Student-facing text for an official module 2 item. Returns null when the
+ * stem, choices, or math still do not render after notation repair.
  */
 export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacing | null {
-  if (!isHardSatBankItem(item)) return null;
+  if (!isOfficialModule2BankItem(item)) return null;
   if (isDeveloperSeededSatItem(item)) return null;
   if (
     !isOfficialSatExtract({
@@ -344,8 +368,9 @@ export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacin
 }
 
 /**
- * Hard bank items that still render: official SAT module 2 MCQ, complete
- * choices, and the shared student-usable gate. Developer seeds, garbled
+ * Official SAT module 2 MCQs that still render: complete choices and the
+ * shared student-usable gate. The hard tail is preferred at selection time;
+ * lower module 2 numbers stay eligible. Developer seeds, module 1, garbled
  * extracts, and wrong figures stay out. Notation-only repairs can qualify
  * an item; missing text cannot.
  */
@@ -531,42 +556,47 @@ export function coercePracticeTestNumber(value: unknown): number | null {
   return null;
 }
 
-function byQuestionNumber<T extends HardSatCandidate>(left: T, right: T): number {
-  const questionDelta = left.questionNumber - right.questionNumber;
+/** Highest question number first. Same number breaks by practice test, then source key. */
+function byHardestFirst<T extends HardSatCandidate>(left: T, right: T): number {
+  const questionDelta = right.questionNumber - left.questionNumber;
   if (questionDelta !== 0) return questionDelta;
+  const leftTest = coercePracticeTestNumber(left.practiceTestNumber) ?? 999;
+  const rightTest = coercePracticeTestNumber(right.practiceTestNumber) ?? 999;
+  if (leftTest !== rightTest) return leftTest - rightTest;
   return left.sourceKey.localeCompare(right.sourceKey);
 }
 
-function takeAlternatingFromTests<T extends HardSatCandidate>(
+/**
+ * Fill a balanced RW/math quota from the hardest remaining items.
+ * A short section is topped up from the other section's next-hardest items.
+ */
+function takeBalancedHardestFirst<T extends HardSatCandidate>(
   items: readonly T[],
-  testNumbers: readonly number[],
   limit: number,
 ): T[] {
-  const selected: T[] = [];
-  for (const testNumber of testNumbers) {
-    if (selected.length >= limit) break;
-    const group = items.filter((item) => item.practiceTestNumber === testNumber);
-    const rw = group.filter((item) => satSection(item.section) === "rw").sort(byQuestionNumber);
-    const math = group.filter((item) => satSection(item.section) === "math").sort(byQuestionNumber);
-    let rwIndex = 0;
-    let mathIndex = 0;
-    let preferRw = true;
-    while (selected.length < limit) {
-      const next = preferRw
-        ? (rw[rwIndex++] ?? math[mathIndex++])
-        : (math[mathIndex++] ?? rw[rwIndex++]);
-      if (!next) break;
-      selected.push(next);
-      preferRw = !preferRw;
-    }
+  if (limit <= 0) return [];
+  const rw = items.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
+  const math = items.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
+  const quota = hardSatSectionQuotas(limit);
+  const selectedRw = rw.slice(0, quota.rw);
+  const selectedMath = math.slice(0, quota.math);
+  const rwShort = quota.rw - selectedRw.length;
+  const mathShort = quota.math - selectedMath.length;
+  if (mathShort > 0) {
+    selectedRw.push(...rw.slice(selectedRw.length, selectedRw.length + mathShort));
   }
-  return selected;
+  if (rwShort > 0) {
+    selectedMath.push(...math.slice(selectedMath.length, selectedMath.length + rwShort));
+  }
+  return [...selectedRw, ...selectedMath].slice(0, limit);
 }
 
 /**
- * Late module 2 items, earliest unseen practice test first.
- * When unseen tests cannot fill `minCount`, remaining slots come from
- * unseen question ids on tests the student has already touched.
+ * Official module 2 items, hardest question number first, balanced toward
+ * the SAT's 54/44 reading-and-writing and math mix. The module 2 tail
+ * (RW ≥ 15, math ≥ 18) is consumed before lower numbers because those
+ * numbers sort first. `seenPracticeTests` does not change the order:
+ * repeats are excluded by source key.
  */
 export function selectHardSatQuestions<T extends HardSatCandidate>(
   items: readonly T[],
@@ -580,42 +610,82 @@ export function selectHardSatQuestions<T extends HardSatCandidate>(
 ): T[] {
   const maxCount = options.maxCount ?? options.targetCount ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS;
   const targetCount = Math.min(maxCount, options.targetCount ?? maxCount);
-  const minCount = options.minCount ?? 0;
   const exclude = options.excludeSourceKeys ?? new Set<string>();
-  const seenTests = options.seenPracticeTests ?? new Set<number>();
+  void options.seenPracticeTests;
+  void options.minCount;
   const unique: T[] = [];
   const seenKeys = new Set<string>();
   for (const item of items) {
     if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
-    if (!isHardSatBankItem(item)) continue;
+    if (!isOfficialModule2BankItem(item)) continue;
     seenKeys.add(item.sourceKey);
     unique.push(item);
   }
-  const testNumbers = [
-    ...new Set(
-      unique
-        .map((item) => coercePracticeTestNumber(item.practiceTestNumber))
-        .filter((value): value is number => value != null),
-    ),
-  ];
-  const unseen = testNumbers.filter((testNumber) => !seenTests.has(testNumber)).sort((a, b) => a - b);
-  const seen = testNumbers.filter((testNumber) => seenTests.has(testNumber)).sort((a, b) => a - b);
-  let selected = takeAlternatingFromTests(unique, unseen, targetCount);
-  if (selected.length < minCount) {
-    const backfill = takeAlternatingFromTests(unique, seen, targetCount - selected.length);
-    selected = selected.concat(backfill);
+  return takeBalancedHardestFirst(unique, targetCount).slice(0, maxCount);
+}
+
+function shareScarceSection<T>(
+  items: readonly T[],
+  preIdeal: number,
+  inIdeal: number,
+  preCap: number,
+  inCap: number,
+): { pre: T[]; inSession: T[]; rest: T[] } {
+  const ideal = preIdeal + inIdeal;
+  if (ideal <= 0 || items.length === 0 || (preCap <= 0 && inCap <= 0)) {
+    return { pre: [], inSession: [], rest: [...items] };
   }
-  if (selected.length < minCount) {
-    const chosen = new Set(selected.map((item) => item.sourceKey));
-    const unnumbered = unique
-      .filter((item) => coercePracticeTestNumber(item.practiceTestNumber) == null && !chosen.has(item.sourceKey))
-      .sort(byQuestionNumber);
-    for (const item of unnumbered) {
-      if (selected.length >= targetCount) break;
-      selected.push(item);
+  let preN = 0;
+  let inN = 0;
+  if (items.length >= ideal) {
+    preN = Math.min(preIdeal, preCap);
+    inN = Math.min(inIdeal, inCap);
+  } else {
+    preN = Math.min(preCap, Math.round((items.length * preIdeal) / ideal));
+    inN = Math.min(inCap, items.length - preN);
+  }
+  return {
+    pre: items.slice(0, preN),
+    inSession: items.slice(preN, preN + inN),
+    rest: items.slice(preN + inN),
+  };
+}
+
+function fillFromRest<T extends HardSatCandidate>(bucket: T[], need: number, rests: T[][]): void {
+  while (bucket.length < need) {
+    let bestIndex = -1;
+    for (let index = 0; index < rests.length; index += 1) {
+      const next = rests[index]?.[0];
+      if (!next) continue;
+      if (bestIndex < 0 || byHardestFirst(next, rests[bestIndex]![0]!) < 0) bestIndex = index;
     }
+    if (bestIndex < 0) break;
+    bucket.push(rests[bestIndex]!.shift()!);
   }
-  return selected.slice(0, maxCount);
+}
+
+/**
+ * Plan pre-work and in-session together so a scarce section is shared
+ * instead of being spent entirely on the first set. Leftover slots are
+ * filled from the other section. A short return means the official module 2
+ * pool cannot fill both sets.
+ */
+function allocateHardSatSets<T extends HardSatCandidate>(
+  rw: readonly T[],
+  math: readonly T[],
+  preCount: number,
+  inCount: number,
+): { prework: T[]; inSession: T[] } {
+  const preQuota = hardSatSectionQuotas(preCount);
+  const inQuota = hardSatSectionQuotas(inCount);
+  const rwShare = shareScarceSection(rw, preQuota.rw, inQuota.rw, preCount, inCount);
+  const mathShare = shareScarceSection(math, preQuota.math, inQuota.math, preCount, inCount);
+  const prework = [...rwShare.pre, ...mathShare.pre];
+  const inSession = [...rwShare.inSession, ...mathShare.inSession];
+  const rests = [rwShare.rest, mathShare.rest];
+  fillFromRest(prework, preCount, rests);
+  fillFromRest(inSession, inCount, rests);
+  return { prework: prework.slice(0, preCount), inSession: inSession.slice(0, inCount) };
 }
 
 export function planHardSatSessionSets<T extends HardSatCandidate>(
@@ -635,28 +705,26 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
   inSessionTimeLimitMinutes: number;
 } {
   const exclude = options.excludeSourceKeys ?? new Set<string>();
-  const seenPracticeTests = options.seenPracticeTests ?? new Set<number>();
-  const prework = selectHardSatQuestions(items, {
-    targetCount: options.preworkTarget ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS,
-    minCount: options.preworkMin ?? ROUTINE_PREWORK_MIN_QUESTIONS,
-    maxCount: options.preworkMax ?? ROUTINE_PREWORK_MAX_QUESTIONS,
-    excludeSourceKeys: exclude,
-    seenPracticeTests,
-  });
-  const inSessionExclude = new Set<string>(exclude);
-  for (const item of prework) inSessionExclude.add(item.sourceKey);
-  const inSessionMax = options.inSessionMax ?? HARD_SAT_IN_SESSION_MAX_QUESTIONS;
-  const inSession = selectHardSatQuestions(items, {
-    targetCount: inSessionMax,
-    minCount: inSessionMax,
-    maxCount: inSessionMax,
-    excludeSourceKeys: inSessionExclude,
-    seenPracticeTests,
-  });
+  void options.seenPracticeTests;
+  void options.preworkMin;
+  const preworkMax = options.preworkMax ?? options.preworkTarget ?? DEFAULT_ROUTINE_PREWORK_QUESTIONS;
+  const preCount = Math.min(preworkMax, options.preworkTarget ?? preworkMax);
+  const inCount = options.inSessionMax ?? HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+  const unique: T[] = [];
+  const seenKeys = new Set<string>();
+  for (const item of items) {
+    if (!item.sourceKey || exclude.has(item.sourceKey) || seenKeys.has(item.sourceKey)) continue;
+    if (!isOfficialModule2BankItem(item)) continue;
+    seenKeys.add(item.sourceKey);
+    unique.push(item);
+  }
+  const rw = unique.filter((item) => satSection(item.section) === "rw").sort(byHardestFirst);
+  const math = unique.filter((item) => satSection(item.section) === "math").sort(byHardestFirst);
+  const allocated = allocateHardSatSets(rw, math, preCount, inCount);
   return {
-    prework,
-    inSession,
-    preworkTimeLimitMinutes: routinePreworkTimeLimitMinutes(prework.length),
+    prework: allocated.prework,
+    inSession: allocated.inSession,
+    preworkTimeLimitMinutes: routinePreworkTimeLimitMinutes(allocated.prework.length),
     inSessionTimeLimitMinutes: HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
   };
 }
