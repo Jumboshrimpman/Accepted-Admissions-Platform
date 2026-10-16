@@ -68,7 +68,48 @@ function hashSeed(id: string): number {
   return (mixed ^ (mixed >>> 16)) >>> 0;
 }
 
-function shuffledChoices(correct: string, distractors: readonly string[], id: string): {
+function shuffleWithSeed<T>(items: readonly T[], seedId: string): T[] {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const mixed = hashSeed(`${seedId}:${index}`) || 1;
+    const swap = Math.floor((mixed / 4294967296) * (index + 1));
+    const hold = copy[index]!;
+    copy[index] = copy[swap]!;
+    copy[swap] = hold;
+  }
+  return copy;
+}
+
+/** Seeded letters for one block. Ten-item blocks get 2 or 3 of each letter. Not an index cycle. */
+function slotsForSection(dateKey: string, section: "math" | "rw"): Map<number, number> {
+  const blocks = [
+    [35, 34, 33, 32, 31, 30, 29, 28, 27, 26],
+    [25, 24, 23, 22, 21, 20, 19, 18, 17, 16],
+    [15, 14, 13, 12, 11, 10, 9, 8, 7, 6],
+    [5, 4, 3, 2, 1],
+  ];
+  const slots = new Map<number, number>();
+  for (const questions of blocks) {
+    const seedId = `${dateKey}:${section}:${questions[0]}-${questions[questions.length - 1]}`;
+    let bag: number[];
+    if (questions.length === 10) {
+      const rank = shuffleWithSeed([0, 1, 2, 3], `${seedId}:rank`);
+      bag = [];
+      rank.forEach((letter, rankIndex) => {
+        const copies = rankIndex < 2 ? 3 : 2;
+        for (let copy = 0; copy < copies; copy += 1) bag.push(letter);
+      });
+    } else {
+      const extra = hashSeed(`${seedId}:extra`) % 4;
+      bag = [0, 1, 2, 3, extra];
+    }
+    const order = shuffleWithSeed(bag, `${seedId}:order`);
+    questions.forEach((question, index) => slots.set(question, order[index]!));
+  }
+  return slots;
+}
+
+function placedChoices(correct: string, distractors: readonly string[], slot: number, id: string): {
   choices: BankChoice[];
   correctAnswer: string;
 } {
@@ -76,16 +117,8 @@ function shuffledChoices(correct: string, distractors: readonly string[], id: st
   if (distractors.includes(correct) || new Set(distractors).size !== 3) {
     throw new Error(`Distractors collided with ${correct}.`);
   }
-  const slot = hashSeed(id) >>> 30;
-  const rest = [distractors[0]!, distractors[1]!, distractors[2]!];
-  let state = hashSeed(`${id}:choices`) || 1;
-  for (let index = rest.length - 1; index > 0; index -= 1) {
-    state = hashSeed(`${state}:${index}`) || 1;
-    const swap = Math.floor((state / 4294967296) * (index + 1));
-    const hold = rest[index]!;
-    rest[index] = rest[swap]!;
-    rest[swap] = hold;
-  }
+  if (slot < 0 || slot > 3) throw new Error(`Bad slot for ${id}.`);
+  const rest = shuffleWithSeed(distractors, `${id}:wrongs`);
   const texts = ["", "", "", ""];
   texts[slot] = correct;
   let next = 0;
@@ -106,6 +139,7 @@ function shuffledChoices(correct: string, distractors: readonly string[], id: st
 
 function buildMath(dateKey: string, drafts: readonly OriginalHardMathDraft[]): OriginalHardMathItem[] {
   if (drafts.length !== 35) throw new Error(`Expected 35 math items for ${dateKey}.`);
+  const slots = slotsForSection(dateKey, "math");
   return drafts.map((draft, index) => {
     const questionNumber = 35 - index;
     const solved = draft.solve();
@@ -115,7 +149,12 @@ function buildMath(dateKey: string, drafts: readonly OriginalHardMathDraft[]): O
     if (draft.wrong.includes(solved) || new Set(draft.wrong).size !== 3) {
       throw new Error(`${dateKey} math ${questionNumber} distractors collided.`);
     }
-    const placed = shuffledChoices(String(solved), draft.wrong.map(String), sourceKey(dateKey, "math", questionNumber));
+    const placed = placedChoices(
+      String(solved),
+      draft.wrong.map(String),
+      slots.get(questionNumber) ?? -1,
+      sourceKey(dateKey, "math", questionNumber),
+    );
     const explanation = `${draft.because} The result is ${solved}.`;
     if (!explanation.includes(String(solved))) throw new Error("Explanation missed the result.");
     return {
@@ -138,11 +177,12 @@ function buildMath(dateKey: string, drafts: readonly OriginalHardMathDraft[]): O
 
 function buildRw(dateKey: string, drafts: readonly OriginalHardRwDraft[]): OriginalHardRwItem[] {
   if (drafts.length !== 35) throw new Error(`Expected 35 reading items for ${dateKey}.`);
+  const slots = slotsForSection(dateKey, "rw");
   return drafts.map((draft, index) => {
     const questionNumber = 35 - index;
     const blanks = draft.stimulus.split("___").length - 1;
     if (blanks > 1) throw new Error(`${dateKey} rw ${questionNumber} has ${blanks} blanks.`);
-    const placed = shuffledChoices(draft.correct, draft.wrong, sourceKey(dateKey, "rw", questionNumber));
+    const placed = placedChoices(draft.correct, draft.wrong, slots.get(questionNumber) ?? -1, sourceKey(dateKey, "rw", questionNumber));
     return {
       dateKey,
       section: "rw",

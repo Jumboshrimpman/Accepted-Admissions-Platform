@@ -340,11 +340,9 @@ function answerSynthesis(prompt: string, stimulus: string, choices: OriginalHard
     .split(/[.!?]/)
     .map((sentence) => sentence.trim())
     .filter(Boolean);
-  if (sentences.length < 2) throw new Error("The synthesis notes are ambiguous.");
+  if (sentences.length < 1) throw new Error("The synthesis notes are ambiguous.");
   const lead = leadWords(sentences[0]!);
-  const second = leadWords(sentences[1]!);
-  for (const word of lead) second.delete(word);
-  if (lead.size < 2 || second.size < 1) throw new Error("The synthesis notes are ambiguous.");
+  if (lead.size < 2) throw new Error("The synthesis notes are ambiguous.");
   const copied = sentences[0]!.toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
   return unique(
     choices,
@@ -355,9 +353,7 @@ function answerSynthesis(prompt: string, stimulus: string, choices: OriginalHard
       if (normalized === copied) return false;
       let leadHits = 0;
       for (const word of lead) if (hasWord(lower, word)) leadHits += 1;
-      let secondHits = 0;
-      for (const word of second) if (hasWord(lower, word)) secondHits += 1;
-      return leadHits >= 2 && secondHits >= 1;
+      return leadHits >= 2;
     },
     "The synthesis choice is ambiguous.",
   );

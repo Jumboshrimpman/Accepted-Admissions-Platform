@@ -144,6 +144,27 @@ test("original hard items render, stay unique, and fill only the three shortfall
     assert.ok(count >= 45 && count <= 60, `key balance ${JSON.stringify(letters)}`);
   }
   assert.ok(oldCycle < 90, `keys still follow the index cycle (${oldCycle} of 210)`);
+  const blockOf = [
+    ["prework 35-26", (question: number) => question >= 26 && question <= 35],
+    ["prework 25-16", (question: number) => question >= 16 && question <= 25],
+    ["in-session 15-06", (question: number) => question >= 6 && question <= 15],
+  ] as const;
+  for (const dateKey of ORIGINAL_HARD_SAT_DATES) {
+    for (const section of ["rw", "math"] as const) {
+      for (const [name, matches] of blockOf) {
+        const counts = { a: 0, b: 0, c: 0, d: 0 };
+        for (const item of [...math, ...reading]) {
+          if (item.dateKey === dateKey && item.section === section && matches(item.questionNumber)) {
+            counts[item.correctAnswer as "a" | "b" | "c" | "d"] += 1;
+          }
+        }
+        console.log(`${dateKey} ${section} ${name} a=${counts.a} b=${counts.b} c=${counts.c} d=${counts.d}`);
+        for (const count of Object.values(counts)) {
+          assert.ok(count >= 2 && count <= 3, `${dateKey} ${section} ${name} ${JSON.stringify(counts)}`);
+        }
+      }
+    }
+  }
 
   const bags = [...math, ...reading].map((item) => ({
     key: item.sourceKey,
@@ -219,8 +240,25 @@ test("original hard items render, stay unique, and fill only the three shortfall
       const keyed = item.choices.find((choice) => choice.id === item.correctAnswer);
       assert.ok(keyed, item.sourceKey);
       assert.equal(keyed!.text.toLowerCase().includes(words[0]!), false, `${item.sourceKey} repeats ${words[0]}`);
+      for (const word of ["although", "because", "yet", "though", "whereas"]) {
+        const pattern = new RegExp(`\\b${word}\\b`, "i");
+        if (pattern.test(keyed!.text)) {
+          assert.ok(pattern.test(item.stimulus), `${item.sourceKey} adds ${word}`);
+        }
+      }
+      assert.equal(/which is why|even after/i.test(keyed!.text), false, `${item.sourceKey} unsupported connective`);
     }
   }
+  const synthesis = reading.filter((item) => /accomplish this goal/i.test(item.prompt));
+  assert.equal(synthesis.length, 15);
+  let keyIsLongest = 0;
+  for (const item of synthesis) {
+    const keyed = item.choices.find((choice) => choice.id === item.correctAnswer);
+    assert.ok(keyed, item.sourceKey);
+    const longest = Math.max(...item.choices.map((choice) => (choice.text ?? "").length));
+    if ((keyed!.text ?? "").length === longest) keyIsLongest += 1;
+  }
+  assert.ok(keyIsLongest > 0 && keyIsLongest < synthesis.length, `synthesis keys longest ${keyIsLongest}`);
 
   const quiz = readFileSync(new URL("./tutor-reusable-quiz.ts", import.meta.url), "utf8");
   assert.match(quiz, /sourceKind === "original_hard"/);
