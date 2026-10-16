@@ -59,12 +59,22 @@ import {
   studentRetryShape,
 } from "./sat-bank-retry.ts";
 import {
+  DEFAULT_ROUTINE_PREWORK_QUESTIONS,
+  ROUTINE_PREWORK_MAX_QUESTIONS,
+  ROUTINE_PREWORK_MIN_QUESTIONS,
   diagnosticTimeLimitMinutes,
   preferSatDiagnosticCollection,
   routinePreworkTimeLimitMinutes,
   selectQuestionsForCountBudget,
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
+import {
+  coercePracticeTestNumber,
+  hardSatStudentFacing,
+  isRenderableHardSatItem,
+  selectHardSatQuestions,
+  type SatDifficulty,
+} from "./sat-set-difficulty.ts";
 
 export { shouldReplaceFirstSessionPrework };
 import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-weakness.ts";
@@ -607,6 +617,64 @@ export async function materializeBankQuestion(bankQuestionId: string): Promise<s
   return (await materializeBankQuestionInternal(bankQuestionId)).questionId;
 }
 
+async function questionHasResponses(questionId: string): Promise<boolean> {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(responsesTable)
+    .where(eq(responsesTable.questionId, questionId));
+  return Number(count ?? 0) > 0;
+}
+
+/**
+ * Materialize a hard-bank item and, when notation repair is what made it
+ * readable, store that repaired text. Questions that already have responses
+ * are not rewritten.
+ */
+export async function materializeHardSatQuestion(bankQuestionId: string): Promise<string> {
+  const [bank] = await db
+    .select()
+    .from(bankQuestionsTable)
+    .where(eq(bankQuestionsTable.id, bankQuestionId))
+    .limit(1);
+  if (!bank) throw new Error("Bank question not found");
+  const facing = hardSatStudentFacing({
+    id: bank.id,
+    sourceKey: bank.sourceKey,
+    examFamily: bank.examFamily,
+    sourceKind: bank.sourceKind,
+    section: bank.section,
+    module: Number(bank.module),
+    questionNumber: Number(bank.questionNumber),
+    practiceTestNumber: coercePracticeTestNumber(bank.practiceTestNumber),
+    prompt: bank.prompt,
+    stimulus: bank.stimulus,
+    choices: Array.isArray(bank.choices) ? bank.choices : [],
+    figures: bank.figures,
+    questionType: bank.questionType,
+    correctAnswer: bank.correctAnswer,
+    officialExplanation: bank.officialExplanation,
+    extractGaps: (bank.extractGaps ?? {}) as Record<string, unknown>,
+    domain: bank.domain,
+    skill: bank.skill,
+    difficulty: bank.difficulty,
+  });
+  if (bank.linkedQuestionId && (await questionHasResponses(bank.linkedQuestionId))) {
+    return bank.linkedQuestionId;
+  }
+  const questionId = await materializeBankQuestion(bankQuestionId);
+  if (facing?.repaired && !(await questionHasResponses(questionId))) {
+    await db
+      .update(questionsTable)
+      .set({
+        prompt: facing.prompt,
+        stimulus: facing.stimulus,
+        choices: facing.choices,
+      })
+      .where(eq(questionsTable.id, questionId));
+  }
+  return questionId;
+}
+
 /** Rematerialize every bank row that already points at a live `questions` row. */
 export type AssignmentLinkedRefreshCounts = LinkedRefreshCounts & {
   skippedForks: number;
@@ -826,6 +894,25 @@ export async function dropUnusableQuestionsFromLiveAssignments(): Promise<{
   return { droppedUnusable, assignmentsTouched: liveIds.length };
 }
 
+/** Archive a pre-work row only when it has no attempts. Attempt rows stay as they are. */
+async function archiveAssignmentIfUnattempted(sessionId: string, assignmentId: string) {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(attemptsTable)
+    .where(eq(attemptsTable.assignmentId, assignmentId));
+  if (Number(count) > 0) return;
+  await db
+    .update(assignmentsTable)
+    .set({ status: "archived" })
+    .where(
+      and(
+        eq(assignmentsTable.id, assignmentId),
+        eq(assignmentsTable.sessionId, sessionId),
+        ne(assignmentsTable.status, "archived"),
+      ),
+    );
+}
+
 async function archiveSessionPrework(sessionId: string) {
   const existing = await db
     .select()
@@ -854,6 +941,16 @@ export async function assignPreworkFromBank(input: {
   targetMinutes?: number;
   skipArchiveExisting?: boolean;
   mcqOnly?: boolean;
+  /** Hard draws late module 2 items. Standard keeps the existing routine selector. */
+  difficulty?: SatDifficulty;
+  excludeSourceKeys?: ReadonlySet<string>;
+  seenPracticeTests?: ReadonlySet<number>;
+  /**
+   * When set (including an empty list), archive only these unattempted
+   * assignments. Attempt rows are never updated. Omit to keep the previous
+   * archive-all behavior for non-hard assigns.
+   */
+  archiveAssignmentIds?: readonly string[];
 }): Promise<{
   planId: string;
   assignmentId: string;
@@ -941,6 +1038,35 @@ export async function assignPreworkFromBank(input: {
     }),
   );
   pool = pool.filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
+  const hardMode = homeworkKind === "routine" && input.difficulty === "hard";
+  if (hardMode) {
+    const excluded = input.excludeSourceKeys ?? new Set<string>();
+    pool = pool.filter(
+      (row) =>
+        !excluded.has(row.sourceKey) &&
+        isRenderableHardSatItem({
+          id: row.id,
+          sourceKey: row.sourceKey,
+          examFamily: row.examFamily,
+          sourceKind: row.sourceKind,
+          section: row.section,
+          module: Number(row.module),
+          questionNumber: Number(row.questionNumber),
+          practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
+          prompt: row.prompt,
+          stimulus: row.stimulus,
+          choices: Array.isArray(row.choices) ? row.choices : [],
+          figures: row.figures,
+          questionType: row.questionType,
+          correctAnswer: row.correctAnswer,
+          officialExplanation: row.officialExplanation,
+          extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
+          domain: row.domain,
+          skill: row.skill,
+          difficulty: row.difficulty,
+        }),
+    );
+  }
   if (pool.length === 0) {
     throw Object.assign(
       new Error(
@@ -967,19 +1093,78 @@ export async function assignPreworkFromBank(input: {
   const selected =
     homeworkKind === "diagnostic"
       ? (composed?.selected ?? []).map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean)
-      : selectQuestionsForCountBudget(
-          pool.map((row) => ({
-            id: row.id,
-            section: row.section as "rw" | "math",
-            skill: row.skill,
-            estimatedSeconds: row.estimatedSeconds,
-            position: row.position,
-          })),
+      : hardMode
+        ? selectHardSatQuestions(
+            pool.map((row) => ({
+              id: row.id,
+              sourceKey: row.sourceKey,
+              section: row.section,
+              module: Number(row.module),
+              questionNumber: Number(row.questionNumber),
+              practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
+            })),
+            {
+              targetCount: DEFAULT_ROUTINE_PREWORK_QUESTIONS,
+              minCount: ROUTINE_PREWORK_MIN_QUESTIONS,
+              maxCount: ROUTINE_PREWORK_MAX_QUESTIONS,
+              seenPracticeTests: input.seenPracticeTests,
+            },
+          ).map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean)
+        : selectQuestionsForCountBudget(
+            pool.map((row) => ({
+              id: row.id,
+              section: row.section as "rw" | "math",
+              skill: row.skill,
+              estimatedSeconds: row.estimatedSeconds,
+              position: row.position,
+            })),
+            {
+              preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
+            },
+          ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
+  const routineItems = hardMode
+    ? selected.flatMap((row) => {
+        const facing = hardSatStudentFacing({
+          id: row.id,
+          sourceKey: row.sourceKey,
+          examFamily: row.examFamily,
+          sourceKind: row.sourceKind,
+          section: row.section,
+          module: Number(row.module),
+          questionNumber: Number(row.questionNumber),
+          practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
+          prompt: row.prompt,
+          stimulus: row.stimulus,
+          choices: Array.isArray(row.choices) ? row.choices : [],
+          figures: row.figures,
+          questionType: row.questionType,
+          correctAnswer: row.correctAnswer,
+          officialExplanation: row.officialExplanation,
+          extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
+          domain: row.domain,
+          skill: row.skill,
+          difficulty: row.difficulty,
+        });
+        if (!facing) return [];
+        return [
           {
-            preferOriginalOrder: Boolean(collectionId || input.bankQuestionIds?.length),
+            id: row.id,
+            sourceKey: row.sourceKey,
+            examFamily: row.examFamily,
+            section: row.section,
+            module: Number(row.module),
+            questionNumber: Number(row.questionNumber),
+            prompt: facing.prompt,
+            stimulus: facing.stimulus,
+            choices: facing.choices,
+            figures: asBankFigures(row.figures),
+            questionType: facing.questionType,
+            correctAnswer: facing.correctAnswer,
+            extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
           },
-        ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
-  const routineItems = selected.map((row) => bankRowForDiagnostic(row));
+        ];
+      })
+    : selected.map((row) => bankRowForDiagnostic(row));
   const routineComposition =
     homeworkKind === "routine" ? summarizeDiagnosticComposition(routineItems) : null;
   if (homeworkKind === "routine" && !canAssignCleanStudentQuizSet(routineItems)) {
@@ -1007,7 +1192,11 @@ export async function assignPreworkFromBank(input: {
           completeForm: Boolean(composed?.composition.usable),
         })
       : routinePreworkTimeLimitMinutes(selected.length);
-  if (!input.skipArchiveExisting) {
+  if (input.archiveAssignmentIds) {
+    for (const assignmentId of input.archiveAssignmentIds) {
+      await archiveAssignmentIfUnattempted(session.id, assignmentId);
+    }
+  } else if (!input.skipArchiveExisting) {
     await archiveSessionPrework(session.id);
   }
   const diagnosticCopy =
@@ -1038,7 +1227,9 @@ export async function assignPreworkFromBank(input: {
     })
     .returning();
   for (const [index, bank] of selected.entries()) {
-    const questionId = await materializeBankQuestion(bank.id);
+    const questionId = hardMode
+      ? await materializeHardSatQuestion(bank.id)
+      : await materializeBankQuestion(bank.id);
     await db.insert(assignmentQuestionsTable).values({
       assignmentId: assignment!.id,
       questionId,

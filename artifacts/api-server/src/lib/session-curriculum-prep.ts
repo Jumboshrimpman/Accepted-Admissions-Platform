@@ -28,6 +28,7 @@ import {
   type PracticeSkillMapping,
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
+import { ensureHardSatSessionSets } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
   MAX_IN_SESSION_HOMEWORK_QUESTIONS,
@@ -486,6 +487,24 @@ export type SessionPrepResult = {
 export async function prepareSessionCurriculum(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<SessionPrepResult> {
+  const hardSets = await ensureHardSatSessionSets(session, session.clientUserId);
+  if (hardSets.difficulty === "hard") {
+    const during = await ensureDuringSessionAssignment(session);
+    const summary =
+      hardSets.inSessionStatus === "attempted"
+        ? "In-session work already started, so the attached questions were left unchanged."
+        : hardSets.inSessionStatus === "unavailable"
+          ? "Hard SAT questions could not be built from the bank yet. Existing questions were left unchanged."
+          : "Hard SAT in-session set: late module 2 questions from practice tests this student has not already been assigned. Up to 15 questions, 30 minutes.";
+    const mode: SessionPrepMode = "hard_bank";
+    await ensurePrepBlock(session.id, mode, summary);
+    return {
+      mode,
+      summary,
+      duringAssignmentId: during.id,
+      attachedQuestionCount: await assignmentQuestionCount(during.id),
+    };
+  }
   const during = await ensureDuringSessionAssignment(session);
   const homeworkRows = await db
     .select()
