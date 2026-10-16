@@ -428,6 +428,22 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   assert.match(hardSets, /satBankUsageCountsAsSeen/);
   assert.match(hardSets, /ne\(assignmentsTable\.status, "archived"\)/);
   assert.match(hardSets, /raiseHardSatShortfallAlert/);
+  assert.match(hardSets, /everyKeyIsHard/);
+  const preworkFn = hardSets.slice(
+    hardSets.indexOf("export async function ensureHardSatPrework"),
+    hardSets.indexOf("export async function officialHardInSessionItems"),
+  );
+  assert.doesNotMatch(preworkFn, /replaceable\[0\]/);
+  assert.match(preworkFn, /blocked-by-attempts/);
+  const inSessionFn = hardSets.slice(
+    hardSets.indexOf("export async function ensureHardSatInSession"),
+    hardSets.indexOf("export async function fillUnattemptedOfficialHardInSession"),
+  );
+  assert.match(inSessionFn, /everyKeyIsHard/);
+  assert.match(inSessionFn, /archiveUnattemptedAssignment/);
+  const sessionSets = hardSets.slice(hardSets.indexOf("export async function ensureHardSatSessionSets"));
+  assert.match(sessionSets, /ensureHardSatInSession\(session\)/);
+  assert.doesNotMatch(sessionSets, /prework\.action === "shortfall"\) return/);
   assert.doesNotMatch(hardSets, /sendEmail|sendTransactionalEmail/);
   const leftover = prep.slice(
     prep.indexOf("async function attachHardBank"),
@@ -447,6 +463,7 @@ test("hard assign path does not email or rewrite attempt rows", () => {
     route.indexOf('"/sessions/:sessionId/adaptive-curriculum"'),
   );
   assert.doesNotMatch(adaptiveFn, /prepareSessionCurriculum|deriveAdaptiveRecommendations|materializeHardSatQuestion|fillUnattemptedOfficialHardInSession/);
+  assert.match(adaptiveFn, /not_prepared/);
   const adaptiveMarker = '"/sessions/:sessionId/adaptive-curriculum"';
   const adaptiveGetAt = route.indexOf(adaptiveMarker);
   const adaptivePostAt = route.indexOf(adaptiveMarker, adaptiveGetAt + adaptiveMarker.length);
@@ -746,6 +763,10 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       assert.equal(hardSatFacingTextIsGarbled(choice.text), false, `${record.sourceKey} ${choice.label}`);
     }
   }
+  const pt7q25 = records.find((record) => record.sourceKey === "sat-pt7-math-m2-q25");
+  assert.ok(pt7q25);
+  assert.deepEqual(pt7q25.choices.map((choice) => choice.text), ["√109", "√149", "√167", "√341"]);
+  assert.equal(pt7q25.correctAnswer.trim().toUpperCase(), "C");
   const pt11q26 = records.find((record) => record.sourceKey === "sat-pt11-math-m2-q26");
   assert.ok(pt11q26);
   assert.deepEqual(pt11q26.choices.map((choice) => choice.text), ["3/5", "3/4", "4/5", "4/3"]);

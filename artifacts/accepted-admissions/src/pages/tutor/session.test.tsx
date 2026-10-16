@@ -4,6 +4,22 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 const clearHomework = vi.fn();
 const currentUserState = { id: "tutor-eunice", role: "tutor" };
+const adaptiveState: {
+  sessionPrep: null | {
+    mode: string;
+    summary: string;
+    duringAssignmentId: string | null;
+    attachedQuestionCount: number;
+    needsQuestions?: boolean;
+  };
+} = {
+  sessionPrep: {
+    mode: "mistake_focus",
+    summary: "Open with the missed transition item.",
+    duringAssignmentId: "practice-from-homework",
+    attachedQuestionCount: 3,
+  },
+};
 
 vi.mock("@workspace/api-client-react", () => ({
   getGetSessionQueryKey: (id: string) => ["/api/sessions", id],
@@ -104,12 +120,7 @@ vi.mock("@workspace/api-client-react", () => ({
       recommendations: [],
       hardQuestions: [],
       publishedBlocks: [],
-      sessionPrep: {
-        mode: "mistake_focus",
-        summary: "Open with the missed transition item.",
-        duringAssignmentId: "practice-from-homework",
-        attachedQuestionCount: 3,
-      },
+      sessionPrep: adaptiveState.sessionPrep,
     },
   }),
   useCreateCurriculumBlock: () => ({ mutate: vi.fn(), isPending: false }),
@@ -175,6 +186,12 @@ afterEach(() => {
   clearHomework.mockReset();
   currentUserState.id = "tutor-eunice";
   currentUserState.role = "tutor";
+  adaptiveState.sessionPrep = {
+    mode: "mistake_focus",
+    summary: "Open with the missed transition item.",
+    duringAssignmentId: "practice-from-homework",
+    attachedQuestionCount: 3,
+  };
 });
 
 describe("tutor session review page", () => {
@@ -221,6 +238,20 @@ describe("tutor session review page", () => {
     expect(screen.getByText(/questions stay attached/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(clearHomework).not.toHaveBeenCalled();
+  });
+
+  test("shows a not-prepared state when the session has no saved plan", () => {
+    adaptiveState.sessionPrep = {
+      mode: "not_prepared",
+      summary: "This session has not been prepared yet. Use Auto-prepare to build the plan.",
+      duringAssignmentId: null,
+      attachedQuestionCount: 0,
+      needsQuestions: false,
+    };
+    render(<TutorSession />);
+    expect(screen.getByTestId("session-not-prepared").textContent).toMatch(/not been prepared yet/i);
+    expect(screen.getByTestId("session-not-prepared").textContent).toMatch(/Auto-prepare/i);
+    expect(screen.queryByText("Prepared live plan")).toBeNull();
   });
 
   test("hides PDF downloads for a tutor who is not assigned to the session", () => {

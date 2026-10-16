@@ -200,6 +200,17 @@ describe("student session quiz path", () => {
     mocks.assignments.splice(0, mocks.assignments.length, ...original);
   });
 
+  test("says the session is not prepared when no plan has been saved", () => {
+    mocks.sessionPrep = {
+      mode: "not_prepared",
+      summary: "This session has not been prepared yet.",
+      duringAssignmentId: "",
+      attachedQuestionCount: 0,
+    };
+    render(<PortalSession />);
+    expect(screen.getByTestId("session-not-prepared").textContent).toMatch(/not been prepared yet/i);
+  });
+
   test("does not show the live-plan unfinished-prep note", () => {
     mocks.blocks = [
       {

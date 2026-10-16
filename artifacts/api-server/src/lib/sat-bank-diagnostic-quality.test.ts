@@ -615,6 +615,7 @@ test("rejects scrambled f(x) and smashed vertex crops; keeps 21px no-solution an
     }),
     false,
   );
+  // These fixtures are the old OCR. The diagnostic filter is unchanged and still rejects them.
   assert.equal(
     isStudentUsableDiagnosticItem({
       sourceKey: "sat-pt4-math-m2-q19",
@@ -1349,9 +1350,14 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "21px juxtaposition no-solution item must stay usable",
   );
   assert.equal(
+    unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q19"),
+    false,
+    "diagnostic filter is unchanged; PT4 M2 Q19 passes because its stored stem was repaired",
+  );
+  assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q24"),
     false,
-    "PT4 math module 2 question 24 is recovered by its full-question crop and clean median choices",
+    "diagnostic filter is unchanged; PT4 M2 Q24 passes because its stored stem was repaired, not because a crop waives garbled text",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-rw-m1-q8"),

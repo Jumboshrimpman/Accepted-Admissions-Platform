@@ -3082,7 +3082,7 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "config": zod.record(zod.string(), zod.unknown())
 })),
   "sessionPrep": zod.object({
-  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
+  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready', 'not_prepared']),
   "summary": zod.string(),
   "duringAssignmentId": zod.string().nullable(),
   "attachedQuestionCount": zod.number(),
@@ -3194,7 +3194,7 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "config": zod.record(zod.string(), zod.unknown())
 })),
   "sessionPrep": zod.object({
-  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready']),
+  "mode": zod.enum(['awaiting_homework', 'complete_homework_in_session', 'mistake_focus', 'hard_bank', 'ready', 'not_prepared']),
   "summary": zod.string(),
   "duringAssignmentId": zod.string().nullable(),
   "attachedQuestionCount": zod.number(),

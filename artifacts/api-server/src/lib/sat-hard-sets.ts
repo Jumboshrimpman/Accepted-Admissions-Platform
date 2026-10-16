@@ -13,7 +13,6 @@ import {
 } from "@workspace/db";
 import { assignPreworkFromBank, materializeHardSatQuestion } from "./sat-bank-service.ts";
 import { listLiveBeforeSessionHomework } from "./session-prework-live.ts";
-import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import { inferSessionPreworkKind } from "./session-prework-dedupe.ts";
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
@@ -140,6 +139,32 @@ async function sourceKeysForAssignment(assignmentId: string): Promise<string[]> 
   return rows.map((row) => row.sourceKey);
 }
 
+async function hardPoolSourceKeys(): Promise<Set<string>> {
+  const pool = await loadRenderableHardBank();
+  return new Set(pool.map((item) => item.sourceKey));
+}
+
+/** True only when every attached question is a renderable hard-pool item. */
+async function classifyBankAssignment(
+  assignmentId: string,
+  hardKeys: ReadonlySet<string>,
+  knownAttempts?: number,
+): Promise<{
+  keys: string[];
+  questionCount: number;
+  attempts: number;
+  everyKeyIsHard: boolean;
+}> {
+  const keys = await sourceKeysForAssignment(assignmentId);
+  const questionCount = await assignmentQuestionCount(assignmentId);
+  const attempts = knownAttempts ?? (await attemptCount(assignmentId));
+  const everyKeyIsHard =
+    questionCount > 0 &&
+    keys.length === questionCount &&
+    keys.every((sourceKey) => hardKeys.has(sourceKey));
+  return { keys, questionCount, attempts, everyKeyIsHard };
+}
+
 async function loadSeenSatBankUsage(
   studentUserId: string,
   ignoreAssignmentIds: readonly string[],
@@ -226,22 +251,6 @@ async function loadRenderableHardBank(): Promise<Array<HardSatCandidate & { bank
     });
   }
   return selected;
-}
-
-function replaceableRoutinePrework<T extends {
-  id: string;
-  title?: string | null;
-  status?: string | null;
-  homeworkKind?: string | null;
-  questionCount?: number | null;
-  attemptCount: number;
-}>(rows: readonly T[]): T[] {
-  return rows.filter((row) => {
-    if (row.attemptCount > 0) return false;
-    if (row.status === "archived") return false;
-    if (isPostSessionFollowUpTitle(row.title)) return false;
-    return inferSessionPreworkKind(row) === "routine";
-  });
 }
 
 async function liveDuringAssignments(sessionId: string) {
@@ -341,30 +350,45 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   needsQuestions: boolean;
 }> {
   const target = await inSessionTargetForSession(session);
+  const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
   let preworkCount = 0;
+  let hasNonHardPrework = false;
+  let hasFullHardPrework = false;
   for (const row of routine) {
-    preworkCount += (await sourceKeysForAssignment(row.id)).length;
+    const info = await classifyBankAssignment(row.id, hardKeys, row.attemptCount);
+    if (info.questionCount === 0) continue;
+    preworkCount += info.questionCount;
+    if (!info.everyKeyIsHard) hasNonHardPrework = true;
+    else if (info.keys.length === HARD_SAT_PREWORK_QUESTIONS) hasFullHardPrework = true;
   }
   const duringRows = await liveDuringAssignments(session.id);
   let duringAssignmentId: string | null = null;
   let questionCount = 0;
+  let hasNonHardDuring = false;
+  let hasFullHardDuring = false;
+  let duringAttempted = false;
   for (const row of duringRows) {
-    const keys = await sourceKeysForAssignment(row.id);
+    const info = await classifyBankAssignment(row.id, hardKeys);
     if (!duringAssignmentId) duringAssignmentId = row.id;
-    questionCount += keys.length;
-    if ((await attemptCount(row.id)) > 0) {
-      return {
-        summary: "In-session work already started, so the attached questions were left unchanged.",
-        duringAssignmentId: row.id,
-        questionCount: keys.length,
-        preworkCount,
-        needsQuestions: preworkCount !== HARD_SAT_PREWORK_QUESTIONS || keys.length !== target,
-      };
-    }
+    questionCount += info.questionCount;
+    if (info.attempts > 0) duringAttempted = true;
+    if (info.questionCount === 0) continue;
+    if (!info.everyKeyIsHard) hasNonHardDuring = true;
+    else if (info.keys.length === target) hasFullHardDuring = true;
   }
-  const needsQuestions = preworkCount !== HARD_SAT_PREWORK_QUESTIONS || questionCount !== target;
+  const needsQuestions =
+    hasNonHardPrework || hasNonHardDuring || !hasFullHardPrework || !hasFullHardDuring;
+  if (duringAttempted && !needsQuestions) {
+    return {
+      summary: "In-session work already started, so the attached questions were left unchanged.",
+      duringAssignmentId,
+      questionCount,
+      preworkCount,
+      needsQuestions: false,
+    };
+  }
   const summary = needsQuestions
     ? `${HARD_SAT_NEEDS_QUESTIONS_SUMMARY} Assigned now: ${preworkCount} pre-work and ${questionCount} in-session; a full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`
     : `Hard SAT set: ${HARD_SAT_PREWORK_QUESTIONS} pre-work questions and ${target} in-session module 2 questions. ${HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES} minutes for the in-session set.`;
@@ -395,35 +419,56 @@ export async function ensureHardSatPrework(
     return { action: "not-hard" };
   }
   const target = await inSessionTargetForSession(session);
+  const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
-  const attempted = routine.find((row) => row.attemptCount > 0);
-  if (attempted) {
-    return { action: "blocked-by-attempts", assignmentId: attempted.id };
+  const classified = [];
+  for (const row of routine) {
+    classified.push({
+      row,
+      ...(await classifyBankAssignment(row.id, hardKeys, row.attemptCount)),
+    });
   }
-  const replaceable = replaceableRoutinePrework(routine);
-  const keeper = replaceable[0] ?? null;
-  const assignedKeys = keeper ? await sourceKeysForAssignment(keeper.id) : [];
-  const assignedCount = keeper ? await assignmentQuestionCount(keeper.id) : 0;
-  if (assignedCount > 0) {
-    const pool = await loadRenderableHardBank();
-    const hardKeys = new Set(pool.map((item) => item.sourceKey));
-    const everyKeyIsHard =
-      assignedKeys.length === assignedCount &&
-      assignedKeys.every((sourceKey) => hardKeys.has(sourceKey));
-    if (everyKeyIsHard) {
-      if (assignedKeys.length !== HARD_SAT_PREWORK_QUESTIONS) {
-        await raiseHardSatShortfallAlert(
-          session,
-          `Pre-work has ${assignedKeys.length} hard questions and was left unchanged. A full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`,
-        );
-      }
-      return { action: "unchanged", assignmentId: keeper!.id };
+  const attempted = classified.filter((item) => item.attempts > 0);
+  if (attempted.length > 0) {
+    const hasFullHard = classified.some(
+      (item) => item.everyKeyIsHard && item.keys.length === HARD_SAT_PREWORK_QUESTIONS,
+    );
+    const everyLiveSetIsHard = classified.every(
+      (item) => item.questionCount === 0 || item.everyKeyIsHard,
+    );
+    if (!hasFullHard || !everyLiveSetIsHard) {
+      await raiseHardSatShortfallAlert(
+        session,
+        `Pre-work already has attempts and is not a full hard set of ${HARD_SAT_PREWORK_QUESTIONS}. The attempted set was left in place.`,
+      );
     }
-    await archiveUnattemptedAssignment(session.id, keeper!.id);
+    for (const item of classified) {
+      if (item.attempts > 0 || item.questionCount === 0 || item.everyKeyIsHard) continue;
+      await archiveUnattemptedAssignment(session.id, item.row.id);
+    }
+    return { action: "blocked-by-attempts", assignmentId: attempted[0]!.row.id };
   }
-  const duringRows = await liveDuringAssignments(session.id);
-  const duringKeys = duringRows[0] ? await sourceKeysForAssignment(duringRows[0].id) : [];
+  for (const item of classified) {
+    if (item.questionCount > 0 && !item.everyKeyIsHard) {
+      await archiveUnattemptedAssignment(session.id, item.row.id);
+    }
+  }
+  const fullHard = classified.find(
+    (item) => item.everyKeyIsHard && item.keys.length === HARD_SAT_PREWORK_QUESTIONS,
+  );
+  if (fullHard) {
+    return { action: "unchanged", assignmentId: fullHard.row.id };
+  }
+  const shortHard = classified.find((item) => item.everyKeyIsHard);
+  if (shortHard) {
+    await raiseHardSatShortfallAlert(
+      session,
+      `Pre-work has ${shortHard.keys.length} hard questions and was left unchanged. A full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`,
+    );
+    return { action: "unchanged", assignmentId: shortHard.row.id };
+  }
+  const replaceableIds = classified.map((item) => item.row.id);
   try {
     const seen = session.clientUserId
       ? await loadSeenSatBankUsage(session.clientUserId, [])
@@ -437,13 +482,19 @@ export async function ensureHardSatPrework(
       preworkMax: HARD_SAT_PREWORK_QUESTIONS,
       inSessionMax: target,
     });
-    const inSessionReady = duringKeys.length === target || planned.inSession.length === target;
+    const duringRows = await liveDuringAssignments(session.id);
+    let duringIsFullHard = false;
+    for (const row of duringRows) {
+      const info = await classifyBankAssignment(row.id, hardKeys);
+      if (info.everyKeyIsHard && info.keys.length === target) duringIsFullHard = true;
+    }
+    const inSessionReady = duringIsFullHard || planned.inSession.length === target;
     if (planned.prework.length !== HARD_SAT_PREWORK_QUESTIONS || !inSessionReady) {
       await raiseHardSatShortfallAlert(
         session,
         `The renderable hard pool has ${planned.prework.length} pre-work and ${planned.inSession.length} in-session items available. A full set is ${HARD_SAT_PREWORK_QUESTIONS} and ${target}. No partial set was assigned.`,
       );
-      return { action: "shortfall", assignmentId: keeper?.id ?? null };
+      return { action: "shortfall", assignmentId: null };
     }
     const result = await assignPreworkFromBank({
       sessionId: session.id,
@@ -453,7 +504,7 @@ export async function ensureHardSatPrework(
       mcqOnly: true,
       skipArchiveExisting: false,
       bankQuestionIds: planned.prework.map((item) => item.bankId),
-      archiveAssignmentIds: replaceable.map((row) => row.id),
+      archiveAssignmentIds: replaceableIds,
     });
     if (result.questionCount !== HARD_SAT_PREWORK_QUESTIONS) {
       await raiseHardSatShortfallAlert(
@@ -468,7 +519,7 @@ export async function ensureHardSatPrework(
       session,
       "The hard SAT pre-work set could not be assigned from the renderable pool.",
     );
-    return { action: "shortfall", assignmentId: keeper?.id ?? null };
+    return { action: "shortfall", assignmentId: null };
   }
 }
 
@@ -583,34 +634,64 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
     return { status: "not-hard", questionCount: 0, duringAssignmentId: null };
   }
   const target = await inSessionTargetForSession(session);
+  const hardKeys = await hardPoolSourceKeys();
   const liveDuring = await liveDuringAssignments(session.id);
-  const existingDuring = liveDuring[0] ?? null;
-  if (existingDuring && (await attemptCount(existingDuring.id)) > 0) {
-    const keys = await sourceKeysForAssignment(existingDuring.id);
+  const classified = [];
+  for (const row of liveDuring) {
+    classified.push({ row, ...(await classifyBankAssignment(row.id, hardKeys)) });
+  }
+  const attempted = classified.filter((item) => item.attempts > 0);
+  if (attempted.length > 0) {
+    const hasFullHard = classified.some(
+      (item) => item.everyKeyIsHard && item.keys.length === target,
+    );
+    const everyLiveSetIsHard = classified.every(
+      (item) => item.questionCount === 0 || item.everyKeyIsHard,
+    );
+    if (!hasFullHard || !everyLiveSetIsHard) {
+      await raiseHardSatShortfallAlert(
+        session,
+        `In-session work already started and is not a full hard set of ${target}. The attempted set was left in place.`,
+      );
+    }
+    for (const item of classified) {
+      if (item.attempts > 0 || item.questionCount === 0 || item.everyKeyIsHard) continue;
+      await archiveUnattemptedAssignment(session.id, item.row.id);
+    }
+    const primary = attempted[0]!;
     return {
       status: "attempted",
-      questionCount: keys.length,
-      duringAssignmentId: existingDuring.id,
+      questionCount: primary.keys.length,
+      duringAssignmentId: primary.row.id,
     };
   }
-  if (existingDuring) {
-    const currentKeys = await sourceKeysForAssignment(existingDuring.id);
-    if (currentKeys.length > 0) {
-      if (currentKeys.length !== target) {
-        await raiseHardSatShortfallAlert(
-          session,
-          `In-session has ${currentKeys.length} questions and was left unchanged. The target is ${target}.`,
-        );
-      }
-      return {
-        status: "unchanged",
-        questionCount: currentKeys.length,
-        duringAssignmentId: existingDuring.id,
-      };
+  for (const item of classified) {
+    if (item.questionCount > 0 && !item.everyKeyIsHard) {
+      await archiveUnattemptedAssignment(session.id, item.row.id);
     }
   }
+  const fullHard = classified.find((item) => item.everyKeyIsHard && item.keys.length === target);
+  if (fullHard) {
+    return {
+      status: "unchanged",
+      questionCount: fullHard.keys.length,
+      duringAssignmentId: fullHard.row.id,
+    };
+  }
+  const shortHard = classified.find((item) => item.everyKeyIsHard);
+  if (shortHard) {
+    await raiseHardSatShortfallAlert(
+      session,
+      `In-session has ${shortHard.keys.length} hard questions and was left unchanged. The target is ${target}.`,
+    );
+    return {
+      status: "unchanged",
+      questionCount: shortHard.keys.length,
+      duringAssignmentId: shortHard.row.id,
+    };
+  }
   try {
-    const inSession = await officialHardInSessionItems(session, existingDuring ? [existingDuring.id] : []);
+    const inSession = await officialHardInSessionItems(session, []);
     if (inSession.length !== target) {
       await raiseHardSatShortfallAlert(
         session,
@@ -619,10 +700,10 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       return {
         status: "unavailable",
         questionCount: 0,
-        duringAssignmentId: existingDuring?.id ?? null,
+        duringAssignmentId: null,
       };
     }
-    const during = existingDuring ?? (await ensureDuringAssignment(session, target));
+    const during = (await liveDuringAssignments(session.id))[0] ?? (await ensureDuringAssignment(session, target));
     const written = await writeOfficialHardInSession(during.id, inSession);
     if (written === "attempted" || written === "archived") {
       return {
@@ -642,7 +723,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
     return {
       status: "unavailable",
       questionCount: 0,
-      duringAssignmentId: existingDuring?.id ?? null,
+      duringAssignmentId: null,
     };
   }
 }
@@ -701,7 +782,9 @@ export async function ensureHardSatSessionSets(
   const difficulty = await satDifficultyForSession(session);
   if (difficulty !== "hard") return { difficulty, inSessionStatus: null };
   const prework = await ensureHardSatPrework(session, actorUserId);
-  if (prework.action === "shortfall") return { difficulty, inSessionStatus: "unavailable" };
   const inSession = await ensureHardSatInSession(session);
+  if (prework.action === "shortfall" || inSession.status === "unavailable") {
+    return { difficulty, inSessionStatus: "unavailable" };
+  }
   return { difficulty, inSessionStatus: inSession.status };
 }

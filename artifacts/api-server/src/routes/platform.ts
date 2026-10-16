@@ -11787,17 +11787,29 @@ async function adaptiveCurriculumForSession(
     storedPrep?.config && typeof storedPrep.config === "object"
       ? (storedPrep.config as { mode?: string; text?: string; needsQuestions?: boolean })
       : null;
-  if (hardSession) {
-    const described = await describeHardSatSessionPrep(session);
-    const summary = storedConfig?.text || described.summary;
+  if (!storedConfig) {
     sessionPrep = {
-      mode: storedConfig?.mode || "hard_bank",
+      mode: "not_prepared",
+      summary: isStaff
+        ? "This session has not been prepared yet. Use Auto-prepare to build the plan."
+        : "This session has not been prepared yet.",
+      duringAssignmentId: null,
+      attachedQuestionCount: 0,
+      needsQuestions: false,
+    };
+  } else if (hardSession) {
+    const described = await describeHardSatSessionPrep(session);
+    const summary = described.needsQuestions
+      ? described.summary
+      : storedConfig.text || described.summary;
+    sessionPrep = {
+      mode: storedConfig.mode || "hard_bank",
       summary,
       duringAssignmentId: described.duringAssignmentId,
       attachedQuestionCount: described.questionCount,
-      needsQuestions: storedConfig?.needsQuestions === true || described.needsQuestions,
+      needsQuestions: storedConfig.needsQuestions === true || described.needsQuestions,
     };
-  } else if (storedConfig && (isStaff || (sessionStudent && (completed || homeworkHasResults)))) {
+  } else if (isStaff || (sessionStudent && (completed || homeworkHasResults))) {
     const [during] = await db
       .select({ id: assignmentsTable.id })
       .from(assignmentsTable)

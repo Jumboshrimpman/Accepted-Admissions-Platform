@@ -3411,6 +3411,7 @@ components:
               mistake_focus,
               hard_bank,
               ready,
+              not_prepared,
             ]
         summary: { type: string }
         duringAssignmentId: { type: ["string", "null"] }
