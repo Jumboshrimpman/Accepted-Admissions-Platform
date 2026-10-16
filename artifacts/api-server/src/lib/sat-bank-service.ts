@@ -69,10 +69,10 @@ import {
   shouldReplaceFirstSessionPrework,
 } from "./sat-bank-timing.ts";
 import {
-  coercePracticeTestNumber,
+  HARD_SAT_PREWORK_QUESTIONS,
   hardSatStudentFacing,
   isRenderableHardSatItem,
-  selectHardSatQuestions,
+  toRenderableHardSatInput,
   type SatDifficulty,
 } from "./sat-set-difficulty.ts";
 
@@ -637,27 +637,7 @@ export async function materializeHardSatQuestion(bankQuestionId: string): Promis
     .where(eq(bankQuestionsTable.id, bankQuestionId))
     .limit(1);
   if (!bank) throw new Error("Bank question not found");
-  const facing = hardSatStudentFacing({
-    id: bank.id,
-    sourceKey: bank.sourceKey,
-    examFamily: bank.examFamily,
-    sourceKind: bank.sourceKind,
-    section: bank.section,
-    module: Number(bank.module),
-    questionNumber: Number(bank.questionNumber),
-    practiceTestNumber: coercePracticeTestNumber(bank.practiceTestNumber),
-    prompt: bank.prompt,
-    stimulus: bank.stimulus,
-    choices: Array.isArray(bank.choices) ? bank.choices : [],
-    figures: bank.figures,
-    questionType: bank.questionType,
-    correctAnswer: bank.correctAnswer,
-    officialExplanation: bank.officialExplanation,
-    extractGaps: (bank.extractGaps ?? {}) as Record<string, unknown>,
-    domain: bank.domain,
-    skill: bank.skill,
-    difficulty: bank.difficulty,
-  });
+  const facing = hardSatStudentFacing(toRenderableHardSatInput(bank));
   if (bank.linkedQuestionId && (await questionHasResponses(bank.linkedQuestionId))) {
     return bank.linkedQuestionId;
   }
@@ -1040,32 +1020,33 @@ export async function assignPreworkFromBank(input: {
   pool = pool.filter((row) => isStudentUsableQuizItem(bankRowForDiagnostic(row)));
   const hardMode = homeworkKind === "routine" && input.difficulty === "hard";
   if (hardMode) {
-    const excluded = input.excludeSourceKeys ?? new Set<string>();
-    pool = pool.filter(
-      (row) =>
-        !excluded.has(row.sourceKey) &&
-        isRenderableHardSatItem({
-          id: row.id,
-          sourceKey: row.sourceKey,
-          examFamily: row.examFamily,
-          sourceKind: row.sourceKind,
-          section: row.section,
-          module: Number(row.module),
-          questionNumber: Number(row.questionNumber),
-          practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
-          prompt: row.prompt,
-          stimulus: row.stimulus,
-          choices: Array.isArray(row.choices) ? row.choices : [],
-          figures: row.figures,
-          questionType: row.questionType,
-          correctAnswer: row.correctAnswer,
-          officialExplanation: row.officialExplanation,
-          extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
-          domain: row.domain,
-          skill: row.skill,
-          difficulty: row.difficulty,
-        }),
-    );
+    const plannedIds = input.bankQuestionIds ?? [];
+    if (plannedIds.length !== HARD_SAT_PREWORK_QUESTIONS) {
+      throw Object.assign(
+        new Error(
+          `Hard SAT pre-work needs ${HARD_SAT_PREWORK_QUESTIONS} planned questions from the renderable pool.`,
+        ),
+        { status: 409, shortfall: true },
+      );
+    }
+    const order = new Map(plannedIds.map((id, index) => [id, index]));
+    const plannedRows = (
+      await db
+        .select()
+        .from(bankQuestionsTable)
+        .orderBy(asc(bankQuestionsTable.position), asc(bankQuestionsTable.questionNumber))
+    )
+      .filter((row) => order.has(row.id))
+      .sort((left, right) => order.get(left.id)! - order.get(right.id)!);
+    pool = plannedRows.filter((row) => isRenderableHardSatItem(toRenderableHardSatInput(row)));
+    if (pool.length !== plannedIds.length) {
+      throw Object.assign(
+        new Error(
+          "The planned hard SAT questions are not all in the renderable pool, so nothing was assigned.",
+        ),
+        { status: 409, shortfall: true },
+      );
+    }
   }
   if (pool.length === 0) {
     throw Object.assign(
@@ -1094,22 +1075,7 @@ export async function assignPreworkFromBank(input: {
     homeworkKind === "diagnostic"
       ? (composed?.selected ?? []).map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean)
       : hardMode
-        ? selectHardSatQuestions(
-            pool.map((row) => ({
-              id: row.id,
-              sourceKey: row.sourceKey,
-              section: row.section,
-              module: Number(row.module),
-              questionNumber: Number(row.questionNumber),
-              practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
-            })),
-            {
-              targetCount: DEFAULT_ROUTINE_PREWORK_QUESTIONS,
-              minCount: ROUTINE_PREWORK_MIN_QUESTIONS,
-              maxCount: ROUTINE_PREWORK_MAX_QUESTIONS,
-              seenPracticeTests: input.seenPracticeTests,
-            },
-          ).map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean)
+        ? pool
         : selectQuestionsForCountBudget(
             pool.map((row) => ({
               id: row.id,
@@ -1124,27 +1090,7 @@ export async function assignPreworkFromBank(input: {
           ).selected.map((item) => pool.find((row) => row.id === item.id)!).filter(Boolean);
   const routineItems = hardMode
     ? selected.flatMap((row) => {
-        const facing = hardSatStudentFacing({
-          id: row.id,
-          sourceKey: row.sourceKey,
-          examFamily: row.examFamily,
-          sourceKind: row.sourceKind,
-          section: row.section,
-          module: Number(row.module),
-          questionNumber: Number(row.questionNumber),
-          practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
-          prompt: row.prompt,
-          stimulus: row.stimulus,
-          choices: Array.isArray(row.choices) ? row.choices : [],
-          figures: row.figures,
-          questionType: row.questionType,
-          correctAnswer: row.correctAnswer,
-          officialExplanation: row.officialExplanation,
-          extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
-          domain: row.domain,
-          skill: row.skill,
-          difficulty: row.difficulty,
-        });
+        const facing = hardSatStudentFacing(toRenderableHardSatInput(row));
         if (!facing) return [];
         return [
           {
@@ -1167,6 +1113,17 @@ export async function assignPreworkFromBank(input: {
     : selected.map((row) => bankRowForDiagnostic(row));
   const routineComposition =
     homeworkKind === "routine" ? summarizeDiagnosticComposition(routineItems) : null;
+  if (
+    hardMode &&
+    (selected.length !== HARD_SAT_PREWORK_QUESTIONS || routineItems.length !== selected.length)
+  ) {
+    throw Object.assign(
+      new Error(
+        `Hard SAT pre-work would have been a partial set of ${routineItems.length}, so nothing was assigned.`,
+      ),
+      { status: 409, shortfall: true },
+    );
+  }
   if (homeworkKind === "routine" && !canAssignCleanStudentQuizSet(routineItems)) {
     throw Object.assign(
       new Error(

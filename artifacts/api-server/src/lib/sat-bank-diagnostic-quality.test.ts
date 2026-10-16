@@ -1289,8 +1289,6 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q9",
     "sat-pt4-math-m2-q15",
     "sat-pt4-math-m2-q18",
-    "sat-pt4-math-m2-q19",
-    "sat-pt4-math-m2-q24",
     "sat-pt4-math-m1-q9",
     "sat-pt4-rw-m1-q8",
     "sat-pt9-math-m1-q10",
@@ -1352,8 +1350,8 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-math-m2-q24"),
-    true,
-    "dot-plot axis ticks OCR'd into the stem must drop even when A–D text exists",
+    false,
+    "PT4 math module 2 question 24 is recovered by its full-question crop and clean median choices",
   );
   assert.equal(
     unusable.some((row) => row.sourceKey === "sat-pt4-rw-m1-q8"),
@@ -1464,8 +1462,6 @@ test("composes a linear SAT diagnostic from PT4 usable rows and fills dropped ma
     "sat-pt4-math-m2-q9",
     "sat-pt4-math-m2-q15",
     "sat-pt4-math-m2-q18",
-    "sat-pt4-math-m2-q19",
-    "sat-pt4-math-m2-q24",
     "sat-pt4-math-m1-q9",
     "sat-pt4-rw-m1-q8",
     "sat-pt9-math-m1-q10",

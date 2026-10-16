@@ -27,7 +27,7 @@ import {
   type PracticeSkillMapping,
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
-import { ensureHardSatSessionSets, fillUnattemptedOfficialHardInSession } from "./sat-hard-sets";
+import { describeHardSatSessionPrep, fillUnattemptedOfficialHardInSession, satDifficultyForSession } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
   MAX_IN_SESSION_HOMEWORK_QUESTIONS,
@@ -416,29 +416,22 @@ async function attachHardBank(
 export type SessionPrepResult = {
   mode: SessionPrepMode;
   summary: string;
-  duringAssignmentId: string;
+  duringAssignmentId: string | null;
   attachedQuestionCount: number;
 };
 
 export async function prepareSessionCurriculum(
   session: typeof sessionsTable.$inferSelect,
 ): Promise<SessionPrepResult> {
-  const hardSets = await ensureHardSatSessionSets(session, session.clientUserId);
-  if (hardSets.difficulty === "hard") {
-    const during = await ensureDuringSessionAssignment(session);
-    const summary =
-      hardSets.inSessionStatus === "attempted"
-        ? "In-session work already started, so the attached questions were left unchanged."
-        : hardSets.inSessionStatus === "unavailable"
-          ? "Hard SAT questions could not be built from the bank yet. Existing questions were left unchanged."
-          : "Hard SAT in-session set: late module 2 questions from practice tests this student has not already been assigned. Up to 15 questions, 30 minutes.";
+  if ((await satDifficultyForSession(session)) === "hard") {
+    const described = await describeHardSatSessionPrep(session);
     const mode: SessionPrepMode = "hard_bank";
-    await ensurePrepBlock(session.id, mode, summary);
+    await ensurePrepBlock(session.id, mode, described.summary);
     return {
       mode,
-      summary,
-      duringAssignmentId: during.id,
-      attachedQuestionCount: await assignmentQuestionCount(during.id),
+      summary: described.summary,
+      duringAssignmentId: described.duringAssignmentId,
+      attachedQuestionCount: described.questionCount,
     };
   }
   const during = await ensureDuringSessionAssignment(session);

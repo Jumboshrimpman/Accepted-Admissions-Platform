@@ -6,6 +6,7 @@ import {
 import { isOfficialSatExtract, isStudentUsableQuizItem } from "./sat-bank-diagnostic-quality.ts";
 import { materializedQuestionContent } from "./sat-bank-figures.ts";
 import {
+  hasFullQuestionCrop,
   hasWrongFigureForStem,
   looksGarbledExtractText,
 } from "./sat-bank-figure-primary.ts";
@@ -38,6 +39,11 @@ export type SatDifficultySetting = {
   nameIncludes?: string;
   difficulty: SatDifficulty;
   effectiveAfterDateKey: string;
+  /**
+   * Hard in-session length for this student. Omit to keep the shared
+   * homework-copy cap. This does not raise that cap for other students.
+   */
+  inSessionQuestionTarget?: number;
 };
 
 export const HARD_SAT_EFFECTIVE_AFTER_DATE_KEY = "2026-10-16";
@@ -48,6 +54,7 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
     nameIncludes: TAITO_STUDENT_DISPLAY_NAME,
     difficulty: "hard",
     effectiveAfterDateKey: HARD_SAT_EFFECTIVE_AFTER_DATE_KEY,
+    inSessionQuestionTarget: 20,
   },
 ];
 
@@ -55,7 +62,9 @@ export const SAT_DIFFICULTY_SETTINGS: readonly SatDifficultySetting[] = [
 export const HARD_SAT_MODULE = 2;
 export const HARD_SAT_RW_MIN_QUESTION = 15;
 export const HARD_SAT_MATH_MIN_QUESTION = 18;
+/** Default hard in-session length. A student setting can raise only that student's target. */
 export const HARD_SAT_IN_SESSION_MAX_QUESTIONS = MAX_IN_SESSION_HOMEWORK_QUESTIONS;
+export const HARD_SAT_PREWORK_QUESTIONS = DEFAULT_ROUTINE_PREWORK_QUESTIONS;
 export const HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES = 30;
 
 export type HardSatCandidate = {
@@ -153,6 +162,48 @@ export function repairHardSatNotation(text: string | null | undefined): string {
     .replace(/\b([xyz])2\b/gi, "$1²")
     .replace(/([A-Za-z0-9)])\s*([−–-])(\d+[A-Za-z])/g, "$1 $2 $3")
     .replace(/([A-Za-z0-9)])([−–-])(\d+)/g, "$1 $2 $3");
+}
+
+/** Answer-key sentence from the College Board explanation, e.g. "Choice B is correct." */
+export function explanationAgreesWithAnswerKey(
+  explanation: string | null | undefined,
+  correctAnswer: string | null | undefined,
+): boolean {
+  const key = (correctAnswer ?? "").trim().toUpperCase();
+  if (!/^[A-D]$/.test(key)) return false;
+  const match = (explanation ?? "").match(/Choice\s+([A-D])\s+is\s+(?:the\s+best\s+answer|correct)\b/i);
+  if (!match?.[1]) return false;
+  return match[1].toUpperCase() === key;
+}
+
+/**
+ * A garbled extract may still be assigned when the student sees the official
+ * full-question crop, every choice is readable, and the explanation names the
+ * same letter as the answer key. An unverified crop does not qualify.
+ */
+export function hardSatFullQuestionCropSalvage(
+  item: RenderableHardSatInput,
+  facing: {
+    prompt?: string | null;
+    stimulus?: string | null;
+    choices: Array<{ text?: string | null }>;
+    correctAnswer?: string | null;
+  },
+): boolean {
+  if (
+    !hasFullQuestionCrop({
+      figures: Array.isArray(item.figures) ? item.figures : [],
+      prompt: facing.prompt ?? item.prompt,
+      stimulus: facing.stimulus ?? item.stimulus,
+    })
+  ) {
+    return false;
+  }
+  if (!explanationAgreesWithAnswerKey(item.officialExplanation, facing.correctAnswer || item.correctAnswer)) {
+    return false;
+  }
+  if (facing.choices.length < 4) return false;
+  return facing.choices.every((choice) => choice.text && !looksGarbledExtractText(choice.text));
 }
 
 export type HardSatFacing = {
@@ -283,13 +334,19 @@ export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacin
   };
   const accept = (facing: HardSatFacing | null): HardSatFacing | null => {
     if (!facing) return null;
+    const cropBacked = hardSatFullQuestionCropSalvage(item, facing);
     const rawParts = [item.prompt, item.stimulus, ...(item.choices ?? []).map((choice) => choice?.text)];
     const stillGarbled = rawParts.some((part) => {
       if (!part) return false;
       return looksGarbledExtractText(part) && looksGarbledExtractText(repairHardSatNotation(part));
     });
-    if (stillGarbled) return null;
-    if (looksGarbledExtractText(facing.prompt) || looksGarbledExtractText(facing.stimulus)) return null;
+    if (stillGarbled && !cropBacked) return null;
+    if (
+      !cropBacked &&
+      (looksGarbledExtractText(facing.prompt) || looksGarbledExtractText(facing.stimulus))
+    ) {
+      return null;
+    }
     if (facing.choices.some((choice) => looksGarbledExtractText(choice.text))) return null;
     if (
       hasWrongFigureForStem({
@@ -336,6 +393,11 @@ export function sameSourceKeySet(left: readonly string[], right: readonly string
   return sortedLeft.every((key, index) => key === sortedRight[index]);
 }
 
+/**
+ * A live hard set stays put. Attempts block a refresh, and so does any
+ * assigned question list — a later plan must not swap the set.
+ * An empty assignment can still be filled.
+ */
 export function shouldRefreshUnattemptedHardPrework(input: {
   difficulty: SatDifficulty;
   attemptCount: number;
@@ -344,8 +406,79 @@ export function shouldRefreshUnattemptedHardPrework(input: {
 }): boolean {
   if (input.difficulty !== "hard") return false;
   if (input.attemptCount > 0) return false;
-  if (input.desiredSourceKeys.length === 0) return false;
-  return !sameSourceKeySet(input.assignedSourceKeys, input.desiredSourceKeys);
+  if (input.assignedSourceKeys.length > 0) return false;
+  return input.desiredSourceKeys.length > 0;
+}
+
+/** Archived assignments with no attempts are not questions the student has seen. */
+export function satBankUsageCountsAsSeen(
+  status: string | null | undefined,
+  attemptCount: number,
+): boolean {
+  if ((status ?? "").trim().toLowerCase() === "archived" && attemptCount <= 0) return false;
+  return true;
+}
+
+export function hardSatSetIsComplete(input: {
+  preworkCount: number;
+  inSessionCount: number;
+  inSessionTarget: number;
+  preworkTarget?: number;
+}): boolean {
+  const preworkTarget = input.preworkTarget ?? HARD_SAT_PREWORK_QUESTIONS;
+  return input.preworkCount === preworkTarget && input.inSessionCount === input.inSessionTarget;
+}
+
+export function toRenderableHardSatInput(row: {
+  id: string;
+  sourceKey: string;
+  examFamily?: string | null;
+  sourceKind?: string | null;
+  section?: string | null;
+  module?: number | string | null;
+  questionNumber?: number | string | null;
+  practiceTestNumber?: unknown;
+  prompt?: string | null;
+  stimulus?: string | null;
+  choices?: RenderableHardSatInput["choices"];
+  figures?: unknown;
+  questionType?: string | null;
+  correctAnswer?: string | null;
+  officialExplanation?: string | null;
+  extractGaps?: Record<string, unknown> | null;
+  domain?: string | null;
+  skill?: string | null;
+  difficulty?: string | null;
+  subject?: string | null;
+  tags?: string[] | null;
+  sourceType?: string | null;
+  generationMethod?: string | null;
+}): RenderableHardSatInput {
+  return {
+    id: row.id,
+    sourceKey: row.sourceKey,
+    examFamily: row.examFamily,
+    sourceKind: row.sourceKind,
+    section: row.section ?? "",
+    module: Number(row.module),
+    questionNumber: Number(row.questionNumber),
+    practiceTestNumber: coercePracticeTestNumber(row.practiceTestNumber),
+    prompt: row.prompt,
+    stimulus: row.stimulus,
+    choices: Array.isArray(row.choices) ? row.choices : [],
+    figures: row.figures,
+    questionType: row.questionType,
+    correctAnswer: row.correctAnswer,
+    officialExplanation: row.officialExplanation,
+    extractGaps: (row.extractGaps ?? {}) as Record<string, unknown>,
+    domain: row.domain,
+    skill: row.skill,
+    difficulty: row.difficulty,
+    subject: row.subject,
+    tags: row.tags,
+    sourceType: row.sourceType,
+    generationMethod: row.generationMethod,
+  };
 }
 
 function settingMatchesStudent(
@@ -397,6 +530,30 @@ export function satDifficultyForStudent(input: {
     return setting.difficulty;
   }
   return "standard";
+}
+
+/** Per-student hard in-session length. Other students stay on the shared cap. */
+export function inSessionQuestionTargetForStudent(input: {
+  email?: string | null;
+  displayName?: string | null;
+  sessionTitle?: string | null;
+  subject?: string | null;
+  sessionDateKey?: string | null;
+  session?: { dateTime: Date; timezone?: string | null } | null;
+  settings?: readonly SatDifficultySetting[];
+}): number {
+  if (input.subject && normalizedSessionSubject(input.subject) !== "SAT") {
+    return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+  }
+  const settings = input.settings ?? SAT_DIFFICULTY_SETTINGS;
+  for (const setting of settings) {
+    if (!settingMatchesStudent(setting, input)) continue;
+    const dateKey = dateKeyForSetting(input.session, input.sessionDateKey, setting);
+    if (!dateKey || dateKey <= setting.effectiveAfterDateKey) return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+    const target = setting.inSessionQuestionTarget ?? HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+    return Number.isFinite(target) && target > 0 ? target : HARD_SAT_IN_SESSION_MAX_QUESTIONS;
+  }
+  return HARD_SAT_IN_SESSION_MAX_QUESTIONS;
 }
 
 export function coercePracticeTestNumber(value: unknown): number | null {
@@ -524,7 +681,7 @@ export function planHardSatSessionSets<T extends HardSatCandidate>(
   const inSessionMax = options.inSessionMax ?? HARD_SAT_IN_SESSION_MAX_QUESTIONS;
   const inSession = selectHardSatQuestions(items, {
     targetCount: inSessionMax,
-    minCount: 1,
+    minCount: inSessionMax,
     maxCount: inSessionMax,
     excludeSourceKeys: inSessionExclude,
     seenPracticeTests,

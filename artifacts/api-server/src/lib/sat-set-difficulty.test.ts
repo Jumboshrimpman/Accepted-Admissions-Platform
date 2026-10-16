@@ -24,15 +24,20 @@ import {
 } from "./sat-bank-timing.ts";
 import {
   HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES,
+  HARD_SAT_PREWORK_QUESTIONS,
   SAT_DIFFICULTY_SETTINGS,
+  hardSatSetIsComplete,
+  inSessionQuestionTargetForStudent,
   isHardSatBankItem,
   hardSatStudentFacing,
   isDeveloperSeededSatItem,
   isRenderableHardSatItem,
   planHardSatSessionSets,
+  satBankUsageCountsAsSeen,
   satDifficultyForStudent,
   selectHardSatQuestions,
   shouldRefreshUnattemptedHardPrework,
+  toRenderableHardSatInput,
   type HardSatCandidate,
   type RenderableHardSatInput,
 } from "./sat-set-difficulty.ts";
@@ -215,8 +220,39 @@ test("attempted pre-work is not refreshed, and garbled math is not renderable", 
       assignedSourceKeys: ["sat-pt4-rw-m1-q1"],
       desiredSourceKeys: ["sat-pt5-rw-m2-q15"],
     }),
+    false,
+  );
+  assert.equal(
+    shouldRefreshUnattemptedHardPrework({
+      difficulty: "hard",
+      attemptCount: 0,
+      assignedSourceKeys: [],
+      desiredSourceKeys: ["sat-pt5-rw-m2-q15"],
+    }),
     true,
   );
+  assert.equal(satBankUsageCountsAsSeen("archived", 0), false);
+  assert.equal(satBankUsageCountsAsSeen("archived", 1), true);
+  assert.equal(satBankUsageCountsAsSeen("published", 0), true);
+  assert.equal(
+    inSessionQuestionTargetForStudent({
+      email: TAITO_STUDENT_EMAIL,
+      subject: "SAT",
+      sessionDateKey: "2026-10-30",
+    }),
+    20,
+  );
+  assert.equal(
+    inSessionQuestionTargetForStudent({
+      email: "other-student@example.com",
+      subject: "SAT",
+      sessionDateKey: "2026-10-30",
+    }),
+    15,
+  );
+  assert.equal(hardSatSetIsComplete({ preworkCount: 39, inSessionCount: 20, inSessionTarget: 20 }), false);
+  assert.equal(hardSatSetIsComplete({ preworkCount: 40, inSessionCount: 20, inSessionTarget: 20 }), true);
+  assert.equal(HARD_SAT_PREWORK_QUESTIONS, 40);
   assert.equal(
     shouldRefreshUnattemptedHardPrework({
       difficulty: "hard",
@@ -311,6 +347,31 @@ test("attempted pre-work is not refreshed, and garbled math is not renderable", 
     ],
   };
   assert.equal(isRenderableHardSatItem(garbledWithCrop), false);
+  const cropBacked: RenderableHardSatInput = {
+    ...garbled,
+    choices: [
+      { id: "a", label: "A", text: "−130" },
+      { id: "b", label: "B", text: "−23/2" },
+      { id: "c", label: "C", text: "−3/2" },
+      { id: "d", label: "D", text: "−3/2" },
+    ],
+    correctAnswer: "D",
+    officialExplanation: "Choice D is correct. The vertex of the rewritten quadratic is at x = -3/2.",
+    figures: [
+      {
+        url: "https://app.acceptedadmissions.org/media/sat-bank/sat-practice-test-4-digital/m2-q18-full.png",
+        alt: "Full question including choices",
+      },
+    ],
+  };
+  assert.equal(isRenderableHardSatItem(cropBacked), true);
+  assert.equal(
+    isRenderableHardSatItem({
+      ...cropBacked,
+      officialExplanation: "Choice A is correct. This letter does not match the key.",
+    }),
+    false,
+  );
   const wrongFigure: RenderableHardSatInput = {
     ...candidate(6, "math", 18),
     examFamily: "sat",
@@ -358,8 +419,14 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   assert.match(guard, /if \(Number\(count\) > 0\) return;/);
   assert.doesNotMatch(guard, /attemptsTable\)\s*\.set|update\(attemptsTable\)|delete\(attemptsTable\)/);
   const prep = readFileSync(new URL("./session-curriculum-prep.ts", import.meta.url), "utf8");
-  assert.match(prep, /ensureHardSatSessionSets/);
-  assert.match(prep, /inSessionStatus === "attempted"/);
+  assert.doesNotMatch(prep, /ensureHardSatSessionSets/);
+  assert.match(prep, /describeHardSatSessionPrep/);
+  const hardSets = readFileSync(new URL("./sat-hard-sets.ts", import.meta.url), "utf8");
+  assert.match(hardSets, /status: "attempted"/);
+  assert.match(hardSets, /satBankUsageCountsAsSeen/);
+  assert.match(hardSets, /ne\(assignmentsTable\.status, "archived"\)/);
+  assert.match(hardSets, /raiseHardSatShortfallAlert/);
+  assert.doesNotMatch(hardSets, /sendEmail|sendTransactionalEmail/);
   const leftover = prep.slice(
     prep.indexOf("async function attachHardBank"),
     prep.indexOf("export type SessionPrepResult"),
@@ -368,7 +435,35 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   assert.doesNotMatch(leftover, /sourceType/);
   assert.doesNotMatch(leftover, /difficulty", "hard"/);
   const route = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
-  assert.match(route, /ensureHardSatSessionSets\(session, req\.appUser\?\.id/);
+  const sessionGet = route.slice(
+    route.indexOf('router.get("/sessions/:sessionId"'),
+    route.indexOf("async function listAssignmentsForUser"),
+  );
+  assert.doesNotMatch(sessionGet, /ensureHardSatSessionSets/);
+  const adaptiveMarker = '"/sessions/:sessionId/adaptive-curriculum"';
+  const adaptiveGetAt = route.indexOf(adaptiveMarker);
+  const adaptivePostAt = route.indexOf(adaptiveMarker, adaptiveGetAt + adaptiveMarker.length);
+  const adaptiveGet = route.slice(route.lastIndexOf("router.get(", adaptiveGetAt), adaptivePostAt);
+  assert.doesNotMatch(adaptiveGet, /ensureHardSatSessionSets/);
+  assert.doesNotMatch(adaptiveGet, /prepareSessionCurriculum/);
+  const postHandler = route.slice(route.lastIndexOf("router.post(", adaptivePostAt), route.indexOf('router.get("/assignments"'));
+  assert.match(postHandler, /ensureRole\(\["administrator", "tutor"\]\)/);
+  assert.match(postHandler, /withSessionPreworkLock/);
+  assert.match(postHandler, /ensureHardSatSessionSets\(session, req\.appUser\?\.id/);
+  const shared = readFileSync(new URL("./sat-bank-service.ts", import.meta.url), "utf8");
+  assert.match(shared, /toRenderableHardSatInput/);
+  assert.match(hardSets, /toRenderableHardSatInput/);
+  assert.equal(
+    toRenderableHardSatInput({
+      id: "bank-1",
+      sourceKey: "sat-pt8-rw-m2-q15",
+      section: "rw",
+      module: "2",
+      questionNumber: "15",
+      practiceTestNumber: "8",
+    }).questionNumber,
+    15,
+  );
 });
 
 function studentUsableRecord(record: ParsedBankRecord): boolean {
@@ -500,31 +595,43 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
     if (typeof testNumber === "number") seenTests.add(testNumber);
   }
   const hardPool = records.filter((record) =>
-    isRenderableHardSatItem({
-      id: record.sourceKey,
-      sourceKey: record.sourceKey,
-      examFamily: record.examFamily,
-      sourceKind: record.sourceKind,
-      section: record.section,
-      module: record.module,
-      questionNumber: record.questionNumber,
-      practiceTestNumber: record.practiceTestNumber,
-      prompt: record.prompt,
-      stimulus: record.stimulus,
-      choices: record.choices,
-      figures: record.figures,
-      questionType: record.questionType,
-      correctAnswer: record.correctAnswer,
-      officialExplanation: record.officialExplanation,
-      extractGaps: record.extractGaps,
-      domain: record.domain,
-      skill: record.skill,
-      difficulty: record.difficulty,
-    }),
+    isRenderableHardSatItem(
+      toRenderableHardSatInput({
+        id: record.sourceKey,
+        sourceKey: record.sourceKey,
+        examFamily: record.examFamily,
+        sourceKind: record.sourceKind,
+        section: record.section,
+        module: record.module,
+        questionNumber: record.questionNumber,
+        practiceTestNumber: record.practiceTestNumber,
+        prompt: record.prompt,
+        stimulus: record.stimulus,
+        choices: record.choices,
+        figures: record.figures,
+        questionType: record.questionType,
+        correctAnswer: record.correctAnswer,
+        officialExplanation: record.officialExplanation,
+        extractGaps: record.extractGaps,
+        domain: record.domain,
+        skill: record.skill,
+        difficulty: record.difficulty,
+      }),
+    ),
   );
+  const inSessionTarget = inSessionQuestionTargetForStudent({
+    email: TAITO_STUDENT_EMAIL,
+    subject: "SAT",
+    sessionDateKey: "2026-10-30",
+  });
+  assert.equal(inSessionTarget, 20);
   const sets = planHardSatSessionSets(hardPool, {
     excludeSourceKeys: seenKeys,
     seenPracticeTests: seenTests,
+    preworkTarget: HARD_SAT_PREWORK_QUESTIONS,
+    preworkMin: HARD_SAT_PREWORK_QUESTIONS,
+    preworkMax: HARD_SAT_PREWORK_QUESTIONS,
+    inSessionMax: inSessionTarget,
   });
   const preworkIds = sets.prework.map((item) => item.sourceKey);
   const inSessionIds = sets.inSession.map((item) => item.sourceKey);
@@ -543,8 +650,8 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       2,
     ),
   );
-  assert.ok(preworkIds.length >= 30 && preworkIds.length <= 50, `prework ${preworkIds.length}`);
-  assert.ok(inSessionIds.length >= 1 && inSessionIds.length <= 15);
+  assert.equal(preworkIds.length, HARD_SAT_PREWORK_QUESTIONS, `prework ${preworkIds.length}`);
+  assert.equal(inSessionIds.length, inSessionTarget);
   assert.equal(new Set([...preworkIds, ...inSessionIds]).size, preworkIds.length + inSessionIds.length);
   for (const sourceKey of [...preworkIds, ...inSessionIds]) {
     assert.equal(seenKeys.has(sourceKey), false, sourceKey);
@@ -553,11 +660,7 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
     assert.equal(record.module, 2, sourceKey);
     if (record.section === "rw") assert.ok(record.questionNumber >= 15, sourceKey);
     if (record.section === "math") assert.ok(record.questionNumber >= 18, sourceKey);
-    assert.equal(
-      ["sat-pt4-math-m2-q18", "sat-pt4-math-m2-q19", "sat-pt4-math-m2-q24"].includes(sourceKey),
-      false,
-      sourceKey,
-    );
+    assert.equal(sourceKey === "sat-pt4-math-m2-q18", false, sourceKey);
   }
   assert.equal(sets.prework.some((item) => item.section === "rw"), true);
   assert.equal(sets.prework.some((item) => item.section === "math"), true);
@@ -585,9 +688,72 @@ test("Taito's next SAT session (Oct 30) gets a hard disjoint pre-work and in-ses
       skill: record.skill,
       difficulty: record.difficulty,
     });
-    return facing ? [facing] : [];
+    return facing
+      ? [{
+          ...facing,
+          section: record.section,
+          module: record.module,
+          questionNumber: record.questionNumber,
+          figures: record.figures,
+          sourceKey: record.sourceKey,
+        }]
+      : [];
   });
   assert.equal(canAssignCleanStudentQuizSet(preworkFacing), true);
   assert.equal(sets.preworkTimeLimitMinutes, routinePreworkTimeLimitMinutes(preworkIds.length));
   assert.equal(sets.inSessionTimeLimitMinutes, 30);
+
+  const rwCount = hardPool.filter((record) => record.section === "rw").length;
+  const mathCount = hardPool.filter((record) => record.section === "math").length;
+  const dates = ["2026-10-30", "2026-11-06", "2026-11-20", "2026-11-27", "2026-12-11", "2026-12-18"];
+  const used = new Set(seenKeys);
+  const coverage = [];
+  for (const sessionDateKey of dates) {
+    const target = inSessionQuestionTargetForStudent({
+      email: TAITO_STUDENT_EMAIL,
+      subject: "SAT",
+      sessionDateKey,
+    });
+    assert.equal(target, 20, sessionDateKey);
+    const planned = planHardSatSessionSets(hardPool, {
+      excludeSourceKeys: used,
+      seenPracticeTests: seenTests,
+      preworkTarget: HARD_SAT_PREWORK_QUESTIONS,
+      preworkMin: HARD_SAT_PREWORK_QUESTIONS,
+      preworkMax: HARD_SAT_PREWORK_QUESTIONS,
+      inSessionMax: target,
+    });
+    const full = hardSatSetIsComplete({
+      preworkCount: planned.prework.length,
+      inSessionCount: planned.inSession.length,
+      inSessionTarget: target,
+    });
+    coverage.push({
+      sessionDateKey,
+      full,
+      prework: planned.prework.length,
+      inSession: planned.inSession.length,
+    });
+    if (!full) break;
+    for (const item of [...planned.prework, ...planned.inSession]) used.add(item.sourceKey);
+  }
+  const covered = coverage.filter((row) => row.full).length;
+  console.log(JSON.stringify({ usableHardRw: rwCount, usableHardMath: mathCount, covered, coverage }, null, 2));
+  assert.equal(rwCount, 133);
+  assert.equal(mathCount, 35);
+  assert.equal(covered, 2);
+  assert.equal(coverage[0]?.full, true);
+  assert.equal(coverage[1]?.full, true);
+  assert.equal(hardSatSetIsComplete({
+    preworkCount: coverage[2]?.prework ?? 0,
+    inSessionCount: coverage[2]?.inSession ?? 0,
+    inSessionTarget: 20,
+  }), false);
+  const pt5 = records.find((record) => record.sourceKey === "sat-pt5-math-m2-q18");
+  assert.ok(pt5);
+  assert.match(pt5.prompt, /4√\(2x\) = 16/);
+  assert.match(pt5.officialExplanation, /√\(2x\) = 4/);
+  assert.match(pt5.officialExplanation, /6x = 48/);
+  assert.equal(pt5.correctAnswer.trim().toUpperCase(), "B");
+  assert.doesNotMatch(pt5.officialExplanation, /yields 2x\s*=\s*4/);
 });
