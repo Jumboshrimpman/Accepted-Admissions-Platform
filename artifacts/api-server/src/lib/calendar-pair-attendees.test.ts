@@ -12,13 +12,10 @@ import {
   NEEL_DHARNI_USER_ID,
   NEEL_PLACEHOLDER_EMAIL,
   NIKA_CONSULTING_EMAIL,
-  VICTORIA_INTENDED_EMAIL,
   VICTORIA_PLACEHOLDER_EMAIL,
-  VICTORIA_USER_ID,
 } from "./college-consulting.ts";
 import {
   adminAttendeeEmailsForPair,
-  CALENDAR_PAIR_ADMIN_INVITES,
   mergeCalendarAttendees,
   MICHELLE_MAKAREM_CLERK_USER_ID,
   MICHELLE_MAKAREM_EMAIL,
@@ -61,117 +58,31 @@ function invite(
   });
 }
 
-test("Michelle with Xavier keeps the original admin invite rule", () => {
-  assert.equal(CALENDAR_PAIR_ADMIN_INVITES.length, 4);
-  assert.deepEqual(CALENDAR_PAIR_ADMIN_INVITES[0], {
-    studentClerkUserIds: ["user_3JCRGfBj8dgWSjO1r2zeKovFVE7"],
-    studentEmails: ["makaremmichelle7@gmail.com"],
-    tutorClerkUserIds: ["user_3IxUfoT1xRnDsqhlx5NN1eGfRg6"],
-    tutorEmails: ["xaver.rmz6@gmail.com"],
-    adminEmails: [ADMIN_INBOX_EMAIL],
-  });
+test("every booking invites admin@, including Michelle+Xavier and unrelated pairs", () => {
   assert.equal(ADMIN_INBOX_EMAIL, ADMIN);
   assert.deepEqual(adminAttendeeEmailsForPair(michelle, xavier), [ADMIN]);
-  assert.deepEqual(adminAttendeeEmailsForPair(null, xavier), []);
-  assert.deepEqual(adminAttendeeEmailsForPair(michelle, null), []);
-});
-
-test("Neel College Consulting pairs invite admin and survive an email swap", () => {
-  const neel = { userId: NEEL_DHARNI_USER_ID, email: NEEL_PLACEHOLDER_EMAIL };
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(neel, { email: NIKA_CONSULTING_EMAIL }),
-    [ADMIN],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(neel, xavier),
-    [ADMIN],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(neel, { email: VICTORIA_PLACEHOLDER_EMAIL }),
-    [ADMIN],
-  );
+  assert.deepEqual(adminAttendeeEmailsForPair(null, null), [ADMIN]);
+  assert.deepEqual(adminAttendeeEmailsForPair(michelle, null), [ADMIN]);
   assert.deepEqual(
     adminAttendeeEmailsForPair(
-      { userId: NEEL_DHARNI_USER_ID, email: "neel.real@example.com" },
-      { userId: VICTORIA_USER_ID, email: VICTORIA_INTENDED_EMAIL },
-    ),
-    [ADMIN],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { email: VICTORIA_INTENDED_EMAIL },
+      { userId: NEEL_DHARNI_USER_ID, email: NEEL_PLACEHOLDER_EMAIL },
       { email: NIKA_CONSULTING_EMAIL },
     ),
-    [],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { userId: NEEL_DHARNI_USER_ID, email: "taito0525@gmail.com" },
-      { email: "eunice_chon@berkeley.edu" },
-    ),
-    [],
+    [ADMIN],
   );
   assert.deepEqual(
     adminAttendeeEmailsForPair(
       { email: "taito0525@gmail.com" },
-      { email: NIKA_CONSULTING_EMAIL },
-    ),
-    [],
-  );
-});
-
-test("Michelle and Xavier match by Clerk id or email, not by display name", () => {
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { clerkUserId: MICHELLE_MAKAREM_CLERK_USER_ID, email: "renamed@example.com" },
-      { clerkUserId: CANONICAL_XAVIER_CLERK_USER_ID, email: "also-renamed@example.com" },
+      { email: "eunice_chon@berkeley.edu" },
     ),
     [ADMIN],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { email: "  MakaremMichelle7@gmail.com " },
-      { email: "Xaver.Rmz6@gmail.com" },
-    ),
-    [ADMIN],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { clerkUserId: MICHELLE_MAKAREM_CLERK_USER_ID },
-      { email: CANONICAL_XAVIER_EMAIL },
-    ),
-    [ADMIN],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { clerkUserId: "user_other", email: "Xavier Morales" },
-      { clerkUserId: "user_other_tutor", email: "Michelle Makarem" },
-    ),
-    [],
-  );
-});
-
-test("unrelated student and tutor pairs do not invite admin", () => {
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      { clerkUserId: "user_taito", email: "taito0525@gmail.com" },
-      xavier,
-    ),
-    [],
-  );
-  assert.deepEqual(
-    adminAttendeeEmailsForPair(
-      michelle,
-      { clerkUserId: "user_eunice", email: "eunice_chon@berkeley.edu" },
-    ),
-    [],
   );
   assert.deepEqual(
     adminAttendeeEmailsForPair(
       { clerkUserId: "user_student", email: "student@example.com" },
-      { clerkUserId: "user_tutor", email: "tutor@example.com" },
+      { email: VICTORIA_PLACEHOLDER_EMAIL },
     ),
-    [],
+    [ADMIN],
   );
 });
 
@@ -202,7 +113,7 @@ test("Michelle with Xavier keeps the student on the same Meet invite and adds ad
   assert.deepEqual(differentCase.attendees, [{ email: "Admin@AcceptedAdmissions.org" }]);
 });
 
-test("other bookings keep only their own attendee and the same event fields", () => {
+test("other bookings keep their own attendee and also include admin", () => {
   const event = invite("taito0525@gmail.com", {
     clerkUserId: "user_taito",
     email: "taito0525@gmail.com",
@@ -211,11 +122,10 @@ test("other bookings keep only their own attendee and the same event fields", ()
     email: "eunice_chon@berkeley.edu",
   });
   assert.equal(event.location, MEET_URL);
-  assert.deepEqual(event.attendees, [{ email: "taito0525@gmail.com" }]);
-  assert.equal(
-    event.attendees.some((attendee) => attendee.email === ADMIN),
-    false,
-  );
+  assert.deepEqual(event.attendees, [
+    { email: "taito0525@gmail.com" },
+    { email: ADMIN },
+  ]);
 
   const unchanged = calendarEventPayload(
     "SAT session",
@@ -225,7 +135,10 @@ test("other bookings keep only their own attendee and the same event fields", ()
     "michelle@example.com",
     MEET_URL,
   );
-  assert.deepEqual(unchanged.attendees, [{ email: "michelle@example.com" }]);
+  assert.deepEqual(unchanged.attendees, [
+    { email: "michelle@example.com" },
+    { email: ADMIN },
+  ]);
 });
 
 test("merging attendees is idempotent and does not drop existing guests", () => {
@@ -246,7 +159,7 @@ test("merging attendees is idempotent and does not drop existing guests", () => 
   );
 });
 
-test("create, reschedule, and admin calendar updates all use the pair invite", async () => {
+test("create and reschedule keep their existing sendUpdates and still invite admin", async () => {
   const platformSource = await readFile(
     fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
     "utf8",
@@ -255,24 +168,35 @@ test("create, reschedule, and admin calendar updates all use the pair invite", a
     fileURLToPath(new URL("./booking.ts", import.meta.url)),
     "utf8",
   );
+  const indexSource = await readFile(
+    fileURLToPath(new URL("../index.ts", import.meta.url)),
+    "utf8",
+  );
   assert.equal(platformSource.includes("calendarEventPayload("), false);
   assert.match(
     bookingSource,
     /adminAttendeeEmailsForPair\(parties\?\.student, parties\?\.tutor\)/,
   );
+  const createStart = platformSource.indexOf('router.post("/booking/sessions"');
+  const cancelStart = platformSource.indexOf('router.post("/booking/sessions/:sessionId/cancel"');
+  const createSlice = platformSource.slice(createStart, cancelStart);
+  assert.match(createSlice, /bookingCalendarEventPayload\(/);
+  assert.match(createSlice, /googleCalendarSendUpdatesForSubjects\(/);
+  assert.doesNotMatch(createSlice, /patchGoogleEventAttendees/);
+  assert.doesNotMatch(createSlice, /sendUpdates:\s*"none"/);
+  const rescheduleStart = platformSource.indexOf(
+    'router.post("/booking/sessions/:sessionId/reschedule"',
+  );
+  const rescheduleEnd = platformSource.indexOf("async function financialSummary");
+  const rescheduleSlice = platformSource.slice(rescheduleStart, rescheduleEnd);
+  assert.match(rescheduleSlice, /bookingCalendarEventPayload\(/);
+  assert.match(rescheduleSlice, /googleCalendarSendUpdatesForSubjects\(session\.subject\)/);
+  assert.match(rescheduleSlice, /inviteAt\(previousStart, session\.timezone\)/);
+  assert.doesNotMatch(rescheduleSlice, /patchGoogleEventAttendees/);
   assert.match(
     platformSource,
-    /function syncGoogleCalendarForSessionChange[\s\S]*?bookingCalendarEventPayload\(/,
+    /function syncGoogleCalendarForSessionChange[\s\S]*?googleCalendarSendUpdatesForSubjects\(/,
   );
-  assert.match(
-    platformSource,
-    /router\.post\("\/booking\/sessions", async[\s\S]*?bookingCalendarEventPayload\(/,
-  );
-  assert.match(
-    platformSource,
-    /router\.post\("\/booking\/sessions\/:sessionId\/reschedule"[\s\S]*?bookingCalendarEventPayload\(/,
-  );
-  assert.match(platformSource, /inviteAt\(previousStart, session\.timezone\)/);
   assert.match(
     platformSource,
     /createGoogleEvent\([\s\S]*?bookingCalendarEventPayload\(/,
@@ -281,4 +205,6 @@ test("create, reschedule, and admin calendar updates all use the pair invite", a
     platformSource,
     /updateGoogleEvent\([\s\S]*?bookingCalendarEventPayload\(/,
   );
+  assert.equal(indexSource.includes("backfillAdminCalendarAttendees"), false);
+  assert.equal(indexSource.includes("/admin/calendar-attendees/backfill"), false);
 });

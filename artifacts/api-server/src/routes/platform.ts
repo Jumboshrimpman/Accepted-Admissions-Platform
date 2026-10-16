@@ -36,12 +36,14 @@ import {
   deleteGoogleEvent,
   googleCalendarSendUpdatesForSubjects,
   exchangeGoogleCode,
+  getGoogleCalendarEvent,
   getGoogleCalendarConfig,
   googleAccessTokenExpiresAt,
   googleAccountMatchesPortalEmails,
   googleCalendarCompletionHtml,
   googleCalendarAuthorizationUrl,
   inspectCalendarOAuthState,
+  isGoogleCalendarNotFound,
   normalizeGoogleCalendarStatus,
   listGoogleBusyWindows,
   resolveGoogleCalendarAccessToken,
@@ -49,6 +51,7 @@ import {
   readCalendarCallbackQuery,
   resolveGoogleCalendarRedirectUri,
   resolveOAuthRedirectUriForRequest,
+  patchGoogleEventAttendees,
   safeCalendarReturnTo,
   updateGoogleEvent,
   type CalendarOAuthOutcome,
@@ -79,6 +82,10 @@ import {
   resolveCalendarProfileForOAuthState,
   resolveCalendarProfileForUser,
 } from "../lib/calendar-profile";
+import {
+  backfillAdminCalendarAttendees,
+  type AdminAttendeeBackfillSession,
+} from "../lib/calendar-admin-attendee";
 import {
   acquireBookingLocks,
   assertNoScheduleConflict,
@@ -8182,6 +8189,88 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
     },
   });
 });
+
+router.post(
+  "/admin/calendar-attendees/backfill",
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const dryRun = (req.body as { dryRun?: unknown } | null)?.dryRun;
+    if (typeof dryRun !== "boolean") {
+      res.status(400).json({
+        error:
+          "Pass dryRun true to list upcoming events missing admin@, or false to patch them.",
+      });
+      return;
+    }
+    const rows = await db
+      .select({
+        id: sessionsTable.id,
+        title: sessionsTable.title,
+        dateTime: sessionsTable.dateTime,
+        tutorUserId: sessionsTable.tutorUserId,
+        providerEventId: sessionsTable.providerEventId,
+      })
+      .from(sessionsTable)
+      .where(
+        and(
+          isNotNull(sessionsTable.providerEventId),
+          sql`${sessionsTable.dateTime} > now()`,
+          sql`${sessionsTable.bookingStatus} <> 'cancelled'`,
+          sql`${sessionsTable.status} <> 'archived'`,
+        ),
+      );
+    const sessions: AdminAttendeeBackfillSession[] = rows.flatMap((row) =>
+      row.providerEventId
+        ? [
+            {
+              sessionId: row.id,
+              title: row.title,
+              start: row.dateTime,
+              tutorUserId: row.tutorUserId,
+              providerEventId: row.providerEventId,
+            },
+          ]
+        : [],
+    );
+    const report = await backfillAdminCalendarAttendees({
+      dryRun,
+      sessions,
+      readAttendees: async (session) => {
+        if (!session.tutorUserId) return null;
+        const access = await calendarAccessForUser(session.tutorUserId);
+        if (!access?.connection.calendarId) return null;
+        try {
+          const event = await runTutorCalendarCall(access, (token) =>
+            getGoogleCalendarEvent(
+              token,
+              access.connection.calendarId!,
+              session.providerEventId,
+            ),
+          );
+          return event.attendees ?? [];
+        } catch (error) {
+          if (isGoogleCalendarNotFound(error)) return null;
+          throw error;
+        }
+      },
+      patchAttendees: async (session, attendees, sendUpdates) => {
+        if (!session.tutorUserId) throw new Error("Session has no tutor");
+        const access = await calendarAccessForUser(session.tutorUserId);
+        if (!access?.connection.calendarId) throw new Error("Tutor calendar is disconnected");
+        await runTutorCalendarCall(access, (token) =>
+          patchGoogleEventAttendees(
+            token,
+            access.connection.calendarId!,
+            session.providerEventId,
+            attendees,
+            sendUpdates,
+          ),
+        );
+      },
+    });
+    res.json(report);
+  },
+);
 
 const CALENDAR_CONNECTION_TEST_WINDOW_MS = 15 * 60 * 1000;
 const TUTOR_PROFILE_ID =
