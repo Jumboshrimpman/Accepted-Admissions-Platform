@@ -90,6 +90,14 @@ export function clientSatCreditAction(args: {
   return "purchase";
 }
 
+/** Whole hours stay integers. 1.5 stays 1.5. */
+export function formatPrepaidCreditCount(hours: number): string {
+  const value = Number(hours);
+  if (!Number.isFinite(value)) return "0";
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 export function prepaidHoursBadgeLabel(
   remainingHours: number | null,
   purchasedHours = 0,

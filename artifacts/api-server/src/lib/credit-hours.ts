@@ -28,6 +28,17 @@ export function remainingCreditHoursForProduct(
   return remainingCreditHours(entries.filter((entry) => entry.productId === productId));
 }
 
+/** Hours whose ledger rows belong to any of these products. */
+export function remainingCreditHoursForProducts(
+  entries: Array<{ entryType: string; hours: unknown; productId?: string | null }>,
+  productIds: readonly string[],
+): number {
+  const ids = new Set(productIds);
+  return remainingCreditHours(
+    entries.filter((entry) => Boolean(entry.productId && ids.has(entry.productId))),
+  );
+}
+
 export function summarizeCreditHours(
   entries: Array<{ entryType: string; hours: unknown }>,
 ): { purchasedHours: number; usedHours: number; remainingHours: number } {

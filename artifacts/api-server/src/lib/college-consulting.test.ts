@@ -15,6 +15,7 @@ import {
 import { sharedMeetOverlapPairs } from "./shared-meet-conflict.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  COLLEGE_CONSULTING_LENGTH_PRODUCTS,
   COLLEGE_CONSULTING_NIKA_SLUG,
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
@@ -172,6 +173,41 @@ test("only Neel can buy consulting hours, and a Nika hour does not pay for Xavie
   assert.equal(consultingTutorDisplayName("xavier"), "Xavier Morales");
   assert.equal(credits.find((credit) => credit.tutorKey === "victoria")?.calendarConnected, false);
   assert.equal(credits.find((credit) => credit.tutorKey === "victoria")?.hourlyRateCents, 13_000);
+
+  const lengthBySlug = new Map(
+    COLLEGE_CONSULTING_LENGTH_PRODUCTS.map((product) => [product.slug, product]),
+  );
+  assert.equal(lengthBySlug.get("college-consulting-nika-90")?.totalPriceCents, 15_000);
+  assert.equal(lengthBySlug.get("college-consulting-nika-120")?.totalPriceCents, 20_000);
+  assert.equal(lengthBySlug.get("college-consulting-victoria-90")?.totalPriceCents, 19_500);
+  assert.equal(lengthBySlug.get("college-consulting-victoria-120")?.totalPriceCents, 26_000);
+  assert.equal(lengthBySlug.get("college-consulting-xavier-90")?.totalPriceCents, 30_000);
+  assert.equal(lengthBySlug.get("college-consulting-xavier-120")?.totalPriceCents, 40_000);
+  assert.equal(
+    consultingCatalogAlignment({
+      slug: "college-consulting-nika-90",
+      name: "College Consulting 1.5 hours with Nika",
+      description: "One prepaid 90-minute College Consulting credit with Nika at $100/hour.",
+      totalPriceCents: 15_000,
+      stripePriceId: "price_nika_90",
+    }),
+    null,
+  );
+  assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, "college-consulting-nika-90"), "consulting");
+  assert.equal(checkoutAudienceForSlug("michelle", "college-consulting-nika-120"), "forbidden");
+  const pooled = consultingTutorCredits({
+    entries: [
+      { entryType: "original", hours: 1, productId: "nika-product" },
+      { entryType: "original", hours: 2, productId: "nika-120" },
+      { entryType: "debit", hours: 1, productId: "nika-product" },
+    ],
+    products: [
+      { id: "nika-product", slug: COLLEGE_CONSULTING_NIKA_SLUG },
+      { id: "nika-120", slug: "college-consulting-nika-120" },
+    ],
+    calendars: { nika: true, xavier: false, victoria: false },
+  });
+  assert.equal(pooled.find((credit) => credit.tutorKey === "nika")?.prepaidHours, 2);
 });
 
 test("placeholder links stop for administrators and do not provision Victoria's real email", () => {

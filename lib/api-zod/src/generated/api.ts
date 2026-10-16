@@ -2614,7 +2614,7 @@ export const createBookingSessionBodyDurationMinutesDefault = 60;
 export const CreateBookingSessionBody = zod.object({
   "tutorProfileId": zod.string(),
   "startTime": zod.coerce.date(),
-  "durationMinutes": zod.literal(60).default(createBookingSessionBodyDurationMinutesDefault)
+  "durationMinutes": zod.union([zod.literal(60), zod.literal(90), zod.literal(120)]).default(createBookingSessionBodyDurationMinutesDefault)
 })
 
 export const CreateBookingSessionResponse = zod.object({

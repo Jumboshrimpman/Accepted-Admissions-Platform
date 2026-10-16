@@ -7,14 +7,13 @@ import {
   type Dashboard,
   type FinancialSummary,
 } from "@workspace/api-client-react";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, ExternalLink, Eye, FileText, Sparkles, Target, Users } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, ExternalLink, Eye, FileText, Sparkles, Target } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
-import { portalTutorRosterKey, portalTutorsFromDashboard } from "@/lib/portal-tutors";
 import {
   collapsedListedSessions,
   canCancelOrRescheduleSession,
@@ -249,13 +248,6 @@ export function ClientDashboardView({
   const analysis = nextSession?.latestResult?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
   const completed = sessions.filter(isSessionWorkComplete).length;
-  const tutors = portalTutorsFromDashboard({
-    credits: dashboard.credits,
-    courses: dashboard.courses,
-    curriculumSessions: sessions,
-    upcomingSessions: dashboard.upcomingSessions,
-  });
-
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
       <section
@@ -357,10 +349,10 @@ export function ClientDashboardView({
               {collegeConsulting ? "College Consulting credits" : "SAT session credits"}
             </CardTitle>
             <CardDescription>
-              Purchased credits unlock after a verified Stripe payment. Booking uses one credit per session.
+              Purchased credits unlock after a verified Stripe payment. A session uses its length in prepaid hours.
               {collegeConsulting
-                ? "Nika is $100/hour. Victoria is $130/hour. Xavier is $200/hour. Hours do not transfer between tutors."
-                : "Pay $130 for a single hour or $1,300 for a 10-hour package, then book Xavier or Eunice."}
+                ? " Nika is $100/hour, Victoria is $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Hours do not transfer between tutors."
+                : " Pay $130/hour. A 1-hour session is $130, 1.5 hours is $195, and 2 hours is $260. A 10-hour package is $1,300."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -492,34 +484,6 @@ export function ClientDashboardView({
           }
         />
       ) : null}
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-primary" />
-            Your tutors
-          </CardTitle>
-          <CardDescription>
-            Your approved tutor relationships, organized by subject.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-            {tutors.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2" data-testid="client-tutor-roster">
-                {tutors.map((tutor) => (
-                  <div key={portalTutorRosterKey(tutor)} className="rounded-xl border p-4">
-                    <p className="font-semibold">{tutor.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{tutor.specialty}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-3 text-sm text-muted-foreground">
-                Your tutor relationships will appear here once the matching tutor account is provisioned.
-              </p>
-            )}
-        </CardContent>
-      </Card>
 
       {nextSession ? (
         <Card className="border-primary/25 shadow-sm">

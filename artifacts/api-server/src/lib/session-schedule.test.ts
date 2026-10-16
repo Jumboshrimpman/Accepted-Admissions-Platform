@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, satCommerceEmailForAccount, selfServeSatBookingForAccount, selfServeSatBookingForEmail, sessionTitle, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
+import { SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, satCommerceEmailForAccount, selfServeSatBookingForAccount, selfServeSatBookingForEmail, personFirstName, sessionTitle, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -95,6 +95,13 @@ test("defines Taito's 12 unique Fall 2026 sessions with the requested tutors", (
         : "Taito’s English Session with Nika",
     );
   }
+});
+
+test("tutors see a linked student by first name", () => {
+  assert.equal(personFirstName("Taito Goto"), "Taito");
+  assert.equal(personFirstName("  Michelle Lee  "), "Michelle");
+  assert.equal(personFirstName(""), "");
+  assert.equal(personFirstName(null, "Student"), "Student");
 });
 
 test("builds participant-driven appointment names with normalized subjects and fallbacks", () => {

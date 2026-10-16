@@ -372,6 +372,13 @@
       "when": 1792100000000,
       "tag": "0056_portal_login_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792200000000,
+      "tag": "0057_session_lengths_and_checkout_test",
+      "breakpoints": true
     }
   ]
 }

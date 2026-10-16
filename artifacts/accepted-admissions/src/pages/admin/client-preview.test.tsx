@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -131,7 +131,7 @@ describe("administrator client preview", () => {
     expect(screen.getByText(/Taito Goto's client-scoped data/)).toBeTruthy();
     expect(screen.getByText(/assign or remove them under People/i)).toBeTruthy();
     expectPaymentReceiptsHidden();
-    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.queryByText("Your tutors")).toBeNull();
     expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
     expect(screen.queryByText("Prepaid booking experience")).toBeNull();
@@ -392,9 +392,8 @@ describe("administrator client preview", () => {
     expect(screen.queryByText(/Meetings for this program are already scheduled/i)).toBeNull();
     expectPaymentReceiptsHidden();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
-    const roster = screen.getByTestId("client-tutor-roster");
-    expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);
-    expect(within(roster).getAllByText("Nika Raiffe")).toHaveLength(1);
+    expect(screen.queryByTestId("client-tutor-roster")).toBeNull();
+    expect(screen.queryByText("Your tutors")).toBeNull();
   });
 
   test("self-serve clients see prepaid booking without the booked banner when a session is reserved", () => {
@@ -487,7 +486,7 @@ describe("administrator client preview", () => {
     expect(screen.queryByText("A prepaid session is booked")).toBeNull();
     expect(screen.getByText("Michelle’s SAT Session with Xavier")).toBeTruthy();
     expectPaymentReceiptsLast();
-    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.queryByText("Your tutors")).toBeNull();
     expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Session roadmap")).toBeTruthy();
     expect(screen.queryByText("One plan. Twelve focused meetings.")).toBeNull();
@@ -862,10 +861,10 @@ describe("administrator client preview", () => {
     render(<AdminClientPreview />);
 
     expect(screen.getByText("Welcome back, Jordan.")).toBeTruthy();
-    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.queryByText("Your tutors")).toBeNull();
     expect(
-      screen.getByText("Your tutor relationships will appear here once the matching tutor account is provisioned."),
-    ).toBeTruthy();
+      screen.queryByText("Your tutor relationships will appear here once the matching tutor account is provisioned."),
+    ).toBeNull();
     expect(screen.getByTestId("client-quizzes").textContent).toContain("No quizzes are assigned yet.");
     expect(screen.getByText("Your sessions will appear here when they are scheduled.")).toBeTruthy();
     expect(screen.getByText("Session roadmap")).toBeTruthy();

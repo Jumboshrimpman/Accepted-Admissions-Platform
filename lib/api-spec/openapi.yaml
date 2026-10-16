@@ -2516,7 +2516,7 @@ components:
       properties:
         tutorProfileId: { type: string }
         startTime: { type: string, format: date-time }
-        durationMinutes: { type: number, enum: [60], default: 60 }
+        durationMinutes: { type: number, enum: [60, 90, 120], default: 60 }
     CancelBookingInput:
       type: object
       properties:

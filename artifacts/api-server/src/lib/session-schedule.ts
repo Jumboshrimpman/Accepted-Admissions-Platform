@@ -133,11 +133,19 @@ export function isTaitoFallSession(session: {
   );
 }
 
+/** First whitespace-delimited token. Tutors see students this way. */
+export function personFirstName(
+  displayName: string | null | undefined,
+  fallback = "",
+): string {
+  return displayName?.trim().split(/\s+/)[0] || fallback;
+}
+
 function participantFirstName(
   displayName: string | null | undefined,
   fallback: string,
 ): string {
-  return displayName?.trim().split(/\s+/)[0] || fallback;
+  return personFirstName(displayName, fallback);
 }
 
 export function normalizedSessionSubject(subject: string): string {

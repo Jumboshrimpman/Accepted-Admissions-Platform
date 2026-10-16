@@ -10,6 +10,7 @@ import {
   clientSatCreditAction,
   paymentCreditBannerCopy,
   paymentCreditBannerState,
+  formatPrepaidCreditCount,
   prepaidHoursBadgeLabel,
   remainingCreditsCaption,
 } from "./portal-sat-payment.ts";
@@ -128,6 +129,13 @@ test("a restored remaining hour is available to book, not reserved or unpaid", (
     }),
     "spent",
   );
+});
+
+test("fractional prepaid credits stay at one decimal", () => {
+  assert.equal(formatPrepaidCreditCount(1), "1");
+  assert.equal(formatPrepaidCreditCount(1.5), "1.5");
+  assert.equal(formatPrepaidCreditCount(2), "2");
+  assert.equal(formatPrepaidCreditCount(10), "10");
 });
 
 test("zero remaining after a purchase is reserved copy only while a session is booked", () => {

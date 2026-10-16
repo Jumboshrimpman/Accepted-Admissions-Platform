@@ -236,6 +236,7 @@ export function BookingCard({
   const { data: currentUser } = useGetCurrentUser();
   const displayTimezone = resolveClientDisplayTimezone(currentUser?.timezone);
   const [selectedTutorId, setSelectedTutorId] = useState("");
+  const [selectedDuration, setSelectedDuration] = useState<60 | 90 | 120>(60);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [selectedDateKey, setSelectedDateKey] = useState("");
   const [reschedulingSessionId, setReschedulingSessionId] = useState<string | null>(null);
@@ -288,7 +289,9 @@ export function BookingCard({
           tagline: null,
         }
       : undefined);
-  const durationMinutes = Number(activeSession?.durationMinutes) || 60;
+  const durationMinutes = reschedulingSessionId
+    ? Number(activeSession?.durationMinutes) || 60
+    : selectedDuration;
   const range = useMemo(
     () =>
       bookingAvailabilityRange({
@@ -425,7 +428,7 @@ export function BookingCard({
       return;
     }
     createBooking.mutate(
-      { data: { tutorProfileId: selectedTutorId, startTime: selectedSlot, durationMinutes: 60 } },
+      { data: { tutorProfileId: selectedTutorId, startTime: selectedSlot, durationMinutes: selectedDuration } },
       {
         onSuccess: (session) => {
           invalidateBookingData();
@@ -477,8 +480,12 @@ export function BookingCard({
     hasLiveBookedSession: upcomingReserved.length > 0,
     rescheduling: Boolean(reschedulingSessionId),
   });
-  const canConfirmSelectedSlot =
-    Boolean(reschedulingSessionId) || selectedTutorHours === null || selectedTutorHours > 0;
+  const requiredHours = durationMinutes / 60;
+  const hasHoursForLength =
+    Boolean(reschedulingSessionId) ||
+    selectedTutorHours === null ||
+    selectedTutorHours + 0.001 >= requiredHours;
+  const canConfirmSelectedSlot = hasHoursForLength;
   const availableSlots = availabilityQuery.data?.slots ?? [];
   const availableDateKeys = useMemo(
     () => new Set(availableSlots.map((slot) => bookingSlotDayKey(slot, displayTimezone))),
@@ -511,8 +518,8 @@ export function BookingCard({
             </CardTitle>
             <CardDescription className="mt-2 max-w-2xl">
               {collegeConsulting
-                ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier ($200/hr). Each hour is checked against that tutor’s Google Calendar and the shared Meet room. A tutor with no calendar connected cannot be booked. Cancel at least 24 hours ahead to restore that tutor’s credit."
-                : "Choose Xavier or Eunice and a 60-minute time verified against their live Google Calendar. Pay $130 for one hour or $1,300 for a 10-hour package, then spend one credit per booking. Cancel at least 24 hours ahead to restore the credit."}
+                ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier ($200/hr), then 1 hour, 1.5 hours, or 2 hours at that same rate. The full length is checked against that tutor’s Google Calendar and the shared Meet room. Cancel at least 24 hours ahead to restore the credit."
+                : "Choose Xavier or Eunice, then 1 hour ($130), 1.5 hours ($195), or 2 hours ($260). The full length is checked against their live Google Calendar. A 10-hour package is $1,300. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
@@ -561,6 +568,35 @@ export function BookingCard({
                 />
               ))}
             </div>
+
+            {!reschedulingSessionId && (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Session length">
+                {(
+                  [
+                    { minutes: 60 as const, label: "1 hour" },
+                    { minutes: 90 as const, label: "1.5 hours" },
+                    { minutes: 120 as const, label: "2 hours" },
+                  ]
+                ).map((length) => (
+                  <button
+                    key={length.minutes}
+                    type="button"
+                    aria-pressed={selectedDuration === length.minutes}
+                    onClick={() => {
+                      setSelectedDuration(length.minutes);
+                      setSelectedSlot("");
+                    }}
+                    className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                      selectedDuration === length.minutes
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hover:border-primary/40 hover:bg-muted/40"
+                    }`}
+                  >
+                    {length.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {selectedTutor && (
               <div className="rounded-2xl bg-muted/40 p-4">
@@ -639,7 +675,7 @@ export function BookingCard({
                             }`}
                           >
                             <span className="font-medium">{formatBookingSlotTime(slot, displayTimezone)}</span>
-                            <span className="mt-1 block text-xs opacity-70">60-minute session</span>
+                            <span className="mt-1 block text-xs opacity-70">{durationMinutes}-minute session</span>
                           </button>
                         ))}
                       </div>
@@ -713,8 +749,13 @@ export function BookingCard({
                 {selectedSlot && canConfirmSelectedSlot && (
                   <Button className="mt-4 rounded-full" onClick={submitBooking} disabled={busy}>
                     {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {reschedulingSessionId ? "Confirm new time" : "Reserve this hour"}
+                    {reschedulingSessionId ? "Confirm new time" : "Reserve this session"}
                   </Button>
+                )}
+                {selectedSlot && !canConfirmSelectedSlot && creditWall === "available" && (
+                  <p className="mt-4 text-sm text-amber-900">
+                    This length needs {requiredHours} prepaid hours.
+                  </p>
                 )}
               </div>
             )}

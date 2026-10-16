@@ -8,6 +8,32 @@ export const RETIRED_TEST_SAT_HOUR_SLUG = "test-sat-hour";
 export const SAT_HOURLY_RATE_CENTS = 13_000;
 export const SINGLE_SAT_SESSION_PRICE_CENTS = SAT_HOURLY_RATE_CENTS;
 export const TEN_SAT_SESSION_PACKAGE_PRICE_CENTS = SAT_HOURLY_RATE_CENTS * 10;
+export const SAT_SESSION_90_SLUG = "sat-session-90";
+export const SAT_SESSION_120_SLUG = "sat-session-120";
+export const SAT_SESSION_90_PRICE_CENTS = Math.round(SAT_HOURLY_RATE_CENTS * 1.5);
+export const SAT_SESSION_120_PRICE_CENTS = SAT_HOURLY_RATE_CENTS * 2;
+
+/**
+ * $1 Stripe checkout for Sama's own logins. Not a bookable tutor hour.
+ * The retired `test-sat-hour` slug stays retired.
+ */
+export const SAMA_LIVE_CHECKOUT_TEST_SLUG = "sama-live-checkout-test";
+export const SAMA_LIVE_CHECKOUT_TEST_PRICE_CENTS = 100;
+export const SAMA_CHECKOUT_TEST_EMAILS = [
+  "samapostgrad@gmail.com",
+  "samakubba@gmail.com",
+  "samakubba@icloud.com",
+  "kubbasama@gmail.com",
+] as const;
+
+export function canBuySamaLiveCheckoutTest(user: {
+  email?: string | null;
+  role?: string | null;
+}): boolean {
+  if (user.role === "administrator") return true;
+  const email = user.email?.trim().toLowerCase() ?? "";
+  return (SAMA_CHECKOUT_TEST_EMAILS as readonly string[]).includes(email);
+}
 
 export const ACCEPTED_SAT_CATALOG = [
   {
@@ -26,6 +52,22 @@ export const ACCEPTED_SAT_CATALOG = [
       "Ten prepaid 60-minute SAT tutoring credits at $130/hour. Use them anytime on our SAT tutors’ available calendar.",
     durationHours: 10,
     totalPriceCents: TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
+    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
+  },
+  {
+    slug: SAT_SESSION_90_SLUG,
+    name: "1.5 Hour SAT Session",
+    description: "One prepaid 90-minute SAT tutoring credit at $130/hour.",
+    durationHours: 1.5,
+    totalPriceCents: SAT_SESSION_90_PRICE_CENTS,
+    effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
+  },
+  {
+    slug: SAT_SESSION_120_SLUG,
+    name: "2 Hour SAT Session",
+    description: "One prepaid 120-minute SAT tutoring credit at $130/hour.",
+    durationHours: 2,
+    totalPriceCents: SAT_SESSION_120_PRICE_CENTS,
     effectiveHourlyRateCents: SAT_HOURLY_RATE_CENTS,
   },
 ] as const;

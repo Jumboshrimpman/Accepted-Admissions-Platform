@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { asCreditHours } from "@/lib/portal-sat-payment";
+import { asCreditHours, formatPrepaidCreditCount } from "@/lib/portal-sat-payment";
 
 function money(cents: number): string {
   return (cents / 100).toLocaleString("en-US", {
@@ -109,7 +109,9 @@ export function FinancialCard({
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {(previewOffers?.length ? previewOffers : previewOffer ? [previewOffer] : []).map((offer) => {
-                const credits = Math.round(offer.durationHours ?? (offer.priceCents >= 130_000 ? 10 : 1));
+                const credits = formatPrepaidCreditCount(
+                  offer.durationHours ?? (offer.priceCents >= 130_000 ? 10 : 1),
+                );
                 return (
                   <div
                     key={offer.slug ?? offer.name}
@@ -122,7 +124,7 @@ export function FinancialCard({
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{offer.description}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {credits} prepaid hour{credits === 1 ? "" : "s"}
+                      {credits} prepaid hour{credits === "1" ? "" : "s"}
                     </p>
                   </div>
                 );

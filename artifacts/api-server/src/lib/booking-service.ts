@@ -19,7 +19,12 @@ import {
   type SessionScheduleInstant,
 } from "./session-schedule-guard.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { ledgerHours, remainingCreditHours, remainingCreditHoursForProduct } from "./credit-hours.ts";
+import {
+  ledgerHours,
+  remainingCreditHours,
+  remainingCreditHoursForProduct,
+  remainingCreditHoursForProducts,
+} from "./credit-hours.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { selfServeSatBookingForAccount } from "./session-schedule.ts";
 
@@ -239,7 +244,8 @@ export async function lockClientCreditsAndRequireHours(
   tx: Tx,
   clientUserId: string,
   requiredHours: number,
-  productId?: string | null,
+  productId?: string | readonly string[] | null,
+  excludeProductIds?: readonly string[],
 ): Promise<void> {
   await tx.execute(
     sql`select id from credit_ledger where client_user_id = ${clientUserId} for update`,
@@ -252,9 +258,14 @@ export async function lockClientCreditsAndRequireHours(
     })
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, clientUserId));
-  const remaining = productId
-    ? remainingCreditHoursForProduct(entries, productId)
-    : remainingCreditHours(entries);
+  const excluded = new Set(excludeProductIds ?? []);
+  const remaining = Array.isArray(productId)
+    ? remainingCreditHoursForProducts(entries, productId)
+    : productId
+      ? remainingCreditHoursForProduct(entries, productId)
+      : remainingCreditHours(
+          entries.filter((entry) => !entry.productId || !excluded.has(entry.productId)),
+        );
   if (remaining < requiredHours) {
     throw new BookingServiceError(
       409,

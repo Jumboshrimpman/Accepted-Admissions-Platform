@@ -11,4 +11,6 @@ export type BookingInputDurationMinutes = typeof BookingInputDurationMinutes[key
 
 export const BookingInputDurationMinutes = {
   NUMBER_60: 60,
+  NUMBER_90: 90,
+  NUMBER_120: 120,
 } as const;
