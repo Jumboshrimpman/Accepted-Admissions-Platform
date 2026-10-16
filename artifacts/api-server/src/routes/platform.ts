@@ -3449,7 +3449,20 @@ async function michelleQuizMathRepairEnabled(input: {
   });
 }
 
-async function attemptShape(attemptId: string) {
+async function attemptResultForViewer(
+  attempt: { id: string; status: string },
+  viewerRole?: string,
+) {
+  if (attempt.status !== "submitted" && attempt.status !== "expired") return null;
+  const stored = await storedAttemptResult(attempt.id);
+  if (!stored || !viewerRole) return stored;
+  return {
+    ...stored,
+    studentName: studentNameForRole(viewerRole, stored.studentName),
+  };
+}
+
+async function attemptShape(attemptId: string, viewerRole?: string) {
   const [record] = await db
     .select({
       attempt: attemptsTable,
@@ -3496,10 +3509,7 @@ async function attemptShape(attemptId: string) {
     ...timing,
     remainingSeconds: remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
     currentQuestionIndex: normalizeQuestionIndex(attempt.currentQuestionIndex),
-    result:
-      attempt.status === "submitted" || attempt.status === "expired"
-        ? await storedAttemptResult(attempt.id)
-        : null,
+    result: await attemptResultForViewer(attempt, viewerRole),
     responses: saved.map((response) => {
       const question = questionById.get(response.questionId);
       return attemptResponseFeedbackShape({
@@ -13065,7 +13075,9 @@ router.get("/attempts/:attemptId", async (req: AuthedRequest, res): Promise<void
       await reopenBrokenEmptyAttempt(attempt.id);
     }
   }
-  res.json(GetAttemptResponse.parse(await attemptShape(attempt.id)));
+  res.json(
+    GetAttemptResponse.parse(await attemptShape(attempt.id, req.appUser!.role)),
+  );
 });
 
 router.get(

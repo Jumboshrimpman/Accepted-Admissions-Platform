@@ -113,17 +113,20 @@ test("preview offers load both active catalog products", () => {
   assert.equal(offers.every((offer) => offer.durationMinutes === 60), true);
 });
 
-test("the $1 checkout is limited to Sama's accounts and administrators", () => {
+test("the $1 checkout is limited to Sama's account and administrators", () => {
   assert.equal(canBuySamaLiveCheckoutTest({ role: "administrator", email: "other@example.com" }), true);
+  assert.equal(
+    canBuySamaLiveCheckoutTest({ role: "student", email: "samapostgrad@gmail.com" }),
+    true,
+  );
   for (const email of [
-    "samapostgrad@gmail.com",
     "samakubba@gmail.com",
     "samakubba@icloud.com",
     "kubbasama@gmail.com",
+    "taito0525@gmail.com",
   ]) {
-    assert.equal(canBuySamaLiveCheckoutTest({ role: "student", email }), true);
+    assert.equal(canBuySamaLiveCheckoutTest({ role: "student", email }), false);
   }
-  assert.equal(canBuySamaLiveCheckoutTest({ role: "student", email: "taito0525@gmail.com" }), false);
-  assert.equal(canBuySamaLiveCheckoutTest({ role: "tutor", email: "samakubba@icloud.com" }), true);
+  assert.equal(canBuySamaLiveCheckoutTest({ role: "tutor", email: "samakubba@icloud.com" }), false);
   assert.equal(isRetiredSatTestProduct(SAMA_LIVE_CHECKOUT_TEST_SLUG), false);
 });

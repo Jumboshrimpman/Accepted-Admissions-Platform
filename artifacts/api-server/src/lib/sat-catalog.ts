@@ -14,17 +14,12 @@ export const SAT_SESSION_90_PRICE_CENTS = Math.round(SAT_HOURLY_RATE_CENTS * 1.5
 export const SAT_SESSION_120_PRICE_CENTS = SAT_HOURLY_RATE_CENTS * 2;
 
 /**
- * $1 Stripe checkout for Sama's own logins. Not a bookable tutor hour.
- * The retired `test-sat-hour` slug stays retired.
+ * $1 Stripe checkout for Sama's samapostgrad@gmail.com login and administrators.
+ * Not a bookable tutor hour. The retired `test-sat-hour` slug stays retired.
  */
 export const SAMA_LIVE_CHECKOUT_TEST_SLUG = "sama-live-checkout-test";
 export const SAMA_LIVE_CHECKOUT_TEST_PRICE_CENTS = 100;
-export const SAMA_CHECKOUT_TEST_EMAILS = [
-  "samapostgrad@gmail.com",
-  "samakubba@gmail.com",
-  "samakubba@icloud.com",
-  "kubbasama@gmail.com",
-] as const;
+export const SAMA_CHECKOUT_TEST_EMAILS = ["samapostgrad@gmail.com"] as const;
 
 export function canBuySamaLiveCheckoutTest(user: {
   email?: string | null;
