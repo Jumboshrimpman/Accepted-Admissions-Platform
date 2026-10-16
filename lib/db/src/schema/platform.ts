@@ -774,6 +774,30 @@ export const calendarOauthNoncesTable = pgTable(
   ],
 );
 
+/**
+ * Verified Clerk login addresses that should open an existing portal user.
+ * The users row keeps its contact email, display name, role, and clerk id.
+ */
+export const portalLoginAliasesTable = pgTable(
+  "portal_login_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    clerkUserId: text("clerk_user_id"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("portal_login_aliases_email_idx").on(table.email),
+    index("portal_login_aliases_user_id_idx").on(table.userId),
+    index("portal_login_aliases_clerk_user_id_idx").on(table.clerkUserId),
+  ],
+);
+
 export const availabilityRulesTable = pgTable("availability_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
   tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
