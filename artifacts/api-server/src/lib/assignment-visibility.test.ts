@@ -493,3 +493,56 @@ test("students only list homework on their own sessions, never Xavier capability
     false,
   );
 });
+
+test("known bank extract mistakes are repaired when a question is shown", () => {
+  const equation = assignmentQuestionShape(
+    {
+      id: "sat-pt11-math-m1-q2",
+      subject: "SAT Math",
+      questionType: "mcq",
+      prompt: "x/4 + 1 = 33\nWhich equation has the same solution as the given equation?",
+      choices: [
+        { id: "a", label: "A", text: "x/4 = 32" },
+        { id: "b", label: "B", text: "x/4 = 5" },
+        { id: "c", label: "C", text: "x/4 = 1" },
+        { id: "d", label: "D", text: "x/4 = -32" },
+      ],
+      correctAnswer: "A",
+      explanation:
+        "Choice A is correct. Subtracting 1 from both sides of the given equation, x/4 + 1 = 33, yields x/4 = 32.",
+    },
+    { position: 9 },
+    { includeKeys: true },
+  );
+  assert.equal(equation.prompt?.startsWith("4x+1=33"), true);
+  assert.doesNotMatch(equation.prompt ?? "", /x\/4/);
+  assert.deepEqual(
+    equation.choices?.map((choice) => choice.text),
+    ["4x=32", "4x=5", "4x=1", "4x=-32"],
+  );
+  assert.match(equation.explanation ?? "", /4x\+1=33/);
+  assert.match(equation.explanation ?? "", /4x=32/);
+  assert.doesNotMatch(equation.explanation ?? "", /x\/4/);
+
+  const percent = assignmentQuestionShape(
+    {
+      id: "sat-pt5-math-m1-q25",
+      subject: "SAT Math",
+      questionType: "mcq",
+      prompt: "The result of increasing the quantity x by 400% is\n60. What is the value of x ?",
+      choices: [
+        { id: "a", label: "A", text: "12" },
+        { id: "b", label: "B", text: "15" },
+        { id: "c", label: "C", text: "240" },
+        { id: "d", label: "D", text: "340" },
+      ],
+      correctAnswer: "A",
+    },
+    { position: 39 },
+  );
+  assert.equal(
+    percent.prompt,
+    "The result of increasing the quantity x by 400% is 60. What is the value of x ?",
+  );
+  assert.doesNotMatch(percent.prompt ?? "", /\n\s*60\./);
+});

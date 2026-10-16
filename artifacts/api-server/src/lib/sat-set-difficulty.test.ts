@@ -27,6 +27,7 @@ import {
   SAT_DIFFICULTY_SETTINGS,
   isHardSatBankItem,
   hardSatStudentFacing,
+  isDeveloperSeededSatItem,
   isRenderableHardSatItem,
   planHardSatSessionSets,
   satDifficultyForStudent,
@@ -276,6 +277,63 @@ test("attempted pre-work is not refreshed, and garbled math is not renderable", 
   const facing = hardSatStudentFacing(repairedMath);
   assert.equal(facing?.repaired, true);
   assert.match(facing?.choices[0]?.text ?? "", /x²/);
+  const seededSlope: RenderableHardSatInput = {
+    ...candidate(5, "math", 18),
+    examFamily: "sat",
+    sourceKind: "official_extract",
+    prompt: "In the xy-plane, what is the slope of the line through (0, 2) and (4, 10)?",
+    choices: [
+      { id: "a", label: "A", text: "1" },
+      { id: "b", label: "B", text: "2" },
+      { id: "c", label: "C", text: "3" },
+      { id: "d", label: "D", text: "4" },
+    ],
+    questionType: "mcq",
+    correctAnswer: "B",
+  };
+  assert.equal(isDeveloperSeededSatItem(seededSlope), true);
+  assert.equal(isRenderableHardSatItem(seededSlope), false);
+  assert.equal(isRenderableHardSatItem({ ...clean, sourceKind: "seed" }), false);
+  assert.equal(
+    isDeveloperSeededSatItem({
+      sourceKind: "official_extract",
+      prompt: "The garden's water use fell after drip lines replaced the sprinklers.",
+    }),
+    true,
+  );
+  const garbledWithCrop: RenderableHardSatInput = {
+    ...garbled,
+    figures: [
+      {
+        url: "https://app.acceptedadmissions.org/media/sat-bank/full-question.png",
+        alt: "Full question including the choices",
+      },
+    ],
+  };
+  assert.equal(isRenderableHardSatItem(garbledWithCrop), false);
+  const wrongFigure: RenderableHardSatInput = {
+    ...candidate(6, "math", 18),
+    examFamily: "sat",
+    sourceKind: "official_extract",
+    prompt:
+      "Rectangle P has an area of 72 square inches. If a rectangle with an area of 20 square inches is removed from rectangle P, what is the area, in square inches, of the resulting figure?",
+    choices: [
+      { id: "a", label: "A", text: "92" },
+      { id: "b", label: "B", text: "84" },
+      { id: "c", label: "C", text: "80" },
+      { id: "d", label: "D", text: "52" },
+    ],
+    questionType: "mcq",
+    correctAnswer: "D",
+    figures: [
+      {
+        url: "https://app.acceptedadmissions.org/media/sat-bank/scatter.png",
+        alt: "Diagram from page 34",
+      },
+    ],
+  };
+  assert.equal(isStudentUsableQuizItem(wrongFigure), true);
+  assert.equal(isRenderableHardSatItem(wrongFigure), false);
 });
 
 test("hard assign path does not email or rewrite attempt rows", () => {
@@ -302,6 +360,13 @@ test("hard assign path does not email or rewrite attempt rows", () => {
   const prep = readFileSync(new URL("./session-curriculum-prep.ts", import.meta.url), "utf8");
   assert.match(prep, /ensureHardSatSessionSets/);
   assert.match(prep, /inSessionStatus === "attempted"/);
+  const leftover = prep.slice(
+    prep.indexOf("async function attachHardBank"),
+    prep.indexOf("export type SessionPrepResult"),
+  );
+  assert.match(leftover, /fillUnattemptedOfficialHardInSession/);
+  assert.doesNotMatch(leftover, /sourceType/);
+  assert.doesNotMatch(leftover, /difficulty", "hard"/);
   const route = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
   assert.match(route, /ensureHardSatSessionSets\(session, req\.appUser\?\.id/);
 });

@@ -1187,6 +1187,46 @@ export function selectStimulusFigures(
   return pool.slice(0, 1);
 }
 
+/**
+ * A figure that contradicts the stem, or a cited diagram that is only a
+ * generic page-neighbor crop. Clean word problems with no served figure
+ * are not treated as wrong-figure items.
+ */
+export function hasWrongFigureForStem(input: {
+  prompt?: string | null;
+  stimulus?: string | null;
+  figures?: unknown;
+}): boolean {
+  const figures = (Array.isArray(input.figures) ? input.figures : []).flatMap((figure) => {
+    if (!figure || typeof figure !== "object") return [];
+    return [figure as BankFigureLike];
+  });
+  const usable = figures.filter((figure) => resolveFigureUrl(figure));
+  if (usable.length === 0) return false;
+  const stem = `${input.prompt ?? ""}\n${input.stimulus ?? ""}`;
+  const recoveredTable = hasRecoveredDataTable(stem);
+  const contradicts = (figure: BankFigureLike) => {
+    if (!figuresMatchStem(figure, stem, recoveredTable)) return true;
+    const hay = figureHay(figure);
+    if (
+      /scatter|dot\s*plot|histogram|temperature|altitude/i.test(hay) &&
+      /rectangle|triangle|perimeter|equation/i.test(stem) &&
+      !/scatter|plot|histogram|graph|chart/i.test(stem)
+    ) {
+      return true;
+    }
+    return false;
+  };
+  if (usable.some(contradicts)) return true;
+  if (!stemCitesVisual(stem) || hasUsableTableData(stem)) return false;
+  if (hasFullQuestionCrop({ figures: usable, prompt: input.prompt, stimulus: input.stimulus })) {
+    return false;
+  }
+  const shown = selectStimulusFigures(usable, input);
+  if (shown.length === 0) return true;
+  return shown.every((figure) => isGenericPageNeighborFigure(figure));
+}
+
 export function hasRenderableFigures(input: {
   figures?: BankFigureLike[] | null;
   stimulus?: string | null;

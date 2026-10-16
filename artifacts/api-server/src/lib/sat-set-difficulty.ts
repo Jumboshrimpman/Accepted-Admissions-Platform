@@ -6,6 +6,10 @@ import {
 import { isOfficialSatExtract, isStudentUsableQuizItem } from "./sat-bank-diagnostic-quality.ts";
 import { materializedQuestionContent } from "./sat-bank-figures.ts";
 import {
+  hasWrongFigureForStem,
+  looksGarbledExtractText,
+} from "./sat-bank-figure-primary.ts";
+import {
   DEFAULT_ROUTINE_PREWORK_QUESTIONS,
   ROUTINE_PREWORK_MAX_QUESTIONS,
   ROUTINE_PREWORK_MIN_QUESTIONS,
@@ -79,7 +83,36 @@ export type RenderableHardSatInput = HardSatCandidate & {
   difficulty?: string | null;
   subject?: string | null;
   tags?: string[] | null;
+  sourceType?: string | null;
+  generationMethod?: string | null;
 };
+
+const DEVELOPER_SEEDED_SAT_TEXT =
+  /returns desk|evening hours|drip lines|dedicated lane|shaded plot retained more water|slope of the line through \(0,\s*2\) and \(4,\s*10\)|x\s*(?:\^2|²)\s*[−-]\s*9\s*=\s*0/i;
+
+/** Developer-written originals and homework seeds. Never a College Board module 2 item. */
+export function isDeveloperSeededSatItem(item: {
+  sourceKind?: string | null;
+  sourceType?: string | null;
+  generationMethod?: string | null;
+  prompt?: string | null;
+  stimulus?: string | null;
+}): boolean {
+  const kind = item.sourceKind?.trim().toLowerCase() ?? "";
+  if (kind === "seed" || kind === "original") return true;
+  const sourceType = item.sourceType?.trim().toLowerCase() ?? "";
+  if (sourceType === "original") return true;
+  const method = item.generationMethod?.trim().toLowerCase() ?? "";
+  if (
+    method === "tutor-authored" ||
+    method === "adaptive-deterministic" ||
+    method === "openai" ||
+    method === "original-ielts-style"
+  ) {
+    return true;
+  }
+  return DEVELOPER_SEEDED_SAT_TEXT.test(`${item.prompt ?? ""}\n${item.stimulus ?? ""}`);
+}
 
 export function satSection(section: string | null | undefined): "rw" | "math" | null {
   const normalized = section?.trim().toLowerCase() ?? "";
@@ -176,6 +209,7 @@ function facingPasses(item: RenderableHardSatInput, facing: {
  */
 export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacing | null {
   if (!isHardSatBankItem(item)) return null;
+  if (isDeveloperSeededSatItem(item)) return null;
   if (
     !isOfficialSatExtract({
       examFamily: item.examFamily ?? "sat",
@@ -247,28 +281,49 @@ export function hardSatStudentFacing(item: RenderableHardSatInput): HardSatFacin
       repaired,
     };
   };
-  const original = asFacing(
-    materialized.prompt,
-    materialized.stimulus,
-    materialized.choices ?? [],
-    false,
+  const accept = (facing: HardSatFacing | null): HardSatFacing | null => {
+    if (!facing) return null;
+    const rawParts = [item.prompt, item.stimulus, ...(item.choices ?? []).map((choice) => choice?.text)];
+    const stillGarbled = rawParts.some((part) => {
+      if (!part) return false;
+      return looksGarbledExtractText(part) && looksGarbledExtractText(repairHardSatNotation(part));
+    });
+    if (stillGarbled) return null;
+    if (looksGarbledExtractText(facing.prompt) || looksGarbledExtractText(facing.stimulus)) return null;
+    if (facing.choices.some((choice) => looksGarbledExtractText(choice.text))) return null;
+    if (
+      hasWrongFigureForStem({
+        prompt: facing.prompt || item.prompt,
+        stimulus: facing.stimulus ?? item.stimulus,
+        figures: item.figures,
+      })
+    ) {
+      return null;
+    }
+    return facing;
+  };
+  const original = accept(
+    asFacing(materialized.prompt, materialized.stimulus, materialized.choices ?? [], false),
   );
   if (original) return original;
-  return asFacing(
-    repairHardSatNotation(materialized.prompt),
-    materialized.stimulus ? repairHardSatNotation(materialized.stimulus) : null,
-    (materialized.choices ?? []).map((choice) => ({
-      ...choice,
-      text: repairHardSatNotation(choice.text),
-    })),
-    true,
+  return accept(
+    asFacing(
+      repairHardSatNotation(materialized.prompt),
+      materialized.stimulus ? repairHardSatNotation(materialized.stimulus) : null,
+      (materialized.choices ?? []).map((choice) => ({
+        ...choice,
+        text: repairHardSatNotation(choice.text),
+      })),
+      true,
+    ),
   );
 }
 
 /**
- * Hard bank items that still render: official SAT MCQ, complete choices, and
- * the shared student-usable gate (skips smashed OCR, missing stems, and
- * garbled math). Notation-only repairs can qualify an item; missing text cannot.
+ * Hard bank items that still render: official SAT module 2 MCQ, complete
+ * choices, and the shared student-usable gate. Developer seeds, garbled
+ * extracts, and wrong figures stay out. Notation-only repairs can qualify
+ * an item; missing text cannot.
  */
 export function isRenderableHardSatItem(item: RenderableHardSatInput): boolean {
   return hardSatStudentFacing(item) !== null;

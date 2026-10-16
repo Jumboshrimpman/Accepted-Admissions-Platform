@@ -20,7 +20,6 @@ import {
   IN_SESSION_PRACTICE_INSTRUCTIONS,
   IN_SESSION_PRACTICE_TITLE,
   deterministicPracticeQuestion,
-  practiceSubjectFamily,
   samePracticeQuestionSet,
   selectHomeworkForPracticePrep,
   selectPracticeQuestionsFromHomeworkMisses,
@@ -28,17 +27,13 @@ import {
   type PracticeSkillMapping,
 } from "./in-session-practice";
 import { isStudentUsableServedQuestion } from "./sat-bank-diagnostic-quality";
-import { ensureHardSatSessionSets } from "./sat-hard-sets";
+import { ensureHardSatSessionSets, fillUnattemptedOfficialHardInSession } from "./sat-hard-sets";
 import {
   IN_SESSION_HOMEWORK_COMPLETION_TITLE,
   MAX_IN_SESSION_HOMEWORK_QUESTIONS,
   selectInSessionHomeworkQuestionIds,
   shouldRepublishSeededHomework,
 } from "./session-homework";
-
-function subjectFamily(subject: string): string {
-  return practiceSubjectFamily(subject);
-}
 
 async function ensureDuringSessionAssignment(
   session: typeof sessionsTable.$inferSelect,
@@ -79,47 +74,6 @@ async function assignmentQuestionCount(assignmentId: string): Promise<number> {
     .from(assignmentQuestionsTable)
     .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
   return Number(count ?? 0);
-}
-
-async function attachQuestions(
-  assignmentId: string,
-  questionIds: string[],
-): Promise<number> {
-  if (questionIds.length === 0) return 0;
-  const [assignment] = await db
-    .select({ status: assignmentsTable.status })
-    .from(assignmentsTable)
-    .where(eq(assignmentsTable.id, assignmentId))
-    .limit(1);
-  if (!shouldRepublishSeededHomework(assignment?.status)) return 0;
-  const existing = await db
-    .select({ questionId: assignmentQuestionsTable.questionId })
-    .from(assignmentQuestionsTable)
-    .where(eq(assignmentQuestionsTable.assignmentId, assignmentId));
-  const already = new Set(existing.map((row) => row.questionId));
-  let position = existing.length;
-  let attached = 0;
-  for (const questionId of questionIds) {
-    if (already.has(questionId)) continue;
-    await db
-      .insert(assignmentQuestionsTable)
-      .values({
-        assignmentId,
-        questionId,
-        position,
-      })
-      .onConflictDoNothing();
-    already.add(questionId);
-    position += 1;
-    attached += 1;
-  }
-  if (attached > 0) {
-    await db
-      .update(assignmentsTable)
-      .set({ status: "published" })
-      .where(eq(assignmentsTable.id, assignmentId));
-  }
-  return attached;
 }
 
 async function ensurePrepBlock(
@@ -435,45 +389,27 @@ async function attachHardBank(
   duringId: string,
   studentUserId: string,
 ): Promise<number> {
-  const usedRows = await db
-    .select({ questionId: assignmentQuestionsTable.questionId })
-    .from(assignmentQuestionsTable)
-    .innerJoin(
-      attemptsTable,
-      eq(attemptsTable.assignmentId, assignmentQuestionsTable.assignmentId),
-    )
-    .where(eq(attemptsTable.userId, studentUserId));
-  const used = new Set(usedRows.map((row) => row.questionId));
-  const hardPool = await db
-    .select()
-    .from(questionsTable)
-    .where(
-      and(
-        inArray(questionsTable.reviewStatus, ["approved", "reviewed"]),
-        eq(questionsTable.sourceType, "original"),
-        eq(questionsTable.difficulty, "hard"),
-      ),
-    );
-  const candidates = hardPool
-    .filter(
-      (question) =>
-        subjectFamily(question.subject) === subjectFamily(session.subject) &&
-        !used.has(question.id),
-    )
-    .slice(0, 6)
-    .map((question) => question.id);
-  const attached = await attachQuestions(duringId, candidates);
-  if (attached > 0 || (await assignmentQuestionCount(duringId)) > 0) {
-    await db
-      .update(assignmentsTable)
-      .set({
-        status: "published",
-        instructions:
-          "Homework was complete with no misses. Use these harder originals if you have leftover session time. Review every answer and explanation together.",
-        title: "Hard-question bank — leftover time",
-      })
-      .where(eq(assignmentsTable.id, duringId));
-  }
+  const [assignment] = await db
+    .select({ status: assignmentsTable.status })
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, duringId))
+    .limit(1);
+  if (!shouldRepublishSeededHomework(assignment?.status)) return 0;
+  const attached = await fillUnattemptedOfficialHardInSession(
+    { ...session, clientUserId: studentUserId },
+    duringId,
+  );
+  if (attached === 0) return 0;
+  await db
+    .update(assignmentsTable)
+    .set({
+      status: "published",
+      instructions:
+        "Homework was complete with no misses. These are official SAT module 2 questions from the hardest part of the test. They do not repeat this session's pre-work or questions already assigned to this student. 30 minutes.",
+      title: "Hard-question bank — leftover time",
+      timeLimitMinutes: 30,
+    })
+    .where(eq(assignmentsTable.id, duringId));
   return attached;
 }
 

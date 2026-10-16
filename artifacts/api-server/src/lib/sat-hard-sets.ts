@@ -260,6 +260,61 @@ export async function ensureHardSatPrework(
   }
 }
 
+/**
+ * Official hardest module 2 items for one session.
+ * Excludes that session's pre-work, questions the student has already been
+ * assigned, placeholders, and seeded originals.
+ */
+export async function officialHardInSessionItems(
+  session: { id: string; clientUserId?: string | null },
+  ignoreAssignmentIds: readonly string[] = [],
+): Promise<Array<HardSatCandidate & { bankId: string }>> {
+  const live = await listLiveBeforeSessionHomework(session.id);
+  const preworkKeys = new Set<string>();
+  for (const row of live) {
+    for (const sourceKey of await sourceKeysForAssignment(row.id)) {
+      preworkKeys.add(sourceKey);
+    }
+  }
+  const seen = session.clientUserId
+    ? await loadSeenSatBankUsage(session.clientUserId, ignoreAssignmentIds)
+    : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
+  const exclude = new Set<string>([...seen.sourceKeys, ...preworkKeys]);
+  const pool = await loadRenderableHardBank();
+  return selectHardSatQuestions(pool, {
+    targetCount: HARD_SAT_IN_SESSION_MAX_QUESTIONS,
+    minCount: 1,
+    maxCount: HARD_SAT_IN_SESSION_MAX_QUESTIONS,
+    excludeSourceKeys: exclude,
+    seenPracticeTests: seen.practiceTests,
+  });
+}
+
+async function writeOfficialHardInSession(
+  duringId: string,
+  items: ReadonlyArray<HardSatCandidate & { bankId: string }>,
+): Promise<"attempted" | "unchanged" | "updated"> {
+  if ((await attemptCount(duringId)) > 0) return "attempted";
+  const desiredKeys = items.map((item) => item.sourceKey);
+  const currentKeys = await sourceKeysForAssignment(duringId);
+  if (sameSourceKeySet(currentKeys, desiredKeys)) return "unchanged";
+  const questionIds: string[] = [];
+  for (const item of items) {
+    questionIds.push(await materializeHardSatQuestion(item.id));
+  }
+  if ((await attemptCount(duringId)) > 0) return "attempted";
+  await db.delete(assignmentQuestionsTable).where(eq(assignmentQuestionsTable.assignmentId, duringId));
+  for (const [index, questionId] of questionIds.entries()) {
+    await db.insert(assignmentQuestionsTable).values({
+      assignmentId: duringId,
+      questionId,
+      position: index,
+      predictionFirst: false,
+    });
+  }
+  return "updated";
+}
+
 async function unattemptedDuringAssignment(sessionId: string) {
   const [during] = await db
     .select()
@@ -338,38 +393,11 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
     };
   }
   try {
-    const live = await listLiveBeforeSessionHomework(session.id);
-    const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
-    const attemptedPrework = routine.filter((row) => row.attemptCount > 0);
-    const ignoreIds = [
-      ...replaceableRoutinePrework(routine).map((row) => row.id),
-      ...(existingDuring ? [existingDuring.id] : []),
-    ];
-    const seen = session.clientUserId
-      ? await loadSeenSatBankUsage(session.clientUserId, ignoreIds)
-      : { sourceKeys: new Set<string>(), practiceTests: new Set<number>() };
-    const pool = await loadRenderableHardBank();
-    const lockedPreworkKeys = new Set<string>(seen.sourceKeys);
-    for (const row of attemptedPrework) {
-      for (const sourceKey of await sourceKeysForAssignment(row.id)) {
-        lockedPreworkKeys.add(sourceKey);
-      }
-    }
-    const inSession =
-      attemptedPrework.length > 0
-        ? selectHardSatQuestions(pool, {
-            targetCount: HARD_SAT_IN_SESSION_MAX_QUESTIONS,
-            minCount: 1,
-            maxCount: HARD_SAT_IN_SESSION_MAX_QUESTIONS,
-            excludeSourceKeys: lockedPreworkKeys,
-            seenPracticeTests: seen.practiceTests,
-          })
-        : planHardSatSessionSets(pool, {
-            excludeSourceKeys: seen.sourceKeys,
-            seenPracticeTests: seen.practiceTests,
-          }).inSession;
-    const desiredKeys = inSession.map((item) => item.sourceKey);
-    if (desiredKeys.length === 0) {
+    const inSession = await officialHardInSessionItems(
+      session,
+      existingDuring ? [existingDuring.id] : [],
+    );
+    if (inSession.length === 0) {
       return {
         status: "unavailable",
         questionCount: existingDuring
@@ -379,47 +407,17 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       };
     }
     const during = existingDuring ?? (await ensureDuringAssignment(session));
-    const currentKeys = await sourceKeysForAssignment(during.id);
-    if (sameSourceKeySet(currentKeys, desiredKeys)) {
-      await publishHardInSession(during.id, session.title);
-      return {
-        status: "unchanged",
-        questionCount: desiredKeys.length,
-        duringAssignmentId: during.id,
-      };
-    }
-    if ((await attemptCount(during.id)) > 0) {
+    const written = await writeOfficialHardInSession(during.id, inSession);
+    if (written === "attempted") {
       return {
         status: "attempted",
-        questionCount: currentKeys.length,
+        questionCount: (await sourceKeysForAssignment(during.id)).length,
         duringAssignmentId: during.id,
       };
-    }
-    const questionIds: string[] = [];
-    for (const item of inSession) {
-      questionIds.push(await materializeHardSatQuestion(item.id));
-    }
-    if ((await attemptCount(during.id)) > 0) {
-      return {
-        status: "attempted",
-        questionCount: currentKeys.length,
-        duringAssignmentId: during.id,
-      };
-    }
-    await db
-      .delete(assignmentQuestionsTable)
-      .where(eq(assignmentQuestionsTable.assignmentId, during.id));
-    for (const [index, questionId] of questionIds.entries()) {
-      await db.insert(assignmentQuestionsTable).values({
-        assignmentId: during.id,
-        questionId,
-        position: index,
-        predictionFirst: false,
-      });
     }
     await publishHardInSession(during.id, session.title);
     return {
-      status: "updated",
+      status: written,
       questionCount: inSession.length,
       duringAssignmentId: during.id,
     };
@@ -430,6 +428,19 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       duringAssignmentId: existingDuring?.id ?? null,
     };
   }
+}
+
+/** Replace an unattempted in-session set with official hardest module 2 items. */
+export async function fillUnattemptedOfficialHardInSession(
+  session: SessionRow,
+  duringId: string,
+): Promise<number> {
+  if ((await attemptCount(duringId)) > 0) return 0;
+  const items = await officialHardInSessionItems(session, [duringId]);
+  if (items.length === 0) return 0;
+  const written = await writeOfficialHardInSession(duringId, items);
+  if (written === "attempted") return 0;
+  return items.length;
 }
 
 async function publishHardInSession(assignmentId: string, sessionTitle: string) {

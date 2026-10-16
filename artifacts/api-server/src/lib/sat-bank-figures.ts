@@ -1,4 +1,5 @@
 import { assignmentChoices, assignmentDifficulty } from "./assignment-visibility.ts";
+import { repairKnownSatBankQuestion } from "./sat-bank-display-repair.ts";
 import {
   extractPlainTextTable,
   formatRecoveredTable,
@@ -120,11 +121,12 @@ export function materializedQuestionContent(bank: {
   extractGaps?: Record<string, unknown> | null;
   tags?: string[] | null;
 }) {
+  const repaired = repairKnownSatBankQuestion(bank);
   const figures = asBankFigures(bank.figures);
-  const parsedChoices = assignmentChoices(bank.choices) ?? [];
+  const parsedChoices = assignmentChoices(repaired.choices) ?? [];
   const figurePrimary = shouldUseFigurePrimary({
-    prompt: bank.prompt,
-    stimulus: bank.stimulus,
+    prompt: repaired.prompt,
+    stimulus: repaired.stimulus,
     choices: parsedChoices,
     figures,
     questionType: bank.questionType,
@@ -132,16 +134,16 @@ export function materializedQuestionContent(bank: {
     extractGaps: bank.extractGaps,
     tags: bank.tags,
   });
-  const extracted = extractPlainTextTable(bank.prompt);
+  const extracted = extractPlainTextTable(repaired.prompt);
   const tableBlock = extracted.table ? formatRecoveredTable(extracted.table) : null;
-  const cleanedPrompt = prepareStudentExtractText(extracted.remainder || bank.prompt);
+  const cleanedPrompt = prepareStudentExtractText(extracted.remainder || repaired.prompt);
   const stimulusFigures = selectStimulusFigures(figures, {
-    prompt: bank.prompt,
-    stimulus: bank.stimulus,
+    prompt: repaired.prompt,
+    stimulus: repaired.stimulus,
   });
   const stimulus = stripSatBankFigureComments(
     enrichStimulusWithFigures(
-      [tableBlock, prepareStudentExtractText(bank.stimulus)].filter(Boolean).join("\n\n") || null,
+      [tableBlock, prepareStudentExtractText(repaired.stimulus)].filter(Boolean).join("\n\n") || null,
       stimulusFigures,
     ) ?? "",
   );
@@ -181,7 +183,7 @@ export function materializedQuestionContent(bank: {
             text: cleanedChoices.find((item) => item.id === choice.id)?.text || choice.text,
           })),
     correctAnswer: normalizeLetterAnswer(bank.correctAnswer),
-    explanation: bank.officialExplanation ?? "",
+    explanation: repaired.officialExplanation ?? "",
     reviewStatus: "approved" as const,
   };
 }
