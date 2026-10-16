@@ -8,6 +8,7 @@ import {
   attendeesIncludingAdmin,
   backfillAdminCalendarAttendees,
   eventWithinAdminBackfillGuard,
+  presentAdminAttendeeBackfillReport,
   type AdminAttendeeBackfillSession,
 } from "./calendar-admin-attendee.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -63,6 +64,10 @@ test("dry run lists events missing admin@ and does not patch, including the 60-m
   assert.deepEqual(patches, []);
   assert.deepEqual(report.patched, []);
   assert.equal(report.alreadyPresent, 1);
+  assert.deepEqual(
+    report.alreadyPresentSessions.map((row) => row.sessionId),
+    ["present"],
+  );
   assert.deepEqual(
     report.missing.map((row) => row.sessionId),
     ["later"],
@@ -144,6 +149,71 @@ test("backfill keeps RSVP, display name, and optional, and appends admin only wh
   assert.equal(already[0]?.responseStatus, "accepted");
   assert.equal(already[0]?.displayName, "Admin");
   assert.equal(already[1], student);
+});
+
+test("the presented report keeps patch results and adds student, tutor, type, and event id", () => {
+  const report = presentAdminAttendeeBackfillReport(
+    {
+      dryRun: true,
+      missing: [
+        {
+          sessionId: "later",
+          title: "Michelle's SAT Session with Xavier",
+          start: "2026-10-18T18:00:00.000Z",
+          tutorUserId: "tutor-user",
+        },
+      ],
+      refused: [],
+      patched: [],
+      alreadyPresent: 1,
+      alreadyPresentSessions: [
+        {
+          sessionId: "present",
+          title: "Already",
+          start: "2026-10-19T18:00:00.000Z",
+          tutorUserId: "tutor-user",
+        },
+      ],
+      skipped: [{ sessionId: "unread", reason: "event_unreadable" }],
+    },
+    new Map([
+      [
+        "later",
+        {
+          studentName: "Michelle Makarem",
+          tutorName: "Xavier Morales",
+          sessionType: "SAT",
+          eventId: "evt-michelle",
+          start: "2026-10-18T18:00:00.000Z",
+          title: "Michelle's SAT Session with Xavier",
+          tutorUserId: "tutor-user",
+        },
+      ],
+      [
+        "unread",
+        {
+          studentName: "Neel Dharni",
+          tutorName: "Eunice Chon",
+          sessionType: "College Consulting",
+          eventId: "evt-neel",
+          start: "2026-10-20T18:00:00.000Z",
+          title: "Neel",
+          tutorUserId: "tutor-user",
+        },
+      ],
+    ]),
+  );
+  assert.equal(report.dryRun, true);
+  assert.equal(report.alreadyPresent, 1);
+  assert.deepEqual(report.patched, []);
+  assert.equal(report.missing[0]?.studentName, "Michelle Makarem");
+  assert.equal(report.missing[0]?.tutorName, "Xavier Morales");
+  assert.equal(report.missing[0]?.sessionType, "SAT");
+  assert.equal(report.missing[0]?.eventId, "evt-michelle");
+  assert.equal(report.skipped[0]?.studentName, "Neel Dharni");
+  assert.equal(report.skipped[0]?.start, "2026-10-20T18:00:00.000Z");
+  assert.equal(report.skipped[0]?.eventId, "evt-neel");
+  assert.equal(report.alreadyPresentSessions[0]?.sessionId, "present");
 });
 
 test("the attendee patch path uses sendUpdates=none and keeps guest fields", async () => {

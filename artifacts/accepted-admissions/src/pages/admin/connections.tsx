@@ -3,6 +3,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import CalendarAttendeeBackfill from "./calendar-attendee-backfill";
 
 export type CalendarConnectionHealthRow = {
   tutorProfileId: string;
@@ -153,6 +154,7 @@ export default function AdminConnections() {
           {error}
         </p>
       ) : null}
+      <CalendarAttendeeBackfill />
       {loading ? <p className="text-sm text-muted-foreground">Loading connections…</p> : null}
       {!loading && connections.length === 0 ? (
         <p className="text-sm text-muted-foreground">No tutor profiles to show.</p>
