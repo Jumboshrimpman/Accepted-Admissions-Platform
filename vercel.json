@@ -67,6 +67,14 @@
       "destination": "https://accepted-admissions-platform-production.up.railway.app/api/:path*"
     },
     {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

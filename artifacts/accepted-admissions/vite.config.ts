@@ -39,15 +39,23 @@ function crawlerAssets() {
         );
     },
     async closeBundle() {
-      const publicRoutes = ['/', '/sat', '/our-team', '/past-success', '/client-request'];
+      const publicRoutes = [
+        { path: '/', changefreq: 'weekly', priority: '1.0' },
+        { path: '/sat', changefreq: 'weekly', priority: '0.9' },
+        { path: '/our-team', changefreq: 'monthly', priority: '0.8' },
+        { path: '/past-success', changefreq: 'monthly', priority: '0.8' },
+        { path: '/client-request', changefreq: 'monthly', priority: '0.9' },
+        { path: '/privacy', changefreq: 'yearly', priority: '0.3' },
+        { path: '/terms', changefreq: 'yearly', priority: '0.3' },
+      ];
       const sitemap = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        ...publicRoutes.flatMap((route, index) => [
+        ...publicRoutes.flatMap((route) => [
           '  <url>',
-          `    <loc>${new URL(route.replace(/^\//, ''), publicBaseUrl).href}</loc>`,
-          `    <changefreq>${index < 2 ? 'weekly' : 'monthly'}</changefreq>`,
-          `    <priority>${index === 0 ? '1.0' : index === 1 || index === 4 ? '0.9' : '0.8'}</priority>`,
+          `    <loc>${new URL(route.path.replace(/^\//, ''), publicBaseUrl).href}</loc>`,
+          `    <changefreq>${route.changefreq}</changefreq>`,
+          `    <priority>${route.priority}</priority>`,
           '  </url>',
         ]),
         '</urlset>',

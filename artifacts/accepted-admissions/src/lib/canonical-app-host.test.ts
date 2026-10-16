@@ -37,6 +37,8 @@ test("matches portal and auth paths without colliding with lookalikes", () => {
   assert.equal(isAppHostAuthPath("/"), false);
   assert.equal(isAppHostAuthPath("/sat"), false);
   assert.equal(isAppHostAuthPath("/our-team"), false);
+  assert.equal(isAppHostAuthPath("/privacy"), false);
+  assert.equal(isAppHostAuthPath("/terms"), false);
   assert.equal(isAppHostAuthPath("/login-help"), false);
 });
 
@@ -78,6 +80,20 @@ test("leaves marketing pages and the working app host alone", () => {
     canonicalAppHostUrl({
       hostname: "www.acceptedadmissions.org",
       pathname: "/sat",
+    }),
+    null,
+  );
+  assert.equal(
+    canonicalAppHostUrl({
+      hostname: "www.acceptedadmissions.org",
+      pathname: "/privacy",
+    }),
+    null,
+  );
+  assert.equal(
+    canonicalAppHostUrl({
+      hostname: "acceptedadmissions.org",
+      pathname: "/terms",
     }),
     null,
   );

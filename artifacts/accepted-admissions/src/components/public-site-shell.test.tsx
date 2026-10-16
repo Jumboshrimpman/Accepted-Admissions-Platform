@@ -40,6 +40,10 @@ describe("PublicSiteShell", () => {
     expect(screen.getByTestId("button-header-sign-in").getAttribute("href")).toBe("/login");
     expect(screen.getByTestId("button-header-sign-in").textContent).toMatch(/^Sign in$/);
     expect(screen.getByTestId("link-footer-sign-in").getAttribute("href")).toBe("/login");
+    expect(screen.getByTestId("link-footer-privacy").getAttribute("href")).toBe("/privacy");
+    expect(screen.getByTestId("link-footer-privacy").textContent).toBe("Privacy Policy");
+    expect(screen.getByTestId("link-footer-terms").getAttribute("href")).toBe("/terms");
+    expect(screen.getByTestId("link-footer-terms").textContent).toBe("Terms of Service");
     expect(screen.getByRole("link", { name: "admin@acceptedadmissions.org" }).getAttribute("href")).toBe(
       "mailto:admin@acceptedadmissions.org",
     );
