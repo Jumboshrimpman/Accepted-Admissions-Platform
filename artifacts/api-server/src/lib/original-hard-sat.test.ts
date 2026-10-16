@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { auditStudentQuizItem } from "./sat-bank-diagnostic-quality.ts";
 import { parseCollegeBoardPayload, resolveCollegeBoardRoot } from "./sat-bank-import.ts";
-import { answerOriginalHardRw } from "./original-hard-sat-rw-answer.ts";
+import { answerOriginalHardRw, defensibleOriginalHardRw } from "./original-hard-sat-rw-answer.ts";
+import { hasRecoveredDataTable } from "./sat-bank-figure-primary.ts";
 import {
   originalHardMathItems,
   originalHardRwItems,
@@ -104,11 +105,14 @@ test("original hard reading items agree with an independent second pass", () => 
   assert.equal(items.length, 105);
   let agreed = 0;
   for (const item of items) {
-    const letter = answerOriginalHardRw({
+    const attempt = {
       stimulus: item.stimulus,
       prompt: item.prompt,
       choices: item.choices,
-    });
+    };
+    const letter = answerOriginalHardRw(attempt);
+    const licensed = defensibleOriginalHardRw(attempt);
+    assert.deepEqual(licensed, [letter], `${item.sourceKey} second reading`);
     assert.equal(letter, item.correctAnswer, `${item.sourceKey} ${item.stimulus}`);
     assert.ok(item.explanation.trim().length > 20, item.sourceKey);
     assert.ok(item.difficultyNote.length >= 40, item.sourceKey);
@@ -232,8 +236,22 @@ test("original hard items render, stay unique, and fill only the three shortfall
         `${item.sourceKey} mid-sentence transition`,
       );
     }
+    if (item.skill === "Text Structure and Purpose" || item.skill === "Cross-Text Connections") {
+      const words = (item.stimulus ?? "").trim().split(/\s+/).filter(Boolean);
+      assert.ok(words.length >= 100 && words.length <= 150, `${item.sourceKey} ${words.length} words`);
+      const echo =
+        item.skill === "Cross-Text Connections"
+          ? ["choice", "author", "likely", "respond"]
+          : ["choice", "describes", "overall", "structure", "states", "purpose"];
+      for (const choice of item.choices) {
+        const lower = (choice.text ?? "").toLowerCase();
+        for (const word of echo) {
+          assert.equal(new RegExp(`\\b${word}\\b`).test(lower), false, `${item.sourceKey} echoes ${word}`);
+        }
+      }
+    }
     if (/accomplish this goal/i.test(item.prompt)) {
-      const goal = /wants to (?:emphasize|highlight|stress|center) ([^.]+)/i.exec(item.prompt);
+      const goal = /wants to (?:emphasize|highlight|stress|center|introduce) ([^.]+)/i.exec(item.prompt);
       assert.ok(goal, item.sourceKey);
       const words = goal![1]!.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((word) => word.length >= 8);
       words.sort((left, right) => right.length - left.length);
@@ -269,7 +287,10 @@ test("original hard items render, stay unique, and fill only the three shortfall
     const stem = norm(`${record.stimulus ?? ""} ${record.prompt}`);
     assert.equal(stems.has(stem), false, record.sourceKey);
     stems.add(stem);
-    assert.doesNotMatch(stem, /\b(?:the table|the figure|the graph|scatterplot|student-produced)\b/i);
+    assert.doesNotMatch(stem, /\b(?:the figure|the graph|scatterplot|student-produced)\b/i);
+    if (/\bthe table\b/i.test(stem)) {
+      assert.equal(hasRecoveredDataTable(`${record.stimulus ?? ""}\n${record.prompt}`), true, record.sourceKey);
+    }
     const facing = isRenderableHardSatItem({
       id: record.sourceKey,
       sourceKey: record.sourceKey,
