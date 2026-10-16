@@ -59,6 +59,7 @@ import {
   isCollaborativeSessionPractice,
   isInSessionHomeworkCompletion,
   inactiveAttemptSaveRecovery,
+  recoveredStatusAfterServerChange,
   isQuestionFeedbackRevealed,
   RESPONSES_ONLY_WHILE_ACTIVE,
   shouldAutoSubmitOnExpiry,
@@ -706,6 +707,23 @@ export default function PortalAssignment() {
     currentQuestionIndex: 0,
     responses: {} as typeof localResponses,
   });
+  const serverStatusRef = useRef<string | null | undefined>(attempt?.status);
+  useEffect(() => {
+    const previous = serverStatusRef.current;
+    const next = attempt?.status;
+    serverStatusRef.current = next;
+    const recovered = recoveredStatusAfterServerChange({
+      recoveredStatus,
+      previousServerStatus: previous,
+      serverStatus: next,
+    });
+    if (recovered === recoveredStatus) return;
+    setRecoveredStatus(null);
+    setSurfacePaused(false);
+    setAutoPaused(false);
+    autoPausedRef.current = false;
+    leaveRef.current.status = "active";
+  }, [attempt?.status, recoveredStatus]);
   const inSessionHomework = isInSessionHomeworkCompletion({
     deliveryPhase: assignment?.deliveryPhase,
     title: assignment?.title,
@@ -838,6 +856,14 @@ export default function PortalAssignment() {
         visible: document.visibilityState === "visible",
         attemptStatus: status,
       });
+      if (action === "use-active" || status === "active") {
+        setRecoveredStatus(null);
+        setSurfacePaused(false);
+        setAutoPaused(false);
+        autoPausedRef.current = false;
+        leaveRef.current.status = "active";
+        return;
+      }
       if (action === "resume") {
         setRecoveredStatus(null);
         resumeInPlaceRef.current();

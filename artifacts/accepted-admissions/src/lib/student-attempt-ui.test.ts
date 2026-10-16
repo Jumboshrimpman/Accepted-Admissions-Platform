@@ -15,6 +15,7 @@ import {
   resolveInSessionPracticeLink,
   studentAssignmentActionLabel,
   inactiveAttemptSaveRecovery,
+  recoveredStatusAfterServerChange,
   quizResponsesForPause,
   quizTimerLeaveAction,
   RESPONSES_ONLY_WHILE_ACTIVE,
@@ -226,6 +227,31 @@ test("a save rejected while the attempt is paused resumes only when the tab is v
       attemptStatus: "paused",
     }),
     "none",
+  );
+  assert.equal(
+    inactiveAttemptSaveRecovery({
+      errorMessage: RESPONSES_ONLY_WHILE_ACTIVE,
+      autoPaused: true,
+      visible: true,
+      attemptStatus: "active",
+    }),
+    "use-active",
+  );
+  assert.equal(
+    recoveredStatusAfterServerChange({
+      recoveredStatus: "paused",
+      previousServerStatus: "paused",
+      serverStatus: "active",
+    }),
+    null,
+  );
+  assert.equal(
+    recoveredStatusAfterServerChange({
+      recoveredStatus: "paused",
+      previousServerStatus: "active",
+      serverStatus: "active",
+    }),
+    "paused",
   );
 });
 

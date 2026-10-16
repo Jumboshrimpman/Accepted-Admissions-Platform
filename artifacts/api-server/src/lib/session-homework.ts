@@ -268,6 +268,67 @@ export function shouldRepublishSeededHomework(status: string | null | undefined)
   return status !== "archived";
 }
 
+export type PlaceholderSatHomeworkAction = "attach" | "leave-existing" | "skip-new";
+
+/** A live bank pre-work with questions. Empty or archived copies do not count. */
+export function sessionHasBankPrework(
+  rows: readonly {
+    title?: string | null;
+    status?: string | null;
+    questionCount?: number | null;
+  }[],
+): boolean {
+  return rows.some(
+    (row) =>
+      row.status !== "archived" &&
+      (row.questionCount ?? 0) > 0 &&
+      sessionPreworkDedupeSlot(row.title) === "sat-bank-prework",
+  );
+}
+
+/**
+ * The generic SAT Homework seed must not create another set beside bank pre-work.
+ * An existing placeholder stays as-is until Sama approves archiving it.
+ */
+export function placeholderSatHomeworkAction(input: {
+  hasBankPrework: boolean;
+  placeholderExists: boolean;
+}): PlaceholderSatHomeworkAction {
+  if (!input.hasBankPrework) return "attach";
+  return input.placeholderExists ? "leave-existing" : "skip-new";
+}
+
+export type FuturePlaceholderSatHomework = {
+  dateKey: string;
+  placeholderTitle: string;
+  placeholderStatus: string;
+  questionCount: number;
+};
+
+/** Future sessions whose generic SAT Homework row is still attached. Archived rows are omitted. */
+export function futurePlaceholderSatHomework(
+  sessions: readonly {
+    dateKey: string;
+    placeholderTitle?: string | null;
+    placeholderStatus?: string | null;
+    questionCount?: number | null;
+  }[],
+  today: string,
+): FuturePlaceholderSatHomework[] {
+  return sessions.flatMap((session) => {
+    if (!session.placeholderTitle || session.placeholderStatus === "archived") return [];
+    if (session.dateKey <= today) return [];
+    return [
+      {
+        dateKey: session.dateKey,
+        placeholderTitle: session.placeholderTitle,
+        placeholderStatus: session.placeholderStatus ?? "published",
+        questionCount: session.questionCount ?? 0,
+      },
+    ];
+  });
+}
+
 export type WrongAnswerCandidate = {
   correct: boolean;
 };
