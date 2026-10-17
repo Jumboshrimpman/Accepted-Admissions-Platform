@@ -23,6 +23,7 @@ import {
   useListBookingTutors,
   useRescheduleBookingSession,
   type AdminClientPreviewBooking,
+  type BookingTutor,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -228,11 +229,14 @@ export function BookingCard({
   initialPurchasedHours,
   fallbackSessions,
   collegeConsulting: collegeConsultingAccount = false,
+  consultingCatalog = false,
 }: {
   initialRemainingHours?: number | null;
   initialPurchasedHours?: number | null;
   fallbackSessions?: ListedSession[] | null;
   collegeConsulting?: boolean;
+  /** Load the College Consulting tutor list. Used by Sama's consulting trial page. */
+  consultingCatalog?: boolean;
 } = {}) {
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
@@ -256,7 +260,38 @@ export function BookingCard({
 
   const tutorsQuery = useListBookingTutors();
   const sessionsQuery = useListBookingSessions();
-  const tutors = tutorsQuery.data ?? [];
+  const [consultingTutors, setConsultingTutors] = useState<BookingTutor[] | null>(null);
+  const [consultingTutorsFailed, setConsultingTutorsFailed] = useState(false);
+  useEffect(() => {
+    if (!consultingCatalog) {
+      setConsultingTutors(null);
+      setConsultingTutorsFailed(false);
+      return;
+    }
+    let cancelled = false;
+    setConsultingTutors(null);
+    setConsultingTutorsFailed(false);
+    fetch(apiPath("/api/booking/tutors?service=college-consulting"))
+      .then(async (response) => {
+        if (!response.ok) throw new Error("tutors");
+        return response.json() as Promise<unknown>;
+      })
+      .then((rows) => {
+        if (cancelled) return;
+        if (!Array.isArray(rows)) throw new Error("tutors");
+        setConsultingTutors(rows as BookingTutor[]);
+      })
+      .catch(() => {
+        if (!cancelled) setConsultingTutorsFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [consultingCatalog]);
+  const tutors = consultingCatalog ? (consultingTutors ?? []) : (tutorsQuery.data ?? []);
+  const tutorsLoading = consultingCatalog
+    ? consultingTutors === null && !consultingTutorsFailed
+    : tutorsQuery.isLoading;
   const queriedSessions = uniqueListedSessions(
     (sessionsQuery.data ?? []).filter(isLiveListedSession),
   );
@@ -485,7 +520,19 @@ export function BookingCard({
       return;
     }
     createBooking.mutate(
-      { data: { tutorProfileId: selectedTutorId, startTime: selectedSlot, durationMinutes: selectedDuration } },
+      {
+        data: {
+          tutorProfileId: selectedTutorId,
+          startTime: selectedSlot,
+          durationMinutes: selectedDuration,
+          ...(collegeConsultingAccount ? { subject: "College Consulting" } : {}),
+        } as {
+          tutorProfileId: string;
+          startTime: string;
+          durationMinutes: 60 | 90 | 120;
+          subject?: string;
+        },
+      },
       {
         onSuccess: (session) => {
           invalidateBookingData();
@@ -510,6 +557,7 @@ export function BookingCard({
         tutorProfileId: selectedTutorId,
         durationMinutes,
         startTime: selectedSlot,
+        ...(collegeConsultingAccount ? { subject: "College Consulting" } : {}),
       }),
     })
       .then(async (response) => {
@@ -611,7 +659,7 @@ export function BookingCard({
       </CardHeader>
       <CardContent className="space-y-6">
         {creditError && <p className="text-sm text-muted-foreground">{creditError}</p>}
-        {tutorsQuery.isLoading ? (
+        {tutorsLoading ? (
           <p className="text-sm text-muted-foreground">Loading eligible tutors…</p>
         ) : tutors.length === 0 ? (
           <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">

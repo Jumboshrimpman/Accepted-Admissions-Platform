@@ -9,6 +9,7 @@ import {
   isPortalHomePath,
   portalPathname,
   shouldShowSatPaymentReceipts,
+  isSamaPostgradTestEmail,
   showsCollegeConsultingAccount,
   showsSelfServeSatCommerce,
 } from "./portal-sat.ts";
@@ -36,6 +37,19 @@ test("Book SAT nav is only for self-serve students", () => {
   assert.equal(showsSelfServeSatCommerce(michelleCredits), true);
   assert.equal(showsSelfServeSatCommerce(taitoCredits), false);
   assert.equal(showsSelfServeSatCommerce(null), false);
+});
+
+test("Sama's test email can open the consulting trial without becoming Neel's account", () => {
+  assert.equal(isSamaPostgradTestEmail("samapostgrad@gmail.com"), true);
+  assert.equal(isSamaPostgradTestEmail(" Samapostgrad@gmail.com "), true);
+  assert.equal(isSamaPostgradTestEmail("sophia.sleiman@example.com"), false);
+  assert.equal(
+    showsCollegeConsultingAccount({
+      userId: "sama-user",
+      credits: { selfServeCollegeConsulting: false },
+    }),
+    false,
+  );
 });
 
 test("Neel's account stays on College Consulting when the dashboard flag is missing", () => {

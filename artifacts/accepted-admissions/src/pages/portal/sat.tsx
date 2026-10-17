@@ -24,6 +24,7 @@ import {
   PORTAL_SAT_TUTOR_HREF,
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
+  isSamaPostgradTestEmail,
   showsCollegeConsultingAccount,
   showsSelfServeSatCommerce,
 } from "@/lib/portal-sat";
@@ -87,6 +88,9 @@ export default function PortalSat() {
   const [creditPollTimedOut, setCreditPollTimedOut] = useState(false);
   const [reconcilingPayment, setReconcilingPayment] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
+  const samaTrial = isSamaPostgradTestEmail(currentUser?.email ?? dashboard.data?.user?.email);
+  const consultingFlow = samaTrial && new URLSearchParams(query).get("flow") === "consulting";
 
   useEffect(() => {
     const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
@@ -104,13 +108,21 @@ export default function PortalSat() {
   }, [location, setLocation]);
 
   useEffect(() => {
-    fetch(apiPath("/api/public/products"))
+    if (userLoading) return;
+    let cancelled = false;
+    setLoadingProducts(true);
+    setProductError(false);
+    const productPath = consultingFlow
+      ? "/api/public/products?service=college-consulting"
+      : "/api/public/products";
+    fetch(apiPath(productPath))
       .then((response) => {
         if (!response.ok) throw new Error("products");
         return response.json() as Promise<unknown>;
       })
       .then((nextProducts) => {
         if (!Array.isArray(nextProducts)) throw new Error("products");
+        if (cancelled) return;
         setProducts(
           nextProducts.filter((product): product is Product => {
             if (!product || typeof product !== "object") return false;
@@ -128,9 +140,16 @@ export default function PortalSat() {
           }),
         );
       })
-      .catch(() => setProductError(true))
-      .finally(() => setLoadingProducts(false));
-  }, []);
+      .catch(() => {
+        if (!cancelled) setProductError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProducts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [consultingFlow, userLoading]);
 
   useEffect(() => {
     if (!awaitingWebhook || dashboard.isLoading || !dashboard.data || baselineHours !== null) return;
@@ -223,10 +242,11 @@ export default function PortalSat() {
   }
 
   const commerceCredits = dashboard.data?.credits;
-  const collegeConsulting = showsCollegeConsultingAccount({
-    userId: dashboard.data?.user?.id ?? currentUser?.id,
-    credits: commerceCredits,
-  });
+  const collegeConsulting =
+    showsCollegeConsultingAccount({
+      userId: dashboard.data?.user?.id ?? currentUser?.id,
+      credits: commerceCredits,
+    }) || consultingFlow;
   const showSatCommerce = showsSelfServeSatCommerce(commerceCredits) || collegeConsulting;
   if (!canPurchaseOrBookSatCredits(currentUser?.role) || !showSatCommerce) {
     const tutorDenied = currentUser?.role === "tutor";
@@ -333,8 +353,21 @@ export default function PortalSat() {
         <p className="mt-1 text-muted-foreground">
           {collegeConsulting
             ? "Purchase College Consulting hours with Nika, Victoria, Xavier, or Eunice. Each tutor’s hours stay on that tutor. Credits appear only after a verified Stripe payment. Open times follow that tutor’s calendar and booking notice."
-            : "Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."}
+            : samaTrial
+              ? "Purchase prepaid hours and book Nika, Victoria, Xavier, or Eunice without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."
+              : "Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."}
         </p>
+        {samaTrial ? (
+          <p className="mt-3 text-sm">
+            <Link
+              href={consultingFlow ? PORTAL_SAT_PURCHASE_HREF : `${PORTAL_SAT_PURCHASE_HREF}?flow=consulting`}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="link-sama-tutor-trial-switch"
+            >
+              {consultingFlow ? "Open SAT booking" : "Open College Consulting booking"}
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       {paymentBanner ? (
@@ -533,6 +566,7 @@ export default function PortalSat() {
           </Card>
           <BookingCard
             collegeConsulting={collegeConsulting}
+            consultingCatalog={consultingFlow}
             initialRemainingHours={remainingHours}
             initialPurchasedHours={purchasedHours}
             fallbackSessions={upcomingSat}

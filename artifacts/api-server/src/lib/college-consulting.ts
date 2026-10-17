@@ -243,6 +243,35 @@ export function isNeelDharniUser(userId: string | null | undefined): boolean {
   return userId === NEEL_DHARNI_USER_ID;
 }
 
+/**
+ * Sama's test student. The Clerk id matches the Xavier capability seed.
+ * Email or Clerk id is enough in code. The membership migration requires both.
+ */
+export const SAMA_POSTGRAD_TEST_EMAIL = "samapostgrad@gmail.com";
+export const SAMA_POSTGRAD_TEST_CLERK_USER_ID = "user_3IxQY4GUjQGp9wT1WXzbyCVH67G";
+
+export function isSamaPostgradTestStudent(
+  user: { clerkUserId?: string | null; email?: string | null } | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.clerkUserId === SAMA_POSTGRAD_TEST_CLERK_USER_ID) return true;
+  return normalizeConsultingEmail(user.email) === SAMA_POSTGRAD_TEST_EMAIL;
+}
+
+export function collegeConsultingServiceRequested(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === COLLEGE_CONSULTING_SUBJECT.toLowerCase() || normalized === "college-consulting";
+}
+
+/** Sama can book consulting only when the request names that service. SAT stays the default. */
+export function samaCollegeConsultingBooking(
+  user: { clerkUserId?: string | null; email?: string | null } | null | undefined,
+  requested: unknown,
+): boolean {
+  return isSamaPostgradTestStudent(user) && collegeConsultingServiceRequested(requested);
+}
+
 /** Keep provisioned client names when Clerk attaches on first sign-in. */
 export function keepProvisionedPlaceholderDisplayName(
   name: string | null | undefined,
@@ -484,17 +513,24 @@ export function decidePlaceholderLink(input: {
 export function clientMayBuyConsultingProduct(
   userId: string | null | undefined,
   slug: string,
+  identity?: { clerkUserId?: string | null; email?: string | null } | null,
 ): boolean {
-  return isNeelDharniUser(userId) && isCollegeConsultingSlug(slug);
+  const allowed = isNeelDharniUser(userId) || isSamaPostgradTestStudent(identity);
+  return allowed && isCollegeConsultingSlug(slug);
 }
 
-/** Neel buys consulting hours only. Everyone else keeps the SAT catalog. */
+/**
+ * Neel buys consulting hours only. Sama's test student can buy either catalog.
+ * Everyone else keeps the SAT catalog.
+ */
 export function checkoutAudienceForSlug(
   userId: string | null | undefined,
   slug: string,
+  identity?: { clerkUserId?: string | null; email?: string | null } | null,
 ): "consulting" | "sat" | "forbidden" {
+  const sama = isSamaPostgradTestStudent(identity);
   if (isCollegeConsultingSlug(slug)) {
-    return isNeelDharniUser(userId) ? "consulting" : "forbidden";
+    return isNeelDharniUser(userId) || sama ? "consulting" : "forbidden";
   }
   if (isNeelDharniUser(userId)) return "forbidden";
   return "sat";

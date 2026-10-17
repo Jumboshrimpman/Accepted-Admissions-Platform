@@ -49,6 +49,7 @@ import {
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
   shouldShowSatPaymentReceipts,
+  isSamaPostgradTestEmail,
   showsSelfServeCollegeConsulting,
 } from "@/lib/portal-sat";
 import { clientSatCreditAction } from "@/lib/portal-sat-payment";
@@ -451,6 +452,13 @@ export function ClientDashboardView({
                     </Button>
                   </>
                 )}
+                {isSamaPostgradTestEmail(dashboard.user.email) && !collegeConsulting ? (
+                  <Button asChild variant="outline" className="rounded-full">
+                    <Link href="/portal/sat?flow=consulting" data-testid="link-portal-consulting-trial">
+                      Book College Consulting
+                    </Link>
+                  </Button>
+                ) : null}
               </div>
             )}
           </CardContent>

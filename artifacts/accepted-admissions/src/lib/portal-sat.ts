@@ -22,6 +22,13 @@ export function canPurchaseOrBookSatCredits(
 
 export const NEEL_DHARNI_USER_ID = "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19";
 
+/** Sama's test student. Her default portal stays SAT; College Consulting is a separate page. */
+export const SAMA_POSTGRAD_TEST_EMAIL = "samapostgrad@gmail.com";
+
+export function isSamaPostgradTestEmail(email: string | null | undefined): boolean {
+  return email?.trim().toLowerCase() === SAMA_POSTGRAD_TEST_EMAIL;
+}
+
 export function showsSelfServeCollegeConsulting(credits?: {
   selfServeCollegeConsulting?: boolean | null;
 } | null): boolean {

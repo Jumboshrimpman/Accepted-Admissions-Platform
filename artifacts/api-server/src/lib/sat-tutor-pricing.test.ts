@@ -125,6 +125,16 @@ test("Nika SAT is $130 for Sophia and Michelle and hidden from other clients", (
     assert.equal(allowsLegacySatPool("nika", user), false);
   }
   assert.equal(canBookSatTutor("nika", otherSatClient), false);
+  assert.equal(
+    canBookSatTutor("nika", {
+      email: "samapostgrad@gmail.com",
+      clerkUserId: "user_3IxQY4GUjQGp9wT1WXzbyCVH67G",
+    }),
+    true,
+  );
+  assert.equal(canBookSatTutor("eunice", {
+    email: "samapostgrad@gmail.com",
+  }), true);
   assert.equal(canBookSatTutor("nika", retiredMichelleEmail), false);
   assert.equal(canBookSatTutor("eunice", otherSatClient), true);
   assert.equal(allowsLegacySatPool("nika", otherSatClient), false);
