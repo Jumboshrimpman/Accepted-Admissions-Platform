@@ -305,10 +305,9 @@ import {
 import {
   SAT_TUTOR_PRODUCTS,
   SAT_TUTOR_PRODUCT_SLUGS,
+  SOPHIA_SLEIMAN_SAT_USER_ID,
   allowsLegacySatPool,
   canBookSatTutor,
-  isSophiaSleimanUser,
-  satTutorRosterRefusalMessage,
   displayedSatDescription,
   displayedSatHourlyCents,
   displayedSatPriceCents,
@@ -733,17 +732,14 @@ function satPortalTutorNames(user: {
   clerkUserId?: string | null;
   email?: string | null;
 } | null | undefined): string[] {
-  return [XAVIER_NAME, EUNICE_NAME, VICTORIA_DISPLAY_NAME, NIKA_NAME].filter((name) => {
-    const tutorKey = satTutorKeyForName(name);
-    return Boolean(tutorKey && canBookSatTutor(tutorKey, user));
-  });
+  const names: string[] = [...SAT_BOOKING_TUTOR_NAMES];
+  if (canBookSatTutor("nika", user)) names.push(NIKA_NAME);
+  return names;
 }
 
 async function bookerMayBookNika(bookerUserId: string | undefined): Promise<boolean> {
   if (!bookerUserId) return false;
-  // Sophia is identified by portal user id. Michelle and Sama are not, so only
-  // Sophia can be excluded before the email lookup.
-  if (isSophiaSleimanUser({ id: bookerUserId })) return false;
+  if (bookerUserId === SOPHIA_SLEIMAN_SAT_USER_ID) return true;
   const [booker] = await db
     .select({
       id: usersTable.id,
@@ -5268,17 +5264,9 @@ async function bookingTutor(
         "This account books College Consulting only.",
       );
     }
-    const satKey = satTutorKeyForName(tutor.name);
-    // Nika's allowance is already decided by bookerMayBookNika, which loads
-    // email. An id-only canBookSatTutor("nika") check would hide her from
-    // Michelle and Sama. Sophia is the only roster narrowed by user id.
-    const sophiaBlocked =
-      isSophiaSleimanUser({ id: bookerUserId }) &&
-      !(satKey && canBookSatTutor(satKey, { id: bookerUserId }));
-    const satRosterAllowed = (onSharedRoster || onNikaRoster) && !sophiaBlocked;
     const allowed = isNeelDharniUser(bookerUserId)
       ? consultingTutorAllowed(tutor)
-      : satRosterAllowed;
+      : onSharedRoster || onNikaRoster;
     if (!allowed) {
       throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
     }
@@ -7803,7 +7791,7 @@ async function assertPrepaidHoursForTutor(
   } else {
     const tutorKey = satTutorKeyForName(tutor.name);
     if (!tutorKey || !canBookSatTutor(tutorKey, user)) {
-      throw new BookingError(403, "INVALID_TUTOR", satTutorRosterRefusalMessage(user));
+      throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
     }
     const catalog = await satCreditCatalog();
     const excluded = new Set(await liveCheckoutTestProductIds());
@@ -7913,7 +7901,7 @@ async function respondWithPrepaidBooking(
     const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
-      throw new BookingError(403, "INVALID_TUTOR", satTutorRosterRefusalMessage(req.appUser));
+      throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
     }
     const course = consulting
       ? await studentCollegeConsultingCourse(req.appUser!.id)

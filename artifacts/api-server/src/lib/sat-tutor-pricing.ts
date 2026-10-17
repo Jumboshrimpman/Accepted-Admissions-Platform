@@ -10,11 +10,9 @@
  * legacy $130 pool.
  *
  * Nika's SAT rows are $130/hour. The shared SAT catalog shows every standard
- * tutor to every self-serve client, except Sophia Sleiman, who books only
- * Xavier and Eunice. Nika is limited to Michelle Makarem and Sama's test
- * student. Her hours do not accept the legacy pool and do not book another
- * tutor. Sophia's Xavier checkout is $130/hour and does not change the stored
- * $200 catalog row. Neel's College Consulting prices are a separate catalog.
+ * tutor to every self-serve client, so Nika is limited to Sophia Sleiman,
+ * Michelle Makarem, and Sama's test student. Her hours do not accept the legacy pool and do not book
+ * another tutor. Neel's College Consulting prices are a separate catalog.
  */
 
 import {
@@ -113,31 +111,19 @@ export function isMichelleMakaremUser(user: MichelleIdentity | null | undefined)
 
 export type SatTutorViewer = MichelleIdentity & { id?: string | null };
 
-export function isSophiaSleimanUser(user: { id?: string | null } | null | undefined): boolean {
-  return user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
-}
-
 /**
  * Eunice, Victoria, and Xavier stay on the shared SAT roster.
- * Sophia Sleiman books only Xavier and Eunice.
- * Nika is bookable for Michelle Makarem and Sama's test student.
+ * Nika is bookable for Sophia Sleiman, Michelle Makarem, and Sama's test student.
  */
 export function canBookSatTutor(
   tutorKey: SatTutorKey,
   user: SatTutorViewer | null | undefined,
 ): boolean {
-  if (isSophiaSleimanUser(user)) return tutorKey === "eunice" || tutorKey === "xavier";
   if (tutorKey !== "nika") return true;
   if (!user) return false;
+  if (user.id === SOPHIA_SLEIMAN_SAT_USER_ID) return true;
   if (isSamaPostgradTestStudent(user)) return true;
   return isMichelleMakaremUser(user);
-}
-
-export function satTutorRosterRefusalMessage(
-  user: { id?: string | null } | null | undefined,
-): string {
-  if (isSophiaSleimanUser(user)) return "Choose Eunice or Xavier for an SAT session.";
-  return "Choose Eunice, Victoria, or Xavier for an SAT session.";
 }
 
 export function satTutorKeyForSlug(slug: string): SatTutorKey | null {
@@ -180,11 +166,9 @@ export function isStandardSatTutorProduct(product: {
 
 export function displayedSatHourlyCents(
   tutorKey: SatTutorKey,
-  user: (MichelleIdentity & { id?: string | null }) | null | undefined,
+  user: MichelleIdentity | null | undefined,
 ): number {
-  if (tutorKey === "xavier" && (isMichelleMakaremUser(user) || isSophiaSleimanUser(user))) {
-    return MICHELLE_XAVIER_SAT_HOURLY_CENTS;
-  }
+  if (tutorKey === "xavier" && isMichelleMakaremUser(user)) return MICHELLE_XAVIER_SAT_HOURLY_CENTS;
   return SAT_TUTORS.find((tutor) => tutor.key === tutorKey)!.hourlyCents;
 }
 
@@ -209,16 +193,12 @@ export function displayedSatDescription(
   return descriptionFor(spec.firstName, length?.minutesLabel ?? "SAT", hourly);
 }
 
-/**
- * Eunice and Victoria accept the legacy $130 pool, including the $1,300 ten-hour package.
- * Xavier does for Michelle and Sophia. Nika never does.
- */
+/** Eunice and Victoria always accept the legacy $130 pool. Xavier does only for Michelle. Nika never does. */
 export function allowsLegacySatPool(
   tutorKey: SatTutorKey,
-  user: (MichelleIdentity & { id?: string | null }) | null | undefined,
+  user: MichelleIdentity | null | undefined,
 ): boolean {
   if (tutorKey === "nika") return false;
-  if (isSophiaSleimanUser(user)) return tutorKey === "eunice" || tutorKey === "xavier";
   if (tutorKey === "eunice" || tutorKey === "victoria") return true;
   return isMichelleMakaremUser(user);
 }

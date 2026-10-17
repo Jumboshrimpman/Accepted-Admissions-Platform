@@ -163,7 +163,7 @@ beforeEach(() => {
 });
 
 describe("portal SAT book/pay", () => {
-  test("Sophia's page books Xavier or Eunice and keeps the removed pricing blurbs off", async () => {
+  test("Sophia's page pays for the chosen session and keeps the removed pricing blurbs off", async () => {
     mocks.currentUser.data = { role: "student", id: SOPHIA_SLEIMAN_SAT_USER_ID };
     mocks.dashboard.data.user = {
       role: "student",
@@ -174,8 +174,8 @@ describe("portal SAT book/pay", () => {
     render(<PortalSat />);
 
     expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
-    expect(screen.getByText(/book Xavier or Eunice/i)).toBeTruthy();
-    expect(screen.queryByText(/Victoria/)).toBeNull();
+    expect(screen.getByText(/pay for that exact session and come back booked/i)).toBeTruthy();
+    expect(screen.queryByText(/Purchase prepaid hours/i)).toBeNull();
     expect(screen.queryByText("Your tutors")).toBeNull();
     expect(screen.queryByText(/hourly rate/i)).toBeNull();
     expect(screen.queryByText(/Hours stay with the tutor/i)).toBeNull();
