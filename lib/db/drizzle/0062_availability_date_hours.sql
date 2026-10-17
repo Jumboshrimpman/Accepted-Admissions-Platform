@@ -1,12 +1,16 @@
 -- Date-specific bookable windows. A key replaces weekly hours for that civil date.
--- An empty list closes the date. Missing keys keep weekly hours.
--- Nika's map is the fixed week of Oct 19–25 2026 plus a close through Nov 15.
--- Weekly hours are left unchanged. An administrator can replace date_hours later.
+-- An empty list closes the date. Inside the first-to-last listed dates, a missing
+-- key is closed too, so weekly hours do not fill the gaps.
+-- Nika is closed on Oct 17 and Oct 18, open only on her fixed windows through
+-- Oct 25, and closed from Oct 26 through 2099-12-31 until an administrator
+-- replaces this map. Weekly hours stay on the row for dates outside the map.
 
 ALTER TABLE "availability_rules" ADD COLUMN "date_hours" jsonb DEFAULT '{}'::jsonb NOT NULL;
 --> statement-breakpoint
 UPDATE "availability_rules" AS ar
 SET "date_hours" = '{
+  "2026-10-17": [],
+  "2026-10-18": [],
   "2026-10-19": [{"start": "21:00", "end": "22:00"}],
   "2026-10-20": [],
   "2026-10-21": [{"start": "18:05", "end": "19:30"}],
@@ -34,7 +38,8 @@ SET "date_hours" = '{
   "2026-11-12": [],
   "2026-11-13": [],
   "2026-11-14": [],
-  "2026-11-15": []
+  "2026-11-15": [],
+  "2099-12-31": []
 }'::jsonb,
     "updated_at" = now()
 FROM "tutor_profiles" AS tp

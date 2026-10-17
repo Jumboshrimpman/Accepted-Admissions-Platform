@@ -30,7 +30,8 @@ export type AvailabilityRule = {
   /**
    * Civil dates in the tutor's timezone. A present key replaces weekly hours
    * for that date. An empty list means the tutor is not bookable that day.
-   * Dates that are absent keep the weekly hours.
+   * Inside the earliest-to-latest listed dates, a missing key is closed too.
+   * Dates outside that span keep the weekly hours.
    */
   dateHours?: Record<string, AvailabilityWindow[]>;
   bookingNoticeMinutes: number;
@@ -174,10 +175,23 @@ export function parseDateHours(
   return { ok: true, dateHours };
 }
 
+function listedDateHoursSpan(
+  dateHours: Record<string, AvailabilityWindow[]> | undefined,
+): { start: string; end: string } | null {
+  if (!dateHours) return null;
+  const keys = Object.keys(dateHours).filter((key) => CIVIL_DATE.test(key)).sort();
+  const start = keys[0];
+  const end = keys[keys.length - 1];
+  if (!start || !end) return null;
+  return { start, end };
+}
+
 function windowsForDate(rule: AvailabilityRule, key: string, weekday: string): AvailabilityWindow[] {
   if (rule.dateHours && Object.prototype.hasOwnProperty.call(rule.dateHours, key)) {
     return rule.dateHours[key] ?? [];
   }
+  const span = listedDateHoursSpan(rule.dateHours);
+  if (span && key >= span.start && key <= span.end) return [];
   return rule.weeklyHours[weekday] ?? [];
 }
 
@@ -258,10 +272,38 @@ export function generateAvailableSlots(
   return slots;
 }
 
-export function calendarInviteIncludesTutor(
-  ...subjects: Array<string | null | undefined>
+/** Guest on her own Accepted Admissions calendar. Other consulting tutors stay off the invite. */
+export const NIKA_CALENDAR_INVITE_EMAIL = "nika.raiffe@gmail.com";
+
+type CalendarInviteInput = string | null | undefined | { tutorEmail?: string | null };
+
+function readCalendarInviteInputs(inputs: CalendarInviteInput[]): {
+  subjects: Array<string | null | undefined>;
+  tutorEmail?: string | null;
+} {
+  const subjects: Array<string | null | undefined> = [];
+  let tutorEmail: string | null | undefined;
+  for (const input of inputs) {
+    if (input && typeof input === "object") tutorEmail = input.tutorEmail;
+    else subjects.push(input);
+  }
+  return { subjects, tutorEmail };
+}
+
+export function isNikaCollegeConsultingInvite(
+  subjects: Array<string | null | undefined>,
+  tutorEmail?: string | null,
 ): boolean {
-  return subjects.some((subject) => subject?.trim().toLowerCase() === "college consulting");
+  const consulting = subjects.some(
+    (subject) => subject?.trim().toLowerCase() === "college consulting",
+  );
+  return consulting && tutorEmail?.trim().toLowerCase() === NIKA_CALENDAR_INVITE_EMAIL;
+}
+
+/** True only for Nika's College Consulting sessions. SAT and other consulting tutors stay off. */
+export function calendarInviteIncludesTutor(...inputs: CalendarInviteInput[]): boolean {
+  const { subjects, tutorEmail } = readCalendarInviteInputs(inputs);
+  return isNikaCollegeConsultingInvite(subjects, tutorEmail);
 }
 
 export const MISSING_CALENDAR_INVITE_TITLE = "No Google Calendar invite was sent";

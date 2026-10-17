@@ -141,6 +141,11 @@ test("Nika's fixed week offers only those windows and ignores Google busy", asyn
   assert.equal(fixedDateHoursOpen(dateHours, "America/New_York", new Date(at("2026-10-21", "18:05"))), true);
   assert.equal(fixedDateHoursOpen(dateHours, "America/New_York", new Date(at("2026-10-20", "16:00"))), false);
   assert.equal(fixedDateHoursOpen(dateHours, "America/New_York", new Date(at("2026-11-16", "07:00"))), false);
+  assert.deepEqual(dateHours["2026-10-17"], []);
+  assert.deepEqual(dateHours["2026-10-18"], []);
+  assert.deepEqual(dateHours["2026-10-26"], []);
+  assert.deepEqual(dateHours["2026-11-15"], []);
+  assert.deepEqual(dateHours["2099-12-31"], []);
 
   const rule = {
     timezone: "America/New_York",
@@ -202,21 +207,67 @@ test("Nika's fixed week offers only those windows and ignores Google busy", asyn
   );
   assert.deepEqual(hidden, []);
 
-  const resumed = generateAvailableSlots(
+  const closedBefore = generateAvailableSlots(
+    rule,
+    new Date("2026-10-17T04:00:00.000Z"),
+    new Date("2026-10-19T04:00:00.000Z"),
+    60,
+    [],
+    [],
+    new Date("2026-10-01T15:00:00.000Z"),
+  );
+  assert.deepEqual(closedBefore, []);
+  const stayedClosed = generateAvailableSlots(
     rule,
     new Date("2026-11-16T05:00:00.000Z"),
-    new Date("2026-11-17T05:00:00.000Z"),
+    new Date("2026-11-18T05:00:00.000Z"),
     60,
-    [{ start: at("2026-11-16", "07:00"), end: at("2026-11-16", "08:00") }],
+    [],
     [],
     now,
   );
-  assert.equal(resumed.includes(at("2026-11-16", "07:00")), false);
-  assert.equal(resumed[0], at("2026-11-16", "09:00"));
+  assert.deepEqual(stayedClosed, []);
+  const stillClosedNextYear = generateAvailableSlots(
+    rule,
+    new Date("2027-03-01T05:00:00.000Z"),
+    new Date("2027-03-03T05:00:00.000Z"),
+    60,
+    [],
+    [],
+    now,
+  );
+  assert.deepEqual(stillClosedNextYear, []);
 
   const insideNotice = new Date("2026-10-19T17:01:00.000Z");
   const tooSoon = generateAvailableSlots(rule, from, weekEnd, 60, [], [], insideNotice);
   assert.equal(tooSoon.includes(at("2026-10-19", "21:00")), false);
+});
+
+test("one closed date does not turn the rest of the week off", () => {
+  const closedChristmas = generateAvailableSlots(
+    {
+      timezone: "America/New_York",
+      weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
+      dateHours: { "2026-12-25": [] },
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    new Date("2026-12-25T05:00:00.000Z"),
+    new Date("2026-12-27T05:00:00.000Z"),
+    60,
+    [],
+    [],
+    new Date("2026-12-01T00:00:00.000Z"),
+  );
+  assert.equal(
+    closedChristmas.includes(zonedDateTimeToUtc("2026-12-25", "10:00", "America/New_York").toISOString()),
+    false,
+  );
+  assert.equal(
+    closedChristmas.includes(zonedDateTimeToUtc("2026-12-26", "10:00", "America/New_York").toISOString()),
+    true,
+  );
 });
 
 test("SAT booking hours expose 07:00–20:00 America/New_York weekday starts", () => {
@@ -433,8 +484,40 @@ test("College Consulting invites the student, Nika, and admin on her calendar", 
     event.attendees.map((attendee) => attendee.email),
     ["ndharni300@gmail.com", "nika.raiffe@gmail.com", "admin@acceptedadmissions.org"],
   );
-  assert.equal(calendarInviteIncludesTutor("College Consulting"), true);
-  assert.equal(calendarInviteIncludesTutor("SAT"), false);
+  assert.equal(
+    calendarInviteIncludesTutor("College Consulting", { tutorEmail: "nika.raiffe@gmail.com" }),
+    true,
+  );
+  assert.equal(
+    calendarInviteIncludesTutor("College Consulting", { tutorEmail: "samakubba@icloud.com" }),
+    false,
+  );
+  assert.equal(
+    calendarInviteIncludesTutor("College Consulting", { tutorEmail: "xaver.rmz6@gmail.com" }),
+    false,
+  );
+  assert.equal(calendarInviteIncludesTutor("College Consulting"), false);
+  assert.equal(calendarInviteIncludesTutor("SAT", { tutorEmail: "nika.raiffe@gmail.com" }), false);
+  for (const email of ["samakubba@icloud.com", "xaver.rmz6@gmail.com"]) {
+    const quiet = bookingCalendarEventPayload({
+      title: "Consulting session",
+      start: new Date("2026-12-02T15:00:00.000Z"),
+      durationMinutes: 60,
+      timeZone: "America/New_York",
+      attendeeEmail: "neel@example.invalid",
+      student: { email: "neel@example.invalid" },
+      tutor: { email },
+      inviteTutor: calendarInviteIncludesTutor("College Consulting", { tutorEmail: email }),
+    });
+    assert.equal(
+      quiet.attendees.some((attendee) => attendee.email === email),
+      false,
+    );
+    assert.deepEqual(
+      quiet.attendees.map((attendee) => attendee.email),
+      ["neel@example.invalid", "admin@acceptedadmissions.org"],
+    );
+  }
   assert.equal(
     missingCalendarInviteMessage({
       studentName: "Neel Dharni",
@@ -457,7 +540,8 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const slice = platformSource.slice(start, end);
   assert.match(slice, /if \(fixedWindow && !access\) \{\s*await confirmBookedSession\(created, false\)/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
-  assert.match(slice, /inviteTutor: consulting/);
+  assert.match(slice, /calendarInviteIncludesTutor\(/);
+  assert.match(slice, /tutorEmail: tutor\.email/);
   assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
   const liveCheck = slice.indexOf("if (!fixedWindow) {");

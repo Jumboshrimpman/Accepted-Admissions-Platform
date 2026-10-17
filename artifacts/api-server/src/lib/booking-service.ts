@@ -556,10 +556,22 @@ export async function cancelBookingWithCreditPolicy(
   return { session: saved ?? current, creditRestored };
 }
 
+export async function sessionBookingConfirmed(sessionId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: auditLogsTable.id })
+    .from(auditLogsTable)
+    .where(
+      and(eq(auditLogsTable.action, "booking.confirmed"), eq(auditLogsTable.entityId, sessionId)),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function recordBookingConfirmedAudit(
   actorUserId: string,
   session: typeof sessionsTable.$inferSelect,
 ): Promise<void> {
+  if (await sessionBookingConfirmed(session.id)) return;
   await db.insert(auditLogsTable).values({
     actorUserId,
     action: "booking.confirmed",
@@ -624,8 +636,21 @@ export async function notifyAdministratorsOfBooking(args: {
     .from(usersTable)
     .where(eq(usersTable.role, "administrator"));
   if (administrators.length === 0) return;
+  const existing = await db
+    .select({ recipientUserId: adminNotificationsTable.recipientUserId })
+    .from(adminNotificationsTable)
+    .where(
+      and(
+        eq(adminNotificationsTable.sessionId, args.sessionId),
+        eq(adminNotificationsTable.kind, args.kind),
+        eq(adminNotificationsTable.title, args.title),
+      ),
+    );
+  const already = new Set(existing.map((row) => row.recipientUserId));
+  const fresh = administrators.filter((admin) => !already.has(admin.id));
+  if (fresh.length === 0) return;
   await db.insert(adminNotificationsTable).values(
-    administrators.map((admin) => ({
+    fresh.map((admin) => ({
       recipientUserId: admin.id,
       kind: args.kind,
       guidanceRequestId: null,

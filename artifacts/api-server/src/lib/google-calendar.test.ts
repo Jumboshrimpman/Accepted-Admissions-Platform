@@ -68,11 +68,33 @@ test("event writes notify attendees the same way create does", () => {
   );
 });
 
-test("College Consulting calendar writes email attendees", () => {
-  assert.equal(googleCalendarSendUpdatesForSubjects("College Consulting"), "all");
-  assert.equal(googleCalendarSendUpdatesForSubjects("SAT", "College Consulting"), "all");
+test("only Nika's College Consulting calendar writes email attendees", () => {
+  assert.equal(googleCalendarSendUpdatesForSubjects("College Consulting"), "none");
+  assert.equal(googleCalendarSendUpdatesForSubjects("SAT", "College Consulting"), "none");
   assert.equal(googleCalendarSendUpdatesForSubjects("SAT"), "all");
   assert.equal(googleCalendarSendUpdatesForSubjects(null), "all");
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("College Consulting", {
+      tutorEmail: "nika.raiffe@gmail.com",
+    }),
+    "all",
+  );
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("College Consulting", {
+      tutorEmail: "samakubba@icloud.com",
+    }),
+    "none",
+  );
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("College Consulting", {
+      tutorEmail: "xaver.rmz6@gmail.com",
+    }),
+    "none",
+  );
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("SAT", { tutorEmail: "nika.raiffe@gmail.com" }),
+    "all",
+  );
   assert.match(
     googleCalendarEventWritePath("primary", undefined, "none"),
     /\/calendars\/primary\/events\?sendUpdates=none$/,

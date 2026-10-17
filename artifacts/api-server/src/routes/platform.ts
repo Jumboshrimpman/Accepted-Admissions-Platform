@@ -123,6 +123,7 @@ import {
   notifyAdministratorsOfBooking,
   raiseLegacyCalendarManualEditAlert,
   recordBookingConfirmedAudit,
+  sessionBookingConfirmed,
   requireStudentBooker,
   rollbackBookingAfterCalendarFailure,
   sessionScheduleChangeError,
@@ -4986,7 +4987,20 @@ async function syncGoogleCalendarForSessionChange(args: {
       "The tutor's calendar is disconnected.",
     );
   }
-  const sendUpdates = googleCalendarSendUpdatesForSubjects(args.existing.subject, args.next.subject);
+  const tutorUserId = args.next.tutorUserId ?? args.existing.tutorUserId;
+  const [tutorProfile] = tutorUserId
+    ? await db
+        .select({ email: tutorProfilesTable.email })
+        .from(tutorProfilesTable)
+        .where(eq(tutorProfilesTable.userId, tutorUserId))
+        .limit(1)
+    : [];
+  const tutorEmail = tutorProfile?.email ?? null;
+  const sendUpdates = googleCalendarSendUpdatesForSubjects(
+    args.existing.subject,
+    args.next.subject,
+    { tutorEmail },
+  );
   if (cancelling) {
     const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
     const removed = await runTutorCalendarCall(access, (token) =>
@@ -5028,7 +5042,11 @@ async function syncGoogleCalendarForSessionChange(args: {
           location: SHARED_FALL_MEETING_URL,
           student,
           tutor,
-          inviteTutor: calendarInviteIncludesTutor(args.existing.subject, args.next.subject),
+          inviteTutor: calendarInviteIncludesTutor(
+            args.existing.subject,
+            args.next.subject,
+            { tutorEmail },
+          ),
         }),
         sendUpdates,
       ),
@@ -5245,6 +5263,19 @@ async function assertDirectCheckoutSlotOpen(
       rule.timezone,
       start,
     );
+  if (!slots.includes(start.toISOString())) {
+    const held = await activeSlotHoldsOverlapping(db, {
+      tutorProfileId: intent.tutorProfileId,
+      start,
+      end,
+    });
+    if (held.length > 0) return;
+    throw new BookingError(
+      409,
+      "SLOT_UNAVAILABLE",
+      "That time is no longer available. Choose another slot.",
+    );
+  }
   if (!access && !fixedWindow) {
     throw new BookingError(
       409,
@@ -5259,18 +5290,7 @@ async function assertDirectCheckoutSlotOpen(
       "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.",
     );
   }
-  if (slots.includes(start.toISOString())) return;
-  const held = await activeSlotHoldsOverlapping(db, {
-    tutorProfileId: intent.tutorProfileId,
-    start,
-    end,
-  });
-  if (held.length > 0) return;
-  throw new BookingError(
-    409,
-    "SLOT_UNAVAILABLE",
-    "That time is no longer available. Choose another slot.",
-  );
+  return;
 }
 
 type SessionWriteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -7531,6 +7551,9 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         rule.timezone,
         start,
       );
+    if (!slots.includes(start.toISOString())) {
+      throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
+    }
     if (!access && !fixedWindow) {
       throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     }
@@ -7541,9 +7564,6 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         "CALENDAR_RECONNECT_REQUIRED",
         "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.",
       );
-    }
-    if (!slots.includes(start.toISOString())) {
-      throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
     }
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
@@ -7642,38 +7662,42 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       });
     });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {
-      await recordBookingConfirmedAudit(req.appUser!.id, session);
-      await notifyAdministratorsOfBooking({
-        kind: "booking_confirmed",
-        sessionId: session.id,
-        title: consulting ? "College Consulting booking confirmed" : "SAT booking confirmed",
-        message: `${req.appUser!.displayName} booked ${session.title} at ${session.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
-      });
-      if (!calendarInviteSent) {
+      if (!(await sessionBookingConfirmed(session.id))) {
         await notifyAdministratorsOfBooking({
           kind: "booking_confirmed",
           sessionId: session.id,
-          title: MISSING_CALENDAR_INVITE_TITLE,
-          message: missingCalendarInviteMessage({
-            studentName: req.appUser!.displayName,
-            sessionTitle: session.title,
-            startIso: session.dateTime.toISOString(),
-            meetingUrl: SHARED_FALL_MEETING_URL,
-          }),
+          title: consulting ? "College Consulting booking confirmed" : "SAT booking confirmed",
+          message: `${req.appUser!.displayName} booked ${session.title} at ${session.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
         });
-      }
-      if (!consulting) {
-        try {
-          await ensureAutogeneratedSatPrework(session.id, req.appUser!.id);
-        } catch {
-          // Autogen must not roll back a confirmed SAT booking.
+        if (!calendarInviteSent) {
+          await notifyAdministratorsOfBooking({
+            kind: "booking_confirmed",
+            sessionId: session.id,
+            title: MISSING_CALENDAR_INVITE_TITLE,
+            message: missingCalendarInviteMessage({
+              studentName: req.appUser!.displayName,
+              sessionTitle: session.title,
+              startIso: session.dateTime.toISOString(),
+              meetingUrl: SHARED_FALL_MEETING_URL,
+            }),
+          });
+        }
+        await recordBookingConfirmedAudit(req.appUser!.id, session);
+        if (!consulting) {
+          try {
+            await ensureAutogeneratedSatPrework(session.id, req.appUser!.id);
+          } catch {
+            // Autogen must not roll back a confirmed SAT booking.
+          }
         }
       }
       const onBooked = (req as AuthedRequest & {
         onPrepaidBooked?: (sessionId: string) => Promise<void>;
       }).onPrepaidBooked;
       if (onBooked) await onBooked(session.id);
-      res.status(201).json(await bookingSessionShape(session));
+      if (!res.headersSent) {
+        res.status(201).json(await bookingSessionShape(session));
+      }
     };
     if (fixedWindow && !access) {
       await confirmBookedSession(created, false);
@@ -7710,9 +7734,15 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
                 location: SHARED_FALL_MEETING_URL,
                 student,
                 tutor: tutorParty,
-                inviteTutor: consulting,
+                inviteTutor: calendarInviteIncludesTutor(
+                  consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+                  { tutorEmail: tutor.email },
+                ),
               }),
-              googleCalendarSendUpdatesForSubjects(consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT"),
+              googleCalendarSendUpdatesForSubjects(
+                consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+                { tutorEmail: tutor.email },
+              ),
             ),
         ),
       );
@@ -7738,7 +7768,11 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       await confirmBookedSession(confirmed, true);
     } catch (error) {
       if (fixedWindow) {
-        await confirmBookedSession(created, false);
+        if (!(await sessionBookingConfirmed(created.id))) {
+          await confirmBookedSession(created, false);
+        } else if (!res.headersSent) {
+          res.status(201).json(await bookingSessionShape(created));
+        }
         return;
       }
       await db.transaction(async (tx) => {
@@ -7918,7 +7952,7 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
     assertSessionAllowsScheduleChange(session, "cancel");
     if (session.providerEventId && session.tutorUserId) {
       const profile = await db
-        .select({ id: tutorProfilesTable.id })
+        .select({ id: tutorProfilesTable.id, email: tutorProfilesTable.email })
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1);
@@ -7930,7 +7964,9 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
             token,
             sessionEventCalendarId(session.providerCalendarId),
             session.providerEventId!,
-            googleCalendarSendUpdatesForSubjects(session.subject),
+            googleCalendarSendUpdatesForSubjects(session.subject, {
+              tutorEmail: profile[0]?.email,
+            }),
           ),
         ),
       );
@@ -7981,10 +8017,10 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       session.id,
       true,
     );
-    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
     if (!slots.includes(start.toISOString())) {
       throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
     }
+    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
     const end = new Date(start.getTime() + session.durationMinutes * 60_000);
     const participantIds = [session.clientUserId, session.tutorUserId].filter(
       (id): id is string => Boolean(id),
@@ -7995,7 +8031,9 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       calendarInviteParty(session.tutorUserId, { email: profile.email }),
     ]);
     const attendeeEmail = student.email ?? "";
-    const sendUpdates = googleCalendarSendUpdatesForSubjects(session.subject);
+    const sendUpdates = googleCalendarSendUpdatesForSubjects(session.subject, {
+      tutorEmail: profile.email,
+    });
     const inviteAt = (startTime: Date, timeZone: string) =>
       bookingCalendarEventPayload({
         title: session.title,
@@ -8006,7 +8044,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         location: SHARED_FALL_MEETING_URL,
         student,
         tutor: tutorParty,
-        inviteTutor: calendarInviteIncludesTutor(session.subject),
+        inviteTutor: calendarInviteIncludesTutor(session.subject, { tutorEmail: profile.email }),
       });
     const eventWrite = session.providerEventId
       ? await runTutorCalendarCall(access, (token) =>
