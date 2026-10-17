@@ -6,6 +6,7 @@ import {
   adminCalendarGrantCanWriteEvents,
   adminCalendarMeetConference,
   bookingsUseAdminCalendarFallback,
+  manualCalendarInviteMessage,
 } from "./admin-calendar-fallback.ts";
 import { GOOGLE_CALENDAR_APP_CREATED_SCOPE, GOOGLE_CALENDAR_FREEBUSY_SCOPE } from "./google-calendar.ts";
 
@@ -45,6 +46,20 @@ test("admin calendar fallback note is Nika's until her app calendar can take boo
       appCalendarId: null,
     }),
     false,
+  );
+});
+
+test("a fixed window with no writer asks an admin to send Nika's invite by hand", () => {
+  assert.equal(
+    manualCalendarInviteMessage({
+      bookerName: "Neel Dharni",
+      bookerEmail: "neel@example.invalid",
+      tutorName: "Nika Raiffe",
+      tutorEmail: "other@example.com",
+      start: new Date("2026-10-21T22:05:00.000Z"),
+      durationMinutes: 60,
+    }),
+    "Send calendar invite manually: Neel Dharni booked Nika Oct 21, 2026, 6:05 PM ET, 60 minutes. Invite neel@example.invalid, nika.raiffe@gmail.com, admin@acceptedadmissions.org.",
   );
 });
 

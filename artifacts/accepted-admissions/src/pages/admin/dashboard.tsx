@@ -153,8 +153,14 @@ export default function AdminDashboard() {
   const unresolvedRequests = unresolvedFormSubmissions(guidanceRequests);
   const resolvedRequests = guidanceRequests.filter((request) => isFormSubmissionResolved(request));
   const notifications = notificationsByNewest(overview?.notifications ?? []);
-  const unreadNotifications = notifications.filter((notification) => notification.status === "unread");
-  const priorNotifications = notifications.filter((notification) => notification.status !== "unread");
+  const manualInviteAlerts = notifications.filter(
+    (notification) => notification.kind === "manual_calendar_invite" && notification.status !== "dismissed",
+  );
+  const assignmentNotifications = notifications.filter(
+    (notification) => notification.kind !== "manual_calendar_invite",
+  );
+  const unreadNotifications = assignmentNotifications.filter((notification) => notification.status === "unread");
+  const priorNotifications = assignmentNotifications.filter((notification) => notification.status !== "unread");
   const unreadList = collapsedItems(unreadNotifications, showAllNotifications);
   const unreadCount = unreadNotifications.length;
   const priorCount = priorNotifications.length;
@@ -183,6 +189,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-in fade-in">
+      <ManualCalendarInviteAlert
+        alerts={manualInviteAlerts}
+        pending={updateNotification.isPending}
+        onResolve={(notificationId) => applyNotificationStatus(notificationId, "dismissed")}
+      />
       <UnresolvedFormSubmissionsAlert requests={unresolvedRequests} />
       <CalendarReconnectAlert alerts={overview?.calendarReconnectAlerts ?? []} />
       <SharedMeetOverlapAlert overlaps={overview?.sharedMeetOverlaps ?? []} />
@@ -223,7 +234,7 @@ export default function AdminDashboard() {
 
       <QuestionReportsQueue />
 
-      {notifications.length > 0 && (
+      {assignmentNotifications.length > 0 && (
         <Card data-testid="card-admin-notifications">
           <CardHeader>
             <CardTitle>Assignment notifications</CardTitle>
@@ -461,6 +472,65 @@ export default function AdminDashboard() {
         </details>
       </Card>
     </div>
+  );
+}
+
+function ManualCalendarInviteAlert({
+  alerts,
+  pending,
+  onResolve,
+}: {
+  alerts: AdminNotification[];
+  pending: boolean;
+  onResolve: (notificationId: string) => void;
+}) {
+  if (alerts.length === 0) return null;
+  return (
+    <section
+      role="alert"
+      aria-labelledby="manual-calendar-invite-heading"
+      data-testid="alert-manual-calendar-invite"
+      className="rounded-2xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950 shadow-sm"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="manual-calendar-invite-heading" className="flex items-center gap-2 text-lg font-semibold">
+            <AlertTriangle className="h-5 w-5" />
+            Send calendar invite manually
+          </h2>
+          <p className="mt-1 text-sm text-amber-900">
+            {alerts.length === 1
+              ? "This booking is confirmed. The invite was not sent. It stays here until you resolve it."
+              : `${alerts.length} bookings are confirmed without an invite. They stay here until you resolve them.`}
+          </p>
+        </div>
+        <Badge className="w-fit border-transparent bg-amber-500 text-amber-950 hover:bg-amber-500">
+          {alerts.length} unresolved
+        </Badge>
+      </div>
+      <ul className="mt-4 space-y-3">
+        {alerts.map((alert) => (
+          <li
+            key={alert.id}
+            className="rounded-xl border border-amber-300 bg-white/80 p-4 text-foreground"
+            data-testid={`alert-manual-calendar-invite-${alert.id}`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium">{alert.message}</p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => onResolve(alert.id)}
+                data-testid={`resolve-manual-calendar-invite-${alert.id}`}
+              >
+                Resolve
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

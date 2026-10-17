@@ -1026,6 +1026,40 @@ describe("administrator overview", () => {
     expect(victoria.textContent).toContain("tutor profile");
   });
 
+  test("keeps a manual calendar invite alert until an admin resolves it", () => {
+    const message =
+      "Send calendar invite manually: Neel Dharni booked Nika Oct 21, 2026, 6:05 PM ET, 60 minutes. Invite neel@example.invalid, nika.raiffe@gmail.com, admin@acceptedadmissions.org.";
+    mocks.overview.notifications = [
+      {
+        id: "manual-invite",
+        kind: "manual_calendar_invite",
+        guidanceRequestId: "",
+        title: "Send calendar invite manually",
+        message,
+        status: "unread",
+        readAt: null,
+        dismissedAt: null,
+        createdAt: "2026-10-17T20:53:00.000Z",
+      },
+      assignmentNotification("assignment-unread", "2026-10-17T20:00:00.000Z"),
+    ];
+
+    render(<AdminDashboard />);
+
+    const alert = screen.getByTestId("alert-manual-calendar-invite");
+    expect(alert.getAttribute("role")).toBe("alert");
+    expect(alert.textContent).toContain(message);
+    expect(screen.getByTestId("resolve-manual-calendar-invite-manual-invite").textContent).toBe("Resolve");
+    expect(screen.queryByTestId("notification-manual-invite")).toBeNull();
+    expect(screen.getByTestId("notification-assignment-unread")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("resolve-manual-calendar-invite-manual-invite"));
+    expect(mocks.updateNotification).toHaveBeenCalledWith(
+      { notificationId: "manual-invite", data: { status: "dismissed" } },
+      expect.any(Object),
+    );
+  });
+
   test("keeps a calendar reconnect alert until the tutor is healthy", () => {
     mocks.overview.calendarReconnectAlerts = [
       {

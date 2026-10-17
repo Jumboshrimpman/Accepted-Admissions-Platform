@@ -718,7 +718,7 @@ export async function notifyPaidBookingReconnectRefusal(args: {
 }
 
 export async function notifyAdministratorsOfBooking(args: {
-  kind: "booking_confirmed" | "booking_cancelled";
+  kind: "booking_confirmed" | "booking_cancelled" | "manual_calendar_invite";
   sessionId: string;
   title: string;
   message: string;

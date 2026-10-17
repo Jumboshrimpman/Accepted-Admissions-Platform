@@ -29,13 +29,9 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import express, { type NextFunction, type Request, type Response } from "express";
 import platformRouter from "../routes/platform";
-import {
-  notifyAdministratorsOfBooking,
-  PAID_BOOKING_RECONNECT_REFUSAL_KIND,
-  PAID_BOOKING_RECONNECT_REFUSAL_TITLE,
-  paidBookingReconnectRefusalMessage,
-} from "./booking-service";
+import { notifyAdministratorsOfBooking } from "./booking-service";
 import { zonedDateTimeToUtc } from "./booking";
+import { manualCalendarInviteMessage } from "./admin-calendar-fallback";
 import {
   COLLEGE_CONSULTING_COURSE_ID,
   NEEL_DHARNI_USER_ID,
@@ -138,10 +134,17 @@ async function getJson(baseUrl: string, path: string) {
 function installCalendarMock(appCalendarId: string) {
   const writes: CapturedWrite[] = [];
   let freeBusyCalls = 0;
+  let googleCalls = 0;
+  let emailCalls = 0;
   const original = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(typeof input === "string" || input instanceof URL ? input : input.url);
+    if (url.includes("api.resend.com")) {
+      emailCalls += 1;
+      return Response.json({ id: "email-should-not-send" });
+    }
     if (url.includes("/calendar/v3/")) {
+      googleCalls += 1;
       if (url.includes("/freeBusy")) {
         freeBusyCalls += 1;
         return Response.json({
@@ -184,6 +187,8 @@ function installCalendarMock(appCalendarId: string) {
   return {
     writes,
     freeBusyCalls: () => freeBusyCalls,
+    googleCalls: () => googleCalls,
+    emailCalls: () => emailCalls,
     restore() {
       globalThis.fetch = original;
     },
@@ -640,9 +645,9 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
   }
 });
 
-test("an empty app calendar refuses Nika before payment and notifies once after a paid hold", async (t) => {
+test("Neel books a fixed Nika slot with a blank app calendar and no admin grant", async (t) => {
   if (!process.env.DATABASE_URL) {
-    t.skip("DATABASE_URL is required for the reconnect refusal");
+    t.skip("DATABASE_URL is required for the manual invite confirmation");
     return;
   }
   const unlockNika = await lockNika();
@@ -658,11 +663,12 @@ test("an empty app calendar refuses Nika before payment and notifies once after 
   const appCalendarId = `reconnect-window-${suffix}`;
   const calendar = installCalendarMock(appCalendarId);
   const createdUserIds: string[] = [];
+  const createdSessionIds: string[] = [];
   const createdPaymentIds: string[] = [];
   const createdInvoiceIds: string[] = [];
   const createdLedgerIds: string[] = [];
   const webhookEventId = `evt_reconnect_${suffix}`;
-  let refusalMessage = "";
+  let manualInviteMessage = "";
   let createdCourse = false;
   let createdMembership = false;
   let createdRuleId: string | undefined;
@@ -863,79 +869,19 @@ test("an empty app calendar refuses Nika before payment and notifies once after 
       .select({ id: paymentsTable.id })
       .from(paymentsTable)
       .where(eq(paymentsTable.clientUserId, neel.id));
-    const refusedCheckout = await postJson(server.baseUrl, "/api/payments/checkout", {
+    const outside = await postJson(server.baseUrl, "/api/payments/checkout", {
       tutorProfileId: profile.id,
       durationMinutes: 60,
-      startTime: NIKA_START,
+      startTime: CLOSED_START,
     });
-    assert.equal(refusedCheckout.status, 409, JSON.stringify(refusedCheckout.body));
-    assert.equal(refusedCheckout.body.code, "CALENDAR_RECONNECT_REQUIRED");
-    const paymentsAfterRefusal = await db
+    assert.equal(outside.status, 409, JSON.stringify(outside.body));
+    assert.equal(outside.body.code, "SLOT_UNAVAILABLE");
+    const paymentsAfterOutside = await db
       .select({ id: paymentsTable.id })
       .from(paymentsTable)
       .where(eq(paymentsTable.clientUserId, neel.id));
-    assert.equal(paymentsAfterRefusal.length, paymentsBefore.length);
+    assert.equal(paymentsAfterOutside.length, paymentsBefore.length);
 
-    const [hour] = await db
-      .select()
-      .from(satProductsTable)
-      .where(eq(satProductsTable.slug, "college-consulting-nika-hour"))
-      .limit(1);
-    assert.ok(hour);
-    const [credit] = await db
-      .insert(creditLedgerTable)
-      .values({
-        clientUserId: neel.id,
-        productId: hour.id,
-        entryType: "original",
-        hours: 1,
-        note: `reconnect-prepaid-${suffix}`,
-      })
-      .returning();
-    createdLedgerIds.push(credit!.id);
-    const ledgerBefore = await db
-      .select({ id: creditLedgerTable.id })
-      .from(creditLedgerTable)
-      .where(eq(creditLedgerTable.clientUserId, neel.id));
-    const sessionsBefore = await db
-      .select({ id: sessionsTable.id })
-      .from(sessionsTable)
-      .where(
-        and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(NIKA_START))),
-      );
-    const unpaidNoticesBefore = await db
-      .select({ id: adminNotificationsTable.id })
-      .from(adminNotificationsTable)
-      .where(eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND));
-    const refusedBooking = await postJson(server.baseUrl, "/api/booking/sessions", {
-      tutorProfileId: profile.id,
-      startTime: NIKA_START,
-      durationMinutes: 60,
-    });
-    assert.equal(refusedBooking.status, 409, JSON.stringify(refusedBooking.body));
-    assert.equal(refusedBooking.body.code, "CALENDAR_RECONNECT_REQUIRED");
-    const ledgerAfterCreditRefusal = await db
-      .select({ id: creditLedgerTable.id })
-      .from(creditLedgerTable)
-      .where(eq(creditLedgerTable.clientUserId, neel.id));
-    assert.equal(ledgerAfterCreditRefusal.length, ledgerBefore.length);
-    const sessionsAfterCreditRefusal = await db
-      .select({ id: sessionsTable.id })
-      .from(sessionsTable)
-      .where(
-        and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(NIKA_START))),
-      );
-    assert.equal(sessionsAfterCreditRefusal.length, sessionsBefore.length);
-    const unpaidNoticesAfter = await db
-      .select({ id: adminNotificationsTable.id })
-      .from(adminNotificationsTable)
-      .where(eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND));
-    assert.equal(unpaidNoticesAfter.length, unpaidNoticesBefore.length);
-
-    await db
-      .update(calendarConnectionsTable)
-      .set({ appCalendarId, updatedAt: new Date() })
-      .where(eq(calendarConnectionsTable.id, connection!.id));
     const checkout = await postJson(server.baseUrl, "/api/payments/checkout", {
       tutorProfileId: profile.id,
       durationMinutes: 60,
@@ -944,103 +890,85 @@ test("an empty app calendar refuses Nika before payment and notifies once after 
     assert.equal(checkout.status, 201, JSON.stringify(checkout.body));
     const paymentId = String(checkout.body.paymentId);
     createdPaymentIds.push(paymentId);
-    await db
-      .update(calendarConnectionsTable)
-      .set({ appCalendarId: null, updatedAt: new Date() })
-      .where(eq(calendarConnectionsTable.id, connection!.id));
-
     const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
     assert.ok(payment);
     if (payment.invoiceId) createdInvoiceIds.push(payment.invoiceId);
-    const webhookEvent = {
+    const googleBeforeConfirm = calendar.googleCalls();
+    const emailBeforeConfirm = calendar.emailCalls();
+    await processStripeWebhook({
       id: webhookEventId,
       type: "checkout.session.completed",
       data: {
         object: {
-          id: `cs_reconnect_${suffix}`,
+          id: `cs_manual_invite_${suffix}`,
           payment_status: "paid",
           amount_total: Number(payment.amountCents),
-          latest_charge: `ch_reconnect_${suffix}`,
+          latest_charge: `ch_manual_invite_${suffix}`,
           metadata: { payment_id: paymentId },
           client_reference_id: paymentId,
         },
       },
-    };
-    await processStripeWebhook(webhookEvent);
+    });
 
-    const sessionsAfterPayment = await db
-      .select({ id: sessionsTable.id })
+    const booked = await db
+      .select()
       .from(sessionsTable)
       .where(
         and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(NIKA_START))),
       );
-    assert.equal(sessionsAfterPayment.length, sessionsBefore.length);
-    const granted = await db
-      .select({
-        id: creditLedgerTable.id,
-        hours: creditLedgerTable.hours,
-        referenceType: creditLedgerTable.referenceType,
-      })
-      .from(creditLedgerTable)
-      .where(
-        and(
-          eq(creditLedgerTable.referenceId, paymentId),
-          eq(creditLedgerTable.referenceType, "payment"),
-        ),
-      );
-    assert.equal(granted.length, 1);
-    assert.ok(Number(granted[0]?.hours) > 0);
-    createdLedgerIds.push(granted[0]!.id);
+    assert.equal(booked.length, 1);
+    assert.equal(booked[0]?.bookingStatus, "confirmed");
+    assert.equal(booked[0]?.providerEventId, null);
+    assert.equal(booked[0]?.providerCalendarId, null);
+    createdSessionIds.push(booked[0]!.id);
+    assert.equal(calendar.googleCalls(), googleBeforeConfirm);
+    assert.equal(calendar.emailCalls(), emailBeforeConfirm);
+    assert.equal(calendar.writes.length, 0);
 
+    manualInviteMessage = manualCalendarInviteMessage({
+      bookerName: neel.displayName,
+      bookerEmail: neel.email,
+      tutorName: profile.name,
+      tutorEmail: profile.email,
+      start: new Date(NIKA_START),
+      durationMinutes: 60,
+    });
     const administrators = await db
       .select({ id: usersTable.id })
       .from(usersTable)
       .where(eq(usersTable.role, "administrator"));
-    refusalMessage = paidBookingReconnectRefusalMessage({
-      clientName: neel.displayName,
-      tutorName: profile.name,
-      slotStartIso: NIKA_START,
-      paymentId,
-    });
-    const noticesFor = async () =>
-      db
-        .select({
-          id: adminNotificationsTable.id,
-          recipientUserId: adminNotificationsTable.recipientUserId,
-          title: adminNotificationsTable.title,
-          message: adminNotificationsTable.message,
-          sessionId: adminNotificationsTable.sessionId,
-        })
-        .from(adminNotificationsTable)
-        .where(eq(adminNotificationsTable.message, refusalMessage));
-    const firstNotices = await noticesFor();
-    assert.equal(firstNotices.length, administrators.length);
+    const alerts = await db
+      .select({
+        recipientUserId: adminNotificationsTable.recipientUserId,
+        kind: adminNotificationsTable.kind,
+        title: adminNotificationsTable.title,
+        message: adminNotificationsTable.message,
+        status: adminNotificationsTable.status,
+        sessionId: adminNotificationsTable.sessionId,
+      })
+      .from(adminNotificationsTable)
+      .where(eq(adminNotificationsTable.message, manualInviteMessage));
     assert.ok(administrators.length > 0);
-    assert.equal(new Set(firstNotices.map((row) => row.recipientUserId)).size, administrators.length);
-    for (const notice of firstNotices) {
-      assert.equal(notice.title, PAID_BOOKING_RECONNECT_REFUSAL_TITLE);
-      assert.equal(notice.sessionId, null);
-      assert.match(notice.message, new RegExp(neel.displayName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-      assert.match(notice.message, new RegExp(profile.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-      assert.match(notice.message, /The credit was kept/);
-      assert.ok(notice.message.includes(NIKA_START));
-      assert.ok(notice.message.includes(paymentId));
+    assert.equal(alerts.length, administrators.length);
+    for (const alert of alerts) {
+      assert.equal(alert.kind, "manual_calendar_invite");
+      assert.equal(alert.title, "Send calendar invite manually");
+      assert.equal(alert.status, "unread");
+      assert.equal(alert.sessionId, booked[0]!.id);
+      assert.equal(alert.message, manualInviteMessage);
     }
-
-    const returned = await postJson(server.baseUrl, "/api/booking/sessions/from-payment", { paymentId });
-    assert.equal(returned.status, 409, JSON.stringify(returned.body));
-    assert.equal(returned.body.code, "CALENDAR_RECONNECT_REQUIRED");
-    await processStripeWebhook(webhookEvent);
-    assert.equal((await noticesFor()).length, firstNotices.length);
-    assert.equal(calendar.writes.filter((write) => write.url.includes("/events")).length, 0);
-    assert.equal(calendar.writes.some((write) => write.url.includes("/calendars//events")), false);
   } finally {
     calendar.restore();
     if (server) await server.close();
-    if (refusalMessage) {
+    if (manualInviteMessage) {
       await db
         .delete(adminNotificationsTable)
-        .where(eq(adminNotificationsTable.message, refusalMessage));
+        .where(eq(adminNotificationsTable.message, manualInviteMessage));
+    }
+    if (createdSessionIds.length > 0) {
+      await db.delete(adminNotificationsTable).where(inArray(adminNotificationsTable.sessionId, createdSessionIds));
+      await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.sessionId, createdSessionIds));
+      await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
     }
     await db
       .delete(stripeWebhookEventsTable)
@@ -1049,6 +977,14 @@ test("an empty app calendar refuses Nika before payment and notifies once after 
       await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.id, createdLedgerIds));
     }
     if (createdPaymentIds.length > 0) {
+      const paymentLedger = await db
+        .select({ id: creditLedgerTable.id })
+        .from(creditLedgerTable)
+        .where(inArray(creditLedgerTable.referenceId, createdPaymentIds));
+      if (paymentLedger.length > 0) {
+        await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.id, paymentLedger.map((row) => row.id)));
+      }
+      await db.delete(bookingSlotHoldsTable).where(inArray(bookingSlotHoldsTable.paymentId, createdPaymentIds));
       await db.delete(paymentsTable).where(inArray(paymentsTable.id, createdPaymentIds));
     }
     if (createdInvoiceIds.length > 0) {
@@ -1666,23 +1602,6 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
     }
 
     server = await startServer(neel);
-    const paymentsBefore = await db
-      .select({ id: paymentsTable.id })
-      .from(paymentsTable)
-      .where(eq(paymentsTable.clientUserId, neel.id));
-    const refusedCheckout = await postJson(server.baseUrl, "/api/payments/checkout", {
-      tutorProfileId: profile.id,
-      durationMinutes: 60,
-      startTime: NIKA_START,
-    });
-    assert.equal(refusedCheckout.status, 409, JSON.stringify(refusedCheckout.body));
-    assert.equal(refusedCheckout.body.code, "CALENDAR_RECONNECT_REQUIRED");
-    const paymentsAfterRefusal = await db
-      .select({ id: paymentsTable.id })
-      .from(paymentsTable)
-      .where(eq(paymentsTable.clientUserId, neel.id));
-    assert.equal(paymentsAfterRefusal.length, paymentsBefore.length);
-
     const offered = await getJson(
       server.baseUrl,
       `/api/booking/availability?tutorProfileId=${profile.id}&from=2026-10-21T20:00:00.000Z&to=2026-10-22T22:00:00.000Z&durationMinutes=60`,
@@ -1752,23 +1671,31 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
         },
       },
     });
-    const refusedSessions = await db
-      .select({ id: sessionsTable.id })
+    const manualSessions = await db
+      .select()
       .from(sessionsTable)
       .where(and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(laterStart))));
-    assert.equal(refusedSessions.length, 0);
-    refusalMessage = paidBookingReconnectRefusalMessage({
-      clientName: neel.displayName,
+    assert.equal(manualSessions.length, 1);
+    assert.equal(manualSessions[0]?.bookingStatus, "confirmed");
+    assert.equal(manualSessions[0]?.providerEventId, null);
+    createdSessionIds.push(manualSessions[0]!.id);
+    refusalMessage = manualCalendarInviteMessage({
+      bookerName: neel.displayName,
+      bookerEmail: neel.email,
       tutorName: profile.name,
-      slotStartIso: laterStart,
-      paymentId: refusedPaymentId,
+      tutorEmail: profile.email,
+      start: new Date(laterStart),
+      durationMinutes: 60,
     });
     const notices = await db
-      .select({ id: adminNotificationsTable.id, title: adminNotificationsTable.title })
+      .select({ id: adminNotificationsTable.id, kind: adminNotificationsTable.kind, title: adminNotificationsTable.title })
       .from(adminNotificationsTable)
       .where(eq(adminNotificationsTable.message, refusalMessage));
     assert.ok(notices.length > 0);
-    assert.equal(notices[0]?.title, PAID_BOOKING_RECONNECT_REFUSAL_TITLE);
+    assert.equal(notices[0]?.kind, "manual_calendar_invite");
+    assert.equal(notices[0]?.title, "Send calendar invite manually");
+    assert.equal(calendar.writes.length, 0);
+    assert.equal(calendar.emailCalls(), 0);
 
     const [adminProfile] = await db
       .insert(tutorProfilesTable)

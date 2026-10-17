@@ -113,6 +113,7 @@ import {
   adminCalendarGrantCanWriteEvents,
   adminCalendarMeetConference,
   bookingsUseAdminCalendarFallback,
+  manualCalendarInviteMessage,
 } from "../lib/admin-calendar-fallback";
 import {
   acquireBookingLocks,
@@ -4637,6 +4638,11 @@ const CALENDAR_RECONNECT_MESSAGE =
 
 type AdminCalendarWriter = { tutorProfileId: string; appCalendarId: string };
 
+type FixedWindowCalendarPlan =
+  | { mode: "tutor" }
+  | { mode: "admin"; writer: AdminCalendarWriter }
+  | { mode: "manual" };
+
 /**
  * The admin Google account, when it has a refresh token and an app calendar.
  * Event writes use calendar.app.created, so the id has to be that secondary calendar.
@@ -4678,23 +4684,22 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
 
 /**
  * A blank app calendar must not reach /calendars//events.
- * Fixed windows skip that 409 only when the admin calendar can write the invite.
- * Every other tutor still 409s before payment.
+ * Fixed windows use the admin calendar when that grant can write.
+ * With no admin grant, the same fixed window confirms after payment and an admin sends the invite by hand.
+ * A slot outside those windows, and any tutor who is not on fixed windows, still 409s before payment.
  */
 async function adminCalendarForFixedWindowBooking(
   access: { connection: { appCalendarId?: string | null } } | null | undefined,
   fixedWindow: boolean,
-): Promise<AdminCalendarWriter | null> {
+): Promise<FixedWindowCalendarPlan> {
   const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
-  if (appCalendarId) return null;
+  if (appCalendarId) return { mode: "tutor" };
   if (!fixedWindow) {
     throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
   }
   const admin = await findStoredAdminCalendarWriter();
-  if (!admin) {
-    throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
-  }
-  return admin;
+  if (!admin) return { mode: "manual" };
+  return { mode: "admin", writer: admin };
 }
 
 async function applyCalendarDisconnectDecision(
@@ -7803,7 +7808,8 @@ async function respondWithPrepaidBooking(
     if (!access && !fixedWindow) {
       throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     }
-    const adminWriter = await adminCalendarForFixedWindowBooking(access, fixedWindow);
+    const calendarPlan = await adminCalendarForFixedWindowBooking(access, fixedWindow);
+    const adminWriter = calendarPlan.mode === "admin" ? calendarPlan.writer : null;
     const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
@@ -7940,6 +7946,23 @@ async function respondWithPrepaidBooking(
       }
     };
     try {
+      if (calendarPlan.mode === "manual") {
+        await notifyAdministratorsOfBooking({
+          kind: "manual_calendar_invite",
+          sessionId: created.id,
+          title: "Send calendar invite manually",
+          message: manualCalendarInviteMessage({
+            bookerName: req.appUser!.displayName,
+            bookerEmail: req.appUser!.email,
+            tutorName: tutor.name,
+            tutorEmail: tutor.email,
+            start,
+            durationMinutes,
+          }),
+        });
+        await confirmBookedSession(created, false);
+        return null;
+      }
       const student = {
         userId: req.appUser!.id,
         email: req.appUser!.email,

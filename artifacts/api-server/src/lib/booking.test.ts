@@ -561,6 +561,9 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   assert.match(slice, /tutorEmail: tutor\.email/);
   assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
+  assert.match(slice, /calendarPlan\.mode === "manual"/);
+  assert.match(slice, /kind: "manual_calendar_invite"/);
+  assert.match(slice, /await confirmBookedSession\(created, false\)/);
   const liveCheck = slice.indexOf("if (!fixedWindow) {");
   assert.ok(liveCheck > 0 && liveCheck < write);
   assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);
