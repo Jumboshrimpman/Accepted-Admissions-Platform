@@ -344,7 +344,7 @@ test("session writes use the app calendar and a missing scope does not disconnec
   const rescheduleStart = platform.indexOf('router.post("/booking/sessions/:sessionId/reschedule"');
   const rescheduleSlice = platform.slice(cancelStart, platform.indexOf("async function financialSummary", rescheduleStart));
   assert.match(rescheduleSlice, /sessionEventCalendarId\(session\.providerCalendarId\)/);
-  assert.match(rescheduleSlice, /writeStoredSessionEvent\(session/);
+  assert.match(rescheduleSlice, /writeStoredSessionEvent\(calendarSession/);
   assert.match(rescheduleSlice, /raiseLegacyCalendarManualEditAlert|writeStoredSessionEvent/);
   const ensureStart = platform.indexOf("const appCalendarId = await ensureAcceptedAdmissionsCalendar");
   const ensureSlice = platform.slice(ensureStart, platform.indexOf('logCallback("info", "connected"', ensureStart));

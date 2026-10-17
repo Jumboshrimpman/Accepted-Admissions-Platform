@@ -538,9 +538,10 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const start = platformSource.indexOf("async function respondWithPrepaidBooking");
   const end = platformSource.indexOf('router.post("/booking/slot-holds/release"');
   const slice = platformSource.slice(start, end);
-  assert.match(slice, /if \(fixedWindow && !access\) \{\s*await confirmBookedSession\(created, false\)/);
+  assert.match(slice, /createGoogleEvent\(\s*token,\s*adminWriter\.appCalendarId/);
+  assert.match(slice, /conferenceData: adminCalendarMeetConference\(created\.id\)/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
-  const reconnectBeforeDebit = slice.indexOf("requireAppCalendarForBooking(access, fixedWindow)");
+  const reconnectBeforeDebit = slice.indexOf("adminCalendarForFixedWindowBooking(access, fixedWindow)");
   const debit = slice.indexOf("insertConfirmedBookingWithDebit");
   const write = slice.indexOf("createGoogleEvent(");
   assert.ok(reconnectBeforeDebit > 0 && reconnectBeforeDebit < debit && debit < write);
@@ -551,7 +552,7 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
     checkoutStart,
     platformSource.indexOf("type SessionWriteTx"),
   );
-  assert.match(checkoutSlice, /requireAppCalendarForBooking\(access, fixedWindow\)/);
+  assert.match(checkoutSlice, /adminCalendarForFixedWindowBooking\(access, fixedWindow\)/);
   const payStart = platformSource.indexOf('"/payments/checkout"');
   const paySlice = platformSource.slice(payStart, platformSource.indexOf("createCheckoutSession", payStart));
   assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") > 0);

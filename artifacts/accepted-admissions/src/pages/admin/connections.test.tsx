@@ -128,6 +128,34 @@ describe("Admin connections", () => {
     );
   });
 
+  test("Nika's connection card notes the admin calendar fallback", async () => {
+    const nikaFallback: CalendarConnectionHealthRow = {
+      tutorProfileId: "nika-profile",
+      name: "Nika Raiffe",
+      portalEmail: "nika.raiffe@gmail.com",
+      connectionStatus: "disconnected",
+      badge: "needs_reconnect",
+      googleAccountMasked: null,
+      calendarIdMasked: null,
+      hasRefreshToken: false,
+      lastTokenRefreshAt: null,
+      lastFreeBusyAt: null,
+      lastError: null,
+      lastErrorAt: null,
+      bookable: true,
+      hasUpcomingBookableTime: true,
+      estimatedTokenAgeDays: null,
+      testingModeExpiryWarning: null,
+      usesAdminCalendarFallback: true,
+    };
+    customFetch.mockResolvedValue({ connections: [nikaFallback, xavier] });
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("admin-calendar-fallback-nika-profile")).toBeTruthy();
+    expect(screen.getByText("Bookings use admin calendar fallback")).toBeTruthy();
+    expect(screen.queryByTestId("admin-calendar-fallback-xavier-profile")).toBeNull();
+  });
+
   test("shows Needs attention with the error and does not replace a revoked message", async () => {
     const nika: CalendarConnectionHealthRow = {
       tutorProfileId: "nika-profile",

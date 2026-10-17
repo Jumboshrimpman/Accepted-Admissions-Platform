@@ -110,6 +110,11 @@ import {
   sessionEventCalendarId,
 } from "../lib/app-created-calendar";
 import {
+  adminCalendarGrantCanWriteEvents,
+  adminCalendarMeetConference,
+  bookingsUseAdminCalendarFallback,
+} from "../lib/admin-calendar-fallback";
+import {
   acquireBookingLocks,
   assertNoScheduleConflict,
   guardSharedMeetWrite,
@@ -4630,20 +4635,66 @@ class BookingError extends Error {
 const CALENDAR_RECONNECT_MESSAGE =
   "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.";
 
+type AdminCalendarWriter = { tutorProfileId: string; appCalendarId: string };
+
 /**
- * A connected grant with a blank app calendar must not reach createGoogleEvent.
- * That call encodes the id into /calendars/{id}/events, and an empty id becomes
- * /calendars//events. A disconnected fixed window never writes, so it stays.
+ * The admin Google account, when it has a refresh token and an app calendar.
+ * Event writes use calendar.app.created, so the id has to be that secondary calendar.
  */
-function requireAppCalendarForBooking(
+async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
+  const rows = await db
+    .select({
+      tutorProfileId: calendarConnectionsTable.tutorProfileId,
+      appCalendarId: calendarConnectionsTable.appCalendarId,
+      grantedScopes: calendarConnectionsTable.grantedScopes,
+      hasRefreshToken: sql<boolean>`coalesce(length(${calendarConnectionsTable.encryptedRefreshToken}), 0) > 0`,
+      status: calendarConnectionsTable.status,
+      googleAccountEmail: calendarConnectionsTable.googleAccountEmail,
+      portalEmail: tutorProfilesTable.email,
+      userEmail: usersTable.email,
+    })
+    .from(calendarConnectionsTable)
+    .innerJoin(
+      tutorProfilesTable,
+      eq(tutorProfilesTable.id, calendarConnectionsTable.tutorProfileId),
+    )
+    .leftJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
+    .where(eq(calendarConnectionsTable.provider, "google"));
+  const match = rows.find((row) =>
+    adminCalendarGrantCanWriteEvents({
+      googleAccountEmail: row.googleAccountEmail,
+      portalEmail: row.portalEmail,
+      userEmail: row.userEmail,
+      status: row.status,
+      hasRefreshToken: Boolean(row.hasRefreshToken),
+      grantedScopes: row.grantedScopes,
+      appCalendarId: row.appCalendarId,
+    }),
+  );
+  const appCalendarId = match?.appCalendarId?.trim() ?? "";
+  if (!match || !appCalendarId) return null;
+  return { tutorProfileId: match.tutorProfileId, appCalendarId };
+}
+
+/**
+ * A blank app calendar must not reach /calendars//events.
+ * Fixed windows skip that 409 only when the admin calendar can write the invite.
+ * Every other tutor still 409s before payment.
+ */
+async function adminCalendarForFixedWindowBooking(
   access: { connection: { appCalendarId?: string | null } } | null | undefined,
   fixedWindow: boolean,
-): string {
+): Promise<AdminCalendarWriter | null> {
   const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
-  if (!appCalendarId && !(fixedWindow && !access)) {
+  if (appCalendarId) return null;
+  if (!fixedWindow) {
     throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
   }
-  return appCalendarId;
+  const admin = await findStoredAdminCalendarWriter();
+  if (!admin) {
+    throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
+  }
+  return admin;
 }
 
 async function applyCalendarDisconnectDecision(
@@ -5234,7 +5285,7 @@ async function assertDirectCheckoutSlotOpen(
       "This tutor's calendar is disconnected.",
     );
   }
-  requireAppCalendarForBooking(access, fixedWindow);
+  await adminCalendarForFixedWindowBooking(access, fixedWindow);
   return;
 }
 
@@ -5267,6 +5318,7 @@ type TutorSlotContext = {
   availabilityRule: AvailabilityRule;
   busyWindows: BusyWindow[];
   bookedWindows: BusyWindow[];
+  usesAdminCalendarFallback: boolean;
 };
 
 async function loadTutorSlotContext(
@@ -5293,9 +5345,17 @@ async function loadTutorSlotContext(
     if (!(error instanceof BookingError)) throw error;
     calendar = null;
   }
-  let access = calendar;
+  // Fixed windows with no app calendar stay on the fixed grid. Do not read that tutor's Google calendar.
+  const fixedWindowFallback =
+    dateHoursIncludeOpenWindow(rule.dateHours) && !calendar?.connection.appCalendarId?.trim();
+  const usesAdminCalendarFallback = bookingsUseAdminCalendarFallback({
+    name: tutor.name,
+    portalEmail: tutor.email,
+    appCalendarId: calendar?.connection.appCalendarId,
+  });
+  let access = fixedWindowFallback ? null : calendar;
   let busyWindows: BusyWindow[] = [];
-  if (calendar) {
+  if (calendar && !fixedWindowFallback) {
     try {
       const listed = await readTutorBusyWindows({
         tutorProfileId,
@@ -5370,7 +5430,7 @@ async function loadTutorSlotContext(
     bufferMinutes: rule.bufferMinutes,
     blackoutDates: rule.blackoutDates,
   };
-  return { tutor, rule, access, availabilityRule, busyWindows, bookedWindows };
+  return { tutor, rule, access, availabilityRule, busyWindows, bookedWindows, usesAdminCalendarFallback };
 }
 
 function projectTutorSlots(
@@ -6321,6 +6381,7 @@ router.get(
           providerStatus: "disconnected",
           offeredToClients: false,
           availabilityDependsOnClient,
+          usesAdminCalendarFallback: false,
           lengths: BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) => ({
             durationMinutes,
             slots: [],
@@ -6354,6 +6415,7 @@ router.get(
             : "disconnected",
         offeredToClients: true,
         availabilityDependsOnClient,
+        usesAdminCalendarFallback: context.usesAdminCalendarFallback,
         lengths: results.map((result, index) => ({
           durationMinutes: BOOKABLE_PORTAL_DURATIONS[index],
           slots: needsReconnect ? [] : result.slots,
@@ -7741,7 +7803,8 @@ async function respondWithPrepaidBooking(
     if (!access && !fixedWindow) {
       throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     }
-    const appCalendarId = requireAppCalendarForBooking(access, fixedWindow);
+    const adminWriter = await adminCalendarForFixedWindowBooking(access, fixedWindow);
+    const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
       throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
@@ -7876,20 +7939,62 @@ async function respondWithPrepaidBooking(
         res.status(201).json(await bookingSessionShape(session));
       }
     };
-    if (fixedWindow && !access) {
-      await confirmBookedSession(created, false);
-      return null;
-    }
     try {
-      if (!access) {
-        throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
-      }
       const student = {
         userId: req.appUser!.id,
         email: req.appUser!.email,
         clerkUserId: req.appUser!.clerkUserId,
       };
       const tutorParty = await calendarInviteParty(tutor.userId, { email: tutor.email });
+      const sendUpdates = googleCalendarSendUpdatesForSubjects(
+        consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+        { tutorEmail: tutor.email },
+      );
+      const inviteTutor = calendarInviteIncludesTutor(
+        consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+        { tutorEmail: tutor.email },
+      );
+      if (adminWriter) {
+        const adminAccess = await calendarAccess(adminWriter.tutorProfileId);
+        if (!adminAccess) {
+          throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
+        }
+        const event = await runTutorCalendarCall(adminAccess, (token) =>
+          createGoogleEvent(
+            token,
+            adminWriter.appCalendarId,
+            {
+              ...bookingCalendarEventPayload({
+                title: created.title,
+                start,
+                durationMinutes,
+                timeZone: rule.timezone,
+                attendeeEmail: req.appUser!.email,
+                student,
+                tutor: tutorParty,
+                inviteTutor,
+              }),
+              conferenceData: adminCalendarMeetConference(created.id),
+            },
+            sendUpdates,
+          ),
+        );
+        const [updated] = await db
+          .update(sessionsTable)
+          .set({
+            providerEventId: event.id ?? null,
+            providerEventUrl: event.hangoutLink ?? event.htmlLink ?? null,
+            providerCalendarId: adminWriter.appCalendarId,
+            updatedAt: new Date(),
+          })
+          .where(eq(sessionsTable.id, created.id))
+          .returning();
+        await confirmBookedSession(updated ?? created, true);
+        return null;
+      }
+      if (!access) {
+        throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+      }
       if (!appCalendarId) {
         throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
       }
@@ -8186,10 +8291,19 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1);
-      const access = profile[0] ? await calendarAccess(profile[0].id) : null;
+      const adminWriter = await findStoredAdminCalendarWriter();
+      const onAdminCalendar = Boolean(
+        adminWriter && session.providerCalendarId?.trim() === adminWriter.appCalendarId,
+      );
+      const access = onAdminCalendar
+        ? await calendarAccess(adminWriter!.tutorProfileId)
+        : profile[0]
+          ? await calendarAccess(profile[0].id)
+          : null;
       if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+      const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
       await runTutorCalendarCall(access, (token) =>
-        writeStoredSessionEvent(session, token, () =>
+        writeStoredSessionEvent(calendarSession, token, () =>
           deleteGoogleEvent(
             token,
             sessionEventCalendarId(session.providerCalendarId),
@@ -8250,7 +8364,19 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     if (!slots.includes(start.toISOString())) {
       throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
     }
-    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    const adminWriter = await findStoredAdminCalendarWriter();
+    const onAdminCalendar = Boolean(
+      adminWriter && session.providerCalendarId?.trim() === adminWriter.appCalendarId,
+    );
+    if (!access && !onAdminCalendar) {
+      throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    }
+    const writeAccess = onAdminCalendar
+      ? await calendarAccess(adminWriter!.tutorProfileId)
+      : access;
+    if (!writeAccess) {
+      throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    }
     const end = new Date(start.getTime() + session.durationMinutes * 60_000);
     const participantIds = [session.clientUserId, session.tutorUserId].filter(
       (id): id is string => Boolean(id),
@@ -8276,9 +8402,10 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         tutor: tutorParty,
         inviteTutor: calendarInviteIncludesTutor(session.subject, { tutorEmail: profile.email }),
       });
+    const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
     const eventWrite = session.providerEventId
-      ? await runTutorCalendarCall(access, (token) =>
-          writeStoredSessionEvent(session, token, () =>
+      ? await runTutorCalendarCall(writeAccess, (token) =>
+          writeStoredSessionEvent(calendarSession, token, () =>
             updateGoogleEvent(
               token,
               sessionEventCalendarId(session.providerCalendarId),
@@ -8325,8 +8452,8 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     } catch (error) {
       if (session.providerEventId) {
         try {
-          await runTutorCalendarCall(access, (token) =>
-            writeStoredSessionEvent(session, token, () =>
+          await runTutorCalendarCall(writeAccess, (token) =>
+            writeStoredSessionEvent(calendarSession, token, () =>
               updateGoogleEvent(
                 token,
                 sessionEventCalendarId(session.providerCalendarId),
