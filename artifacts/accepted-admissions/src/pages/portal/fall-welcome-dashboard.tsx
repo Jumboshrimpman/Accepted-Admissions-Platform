@@ -237,6 +237,15 @@ export function ClientDashboardView({
     remainingHours: dashboard.credits.remainingHours,
     hasUpcomingReservedSession,
   });
+  const bookSessionLabel = collegeConsulting
+    ? "Book a College Consulting session"
+    : "Book a SAT session";
+  const buyMoreLabel = collegeConsulting
+    ? "Buy College Consulting hours"
+    : "Buy more SAT credits";
+  const purchaseLabel = collegeConsulting
+    ? "Purchase College Consulting hours"
+    : "Purchase session credits";
   const calendarDayPast = (session: { dateTime: string | Date; timezone: string }) =>
     sessionCalendarDayIsPast(session, now, clientTimezone);
   const nextSession =
@@ -384,11 +393,11 @@ export function ClientDashboardView({
                         document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
                       }
                     >
-                      Book a SAT session
+                      {bookSessionLabel}
                     </Button>
                     <Button asChild variant="outline" className="rounded-full">
                       <Link href="/portal/sat" data-testid="link-portal-sat-pay">
-                        Buy more SAT credits
+                        {buyMoreLabel}
                       </Link>
                     </Button>
                   </>
@@ -419,7 +428,7 @@ export function ClientDashboardView({
                     </Button>
                     <Button asChild variant="outline" className="rounded-full">
                       <Link href="/portal/sat" data-testid="link-portal-sat-pay">
-                        Buy more SAT credits
+                        {buyMoreLabel}
                       </Link>
                     </Button>
                   </>
@@ -427,7 +436,7 @@ export function ClientDashboardView({
                   <>
                     <Button asChild className="rounded-full">
                       <Link href="/portal/sat" data-testid="link-portal-sat-pay">
-                        Purchase session credits
+                        {purchaseLabel}
                       </Link>
                     </Button>
                     <Button
@@ -438,7 +447,7 @@ export function ClientDashboardView({
                         document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
                       }
                     >
-                      Book a SAT session
+                      {bookSessionLabel}
                     </Button>
                   </>
                 )}
@@ -450,6 +459,7 @@ export function ClientDashboardView({
 
       {studentSatCommerce && showSelfServeBooking ? (
         <BookingCard
+          collegeConsulting={collegeConsulting}
           initialRemainingHours={dashboard.credits.remainingHours}
           initialPurchasedHours={dashboard.credits.purchasedHours}
           fallbackSessions={[
@@ -778,6 +788,7 @@ export function ClientDashboardView({
             previewOffer={previewOffer}
             previewOffers={previewOffers}
             adminPreview
+            collegeConsulting={collegeConsulting}
             offPlatformBilling={offPlatformBilling}
           />
         </div>

@@ -19,7 +19,7 @@ vi.mock("wouter", () => ({
   ),
 }));
 
-import OurTeam from "./our-team";
+import OurTeam, { publicTeamSubjects } from "./our-team";
 
 afterEach(() => {
   cleanup();
@@ -27,6 +27,11 @@ afterEach(() => {
 });
 
 describe("OurTeam publication gate", () => {
+  it("keeps a College Consulting subject off the public team tags", () => {
+    expect(publicTeamSubjects(["SAT", "Math", "College Consulting"])).toEqual(["SAT", "Math"]);
+    expect(publicTeamSubjects(["College admissions"])).toEqual(["College admissions"]);
+  });
+
   it("renders the approved team roster with each public profile's purpose", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1420,9 +1420,9 @@ describe("authenticated role dashboard flows", () => {
         avatarUrl: null,
       },
       credits: {
-        purchasedHours: 0,
+        purchasedHours: 1,
         usedHours: 0,
-        remainingHours: 0,
+        remainingHours: 1,
         readOnly: false,
         selfServeCollegeConsulting: true,
         selfServeSatBooking: false,
@@ -1431,6 +1431,14 @@ describe("authenticated role dashboard flows", () => {
     } as Dashboard;
     render(<FallWelcomeDashboard />);
     expect(screen.getByText("College Consulting credits")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Book a College Consulting session" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Buy College Consulting hours" }).getAttribute("href")).toBe(
+      "/portal/sat",
+    );
+    expect(screen.queryByRole("button", { name: "Book a SAT session" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
     for (const phrase of phrases) expect(screen.queryByText(phrase)).toBeNull();
   });
 

@@ -12,7 +12,7 @@ export const BOOKING_CHECKOUT_PAYMENT_PENDING =
 
 const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika"] as const;
 export type SatBookingTutorKey = (typeof SAT_TUTOR_KEYS)[number];
-export type ConsultingBookingTutorKey = "nika" | "victoria" | "xavier";
+export type ConsultingBookingTutorKey = "nika" | "victoria" | "xavier" | "eunice";
 
 export type CheckoutCatalogProduct = {
   id: string;

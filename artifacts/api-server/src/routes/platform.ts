@@ -133,6 +133,7 @@ import {
   checkoutAudienceForSlug,
   consultingCatalogAlignment,
   COLLEGE_CONSULTING_COURSE_ID,
+  type CollegeConsultingTutorKey,
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_SUBJECT,
@@ -5100,6 +5101,13 @@ async function bookingTutor(
       tutor.bookingEligible &&
       tutor.name === NIKA_NAME &&
       (await bookerMayBookNika(bookerUserId));
+    if (isNeelDharniUser(bookerUserId) && !consultingTutorAllowed(tutor)) {
+      throw new BookingError(
+        403,
+        "SAT_BOOKING_CLOSED",
+        "This account books College Consulting only.",
+      );
+    }
     const allowed = isNeelDharniUser(bookerUserId)
       ? consultingTutorAllowed(tutor)
       : onSharedRoster || onNikaRoster;
@@ -5950,6 +5958,9 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       })
       .map((tutor) => ({
         ...tutor,
+        subjects: tutor.subjects.filter(
+          (subject) => subject.trim().toLowerCase() !== "college consulting",
+        ),
         photoUrl: publicTeamPortrait(tutor.name, tutor.photoUrl),
       })),
   );
@@ -7196,6 +7207,7 @@ async function consultingTutorList(clientUserId: string) {
     nika: false,
     xavier: false,
     victoria: false,
+    eunice: false,
   };
   for (const tutor of visible) {
     const key = collegeConsultingTutorKeyForProfile(tutor);
@@ -7237,7 +7249,7 @@ async function consultingTutorList(clientUserId: string) {
           : consultingTutorBiography(key)
         : tutor.biography,
       tagline: tutor.tagline,
-      subjects: tutor.subjects,
+      subjects: [COLLEGE_CONSULTING_SUBJECT],
       calendarStatus: tutor.calendarStatus,
       providerStatus: connected ? ("connected" as const) : ("disconnected" as const),
       hourlyRateCents: credit?.hourlyRateCents ?? null,
@@ -12442,7 +12454,7 @@ async function dashboardDataForUser(user: AppUser) {
       : !entry.productId || !consultingProductIds.has(entry.productId);
   });
   const creditSummary = creditHoursSummary(summaryEntries);
-  const consultingCalendars = { nika: false, xavier: false, victoria: false };
+  const consultingCalendars = { nika: false, xavier: false, victoria: false, eunice: false };
   if (neelConsulting) {
     const tutorRows = await db
       .select({
@@ -12718,11 +12730,16 @@ router.get(
         availability: null,
         sessions: previewSessions,
       };
-      const prepaidHours: Partial<Record<"nika" | "victoria" | "xavier", number>> = {};
-      const calendars: Partial<Record<"nika" | "victoria" | "xavier", boolean>> = {};
+      const prepaidHours: Partial<Record<CollegeConsultingTutorKey, number>> = {};
+      const calendars: Partial<Record<CollegeConsultingTutorKey, boolean>> = {};
       for (const tutor of dashboard.credits.collegeConsultingTutors ?? []) {
-        const tutorKey = String(tutor.tutorKey);
-        if (tutorKey === "nika" || tutorKey === "victoria" || tutorKey === "xavier") {
+        const tutorKey = tutor.tutorKey;
+        if (
+          tutorKey === "nika" ||
+          tutorKey === "victoria" ||
+          tutorKey === "xavier" ||
+          tutorKey === "eunice"
+        ) {
           prepaidHours[tutorKey] = Number(tutor.prepaidHours);
           calendars[tutorKey] = tutor.calendarConnected === true;
         }

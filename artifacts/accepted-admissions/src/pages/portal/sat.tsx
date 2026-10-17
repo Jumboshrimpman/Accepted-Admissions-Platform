@@ -24,7 +24,7 @@ import {
   PORTAL_SAT_TUTOR_HREF,
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
-  showsSelfServeCollegeConsulting,
+  showsCollegeConsultingAccount,
   showsSelfServeSatCommerce,
 } from "@/lib/portal-sat";
 import {
@@ -223,7 +223,10 @@ export default function PortalSat() {
   }
 
   const commerceCredits = dashboard.data?.credits;
-  const collegeConsulting = showsSelfServeCollegeConsulting(commerceCredits);
+  const collegeConsulting = showsCollegeConsultingAccount({
+    userId: dashboard.data?.user?.id ?? currentUser?.id,
+    credits: commerceCredits,
+  });
   const showSatCommerce = showsSelfServeSatCommerce(commerceCredits) || collegeConsulting;
   if (!canPurchaseOrBookSatCredits(currentUser?.role) || !showSatCommerce) {
     const tutorDenied = currentUser?.role === "tutor";
@@ -292,6 +295,7 @@ export default function PortalSat() {
     (dashboard.data?.upcomingSessions ?? []).filter((session) => {
       if (!isLiveListedSession(session)) return false;
       const subject = session.subject?.toLowerCase() ?? "";
+      if (collegeConsulting) return subject === "college consulting";
       return subject.startsWith("sat") || /sat/i.test(session.title);
     }),
   );
@@ -323,9 +327,13 @@ export default function PortalSat() {
     <div className="mx-auto max-w-5xl space-y-6 pb-16" data-testid="portal-sat-page">
       <div>
         <p className="mb-2 text-sm font-medium text-primary">Client portal</p>
-        <h1 className="text-3xl font-bold tracking-tight">SAT book and pay</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          {collegeConsulting ? "College Consulting" : "SAT book and pay"}
+        </h1>
         <p className="mt-1 text-muted-foreground">
-          Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar.
+          {collegeConsulting
+            ? "Purchase College Consulting hours with Nika, Victoria, Xavier, or Eunice. Each tutor’s hours stay on that tutor. Credits appear only after a verified Stripe payment. Open times follow that tutor’s calendar and booking notice."
+            : "Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."}
         </p>
       </div>
 
@@ -393,12 +401,22 @@ export default function PortalSat() {
 
       <Card data-testid="portal-sat-upcoming">
         <CardHeader>
-          <CardTitle>Upcoming SAT sessions</CardTitle>
-          <CardDescription>Booked SAT meetings that belong to this client stay in the portal.</CardDescription>
+          <CardTitle>
+            {collegeConsulting ? "Upcoming College Consulting sessions" : "Upcoming SAT sessions"}
+          </CardTitle>
+          <CardDescription>
+            {collegeConsulting
+              ? "Booked College Consulting meetings that belong to this client stay in the portal."
+              : "Booked SAT meetings that belong to this client stay in the portal."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {upcomingSat.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No upcoming SAT sessions are on this account yet.</p>
+            <p className="text-sm text-muted-foreground">
+              {collegeConsulting
+                ? "No upcoming College Consulting sessions are on this account yet."
+                : "No upcoming SAT sessions are on this account yet."}
+            </p>
           ) : (
             <>
               {upcomingSatList.visible.map((session) => (
@@ -456,7 +474,7 @@ export default function PortalSat() {
               </CardTitle>
               <CardDescription>
                 {collegeConsulting
-                  ? "Nika is $100/hour, Victoria is $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
+                  ? "Nika is $100/hour, Victoria and Eunice are $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
                   : "Prices are on each offer. A 1-hour, 1.5-hour, or 2-hour session uses that tutor’s hourly rate. Hours stay with the tutor you buy them for. Card details stay on Stripe Checkout."}
               </CardDescription>
             </CardHeader>
@@ -472,7 +490,11 @@ export default function PortalSat() {
               </p>
               {loadingProducts ? <Skeleton className="h-40 rounded-xl" /> : null}
               {productError ? (
-                <p className="text-sm text-destructive">SAT offers are temporarily unavailable.</p>
+                <p className="text-sm text-destructive">
+                  {collegeConsulting
+                    ? "College Consulting offers are temporarily unavailable."
+                    : "SAT offers are temporarily unavailable."}
+                </p>
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 {products.map((product) => {
@@ -510,6 +532,7 @@ export default function PortalSat() {
             </CardContent>
           </Card>
           <BookingCard
+            collegeConsulting={collegeConsulting}
             initialRemainingHours={remainingHours}
             initialPurchasedHours={purchasedHours}
             fallbackSessions={upcomingSat}

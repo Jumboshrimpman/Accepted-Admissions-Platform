@@ -925,7 +925,7 @@ export const GetAdminClientDashboardResponse = zod.object({
 }))
 }),
   "previewConsultingTutors": zod.array(zod.object({
-  "tutorKey": zod.enum(['nika', 'victoria', 'xavier']),
+  "tutorKey": zod.enum(['nika', 'victoria', 'xavier', 'eunice']),
   "id": zod.string(),
   "name": zod.string(),
   "title": zod.string(),

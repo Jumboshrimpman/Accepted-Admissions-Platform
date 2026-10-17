@@ -20,10 +20,22 @@ export function canPurchaseOrBookSatCredits(
   return role === "student";
 }
 
+export const NEEL_DHARNI_USER_ID = "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19";
+
 export function showsSelfServeCollegeConsulting(credits?: {
   selfServeCollegeConsulting?: boolean | null;
 } | null): boolean {
   return credits?.selfServeCollegeConsulting === true;
+}
+
+/** Neel's portal is College Consulting even when a dashboard payload omits the flag. */
+export function showsCollegeConsultingAccount(input: {
+  userId?: string | null;
+  credits?: { selfServeCollegeConsulting?: boolean | null } | null;
+}): boolean {
+  return (
+    showsSelfServeCollegeConsulting(input.credits) || input.userId === NEEL_DHARNI_USER_ID
+  );
 }
 
 /** Stripe book/pay chrome. Missing credits fail closed so off-platform clients never flash a CTA. */

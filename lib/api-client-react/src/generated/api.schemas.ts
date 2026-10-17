@@ -1872,7 +1872,7 @@ export interface AdminClientPreviewBooking {
 }
 
 export interface AdminClientPreviewConsultingTutor {
-  tutorKey: "nika" | "victoria" | "xavier";
+  tutorKey: "nika" | "victoria" | "xavier" | "eunice";
   id: string;
   name: string;
   title: string;

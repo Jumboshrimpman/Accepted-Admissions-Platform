@@ -23,6 +23,15 @@ export type TeamContent = {
   body: { intro?: string };
 };
 
+/** Public cards keep the subjects published before College Consulting. That label stays in the portal. */
+export function publicTeamSubjects(subjects: unknown): string[] {
+  if (!Array.isArray(subjects)) return [];
+  return subjects.filter(
+    (subject): subject is string =>
+      typeof subject === "string" && subject.trim().toLowerCase() !== "college consulting",
+  );
+}
+
 function normalizeTutor(value: unknown): Tutor | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
@@ -36,9 +45,7 @@ function normalizeTutor(value: unknown): Tutor | null {
     photoUrl: typeof candidate.photoUrl === "string" && candidate.photoUrl ? candidate.photoUrl : null,
     photoAltText: typeof candidate.photoAltText === "string" && candidate.photoAltText ? candidate.photoAltText : null,
     biography: typeof candidate.biography === "string" && candidate.biography ? candidate.biography : null,
-    subjects: Array.isArray(candidate.subjects)
-      ? candidate.subjects.filter((subject): subject is string => typeof subject === "string")
-      : [],
+    subjects: publicTeamSubjects(candidate.subjects),
     linkedinUrl: typeof candidate.linkedinUrl === "string" && candidate.linkedinUrl ? candidate.linkedinUrl : null,
   };
 }
