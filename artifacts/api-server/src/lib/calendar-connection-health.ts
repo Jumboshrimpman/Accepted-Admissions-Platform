@@ -101,14 +101,28 @@ export function hasUpcomingBookableTime(input: {
   return Object.values(hours).some((windows) => Array.isArray(windows) && windows.length > 0);
 }
 
+function freeBusySucceeded(value: Date | string | null | undefined): boolean {
+  if (value == null) return false;
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !Number.isNaN(new Date(trimmed).getTime());
+}
+
 export function calendarHealthBadge(input: {
   hasRefreshToken: boolean;
   connectedAt?: Date | string | null;
   lastError?: string | null;
+  lastFreeBusyAt?: Date | string | null;
   grantedScopes?: string | null;
   appCalendarId?: string | null;
 }): CalendarHealthBadge {
+  const error = input.lastError?.trim() ?? "";
+  // A refresh token that just completed free/busy is a working grant. Missing
+  // calendar.app.created or an app calendar id must not override that on the
+  // Connections page. Those grants still show primary and have no last error.
+  const workingGrant = input.hasRefreshToken && !error && freeBusySucceeded(input.lastFreeBusyAt);
   if (
+    !workingGrant &&
     calendarGrantNeedsReconnect({
       hasRefreshToken: input.hasRefreshToken,
       grantedScopes: input.grantedScopes,
@@ -117,7 +131,6 @@ export function calendarHealthBadge(input: {
   ) {
     return "needs_reconnect";
   }
-  const error = input.lastError?.trim() ?? "";
   if (input.hasRefreshToken) return error ? "needs_attention" : "healthy";
   const previouslyConnected = Boolean(input.connectedAt);
   const reconnectError = /reconnect|revoked|invalid_grant|disconnected/i.test(error);

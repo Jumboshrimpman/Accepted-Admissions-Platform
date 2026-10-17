@@ -25,6 +25,72 @@ import {
 
 const weekdayHours = { "1": [{ start: "07:00", end: "21:00" }] };
 
+test("a working primary-calendar grant stays connected without an app calendar id", () => {
+  const checkedAt = "2026-10-17T18:16:49.000Z";
+  const now = new Date("2026-10-17T18:20:00.000Z");
+  for (const tutor of [
+    { name: "Xavier Morales", email: "xaver.rmz6@gmail.com" },
+    { name: "Nika Raiffe", email: "nika.raiffe@gmail.com" },
+    { name: "Eunice Chon", email: "eunice_chon@berkeley.edu" },
+  ]) {
+    const row = buildCalendarConnectionHealth({
+      tutorProfileId: tutor.email,
+      name: tutor.name,
+      portalEmail: tutor.email,
+      active: true,
+      bookingEligible: true,
+      weeklyHours: weekdayHours,
+      connectionStatus: "connected",
+      hasRefreshToken: true,
+      googleAccountEmail: tutor.email,
+      calendarId: "primary",
+      grantedScopes: null,
+      appCalendarId: null,
+      connectedAt: "2026-10-16T18:16:49.000Z",
+      lastTokenRefreshAt: checkedAt,
+      lastFreeBusyAt: checkedAt,
+      lastError: null,
+      now,
+    });
+    assert.equal(row.badge, "healthy");
+    assert.equal(row.connectionStatus, "connected");
+    assert.equal(row.calendarIdMasked, "primary");
+    assert.equal(row.hasRefreshToken, true);
+    assert.equal(row.lastError, null);
+    assert.equal(row.bookable, true);
+    assert.equal(row.hasUpcomingBookableTime, true);
+    assert.equal(row.estimatedTokenAgeDays, 1);
+    assert.equal(row.googleAccountMasked, `${tutor.email.slice(0, 1)}***@${tutor.email.split("@")[1]}`);
+  }
+  assert.equal(
+    calendarHealthBadge({
+      hasRefreshToken: true,
+      grantedScopes: null,
+      appCalendarId: null,
+      lastFreeBusyAt: checkedAt,
+    }),
+    "healthy",
+  );
+  assert.equal(
+    calendarHealthBadge({
+      hasRefreshToken: true,
+      grantedScopes:
+        "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+      appCalendarId: null,
+      lastFreeBusyAt: checkedAt,
+    }),
+    "healthy",
+  );
+  assert.equal(
+    calendarHealthBadge({
+      hasRefreshToken: true,
+      grantedScopes: null,
+      appCalendarId: null,
+    }),
+    "needs_reconnect",
+  );
+});
+
 test("badges distinguish a live grant, a lost grant, and no connection", () => {
   assert.equal(calendarHealthBadge({ hasRefreshToken: true, connectedAt: null }), "healthy");
   assert.equal(
