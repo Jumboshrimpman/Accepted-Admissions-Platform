@@ -63,6 +63,8 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { NIKA_BOOKING_TAGLINE, XAVIER_BOOKING_TAGLINE } from "./public-team-roster.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { NIKA_ESSAY_PRODUCTS } from "./essay-editing.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SHARED_FALL_MEETING_URL } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
@@ -219,6 +221,14 @@ async function ensureCatalogProducts(tx: ProvisionTx): Promise<void> {
       durationHours: product.durationHours,
       totalPriceCents: product.totalPriceCents,
       effectiveHourlyRateCents: product.hourlyRateCents,
+    })),
+    ...NIKA_ESSAY_PRODUCTS.map((product) => ({
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      durationHours: product.durationHours,
+      totalPriceCents: product.totalPriceCents,
+      effectiveHourlyRateCents: product.effectiveHourlyRateCents,
     })),
     {
       slug: SAMA_LIVE_CHECKOUT_TEST_SLUG,

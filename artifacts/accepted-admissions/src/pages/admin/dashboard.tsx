@@ -28,6 +28,7 @@ import {
 } from "@/lib/form-submissions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { QuestionReportsQueue } from "./question-reports-queue";
+import { EssayRequestsPanel } from "@/components/essay-editing-panel";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import {
@@ -196,6 +197,7 @@ export default function AdminDashboard() {
           {newRequestCount} new guidance request{newRequestCount === 1 ? "" : "s"}
         </p>
       </div>
+      <EssayRequestsPanel mode="admin" />
 
       {accessConflicts.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 text-amber-950" role="alert">
