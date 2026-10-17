@@ -154,6 +154,18 @@ import {
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
 import {
+  BOOKING_CHECKOUT_PAYMENT_PENDING,
+  BOOKING_CHECKOUT_SLOT_TAKEN,
+  bookedSessionIdFromMetadata,
+  bookingIntentFromBody,
+  bookingIntentFromMetadata,
+  selectBookingCheckoutProduct,
+} from "../lib/booking-checkout";
+import {
+  remainingCreditHours,
+  remainingCreditHoursForProducts,
+} from "../lib/credit-hours";
+import {
   attachVerifiedEmailAlias,
   establishedAliasUser,
   missingLoginAliasRelation,
@@ -7134,7 +7146,77 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
   );
 });
 
+async function assertPrepaidHoursForTutor(
+  user: AppUser,
+  tutor: { name: string; email: string; userId: string | null },
+  durationMinutes: number,
+  consulting: boolean,
+): Promise<void> {
+  const requiredHours = durationMinutes / 60;
+  const entries = await db
+    .select({
+      entryType: creditLedgerTable.entryType,
+      hours: creditLedgerTable.hours,
+      productId: creditLedgerTable.productId,
+    })
+    .from(creditLedgerTable)
+    .where(eq(creditLedgerTable.clientUserId, user.id));
+  let remaining: number;
+  if (consulting) {
+    remaining = remainingCreditHoursForProducts(entries, await consultingCreditProductIds(tutor));
+  } else {
+    const tutorKey = satTutorKeyForName(tutor.name);
+    if (!tutorKey) {
+      throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
+    }
+    const catalog = await satCreditCatalog();
+    const excluded = new Set(await liveCheckoutTestProductIds());
+    const remainingEntries = entries.filter(
+      (entry) => !entry.productId || !excluded.has(entry.productId),
+    );
+    remaining = satSpendableHours(remainingEntries, {
+      tutorProductIds: catalog
+        .filter((product) => satTutorKeyForSlug(product.slug) === tutorKey)
+        .map((product) => product.id),
+      legacyProductIds: catalog
+        .filter((product) => isLegacySharedSatSlug(product.slug))
+        .map((product) => product.id),
+      allowLegacy: allowsLegacySatPool(tutorKey, user),
+    });
+  }
+  if (remaining + 0.001 < requiredHours) {
+    throw new BookingError(
+      409,
+      "INSUFFICIENT_CREDIT",
+      "You do not have enough prepaid hours for this session.",
+    );
+  }
+}
+
+async function rememberBookedPayment(paymentId: string, sessionId: string): Promise<void> {
+  const [payment] = await db
+    .select({ auditMetadata: paymentsTable.auditMetadata })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, paymentId))
+    .limit(1);
+  const metadata =
+    payment?.auditMetadata && typeof payment.auditMetadata === "object"
+      ? payment.auditMetadata
+      : {};
+  await db
+    .update(paymentsTable)
+    .set({
+      auditMetadata: { ...metadata, bookedSessionId: sessionId },
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, paymentId));
+}
+
 router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> => {
+  await respondWithPrepaidBooking(req, res);
+});
+
+async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Promise<void> {
   try {
     requireStudentBooker(req.appUser!);
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -7144,6 +7226,21 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     const consulting = isNeelDharniUser(req.appUser!.id);
     rejectUnlistedPortalDuration(durationMinutes);
+    const [bookedTutor] = await db
+      .select({
+        id: tutorProfilesTable.id,
+        name: tutorProfilesTable.name,
+        email: tutorProfilesTable.email,
+        userId: tutorProfilesTable.userId,
+      })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.id, tutorProfileId))
+      .limit(1);
+    if (!bookedTutor) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
+    await assertPrepaidHoursForTutor(req.appUser!, bookedTutor, durationMinutes, consulting);
+    const slotTakenMessage =
+      (req as AuthedRequest & { bookingSlotTakenMessage?: string }).bookingSlotTakenMessage ??
+      "That time is no longer available. Choose another slot.";
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
       new Date(start.getTime() - 1),
@@ -7163,7 +7260,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       );
     }
     if (!slots.includes(start.toISOString())) {
-      throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
+      throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
     }
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && !tutorKey) {
@@ -7217,7 +7314,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         );
       }
       if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
-        throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
+        throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
       }
       const satDebits = satCreditArgs
         ? await lockSatTutorCredits(tx, req.appUser!.id, durationMinutes / 60, satCreditArgs)
@@ -7316,6 +7413,10 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
           // Autogen must not roll back a confirmed SAT booking.
         }
       }
+      const onBooked = (req as AuthedRequest & {
+        onPrepaidBooked?: (sessionId: string) => Promise<void>;
+      }).onPrepaidBooked;
+      if (onBooked) await onBooked(confirmed.id);
       res.status(201).json(await bookingSessionShape(confirmed));
     } catch (error) {
       await db.transaction(async (tx) => {
@@ -7333,6 +7434,73 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         "The tutor calendar could not be updated. Your credit was not used.",
       );
     }
+  } catch (error) {
+    sendBookingError(error, res);
+  }
+}
+
+router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): Promise<void> => {
+  try {
+    requireStudentBooker(req.appUser!);
+    const paymentId = stringField((req.body ?? {}) as Record<string, unknown>, "paymentId");
+    if (!paymentId) throw new BookingError(400, "PAYMENT_REQUIRED", "A payment is required.");
+    let [payment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(
+        and(eq(paymentsTable.id, paymentId), eq(paymentsTable.clientUserId, req.appUser!.id)),
+      )
+      .limit(1);
+    if (!payment) throw new BookingError(404, "PAYMENT_NOT_FOUND", "That payment could not be found.");
+    if (payment.status === "pending") {
+      await reconcilePendingStripeCheckouts({
+        clientUserId: req.appUser!.id,
+        actorUserId: req.appUser!.id,
+      });
+      [payment] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId))
+        .limit(1);
+    }
+    if (!payment || payment.status !== "paid") {
+      throw new BookingError(409, "PAYMENT_NOT_CONFIRMED", BOOKING_CHECKOUT_PAYMENT_PENDING);
+    }
+    const existingSessionId = bookedSessionIdFromMetadata(payment.auditMetadata);
+    if (existingSessionId) {
+      const [existing] = await db
+        .select()
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, existingSessionId))
+        .limit(1);
+      if (existing && existing.bookingStatus !== "cancelled") {
+        res.status(201).json(await bookingSessionShape(existing));
+        return;
+      }
+    }
+    const intent = bookingIntentFromMetadata(payment.auditMetadata);
+    if (!intent) {
+      throw new BookingError(
+        409,
+        "BOOKING_INTENT_MISSING",
+        "This payment is not tied to a chosen time. Your hours are on your account. Choose another time.",
+      );
+    }
+    const bookingRequest = req as AuthedRequest & {
+      body: Record<string, unknown>;
+      bookingSlotTakenMessage?: string;
+      onPrepaidBooked?: (sessionId: string) => Promise<void>;
+    };
+    bookingRequest.body = {
+      tutorProfileId: intent.tutorProfileId,
+      startTime: intent.startTime,
+      durationMinutes: intent.durationMinutes,
+    };
+    bookingRequest.bookingSlotTakenMessage = BOOKING_CHECKOUT_SLOT_TAKEN;
+    bookingRequest.onPrepaidBooked = async (sessionId: string) => {
+      await rememberBookedPayment(paymentId, sessionId);
+    };
+    await respondWithPrepaidBooking(bookingRequest, res);
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -7594,21 +7762,96 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
 });
 
 
+async function resolveDirectBookingProduct(
+  user: AppUser,
+  intent: { tutorProfileId: string; durationMinutes: number },
+) {
+  const [tutor] = await db
+    .select({
+      id: tutorProfilesTable.id,
+      name: tutorProfilesTable.name,
+      email: tutorProfilesTable.email,
+      userId: tutorProfilesTable.userId,
+    })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.id, intent.tutorProfileId))
+    .limit(1);
+  if (!tutor) return { status: 404 as const, error: "A tutor is required." };
+  const consulting = isNeelDharniUser(user.id);
+  const tutorKey = consulting
+    ? collegeConsultingTutorKeyForProfile(tutor)
+    : satTutorKeyForName(tutor.name);
+  if (!tutorKey) return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
+  const products = await db
+    .select({
+      id: satProductsTable.id,
+      slug: satProductsTable.slug,
+      durationHours: satProductsTable.durationHours,
+      totalPriceCents: satProductsTable.totalPriceCents,
+      active: satProductsTable.active,
+    })
+    .from(satProductsTable)
+    .where(eq(satProductsTable.active, true));
+  const selected = selectBookingCheckoutProduct({
+    audience: consulting ? "consulting" : "sat",
+    tutorKey,
+    durationMinutes: intent.durationMinutes,
+    products: products.map((product) => ({
+      ...product,
+      durationHours: Number(product.durationHours),
+      totalPriceCents: Number(product.totalPriceCents),
+    })),
+  });
+  if (!selected) {
+    return { status: 404 as const, error: "No checkout product matches this tutor and length." };
+  }
+  const [product] = await db
+    .select()
+    .from(satProductsTable)
+    .where(and(eq(satProductsTable.id, selected.id), eq(satProductsTable.active, true)))
+    .limit(1);
+  if (!product) return { status: 404 as const, error: "No checkout product matches this tutor and length." };
+  return { product };
+}
+
 router.post(
   "/payments/checkout",
   ensureRole(["student", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
-    const productId = stringField((req.body ?? {}) as Record<string, unknown>, "productId");
-    const [product] = await db
-      .select()
-      .from(satProductsTable)
-      .where(
-        and(
-          eq(satProductsTable.id, productId),
-          eq(satProductsTable.active, true),
-        ),
-      )
-      .limit(1);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const requestedProductId = stringField(body, "productId");
+    const intentResult = bookingIntentFromBody(body);
+    if (intentResult.present && "error" in intentResult) {
+      res.status(400).json({ error: intentResult.error });
+      return;
+    }
+    let product: typeof satProductsTable.$inferSelect | undefined;
+    let bookingIntent: ReturnType<typeof bookingIntentFromMetadata> = null;
+    if (intentResult.present && "intent" in intentResult) {
+      const resolved = await resolveDirectBookingProduct(req.appUser!, intentResult.intent);
+      if ("error" in resolved) {
+        res.status(resolved.status).json({ error: resolved.error });
+        return;
+      }
+      if (requestedProductId && requestedProductId !== resolved.product.id) {
+        res.status(409).json({ error: "That product does not match this tutor and length." });
+        return;
+      }
+      product = resolved.product;
+      bookingIntent = intentResult.intent;
+    } else {
+      const [listed] = await db
+        .select()
+        .from(satProductsTable)
+        .where(
+          and(
+            eq(satProductsTable.id, requestedProductId),
+            eq(satProductsTable.active, true),
+          ),
+        )
+        .limit(1);
+      product = listed;
+    }
     if (!product) {
       res.status(404).json({ error: "Product not found" });
       return;
@@ -7710,6 +7953,7 @@ router.post(
             creditsGrantedOnPaidWebhook: product.durationHours,
             catalogPriceCents: product.totalPriceCents,
             clientPriceOverride: chargeCents !== product.totalPriceCents,
+            ...(bookingIntent ? { bookingIntent } : {}),
           },
         })
         .returning();
@@ -7717,13 +7961,19 @@ router.post(
     });
     try {
       const origin = publicAppOrigin();
+      const successUrl = bookingIntent
+        ? `${origin}/portal?payment=success&bookPayment=${payment.id}`
+        : `${origin}/portal/sat?payment=success`;
+      const cancelUrl = bookingIntent
+        ? `${origin}/portal?payment=canceled`
+        : `${origin}/portal/sat?payment=canceled`;
       const checkout = await createCheckoutSession({
         user: req.appUser!,
         product,
         invoiceId: invoice.id,
         paymentId: payment.id,
-        successUrl: `${origin}/portal/sat?payment=success`,
-        cancelUrl: `${origin}/portal/sat?payment=canceled`,
+        successUrl,
+        cancelUrl,
         unitAmountCents: chargeCents,
       });
       await db

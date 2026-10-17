@@ -1429,6 +1429,9 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
     expect(screen.queryByText(/checked against their live Google Calendar/)).toBeNull();
     expect(screen.queryByText(/Cancel at least 24 hours ahead to restore the credit/)).toBeNull();
+    expect(screen.queryByText(/Choose Eunice, Victoria, or Xavier, then/)).toBeNull();
+    expect(screen.queryByText(/Hours stay with the tutor you buy them for/)).toBeNull();
+    expect(screen.queryByText(/Nika is \$100\/hour/)).toBeNull();
     expect(screen.getByTestId("button-dashboard-change-session-time")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /Change time/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Buy more SAT credits/i }).getAttribute("href")).toBe(

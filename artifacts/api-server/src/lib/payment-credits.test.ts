@@ -398,6 +398,39 @@ test("admin manual grant records an audit trail", async () => {
   }
 });
 
+test("webhook credits 1, 1.5, and 2 hours onto the purchased product only", async () => {
+  for (const durationHours of [1, 1.5, 2]) {
+    const fixture = await createPurchaseFixture({
+      amountCents: Math.round(20_000 * durationHours),
+      durationHours,
+      slug: "tutor-length-credit",
+    });
+    try {
+      await processStripeWebhook({
+        id: `evt_${fixture.paymentId}`,
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: `cs_test_${fixture.suffix}`,
+            payment_status: "paid",
+            amount_total: Math.round(20_000 * durationHours),
+            metadata: { payment_id: fixture.paymentId },
+          },
+        },
+      });
+      assert.equal(await creditHoursFor(fixture.db, fixture.userId), durationHours);
+      const [entry] = await fixture.db.db
+        .select()
+        .from(fixture.db.creditLedgerTable)
+        .where(eq(fixture.db.creditLedgerTable.clientUserId, fixture.userId));
+      assert.equal(entry?.productId, fixture.productId);
+      assert.equal(Number(entry?.hours), durationHours);
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  }
+});
+
 test("a non-catalog charge amount still grants durationHours, not a dollar fraction", async () => {
   const fixture = await createPurchaseFixture({
     amountCents: DISCOUNTED_HOUR_PRICE_CENTS,

@@ -5,6 +5,8 @@ import { format, parseISO } from "date-fns";
 const originalTimezone = process.env.TZ;
 process.env.TZ = "America/New_York";
 
+const tutorTimezone = vi.hoisted(() => "Asia/Tokyo");
+
 const mocks = vi.hoisted(() => ({
   queryClient: {
     invalidateQueries: vi.fn(),
@@ -48,6 +50,14 @@ const mocks = vi.hoisted(() => ({
     isPending: false,
     mutate: vi.fn(),
   },
+  currentUser: {
+    id: "student-1",
+    role: "student",
+    displayName: "Michelle Makarem",
+    email: "makaremmichelle7@gmail.com",
+    timezone: tutorTimezone,
+    timezoneSource: "admin",
+  },
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -63,14 +73,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useCreateBookingSession: () => mocks.createBooking,
   useGetBookingAvailability: () => mocks.availabilityQuery,
   useGetCurrentUser: () => ({
-    data: {
-      id: "student-1",
-      role: "student",
-      displayName: "Michelle Makarem",
-      email: "makaremmichelle7@gmail.com",
-      timezone: tutorTimezone,
-      timezoneSource: "admin",
-    },
+    data: mocks.currentUser,
   }),
   useListBookingSessions: () => mocks.sessionsQuery,
   useListBookingTutors: () => mocks.tutorsQuery,
@@ -79,7 +82,6 @@ vi.mock("@workspace/api-client-react", () => ({
 
 import { BookingCard } from "./booking-card";
 
-const tutorTimezone = "Asia/Tokyo";
 const firstSlotInstant = new Date();
 firstSlotInstant.setUTCDate(firstSlotInstant.getUTCDate() + 2);
 firstSlotInstant.setUTCHours(15, 30, 0, 0);
@@ -144,6 +146,14 @@ beforeEach(() => {
   mocks.availabilityQuery.isLoading = false;
   mocks.sessionsQuery.data = [];
   mocks.sessionsQuery.isLoading = false;
+  mocks.currentUser = {
+    id: "student-1",
+    role: "student",
+    displayName: "Michelle Makarem",
+    email: "makaremmichelle7@gmail.com",
+    timezone: tutorTimezone,
+    timezoneSource: "admin",
+  };
 });
 
 afterEach(() => {
@@ -306,12 +316,31 @@ describe("client availability calendar", () => {
     expect(screen.queryByRole("tab", { name: "Victoria Wijerathnayapa" })).toBeNull();
   });
 
-  test("prompts a zero-credit client to buy a single hour or 10-hour package before booking", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ remainingHours: 0 }),
+  test("sends a short-credit client to checkout for the chosen tutor and length", async () => {
+    const checkoutBodies: unknown[] = [];
+    const assign = vi.fn();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/payments/checkout")) {
+        checkoutBodies.push(JSON.parse(String(init?.body ?? "{}")));
+        return {
+          ok: true,
+          json: async () => ({ url: "https://checkout.stripe.test/cs_test", paymentId: "pay_1" }),
+        };
+      }
+      return { ok: true, json: async () => ({ remainingHours: 0, purchasedHours: 0 }) };
     });
     vi.stubGlobal("fetch", fetchMock);
+    const originalLocation = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        assign,
+        search: "",
+        pathname: "/portal",
+        href: "http://localhost/portal",
+      },
+    });
     mocks.tutorsQuery.data = [
       {
         id: "tutor-xavier",
@@ -322,6 +351,7 @@ describe("client availability calendar", () => {
         subjects: ["SAT", "Math"],
         calendarStatus: "connected",
         providerStatus: "connected",
+        prepaidHours: 0,
       },
       {
         id: "tutor-eunice",
@@ -332,22 +362,70 @@ describe("client availability calendar", () => {
         subjects: ["SAT"],
         calendarStatus: "connected",
         providerStatus: "connected",
+        prepaidHours: 0,
       },
     ];
 
-    render(<BookingCard />);
-    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
+    const slotDate = new Date();
+    slotDate.setUTCDate(slotDate.getUTCDate() + 3);
+    slotDate.setUTCHours(15, 0, 0, 0);
+    const slot = slotDate.toISOString();
+    mocks.availabilityQuery.data = {
+      tutor: { timezone: "America/New_York" },
+      providerStatus: "connected",
+      slots: [slot],
+    };
+    mocks.currentUser = {
+      ...mocks.currentUser,
+      id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
+      displayName: "Sophia Sleiman",
+      email: "sophia.sleiman@example.invalid",
+      timezone: "America/New_York",
+    };
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(/You need prepaid hours with this tutor before reserving/),
-      ).toBeTruthy();
-    });
-    expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");
-    expect(screen.queryByText(/checked against their live Google Calendar/)).toBeNull();
-    expect(screen.queryByText(/Cancel at least 24 hours ahead to restore the credit/)).toBeNull();
-    expect(screen.getByRole("tab", { name: "Eunice" })).toBeTruthy();
-    vi.unstubAllGlobals();
+    try {
+      render(<BookingCard />);
+      fireEvent.click(screen.getByRole("tab", { name: "Xavier" }));
+      fireEvent.click(screen.getByRole("button", { name: "1.5 hours" }));
+      const slotLabel = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(slot));
+      fireEvent.click(screen.getByText(slotLabel));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("button-booking-direct-checkout")).toBeTruthy();
+      });
+      expect(screen.queryByRole("link", { name: /Purchase SAT hours/i })).toBeNull();
+      expect(screen.queryByRole("link", { name: /Purchase College Consulting hours/i })).toBeNull();
+      expect(screen.queryByText(/full price list/i)).toBeTruthy();
+      expect(screen.queryByText(/unlock after a verified Stripe payment/)).toBeNull();
+      expect(screen.queryByText(/checked against their live Google Calendar/)).toBeNull();
+      expect(screen.queryByText(/Choose Eunice, Victoria, or Xavier, then/)).toBeNull();
+      expect(screen.queryByText(/Hours stay with the tutor you buy them for/)).toBeNull();
+      expect(screen.queryByText(/Nika is \$100\/hour/)).toBeNull();
+      fireEvent.click(screen.getByTestId("button-booking-direct-checkout"));
+      await waitFor(() => {
+        expect(checkoutBodies).toEqual([
+          {
+            tutorProfileId: "tutor-xavier",
+            durationMinutes: 90,
+            startTime: slot,
+          },
+        ]);
+      });
+      expect(JSON.stringify(checkoutBodies[0])).not.toMatch(/amountCents|priceCents|unitAmount/);
+      expect(assign).toHaveBeenCalledWith("https://checkout.stripe.test/cs_test");
+      expect(screen.getByRole("tab", { name: "Eunice" })).toBeTruthy();
+    } finally {
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: originalLocation,
+      });
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
   });
 
   test("does not treat a reserved prepaid hour as an unpaid purchase", async () => {

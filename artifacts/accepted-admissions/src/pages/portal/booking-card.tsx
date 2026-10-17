@@ -24,7 +24,6 @@ import {
   useRescheduleBookingSession,
   type AdminClientPreviewBooking,
 } from "@workspace/api-client-react";
-import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -250,6 +249,7 @@ export function BookingCard({
   const creditsLoadedRef = useRef(false);
   const [creditError, setCreditError] = useState("");
   const [message, setMessage] = useState("");
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [showAllBooked, setShowAllBooked] = useState(false);
 
   const tutorsQuery = useListBookingTutors();
@@ -349,6 +349,47 @@ export function BookingCard({
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentId = params.get("bookPayment");
+    if (params.get("payment") !== "success" || !paymentId) return;
+    let cancelled = false;
+    setCheckoutBusy(true);
+    fetch(apiPath("/api/booking/sessions/from-payment"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paymentId }),
+    })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as { error?: string; title?: string };
+        if (cancelled) return;
+        if (response.ok) {
+          invalidateBookingData();
+          refreshCredits();
+          setMessage(
+            body.title
+              ? `Confirmed: ${body.title}.`
+              : "Your session is reserved.",
+          );
+        } else {
+          setMessage(body.error ?? "Checkout finished, but that time could not be reserved.");
+        }
+        params.delete("bookPayment");
+        params.delete("payment");
+        const query = params.toString();
+        window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+      })
+      .catch(() => {
+        if (!cancelled) setMessage("Checkout finished, but that time could not be reserved.");
+      })
+      .finally(() => {
+        if (!cancelled) setCheckoutBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (creditsLoadedRef.current) return;
     const remaining = asCreditHours(initialRemainingHours);
     const purchased = asCreditHours(initialPurchasedHours);
@@ -443,6 +484,34 @@ export function BookingCard({
     );
   };
 
+  const startDirectCheckout = () => {
+    if (!selectedTutorId || !selectedSlot) return;
+    setMessage("");
+    setCheckoutBusy(true);
+    fetch(apiPath("/api/payments/checkout"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tutorProfileId: selectedTutorId,
+        durationMinutes,
+        startTime: selectedSlot,
+      }),
+    })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!response.ok || !body.url) {
+          setCheckoutBusy(false);
+          setMessage(body.error ?? "Checkout could not be started.");
+          return;
+        }
+        window.location.assign(body.url);
+      })
+      .catch(() => {
+        setCheckoutBusy(false);
+        setMessage("Checkout could not be started.");
+      });
+  };
+
   const cancel = (sessionId: string) => {
     const session = sessions.find((item) => item.id === sessionId);
     const blocked = session ? sessionScheduleChangeMessage("cancel", session) : null;
@@ -470,7 +539,7 @@ export function BookingCard({
   const scopedHours = selectedTutor?.prepaidHours;
   const tutorScopedCredits = typeof scopedHours === "number";
   const selectedTutorHours = tutorScopedCredits ? scopedHours : remainingHours;
-  const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
+  const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending || checkoutBusy;
   const upcomingReserved = bookedSessionList.upcoming.filter(
     (session) =>
       canCancelOrRescheduleSession(session) &&
@@ -690,16 +759,13 @@ export function BookingCard({
                     </p>
                   </div>
                 )}
-                {creditWall === "unpaid" && (
+                {creditWall === "unpaid" && !selectedSlot && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p>
-                      {collegeConsulting
-                        ? `You need a prepaid hour with ${selectedTutor?.name ?? "this tutor"} before reserving. Hours do not transfer between tutors.`
-                        : "You need prepaid hours with this tutor before reserving. Buy a 1-hour, 1.5-hour, or 2-hour session for them, then book here."}
+                      {typeof selectedTutor?.prepaidHours === "number"
+                        ? `You need prepaid hours with ${portalTutorFirstName(selectedTutor?.name ?? "this tutor")} before reserving. Hours do not transfer between tutors. Choose an open time to pay for that session.`
+                        : "You need prepaid hours before reserving. Choose an open time to pay for that tutor and length."}
                     </p>
-                    <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
-                    </Button>
                   </div>
                 )}
                 {creditWall === "reserved" && (
@@ -729,18 +795,15 @@ export function BookingCard({
                     ) : null}
                   </div>
                 )}
-                {creditWall === "spent" && (
+                {creditWall === "spent" && !selectedSlot && (
                   <div
                     className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
                     data-testid="booking-credit-spent"
                   >
                     <p>
                       You do not have a remaining prepaid hour, and there is no upcoming session to reschedule.
-                      Buy another hour to book a new time.
+                      Choose an open time to pay for that session.
                     </p>
-                    <Button asChild className="mt-3 rounded-full" size="sm">
-                      <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
-                    </Button>
                   </div>
                 )}
                 {selectedSlot && canConfirmSelectedSlot && (
@@ -749,10 +812,27 @@ export function BookingCard({
                     {reschedulingSessionId ? "Confirm new time" : "Reserve this session"}
                   </Button>
                 )}
-                {selectedSlot && !canConfirmSelectedSlot && creditWall === "available" && (
-                  <p className="mt-4 text-sm text-amber-900">
-                    This length needs {requiredHours} prepaid hours.
-                  </p>
+                {selectedSlot && !canConfirmSelectedSlot && (
+                  <div
+                    className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                    data-testid="booking-direct-checkout"
+                  >
+                    <p>
+                      Checkout is only for this {requiredHours}-hour session with{" "}
+                      {portalTutorFirstName(selectedTutor?.name ?? "this tutor")}. You will not go back to the full price list.
+                    </p>
+                    <Button
+                      type="button"
+                      className="mt-3 rounded-full"
+                      size="sm"
+                      data-testid="button-booking-direct-checkout"
+                      onClick={startDirectCheckout}
+                      disabled={busy}
+                    >
+                      {checkoutBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Continue to checkout
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
