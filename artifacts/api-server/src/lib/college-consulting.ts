@@ -10,6 +10,8 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { remainingCreditHoursForProducts } from "./credit-hours.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isNikaEssaySlug } from "./essay-editing.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
   EUNICE_PUBLIC_BIOGRAPHY,
@@ -330,7 +332,7 @@ export function nikaTemporaryViewDecision(input: {
 }
 
 export function isCollegeConsultingSlug(slug: string | null | undefined): boolean {
-  return Boolean(slug && CONSULTING_SLUG_SET.has(slug));
+  return Boolean(slug && (CONSULTING_SLUG_SET.has(slug) || isNikaEssaySlug(slug)));
 }
 
 export function collegeConsultingProductBySlug(slug: string) {

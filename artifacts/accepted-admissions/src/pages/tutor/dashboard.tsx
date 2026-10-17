@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
+import { EssayRequestsPanel } from "@/components/essay-editing-panel";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
@@ -195,6 +196,8 @@ export default function TutorDashboard() {
           Sessions and student work that need you today.
         </p>
       </section>
+
+      <EssayRequestsPanel mode="tutor" />
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7">
