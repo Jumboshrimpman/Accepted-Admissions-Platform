@@ -57,6 +57,20 @@ const {
 
 process.env.SESSION_SECRET = "booking-test-session-secret";
 
+test("a blank calendar id never builds /calendars//events", () => {
+  for (const calendarId of ["", "   "]) {
+    assert.throws(
+      () => googleCalendarEventWritePath(calendarId),
+      (error: unknown) => {
+        assert.ok(error instanceof GoogleCalendarRequestError);
+        assert.equal(error.reason, "calendar_id_required");
+        assert.equal(String(error.message).includes("/calendars//events"), false);
+        return true;
+      },
+    );
+  }
+});
+
 test("event writes notify attendees the same way create does", () => {
   assert.match(
     googleCalendarEventWritePath("primary"),

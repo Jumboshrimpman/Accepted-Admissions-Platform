@@ -121,6 +121,7 @@ import {
   lockClientCreditsAndRequireHours,
   lockSatTutorCredits,
   notifyAdministratorsOfBooking,
+  notifyPaidBookingReconnectRefusal,
   raiseLegacyCalendarManualEditAlert,
   recordBookingConfirmedAudit,
   sessionBookingConfirmed,
@@ -4625,6 +4626,25 @@ class BookingError extends Error {
   }
 }
 
+const CALENDAR_RECONNECT_MESSAGE =
+  "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.";
+
+/**
+ * A connected grant with a blank app calendar must not reach createGoogleEvent.
+ * That call encodes the id into /calendars/{id}/events, and an empty id becomes
+ * /calendars//events. A disconnected fixed window never writes, so it stays.
+ */
+function requireAppCalendarForBooking(
+  access: { connection: { appCalendarId?: string | null } } | null | undefined,
+  fixedWindow: boolean,
+): string {
+  const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
+  if (!appCalendarId && !(fixedWindow && !access)) {
+    throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
+  }
+  return appCalendarId;
+}
+
 async function applyCalendarDisconnectDecision(
   tutorProfileId: string,
   connectionId: string,
@@ -5294,13 +5314,7 @@ async function assertDirectCheckoutSlotOpen(
       "This tutor's calendar is disconnected.",
     );
   }
-  if (!fixedWindow && !access?.connection.appCalendarId?.trim()) {
-    throw new BookingError(
-      409,
-      "CALENDAR_RECONNECT_REQUIRED",
-      "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.",
-    );
-  }
+  requireAppCalendarForBooking(access, fixedWindow);
   return;
 }
 
@@ -7530,7 +7544,10 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
   await respondWithPrepaidBooking(req, res);
 });
 
-async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Promise<void> {
+async function respondWithPrepaidBooking(
+  req: AuthedRequest,
+  res: Response,
+): Promise<BookingError | null> {
   try {
     requireStudentBooker(req.appUser!);
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -7583,14 +7600,7 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
     if (!access && !fixedWindow) {
       throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     }
-    const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
-    if (!fixedWindow && !appCalendarId) {
-      throw new BookingError(
-        409,
-        "CALENDAR_RECONNECT_REQUIRED",
-        "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.",
-      );
-    }
+    const appCalendarId = requireAppCalendarForBooking(access, fixedWindow);
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
       throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
@@ -7727,7 +7737,7 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
     };
     if (fixedWindow && !access) {
       await confirmBookedSession(created, false);
-      return;
+      return null;
     }
     try {
       if (!access) {
@@ -7739,6 +7749,9 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         clerkUserId: req.appUser!.clerkUserId,
       };
       const tutorParty = await calendarInviteParty(tutor.userId, { email: tutor.email });
+      if (!appCalendarId) {
+        throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
+      }
       const written = await runTutorCalendarCall(access, (token) =>
         writeStoredSessionEvent(
           {
@@ -7793,13 +7806,16 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       const confirmed = updated ?? created;
       await confirmBookedSession(confirmed, true);
     } catch (error) {
-      if (fixedWindow) {
+      if (
+        fixedWindow &&
+        !(error instanceof BookingError && error.code === "CALENDAR_RECONNECT_REQUIRED")
+      ) {
         if (!(await sessionBookingConfirmed(created.id))) {
           await confirmBookedSession(created, false);
         } else if (!res.headersSent) {
           res.status(201).json(await bookingSessionShape(created));
         }
-        return;
+        return null;
       }
       await db.transaction(async (tx) => {
         await rollbackBookingAfterCalendarFailure(tx, {
@@ -7816,8 +7832,12 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         "The tutor calendar could not be updated. Your credit was not used.",
       );
     }
+    return null;
   } catch (error) {
     sendBookingError(error, res);
+    return error instanceof BookingError
+      ? error
+      : new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
   }
 }
 
@@ -7842,6 +7862,27 @@ router.post("/booking/slot-holds/release", async (req: AuthedRequest, res): Prom
     sendBookingError(error, res);
   }
 });
+
+async function notifyPaidReconnectRefusal(args: {
+  paymentId: string;
+  clientName: string;
+  tutorProfileId: string;
+  slotStartIso: string;
+  sessionId?: string | null;
+}): Promise<void> {
+  const [tutor] = await db
+    .select({ name: tutorProfilesTable.name })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.id, args.tutorProfileId))
+    .limit(1);
+  await notifyPaidBookingReconnectRefusal({
+    paymentId: args.paymentId,
+    clientName: args.clientName,
+    tutorName: tutor?.name?.trim() || "Tutor",
+    slotStartIso: args.slotStartIso,
+    sessionId: args.sessionId,
+  });
+}
 
 router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): Promise<void> => {
   try {
@@ -7907,7 +7948,19 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
     bookingRequest.onPrepaidBooked = async (sessionId: string) => {
       await rememberBookedPayment(paymentId, sessionId);
     };
-    await respondWithPrepaidBooking(bookingRequest, res);
+    const refusal = await respondWithPrepaidBooking(bookingRequest, res);
+    if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+      try {
+        await notifyPaidReconnectRefusal({
+          paymentId,
+          clientName: req.appUser!.displayName,
+          tutorProfileId: intent.tutorProfileId,
+          slotStartIso: intent.startTime,
+        });
+      } catch {
+        // The 409 is already on the wire. A later webhook retry can still notify.
+      }
+    }
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -7961,7 +8014,15 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
       return this;
     },
   } as unknown as Response;
-  await respondWithPrepaidBooking(bookingRequest, res);
+  const refusal = await respondWithPrepaidBooking(bookingRequest, res);
+  if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+    await notifyPaidReconnectRefusal({
+      paymentId,
+      clientName: user.displayName,
+      tutorProfileId: intent.tutorProfileId,
+      slotStartIso: intent.startTime,
+    });
+  }
   if (status >= 500) {
     throw new Error("Held checkout could not be booked.");
   }

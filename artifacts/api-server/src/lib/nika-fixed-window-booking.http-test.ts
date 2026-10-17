@@ -21,6 +21,7 @@ import {
   portalAccessGrantsTable,
   satProductsTable,
   sessionsTable,
+  stripeWebhookEventsTable,
   tutorProfilesTable,
   usersTable,
   type AppUser,
@@ -28,7 +29,12 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import express, { type NextFunction, type Request, type Response } from "express";
 import platformRouter from "../routes/platform";
-import { notifyAdministratorsOfBooking } from "./booking-service";
+import {
+  notifyAdministratorsOfBooking,
+  PAID_BOOKING_RECONNECT_REFUSAL_KIND,
+  PAID_BOOKING_RECONNECT_REFUSAL_TITLE,
+  paidBookingReconnectRefusalMessage,
+} from "./booking-service";
 import { zonedDateTimeToUtc } from "./booking";
 import {
   COLLEGE_CONSULTING_COURSE_ID,
@@ -189,6 +195,18 @@ async function deleteCreatedUsers(ids: string[]) {
   await db.delete(usersTable).where(inArray(usersTable.id, ids));
 }
 
+let nikaTurn: Promise<void> = Promise.resolve();
+
+function lockNika(): Promise<() => void> {
+  let unlock!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    unlock = resolve;
+  });
+  const previous = nikaTurn;
+  nikaTurn = gate;
+  return previous.then(() => unlock);
+}
+
 async function noticeCount(sessionId: string, title: string) {
   const rows = await db
     .select({ id: adminNotificationsTable.id })
@@ -207,6 +225,7 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
     t.skip("DATABASE_URL is required for the fixed-window booking");
     return;
   }
+  const unlockNika = await lockNika();
   assert.equal(VICTORIA_PLACEHOLDER_EMAIL, "samakubba@icloud.com");
   const suffix = randomUUID().slice(0, 8);
   const previousSecret = process.env.SESSION_SECRET;
@@ -595,6 +614,474 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
     else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudents;
     if (previousAdmins === undefined) delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
     else process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdmins;
+    unlockNika();
+  }
+});
+
+test("an empty app calendar refuses Nika before payment and notifies once after a paid hold", async (t) => {
+  if (!process.env.DATABASE_URL) {
+    t.skip("DATABASE_URL is required for the reconnect refusal");
+    return;
+  }
+  const unlockNika = await lockNika();
+  const suffix = randomUUID().slice(0, 8);
+  const previousSecret = process.env.SESSION_SECRET;
+  const previousDouble = process.env.STRIPE_CHECKOUT_TEST_DOUBLE;
+  const previousOrigin = process.env.APP_ORIGIN;
+  const previousStudents = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+  const previousAdmins = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+  process.env.SESSION_SECRET = previousSecret || "fixed-window-test-secret";
+  process.env.STRIPE_CHECKOUT_TEST_DOUBLE = "1";
+  process.env.APP_ORIGIN = "https://fixed-window.test";
+  const appCalendarId = `reconnect-window-${suffix}`;
+  const calendar = installCalendarMock(appCalendarId);
+  const createdUserIds: string[] = [];
+  const createdPaymentIds: string[] = [];
+  const createdInvoiceIds: string[] = [];
+  const createdLedgerIds: string[] = [];
+  const webhookEventId = `evt_reconnect_${suffix}`;
+  let refusalMessage = "";
+  let createdCourse = false;
+  let createdMembership = false;
+  let createdRuleId: string | undefined;
+  let createdConnectionId: string | undefined;
+  let removedConnection: typeof calendarConnectionsTable.$inferSelect | undefined;
+  let ruleSnapshot: typeof availabilityRulesTable.$inferSelect | undefined;
+  let nikaEmailSnapshot: string | undefined;
+  let nikaUserId: string | undefined;
+  let server: Awaited<ReturnType<typeof startServer>> | undefined;
+
+  try {
+    const dateHours = await nikaDateHours();
+    let neel = (
+      await db.select().from(usersTable).where(eq(usersTable.id, NEEL_DHARNI_USER_ID)).limit(1)
+    )[0];
+    if (!neel) {
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          id: NEEL_DHARNI_USER_ID,
+          clerkUserId: `reconnect-neel:${suffix}`,
+          email: `reconnect-neel-${suffix}@example.invalid`,
+          displayName: "Neel Dharni",
+          role: "student",
+        })
+        .returning();
+      neel = created;
+      createdUserIds.push(neel!.id);
+    }
+    assert.ok(neel);
+    process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = neel.clerkUserId;
+
+    let nikaUser = (
+      await db.select().from(usersTable).where(eq(usersTable.email, NIKA_EMAIL)).limit(1)
+    )[0];
+    if (!nikaUser) {
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          clerkUserId: `reconnect-nika:${suffix}`,
+          email: NIKA_EMAIL,
+          displayName: "Nika Raiffe",
+          role: "tutor",
+        })
+        .returning();
+      nikaUser = created;
+      createdUserIds.push(nikaUser!.id);
+    }
+    assert.ok(nikaUser);
+    nikaUserId = nikaUser.id;
+    if (nikaUser.email !== NIKA_EMAIL) {
+      nikaEmailSnapshot = nikaUser.email;
+      await db.update(usersTable).set({ email: NIKA_EMAIL }).where(eq(usersTable.id, nikaUser.id));
+    }
+
+    let profile = (
+      await db.select().from(tutorProfilesTable).where(eq(tutorProfilesTable.email, NIKA_EMAIL)).limit(1)
+    )[0];
+    if (!profile) {
+      const [created] = await db
+        .insert(tutorProfilesTable)
+        .values({
+          userId: nikaUser.id,
+          email: NIKA_EMAIL,
+          name: "Nika Raiffe",
+          title: "Admissions Tutor",
+          subjects: ["College Consulting"],
+          active: true,
+          bookingEligible: true,
+        })
+        .returning();
+      profile = created;
+    }
+    assert.ok(profile);
+
+    const [existingRule] = await db
+      .select()
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+      .limit(1);
+    if (existingRule) {
+      ruleSnapshot = existingRule;
+      await db
+        .update(availabilityRulesTable)
+        .set({
+          timezone: "America/New_York",
+          dateHours,
+          bookingNoticeMinutes: 0,
+          bufferMinutes: 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(availabilityRulesTable.id, existingRule.id));
+    } else {
+      const [created] = await db
+        .insert(availabilityRulesTable)
+        .values({
+          tutorProfileId: profile.id,
+          timezone: "America/New_York",
+          weeklyHours: {
+            "0": [{ start: "07:00", end: "21:00" }],
+            "1": [{ start: "07:00", end: "21:00" }],
+            "2": [{ start: "07:00", end: "21:00" }],
+            "3": [{ start: "07:00", end: "21:00" }],
+            "4": [{ start: "07:00", end: "21:00" }],
+            "5": [{ start: "07:00", end: "21:00" }],
+            "6": [{ start: "07:00", end: "21:00" }],
+          },
+          dateHours,
+          bookingNoticeMinutes: 0,
+          bufferMinutes: 0,
+          blackoutDates: [],
+        })
+        .returning();
+      createdRuleId = created!.id;
+    }
+
+    const [course] = await db
+      .select({ id: coursesTable.id })
+      .from(coursesTable)
+      .where(eq(coursesTable.id, COLLEGE_CONSULTING_COURSE_ID))
+      .limit(1);
+    if (!course) {
+      await db.insert(coursesTable).values({
+        id: COLLEGE_CONSULTING_COURSE_ID,
+        title: "College Consulting",
+        subject: "College Consulting",
+        term: "Fall 2026",
+        status: "active",
+      });
+      createdCourse = true;
+    }
+    const [membership] = await db
+      .select({ id: courseMembershipsTable.id })
+      .from(courseMembershipsTable)
+      .where(
+        and(
+          eq(courseMembershipsTable.courseId, COLLEGE_CONSULTING_COURSE_ID),
+          eq(courseMembershipsTable.userId, neel.id),
+          eq(courseMembershipsTable.membershipRole, "student"),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      await db.insert(courseMembershipsTable).values({
+        courseId: COLLEGE_CONSULTING_COURSE_ID,
+        userId: neel.id,
+        membershipRole: "student",
+        subject: "College Consulting",
+      });
+      createdMembership = true;
+    }
+
+    const [admin] = await db
+      .insert(usersTable)
+      .values({
+        clerkUserId: `reconnect-admin:${suffix}`,
+        email: `reconnect-admin-${suffix}@example.invalid`,
+        displayName: "Reconnect Admin",
+        role: "administrator",
+      })
+      .returning();
+    createdUserIds.push(admin!.id);
+    process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = admin!.clerkUserId;
+
+    const [storedConnection] = await db
+      .select()
+      .from(calendarConnectionsTable)
+      .where(
+        and(
+          eq(calendarConnectionsTable.tutorProfileId, profile.id),
+          eq(calendarConnectionsTable.provider, "google"),
+        ),
+      )
+      .limit(1);
+    if (storedConnection) {
+      removedConnection = storedConnection;
+      await db.delete(calendarConnectionsTable).where(eq(calendarConnectionsTable.id, storedConnection.id));
+    }
+    const [connection] = await db
+      .insert(calendarConnectionsTable)
+      .values({
+        tutorProfileId: profile.id,
+        provider: "google",
+        status: "connected",
+        calendarId: "primary",
+        appCalendarId: null,
+        grantedScopes: `${GOOGLE_CALENDAR_FREEBUSY_SCOPE} ${GOOGLE_CALENDAR_APP_CREATED_SCOPE}`,
+        encryptedAccessToken: encryptCalendarToken(`reconnect-access-${suffix}`),
+        encryptedRefreshToken: encryptCalendarToken(`reconnect-refresh-${suffix}`),
+        accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        googleAccountEmail: NIKA_EMAIL,
+      })
+      .returning();
+    createdConnectionId = connection!.id;
+
+    server = await startServer(neel);
+    const paymentsBefore = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.clientUserId, neel.id));
+    const refusedCheckout = await postJson(server.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profile.id,
+      durationMinutes: 60,
+      startTime: NIKA_START,
+    });
+    assert.equal(refusedCheckout.status, 409, JSON.stringify(refusedCheckout.body));
+    assert.equal(refusedCheckout.body.code, "CALENDAR_RECONNECT_REQUIRED");
+    const paymentsAfterRefusal = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.clientUserId, neel.id));
+    assert.equal(paymentsAfterRefusal.length, paymentsBefore.length);
+
+    const [hour] = await db
+      .select()
+      .from(satProductsTable)
+      .where(eq(satProductsTable.slug, "college-consulting-nika-hour"))
+      .limit(1);
+    assert.ok(hour);
+    const [credit] = await db
+      .insert(creditLedgerTable)
+      .values({
+        clientUserId: neel.id,
+        productId: hour.id,
+        entryType: "original",
+        hours: 1,
+        note: `reconnect-prepaid-${suffix}`,
+      })
+      .returning();
+    createdLedgerIds.push(credit!.id);
+    const ledgerBefore = await db
+      .select({ id: creditLedgerTable.id })
+      .from(creditLedgerTable)
+      .where(eq(creditLedgerTable.clientUserId, neel.id));
+    const sessionsBefore = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(
+        and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(NIKA_START))),
+      );
+    const unpaidNoticesBefore = await db
+      .select({ id: adminNotificationsTable.id })
+      .from(adminNotificationsTable)
+      .where(eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND));
+    const refusedBooking = await postJson(server.baseUrl, "/api/booking/sessions", {
+      tutorProfileId: profile.id,
+      startTime: NIKA_START,
+      durationMinutes: 60,
+    });
+    assert.equal(refusedBooking.status, 409, JSON.stringify(refusedBooking.body));
+    assert.equal(refusedBooking.body.code, "CALENDAR_RECONNECT_REQUIRED");
+    const ledgerAfterCreditRefusal = await db
+      .select({ id: creditLedgerTable.id })
+      .from(creditLedgerTable)
+      .where(eq(creditLedgerTable.clientUserId, neel.id));
+    assert.equal(ledgerAfterCreditRefusal.length, ledgerBefore.length);
+    const sessionsAfterCreditRefusal = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(
+        and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(NIKA_START))),
+      );
+    assert.equal(sessionsAfterCreditRefusal.length, sessionsBefore.length);
+    const unpaidNoticesAfter = await db
+      .select({ id: adminNotificationsTable.id })
+      .from(adminNotificationsTable)
+      .where(eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND));
+    assert.equal(unpaidNoticesAfter.length, unpaidNoticesBefore.length);
+
+    await db
+      .update(calendarConnectionsTable)
+      .set({ appCalendarId, updatedAt: new Date() })
+      .where(eq(calendarConnectionsTable.id, connection!.id));
+    const checkout = await postJson(server.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profile.id,
+      durationMinutes: 60,
+      startTime: NIKA_START,
+    });
+    assert.equal(checkout.status, 201, JSON.stringify(checkout.body));
+    const paymentId = String(checkout.body.paymentId);
+    createdPaymentIds.push(paymentId);
+    await db
+      .update(calendarConnectionsTable)
+      .set({ appCalendarId: null, updatedAt: new Date() })
+      .where(eq(calendarConnectionsTable.id, connection!.id));
+
+    const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
+    assert.ok(payment);
+    if (payment.invoiceId) createdInvoiceIds.push(payment.invoiceId);
+    const webhookEvent = {
+      id: webhookEventId,
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: `cs_reconnect_${suffix}`,
+          payment_status: "paid",
+          amount_total: Number(payment.amountCents),
+          latest_charge: `ch_reconnect_${suffix}`,
+          metadata: { payment_id: paymentId },
+          client_reference_id: paymentId,
+        },
+      },
+    };
+    await processStripeWebhook(webhookEvent);
+
+    const sessionsAfterPayment = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(
+        and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(NIKA_START))),
+      );
+    assert.equal(sessionsAfterPayment.length, sessionsBefore.length);
+    const granted = await db
+      .select({
+        id: creditLedgerTable.id,
+        hours: creditLedgerTable.hours,
+        referenceType: creditLedgerTable.referenceType,
+      })
+      .from(creditLedgerTable)
+      .where(
+        and(
+          eq(creditLedgerTable.referenceId, paymentId),
+          eq(creditLedgerTable.referenceType, "payment"),
+        ),
+      );
+    assert.equal(granted.length, 1);
+    assert.ok(Number(granted[0]?.hours) > 0);
+    createdLedgerIds.push(granted[0]!.id);
+
+    const administrators = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.role, "administrator"));
+    refusalMessage = paidBookingReconnectRefusalMessage({
+      clientName: neel.displayName,
+      tutorName: profile.name,
+      slotStartIso: NIKA_START,
+      paymentId,
+    });
+    const noticesFor = async () =>
+      db
+        .select({
+          id: adminNotificationsTable.id,
+          recipientUserId: adminNotificationsTable.recipientUserId,
+          title: adminNotificationsTable.title,
+          message: adminNotificationsTable.message,
+          sessionId: adminNotificationsTable.sessionId,
+        })
+        .from(adminNotificationsTable)
+        .where(eq(adminNotificationsTable.message, refusalMessage));
+    const firstNotices = await noticesFor();
+    assert.equal(firstNotices.length, administrators.length);
+    assert.ok(administrators.length > 0);
+    assert.equal(new Set(firstNotices.map((row) => row.recipientUserId)).size, administrators.length);
+    for (const notice of firstNotices) {
+      assert.equal(notice.title, PAID_BOOKING_RECONNECT_REFUSAL_TITLE);
+      assert.equal(notice.sessionId, null);
+      assert.match(notice.message, new RegExp(neel.displayName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(notice.message, new RegExp(profile.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(notice.message, /The credit was kept/);
+      assert.ok(notice.message.includes(NIKA_START));
+      assert.ok(notice.message.includes(paymentId));
+    }
+
+    const returned = await postJson(server.baseUrl, "/api/booking/sessions/from-payment", { paymentId });
+    assert.equal(returned.status, 409, JSON.stringify(returned.body));
+    assert.equal(returned.body.code, "CALENDAR_RECONNECT_REQUIRED");
+    await processStripeWebhook(webhookEvent);
+    assert.equal((await noticesFor()).length, firstNotices.length);
+    assert.equal(calendar.writes.filter((write) => write.url.includes("/events")).length, 0);
+    assert.equal(calendar.writes.some((write) => write.url.includes("/calendars//events")), false);
+  } finally {
+    calendar.restore();
+    if (server) await server.close();
+    if (refusalMessage) {
+      await db
+        .delete(adminNotificationsTable)
+        .where(eq(adminNotificationsTable.message, refusalMessage));
+    }
+    await db
+      .delete(stripeWebhookEventsTable)
+      .where(eq(stripeWebhookEventsTable.providerEventId, webhookEventId));
+    if (createdLedgerIds.length > 0) {
+      await db.delete(creditLedgerTable).where(inArray(creditLedgerTable.id, createdLedgerIds));
+    }
+    if (createdPaymentIds.length > 0) {
+      await db.delete(paymentsTable).where(inArray(paymentsTable.id, createdPaymentIds));
+    }
+    if (createdInvoiceIds.length > 0) {
+      await db.delete(invoicesTable).where(inArray(invoicesTable.id, createdInvoiceIds));
+    }
+    if (createdConnectionId) {
+      await db.delete(calendarConnectionsTable).where(eq(calendarConnectionsTable.id, createdConnectionId));
+    }
+    if (removedConnection) {
+      await db.insert(calendarConnectionsTable).values(removedConnection);
+    }
+    if (createdRuleId) {
+      await db.delete(availabilityRulesTable).where(eq(availabilityRulesTable.id, createdRuleId));
+    } else if (ruleSnapshot) {
+      await db
+        .update(availabilityRulesTable)
+        .set({
+          timezone: ruleSnapshot.timezone,
+          weeklyHours: ruleSnapshot.weeklyHours,
+          dateHours: ruleSnapshot.dateHours,
+          bookingNoticeMinutes: ruleSnapshot.bookingNoticeMinutes,
+          bufferMinutes: ruleSnapshot.bufferMinutes,
+          blackoutDates: ruleSnapshot.blackoutDates,
+          updatedAt: ruleSnapshot.updatedAt,
+        })
+        .where(eq(availabilityRulesTable.id, ruleSnapshot.id));
+    }
+    if (createdMembership) {
+      await db
+        .delete(courseMembershipsTable)
+        .where(
+          and(
+            eq(courseMembershipsTable.courseId, COLLEGE_CONSULTING_COURSE_ID),
+            eq(courseMembershipsTable.userId, NEEL_DHARNI_USER_ID),
+          ),
+        );
+    }
+    if (createdCourse) {
+      await db.delete(coursesTable).where(eq(coursesTable.id, COLLEGE_CONSULTING_COURSE_ID));
+    }
+    if (nikaEmailSnapshot && nikaUserId) {
+      await db.update(usersTable).set({ email: nikaEmailSnapshot }).where(eq(usersTable.id, nikaUserId));
+    }
+    await deleteCreatedUsers(createdUserIds);
+    if (previousSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = previousSecret;
+    if (previousDouble === undefined) delete process.env.STRIPE_CHECKOUT_TEST_DOUBLE;
+    else process.env.STRIPE_CHECKOUT_TEST_DOUBLE = previousDouble;
+    if (previousOrigin === undefined) delete process.env.APP_ORIGIN;
+    else process.env.APP_ORIGIN = previousOrigin;
+    if (previousStudents === undefined) delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+    else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudents;
+    if (previousAdmins === undefined) delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+    else process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdmins;
+    unlockNika();
   }
 });
 

@@ -108,6 +108,26 @@ describe("Admin connections", () => {
     expect(testCall?.[1]?.body).toBeUndefined();
   });
 
+  test("a free/busy-only grant stays Needs reconnect and names the missing invite access", async () => {
+    const xavierFreeBusy: CalendarConnectionHealthRow = {
+      ...xavier,
+      badge: "needs_reconnect",
+      calendarIdMasked: "primary",
+      statusLabel: "Connected (free/busy only): reconnect to enable bookings and invites",
+    };
+    customFetch.mockResolvedValue({ connections: [xavierFreeBusy] });
+
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("badge-calendar-connection-xavier-profile")).toBeTruthy();
+    expect(screen.getByTestId("badge-calendar-connection-xavier-profile").textContent).toBe(
+      "Needs reconnect",
+    );
+    expect(screen.getByTestId("status-calendar-connection-xavier-profile").textContent).toBe(
+      "Connected (free/busy only): reconnect to enable bookings and invites",
+    );
+  });
+
   test("shows Needs attention with the error and does not replace a revoked message", async () => {
     const nika: CalendarConnectionHealthRow = {
       tutorProfileId: "nika-profile",

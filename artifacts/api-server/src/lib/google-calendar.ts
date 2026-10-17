@@ -1491,7 +1491,15 @@ export function googleCalendarEventWritePath(
   eventId?: string,
   sendUpdates: GoogleCalendarSendUpdates = "all",
 ): string {
-  const base = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+  const id = calendarId.trim();
+  if (!id) {
+    throw new GoogleCalendarRequestError(
+      400,
+      "calendar_id_required",
+      "A calendar id is required.",
+    );
+  }
+  const base = `/calendar/v3/calendars/${encodeURIComponent(id)}/events`;
   const path = eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
   return `${path}?sendUpdates=${sendUpdates}`;
 }
