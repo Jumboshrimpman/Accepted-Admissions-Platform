@@ -196,6 +196,10 @@ test("authenticated GET /api/public/products lists live SAT prices and omits the
       products.filter((product) => /^(sat-eunice|sat-victoria|sat-xavier)-/.test(product.slug)).length,
       9,
     );
+    assert.equal(
+      products.some((product) => product.slug.startsWith("sat-nika-")),
+      false,
+    );
 
     assert.equal(
       products.some((product) => product.slug === decoySlug),
@@ -263,6 +267,28 @@ test("checkout charges Michelle $130 for Xavier SAT and $200 for everyone else",
     const xavier = products.find((product) => product.slug === "sat-xavier-60");
     assert.ok(xavier);
     assert.equal(Number(xavier.totalPriceCents), 20_000);
+    assert.equal(products.some((product) => product.slug.startsWith("sat-nika-")), false);
+    const michelleProductsResponse = await fetch(`${michelleServer.baseUrl}/api/public/products`);
+    assert.equal(michelleProductsResponse.status, 200);
+    const michelleProducts = (await michelleProductsResponse.json()) as Array<{
+      id: string;
+      slug: string;
+      name: string;
+      totalPriceCents: number;
+    }>;
+    const nikaHour = michelleProducts.find((product) => product.slug === "sat-nika-60");
+    const nikaNinety = michelleProducts.find((product) => product.slug === "sat-nika-90");
+    const nikaTwoHours = michelleProducts.find((product) => product.slug === "sat-nika-120");
+    assert.equal(nikaHour?.name, "SAT 1 hour with Nika");
+    assert.equal(Number(nikaHour?.totalPriceCents), 13_000);
+    assert.equal(Number(nikaNinety?.totalPriceCents), 19_500);
+    assert.equal(Number(nikaTwoHours?.totalPriceCents), 26_000);
+    const sophiaNikaCheckout = await fetch(`${sophiaServer.baseUrl}/api/payments/checkout`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ productId: nikaHour?.id, amountCents: 100 }),
+    });
+    assert.equal(sophiaNikaCheckout.status, 404);
     const [storedBefore] = await db
       .select({
         totalPriceCents: satProductsTable.totalPriceCents,

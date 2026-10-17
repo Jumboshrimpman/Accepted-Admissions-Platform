@@ -728,6 +728,44 @@ describe("client availability calendar", () => {
     expect(screen.queryByText("Taito SAT 2026-10-23 ET")).toBeNull();
   });
 
+  test("shows Nika by first name at $130 an hour", () => {
+    mocks.tutorsQuery.data = [
+      {
+        id: "tutor-eunice",
+        name: "Eunice Chon",
+        title: "SAT Tutor",
+        photoUrl: null,
+        biography: "Eunice coaches SAT sessions.",
+        subjects: ["SAT"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+        serviceName: "SAT",
+        hourlyRateCents: 13000,
+        bookable: true,
+      },
+      {
+        id: "tutor-nika",
+        name: "Nika Raiffe",
+        title: "SAT Tutor",
+        photoUrl: "/media/team/nika-raiffe.png",
+        biography: "Nika is a senior studying political science.",
+        tagline: "Columbia and Sciences Po",
+        subjects: ["SAT"],
+        calendarStatus: "disconnected",
+        providerStatus: "disconnected",
+        serviceName: "SAT",
+        hourlyRateCents: 13000,
+        bookable: false,
+      },
+    ];
+
+    render(<BookingCard />);
+    expect(screen.getByRole("tab", { name: "Nika" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Nika Raiffe" })).toBeNull();
+    expect(screen.getByText("$130/hr · Not bookable until Google Calendar is connected")).toBeTruthy();
+    expect(screen.queryByText("Nika Raiffe")).toBeNull();
+  });
+
   test("hides a cancelled Sep 7 Xavier session from Your booked sessions", () => {
     mocks.sessionsQuery.data = [
       {

@@ -4,7 +4,9 @@ import { MICHELLE_MAKAREM_CLERK_USER_ID } from "./calendar-pair-attendees.ts";
 import { checkoutLineItemFields, hostedInvoiceItemFields } from "./payment-service.ts";
 import {
   SAT_TUTOR_PRODUCTS,
+  SOPHIA_SLEIMAN_SAT_USER_ID,
   allowsLegacySatPool,
+  canBookSatTutor,
   displayedSatDescription,
   displayedSatHourlyCents,
   displayedSatPriceCents,
@@ -14,6 +16,7 @@ import {
   previewOffersFromSatTutorProducts,
   satDebitPlan,
   satSpendableHours,
+  satTutorKeyForName,
 } from "./sat-tutor-pricing.ts";
 
 const michelle = {
@@ -23,9 +26,14 @@ const michelle = {
 const michelleEmail = { email: "MakaremMichelle7@gmail.com" };
 const retiredMichelleEmail = { email: "michaelmakarem@gmail.com" };
 const sophia = {
-  id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
+  id: SOPHIA_SLEIMAN_SAT_USER_ID,
   email: "kubbasama@gmail.com",
   clerkUserId: "user_3KnHZLQbestfMDxWWpHThXLFiNO",
+};
+const otherSatClient = {
+  id: "11111111-1111-4111-8111-111111111111",
+  email: "other-sat-client@example.com",
+  clerkUserId: "user_other_sat_client",
 };
 
 function product(slug: string) {
@@ -35,7 +43,7 @@ function product(slug: string) {
 }
 
 test("per-tutor SAT catalog stores the standard rates", () => {
-  assert.equal(SAT_TUTOR_PRODUCTS.length, 9);
+  assert.equal(SAT_TUTOR_PRODUCTS.length, 12);
   assert.deepEqual(
     SAT_TUTOR_PRODUCTS.filter((item) => item.tutorKey === "eunice").map((item) => item.totalPriceCents),
     [13_000, 19_500, 26_000],
@@ -48,6 +56,15 @@ test("per-tutor SAT catalog stores the standard rates", () => {
     SAT_TUTOR_PRODUCTS.filter((item) => item.tutorKey === "xavier").map((item) => item.totalPriceCents),
     [20_000, 30_000, 40_000],
   );
+  assert.deepEqual(
+    SAT_TUTOR_PRODUCTS.filter((item) => item.tutorKey === "nika").map((item) => item.totalPriceCents),
+    [13_000, 19_500, 26_000],
+  );
+  assert.equal(product("sat-nika-60").firstName, "Nika");
+  assert.equal(product("sat-nika-60").fullName, "Nika Raiffe");
+  assert.equal(product("sat-nika-60").name, "SAT 1 hour with Nika");
+  assert.equal(satTutorKeyForName("Nika Raiffe"), "nika");
+  assert.equal(satTutorKeyForName("Nika"), null);
   assert.equal(isStandardSatTutorProduct({ ...product("sat-xavier-60"), active: true }), true);
   assert.equal(
     isStandardSatTutorProduct({ ...product("sat-xavier-60"), active: true, totalPriceCents: 13_000 }),
@@ -95,6 +112,60 @@ test("Michelle keeps Xavier at $130 and Sophia sees $200", () => {
   assert.equal(allowsLegacySatPool("xavier", michelle), true);
   assert.equal(allowsLegacySatPool("eunice", sophia), true);
   assert.equal(allowsLegacySatPool("victoria", sophia), true);
+});
+
+test("Nika SAT is $130 for Sophia and Michelle and hidden from other clients", () => {
+  for (const user of [sophia, michelle, michelleEmail]) {
+    assert.equal(canBookSatTutor("nika", user), true);
+    assert.equal(displayedSatHourlyCents("nika", user), 13_000);
+    assert.equal(displayedSatPriceCents(product("sat-nika-60"), user), 13_000);
+    assert.equal(displayedSatPriceCents(product("sat-nika-90"), user), 19_500);
+    assert.equal(displayedSatPriceCents(product("sat-nika-120"), user), 26_000);
+    assert.match(displayedSatDescription(product("sat-nika-60"), user), /with Nika at \$130\/hour/);
+    assert.equal(allowsLegacySatPool("nika", user), false);
+  }
+  assert.equal(canBookSatTutor("nika", otherSatClient), false);
+  assert.equal(canBookSatTutor("nika", retiredMichelleEmail), false);
+  assert.equal(canBookSatTutor("eunice", otherSatClient), true);
+  assert.equal(allowsLegacySatPool("nika", otherSatClient), false);
+
+  const entries = [
+    { entryType: "original", hours: 2, productId: "nika-hour" },
+    { entryType: "original", hours: 3, productId: "legacy-hour" },
+    { entryType: "original", hours: 1, productId: "eunice-hour" },
+  ];
+  assert.equal(
+    satSpendableHours(entries, {
+      tutorProductIds: ["nika-hour"],
+      legacyProductIds: ["legacy-hour"],
+      allowLegacy: false,
+    }),
+    2,
+  );
+  assert.equal(
+    satSpendableHours(entries, {
+      tutorProductIds: ["eunice-hour"],
+      legacyProductIds: ["legacy-hour"],
+      allowLegacy: true,
+    }),
+    4,
+  );
+  const nikaFromLegacy = satDebitPlan(entries, {
+    tutorProductIds: ["nika-hour"],
+    legacyProductIds: ["legacy-hour"],
+    requiredHours: 3,
+    tutorHourProductId: "nika-hour",
+    allowLegacy: false,
+  });
+  assert.equal(nikaFromLegacy.ok, false);
+  const euniceFromNika = satDebitPlan(entries, {
+    tutorProductIds: ["eunice-hour"],
+    legacyProductIds: [],
+    requiredHours: 2,
+    tutorHourProductId: "eunice-hour",
+    allowLegacy: false,
+  });
+  assert.equal(euniceFromNika.ok, false);
 });
 
 test("legacy $130 hours book Eunice, Victoria, and Michelle's Xavier only", () => {
@@ -182,14 +253,22 @@ test("admin preview lists one-hour tutor rates for the viewed client", () => {
       { slug: "sat-eunice-60", priceCents: 13_000, durationMinutes: 60 },
       { slug: "sat-victoria-60", priceCents: 13_000, durationMinutes: 60 },
       { slug: "sat-xavier-60", priceCents: 20_000, durationMinutes: 60 },
+      { slug: "sat-nika-60", priceCents: 13_000, durationMinutes: 60 },
     ],
   );
+  const strangerOffers = previewOffersFromSatTutorProducts(
+    SAT_TUTOR_PRODUCTS.map((item) => ({ ...item, active: true })),
+    otherSatClient,
+  );
+  assert.equal(strangerOffers.some((offer) => offer.slug.startsWith("sat-nika")), false);
   const michelleOffers = previewOffersFromSatTutorProducts(
     SAT_TUTOR_PRODUCTS.map((item) => ({ ...item, active: true })),
     michelle,
   );
   assert.equal(michelleOffers.find((offer) => offer.slug === "sat-xavier-60")?.priceCents, 13_000);
   assert.match(michelleOffers.find((offer) => offer.slug === "sat-xavier-60")?.description ?? "", /\$130\/hour/);
+  assert.equal(michelleOffers.find((offer) => offer.slug === "sat-nika-60")?.priceCents, 13_000);
+  assert.equal(michelleOffers.find((offer) => offer.slug === "sat-nika-60")?.name, "SAT 1 hour with Nika");
 });
 
 test("a client price override uses Checkout price_data and leaves the catalog price id alone", () => {
