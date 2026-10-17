@@ -435,6 +435,13 @@
       "when": 1792690000000,
       "tag": "0067_samapostgrad_tutor_trial",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792710000000,
+      "tag": "0068_eunice_biography",
+      "breakpoints": true
     }
   ]
 }

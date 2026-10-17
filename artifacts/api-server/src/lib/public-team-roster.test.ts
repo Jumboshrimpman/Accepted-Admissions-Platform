@@ -76,8 +76,11 @@ test("publishes the current Xavier, Eunice, and Nika biographies and retires the
   assert.match(XAVIER_PUBLIC_BIOGRAPHY, /2030 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /2029 Harvard Law School/);
   assert.doesNotMatch(XAVIER_PUBLIC_BIOGRAPHY, /Oxford until 2026/);
-  assert.match(EUNICE_PUBLIC_BIOGRAPHY, /Harvard 2024 graduate/);
-  assert.match(EUNICE_PUBLIC_BIOGRAPHY, /Harvard Medical School\/Massachusetts General Hospital/);
+  assert.equal(
+    EUNICE_PUBLIC_BIOGRAPHY,
+    "Harvard Class of 2025 with a background in History of Science. Incoming PhD Student at UC Berkeley.",
+  );
+  assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /Berkley/);
   assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /third-year at Harvard College/);
   assert.doesNotMatch(EUNICE_PUBLIC_BIOGRAPHY, /Coca-Cola Scholar/);
   assert.match(NIKA_PUBLIC_BIOGRAPHY, /Goldman Sachs Business Intelligence Group/);
@@ -89,6 +92,7 @@ test("publishes the current Xavier, Eunice, and Nika biographies and retires the
   assert.match(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Jane Street Capital/);
   assert.doesNotMatch(XAVIER_LEGACY_PUBLIC_BIOGRAPHIES[1], /Ivy League/);
   assert.match(EUNICE_LEGACY_PUBLIC_BIOGRAPHIES[0], /third-year at Harvard College/);
+  assert.match(EUNICE_LEGACY_PUBLIC_BIOGRAPHIES[1], /Harvard Medical School\/Massachusetts General Hospital/);
   assert.match(NIKA_LEGACY_PUBLIC_BIOGRAPHIES[0], /sophomore studying/);
   assert.equal(
     XAVIER_BOOKING_TAGLINE,
@@ -138,6 +142,32 @@ test("seed and migration replace only the stale Xavier, Eunice, and Nika bios", 
   assert.match(migrationSource, /third-year at Harvard College/);
   assert.match(migrationSource, /2029 Harvard Law School/);
   assert.match(migrationSource, /sophomore studying/);
+});
+
+test("Eunice's biography migration copies the one published sentence after 0066", async () => {
+  const migrationSource = await readFile(
+    fileURLToPath(new URL("../../../../lib/db/drizzle/0068_eunice_biography.sql", import.meta.url)),
+    "utf8",
+  );
+  const journal = JSON.parse(
+    await readFile(
+      fileURLToPath(new URL("../../../../lib/db/drizzle/meta/_journal.json", import.meta.url)),
+      "utf8",
+    ),
+  ) as { entries: Array<{ idx: number; when: number; tag: string }> };
+  const entry = journal.entries.find((item) => item.tag === "0068_eunice_biography");
+  assert.ok(entry);
+  assert.equal(entry.idx, 67);
+  assert.equal(entry.when, 1792710000000);
+  assert.equal(migrationSource.includes(EUNICE_PUBLIC_BIOGRAPHY), true);
+  assert.match(migrationSource, /eunice_chon@berkeley\.edu/);
+  assert.match(migrationSource, /"name" = 'Eunice Chon'/);
+  assert.match(migrationSource, /IS DISTINCT FROM/);
+  assert.doesNotMatch(migrationSource, /Xavier|Nika|Victoria/);
+  assert.equal(
+    journal.entries.some((item) => item.idx === 66 || item.when === 1792700000000),
+    false,
+  );
 });
 
 test("locks Kya's public portrait even when the stored value is blank or drifted", () => {
