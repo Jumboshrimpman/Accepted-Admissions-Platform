@@ -140,7 +140,6 @@ export function PublicSiteShell({
             <PublicNavLink href="/sat">SAT tutoring</PublicNavLink>
             <PublicNavLink href="/our-team">Meet the team</PublicNavLink>
             <PublicNavLink href="/past-success">Student stories</PublicNavLink>
-            <PublicNavLink href="/client-request">Get guidance</PublicNavLink>
           </nav>
           <div className="flex min-w-0 items-center justify-end gap-2">
             <span className="hidden text-xs text-muted-foreground md:inline">{eyebrow}</span>
@@ -179,7 +178,6 @@ export function PublicSiteShell({
               <PublicNavLink reference={firstMobileLink} href="/sat">SAT tutoring</PublicNavLink>
               <PublicNavLink href="/our-team">Meet the team</PublicNavLink>
               <PublicNavLink href="/past-success">Student stories</PublicNavLink>
-              <PublicNavLink href="/client-request">Get guidance</PublicNavLink>
               <WhenSignedOut>
                 <Link href="/login" data-testid="link-mobile-sign-in" className="rounded-md px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Sign in</Link>
               </WhenSignedOut>
