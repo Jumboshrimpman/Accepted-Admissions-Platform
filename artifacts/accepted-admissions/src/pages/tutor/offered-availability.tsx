@@ -19,7 +19,7 @@ type OfferedAvailability = {
   from: string;
   to: string;
   timezone: string;
-  providerStatus: "connected" | "disconnected";
+  providerStatus: "connected" | "disconnected" | "reconnect";
   lengths: OfferedLength[];
 };
 
@@ -72,7 +72,11 @@ export function TutorOfferedAvailability() {
   if (hidden) return null;
 
   const timezone = offer?.timezone ?? "";
-  const disconnected = offer?.providerStatus === "disconnected";
+  const reconnect = offer?.providerStatus === "reconnect";
+  const openSlotCount =
+    offer?.lengths.reduce((count, length) => count + length.slots.length, 0) ?? 0;
+  const disconnectedWithoutSlots = offer?.providerStatus === "disconnected" && openSlotCount === 0;
+  const showSlots = Boolean(offer) && !reconnect && !disconnectedWithoutSlots;
 
   return (
     <Card data-testid="tutor-offered-availability" className="border-primary/20 shadow-sm">
@@ -82,8 +86,9 @@ export function TutorOfferedAvailability() {
           Availability offered to clients
         </CardTitle>
         <CardDescription className="mt-1 max-w-2xl">
-          Open times clients can book with you over the next 14 days, for 1 hour, 1.5 hour, and 2 hour
-          sessions.
+          {reconnect
+            ? "Google Calendar needs to be reconnected before clients can book you."
+            : "Open times clients can book with you over the next 14 days, for 1 hour, 1.5 hour, and 2 hour sessions."}
           {timezone ? ` Times are shown in ${clientTimezoneCaption(timezone)}.` : ""}
         </CardDescription>
       </CardHeader>
@@ -94,7 +99,22 @@ export function TutorOfferedAvailability() {
             {error}
           </p>
         ) : null}
-        {disconnected ? (
+        {reconnect ? (
+          <div className="rounded-xl border border-dashed p-4 text-sm" data-testid="tutor-offered-reconnect">
+            <p className="font-medium">Reconnect Google Calendar to offer bookable times.</p>
+            <p className="mt-1 text-muted-foreground">
+              The sessions calendar is missing, so a booking would be refused. No times are shown until
+              you reconnect.
+            </p>
+            <a
+              className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+              href={calendarConnectUrl("tutor_dashboard")}
+            >
+              Reconnect Google Calendar
+            </a>
+          </div>
+        ) : null}
+        {disconnectedWithoutSlots ? (
           <div className="rounded-xl border border-dashed p-4 text-sm" data-testid="tutor-offered-disconnected">
             <p className="font-medium">Clients cannot book you until Google Calendar is connected.</p>
             <p className="mt-1 text-muted-foreground">
@@ -108,7 +128,7 @@ export function TutorOfferedAvailability() {
             </a>
           </div>
         ) : null}
-        {offer && !disconnected ? (
+        {showSlots && offer ? (
           <div className="max-h-96 space-y-6 overflow-y-auto">
             {offer.lengths.map((length) => {
               const days = slotsByDay(length.slots, offer.timezone);

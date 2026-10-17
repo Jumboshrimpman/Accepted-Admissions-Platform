@@ -70,6 +70,53 @@ describe("tutor offered availability", () => {
     expect(screen.queryByRole("link", { name: "Connect Google Calendar" })).toBeNull();
   });
 
+  test("a disconnected fixed window still lists the times clients can book", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "disconnected",
+      lengths: [
+        { durationMinutes: 60, slots: ["2026-10-21T14:00:00.000Z"] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: [] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    const hour = await screen.findByRole("region", { name: "1 hour" });
+    expect(hour.textContent).toContain("10:00 AM");
+    expect(hour.textContent).toContain("Wednesday, October 21, 2026");
+    expect(screen.queryByTestId("tutor-offered-disconnected")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Connect Google Calendar" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Reconnect Google Calendar" })).toBeNull();
+  });
+
+  test("a missing app calendar shows reconnect instead of unbookable times", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "reconnect",
+      lengths: [
+        { durationMinutes: 60, slots: [] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: [] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    const notice = await screen.findByTestId("tutor-offered-reconnect");
+    expect(notice.textContent).toContain("Reconnect Google Calendar to offer bookable times.");
+    expect(notice.textContent).toContain("a booking would be refused");
+    expect(screen.getByRole("link", { name: "Reconnect Google Calendar" }).getAttribute("href")).toBe(
+      CONNECT_URL,
+    );
+    expect(screen.queryByRole("region", { name: "1 hour" })).toBeNull();
+    expect(screen.queryByText("10:00 AM")).toBeNull();
+    expect(notice.textContent).not.toMatch(/@/);
+  });
+
   test("hides the section when this login has no tutor profile", async () => {
     const missing = new Error("Tutor profile not found") as Error & { status: number };
     missing.status = 404;

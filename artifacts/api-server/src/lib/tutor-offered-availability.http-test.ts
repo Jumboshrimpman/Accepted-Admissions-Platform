@@ -159,6 +159,8 @@ test("tutors see only their own client-offered slots, with no client details", a
   let xavierServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let euniceServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let nikaServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  let fixedServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  let reconnectServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let studentServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let failure: unknown;
   let cleanupError: unknown;
@@ -214,6 +216,18 @@ test("tutors see only their own client-offered slots, with no client details", a
       `offered-nika-${suffix}@example.invalid`,
       "tutor",
     );
+    const fixedUser = await createUser(
+      "tutor",
+      "Victoria Wijerathnayapa",
+      `offered-fixed-${suffix}@example.invalid`,
+      "tutor",
+    );
+    const reconnectUser = await createUser(
+      "tutor",
+      "Xavier Morales",
+      `offered-reconnect-${suffix}@example.invalid`,
+      "tutor",
+    );
     const student = await createUser(
       "student",
       "Portal Student",
@@ -231,8 +245,11 @@ test("tutors see only their own client-offered slots, with no client details", a
       .returning();
     createdUserIds.push(piiStudent!.id);
 
-    const connectCalendar = async (profileId: string, email: string) => {
-      const appCalendarId = `app-cal-${profileId.slice(0, 8)}`;
+    const connectCalendar = async (
+      profileId: string,
+      email: string,
+      appCalendarId: string | null,
+    ) => {
       await db.insert(calendarConnectionsTable).values({
         tutorProfileId: profileId,
         provider: "google",
@@ -241,6 +258,9 @@ test("tutors see only their own client-offered slots, with no client details", a
         appCalendarId,
         grantedScopes: `${GOOGLE_CALENDAR_FREEBUSY_SCOPE} ${GOOGLE_CALENDAR_APP_CREATED_SCOPE}`,
         encryptedAccessToken: encryptCalendarToken(`offered-access-${profileId}`),
+        encryptedRefreshToken: appCalendarId
+          ? null
+          : encryptCalendarToken(`offered-refresh-${profileId}`),
         accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
         googleAccountEmail: email,
       });
@@ -250,7 +270,11 @@ test("tutors see only their own client-offered slots, with no client details", a
       user: AppUser,
       name: string,
       hours: { start: string; end: string },
-      connect: boolean,
+      connect: boolean | "reconnect",
+      options?: {
+        dateHours?: Record<string, { start: string; end: string }[]>;
+        bookingNoticeMinutes?: number;
+      },
     ) => {
       const [profile] = await db
         .insert(tutorProfilesTable)
@@ -269,17 +293,43 @@ test("tutors see only their own client-offered slots, with no client details", a
         tutorProfileId: profile!.id,
         timezone: TIMEZONE,
         weeklyHours: weeklyHours(hours.start, hours.end),
-        bookingNoticeMinutes: 0,
+        dateHours: options?.dateHours ?? {},
+        bookingNoticeMinutes: options?.bookingNoticeMinutes ?? 0,
         bufferMinutes: 0,
         blackoutDates: [],
       });
-      if (connect) await connectCalendar(profile!.id, user.email);
+      if (connect === "reconnect") await connectCalendar(profile!.id, user.email, null);
+      else if (connect) await connectCalendar(profile!.id, user.email, `app-cal-${profile!.id.slice(0, 8)}`);
       return profile!.id;
     };
 
     const xavierProfileId = await createProfile(xavierUser, "Xavier Morales", { start: "07:00", end: "21:00" }, true);
     const euniceProfileId = await createProfile(euniceUser, "Eunice Chon", { start: "07:00", end: "08:00" }, true);
     const nikaProfileId = await createProfile(nikaUser, "Nika Raiffe", { start: "07:00", end: "21:00" }, false);
+    const openDay = localDateKey(2);
+    const closedDay = localDateKey(3);
+    const fixedProfileId = await createProfile(
+      fixedUser,
+      "Victoria Wijerathnayapa",
+      { start: "07:00", end: "21:00" },
+      false,
+      {
+        bookingNoticeMinutes: 480,
+        dateHours: {
+          [localDateKey(0)]: [{ start: "00:00", end: "23:59" }],
+          [openDay]: [{ start: "10:00", end: "13:00" }],
+          [closedDay]: [],
+          "2099-01-01": [],
+        },
+      },
+    );
+    const reconnectProfileId = await createProfile(
+      reconnectUser,
+      "Xavier Morales",
+      { start: "07:00", end: "21:00" },
+      "reconnect",
+      { bookingNoticeMinutes: 240 },
+    );
 
     const [course] = await db
       .insert(coursesTable)
@@ -326,6 +376,8 @@ test("tutors see only their own client-offered slots, with no client details", a
     xavierServer = await startServer(xavierUser);
     euniceServer = await startServer(euniceUser);
     nikaServer = await startServer(nikaUser);
+    fixedServer = await startServer(fixedUser);
+    reconnectServer = await startServer(reconnectUser);
     studentServer = await startServer(student);
 
     const xavierOffered = await getJson(
@@ -340,6 +392,8 @@ test("tutors see only their own client-offered slots, with no client details", a
       nikaServer.baseUrl,
       `/api/tutor/offered-availability?tutorProfileId=${xavierProfileId}`,
     );
+    const fixedOffered = await getJson(fixedServer.baseUrl, "/api/tutor/offered-availability");
+    const reconnectOffered = await getJson(reconnectServer.baseUrl, "/api/tutor/offered-availability");
     const studentOffered = await getJson(
       studentServer.baseUrl,
       `/api/tutor/offered-availability?tutorProfileId=${xavierProfileId}`,
@@ -389,6 +443,53 @@ test("tutors see only their own client-offered slots, with no client details", a
       assert.equal(clientNika.status, 404);
     });
 
+    await t.test("a disconnected fixed window matches the client slots for the same tutor and time", async () => {
+      assert.equal(fixedOffered.status, 200, fixedOffered.text);
+      assert.equal(fixedOffered.body.providerStatus, "disconnected");
+      assert.equal(fixedOffered.body.timezone, TIMEZONE);
+      const noticeFloor = Date.now() + 480 * 60_000 - 60_000;
+      const openSlot = localSlot(2, "10:00");
+      assert.equal(offeredSlots(fixedOffered.body, 60).includes(openSlot), true);
+      assert.equal(offeredSlots(fixedOffered.body, 60).includes(localSlot(3, "10:00")), false);
+      assert.equal(offeredSlots(fixedOffered.body, 60).includes(localSlot(1, "10:00")), false);
+      for (const length of fixedOffered.body.lengths ?? []) {
+        assert.ok(length.slots.length > 0, `expected open fixed-window slots for ${length.durationMinutes}`);
+        for (const slot of length.slots) {
+          assert.ok(Date.parse(slot) >= noticeFloor, slot);
+        }
+        const client = await getJson(
+          studentServer!.baseUrl,
+          availabilityPath(fixedProfileId, fixedOffered.body.from!, fixedOffered.body.to!, length.durationMinutes),
+        );
+        assert.equal(client.status, 200, client.text);
+        assert.equal(client.body.providerStatus, fixedOffered.body.providerStatus);
+        assert.deepEqual(stableSlots(client.body.slots), stableSlots(length.slots));
+      }
+    });
+
+    await t.test("a missing app calendar hides slots students cannot actually book", async () => {
+      assert.equal(reconnectOffered.status, 200, reconnectOffered.text);
+      assert.equal(reconnectOffered.body.providerStatus, "reconnect");
+      assert.equal(reconnectOffered.body.timezone, TIMEZONE);
+      for (const length of reconnectOffered.body.lengths ?? []) {
+        assert.deepEqual(length.slots, []);
+        const client = await getJson(
+          studentServer!.baseUrl,
+          availabilityPath(
+            reconnectProfileId,
+            reconnectOffered.body.from!,
+            reconnectOffered.body.to!,
+            length.durationMinutes,
+          ),
+        );
+        assert.equal(client.status, 200, client.text);
+        assert.equal(client.body.providerStatus, "connected");
+        const clientSlots = stableSlots(client.body.slots);
+        assert.ok(clientSlots.length > 0, `students still list ${length.durationMinutes} minute slots`);
+        assert.notDeepEqual(clientSlots, length.slots);
+      }
+    });
+
     await t.test("a disconnected calendar offers no slots", () => {
       assert.equal(nikaOffered.status, 200, nikaOffered.text);
       assert.equal(nikaOffered.body.providerStatus, "disconnected");
@@ -399,7 +500,7 @@ test("tutors see only their own client-offered slots, with no client details", a
     });
 
     await t.test("held and booked times are omitted and the response has no client details", () => {
-      const serialized = `${xavierOffered.text}${euniceOffered.text}${nikaOffered.text}`;
+      const serialized = `${xavierOffered.text}${euniceOffered.text}${nikaOffered.text}${fixedOffered.text}${reconnectOffered.text}`;
       assert.equal(serialized.toLowerCase().includes("quinlan"), false);
       assert.equal(serialized.toLowerCase().includes(piiToken), false);
       assert.equal(serialized.includes(piiEmail), false);
@@ -428,6 +529,8 @@ test("tutors see only their own client-offered slots, with no client details", a
     await xavierServer?.close().catch(() => undefined);
     await euniceServer?.close().catch(() => undefined);
     await nikaServer?.close().catch(() => undefined);
+    await fixedServer?.close().catch(() => undefined);
+    await reconnectServer?.close().catch(() => undefined);
     await studentServer?.close().catch(() => undefined);
     try {
       if (profileIds.length > 0) {

@@ -6249,14 +6249,25 @@ router.get(
         ),
       );
       const first = results[0];
+      // A live grant with a blank app calendar lists slots to students, then
+      // booking returns 409. Hide those unbookable times and ask for reconnect.
+      // A fully disconnected grant keeps the fixed-window slots students can book.
+      const needsReconnect = results.some(
+        (result) => result.access && !result.access.connection.appCalendarId?.trim(),
+      );
+      const connected = results.every((result) => result.access);
       res.json({
         from: from.toISOString(),
         to: to.toISOString(),
         timezone: first?.rule.timezone ?? "UTC",
-        providerStatus: results.every((result) => result.access) ? "connected" : "disconnected",
+        providerStatus: needsReconnect
+          ? "reconnect"
+          : connected
+            ? "connected"
+            : "disconnected",
         lengths: results.map((result, index) => ({
           durationMinutes: BOOKABLE_PORTAL_DURATIONS[index],
-          slots: result.slots,
+          slots: needsReconnect ? [] : result.slots,
         })),
       });
     } catch (error) {
