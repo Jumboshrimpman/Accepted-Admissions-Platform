@@ -113,6 +113,7 @@ import {
   adminCalendarGrantCanWriteEvents,
   adminCalendarMeetConference,
   bookingsUseAdminCalendarFallback,
+  isNikaTutorProfile,
   manualCalendarInviteMessage,
 } from "../lib/admin-calendar-fallback";
 import {
@@ -4684,17 +4685,19 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
 
 /**
  * A blank app calendar must not reach /calendars//events.
- * Fixed windows use the admin calendar when that grant can write.
- * With no admin grant, the same fixed window confirms after payment and an admin sends the invite by hand.
- * A slot outside those windows, and any tutor who is not on fixed windows, still 409s before payment.
+ * Only Nika's fixed windows use the admin calendar, or confirm for a hand-sent invite.
+ * Every other tutor, including one with date windows, still 409s before payment.
  */
 async function adminCalendarForFixedWindowBooking(
   access: { connection: { appCalendarId?: string | null } } | null | undefined,
   fixedWindow: boolean,
+  tutor: { name?: string | null; email?: string | null },
 ): Promise<FixedWindowCalendarPlan> {
   const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
   if (appCalendarId) return { mode: "tutor" };
-  if (!fixedWindow) {
+  const nikaFixedWindow =
+    fixedWindow && isNikaTutorProfile({ name: tutor.name, portalEmail: tutor.email });
+  if (!nikaFixedWindow) {
     throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
   }
   const admin = await findStoredAdminCalendarWriter();
@@ -5254,7 +5257,7 @@ async function assertDirectCheckoutSlotOpen(
 ): Promise<void> {
   const start = new Date(intent.startTime);
   const end = new Date(start.getTime() + intent.durationMinutes * 60_000);
-  const { access, slots, rule } = await slotsForTutor(
+  const { access, slots, rule, tutor } = await slotsForTutor(
     intent.tutorProfileId,
     new Date(start.getTime() - 1),
     new Date(end.getTime() + 1),
@@ -5290,7 +5293,7 @@ async function assertDirectCheckoutSlotOpen(
       "This tutor's calendar is disconnected.",
     );
   }
-  await adminCalendarForFixedWindowBooking(access, fixedWindow);
+  await adminCalendarForFixedWindowBooking(access, fixedWindow, tutor);
   return;
 }
 
@@ -5350,9 +5353,11 @@ async function loadTutorSlotContext(
     if (!(error instanceof BookingError)) throw error;
     calendar = null;
   }
-  // Fixed windows with no app calendar stay on the fixed grid. Do not read that tutor's Google calendar.
+  // Nika's fixed windows with no app calendar stay on the fixed grid. Do not read her Google calendar.
   const fixedWindowFallback =
-    dateHoursIncludeOpenWindow(rule.dateHours) && !calendar?.connection.appCalendarId?.trim();
+    isNikaTutorProfile({ name: tutor.name, portalEmail: tutor.email }) &&
+    dateHoursIncludeOpenWindow(rule.dateHours) &&
+    !calendar?.connection.appCalendarId?.trim();
   const usesAdminCalendarFallback = bookingsUseAdminCalendarFallback({
     name: tutor.name,
     portalEmail: tutor.email,
@@ -7808,7 +7813,7 @@ async function respondWithPrepaidBooking(
     if (!access && !fixedWindow) {
       throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     }
-    const calendarPlan = await adminCalendarForFixedWindowBooking(access, fixedWindow);
+    const calendarPlan = await adminCalendarForFixedWindowBooking(access, fixedWindow, tutor);
     const adminWriter = calendarPlan.mode === "admin" ? calendarPlan.writer : null;
     const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
@@ -7960,7 +7965,7 @@ async function respondWithPrepaidBooking(
             durationMinutes,
           }),
         });
-        await confirmBookedSession(created, false);
+        await confirmBookedSession(created, true);
         return null;
       }
       const student = {

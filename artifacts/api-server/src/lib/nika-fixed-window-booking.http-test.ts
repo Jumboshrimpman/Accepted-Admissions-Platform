@@ -30,8 +30,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import express, { type NextFunction, type Request, type Response } from "express";
 import platformRouter from "../routes/platform";
 import { notifyAdministratorsOfBooking } from "./booking-service";
-import { zonedDateTimeToUtc } from "./booking";
-import { manualCalendarInviteMessage } from "./admin-calendar-fallback";
+import { MISSING_CALENDAR_INVITE_TITLE, zonedDateTimeToUtc } from "./booking";
+import { isNikaTutorProfile, manualCalendarInviteMessage } from "./admin-calendar-fallback";
 import {
   COLLEGE_CONSULTING_COURSE_ID,
   NEEL_DHARNI_USER_ID,
@@ -208,6 +208,13 @@ async function nikaDateHours() {
   >;
 }
 
+async function deleteOwnedTutorProfile(profileId: string | undefined) {
+  if (!profileId) return;
+  await db.delete(calendarConnectionsTable).where(eq(calendarConnectionsTable.tutorProfileId, profileId));
+  await db.delete(availabilityRulesTable).where(eq(availabilityRulesTable.tutorProfileId, profileId));
+  await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.id, profileId));
+}
+
 async function deleteCreatedUsers(ids: string[]) {
   if (ids.length === 0) return;
   await db.delete(loginActivityTable).where(inArray(loginActivityTable.userId, ids));
@@ -277,6 +284,7 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
   let ruleSnapshot: typeof availabilityRulesTable.$inferSelect | undefined;
   let nikaEmailSnapshot: string | undefined;
   let nikaUserId: string | undefined;
+  let createdTutorProfileId: string | undefined;
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
 
   try {
@@ -341,6 +349,7 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
         })
         .returning();
       profile = created;
+      createdTutorProfileId = created!.id;
     }
     assert.ok(profile);
     assert.equal(profile.email, NIKA_EMAIL);
@@ -630,6 +639,7 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
     if (nikaEmailSnapshot && nikaUserId) {
       await db.update(usersTable).set({ email: nikaEmailSnapshot }).where(eq(usersTable.id, nikaUserId));
     }
+    await deleteOwnedTutorProfile(createdTutorProfileId);
     await deleteCreatedUsers(createdUserIds);
     if (previousSecret === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = previousSecret;
@@ -677,6 +687,7 @@ test("Neel books a fixed Nika slot with a blank app calendar and no admin grant"
   let ruleSnapshot: typeof availabilityRulesTable.$inferSelect | undefined;
   let nikaEmailSnapshot: string | undefined;
   let nikaUserId: string | undefined;
+  let createdTutorProfileId: string | undefined;
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
 
   try {
@@ -741,6 +752,7 @@ test("Neel books a fixed Nika slot with a blank app calendar and no admin grant"
         })
         .returning();
       profile = created;
+      createdTutorProfileId = created!.id;
     }
     assert.ok(profile);
 
@@ -957,6 +969,7 @@ test("Neel books a fixed Nika slot with a blank app calendar and no admin grant"
       assert.equal(alert.sessionId, booked[0]!.id);
       assert.equal(alert.message, manualInviteMessage);
     }
+    assert.equal(await noticeCount(booked[0]!.id, MISSING_CALENDAR_INVITE_TITLE), 0);
   } finally {
     calendar.restore();
     if (server) await server.close();
@@ -1028,6 +1041,7 @@ test("Neel books a fixed Nika slot with a blank app calendar and no admin grant"
     if (nikaEmailSnapshot && nikaUserId) {
       await db.update(usersTable).set({ email: nikaEmailSnapshot }).where(eq(usersTable.id, nikaUserId));
     }
+    await deleteOwnedTutorProfile(createdTutorProfileId);
     await deleteCreatedUsers(createdUserIds);
     if (previousSecret === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = previousSecret;
@@ -1379,6 +1393,8 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
           .where(eq(calendarConnectionsTable.id, connectionSnapshot.id));
       }
       if (createdProfileIds.length > 0) {
+        await db.delete(calendarConnectionsTable).where(inArray(calendarConnectionsTable.tutorProfileId, createdProfileIds));
+        await db.delete(availabilityRulesTable).where(inArray(availabilityRulesTable.tutorProfileId, createdProfileIds));
         await db.delete(tutorProfilesTable).where(inArray(tutorProfilesTable.id, createdProfileIds));
       }
       await deleteCreatedUsers(createdUserIds);
@@ -1426,6 +1442,7 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
   let ruleSnapshot: typeof availabilityRulesTable.$inferSelect | undefined;
   let nikaEmailSnapshot: string | undefined;
   let nikaUserId: string | undefined;
+  let createdTutorProfileId: string | undefined;
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
   let refusalMessage = "";
   const refusalWebhookId = `evt_admin_fallback_refusal_${suffix}`;
@@ -1494,6 +1511,7 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
         })
         .returning();
       profile = created;
+      createdTutorProfileId = created!.id;
     }
     assert.ok(profile);
 
@@ -1851,6 +1869,7 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
     if (nikaEmailSnapshot && nikaUserId) {
       await db.update(usersTable).set({ email: nikaEmailSnapshot }).where(eq(usersTable.id, nikaUserId));
     }
+    await deleteOwnedTutorProfile(createdTutorProfileId);
     await deleteCreatedUsers(createdUserIds);
     if (previousSecret === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = previousSecret;
@@ -1862,6 +1881,142 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
     else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudents;
     if (previousAdmins === undefined) delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
     else process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdmins;
+    unlockNika();
+  }
+});
+
+test("a non-Nika date-window tutor with a blank app calendar still requires reconnect", async (t) => {
+  if (!process.env.DATABASE_URL) {
+    t.skip("DATABASE_URL is required for the non-Nika reconnect check");
+    return;
+  }
+  const unlockNika = await lockNika();
+  const suffix = randomUUID().slice(0, 8);
+  const previousSecret = process.env.SESSION_SECRET;
+  const previousDouble = process.env.STRIPE_CHECKOUT_TEST_DOUBLE;
+  const previousOrigin = process.env.APP_ORIGIN;
+  const previousStudents = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+  process.env.SESSION_SECRET = previousSecret || "fixed-window-test-secret";
+  process.env.STRIPE_CHECKOUT_TEST_DOUBLE = "1";
+  process.env.APP_ORIGIN = "https://fixed-window.test";
+  const tutorEmail = `date-window-${suffix}@example.invalid`;
+  const slotStart = zonedDateTimeToUtc("2026-11-02", "10:00", "America/New_York").toISOString();
+  const calendar = installCalendarMock(`date-window-${suffix}`);
+  const createdUserIds: string[] = [];
+  const createdPaymentIds: string[] = [];
+  let createdTutorProfileId: string | undefined;
+  let server: Awaited<ReturnType<typeof startServer>> | undefined;
+
+  try {
+    let neel = (
+      await db.select().from(usersTable).where(eq(usersTable.id, NEEL_DHARNI_USER_ID)).limit(1)
+    )[0];
+    if (!neel) {
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          id: NEEL_DHARNI_USER_ID,
+          clerkUserId: `date-window-neel:${suffix}`,
+          email: `date-window-neel-${suffix}@example.invalid`,
+          displayName: "Neel Dharni",
+          role: "student",
+        })
+        .returning();
+      neel = created;
+      createdUserIds.push(neel!.id);
+    }
+    assert.ok(neel);
+    process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = neel.clerkUserId;
+
+    const [profile] = await db
+      .insert(tutorProfilesTable)
+      .values({
+        email: tutorEmail,
+        name: "Eunice Chon",
+        title: "Admissions Tutor",
+        subjects: ["College Consulting"],
+        active: true,
+        bookingEligible: true,
+      })
+      .returning();
+    createdTutorProfileId = profile!.id;
+    assert.equal(
+      isNikaTutorProfile({ name: profile!.name, portalEmail: profile!.email }),
+      false,
+    );
+
+    await db.insert(availabilityRulesTable).values({
+      tutorProfileId: profile!.id,
+      timezone: "America/New_York",
+      weeklyHours: {
+        "1": [{ start: "07:00", end: "21:00" }],
+      },
+      dateHours: {
+        "2026-11-02": [{ start: "10:00", end: "12:00" }],
+      },
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    });
+    await db.insert(calendarConnectionsTable).values({
+      tutorProfileId: profile!.id,
+      provider: "google",
+      status: "connected",
+      calendarId: "primary",
+      appCalendarId: null,
+      grantedScopes: `${GOOGLE_CALENDAR_FREEBUSY_SCOPE} ${GOOGLE_CALENDAR_APP_CREATED_SCOPE}`,
+      encryptedAccessToken: encryptCalendarToken(`date-window-access-${suffix}`),
+      encryptedRefreshToken: encryptCalendarToken(`date-window-refresh-${suffix}`),
+      accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      googleAccountEmail: tutorEmail,
+    });
+
+    server = await startServer(neel);
+    const paymentsBefore = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.clientUserId, neel.id));
+    const checkout = await postJson(server.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profile!.id,
+      durationMinutes: 60,
+      startTime: slotStart,
+    });
+    if (typeof checkout.body.paymentId === "string") createdPaymentIds.push(checkout.body.paymentId);
+    assert.equal(checkout.status, 409, JSON.stringify(checkout.body));
+    assert.equal(checkout.body.code, "CALENDAR_RECONNECT_REQUIRED");
+    assert.ok(calendar.freeBusyCalls() > 0);
+    assert.equal(calendar.writes.length, 0);
+    assert.equal(calendar.emailCalls(), 0);
+    const paymentsAfter = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.clientUserId, neel.id));
+    assert.equal(paymentsAfter.length, paymentsBefore.length);
+  } finally {
+    calendar.restore();
+    if (server) await server.close();
+    if (createdPaymentIds.length > 0) {
+      await db.delete(bookingSlotHoldsTable).where(inArray(bookingSlotHoldsTable.paymentId, createdPaymentIds));
+      const paymentRows = await db
+        .select({ invoiceId: paymentsTable.invoiceId })
+        .from(paymentsTable)
+        .where(inArray(paymentsTable.id, createdPaymentIds));
+      await db.delete(paymentsTable).where(inArray(paymentsTable.id, createdPaymentIds));
+      const invoiceIds = paymentRows.map((row) => row.invoiceId).filter((id): id is string => Boolean(id));
+      if (invoiceIds.length > 0) {
+        await db.delete(invoicesTable).where(inArray(invoicesTable.id, invoiceIds));
+      }
+    }
+    await deleteOwnedTutorProfile(createdTutorProfileId);
+    await deleteCreatedUsers(createdUserIds);
+    if (previousSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = previousSecret;
+    if (previousDouble === undefined) delete process.env.STRIPE_CHECKOUT_TEST_DOUBLE;
+    else process.env.STRIPE_CHECKOUT_TEST_DOUBLE = previousDouble;
+    if (previousOrigin === undefined) delete process.env.APP_ORIGIN;
+    else process.env.APP_ORIGIN = previousOrigin;
+    if (previousStudents === undefined) delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+    else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudents;
     unlockNika();
   }
 });
