@@ -184,6 +184,7 @@ import {
 import { aliasLoginAccessOutcome, aliasSessionRole, requireAppRole } from "../lib/portal-login-aliases";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
+  BOOKABLE_PORTAL_DURATIONS,
   bookingCalendarEventPayload,
   generateAvailableSlots,
   overlapsBusyWindow,
@@ -6135,6 +6136,46 @@ router.get(
       active: profile.active,
       bookingEligible: profile.bookingEligible,
     });
+  },
+);
+
+const TUTOR_OFFERED_AVAILABILITY_HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
+
+router.get(
+  "/tutor/offered-availability",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    // Own profile only. A tutorProfileId query cannot select another tutor.
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, false);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const from = new Date();
+    const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
+    try {
+      // allowExistingSessionTutor skips the client roster gate (Nika, and any
+      // active tutor). Slot math is still slotsForTutor, the client path.
+      const results = await Promise.all(
+        BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) =>
+          slotsForTutor(profile.id, from, to, durationMinutes, undefined, true),
+        ),
+      );
+      const first = results[0];
+      res.json({
+        from: from.toISOString(),
+        to: to.toISOString(),
+        timezone: first?.rule.timezone ?? "UTC",
+        providerStatus: results.every((result) => result.access) ? "connected" : "disconnected",
+        lengths: results.map((result, index) => ({
+          durationMinutes: BOOKABLE_PORTAL_DURATIONS[index],
+          slots: result.slots,
+        })),
+      });
+    } catch (error) {
+      sendBookingError(error, res);
+    }
   },
 );
 
