@@ -8,6 +8,11 @@
  * Victoria, and — for Michelle only — Xavier. New purchases are tagged to one
  * tutor and book only that tutor. Xavier's $200 hours never come from the
  * legacy $130 pool.
+ *
+ * Nika's SAT rows are $130/hour. The shared SAT catalog shows every standard
+ * tutor to every self-serve client, so Nika is limited to Sophia Sleiman and
+ * Michelle Makarem. Her hours do not accept the legacy pool and do not book
+ * another tutor. Neel's College Consulting prices are a separate catalog.
  */
 
 import {
@@ -21,8 +26,11 @@ import {
   roundCreditHours,
 } from "./credit-hours.ts";
 
-export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier"] as const;
+export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika"] as const;
 export type SatTutorKey = (typeof SAT_TUTOR_KEYS)[number];
+
+/** Sophia Sleiman. Nika's SAT portal is limited to this user id and Michelle. */
+export const SOPHIA_SLEIMAN_SAT_USER_ID = "bf530aa6-faaa-43df-b3cf-140026f3313e";
 
 export const MICHELLE_XAVIER_SAT_HOURLY_CENTS = 13_000;
 
@@ -35,6 +43,7 @@ const SAT_TUTORS = [
     hourlyCents: 13_000,
   },
   { key: "xavier" as const, firstName: "Xavier", fullName: "Xavier Morales", hourlyCents: 20_000 },
+  { key: "nika" as const, firstName: "Nika", fullName: "Nika Raiffe", hourlyCents: 13_000 },
 ];
 
 const SAT_LENGTHS = [
@@ -96,6 +105,22 @@ export function isMichelleMakaremUser(user: MichelleIdentity | null | undefined)
   if (user.clerkUserId === MICHELLE_MAKAREM_CLERK_USER_ID) return true;
   const email = user.email?.trim().toLowerCase() ?? "";
   return email === MICHELLE_MAKAREM_EMAIL;
+}
+
+export type SatTutorViewer = MichelleIdentity & { id?: string | null };
+
+/**
+ * Eunice, Victoria, and Xavier stay on the shared SAT roster.
+ * Nika is bookable only for Sophia Sleiman and Michelle Makarem.
+ */
+export function canBookSatTutor(
+  tutorKey: SatTutorKey,
+  user: SatTutorViewer | null | undefined,
+): boolean {
+  if (tutorKey !== "nika") return true;
+  if (!user) return false;
+  if (user.id === SOPHIA_SLEIMAN_SAT_USER_ID) return true;
+  return isMichelleMakaremUser(user);
 }
 
 export function satTutorKeyForSlug(slug: string): SatTutorKey | null {
@@ -165,11 +190,12 @@ export function displayedSatDescription(
   return descriptionFor(spec.firstName, length?.minutesLabel ?? "SAT", hourly);
 }
 
-/** Eunice and Victoria always accept the legacy $130 pool. Xavier does only for Michelle. */
+/** Eunice and Victoria always accept the legacy $130 pool. Xavier does only for Michelle. Nika never does. */
 export function allowsLegacySatPool(
   tutorKey: SatTutorKey,
   user: MichelleIdentity | null | undefined,
 ): boolean {
+  if (tutorKey === "nika") return false;
   if (tutorKey === "eunice" || tutorKey === "victoria") return true;
   return isMichelleMakaremUser(user);
 }
@@ -254,7 +280,15 @@ export function previewOffersFromSatTutorProducts(
   user: MichelleIdentity | null | undefined,
 ): AdminSatPreviewOffer[] {
   return products
-    .filter((product) => isStandardSatTutorProduct(product) && Number(product.durationHours) === 1)
+    .filter((product) => {
+      const tutorKey = satTutorKeyForSlug(product.slug);
+      return Boolean(
+        tutorKey &&
+          canBookSatTutor(tutorKey, user) &&
+          isStandardSatTutorProduct(product) &&
+          Number(product.durationHours) === 1,
+      );
+    })
     .slice()
     .sort((left, right) => satTutorProductSortKey(left.slug) - satTutorProductSortKey(right.slug))
     .map((product) => ({

@@ -279,7 +279,9 @@ import {
 import {
   SAT_TUTOR_PRODUCTS,
   SAT_TUTOR_PRODUCT_SLUGS,
+  SOPHIA_SLEIMAN_SAT_USER_ID,
   allowsLegacySatPool,
+  canBookSatTutor,
   displayedSatDescription,
   displayedSatHourlyCents,
   displayedSatPriceCents,
@@ -692,12 +694,38 @@ type AuthedRequest = Request & {
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
 const EUNICE_NAME = "Eunice Chon";
-/** SAT calendars. Hours are per tutor; legacy $130 hours also book Eunice and Victoria. */
+/** Shared SAT calendars. Nika is added only for Sophia and Michelle. */
 const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME, VICTORIA_DISPLAY_NAME] as const;
 /** Legacy tutor compensation seed only — not used for student Checkout settlement. */
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
+
+function satPortalTutorNames(user: {
+  id?: string | null;
+  clerkUserId?: string | null;
+  email?: string | null;
+} | null | undefined): string[] {
+  const names: string[] = [...SAT_BOOKING_TUTOR_NAMES];
+  if (canBookSatTutor("nika", user)) names.push(NIKA_NAME);
+  return names;
+}
+
+async function bookerMayBookNika(bookerUserId: string | undefined): Promise<boolean> {
+  if (!bookerUserId) return false;
+  if (bookerUserId === SOPHIA_SLEIMAN_SAT_USER_ID) return true;
+  const [booker] = await db
+    .select({
+      id: usersTable.id,
+      clerkUserId: usersTable.clerkUserId,
+      email: usersTable.email,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, bookerUserId))
+    .limit(1);
+  return canBookSatTutor("nika", booker);
+}
+
 const NIKA_APPROVED_PHOTO_URL = APPROVED_PUBLIC_TEAM_PORTRAITS["Nika Raiffe"];
 const NIKA_LEGACY_SEED_PHOTO_URL = LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
 const NIKA_LEGACY_APPROVED_WIX_PHOTO_URL =
@@ -5039,10 +5067,16 @@ async function bookingTutor(
     throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
   }
   if (!allowExistingSessionTutor) {
+    const onSharedRoster =
+      tutor.bookingEligible &&
+      SAT_BOOKING_TUTOR_NAMES.includes(tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number]);
+    const onNikaRoster =
+      tutor.bookingEligible &&
+      tutor.name === NIKA_NAME &&
+      (await bookerMayBookNika(bookerUserId));
     const allowed = isNeelDharniUser(bookerUserId)
       ? consultingTutorAllowed(tutor)
-      : tutor.bookingEligible &&
-        SAT_BOOKING_TUTOR_NAMES.includes(tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number]);
+      : onSharedRoster || onNikaRoster;
     if (!allowed) {
       throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
     }
@@ -5803,7 +5837,10 @@ router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): 
     res.json(await appendLiveCheckoutTestProduct(products.map(publicProductShape), viewer));
     return;
   }
-  const products = await listActiveSatTutorProducts();
+  const products = (await listActiveSatTutorProducts()).filter((product) => {
+    const tutorKey = satTutorKeyForSlug(product.slug);
+    return Boolean(tutorKey && canBookSatTutor(tutorKey, req.appUser));
+  });
   res.json(
     await appendLiveCheckoutTestProduct(
       products.map((product) => publicSatProductForViewer(product, req.appUser!)),
@@ -7111,7 +7148,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       and(
         eq(tutorProfilesTable.active, true),
         eq(tutorProfilesTable.bookingEligible, true),
-        inArray(tutorProfilesTable.name, [...SAT_BOOKING_TUTOR_NAMES]),
+        inArray(tutorProfilesTable.name, satPortalTutorNames(req.appUser)),
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
@@ -7270,7 +7307,7 @@ async function assertPrepaidHoursForTutor(
     remaining = remainingCreditHoursForProducts(entries, await consultingCreditProductIds(tutor));
   } else {
     const tutorKey = satTutorKeyForName(tutor.name);
-    if (!tutorKey) {
+    if (!tutorKey || !canBookSatTutor(tutorKey, user)) {
       throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
     }
     const catalog = await satCreditCatalog();
@@ -7370,7 +7407,7 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
     }
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
-    if (!consulting && !tutorKey) {
+    if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
       throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
     }
     const course = consulting
@@ -7978,7 +8015,9 @@ async function resolveDirectBookingProduct(
   const tutorKey = consulting
     ? collegeConsultingTutorKeyForProfile(tutor)
     : satTutorKeyForName(tutor.name);
-  if (!tutorKey) return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
+  if (!tutorKey || (!consulting && !canBookSatTutor(tutorKey, user))) {
+    return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
+  }
   const products = await db
     .select({
       id: satProductsTable.id,
@@ -8087,6 +8126,13 @@ router.post(
           .where(eq(satProductsTable.id, product.id))
           .returning();
         if (aligned) Object.assign(product, aligned);
+      }
+      if (audience === "sat") {
+        const bookedTutorKey = satTutorKeyForSlug(product.slug);
+        if (bookedTutorKey && !canBookSatTutor(bookedTutorKey, req.appUser)) {
+          res.status(404).json({ error: "SAT product not found" });
+          return;
+        }
       }
       if (audience === "sat" && isLegacySharedSatSlug(product.slug)) {
         res.status(403).json({ error: "Choose a tutor to buy SAT hours." });

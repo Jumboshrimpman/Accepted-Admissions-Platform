@@ -112,7 +112,50 @@ test("Sophia is an SAT client and prefers a per-tutor product when that row exis
     "sat-session-90",
   ]);
   assert.equal(isPerTutorSatSlug("sat-eunice-60"), true);
+  assert.equal(isPerTutorSatSlug("sat-nika-60"), true);
   assert.equal(isPerTutorSatSlug("single-sat-session"), false);
+  assert.equal(isPerTutorSatSlug("college-consulting-nika-hour"), false);
+});
+
+test("Nika SAT checkout stays on sat-nika and consulting Nika stays at $100", () => {
+  const satNika = [
+    product("sat-nika-60", 1, 13_000),
+    product("sat-nika-90", 1.5, 19_500),
+    product("sat-nika-120", 2, 26_000),
+  ];
+  const cases = [
+    [60, "sat-nika-60", 13_000],
+    [90, "sat-nika-90", 19_500],
+    [120, "sat-nika-120", 26_000],
+  ] as const;
+  for (const [minutes, slug, cents] of cases) {
+    const selected = selectBookingCheckoutProduct({
+      audience: "sat",
+      tutorKey: "nika",
+      durationMinutes: minutes,
+      products: [...SHARED_SAT, ...CONSULTING, ...satNika],
+    });
+    assert.equal(selected?.slug, slug);
+    assert.equal(authoritativeCheckoutAmountCents(selected!), cents);
+  }
+  assert.equal(
+    selectBookingCheckoutProduct({
+      audience: "sat",
+      tutorKey: "nika",
+      durationMinutes: 60,
+      products: [...SHARED_SAT, ...CONSULTING],
+    }),
+    null,
+  );
+  assert.deepEqual(satCheckoutSlugCandidates("nika", 90), ["sat-nika-90"]);
+  const consulting = selectBookingCheckoutProduct({
+    audience: "consulting",
+    tutorKey: "nika",
+    durationMinutes: 90,
+    products: [...SHARED_SAT, ...CONSULTING, ...satNika],
+  });
+  assert.equal(consulting?.slug, "college-consulting-nika-90");
+  assert.equal(authoritativeCheckoutAmountCents(consulting!), 15_000);
 });
 
 test("SAT checkout falls back to the shared length product until a per-tutor row exists", () => {
