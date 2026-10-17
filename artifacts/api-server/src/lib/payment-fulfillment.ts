@@ -9,6 +9,8 @@ import {
 } from "@workspace/db";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { PAID_STATUSES_NEEDING_PURCHASE_CREDIT, missingProductFulfillmentError, purchaseCreditFulfillmentKey, purchaseCreditHours } from "./payment-fulfillment-rules.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { isNikaEssaySlug } from "./essay-editing.ts";
 
 export async function grantPaidPurchaseCredits(
   tx: any,
@@ -117,6 +119,7 @@ export async function listPaidUncreditedPayments(limit = 100): Promise<PaymentCr
   );
 
   return recentPaid
+    .filter((row) => !isNikaEssaySlug(row.productSlug))
     .filter((row) => !credited.has(purchaseCreditFulfillmentKey(row.paymentId)))
     .map((row) => ({
       ...row,
