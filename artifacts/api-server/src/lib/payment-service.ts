@@ -22,6 +22,7 @@ import { grantPaidPurchaseCredits } from "./payment-fulfillment.ts";
 import { paymentRequiresCatalogProduct, isStripePaidSuccessEvent, stripeCheckoutObjectIsPaid } from "./payment-fulfillment-rules.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { stripeCatalogProductIdempotencyKey } from "./college-consulting.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
 import {
   bookHeldCheckoutIfActive,
   releaseSlotHoldForPayment,

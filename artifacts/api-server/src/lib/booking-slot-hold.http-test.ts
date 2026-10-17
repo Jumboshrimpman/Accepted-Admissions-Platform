@@ -19,6 +19,7 @@ import {
   satProductsTable,
   sessionsTable,
   stripeWebhookEventsTable,
+  tutorAssignmentsTable,
   tutorProfilesTable,
   usersTable,
   type AppUser,
@@ -105,11 +106,13 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
   const suffix = randomUUID().slice(0, 8);
   const previousSecret = process.env.SESSION_SECRET;
   const previousDouble = process.env.STRIPE_CHECKOUT_TEST_DOUBLE;
+  const previousAdminIds = process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
   process.env.SESSION_SECRET = previousSecret || "slot-hold-test-secret";
   process.env.STRIPE_CHECKOUT_TEST_DOUBLE = "1";
   process.env.APP_ORIGIN = "https://slot-hold.test";
   const originalFetch = globalThis.fetch.bind(globalThis);
   const appCalendarId = `app-cal-${suffix}`;
+  let busyWindows: Array<{ start: string; end: string }> = [];
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(
       typeof input === "string" || input instanceof URL ? input : input.url,
@@ -117,8 +120,8 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
     if (url.includes("/calendar/v3/freeBusy")) {
       return Response.json({
         calendars: {
-          primary: { busy: [] },
-          [appCalendarId]: { busy: [] },
+          primary: { busy: busyWindows },
+          [appCalendarId]: { busy: busyWindows },
         },
       });
     }
@@ -137,6 +140,8 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
   let profileId: string | undefined;
   let serverA: Awaited<ReturnType<typeof startServer>> | undefined;
   let serverB: Awaited<ReturnType<typeof startServer>> | undefined;
+  let serverTutor: Awaited<ReturnType<typeof startServer>> | undefined;
+  let serverAdmin: Awaited<ReturnType<typeof startServer>> | undefined;
   let failure: unknown;
   let cleanupError: unknown;
 
@@ -236,7 +241,33 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
     await db.insert(courseMembershipsTable).values([
       { courseId, userId: studentA!.id, membershipRole: "student", subject: "SAT" },
       { courseId, userId: studentB!.id, membershipRole: "student", subject: "SAT" },
+      { courseId, userId: tutorUser!.id, membershipRole: "tutor", subject: "SAT" },
     ]);
+    await db.insert(tutorAssignmentsTable).values({
+      courseId,
+      tutorUserId: tutorUser!.id,
+      studentUserId: studentA!.id,
+      subject: "SAT",
+    });
+    const [adminUser] = await db
+      .insert(usersTable)
+      .values({
+        clerkUserId: `slot-hold-admin:${suffix}`,
+        email: `slot-hold-admin-${suffix}@example.invalid`,
+        displayName: "Ada Admin",
+        role: "administrator",
+      })
+      .returning();
+    createdUserIds.push(adminUser!.id);
+    await db.insert(portalAccessGrantsTable).values({
+      email: tutorUser!.email,
+      clerkUserId: tutorUser!.clerkUserId,
+      displayName: tutorUser!.displayName,
+      roleCategory: "tutor",
+      active: true,
+      userId: tutorUser!.id,
+    });
+    process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = adminUser!.clerkUserId;
     const [xavierHour] = await db
       .select()
       .from(satProductsTable)
@@ -256,6 +287,8 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
 
     serverA = await startServer(studentA!);
     serverB = await startServer(studentB!);
+    serverTutor = await startServer(tutorUser!);
+    serverAdmin = await startServer(adminUser!);
     const checkoutBody = {
       tutorProfileId: profileId,
       durationMinutes: 60,
@@ -470,6 +503,66 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
     });
     assert.equal(releasedAgain.body.released, true);
 
+    const paymentsBeforeReject = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.clientUserId, studentA!.id));
+    const offGrid = await postJson(serverA.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profileId,
+      durationMinutes: 60,
+      startTime: "2026-11-06T19:30:00.000Z",
+    });
+    assert.equal(offGrid.status, 409, JSON.stringify(offGrid.body));
+    assert.equal(offGrid.body.code, "SLOT_UNAVAILABLE");
+    busyWindows = [{ start: "2026-11-09T19:00:00.000Z", end: "2026-11-09T20:00:00.000Z" }];
+    const busy = await postJson(serverA.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profileId,
+      durationMinutes: 60,
+      startTime: "2026-11-09T19:00:00.000Z",
+    });
+    assert.equal(busy.status, 409, JSON.stringify(busy.body));
+    assert.equal(busy.body.code, "SLOT_UNAVAILABLE");
+    busyWindows = [];
+    const paymentsAfterReject = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.clientUserId, studentA!.id));
+    assert.equal(paymentsAfterReject.length, paymentsBeforeReject.length);
+
+    const heldStart = "2026-11-10T19:00:00.000Z";
+    const heldCheckout = await postJson(serverA.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profileId,
+      durationMinutes: 60,
+      startTime: heldStart,
+    });
+    assert.equal(heldCheckout.status, 201, JSON.stringify(heldCheckout.body));
+    createdPaymentIds.push(String(heldCheckout.body.paymentId));
+    const sessionBody = {
+      courseId,
+      clientUserId: studentA!.id,
+      tutorUserId: tutorUser!.id,
+      dateTime: heldStart,
+      timezone: "America/New_York",
+      subject: "SAT",
+      durationMinutes: 60,
+    };
+    const tutorBlocked = await postJson(serverTutor.baseUrl, "/api/tutor/sessions", sessionBody);
+    assert.equal(tutorBlocked.status, 409, JSON.stringify(tutorBlocked.body));
+    assert.equal(tutorBlocked.body.code, "SLOT_HELD");
+    const adminBlocked = await postJson(serverAdmin.baseUrl, "/api/admin/sessions", sessionBody);
+    assert.equal(adminBlocked.status, 409, JSON.stringify(adminBlocked.body));
+    assert.equal(adminBlocked.body.code, "SLOT_HELD");
+    const heldSessions = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.tutorUserId, tutorUser!.id),
+          eq(sessionsTable.dateTime, new Date(heldStart)),
+        ),
+      );
+    assert.equal(heldSessions.length, 0);
+
     void creditB;
     } catch (error) {
       failure = error;
@@ -478,11 +571,15 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
     try {
     await serverA?.close();
     await serverB?.close();
+    await serverTutor?.close();
+    await serverAdmin?.close();
     globalThis.fetch = originalFetch;
     if (previousDouble === undefined) delete process.env.STRIPE_CHECKOUT_TEST_DOUBLE;
     else process.env.STRIPE_CHECKOUT_TEST_DOUBLE = previousDouble;
     if (previousSecret === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = previousSecret;
+    if (previousAdminIds === undefined) delete process.env.ACCEPTED_ADMIN_CLERK_USER_IDS;
+    else process.env.ACCEPTED_ADMIN_CLERK_USER_IDS = previousAdminIds;
     await db
       .delete(stripeWebhookEventsTable)
       .where(

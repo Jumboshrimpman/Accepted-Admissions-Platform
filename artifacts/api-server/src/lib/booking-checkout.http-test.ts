@@ -5,6 +5,8 @@ import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
   auditLogsTable,
+  availabilityRulesTable,
+  calendarConnectionsTable,
   coursesTable,
   courseMembershipsTable,
   creditLedgerTable,
@@ -38,6 +40,12 @@ import {
 } from "./calendar-pair-attendees";
 import { isMichelleMakaremUser } from "./sat-tutor-pricing";
 import { resetStripeClientForTests } from "./stripe-client";
+import { XAVIER_BOOKING_WEEKLY_HOURS } from "./booking";
+import {
+  GOOGLE_CALENDAR_APP_CREATED_SCOPE,
+  GOOGLE_CALENDAR_FREEBUSY_SCOPE,
+  encryptCalendarToken,
+} from "./google-calendar";
 
 const SOPHIA_SLEIMAN_USER_ID = "bf530aa6-faaa-43df-b3cf-140026f3313e";
 
@@ -164,6 +172,10 @@ test("direct checkout and credit pools apply to every bookable client", async (t
   let reusedMichelleMemberships: (typeof courseMembershipsTable.$inferSelect)[] = [];
   let activityStartedAt = new Date();
   let neel: AppUser | undefined;
+  const temporaryRuleIds: string[] = [];
+  const temporaryConnectionIds: string[] = [];
+  let checkoutOriginalFetch: typeof fetch | undefined;
+  let previousCheckoutSecret: string | undefined;
 
   try {
   const [createdNeel] = await db
@@ -212,6 +224,7 @@ test("direct checkout and credit pools apply to every bookable client", async (t
       name: "Victoria",
       title: "College Consulting Tutor",
       subjects: ["College Consulting"],
+      bookingEligible: true,
     })
     .returning();
   createdProfileIds.push(victoriaProfile!.id);
@@ -333,7 +346,94 @@ test("direct checkout and credit pools apply to every bookable client", async (t
       await db.delete(creditLedgerTable).where(eq(creditLedgerTable.id, ledger!.id));
     }
 
-    for (const [index, [tutorKey, minutes, slug, cents]] of CONSULTING_CHECKOUT.entries()) {
+    previousCheckoutSecret = process.env.SESSION_SECRET;
+    process.env.SESSION_SECRET = previousCheckoutSecret || "booking-checkout-test-secret";
+    checkoutOriginalFetch = globalThis.fetch.bind(globalThis);
+    const originalFetch = checkoutOriginalFetch;
+    const checkoutAppCalendarId = `booking-checkout-app-${suffix}`;
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = String(
+        typeof input === "string" || input instanceof URL ? input : input.url,
+      );
+      if (url.includes("/calendar/v3/freeBusy")) {
+        return Response.json({
+          calendars: {
+            primary: { busy: [] },
+            [checkoutAppCalendarId]: { busy: [] },
+          },
+        });
+      }
+      return originalFetch(input, init);
+    }) as typeof fetch;
+    const checkoutProfileIds = [
+      nikaProfile!.id,
+      victoriaProfile!.id,
+      xavierProfile!.id,
+      euniceProfile!.id,
+      satVictoriaProfile!.id,
+    ];
+    for (const tutorProfileId of checkoutProfileIds) {
+      const [existingRule] = await db
+        .select({ id: availabilityRulesTable.id })
+        .from(availabilityRulesTable)
+        .where(eq(availabilityRulesTable.tutorProfileId, tutorProfileId))
+        .limit(1);
+      if (!existingRule) {
+        const [rule] = await db
+          .insert(availabilityRulesTable)
+          .values({
+            tutorProfileId,
+            timezone: "America/New_York",
+            weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
+            bookingNoticeMinutes: 0,
+            bufferMinutes: 0,
+            blackoutDates: [],
+          })
+          .returning({ id: availabilityRulesTable.id });
+        temporaryRuleIds.push(rule!.id);
+      }
+      const [connection] = await db
+        .insert(calendarConnectionsTable)
+        .values({
+          tutorProfileId,
+          provider: "google",
+          status: "connected",
+          calendarId: "primary",
+          appCalendarId: checkoutAppCalendarId,
+          grantedScopes: `${GOOGLE_CALENDAR_FREEBUSY_SCOPE} ${GOOGLE_CALENDAR_APP_CREATED_SCOPE}`,
+          encryptedAccessToken: encryptCalendarToken(`booking-checkout-access-${suffix}`),
+          accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          googleAccountEmail: `booking-checkout-${suffix}@example.invalid`,
+        })
+        .returning({ id: calendarConnectionsTable.id });
+      temporaryConnectionIds.push(connection!.id);
+    }
+    const gridDays = [
+      "2026-12-02",
+      "2026-12-03",
+      "2026-12-09",
+      "2026-12-10",
+      "2026-12-11",
+      "2026-12-14",
+      "2026-12-15",
+      "2026-12-16",
+      "2026-12-17",
+      "2026-12-18",
+      "2026-12-21",
+      "2026-12-22",
+      "2026-12-23",
+      "2026-12-24",
+      "2026-12-28",
+    ];
+    let gridDay = 0;
+    const nextOpenStart = (minutes: number): string => {
+      const day = gridDays[gridDay];
+      gridDay += 1;
+      if (!day) throw new Error("ran out of on-grid checkout days");
+      return `${day}T${minutes === 120 ? "16" : "15"}:00:00.000Z`;
+    };
+
+    for (const [tutorKey, minutes, slug, cents] of CONSULTING_CHECKOUT) {
       const product = await productBySlug(slug);
       assert.ok(product, slug);
       assert.equal(Number(product.totalPriceCents), cents, slug);
@@ -348,7 +448,7 @@ test("direct checkout and credit pools apply to every bookable client", async (t
           active: product.active,
         });
       }
-      const startTime = new Date(Date.UTC(2026, 11, 2, 15, index, 0)).toISOString();
+      const startTime = nextOpenStart(minutes);
       const checkout = await postJson(neelServer.baseUrl, "/api/payments/checkout", {
         tutorProfileId: consultingProfiles[tutorKey],
         durationMinutes: minutes,
@@ -396,11 +496,11 @@ test("direct checkout and credit pools apply to every bookable client", async (t
         cents: 26_000,
       },
     ];
-    for (const [index, item] of satCheckouts.entries()) {
+    for (const item of satCheckouts) {
       const product = await productBySlug(item.slug);
       assert.ok(product, item.slug);
       assert.equal(Number(product.totalPriceCents), item.cents, item.slug);
-      const startTime = new Date(Date.UTC(2026, 11, 3, 15, index, 0)).toISOString();
+      const startTime = nextOpenStart(item.durationMinutes);
       const checkout = await postJson(satServer.baseUrl, "/api/payments/checkout", {
         tutorProfileId: item.tutorProfileId,
         durationMinutes: item.durationMinutes,
@@ -432,11 +532,11 @@ test("direct checkout and credit pools apply to every bookable client", async (t
       { durationMinutes: 90, slug: "sat-xavier-90", chargeCents: 19_500, catalogCents: 30_000 },
       { durationMinutes: 120, slug: "sat-xavier-120", chargeCents: 26_000, catalogCents: 40_000 },
     ] as const;
-    for (const [index, item] of michelleXavier.entries()) {
+    for (const item of michelleXavier) {
       const product = await productBySlug(item.slug);
       assert.ok(product, item.slug);
       assert.equal(Number(product.totalPriceCents), item.catalogCents, item.slug);
-      const startTime = new Date(Date.UTC(2026, 11, 3, 16, index, 0)).toISOString();
+      const startTime = nextOpenStart(item.durationMinutes);
       const checkout = await postJson(michelleServer!.baseUrl, "/api/payments/checkout", {
         tutorProfileId: xavierProfile!.id,
         durationMinutes: item.durationMinutes,
@@ -475,6 +575,20 @@ test("direct checkout and credit pools apply to every bookable client", async (t
       assert.equal(metadata.bookingIntent?.tutorProfileId, xavierProfile!.id);
       assert.equal(metadata.bookingIntent?.durationMinutes, item.durationMinutes);
     }
+
+    if (temporaryConnectionIds.length > 0) {
+      await db
+        .delete(calendarConnectionsTable)
+        .where(inArray(calendarConnectionsTable.id, temporaryConnectionIds));
+      temporaryConnectionIds.length = 0;
+    }
+    if (temporaryRuleIds.length > 0) {
+      await db.delete(availabilityRulesTable).where(inArray(availabilityRulesTable.id, temporaryRuleIds));
+      temporaryRuleIds.length = 0;
+    }
+    if (checkoutOriginalFetch) globalThis.fetch = checkoutOriginalFetch;
+    if (previousCheckoutSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = previousCheckoutSecret;
 
     const pendingStart = "2026-12-04T15:00:00.000Z";
     const satXavier = await productBySlug("sat-xavier-90");
@@ -670,6 +784,17 @@ test("direct checkout and credit pools apply to every bookable client", async (t
     assert.equal(xavierLegacy.body.code, "INSUFFICIENT_CREDIT");
     await db.delete(creditLedgerTable).where(eq(creditLedgerTable.id, legacyLedger!.id));
   } finally {
+    if (temporaryConnectionIds.length > 0) {
+      await db
+        .delete(calendarConnectionsTable)
+        .where(inArray(calendarConnectionsTable.id, temporaryConnectionIds));
+    }
+    if (temporaryRuleIds.length > 0) {
+      await db.delete(availabilityRulesTable).where(inArray(availabilityRulesTable.id, temporaryRuleIds));
+    }
+    if (checkoutOriginalFetch) globalThis.fetch = checkoutOriginalFetch;
+    if (previousCheckoutSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = previousCheckoutSecret;
     await neelServer?.close();
     await satServer?.close();
     await michelleServer?.close();

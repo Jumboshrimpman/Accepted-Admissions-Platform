@@ -5102,7 +5102,9 @@ async function slotsForTutor(
       .from(sessionsTable)
       .where(
         and(
-          eq(sessionsTable.tutorUserId, tutor.userId ?? ""),
+          tutor.userId
+            ? eq(sessionsTable.tutorUserId, tutor.userId)
+            : sql`false`,
           inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
           sql`${sessionsTable.status} <> 'archived'`,
           sql`${sessionsTable.dateTime} < ${to}`,
@@ -5154,6 +5156,75 @@ async function slotsForTutor(
       bookedWindows,
     ),
   };
+}
+
+/**
+ * Direct checkout must match an open grid slot before a hold or charge.
+ * An active hold is left for claimBookingSlotHold, which answers SLOT_HELD.
+ */
+async function assertDirectCheckoutSlotOpen(
+  userId: string,
+  intent: { tutorProfileId: string; startTime: string; durationMinutes: number },
+): Promise<void> {
+  const start = new Date(intent.startTime);
+  const end = new Date(start.getTime() + intent.durationMinutes * 60_000);
+  const { access, slots } = await slotsForTutor(
+    intent.tutorProfileId,
+    new Date(start.getTime() - 1),
+    new Date(end.getTime() + 1),
+    intent.durationMinutes,
+    undefined,
+    false,
+    userId,
+  );
+  if (!access) {
+    throw new BookingError(
+      409,
+      "CALENDAR_DISCONNECTED",
+      "This tutor's calendar is disconnected.",
+    );
+  }
+  if (!access.connection.appCalendarId?.trim()) {
+    throw new BookingError(
+      409,
+      "CALENDAR_RECONNECT_REQUIRED",
+      "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.",
+    );
+  }
+  if (slots.includes(start.toISOString())) return;
+  const held = await activeSlotHoldsOverlapping(db, {
+    tutorProfileId: intent.tutorProfileId,
+    start,
+    end,
+  });
+  if (held.length > 0) return;
+  throw new BookingError(
+    409,
+    "SLOT_UNAVAILABLE",
+    "That time is no longer available. Choose another slot.",
+  );
+}
+
+type SessionWriteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function rejectHeldTutorSlot(
+  tx: SessionWriteTx,
+  tutorUserId: string | null | undefined,
+  start: Date,
+  end: Date,
+): Promise<void> {
+  if (!tutorUserId) return;
+  const [profile] = await tx
+    .select({ id: tutorProfilesTable.id })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, tutorUserId))
+    .limit(1);
+  if (!profile) return;
+  await assertSlotNotHeld(tx, {
+    tutorProfileId: profile.id,
+    start,
+    end,
+  });
 }
 
 async function studentCollegeConsultingCourse(userId: string): Promise<{ id: string; subject: string }> {
@@ -6516,6 +6587,7 @@ router.post(
     try {
       created = await db.transaction(async (tx) => {
         const end = new Date(body.data.dateTime.getTime() + body.data.durationMinutes * 60_000);
+        await rejectHeldTutorSlot(tx, tutorUserId, body.data.dateTime, end);
         await guardSharedMeetWrite(tx, {
           start: body.data.dateTime,
           end,
@@ -6568,7 +6640,11 @@ router.post(
         return row;
       });
     } catch (error) {
-      if (error instanceof BookingError || error instanceof BookingServiceError) {
+      if (
+        error instanceof BookingError ||
+        error instanceof BookingServiceError ||
+        error instanceof SlotHoldConflict
+      ) {
         res.status(error.status).json({ code: error.code, error: error.message });
         return;
       }
@@ -8037,6 +8113,17 @@ router.post(
       !testCheckout && checkoutAudienceForSlug(req.appUser!.id, product.slug) === "sat"
         ? displayedSatPriceCents(product, req.appUser)
         : product.totalPriceCents;
+    if (bookingIntent) {
+      try {
+        await assertDirectCheckoutSlotOpen(req.appUser!.id, bookingIntent);
+      } catch (error) {
+        if (error instanceof BookingError) {
+          res.status(error.status).json({ code: error.code, error: error.message });
+          return;
+        }
+        throw error;
+      }
+    }
     const holdExpiresAt = bookingIntent ? checkoutHoldExpiresAt() : null;
     let invoice: typeof invoicesTable.$inferSelect;
     let payment: typeof paymentsTable.$inferSelect;
@@ -11368,6 +11455,7 @@ router.post(
     try {
       created = await db.transaction(async (tx) => {
         const end = new Date(body.data.dateTime.getTime() + body.data.durationMinutes * 60_000);
+        await rejectHeldTutorSlot(tx, body.data.tutorUserId, body.data.dateTime, end);
         await guardSharedMeetWrite(tx, {
           start: body.data.dateTime,
           end,
@@ -11417,7 +11505,11 @@ router.post(
         return row;
       });
     } catch (error) {
-      if (error instanceof BookingError || error instanceof BookingServiceError) {
+      if (
+        error instanceof BookingError ||
+        error instanceof BookingServiceError ||
+        error instanceof SlotHoldConflict
+      ) {
         res.status(error.status).json({ code: error.code, error: error.message });
         return;
       }
