@@ -9,6 +9,7 @@ const PATCH_KINDS = [
   "legacy_calendar_event",
   "client_intake_submitted",
   "hard_sat_shortfall",
+  "manual_calendar_invite",
 ] as const;
 
 test("PATCH /admin/notifications returns legacy_calendar_event after the row is updated", async () => {

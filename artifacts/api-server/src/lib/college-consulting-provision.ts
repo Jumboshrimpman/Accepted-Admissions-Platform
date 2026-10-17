@@ -611,7 +611,7 @@ function blankProfileText(value: string | null | undefined): boolean {
 }
 
 async function ensureVictoriaProfile(tx: ProvisionTx, userId: string, email: string): Promise<void> {
-  const notes = `Temporary tutor login ${VICTORIA_PLACEHOLDER_EMAIL}. Display name ${VICTORIA_DISPLAY_NAME} (she/her). Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned and must not be contacted. Swap users.email, portal_access_grants.email, and tutor_profiles.email for ${VICTORIA_USER_ID} later. No Clerk invitation was sent.`;
+  const notes = `Tutor login is users.email for ${VICTORIA_USER_ID}. Display name ${VICTORIA_DISPLAY_NAME} (she/her). Do not email ${VICTORIA_INTENDED_EMAIL}. No Clerk invitation was sent.`;
   const [byUser] = await tx
     .select()
     .from(tutorProfilesTable)
@@ -799,7 +799,7 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     allowedGrantRoles: ["tutor"],
     requireKnownClerkId: false,
     title: "College Consulting Tutor",
-    notes: `Temporary Victoria tutor login for testing. Intended email ${VICTORIA_INTENDED_EMAIL} is not provisioned. No Clerk invitation was sent.`,
+    notes: `Victoria tutor login follows users.email for this user id. Do not email ${VICTORIA_INTENDED_EMAIL}. No Clerk invitation was sent.`,
   });
   if (victoria.linked && victoria.userId === VICTORIA_USER_ID && victoria.email) {
     await ensureVictoriaProfile(tx, victoria.userId, victoria.email);

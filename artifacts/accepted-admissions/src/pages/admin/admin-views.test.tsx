@@ -1024,6 +1024,68 @@ describe("administrator overview", () => {
     expect(victoria.textContent).toContain("iCloud Owner");
     expect(victoria.textContent).toContain("samakubba@icloud.com");
     expect(victoria.textContent).toContain("tutor profile");
+    expect(screen.getByText(/Intended email victoriawije7@gmail.com is not provisioned/)).toBeTruthy();
+  });
+
+  test("shows Victoria's Google login once that address is stored", () => {
+    mocks.overview.consultingProvision = {
+      nikaEmail: "nika.raiffe@gmail.com",
+      nikaClerkUserId: null,
+      nikaBookable: true,
+      nikaSkipReason: null,
+      neelLinked: true,
+      neelUserId: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+      neelEmail: "ndharni300@gmail.com",
+      neelStoppedReason: null,
+      neelEmailOwner: null,
+      victoriaLinked: true,
+      victoriaUserId: "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63",
+      victoriaPlaceholderEmail: "samakubba@icloud.com",
+      victoriaIntendedEmail: "victoriawije7@gmail.com",
+      victoriaEmail: "victoriawije7@gmail.com",
+      victoriaStoppedReason: null,
+      victoriaEmailOwner: null,
+    };
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByText(/victoriawije7@gmail.com at \/login, then \/tutor/)).toBeTruthy();
+    expect(screen.getByText(/Google sign-in uses that address/)).toBeTruthy();
+    expect(screen.queryByText(/is not provisioned/)).toBeNull();
+  });
+
+  test("keeps a manual calendar invite alert until an admin resolves it", () => {
+    const message =
+      "Send calendar invite manually: Neel Dharni booked Nika Oct 21, 2026, 6:05 PM ET, 60 minutes. Invite neel@example.invalid, nika.raiffe@gmail.com, admin@acceptedadmissions.org.";
+    mocks.overview.notifications = [
+      {
+        id: "manual-invite",
+        kind: "manual_calendar_invite",
+        guidanceRequestId: "",
+        title: "Send calendar invite manually",
+        message,
+        status: "unread",
+        readAt: null,
+        dismissedAt: null,
+        createdAt: "2026-10-17T20:53:00.000Z",
+      },
+      assignmentNotification("assignment-unread", "2026-10-17T20:00:00.000Z"),
+    ];
+
+    render(<AdminDashboard />);
+
+    const alert = screen.getByTestId("alert-manual-calendar-invite");
+    expect(alert.getAttribute("role")).toBe("alert");
+    expect(alert.textContent).toContain(message);
+    expect(screen.getByTestId("resolve-manual-calendar-invite-manual-invite").textContent).toBe("Resolve");
+    expect(screen.queryByTestId("notification-manual-invite")).toBeNull();
+    expect(screen.getByTestId("notification-assignment-unread")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("resolve-manual-calendar-invite-manual-invite"));
+    expect(mocks.updateNotification).toHaveBeenCalledWith(
+      { notificationId: "manual-invite", data: { status: "dismissed" } },
+      expect.any(Object),
+    );
   });
 
   test("keeps a calendar reconnect alert until the tutor is healthy", () => {

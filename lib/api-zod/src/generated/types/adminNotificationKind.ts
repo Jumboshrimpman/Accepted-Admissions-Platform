@@ -16,4 +16,5 @@ export const AdminNotificationKind = {
   legacy_calendar_event: 'legacy_calendar_event',
   client_intake_submitted: 'client_intake_submitted',
   hard_sat_shortfall: 'hard_sat_shortfall',
+  manual_calendar_invite: 'manual_calendar_invite',
 } as const;

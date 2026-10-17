@@ -35,6 +35,22 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Calendar as AvailabilityCalendar } from "@/components/ui/calendar";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { NEEL_DHARNI_USER_ID } from "@/lib/portal-sat";
+
+/** Neel's sessions with Nika. Same room as NEEL_NIKA_MEET_URL on the API. */
+const NEEL_NIKA_MEET_URL = "https://meet.google.com/rih-iayt-okb";
+
+function isNikaTutorName(name: string | null | undefined): boolean {
+  return name?.trim() === "Nika Raiffe";
+}
+
+function neelNikaMeetForViewer(
+  userId: string | null | undefined,
+  tutorName: string | null | undefined,
+): string | null {
+  if (userId !== NEEL_DHARNI_USER_ID || !isNikaTutorName(tutorName)) return null;
+  return NEEL_NIKA_MEET_URL;
+}
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
@@ -537,8 +553,12 @@ export function BookingCard({
         onSuccess: (session) => {
           invalidateBookingData();
           setSelectedSlot("");
+          const joinAt =
+            neelNikaMeetForViewer(currentUser?.id, selectedTutor?.name) ??
+            session.meetingUrl ??
+            NEEL_NIKA_MEET_URL;
           setMessage(
-            `Confirmed: ${session.title}. Join at ${session.meetingUrl ?? "https://meet.google.com/rih-iayt-okb"}. Your tutor and an administrator have been notified.`,
+            `Confirmed: ${session.title}. Join at ${joinAt}. Your tutor and an administrator have been notified.`,
           );
         },
         onError: (error) => setMessage(errorMessage(error)),
@@ -929,10 +949,21 @@ export function BookingCard({
                         {session.bookingStatus === "rescheduled" ? "Rescheduled" : "Confirmed"}
                         {session.tutorName ? ` · ${session.tutorName}` : ""}
                       </p>
+                      {neelNikaMeetForViewer(currentUser?.id, session.tutorName) ? (
+                        <p
+                          className="mt-1 break-all text-xs text-muted-foreground"
+                          data-testid={`session-meet-url-${session.id}`}
+                        >
+                          {NEEL_NIKA_MEET_URL}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex gap-2">
                        <SessionJoinActions
-                         meetingUrl={session.meetingUrl}
+                         meetingUrl={
+                           neelNikaMeetForViewer(currentUser?.id, session.tutorName) ??
+                           session.meetingUrl
+                         }
                          calendarEventUrl={session.calendarEventUrl}
                          meetingLabel="Meet"
                          calendarLabel="Calendar"

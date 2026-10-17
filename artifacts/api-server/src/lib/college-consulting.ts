@@ -19,6 +19,10 @@ import {
   XAVIER_BOOKING_TAGLINE,
   XAVIER_PUBLIC_BIOGRAPHY,
 } from "./public-team-roster.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isNikaTutorProfile } from "./admin-calendar-fallback.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { NEEL_NIKA_MEET_URL } from "./session-schedule.ts";
 
 /** Stable client id. Bookings stay on this id when the login email changes. */
 export const NEEL_DHARNI_USER_ID = "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19";
@@ -42,8 +46,9 @@ export const VICTORIA_PLACEHOLDER_DISPLAY_NAME = "Victoria";
 /** Temporary tutor login so the tutor portal and Google Calendar can be tested. */
 export const VICTORIA_PLACEHOLDER_EMAIL = "samakubba@icloud.com";
 /**
- * Future login. Recorded only. Do not provision a grant, user, or Clerk identity
- * for this address, and do not send mail to it.
+ * Tutor login. Migration 0069 stores this on her user, grant, and tutor profile.
+ * She is matched by email when she signs in. Do not email this address and do
+ * not create a Clerk user for it.
  */
 export const VICTORIA_INTENDED_EMAIL = "victoriawije7@gmail.com";
 /** First-party portrait, same /media/team path as Nika and Xavier. Not a public-team roster entry. */
@@ -243,6 +248,17 @@ const TEMP_NIKA_VIEW_DISABLED = new Set(["", "off", "disabled", "none", "false"]
 
 export function isNeelDharniUser(userId: string | null | undefined): boolean {
   return userId === NEEL_DHARNI_USER_ID;
+}
+
+/** Neel booking Nika. Other students, and Neel with anyone else, stay on their own Meet. */
+export function neelNikaMeetUrl(input: {
+  clientUserId?: string | null;
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): string | null {
+  if (!isNeelDharniUser(input.clientUserId)) return null;
+  if (!isNikaTutorProfile({ name: input.tutorName, portalEmail: input.tutorEmail })) return null;
+  return NEEL_NIKA_MEET_URL;
 }
 
 /**
@@ -544,6 +560,20 @@ export function consultingRateCentsForTutorKey(
   return collegeConsultingProductForTutorKey(tutorKey)!.hourlyRateCents;
 }
 
+/**
+ * The line under a tutor's name on client booking cards.
+ * Eunice's card uses her published bio. Other tutors keep their stored title.
+ */
+export function clientPortalTutorTitle(profile: {
+  name?: string | null;
+  email?: string | null;
+  userId?: string | null;
+  title?: string | null;
+}): string {
+  if (collegeConsultingTutorKeyForProfile(profile) === "eunice") return EUNICE_PUBLIC_BIOGRAPHY;
+  return profile.title?.trim() ?? "";
+}
+
 /** Consulting page bio. Nika's public roster biography stays on the team page. */
 export function consultingTutorBiography(tutorKey: CollegeConsultingTutorKey): string {
   if (tutorKey === "nika") return NIKA_CONSULTING_BIOGRAPHY;
@@ -752,7 +782,12 @@ export function consultingPreviewTutors(input: {
       tutorKey,
       id: profile?.id ?? `preview-${tutorKey}`,
       name: consultingTutorDisplayName(tutorKey),
-      title: filledPreviewText(profile?.title, fallback.title),
+      title: clientPortalTutorTitle({
+        name: profile?.name ?? fallback.name,
+        email: profile?.email,
+        userId: profile?.userId,
+        title: filledPreviewText(profile?.title, fallback.title),
+      }),
       tagline: filledPreviewText(profile?.tagline, fallback.tagline),
       biography:
         tutorKey === "xavier"

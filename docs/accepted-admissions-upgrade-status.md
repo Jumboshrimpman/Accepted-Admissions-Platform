@@ -36,7 +36,7 @@ In-portal book/pay for **College Consulting** only. No curriculum, quizzes, or p
 - Victoria Wijerathnayapa — $130/hour (`college-consulting-victoria-hour`), hidden from booking until her Google Calendar is connected
 - Xavier Morales — $200/hour for Neel only (`college-consulting-xavier-hour`)
 
-Michelle’s SAT catalog is unchanged. Startup does not send email or Clerk invites. Neel’s placeholder `samakubba@gmail.com` is linked only when that identity is not an administrator; otherwise admin overview shows the stop reason. Victoria’s temporary tutor login is `samakubba@icloud.com`. `victoriawije7@gmail.com` is the future email and is not provisioned.
+Michelle’s SAT catalog is unchanged. Startup does not send email or Clerk invites. Neel’s placeholder `samakubba@gmail.com` is linked only when that identity is not an administrator; otherwise admin overview shows the stop reason. Victoria’s tutor login is `victoriawije7@gmail.com` (migration `0069_victoria_tutor_login`). No Clerk invitation is sent.
 
 Migration `0026_xavier_email_xaver_rmz6` corrects Xavier’s live email from the 0008 alias `xsfam6@gmail.com` to `xaver.rmz6@gmail.com` on `tutor_profiles`, `users`, and `portal_access_grants`. Historical migration 0008 is left unchanged.
 

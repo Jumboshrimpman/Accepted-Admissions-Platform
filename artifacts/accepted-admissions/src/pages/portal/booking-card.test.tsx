@@ -81,6 +81,7 @@ vi.mock("@workspace/api-client-react", () => ({
 }));
 
 import { BookingCard } from "./booking-card";
+import { NEEL_DHARNI_USER_ID } from "@/lib/portal-sat";
 
 const firstSlotInstant = new Date();
 firstSlotInstant.setUTCDate(firstSlotInstant.getUTCDate() + 2);
@@ -835,5 +836,50 @@ describe("client availability calendar", () => {
     );
     expect(screen.getByText("College Consulting session")).toBeTruthy();
     expect(screen.queryByText("SAT session")).toBeNull();
+  });
+
+  test("shows Nika's shared Meet on Neel's session card", () => {
+    mocks.sessionsQuery.data = [
+      {
+        id: "neel-nika",
+        title: "Neel’s College Consulting Session with Nika",
+        dateTime: "2026-10-21T22:05:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Nika Raiffe",
+        tutorProfileId: "tutor-nika",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+      {
+        id: "neel-eunice",
+        title: "Neel’s College Consulting Session with Eunice",
+        dateTime: "2026-10-22T20:00:00.000Z",
+        timezone: "America/New_York",
+        durationMinutes: 60,
+        bookingStatus: "confirmed",
+        tutorName: "Eunice Chon",
+        tutorProfileId: "tutor-eunice",
+        meetingUrl: null,
+        calendarEventUrl: null,
+      },
+    ];
+
+    const previousUserId = mocks.currentUser.id;
+    mocks.currentUser.id = NEEL_DHARNI_USER_ID;
+    try {
+      render(<BookingCard collegeConsulting />);
+
+      expect(screen.getByTestId("session-meet-url-neel-nika").textContent).toBe(
+        "https://meet.google.com/rih-iayt-okb",
+      );
+      expect(screen.getByRole("link", { name: "Meet" }).getAttribute("href")).toBe(
+        "https://meet.google.com/rih-iayt-okb",
+      );
+      expect(screen.queryByTestId("session-meet-url-neel-eunice")).toBeNull();
+    } finally {
+      mocks.currentUser.id = previousUserId;
+    }
   });
 });

@@ -3,8 +3,8 @@
 -- college-consulting-nika-hour when the webhook marks the payment paid.
 -- PDFs live in this table. The app has no private document bucket.
 --
--- Journal idx 68, when 1792720000000, after 0068_eunice_biography
--- (idx 67, when 1792710000000). The SQL file stays named 0066.
+-- Journal idx 70, when 1792740000000, after 0069_victoria_tutor_login
+-- (idx 69, when 1792730000000). The SQL file stays named 0066.
 
 CREATE TABLE IF NOT EXISTS "essay_requests" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

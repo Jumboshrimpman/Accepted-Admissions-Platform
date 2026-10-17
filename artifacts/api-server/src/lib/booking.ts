@@ -240,6 +240,7 @@ export function generateAvailableSlots(
   busyWindows: BusyWindow[],
   bookedWindows: BusyWindow[],
   now = new Date(),
+  roomWindows: BusyWindow[] = [],
 ): string[] {
   if (durationMinutes <= 0 || from >= to) return [];
   const first = localParts(from, rule.timezone);
@@ -265,6 +266,8 @@ export function generateAvailableSlots(
         );
         const blocking = fixedDate ? bookedWindows : allBusy;
         if (overlapsBusyWindow(start, end, blocking, rule.bufferMinutes)) continue;
+        // The shared room has no buffer: the next session may start when the previous one ends.
+        if (overlapsBusyWindow(start, end, roomWindows, 0)) continue;
         slots.push(start.toISOString());
       }
     }
@@ -330,6 +333,7 @@ export function calendarEventPayload(
     tutor?: CalendarInviteParty | null;
     /** College Consulting adds the tutor. On her own calendar she is the organizer; Google still accepts her as an attendee. */
     inviteTutor?: boolean;
+    description?: string;
   } | null,
 ) {
   const existing = attendeeEmail.trim() ? [{ email: attendeeEmail }] : [];
@@ -337,9 +341,10 @@ export function calendarEventPayload(
   if (tutorEmail) existing.push({ email: tutorEmail });
   const extras = adminAttendeeEmailsForPair(parties?.student, parties?.tutor);
   const attendees = mergeCalendarAttendees(existing, extras);
+  const description = parties?.description?.trim() || "Accepted Admissions tutoring session";
   return {
     summary: title,
-    description: "Accepted Admissions tutoring session",
+    description,
     ...(location ? { location } : {}),
     start: { dateTime: start.toISOString(), timeZone },
     end: { dateTime: new Date(start.getTime() + durationMinutes * 60_000).toISOString(), timeZone },
@@ -355,6 +360,7 @@ export function bookingCalendarEventPayload(args: {
   timeZone: string;
   attendeeEmail: string;
   location?: string;
+  description?: string;
   student: CalendarInviteParty | null;
   tutor: CalendarInviteParty | null;
   inviteTutor?: boolean;
@@ -366,6 +372,11 @@ export function bookingCalendarEventPayload(args: {
     args.timeZone,
     args.attendeeEmail,
     args.location,
-    { student: args.student, tutor: args.tutor, inviteTutor: args.inviteTutor },
+    {
+      student: args.student,
+      tutor: args.tutor,
+      inviteTutor: args.inviteTutor,
+      description: args.description,
+    },
   );
 }

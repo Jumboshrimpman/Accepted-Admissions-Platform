@@ -55,6 +55,51 @@ afterEach(() => {
 });
 
 describe("Admin connections", () => {
+  test("shows whether the admin invite calendar can send automatically", async () => {
+    customFetch.mockResolvedValue({
+      connections: [xavier],
+      adminCalendarInvites: {
+        healthy: true,
+        accountEmail: "admin@acceptedadmissions.org",
+        hasRefreshToken: true,
+        hasWriteScope: true,
+        hasAppCalendar: true,
+      },
+    });
+
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("admin-calendar-invites")).toBeTruthy();
+    expect(screen.getByText("Admin calendar (invites)")).toBeTruthy();
+    expect(screen.getByTestId("badge-admin-calendar-invites").textContent).toBe("Healthy");
+    expect(screen.getByTestId("status-admin-calendar-invites").textContent).toBe(
+      "admin@ sends invites only for Nika's fixed-window fallback.",
+    );
+  });
+
+  test("shows the admin invite calendar as not ready when the writer is missing a piece", async () => {
+    customFetch.mockResolvedValue({
+      connections: [],
+      adminCalendarInvites: {
+        healthy: false,
+        accountEmail: "admin@acceptedadmissions.org",
+        hasRefreshToken: true,
+        hasWriteScope: false,
+        hasAppCalendar: false,
+      },
+    });
+
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("badge-admin-calendar-invites")).toBeTruthy();
+    expect(screen.getByTestId("badge-admin-calendar-invites").textContent).toBe("Not ready");
+    expect(screen.getByTestId("status-admin-calendar-invites").textContent).toBe(
+      "admin@ sends invites only for Nika's fixed-window fallback. This account is not ready.",
+    );
+    expect(screen.getByText("Event-write scope").parentElement?.textContent).toContain("No");
+    expect(screen.getByText("Sessions calendar").parentElement?.textContent).toContain("No");
+  });
+
   test("shows masked health for each tutor and runs a read-only free/busy test", async () => {
     customFetch.mockImplementation(async (url: string, options?: { method?: string }) => {
       if (String(url).endsWith("/test")) {
@@ -126,6 +171,34 @@ describe("Admin connections", () => {
     expect(screen.getByTestId("status-calendar-connection-xavier-profile").textContent).toBe(
       "Connected (free/busy only): reconnect to enable bookings and invites",
     );
+  });
+
+  test("Nika's connection card notes the admin calendar fallback", async () => {
+    const nikaFallback: CalendarConnectionHealthRow = {
+      tutorProfileId: "nika-profile",
+      name: "Nika Raiffe",
+      portalEmail: "nika.raiffe@gmail.com",
+      connectionStatus: "disconnected",
+      badge: "needs_reconnect",
+      googleAccountMasked: null,
+      calendarIdMasked: null,
+      hasRefreshToken: false,
+      lastTokenRefreshAt: null,
+      lastFreeBusyAt: null,
+      lastError: null,
+      lastErrorAt: null,
+      bookable: true,
+      hasUpcomingBookableTime: true,
+      estimatedTokenAgeDays: null,
+      testingModeExpiryWarning: null,
+      usesAdminCalendarFallback: true,
+    };
+    customFetch.mockResolvedValue({ connections: [nikaFallback, xavier] });
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("admin-calendar-fallback-nika-profile")).toBeTruthy();
+    expect(screen.getByText("Bookings use admin calendar fallback")).toBeTruthy();
+    expect(screen.queryByTestId("admin-calendar-fallback-xavier-profile")).toBeNull();
   });
 
   test("shows Needs attention with the error and does not replace a revoked message", async () => {

@@ -21,6 +21,8 @@ export function canPurchaseOrBookSatCredits(
 }
 
 export const NEEL_DHARNI_USER_ID = "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19";
+/** Sophia Sleiman. SAT booking stays on this account; College Consulting stays on Neel's. */
+export const SOPHIA_SLEIMAN_SAT_USER_ID = "bf530aa6-faaa-43df-b3cf-140026f3313e";
 
 /** Sama's test student. Her default portal stays SAT; College Consulting is a separate page. */
 export const SAMA_POSTGRAD_TEST_EMAIL = "samapostgrad@gmail.com";

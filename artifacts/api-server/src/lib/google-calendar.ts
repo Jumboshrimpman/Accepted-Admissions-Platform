@@ -383,6 +383,7 @@ export type GoogleCalendarAttendee = {
 export type GoogleCalendarEvent = {
   id?: string;
   htmlLink?: string;
+  hangoutLink?: string;
   attendees?: GoogleCalendarAttendee[];
 };
 
@@ -1490,6 +1491,7 @@ export function googleCalendarEventWritePath(
   calendarId: string,
   eventId?: string,
   sendUpdates: GoogleCalendarSendUpdates = "all",
+  conferenceDataVersion = false,
 ): string {
   const id = calendarId.trim();
   if (!id) {
@@ -1501,7 +1503,9 @@ export function googleCalendarEventWritePath(
   }
   const base = `/calendar/v3/calendars/${encodeURIComponent(id)}/events`;
   const path = eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
-  return `${path}?sendUpdates=${sendUpdates}`;
+  const params = new URLSearchParams({ sendUpdates });
+  if (conferenceDataVersion) params.set("conferenceDataVersion", "1");
+  return `${path}?${params.toString()}`;
 }
 
 export function isGoogleCalendarNotFound(error: unknown): boolean {
@@ -1540,11 +1544,63 @@ export async function createGoogleEvent(
   event: Record<string, unknown>,
   sendUpdates: GoogleCalendarSendUpdates = "all",
 ): Promise<GoogleCalendarEvent> {
+  const withConference = Boolean(event.conferenceData);
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    googleCalendarEventWritePath(calendarId, undefined, sendUpdates),
+    googleCalendarEventWritePath(calendarId, undefined, sendUpdates, withConference),
     { method: "POST", body: JSON.stringify(event) },
   );
+}
+
+/**
+ * An existing Meet room. Google often rejects caller-supplied entry points;
+ * callers retry without conferenceData when that happens.
+ */
+export function existingGoogleMeetConference(meetUrl: string): {
+  conferenceSolution: { key: { type: "hangoutsMeet" } };
+  conferenceId: string;
+  entryPoints: [{ entryPointType: "video"; uri: string }];
+} {
+  const uri = meetUrl.trim();
+  let conferenceId = "";
+  try {
+    conferenceId = new URL(uri).pathname.split("/").filter(Boolean).pop() ?? "";
+  } catch {
+    conferenceId = uri.split("/").filter(Boolean).pop() ?? "";
+  }
+  return {
+    conferenceSolution: { key: { type: "hangoutsMeet" } },
+    conferenceId,
+    entryPoints: [{ entryPointType: "video", uri }],
+  };
+}
+
+export function googleRejectedConferenceData(error: unknown): boolean {
+  return (
+    error instanceof GoogleCalendarRequestError &&
+    error.status === 400 &&
+    /conference/i.test(`${error.reason}\n${error.message}`)
+  );
+}
+
+function withoutConferenceData(event: Record<string, unknown>): Record<string, unknown> {
+  const { conferenceData: _ignored, ...rest } = event;
+  return rest;
+}
+
+/** Tries the existing Meet, then writes location and description alone if Google rejects it. */
+export async function createGoogleEventWithMeetFallback(
+  accessToken: string,
+  calendarId: string,
+  event: Record<string, unknown>,
+  sendUpdates: GoogleCalendarSendUpdates = "all",
+): Promise<GoogleCalendarEvent> {
+  try {
+    return await createGoogleEvent(accessToken, calendarId, event, sendUpdates);
+  } catch (error) {
+    if (!event.conferenceData || !googleRejectedConferenceData(error)) throw error;
+    return createGoogleEvent(accessToken, calendarId, withoutConferenceData(event), sendUpdates);
+  }
 }
 
 export async function deleteGoogleEvent(
@@ -1573,11 +1629,33 @@ export async function updateGoogleEvent(
   event: Record<string, unknown>,
   sendUpdates: GoogleCalendarSendUpdates = "all",
 ): Promise<GoogleCalendarEvent> {
+  const withConference = Boolean(event.conferenceData);
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    googleCalendarEventWritePath(calendarId, eventId, sendUpdates),
+    googleCalendarEventWritePath(calendarId, eventId, sendUpdates, withConference),
     { method: "PATCH", body: JSON.stringify(event) },
   );
+}
+
+export async function updateGoogleEventWithMeetFallback(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  event: Record<string, unknown>,
+  sendUpdates: GoogleCalendarSendUpdates = "all",
+): Promise<GoogleCalendarEvent> {
+  try {
+    return await updateGoogleEvent(accessToken, calendarId, eventId, event, sendUpdates);
+  } catch (error) {
+    if (!event.conferenceData || !googleRejectedConferenceData(error)) throw error;
+    return updateGoogleEvent(
+      accessToken,
+      calendarId,
+      eventId,
+      withoutConferenceData(event),
+      sendUpdates,
+    );
+  }
 }
 
 export async function getGoogleCalendarEvent(

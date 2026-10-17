@@ -4,6 +4,8 @@ import {
   db,
   sessionsTable,
 } from "@workspace/db";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { acquireSharedMeetLock, assertNoSharedMeetConflict } from "./booking-service.ts";
 
 /**
  * Stripe Checkout rejects expires_at sooner than 30 minutes. One extra minute
@@ -150,6 +152,7 @@ export async function claimBookingSlotHold(
 ): Promise<void> {
   await acquireTutorSlotLock(tx, args.tutorProfileId);
   await releaseExpiredSlotHolds(tx, args.tutorProfileId);
+  await acquireSharedMeetLock(tx);
   const end = new Date(args.start.getTime() + args.durationMinutes * 60_000);
   const [held, sessionTaken] = await Promise.all([
     activeSlotHoldsOverlapping(tx, {
@@ -164,6 +167,11 @@ export async function claimBookingSlotHold(
     }),
   ]);
   if (held.length > 0 || sessionTaken) throw new SlotHoldConflict();
+  await assertNoSharedMeetConflict(tx, {
+    start: args.start,
+    end,
+    ignoreHoldPaymentId: args.paymentId,
+  });
   try {
     await tx.insert(bookingSlotHoldsTable).values({
       tutorProfileId: args.tutorProfileId,

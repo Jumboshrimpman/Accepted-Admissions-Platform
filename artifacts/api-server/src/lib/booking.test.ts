@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { after } from "node:test";
+import { pool } from "@workspace/db";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { paidBookingReconnectRefusalMessage } from "./booking-service.ts";
+
+after(async () => {
+  await pool.end();
+});
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   bookingCalendarEventPayload,
@@ -480,6 +487,21 @@ test("College Consulting invites the student, Nika, and admin on her calendar", 
     inviteTutor: true,
   });
   assert.equal(event.location, "https://meet.google.com/rih-iayt-okb");
+  assert.equal(event.description, "Accepted Admissions tutoring session");
+  const pinned = bookingCalendarEventPayload({
+    title: "Neel’s College Consulting Session with Nika",
+    start: new Date("2026-10-20T01:00:00.000Z"),
+    durationMinutes: 60,
+    timeZone: "America/New_York",
+    attendeeEmail: "ndharni300@gmail.com",
+    location: "https://meet.google.com/rih-iayt-okb",
+    description: "https://meet.google.com/rih-iayt-okb",
+    student: { email: "ndharni300@gmail.com" },
+    tutor: { email: "nika.raiffe@gmail.com" },
+    inviteTutor: true,
+  });
+  assert.equal(pinned.description, "https://meet.google.com/rih-iayt-okb");
+  assert.equal(pinned.location, "https://meet.google.com/rih-iayt-okb");
   assert.deepEqual(
     event.attendees.map((attendee) => attendee.email),
     ["ndharni300@gmail.com", "nika.raiffe@gmail.com", "admin@acceptedadmissions.org"],
@@ -538,20 +560,30 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const start = platformSource.indexOf("async function respondWithPrepaidBooking");
   const end = platformSource.indexOf('router.post("/booking/slot-holds/release"');
   const slice = platformSource.slice(start, end);
-  assert.match(slice, /if \(fixedWindow && !access\) \{\s*await confirmBookedSession\(created, false\)/);
+  assert.match(slice, /createGoogleEvent\(\s*token,\s*adminWriter\.appCalendarId/);
+  assert.doesNotMatch(slice, /adminCalendarMeetConference\(/);
+  assert.match(slice, /createGoogleEventWithMeetFallback\(\s*token,\s*adminWriter\.appCalendarId/);
+  assert.match(slice, /manualCalendarInviteMessage\(\{[\s\S]*?meetUrl: SHARED_FALL_MEETING_URL/);
+  assert.match(slice, /neelNikaCalendarEvent\(\{[\s\S]*?clientUserId: req\.appUser!\.id/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
-  const reconnectBeforeDebit = slice.indexOf("requireAppCalendarForBooking(access, fixedWindow)");
+  const reconnectBeforeDebit = slice.indexOf(
+    "adminCalendarForFixedWindowBooking(access, fixedWindow, tutor)",
+  );
   const debit = slice.indexOf("insertConfirmedBookingWithDebit");
   const write = slice.indexOf("createGoogleEvent(");
   assert.ok(reconnectBeforeDebit > 0 && reconnectBeforeDebit < debit && debit < write);
   assert.match(slice, /error\.code === "CALENDAR_RECONNECT_REQUIRED"/);
   assert.match(slice, /if \(!appCalendarId\) \{\s*throw new BookingError\(\s*409,\s*"CALENDAR_RECONNECT_REQUIRED"/);
+  assert.match(
+    slice,
+    /if \(error instanceof BookingServiceError\) \{\s*return new BookingError\(error\.status, error\.code, error\.message\);\s*\}/,
+  );
   const checkoutStart = platformSource.indexOf("async function assertDirectCheckoutSlotOpen");
   const checkoutSlice = platformSource.slice(
     checkoutStart,
     platformSource.indexOf("type SessionWriteTx"),
   );
-  assert.match(checkoutSlice, /requireAppCalendarForBooking\(access, fixedWindow\)/);
+  assert.match(checkoutSlice, /adminCalendarForFixedWindowBooking\(access, fixedWindow, tutor\)/);
   const payStart = platformSource.indexOf('"/payments/checkout"');
   const paySlice = platformSource.slice(payStart, platformSource.indexOf("createCheckoutSession", payStart));
   assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") > 0);
@@ -560,6 +592,14 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   assert.match(slice, /tutorEmail: tutor\.email/);
   assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
+  assert.match(slice, /calendarPlan\.mode === "manual"/);
+  assert.match(slice, /kind: "manual_calendar_invite"/);
+  assert.match(slice, /calendarPlan\.mode === "manual"[\s\S]{0,900}confirmBookedSession\(created, true\)/);
+  assert.match(slice, /await confirmBookedSession\(created, false\)/);
+  const nikaGates = platformSource.match(
+    /isNikaTutorProfile\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/g,
+  );
+  assert.equal(nikaGates?.length, 2);
   const liveCheck = slice.indexOf("if (!fixedWindow) {");
   assert.ok(liveCheck > 0 && liveCheck < write);
   assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);
@@ -574,12 +614,17 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const webhookAt = paidSlice.indexOf("async function bookActiveHoldForPayment");
   const returnSlice = paidSlice.slice(0, webhookAt);
   const webhookSlice = paidSlice.slice(webhookAt);
-  assert.match(returnSlice, /refusal\?\.code === "CALENDAR_RECONNECT_REQUIRED"/);
+  assert.match(
+    platformSource,
+    /const PAID_BOOKING_REFUSAL_CODES = new Set\(\[\s*"SCHEDULE_CONFLICT",\s*"SLOT_UNAVAILABLE",\s*"BOOKING_UNAVAILABLE",\s*"CALENDAR_RECONNECT_REQUIRED",\s*\]\)/,
+  );
+  assert.match(returnSlice, /PAID_BOOKING_REFUSAL_CODES\.has\(refusal\.code\)/);
   assert.match(returnSlice, /await notifyPaidReconnectRefusal\(/);
-  assert.match(webhookSlice, /refusal\?\.code === "CALENDAR_RECONNECT_REQUIRED"/);
+  assert.match(webhookSlice, /PAID_BOOKING_REFUSAL_CODES\.has\(refusal\.code\)/);
   assert.match(webhookSlice, /await notifyPaidReconnectRefusal\(/);
   assert.match(returnSlice, /try \{\s*await notifyPaidReconnectRefusal\(/);
   assert.doesNotMatch(webhookSlice, /try \{\s*await notifyPaidReconnectRefusal\(/);
+  assert.doesNotMatch(paidSlice, /sendEmail|mailto:|resend|nodemailer/);
 });
 
 test("a paid reconnect refusal notice stays in the app and fires once", async () => {
@@ -591,9 +636,17 @@ test("a paid reconnect refusal notice stays in the app and fires once", async ()
   const slice = source.slice(start, source.indexOf("export function requireStudentBooker"));
   assert.match(slice, /calendar_reconnect_booking_refused/);
   assert.match(slice, /Paid booking kept the credit/);
-  assert.match(slice, /The credit was kept/);
+  assert.match(slice, /Hours stay on the account; rebook manually/);
+  assert.match(slice, /formatSessionInstantEt\(new Date\(args\.slotStartIso\)\)/);
   assert.match(slice, /calendarReconnectRefusalNotified/);
   assert.match(slice, /for update/);
   assert.match(slice, /if \(administrators\.length === 0\) return/);
   assert.doesNotMatch(slice, /sendEmail|mailto:|resend|nodemailer/);
+  assert.equal(
+    paidBookingReconnectRefusalMessage({
+      clientName: "Neel Dharni",
+      slotStartIso: "2026-10-21T22:05:00.000Z",
+    }),
+    "Paid booking refused: Neel Dharni Oct 21, 2026, 6:05 PM ET. Hours stay on the account; rebook manually.",
+  );
 });

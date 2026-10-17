@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import { EssayRequestsPanel } from "@/components/essay-editing-panel";
+import { TutorOfferedAvailability } from "@/pages/tutor/offered-availability";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
@@ -197,6 +198,7 @@ export default function TutorDashboard() {
         </p>
       </section>
 
+      <TutorOfferedAvailability />
       <EssayRequestsPanel mode="tutor" />
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">

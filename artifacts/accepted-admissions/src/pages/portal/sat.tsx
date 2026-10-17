@@ -28,6 +28,7 @@ import {
   isSamaPostgradTestEmail,
   showsCollegeConsultingAccount,
   showsSelfServeSatCommerce,
+  SOPHIA_SLEIMAN_SAT_USER_ID,
 } from "@/lib/portal-sat";
 import {
   type PaymentCreditBanner,
@@ -312,6 +313,9 @@ export default function PortalSat() {
   const paymentBanner = paymentBannerState
     ? paymentCreditBannerCopy(paymentBannerState, remainingHours, { usedHours })
     : null;
+  const sophiaSat =
+    currentUser?.id === SOPHIA_SLEIMAN_SAT_USER_ID ||
+    dashboard.data?.user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
   const upcomingSat = uniqueListedSessions(
     (dashboard.data?.upcomingSessions ?? []).filter((session) => {
       if (!isLiveListedSession(session)) return false;
@@ -354,9 +358,11 @@ export default function PortalSat() {
         <p className="mt-1 text-muted-foreground">
           {collegeConsulting
             ? "Credits appear only after a verified Stripe payment. Open times follow that tutor’s calendar and booking notice."
-            : samaTrial
-              ? "Purchase prepaid hours and book Nika, Victoria, Xavier, or Eunice without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."
-              : "Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."}
+            : sophiaSat
+              ? "Pick a tutor, a length, and an open time, then pay for that exact session and come back booked. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."
+              : samaTrial
+                ? "Purchase prepaid hours and book Nika, Victoria, Xavier, or Eunice without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."
+                : "Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."}
         </p>
         {samaTrial ? (
           <p className="mt-3 text-sm">

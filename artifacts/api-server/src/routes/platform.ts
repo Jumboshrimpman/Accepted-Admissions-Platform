@@ -34,9 +34,11 @@ import {
   classifyGoogleProviderError,
   createCalendarOAuthState,
   createGoogleEvent,
+  createGoogleEventWithMeetFallback,
   decryptCalendarToken,
   deleteGoogleEvent,
   googleCalendarSendUpdatesForSubjects,
+  existingGoogleMeetConference,
   exchangeGoogleCode,
   getGoogleCalendarEvent,
   getGoogleCalendarConfig,
@@ -60,6 +62,7 @@ import {
   patchGoogleEventAttendees,
   safeCalendarReturnTo,
   updateGoogleEvent,
+  updateGoogleEventWithMeetFallback,
   type CalendarOAuthOutcome,
 } from "../lib/google-calendar";
 import {
@@ -110,6 +113,13 @@ import {
   sessionEventCalendarId,
 } from "../lib/app-created-calendar";
 import {
+  adminCalendarGrantCanWriteEvents,
+  adminCalendarInviteHealth,
+  bookingsUseAdminCalendarFallback,
+  isNikaTutorProfile,
+  manualCalendarInviteMessage,
+} from "../lib/admin-calendar-fallback";
+import {
   acquireBookingLocks,
   assertNoScheduleConflict,
   guardSharedMeetWrite,
@@ -117,7 +127,7 @@ import {
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
-  listSharedMeetBusyWindows,
+  listGlobalRoomBusyWindows,
   lockClientCreditsAndRequireHours,
   lockSatTutorCredits,
   notifyAdministratorsOfBooking,
@@ -138,6 +148,7 @@ import {
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_SUBJECT,
+  clientPortalTutorTitle,
   consultingPreviewTutors,
   consultingTutorBiography,
   consultingTutorCredits,
@@ -148,6 +159,7 @@ import {
   VICTORIA_DISPLAY_NAME,
   collegeConsultingServiceRequested,
   isNeelDharniUser,
+  neelNikaMeetUrl,
   isNikaTemporaryViewEmail,
   isSamaPostgradTestStudent,
   samaCollegeConsultingBooking,
@@ -196,6 +208,7 @@ import {
 import { aliasLoginAccessOutcome, aliasSessionRole, requireAppRole } from "../lib/portal-login-aliases";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
+  BOOKABLE_PORTAL_DURATIONS,
   bookingCalendarEventPayload,
   bookingNoticeMinutesForTutor,
   calendarInviteIncludesTutor,
@@ -4635,20 +4648,76 @@ class BookingError extends Error {
 const CALENDAR_RECONNECT_MESSAGE =
   "This tutor needs to reconnect Google Calendar before new sessions can be scheduled.";
 
+type AdminCalendarWriter = { tutorProfileId: string; appCalendarId: string };
+
+type FixedWindowCalendarPlan =
+  | { mode: "tutor" }
+  | { mode: "admin"; writer: AdminCalendarWriter }
+  | { mode: "manual" };
+
 /**
- * A connected grant with a blank app calendar must not reach createGoogleEvent.
- * That call encodes the id into /calendars/{id}/events, and an empty id becomes
- * /calendars//events. A disconnected fixed window never writes, so it stays.
+ * The admin Google account, when it has a refresh token and an app calendar.
+ * Event writes use calendar.app.created, so the id has to be that secondary calendar.
  */
-function requireAppCalendarForBooking(
+async function loadStoredCalendarGrants() {
+  return db
+    .select({
+      tutorProfileId: calendarConnectionsTable.tutorProfileId,
+      appCalendarId: calendarConnectionsTable.appCalendarId,
+      grantedScopes: calendarConnectionsTable.grantedScopes,
+      hasRefreshToken: sql<boolean>`coalesce(length(${calendarConnectionsTable.encryptedRefreshToken}), 0) > 0`,
+      status: calendarConnectionsTable.status,
+      googleAccountEmail: calendarConnectionsTable.googleAccountEmail,
+      portalEmail: tutorProfilesTable.email,
+      userEmail: usersTable.email,
+    })
+    .from(calendarConnectionsTable)
+    .innerJoin(
+      tutorProfilesTable,
+      eq(tutorProfilesTable.id, calendarConnectionsTable.tutorProfileId),
+    )
+    .leftJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
+    .where(eq(calendarConnectionsTable.provider, "google"));
+}
+
+async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
+  const rows = await loadStoredCalendarGrants();
+  const match = rows.find((row) =>
+    adminCalendarGrantCanWriteEvents({
+      googleAccountEmail: row.googleAccountEmail,
+      portalEmail: row.portalEmail,
+      userEmail: row.userEmail,
+      status: row.status,
+      hasRefreshToken: Boolean(row.hasRefreshToken),
+      grantedScopes: row.grantedScopes,
+      appCalendarId: row.appCalendarId,
+    }),
+  );
+  const appCalendarId = match?.appCalendarId?.trim() ?? "";
+  if (!match || !appCalendarId) return null;
+  return { tutorProfileId: match.tutorProfileId, appCalendarId };
+}
+
+/**
+ * A blank app calendar must not reach /calendars//events.
+ * Only Nika's fixed windows use the admin calendar, or confirm for a hand-sent invite.
+ * Every other tutor, including one with date windows, still 409s before payment.
+ */
+async function adminCalendarForFixedWindowBooking(
   access: { connection: { appCalendarId?: string | null } } | null | undefined,
   fixedWindow: boolean,
-): string {
+  tutor: { name?: string | null; email?: string | null },
+): Promise<FixedWindowCalendarPlan> {
   const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
-  if (!appCalendarId && !(fixedWindow && !access)) {
+  if (appCalendarId) return { mode: "tutor" };
+  const nikaFixedWindow =
+    fixedWindow && isNikaTutorProfile({ name: tutor.name, portalEmail: tutor.email });
+  if (!nikaFixedWindow) {
     throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
   }
-  return appCalendarId;
+  const admin = await findStoredAdminCalendarWriter();
+  if (!admin) return { mode: "manual" };
+  return { mode: "admin", writer: admin };
 }
 
 async function applyCalendarDisconnectDecision(
@@ -4981,6 +5050,41 @@ async function calendarInviteParty(
   };
 }
 
+function neelNikaCalendarEvent(args: {
+  title: string;
+  start: Date;
+  durationMinutes: number;
+  timeZone: string;
+  attendeeEmail: string;
+  location?: string;
+  student: CalendarInviteParty | null;
+  tutor: CalendarInviteParty | null;
+  inviteTutor?: boolean;
+  clientUserId?: string | null;
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): { meetUrl: string; body: Record<string, unknown> } {
+  const meetUrl = SHARED_FALL_MEETING_URL;
+  return {
+    meetUrl,
+    body: {
+      ...bookingCalendarEventPayload({
+        title: args.title,
+        start: args.start,
+        durationMinutes: args.durationMinutes,
+        timeZone: args.timeZone,
+        attendeeEmail: args.attendeeEmail,
+        location: meetUrl,
+        description: meetUrl,
+        student: args.student,
+        tutor: args.tutor,
+        inviteTutor: args.inviteTutor,
+      }),
+      conferenceData: existingGoogleMeetConference(meetUrl),
+    },
+  };
+}
+
 async function syncGoogleCalendarForSessionChange(args: {
   existing: typeof sessionsTable.$inferSelect;
   next: {
@@ -5057,29 +5161,40 @@ async function syncGoogleCalendarForSessionChange(args: {
     calendarInviteParty(args.next.tutorUserId ?? args.existing.tutorUserId),
   ]);
   const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
+  const pinned = neelNikaCalendarEvent({
+    title: args.next.title,
+    start: args.next.dateTime,
+    durationMinutes: args.next.durationMinutes,
+    timeZone: args.next.timezone,
+    attendeeEmail: student.email ?? "",
+    location: SHARED_FALL_MEETING_URL,
+    student,
+    tutor,
+    inviteTutor: calendarInviteIncludesTutor(
+      args.existing.subject,
+      args.next.subject,
+      { tutorEmail },
+    ),
+    clientUserId: args.next.clientUserId,
+    tutorEmail,
+  });
   const written = await runTutorCalendarCall(access, (token) =>
     writeStoredSessionEvent(args.existing, token, () =>
-      updateGoogleEvent(
-        token,
-        calendarId,
-        args.existing.providerEventId!,
-        bookingCalendarEventPayload({
-          title: args.next.title,
-          start: args.next.dateTime,
-          durationMinutes: args.next.durationMinutes,
-          timeZone: args.next.timezone,
-          attendeeEmail: student.email ?? "",
-          location: SHARED_FALL_MEETING_URL,
-          student,
-          tutor,
-          inviteTutor: calendarInviteIncludesTutor(
-            args.existing.subject,
-            args.next.subject,
-            { tutorEmail },
+      pinned.meetUrl
+        ? updateGoogleEventWithMeetFallback(
+            token,
+            calendarId,
+            args.existing.providerEventId!,
+            pinned.body,
+            sendUpdates,
+          )
+        : updateGoogleEvent(
+            token,
+            calendarId,
+            args.existing.providerEventId!,
+            pinned.body,
+            sendUpdates,
           ),
-        }),
-        sendUpdates,
-      ),
     ),
   );
   if (written.status === "manual") {
@@ -5091,7 +5206,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   const event = written.value;
   return {
     providerEventId: event.id ?? args.existing.providerEventId,
-    providerEventUrl: event.htmlLink ?? args.existing.providerEventUrl,
+    providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? args.existing.providerEventUrl,
   };
 }
 
@@ -5106,6 +5221,24 @@ function consultingTutorAllowed(tutor: {
     tutor.active &&
     tutor.bookingEligible &&
     collegeConsultingTutorKeyForProfile(tutor) !== null
+  );
+}
+
+/** Students can be offered this tutor. Nika is included even though only some clients may book her. */
+function tutorOfferedToClients(tutor: {
+  name: string;
+  email: string;
+  userId: string | null;
+  active: boolean;
+  bookingEligible: boolean;
+}): boolean {
+  const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
+    tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
+  );
+  return (
+    tutor.active &&
+    tutor.bookingEligible &&
+    (onSharedRoster || tutor.name === NIKA_NAME || consultingTutorAllowed(tutor))
   );
 }
 
@@ -5163,115 +5296,16 @@ async function slotsForTutor(
   bookerUserId?: string,
   ignoreHoldPaymentId?: string,
 ) {
-  if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
-    throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
-  }
-  const { tutor, rule } = await bookingTutor(
+  const context = await loadTutorSlotContext(
     tutorProfileId,
-    allowExistingSessionTutor,
-    bookerUserId,
-  );
-  let calendar: Awaited<ReturnType<typeof calendarAccess>> = null;
-  try {
-    calendar = await calendarAccess(tutorProfileId);
-  } catch (error) {
-    if (!(error instanceof BookingError)) throw error;
-    calendar = null;
-  }
-  let access = calendar;
-  let busyWindows: BusyWindow[] = [];
-  if (calendar) {
-    try {
-      const listed = await readTutorBusyWindows({
-        tutorProfileId,
-        connection: calendar.connection,
-        listBusy: () =>
-          runTutorCalendarCall(calendar, (token) =>
-            listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(calendar.connection), from, to),
-          ),
-        record: recordCalendarFreeBusyCheck,
-        warn: (fields, message) => logger.warn(fields, message),
-      });
-      if (listed.disconnected) {
-        access = null;
-      } else {
-        busyWindows = listed.busyWindows;
-      }
-    } catch (error) {
-      if (!(error instanceof BookingError)) throw error;
-      access = null;
-      busyWindows = [];
-    }
-  }
-  const [bookedSessions, sharedMeetWindows] = await Promise.all([
-    db
-      .select({
-        id: sessionsTable.id,
-        dateTime: sessionsTable.dateTime,
-        durationMinutes: sessionsTable.durationMinutes,
-      })
-      .from(sessionsTable)
-      .where(
-        and(
-          tutor.userId
-            ? eq(sessionsTable.tutorUserId, tutor.userId)
-            : sql`false`,
-          inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
-          sql`${sessionsTable.status} <> 'archived'`,
-          sql`${sessionsTable.dateTime} < ${to}`,
-          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
-          excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
-        ),
-      ),
-    listSharedMeetBusyWindows({
-      start: from,
-      end: to,
-      excludeSessionId,
-    }),
-  ]);
-  await releaseExpiredSlotHolds(db, tutorProfileId);
-  const heldSlots = await activeSlotHoldsOverlapping(db, {
-    tutorProfileId,
-    start: from,
-    end: to,
-    ignorePaymentId: ignoreHoldPaymentId,
-  });
-  const bookedWindows: BusyWindow[] = [
-    ...bookedSessions.map((session) => ({
-      start: session.dateTime.toISOString(),
-      end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
-    })),
-    ...heldSlots.map((hold) => ({
-      start: hold.startTime.toISOString(),
-      end: new Date(hold.startTime.getTime() + Number(hold.durationMinutes) * 60_000).toISOString(),
-    })),
-    ...sharedMeetWindows,
-  ];
-  const availabilityRule: AvailabilityRule = {
-    timezone: rule.timezone,
-    weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
-    dateHours: (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
-    bookingNoticeMinutes: rule.bookingNoticeMinutes,
-    bufferMinutes: rule.bufferMinutes,
-    blackoutDates: rule.blackoutDates,
-  };
-  const generated = generateAvailableSlots(
-    availabilityRule,
     from,
     to,
-    durationMinutes,
-    busyWindows,
-    bookedWindows,
+    excludeSessionId,
+    allowExistingSessionTutor,
+    bookerUserId,
+    ignoreHoldPaymentId,
   );
-  const slots = access
-    ? generated
-    : generated.filter((slot) => fixedDateHoursOpen(availabilityRule.dateHours, availabilityRule.timezone, new Date(slot)));
-  return {
-    tutor,
-    rule,
-    access,
-    slots,
-  };
+  return projectTutorSlots(context, from, to, durationMinutes);
 }
 
 /**
@@ -5284,7 +5318,7 @@ async function assertDirectCheckoutSlotOpen(
 ): Promise<void> {
   const start = new Date(intent.startTime);
   const end = new Date(start.getTime() + intent.durationMinutes * 60_000);
-  const { access, slots, rule } = await slotsForTutor(
+  const { access, slots, rule, tutor } = await slotsForTutor(
     intent.tutorProfileId,
     new Date(start.getTime() - 1),
     new Date(end.getTime() + 1),
@@ -5320,7 +5354,7 @@ async function assertDirectCheckoutSlotOpen(
       "This tutor's calendar is disconnected.",
     );
   }
-  requireAppCalendarForBooking(access, fixedWindow);
+  await adminCalendarForFixedWindowBooking(access, fixedWindow, tutor);
   return;
 }
 
@@ -5344,6 +5378,169 @@ async function rejectHeldTutorSlot(
     start,
     end,
   });
+}
+
+type TutorSlotContext = {
+  tutor: Awaited<ReturnType<typeof bookingTutor>>["tutor"];
+  rule: Awaited<ReturnType<typeof bookingTutor>>["rule"];
+  access: Awaited<ReturnType<typeof calendarAccess>>;
+  availabilityRule: AvailabilityRule;
+  busyWindows: BusyWindow[];
+  bookedWindows: BusyWindow[];
+  roomWindows: BusyWindow[];
+  usesAdminCalendarFallback: boolean;
+};
+
+async function loadTutorSlotContext(
+  tutorProfileId: string,
+  from: Date,
+  to: Date,
+  excludeSessionId?: string,
+  allowExistingSessionTutor = false,
+  bookerUserId?: string,
+  ignoreHoldPaymentId?: string,
+): Promise<TutorSlotContext> {
+  if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
+    throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
+  }
+  const { tutor, rule } = await bookingTutor(
+    tutorProfileId,
+    allowExistingSessionTutor,
+    bookerUserId,
+  );
+  let calendar: Awaited<ReturnType<typeof calendarAccess>> = null;
+  try {
+    calendar = await calendarAccess(tutorProfileId);
+  } catch (error) {
+    if (!(error instanceof BookingError)) throw error;
+    calendar = null;
+  }
+  // Nika's fixed windows with no app calendar stay on the fixed grid. Do not read her Google calendar.
+  const fixedWindowFallback =
+    isNikaTutorProfile({ name: tutor.name, portalEmail: tutor.email }) &&
+    dateHoursIncludeOpenWindow(rule.dateHours) &&
+    !calendar?.connection.appCalendarId?.trim();
+  const usesAdminCalendarFallback = bookingsUseAdminCalendarFallback({
+    name: tutor.name,
+    portalEmail: tutor.email,
+    appCalendarId: calendar?.connection.appCalendarId,
+  });
+  let access = fixedWindowFallback ? null : calendar;
+  let busyWindows: BusyWindow[] = [];
+  if (calendar && !fixedWindowFallback) {
+    try {
+      const listed = await readTutorBusyWindows({
+        tutorProfileId,
+        connection: calendar.connection,
+        listBusy: () =>
+          runTutorCalendarCall(calendar, (token) =>
+            listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(calendar.connection), from, to),
+          ),
+        record: recordCalendarFreeBusyCheck,
+        warn: (fields, message) => logger.warn(fields, message),
+      });
+      if (listed.disconnected) {
+        access = null;
+      } else {
+        busyWindows = listed.busyWindows;
+      }
+    } catch (error) {
+      if (!(error instanceof BookingError)) throw error;
+      access = null;
+      busyWindows = [];
+    }
+  }
+  const bookedSessions = await db
+    .select({
+      id: sessionsTable.id,
+      dateTime: sessionsTable.dateTime,
+      durationMinutes: sessionsTable.durationMinutes,
+    })
+    .from(sessionsTable)
+    .where(
+      and(
+        tutor.userId
+          ? eq(sessionsTable.tutorUserId, tutor.userId)
+          : sql`false`,
+        inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
+        sql`${sessionsTable.status} <> 'archived'`,
+        sql`${sessionsTable.dateTime} < ${to}`,
+        sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
+        excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
+      ),
+    );
+  await releaseExpiredSlotHolds(db, tutorProfileId);
+  const [heldSlots, roomWindows] = await Promise.all([
+    activeSlotHoldsOverlapping(db, {
+      tutorProfileId,
+      start: from,
+      end: to,
+      ignorePaymentId: ignoreHoldPaymentId,
+    }),
+    listGlobalRoomBusyWindows({
+      start: from,
+      end: to,
+      excludeSessionId,
+      ignoreHoldPaymentId,
+    }),
+  ]);
+  const bookedWindows: BusyWindow[] = [
+    ...bookedSessions.map((session) => ({
+      start: session.dateTime.toISOString(),
+      end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
+    })),
+    ...heldSlots.map((hold) => ({
+      start: hold.startTime.toISOString(),
+      end: new Date(hold.startTime.getTime() + Number(hold.durationMinutes) * 60_000).toISOString(),
+    })),
+  ];
+  const availabilityRule: AvailabilityRule = {
+    timezone: rule.timezone,
+    weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
+    dateHours: (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+    bookingNoticeMinutes: rule.bookingNoticeMinutes,
+    bufferMinutes: rule.bufferMinutes,
+    blackoutDates: rule.blackoutDates,
+  };
+  return {
+    tutor,
+    rule,
+    access,
+    availabilityRule,
+    busyWindows,
+    bookedWindows,
+    roomWindows,
+    usesAdminCalendarFallback,
+  };
+}
+
+function projectTutorSlots(
+  context: TutorSlotContext,
+  from: Date,
+  to: Date,
+  durationMinutes: number,
+) {
+  const generated = generateAvailableSlots(
+    context.availabilityRule,
+    from,
+    to,
+    durationMinutes,
+    context.busyWindows,
+    context.bookedWindows,
+    new Date(),
+    context.roomWindows,
+  );
+  const slots = context.access
+    ? generated
+    : generated.filter((slot) =>
+        fixedDateHoursOpen(context.availabilityRule.dateHours, context.availabilityRule.timezone, new Date(slot)),
+      );
+  return {
+    tutor: context.tutor,
+    rule: context.rule,
+    access: context.access,
+    slots,
+  };
 }
 
 async function studentCollegeConsultingCourse(userId: string): Promise<{ id: string; subject: string }> {
@@ -5419,7 +5616,11 @@ async function bookingSessionShape(
 ) {
   const [tutorProfile] = session.tutorUserId
     ? await db
-        .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
+        .select({
+          id: tutorProfilesTable.id,
+          name: tutorProfilesTable.name,
+          email: tutorProfilesTable.email,
+        })
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1)
@@ -5435,7 +5636,12 @@ async function bookingSessionShape(
     title: session.title,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: SHARED_FALL_MEETING_URL,
+    meetingUrl:
+      neelNikaMeetUrl({
+        clientUserId: session.clientUserId,
+        tutorName: tutorProfile?.name,
+        tutorEmail: tutorProfile?.email,
+      }) ?? SHARED_FALL_MEETING_URL,
     calendarEventUrl: calendarEventUrlForSession(session),
     cancellationReason: session.cancellationReason,
     ...(extras.creditRestored !== undefined
@@ -6227,6 +6433,89 @@ router.get(
       active: profile.active,
       bookingEligible: profile.bookingEligible,
     });
+  },
+);
+
+const TUTOR_OFFERED_AVAILABILITY_HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
+
+router.get(
+  "/tutor/offered-availability",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    // Own profile only. A tutorProfileId query cannot select another tutor.
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, false);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const from = new Date();
+    const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
+    try {
+      const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
+        profile.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
+      );
+      // The client gates who may book this tutor. Slot math does not change.
+      // Nika and consulting-only tutors are limited to approved clients.
+      const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
+      const availabilityDependsOnClient = profile.name === NIKA_NAME || consultingOnly;
+      const offeredToClients = tutorOfferedToClients(profile);
+      if (!offeredToClients) {
+        const [rule] = await db
+          .select({ timezone: availabilityRulesTable.timezone })
+          .from(availabilityRulesTable)
+          .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+          .limit(1);
+        res.json({
+          from: from.toISOString(),
+          to: to.toISOString(),
+          timezone: rule?.timezone ?? "UTC",
+          providerStatus: "disconnected",
+          offeredToClients: false,
+          availabilityDependsOnClient,
+          usesAdminCalendarFallback: false,
+          lengths: BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) => ({
+            durationMinutes,
+            slots: [],
+          })),
+        });
+        return;
+      }
+      // allowExistingSessionTutor keeps the slot math for this tutor's own
+      // portal. offeredToClients above is the active and roster gate.
+      // One free/busy read is reused for 60, 90, and 120 minute lengths.
+      const context = await loadTutorSlotContext(profile.id, from, to, undefined, true);
+      const results = BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) =>
+        projectTutorSlots(context, from, to, durationMinutes),
+      );
+      const first = results[0];
+      // A live grant with a blank app calendar lists slots to students, then
+      // booking returns 409. Hide those unbookable times and ask for reconnect.
+      // A fully disconnected grant keeps the fixed-window slots students can book.
+      const needsReconnect = results.some(
+        (result) => result.access && !result.access.connection.appCalendarId?.trim(),
+      );
+      const connected = results.every((result) => result.access);
+      res.json({
+        from: from.toISOString(),
+        to: to.toISOString(),
+        timezone: first?.rule.timezone ?? "UTC",
+        providerStatus: needsReconnect
+          ? "reconnect"
+          : connected
+            ? "connected"
+            : "disconnected",
+        offeredToClients: true,
+        availabilityDependsOnClient,
+        usesAdminCalendarFallback: context.usesAdminCalendarFallback,
+        lengths: results.map((result, index) => ({
+          durationMinutes: BOOKABLE_PORTAL_DURATIONS[index],
+          slots: needsReconnect ? [] : result.slots,
+        })),
+      });
+    } catch (error) {
+      sendBookingError(error, res);
+    }
   },
 );
 
@@ -7268,7 +7557,7 @@ async function consultingTutorList(clientUserId: string) {
     return {
       id: tutor.id,
       name: key ? consultingTutorDisplayName(key) : tutor.name,
-      title: tutor.title,
+      title: clientPortalTutorTitle(tutor),
       photoUrl: key ? consultingTutorPhotoUrl(key, tutor.photoUrl) : tutor.photoUrl,
       biography: key
         ? key === "xavier"
@@ -7372,6 +7661,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       return {
         ...tutor,
         name: personFirstName(tutor.name),
+        title: clientPortalTutorTitle(tutor),
         subjects,
         providerStatus: connected ? ("connected" as const) : ("disconnected" as const),
         hourlyRateCents: tutorKey ? displayedSatHourlyCents(tutorKey, req.appUser) : null,
@@ -7447,6 +7737,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       courseId: sessionsTable.courseId,
       tutorProfileId: tutorProfilesTable.id,
       tutorName: tutorProfilesTable.name,
+      tutorEmail: tutorProfilesTable.email,
       dateTime: sessionsTable.dateTime,
       timezone: sessionsTable.timezone,
       subject: sessionsTable.subject,
@@ -7473,7 +7764,12 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       title: session.title,
       durationMinutes: session.durationMinutes,
       bookingStatus: session.bookingStatus,
-      meetingUrl: SHARED_FALL_MEETING_URL,
+      meetingUrl:
+        neelNikaMeetUrl({
+          clientUserId: subjectUserId,
+          tutorName: session.tutorName,
+          tutorEmail: session.tutorEmail,
+        }) ?? SHARED_FALL_MEETING_URL,
       calendarEventUrl: calendarEventUrlForSession(session),
       cancellationReason: session.cancellationReason,
     })),
@@ -7606,7 +7902,9 @@ async function respondWithPrepaidBooking(
     if (!access && !fixedWindow) {
       throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     }
-    const appCalendarId = requireAppCalendarForBooking(access, fixedWindow);
+    const calendarPlan = await adminCalendarForFixedWindowBooking(access, fixedWindow, tutor);
+    const adminWriter = calendarPlan.mode === "admin" ? calendarPlan.writer : null;
+    const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
       throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
@@ -7650,7 +7948,12 @@ async function respondWithPrepaidBooking(
         end,
         ignorePaymentId: holdPaymentId,
       });
-      await assertNoScheduleConflict(tx, { participantIds, start, end });
+      await assertNoScheduleConflict(tx, {
+        participantIds,
+        start,
+        end,
+        ignoreHoldPaymentId: holdPaymentId,
+      });
       if (!fixedWindow) {
         if (!access) {
           throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
@@ -7741,13 +8044,24 @@ async function respondWithPrepaidBooking(
         res.status(201).json(await bookingSessionShape(session));
       }
     };
-    if (fixedWindow && !access) {
-      await confirmBookedSession(created, false);
-      return null;
-    }
     try {
-      if (!access) {
-        throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+      if (calendarPlan.mode === "manual") {
+        await notifyAdministratorsOfBooking({
+          kind: "manual_calendar_invite",
+          sessionId: created.id,
+          title: "Send calendar invite manually",
+          message: manualCalendarInviteMessage({
+            bookerName: req.appUser!.displayName,
+            bookerEmail: req.appUser!.email,
+            tutorName: tutor.name,
+            tutorEmail: tutor.email,
+            start,
+            durationMinutes,
+            meetUrl: SHARED_FALL_MEETING_URL,
+          }),
+        });
+        await confirmBookedSession(created, true);
+        return null;
       }
       const student = {
         userId: req.appUser!.id,
@@ -7755,9 +8069,83 @@ async function respondWithPrepaidBooking(
         clerkUserId: req.appUser!.clerkUserId,
       };
       const tutorParty = await calendarInviteParty(tutor.userId, { email: tutor.email });
+      const sendUpdates = googleCalendarSendUpdatesForSubjects(
+        consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+        { tutorEmail: tutor.email },
+      );
+      const inviteTutor = calendarInviteIncludesTutor(
+        consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+        { tutorEmail: tutor.email },
+      );
+      if (adminWriter) {
+        const adminAccess = await calendarAccess(adminWriter.tutorProfileId);
+        if (!adminAccess) {
+          throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
+        }
+        const pinned = neelNikaCalendarEvent({
+          title: created.title,
+          start,
+          durationMinutes,
+          timeZone: rule.timezone,
+          attendeeEmail: req.appUser!.email,
+          student,
+          tutor: tutorParty,
+          inviteTutor,
+          clientUserId: req.appUser!.id,
+          tutorName: tutor.name,
+          tutorEmail: tutor.email,
+        });
+        const event = await runTutorCalendarCall(adminAccess, (token) =>
+          pinned.meetUrl
+            ? createGoogleEventWithMeetFallback(
+                token,
+                adminWriter.appCalendarId,
+                pinned.body,
+                sendUpdates,
+              )
+            : createGoogleEvent(
+                token,
+                adminWriter.appCalendarId,
+                pinned.body,
+                sendUpdates,
+              ),
+        );
+        const [updated] = await db
+          .update(sessionsTable)
+          .set({
+            providerEventId: event.id ?? null,
+            providerEventUrl: pinned.meetUrl ?? event.hangoutLink ?? event.htmlLink ?? null,
+            providerCalendarId: adminWriter.appCalendarId,
+            updatedAt: new Date(),
+          })
+          .where(eq(sessionsTable.id, created.id))
+          .returning();
+        await confirmBookedSession(updated ?? created, true);
+        return null;
+      }
+      if (!access) {
+        throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+      }
       if (!appCalendarId) {
         throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
       }
+      const pinned = neelNikaCalendarEvent({
+        title: created.title,
+        start,
+        durationMinutes,
+        timeZone: rule.timezone,
+        attendeeEmail: req.appUser!.email,
+        location: SHARED_FALL_MEETING_URL,
+        student,
+        tutor: tutorParty,
+        inviteTutor: calendarInviteIncludesTutor(
+          consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+          { tutorEmail: tutor.email },
+        ),
+        clientUserId: req.appUser!.id,
+        tutorName: tutor.name,
+        tutorEmail: tutor.email,
+      });
       const written = await runTutorCalendarCall(access, (token) =>
         writeStoredSessionEvent(
           {
@@ -7767,28 +8155,19 @@ async function respondWithPrepaidBooking(
           },
           token,
           () =>
-            createGoogleEvent(
-              token,
-              appCalendarId,
-              bookingCalendarEventPayload({
-                title: created.title,
-                start,
-                durationMinutes,
-                timeZone: rule.timezone,
-                attendeeEmail: req.appUser!.email,
-                location: SHARED_FALL_MEETING_URL,
-                student,
-                tutor: tutorParty,
-                inviteTutor: calendarInviteIncludesTutor(
-                  consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
-                  { tutorEmail: tutor.email },
+            pinned.meetUrl
+              ? createGoogleEventWithMeetFallback(
+                  token,
+                  appCalendarId,
+                  pinned.body,
+                  sendUpdates,
+                )
+              : createGoogleEvent(
+                  token,
+                  appCalendarId,
+                  pinned.body,
+                  sendUpdates,
                 ),
-              }),
-              googleCalendarSendUpdatesForSubjects(
-                consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
-                { tutorEmail: tutor.email },
-              ),
-            ),
         ),
       );
       if (written.status === "manual") {
@@ -7803,7 +8182,7 @@ async function respondWithPrepaidBooking(
         .update(sessionsTable)
         .set({
           providerEventId: event.id ?? null,
-          providerEventUrl: event.htmlLink ?? null,
+          providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? null,
           providerCalendarId: appCalendarId,
           updatedAt: new Date(),
         })
@@ -7841,9 +8220,11 @@ async function respondWithPrepaidBooking(
     return null;
   } catch (error) {
     sendBookingError(error, res);
-    return error instanceof BookingError
-      ? error
-      : new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
+    if (error instanceof BookingError) return error;
+    if (error instanceof BookingServiceError) {
+      return new BookingError(error.status, error.code, error.message);
+    }
+    return new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
   }
 }
 
@@ -7869,22 +8250,22 @@ router.post("/booking/slot-holds/release", async (req: AuthedRequest, res): Prom
   }
 });
 
+const PAID_BOOKING_REFUSAL_CODES = new Set([
+  "SCHEDULE_CONFLICT",
+  "SLOT_UNAVAILABLE",
+  "BOOKING_UNAVAILABLE",
+  "CALENDAR_RECONNECT_REQUIRED",
+]);
+
 async function notifyPaidReconnectRefusal(args: {
   paymentId: string;
   clientName: string;
-  tutorProfileId: string;
   slotStartIso: string;
   sessionId?: string | null;
 }): Promise<void> {
-  const [tutor] = await db
-    .select({ name: tutorProfilesTable.name })
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.id, args.tutorProfileId))
-    .limit(1);
   await notifyPaidBookingReconnectRefusal({
     paymentId: args.paymentId,
     clientName: args.clientName,
-    tutorName: tutor?.name?.trim() || "Tutor",
     slotStartIso: args.slotStartIso,
     sessionId: args.sessionId,
   });
@@ -7956,16 +8337,15 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
       await linkEssayRequestToSession(paymentId, sessionId);
     };
     const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-    if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+    if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
       try {
         await notifyPaidReconnectRefusal({
           paymentId,
           clientName: req.appUser!.displayName,
-          tutorProfileId: intent.tutorProfileId,
           slotStartIso: intent.startTime,
         });
       } catch {
-        // The 409 is already on the wire. A later webhook retry can still notify.
+        // The refusal is already on the wire. A later webhook retry can still notify.
       }
     }
   } catch (error) {
@@ -8023,11 +8403,10 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
     },
   } as unknown as Response;
   const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-  if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+  if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
     await notifyPaidReconnectRefusal({
       paymentId,
       clientName: user.displayName,
-      tutorProfileId: intent.tutorProfileId,
       slotStartIso: intent.startTime,
     });
   }
@@ -8053,10 +8432,19 @@ router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, re
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1);
-      const access = profile[0] ? await calendarAccess(profile[0].id) : null;
+      const adminWriter = await findStoredAdminCalendarWriter();
+      const onAdminCalendar = Boolean(
+        adminWriter && session.providerCalendarId?.trim() === adminWriter.appCalendarId,
+      );
+      const access = onAdminCalendar
+        ? await calendarAccess(adminWriter!.tutorProfileId)
+        : profile[0]
+          ? await calendarAccess(profile[0].id)
+          : null;
       if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+      const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
       await runTutorCalendarCall(access, (token) =>
-        writeStoredSessionEvent(session, token, () =>
+        writeStoredSessionEvent(calendarSession, token, () =>
           deleteGoogleEvent(
             token,
             sessionEventCalendarId(session.providerCalendarId),
@@ -8117,7 +8505,19 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     if (!slots.includes(start.toISOString())) {
       throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
     }
-    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    const adminWriter = await findStoredAdminCalendarWriter();
+    const onAdminCalendar = Boolean(
+      adminWriter && session.providerCalendarId?.trim() === adminWriter.appCalendarId,
+    );
+    if (!access && !onAdminCalendar) {
+      throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    }
+    const writeAccess = onAdminCalendar
+      ? await calendarAccess(adminWriter!.tutorProfileId)
+      : access;
+    if (!writeAccess) {
+      throw new BookingError(409, "CALENDAR_DISCONNECTED", "The tutor's calendar is disconnected.");
+    }
     const end = new Date(start.getTime() + session.durationMinutes * 60_000);
     const participantIds = [session.clientUserId, session.tutorUserId].filter(
       (id): id is string => Boolean(id),
@@ -8132,7 +8532,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       tutorEmail: profile.email,
     });
     const inviteAt = (startTime: Date, timeZone: string) =>
-      bookingCalendarEventPayload({
+      neelNikaCalendarEvent({
         title: session.title,
         start: startTime,
         durationMinutes: session.durationMinutes,
@@ -8142,17 +8542,30 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         student,
         tutor: tutorParty,
         inviteTutor: calendarInviteIncludesTutor(session.subject, { tutorEmail: profile.email }),
+        clientUserId: session.clientUserId,
+        tutorName: profile.name,
+        tutorEmail: profile.email,
       });
+    const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
+    const moved = inviteAt(start, rule.timezone);
     const eventWrite = session.providerEventId
-      ? await runTutorCalendarCall(access, (token) =>
-          writeStoredSessionEvent(session, token, () =>
-            updateGoogleEvent(
-              token,
-              sessionEventCalendarId(session.providerCalendarId),
-              session.providerEventId!,
-              inviteAt(start, rule.timezone),
-              sendUpdates,
-            ),
+      ? await runTutorCalendarCall(writeAccess, (token) =>
+          writeStoredSessionEvent(calendarSession, token, () =>
+            moved.meetUrl
+              ? updateGoogleEventWithMeetFallback(
+                  token,
+                  sessionEventCalendarId(session.providerCalendarId),
+                  session.providerEventId!,
+                  moved.body,
+                  sendUpdates,
+                )
+              : updateGoogleEvent(
+                  token,
+                  sessionEventCalendarId(session.providerCalendarId),
+                  session.providerEventId!,
+                  moved.body,
+                  sendUpdates,
+                ),
           ),
         )
       : null;
@@ -8179,7 +8592,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             timezone: rule.timezone,
             bookingStatus: "rescheduled",
             providerEventId: event?.id ?? session.providerEventId,
-            providerEventUrl: event?.htmlLink ?? session.providerEventUrl,
+            providerEventUrl: event?.htmlLink ?? moved.meetUrl ?? session.providerEventUrl,
             updatedAt: new Date(),
           })
           .where(eq(sessionsTable.id, session.id))
@@ -8192,15 +8605,24 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     } catch (error) {
       if (session.providerEventId) {
         try {
-          await runTutorCalendarCall(access, (token) =>
-            writeStoredSessionEvent(session, token, () =>
-              updateGoogleEvent(
-                token,
-                sessionEventCalendarId(session.providerCalendarId),
-                session.providerEventId!,
-                inviteAt(previousStart, session.timezone),
-                sendUpdates,
-              ),
+          const rewind = inviteAt(previousStart, session.timezone);
+          await runTutorCalendarCall(writeAccess, (token) =>
+            writeStoredSessionEvent(calendarSession, token, () =>
+              rewind.meetUrl
+                ? updateGoogleEventWithMeetFallback(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    rewind.body,
+                    sendUpdates,
+                  )
+                : updateGoogleEvent(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    rewind.body,
+                    sendUpdates,
+                  ),
             ),
           );
         } catch {
@@ -8568,7 +8990,7 @@ router.post(
       return [createdInvoice!, createdPayment!] as const;
     });
     } catch (error) {
-      if (error instanceof SlotHoldConflict) {
+      if (error instanceof SlotHoldConflict || error instanceof BookingServiceError) {
         res.status(error.status).json({ code: error.code, error: error.message });
         return;
       }
@@ -9742,8 +10164,24 @@ router.get(
   "/admin/calendar-connections",
   ensureRole(["administrator"]),
   async (_req: AuthedRequest, res): Promise<void> => {
-    const connections = await listPublicCalendarConnectionHealth();
-    res.json({ connections });
+    const [connections, grants] = await Promise.all([
+      listPublicCalendarConnectionHealth(),
+      loadStoredCalendarGrants(),
+    ]);
+    res.json({
+      connections,
+      adminCalendarInvites: adminCalendarInviteHealth(
+        grants.map((row) => ({
+          googleAccountEmail: row.googleAccountEmail,
+          portalEmail: row.portalEmail,
+          userEmail: row.userEmail,
+          status: row.status,
+          hasRefreshToken: Boolean(row.hasRefreshToken),
+          grantedScopes: row.grantedScopes,
+          appCalendarId: row.appCalendarId,
+        })),
+      ),
+    });
   },
 );
 
@@ -10593,7 +11031,7 @@ async function adminSessionShape(
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
+    meetingUrl: SHARED_FALL_MEETING_URL,
     calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
       ? {
@@ -12229,7 +12667,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
               ),
             ),
             tutor,
-            meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
+            meetingUrl: SHARED_FALL_MEETING_URL,
             calendarEventUrl: calendarEventUrlForSession(session),
           };
         }),
@@ -12315,19 +12753,6 @@ async function dashboardDataForUser(user: AppUser) {
   const courses = (
     await Promise.all(ids.map((id) => courseShape(id, user)))
   ).filter(Boolean);
-  const courseRows =
-    ids.length === 0
-      ? []
-      : await db
-           .select({ id: coursesTable.id, term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-          .from(coursesTable)
-          .where(inArray(coursesTable.id, ids));
-  const meetingUrls = new Map(
-    courseRows.map((course) => [
-      course.id,
-      meetingUrlForTerm(course.term, course.meetUrl),
-    ]),
-  );
   const scopedSessions = await dashboardSessionsForUser(user);
   const studentShapeCache = new Map<string, Promise<{ id: string; name: string } | null>>();
   const tutorShapeCache = new Map<
@@ -12428,11 +12853,12 @@ async function dashboardDataForUser(user: AppUser) {
           : preparation
             ? "Take quiz"
             : "Open session plan";
+      const tutor = await sessionTutorShapeCached(session);
       return {
         ...dashboardSessionShape(
           session,
-          await sessionTutorShapeCached(session),
-          meetingUrls.get(session.courseId) ?? null,
+          tutor,
+          SHARED_FALL_MEETING_URL,
           user.role === "tutor" || user.role === "administrator"
             ? session.clientUserId
               ? await studentShapeCached(session.clientUserId)
@@ -12641,10 +13067,11 @@ async function dashboardDataForUser(user: AppUser) {
             const student = session.clientUserId
               ? await studentShapeCached(session.clientUserId)
               : null;
+            const tutor = await sessionTutorShapeCached(session);
             return dashboardSessionShape(
               session,
-              await sessionTutorShapeCached(session),
-              meetingUrls.get(session.courseId) ?? null,
+              tutor,
+              SHARED_FALL_MEETING_URL,
               user.role === "tutor" || user.role === "administrator"
                 ? student
                 : undefined,
@@ -12830,7 +13257,7 @@ router.get(
       ? {
           id: previewTutor.id,
           name: previewTutor.name,
-          title: previewTutor.title,
+          title: clientPortalTutorTitle(previewTutor),
           timezone: SAT_BOOKING_TIMEZONE,
         }
       : null;
@@ -12887,7 +13314,7 @@ router.get(
             tutor: {
               id: availability.tutor.id,
               name: availability.tutor.name,
-              title: availability.tutor.title,
+              title: clientPortalTutorTitle(availability.tutor),
               timezone: availability.rule.timezone,
             },
             providerStatus: availability.access ? "connected" : "disconnected",
@@ -12955,11 +13382,6 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     return;
   }
   const subjectUserId = await dataSubjectUserId(req.appUser!);
-  const [course] = await db
-    .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-    .from(coursesTable)
-    .where(eq(coursesTable.id, session.courseId))
-    .limit(1);
   const blocks = await db
     .select()
     .from(curriculumBlocksTable)
@@ -13052,7 +13474,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : session.title,
       ),
       tutor: sessionTutor,
-      meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
+      meetingUrl: SHARED_FALL_MEETING_URL,
       calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
