@@ -827,7 +827,7 @@ export function BookingCard({
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <p>
                       {typeof selectedTutor?.prepaidHours === "number"
-                        ? `You need prepaid hours with ${portalTutorFirstName(selectedTutor?.name ?? "this tutor")} before reserving. Hours do not transfer between tutors. Choose an open time to pay for that session.`
+                        ? `You need prepaid hours with ${portalTutorFirstName(selectedTutor?.name ?? "this tutor")} before reserving. Choose an open time to pay for that session.`
                         : "You need prepaid hours before reserving. Choose an open time to pay for that tutor and length."}
                     </p>
                   </div>

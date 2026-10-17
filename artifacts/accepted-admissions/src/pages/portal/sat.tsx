@@ -352,7 +352,7 @@ export default function PortalSat() {
         </h1>
         <p className="mt-1 text-muted-foreground">
           {collegeConsulting
-            ? "Purchase College Consulting hours with Nika, Victoria, Xavier, or Eunice. Each tutor’s hours stay on that tutor. Credits appear only after a verified Stripe payment. Open times follow that tutor’s calendar and booking notice."
+            ? "Credits appear only after a verified Stripe payment. Open times follow that tutor’s calendar and booking notice."
             : samaTrial
               ? "Purchase prepaid hours and book Nika, Victoria, Xavier, or Eunice without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."
               : "Purchase prepaid hours and book Eunice, Victoria, or Xavier without leaving the portal. Credits appear only after a verified Stripe payment. Open times come from the tutor’s Google Calendar."}
@@ -507,8 +507,8 @@ export default function PortalSat() {
               </CardTitle>
               <CardDescription>
                 {collegeConsulting
-                  ? "Nika is $100/hour, Victoria and Eunice are $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
-                  : "Prices are on each offer. A 1-hour, 1.5-hour, or 2-hour session uses that tutor’s hourly rate. Hours stay with the tutor you buy them for. Card details stay on Stripe Checkout."}
+                  ? "Card details stay on Stripe Checkout."
+                  : "Prices are on each offer. Card details stay on Stripe Checkout."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

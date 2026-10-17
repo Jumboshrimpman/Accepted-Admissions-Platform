@@ -164,6 +164,8 @@ describe("portal SAT book/pay", () => {
     render(<PortalSat />);
     expect(screen.getByTestId("portal-sat-page")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
+    expect(screen.queryByText(/hourly rate/i)).toBeNull();
+    expect(screen.queryByText(/Hours stay with the tutor/i)).toBeNull();
     expect(screen.getByTestId("portal-sat-purchase")).toBeTruthy();
     expect(await screen.findByTestId("portal-sat-offer-prod-1")).toBeTruthy();
     expect(screen.getByTestId("portal-sat-offer-prod-1").textContent).toContain("Single SAT session");
@@ -419,8 +421,11 @@ describe("portal SAT book/pay", () => {
     expect(screen.getByRole("heading", { name: "College Consulting" })).toBeTruthy();
     expect(screen.getByText("Upcoming College Consulting sessions")).toBeTruthy();
     expect(screen.getByText("No upcoming College Consulting sessions are on this account yet.")).toBeTruthy();
-    expect(screen.getByText(/Xavier is \$200\/hour/)).toBeTruthy();
-    expect(screen.getByText(/Eunice are \$130\/hour/)).toBeTruthy();
+    expect(screen.queryByText(/Xavier is \$200\/hour/)).toBeNull();
+    expect(screen.queryByText(/Eunice are \$130\/hour/)).toBeNull();
+    expect(screen.queryByText(/Hours do not transfer/i)).toBeNull();
+    expect(screen.queryByText(/hours stay on that tutor/i)).toBeNull();
+    expect(screen.queryByText(/Each tutor keeps their own hours/i)).toBeNull();
     expect(screen.getByText("Book a College Consulting session")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "SAT book and pay" })).toBeNull();
     expect(screen.queryByText("Upcoming SAT sessions")).toBeNull();

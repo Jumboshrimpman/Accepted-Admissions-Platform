@@ -987,6 +987,9 @@ describe("administrator client preview", () => {
     render(<AdminClientPreview />);
 
     expect(screen.getByTestId("consulting-preview-dashboard").textContent).toContain("Welcome back, Neel.");
+    expect(screen.queryByText(/Each tutor keeps their own hours/i)).toBeNull();
+    expect(screen.queryByText(/Hours do not transfer between tutors/i)).toBeNull();
+    expect(screen.queryByText(/Nika is \$100\/hour/)).toBeNull();
     expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).toContain("Nika");
     expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).not.toContain("Nika Raiffe");
     expect(screen.getByTestId("consulting-preview-tutor-nika").textContent).toContain("$100/hr");
