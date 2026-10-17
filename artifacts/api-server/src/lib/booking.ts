@@ -258,6 +258,24 @@ export function generateAvailableSlots(
   return slots;
 }
 
+export function calendarInviteIncludesTutor(
+  ...subjects: Array<string | null | undefined>
+): boolean {
+  return subjects.some((subject) => subject?.trim().toLowerCase() === "college consulting");
+}
+
+export const MISSING_CALENDAR_INVITE_TITLE = "No Google Calendar invite was sent";
+
+/** In-app admin copy when a fixed-window session is confirmed without a Google event. */
+export function missingCalendarInviteMessage(args: {
+  studentName: string;
+  sessionTitle: string;
+  startIso: string;
+  meetingUrl: string;
+}): string {
+  return `${args.studentName} booked ${args.sessionTitle} at ${args.startIso}. The session is confirmed. Meet: ${args.meetingUrl}. Google Calendar was not updated, so no invite went to the student, the tutor, or admin@acceptedadmissions.org.`;
+}
+
 export function calendarEventPayload(
   title: string,
   start: Date,
@@ -268,9 +286,13 @@ export function calendarEventPayload(
   parties?: {
     student?: CalendarInviteParty | null;
     tutor?: CalendarInviteParty | null;
+    /** College Consulting adds the tutor. On her own calendar she is the organizer; Google still accepts her as an attendee. */
+    inviteTutor?: boolean;
   } | null,
 ) {
   const existing = attendeeEmail.trim() ? [{ email: attendeeEmail }] : [];
+  const tutorEmail = parties?.inviteTutor ? parties.tutor?.email?.trim() ?? "" : "";
+  if (tutorEmail) existing.push({ email: tutorEmail });
   const extras = adminAttendeeEmailsForPair(parties?.student, parties?.tutor);
   const attendees = mergeCalendarAttendees(existing, extras);
   return {
@@ -293,6 +315,7 @@ export function bookingCalendarEventPayload(args: {
   location?: string;
   student: CalendarInviteParty | null;
   tutor: CalendarInviteParty | null;
+  inviteTutor?: boolean;
 }) {
   return calendarEventPayload(
     args.title,
@@ -301,6 +324,6 @@ export function bookingCalendarEventPayload(args: {
     args.timeZone,
     args.attendeeEmail,
     args.location,
-    { student: args.student, tutor: args.tutor },
+    { student: args.student, tutor: args.tutor, inviteTutor: args.inviteTutor },
   );
 }

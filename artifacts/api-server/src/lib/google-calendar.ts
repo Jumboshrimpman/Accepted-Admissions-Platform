@@ -1467,14 +1467,11 @@ export async function listGoogleBusyWindows(
 
 export type GoogleCalendarSendUpdates = "all" | "none";
 
-/** College Consulting writes stay silent. SAT and every other subject still notify attendees. */
+/** SAT and College Consulting both mail Google's attendee invites. The admin backfill stays on sendUpdates none. */
 export function googleCalendarSendUpdatesForSubjects(
-  ...subjects: Array<string | null | undefined>
+  ..._subjects: Array<string | null | undefined>
 ): GoogleCalendarSendUpdates {
-  const consulting = subjects.some(
-    (subject) => subject?.trim().toLowerCase() === "college consulting",
-  );
-  return consulting ? "none" : "all";
+  return "all";
 }
 
 export function googleCalendarEventWritePath(

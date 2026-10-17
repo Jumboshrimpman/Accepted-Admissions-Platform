@@ -7,6 +7,9 @@ import {
   bookingCalendarEventPayload,
   bookingNoticeMinutesForTutor,
   calendarEventPayload,
+  calendarInviteIncludesTutor,
+  missingCalendarInviteMessage,
+  MISSING_CALENDAR_INVITE_TITLE,
   DEFAULT_BOOKING_NOTICE_MINUTES,
   fixedDateHoursOpen,
   generateAvailableSlots,
@@ -411,4 +414,54 @@ test("portal bookings accept 60, 90, and 120 minutes and block the full length",
     event.attendees.map((attendee) => attendee.email),
     ["student@example.com", "admin@acceptedadmissions.org"],
   );
+});
+
+test("College Consulting invites the student, Nika, and admin on her calendar", () => {
+  const event = bookingCalendarEventPayload({
+    title: "Neel’s College Consulting Session with Nika",
+    start: new Date("2026-10-20T01:00:00.000Z"),
+    durationMinutes: 60,
+    timeZone: "America/New_York",
+    attendeeEmail: "ndharni300@gmail.com",
+    location: "https://meet.google.com/rih-iayt-okb",
+    student: { email: "ndharni300@gmail.com" },
+    tutor: { email: "nika.raiffe@gmail.com" },
+    inviteTutor: true,
+  });
+  assert.equal(event.location, "https://meet.google.com/rih-iayt-okb");
+  assert.deepEqual(
+    event.attendees.map((attendee) => attendee.email),
+    ["ndharni300@gmail.com", "nika.raiffe@gmail.com", "admin@acceptedadmissions.org"],
+  );
+  assert.equal(calendarInviteIncludesTutor("College Consulting"), true);
+  assert.equal(calendarInviteIncludesTutor("SAT"), false);
+  assert.equal(
+    missingCalendarInviteMessage({
+      studentName: "Neel Dharni",
+      sessionTitle: event.summary,
+      startIso: "2026-10-20T01:00:00.000Z",
+      meetingUrl: "https://meet.google.com/rih-iayt-okb",
+    }),
+    "Neel Dharni booked Neel’s College Consulting Session with Nika at 2026-10-20T01:00:00.000Z. The session is confirmed. Meet: https://meet.google.com/rih-iayt-okb. Google Calendar was not updated, so no invite went to the student, the tutor, or admin@acceptedadmissions.org.",
+  );
+  assert.equal(MISSING_CALENDAR_INVITE_TITLE, "No Google Calendar invite was sent");
+});
+
+test("a connected fixed-window booking writes her calendar and a disconnected one alerts admins", async () => {
+  const platformSource = await readFile(
+    fileURLToPath(new URL("../routes/platform.ts", import.meta.url)),
+    "utf8",
+  );
+  const start = platformSource.indexOf("async function respondWithPrepaidBooking");
+  const end = platformSource.indexOf('router.post("/booking/slot-holds/release"');
+  const slice = platformSource.slice(start, end);
+  assert.match(slice, /if \(fixedWindow && !access\) \{\s*await confirmBookedSession\(created, false\)/);
+  assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
+  assert.match(slice, /inviteTutor: consulting/);
+  assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
+  assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
+  const liveCheck = slice.indexOf("if (!fixedWindow) {");
+  const write = slice.indexOf("createGoogleEvent(");
+  assert.ok(liveCheck > 0 && liveCheck < write);
+  assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);
 });
