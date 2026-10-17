@@ -140,7 +140,7 @@ describe("tutor offered availability", () => {
     expect(screen.queryByTestId("tutor-offered-client-specific")).toBeNull();
   });
 
-  test("Nika's card notes that the times depend on who is booking", async () => {
+  test("approved-client tutors note that only those clients see these times", async () => {
     mocks.customFetch.mockResolvedValue({
       from: "2026-10-17T14:00:00.000Z",
       to: "2026-10-31T14:00:00.000Z",
@@ -157,7 +157,9 @@ describe("tutor offered availability", () => {
     render(<TutorOfferedAvailability />);
 
     expect(await screen.findByTestId("tutor-offered-client-specific")).toBeTruthy();
-    expect(screen.getByText("The times a client sees depend on who is booking.")).toBeTruthy();
+    expect(
+      screen.getByText("Only approved clients can book you; those clients see these times."),
+    ).toBeTruthy();
     expect((await screen.findByRole("region", { name: "1 hour" })).textContent).toContain("10:00 AM");
   });
 

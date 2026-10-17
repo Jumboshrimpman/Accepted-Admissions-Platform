@@ -6300,7 +6300,13 @@ router.get(
     const from = new Date();
     const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
     try {
-      const availabilityDependsOnClient = profile.name === NIKA_NAME;
+      const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
+        profile.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
+      );
+      // The client gates who may book this tutor. Slot math does not change.
+      // Nika and consulting-only tutors are limited to approved clients.
+      const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
+      const availabilityDependsOnClient = profile.name === NIKA_NAME || consultingOnly;
       const offeredToClients = tutorOfferedToClients(profile);
       if (!offeredToClients) {
         const [rule] = await db

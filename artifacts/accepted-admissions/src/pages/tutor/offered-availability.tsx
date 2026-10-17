@@ -112,7 +112,7 @@ export function TutorOfferedAvailability() {
         ) : null}
         {clientSpecific ? (
           <p className="mb-4 text-sm text-muted-foreground" data-testid="tutor-offered-client-specific">
-            The times a client sees depend on who is booking.
+            Only approved clients can book you; those clients see these times.
           </p>
         ) : null}
         {reconnect && !notOffered ? (
