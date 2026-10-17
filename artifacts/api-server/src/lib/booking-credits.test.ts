@@ -719,3 +719,87 @@ test("late cancellation does not restore a credit", async () => {
     await cleanupBookingFixture(fixture);
   }
 });
+
+test("a split SAT debit restores the tutor pool and the legacy pool", async () => {
+  const fixture = await createBookingFixture({ creditHours: 1 });
+  let productId = "";
+  try {
+    const [product] = await fixture.db.db
+      .insert(fixture.db.satProductsTable)
+      .values({
+        slug: `sat-split-${fixture.suffix}`,
+        name: "Split SAT hour",
+        description: "Temporary split-debit product",
+        durationHours: 1,
+        totalPriceCents: 13_000,
+        effectiveHourlyRateCents: 13_000,
+        active: true,
+      })
+      .returning();
+    productId = product!.id;
+    await fixture.db.db.insert(fixture.db.creditLedgerTable).values({
+      clientUserId: fixture.studentId,
+      productId,
+      entryType: "original",
+      hours: 1,
+      fulfillmentKey: `split-tutor-credit-${fixture.suffix}`,
+      note: "Tutor-specific hour",
+    });
+    assert.equal(await creditHoursFor(fixture.db, fixture.studentId), 2);
+    const session = await fixture.db.db.transaction(async (tx) =>
+      insertConfirmedBookingWithDebit(tx, {
+        courseId: fixture.courseId,
+        clientUserId: fixture.studentId,
+        tutorUserId: fixture.tutorId,
+        start: fixture.start,
+        timezone: "America/New_York",
+        subject: "SAT",
+        title: "Split debit booking",
+        durationMinutes: 120,
+        tutorName: "Xavier Morales",
+        debits: [
+          { productId, hours: 1 },
+          { productId: null, hours: 1 },
+        ],
+      }),
+    );
+    assert.equal(await creditHoursFor(fixture.db, fixture.studentId), 0);
+    await fixture.db.db.transaction(async (tx) => {
+      await rollbackBookingAfterCalendarFailure(tx, {
+        sessionId: session.id,
+        clientUserId: fixture.studentId,
+        durationMinutes: 120,
+        actorUserId: fixture.studentId,
+      });
+    });
+    assert.equal(await creditHoursFor(fixture.db, fixture.studentId), 2);
+    const restores = await fixture.db.db
+      .select()
+      .from(fixture.db.creditLedgerTable)
+      .where(
+        and(
+          eq(fixture.db.creditLedgerTable.sessionId, session.id),
+          eq(fixture.db.creditLedgerTable.entryType, "restored"),
+        ),
+      );
+    assert.equal(restores.length, 2);
+    const primary = restores.find(
+      (entry) => entry.fulfillmentKey === sessionCalendarFailRestoreFulfillmentKey(session.id),
+    );
+    const extra = restores.find(
+      (entry) =>
+        entry.fulfillmentKey === `${sessionCalendarFailRestoreFulfillmentKey(session.id)}:1`,
+    );
+    assert.equal(primary?.productId, productId);
+    assert.equal(Number(primary?.hours), 1);
+    assert.equal(extra?.productId, null);
+    assert.equal(Number(extra?.hours), 1);
+  } finally {
+    await cleanupBookingFixture(fixture);
+    if (productId) {
+      await fixture.db.db
+        .delete(fixture.db.satProductsTable)
+        .where(eq(fixture.db.satProductsTable.id, productId));
+    }
+  }
+});

@@ -131,7 +131,7 @@ export function FinancialCard({
               })}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Checkout is unavailable in the administrator preview. A verified purchase provides prepaid session credits that students book on Xavier or Eunice’s calendar.
+              Checkout is unavailable in the administrator preview. A verified purchase provides prepaid hours with Eunice, Victoria, or Xavier at that client’s rate.
             </p>
             <Button disabled variant="outline" className="mt-4 rounded-full">Checkout disabled in preview</Button>
           </div>

@@ -403,23 +403,34 @@ export async function ensureStripeCustomer(user: AppUser): Promise<string> {
   return customerId;
 }
 
+/** Creates the Stripe Product when needed and stores only stripe_product_id. */
+export async function ensureStripeCatalogProduct(
+  product: typeof satProductsTable.$inferSelect,
+): Promise<string> {
+  if (product.stripeProductId) return product.stripeProductId;
+  const stripeProduct = await stripeRequest<StripeRecord>("/v1/products", {
+    method: "POST",
+    idempotencyKey: stripeCatalogProductIdempotencyKey(product),
+    body: formData({
+      name: product.name,
+      description: product.description,
+      "metadata[app_product_id]": product.id,
+      "metadata[slug]": product.slug,
+    }),
+  });
+  const stripeProductId = recordString(stripeProduct, "id");
+  if (!stripeProductId) throw new Error("Stripe did not return a product id");
+  await db
+    .update(satProductsTable)
+    .set({ stripeProductId, updatedAt: new Date() })
+    .where(eq(satProductsTable.id, product.id));
+  product.stripeProductId = stripeProductId;
+  return stripeProductId;
+}
+
 export async function ensureStripePrice(product: typeof satProductsTable.$inferSelect): Promise<string> {
   if (product.stripePriceId) return product.stripePriceId;
-  let stripeProductId = product.stripeProductId ?? undefined;
-  if (!stripeProductId) {
-    const stripeProduct = await stripeRequest<StripeRecord>("/v1/products", {
-      method: "POST",
-      idempotencyKey: stripeCatalogProductIdempotencyKey(product),
-      body: formData({
-        name: product.name,
-        description: product.description,
-        "metadata[app_product_id]": product.id,
-        "metadata[slug]": product.slug,
-      }),
-    });
-    stripeProductId = recordString(stripeProduct, "id");
-  }
-  if (!stripeProductId) throw new Error("Stripe did not return a product id");
+  const stripeProductId = await ensureStripeCatalogProduct(product);
   const stripePrice = await stripeRequest<StripeRecord>("/v1/prices", {
     method: "POST",
     idempotencyKey: `accepted-admissions-price-${product.id}-${product.totalPriceCents}`,
@@ -436,7 +447,33 @@ export async function ensureStripePrice(product: typeof satProductsTable.$inferS
     .update(satProductsTable)
     .set({ stripeProductId, stripePriceId, updatedAt: new Date() })
     .where(eq(satProductsTable.id, product.id));
+  product.stripePriceId = stripePriceId;
   return stripePriceId;
+}
+
+/**
+ * Catalog checkouts reuse the stored Stripe Price. A per-client override, such
+ * as Michelle's $130 Xavier hour, sends price_data and does not replace that Price.
+ */
+export function checkoutLineItemFields(args: {
+  catalogPriceCents: number;
+  unitAmountCents?: number;
+  priceId?: string;
+  stripeProductId?: string;
+}): Record<string, string | number> {
+  const chargeCents = args.unitAmountCents ?? args.catalogPriceCents;
+  if (chargeCents !== args.catalogPriceCents) {
+    return {
+      "line_items[0][price_data][currency]": "usd",
+      "line_items[0][price_data][unit_amount]": chargeCents,
+      "line_items[0][price_data][product]": args.stripeProductId ?? "",
+      "line_items[0][quantity]": 1,
+    };
+  }
+  return {
+    "line_items[0][price]": args.priceId ?? "",
+    "line_items[0][quantity]": 1,
+  };
 }
 
 export async function createCheckoutSession(args: {
@@ -446,11 +483,23 @@ export async function createCheckoutSession(args: {
   paymentId: string;
   successUrl: string;
   cancelUrl: string;
+  /** Charged amount. Differs from the catalog only for a per-client override. */
+  unitAmountCents?: number;
 }): Promise<{ id: string; url: string; paymentIntentId?: string }> {
-  const [customerId, priceId] = await Promise.all([
-    ensureStripeCustomer(args.user),
-    ensureStripePrice(args.product),
-  ]);
+  const catalogCents = args.product.totalPriceCents;
+  const chargeCents = args.unitAmountCents ?? catalogCents;
+  const customerId = await ensureStripeCustomer(args.user);
+  const lineItems =
+    chargeCents === catalogCents
+      ? checkoutLineItemFields({
+          catalogPriceCents: catalogCents,
+          priceId: await ensureStripePrice(args.product),
+        })
+      : checkoutLineItemFields({
+          catalogPriceCents: catalogCents,
+          unitAmountCents: chargeCents,
+          stripeProductId: await ensureStripeCatalogProduct(args.product),
+        });
   const session = await stripeRequest<StripeRecord>("/v1/checkout/sessions", {
     method: "POST",
     idempotencyKey: `accepted-admissions-checkout-${args.paymentId}`,
@@ -459,8 +508,7 @@ export async function createCheckoutSession(args: {
       customer: customerId,
       success_url: args.successUrl,
       cancel_url: args.cancelUrl,
-      "line_items[0][price]": priceId,
-      "line_items[0][quantity]": 1,
+      ...lineItems,
       "metadata[payment_id]": args.paymentId,
       "metadata[invoice_id]": args.invoiceId,
       "metadata[product_id]": args.product.id,
@@ -488,11 +536,14 @@ export async function createHostedInvoice(args: {
   invoiceId: string;
   paymentId: string;
   daysUntilDue: number;
+  unitAmountCents?: number;
 }): Promise<{ id: string; hostedInvoiceUrl?: string; dueAt?: Date }> {
-  const [customerId, priceId] = await Promise.all([
-    ensureStripeCustomer(args.user),
-    ensureStripePrice(args.product),
-  ]);
+  const catalogCents = args.product.totalPriceCents;
+  const chargeCents = args.unitAmountCents ?? catalogCents;
+  const customerId = await ensureStripeCustomer(args.user);
+  const priceOverride = chargeCents !== catalogCents;
+  const priceId = priceOverride ? undefined : await ensureStripePrice(args.product);
+  const stripeProductId = priceOverride ? await ensureStripeCatalogProduct(args.product) : undefined;
   const invoice = await stripeRequest<StripeRecord>("/v1/invoices", {
     method: "POST",
     idempotencyKey: `accepted-admissions-invoice-${args.invoiceId}`,
@@ -518,7 +569,13 @@ export async function createHostedInvoice(args: {
       body: formData({
         customer: customerId,
         invoice: id,
-        "pricing[price]": priceId,
+        ...(priceOverride
+          ? {
+              "pricing[price_data][currency]": "usd",
+              "pricing[price_data][product]": stripeProductId,
+              "pricing[price_data][unit_amount]": chargeCents,
+            }
+          : { "pricing[price]": priceId }),
         "metadata[payment_id]": args.paymentId,
         "metadata[invoice_id]": args.invoiceId,
       }),

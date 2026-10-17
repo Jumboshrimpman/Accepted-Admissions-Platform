@@ -3,18 +3,27 @@ import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import { db, satProductsTable, usersTable, type AppUser } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import {
+  courseMembershipsTable,
+  db,
+  invoicesTable,
+  loginActivityTable,
+  paymentsTable,
+  satProductsTable,
+  usersTable,
+  type AppUser,
+} from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import express, {
   type NextFunction,
   type Request,
   type Response,
 } from "express";
 import platformRouter from "../routes/platform";
+import { MICHELLE_MAKAREM_EMAIL } from "./calendar-pair-attendees";
 import {
   RETIRED_TEST_SAT_HOUR_SLUG,
   SINGLE_SAT_SESSION_PRICE_CENTS,
-  TEN_SAT_SESSION_PACKAGE_PRICE_CENTS,
 } from "./sat-catalog";
 
 function testAuthMiddleware(user?: AppUser) {
@@ -165,16 +174,28 @@ test("authenticated GET /api/public/products lists live SAT prices and omits the
       false,
     );
 
-    const single = products.find((product) => product.slug === "single-sat-session");
-    if (single) {
-      assert.equal(Number(single.totalPriceCents), SINGLE_SAT_SESSION_PRICE_CENTS);
-      assert.equal(Number(single.durationHours), 1);
+    for (const slug of [
+      "single-sat-session",
+      "ten-sat-session-package",
+      "sat-session-90",
+      "sat-session-120",
+    ]) {
+      assert.equal(
+        products.some((product) => product.slug === slug),
+        false,
+        `${slug} is no longer offered`,
+      );
     }
-    const pack = products.find((product) => product.slug === "ten-sat-session-package");
-    if (pack) {
-      assert.equal(Number(pack.totalPriceCents), TEN_SAT_SESSION_PACKAGE_PRICE_CENTS);
-      assert.equal(Number(pack.durationHours), 10);
-    }
+    const eunice = products.find((product) => product.slug === "sat-eunice-60");
+    const victoria = products.find((product) => product.slug === "sat-victoria-90");
+    const xavier = products.find((product) => product.slug === "sat-xavier-60");
+    assert.equal(Number(eunice?.totalPriceCents), SINGLE_SAT_SESSION_PRICE_CENTS);
+    assert.equal(Number(victoria?.totalPriceCents), 19_500);
+    assert.equal(Number(xavier?.totalPriceCents), 20_000);
+    assert.equal(
+      products.filter((product) => /^(sat-eunice|sat-victoria|sat-xavier)-/.test(product.slug)).length,
+      9,
+    );
 
     assert.equal(
       products.some((product) => product.slug === decoySlug),
@@ -188,7 +209,138 @@ test("authenticated GET /api/public/products lists live SAT prices and omits the
       await db.delete(satProductsTable).where(eq(satProductsTable.id, decoy.id));
     }
     if (student?.id) {
+      await db.delete(loginActivityTable).where(eq(loginActivityTable.userId, student.id));
+      await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.userId, student.id));
       await db.delete(usersTable).where(eq(usersTable.id, student.id));
     }
+  }
+});
+
+test("checkout charges Michelle $130 for Xavier SAT and $200 for everyone else", async (t) => {
+  if (!process.env.DATABASE_URL) {
+    t.skip("DATABASE_URL is required for SAT checkout coverage");
+    return;
+  }
+  const suffix = randomUUID().slice(0, 8);
+  const [emailTaken] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, MICHELLE_MAKAREM_EMAIL))
+    .limit(1);
+  if (emailTaken) {
+    t.skip("Michelle's email is already present in this database");
+    return;
+  }
+  const [michelle] = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId: `michelle-checkout:${suffix}`,
+      email: MICHELLE_MAKAREM_EMAIL,
+      displayName: "Michelle Makarem",
+      role: "student",
+    })
+    .returning();
+  const [sophia] = await db
+    .insert(usersTable)
+    .values({
+      clerkUserId: `sophia-checkout:${suffix}`,
+      email: `sophia-checkout-${suffix}@example.invalid`,
+      displayName: "Sophia Sleiman",
+      role: "student",
+    })
+    .returning();
+  const createdIds = [michelle!.id, sophia!.id];
+  const previousStudentIds = process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+  process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = [michelle!.clerkUserId, sophia!.clerkUserId].join(",");
+  let michelleServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  let sophiaServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  try {
+    michelleServer = await startServer(michelle);
+    sophiaServer = await startServer(sophia);
+    const listed = await fetch(`${sophiaServer.baseUrl}/api/public/products`);
+    assert.equal(listed.status, 200);
+    const products = (await listed.json()) as Array<{ id: string; slug: string; totalPriceCents: number }>;
+    const xavier = products.find((product) => product.slug === "sat-xavier-60");
+    assert.ok(xavier);
+    assert.equal(Number(xavier.totalPriceCents), 20_000);
+    const [storedBefore] = await db
+      .select({
+        totalPriceCents: satProductsTable.totalPriceCents,
+        stripePriceId: satProductsTable.stripePriceId,
+      })
+      .from(satProductsTable)
+      .where(eq(satProductsTable.id, xavier.id))
+      .limit(1);
+    const [legacy] = await db
+      .select({ id: satProductsTable.id })
+      .from(satProductsTable)
+      .where(eq(satProductsTable.slug, "single-sat-session"))
+      .limit(1);
+    if (legacy) {
+      const rejected = await fetch(`${sophiaServer.baseUrl}/api/payments/checkout`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productId: legacy.id }),
+      });
+      assert.equal(rejected.status, 403);
+      const rejectedBody = (await rejected.json()) as { error?: string };
+      assert.equal(rejectedBody.error, "Choose a tutor to buy SAT hours.");
+    }
+    if (process.env.STRIPE_SECRET_KEY) {
+      t.diagnostic("skipped live Stripe amount check");
+      return;
+    }
+    const michelleCheckout = await fetch(`${michelleServer.baseUrl}/api/payments/checkout`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ productId: xavier.id }),
+    });
+    assert.equal(michelleCheckout.status, 502);
+    const sophiaCheckout = await fetch(`${sophiaServer.baseUrl}/api/payments/checkout`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ productId: xavier.id }),
+    });
+    assert.equal(sophiaCheckout.status, 502);
+    const rows = await db
+      .select({
+        clientUserId: paymentsTable.clientUserId,
+        amountCents: paymentsTable.amountCents,
+        productId: paymentsTable.productId,
+      })
+      .from(paymentsTable)
+      .where(inArray(paymentsTable.clientUserId, createdIds));
+    assert.equal(rows.find((row) => row.clientUserId === michelle!.id)?.amountCents, 13_000);
+    assert.equal(rows.find((row) => row.clientUserId === sophia!.id)?.amountCents, 20_000);
+    assert.equal(rows.every((row) => row.productId === xavier.id), true);
+    const [storedAfter] = await db
+      .select({
+        totalPriceCents: satProductsTable.totalPriceCents,
+        stripePriceId: satProductsTable.stripePriceId,
+      })
+      .from(satProductsTable)
+      .where(eq(satProductsTable.id, xavier.id))
+      .limit(1);
+    assert.equal(Number(storedAfter?.totalPriceCents), 20_000);
+    assert.equal(storedAfter?.stripePriceId ?? null, storedBefore?.stripePriceId ?? null);
+  } finally {
+    await michelleServer?.close();
+    await sophiaServer?.close();
+    if (previousStudentIds === undefined) delete process.env.ACCEPTED_STUDENT_CLERK_USER_IDS;
+    else process.env.ACCEPTED_STUDENT_CLERK_USER_IDS = previousStudentIds;
+    const payments = await db
+      .select({ id: paymentsTable.id, invoiceId: paymentsTable.invoiceId })
+      .from(paymentsTable)
+      .where(inArray(paymentsTable.clientUserId, createdIds));
+    if (payments.length > 0) {
+      await db.delete(paymentsTable).where(inArray(paymentsTable.clientUserId, createdIds));
+    }
+    const invoiceIds = payments.map((payment) => payment.invoiceId).filter((id): id is string => Boolean(id));
+    if (invoiceIds.length > 0) {
+      await db.delete(invoicesTable).where(inArray(invoicesTable.id, invoiceIds));
+    }
+    await db.delete(loginActivityTable).where(inArray(loginActivityTable.userId, createdIds));
+    await db.delete(courseMembershipsTable).where(inArray(courseMembershipsTable.userId, createdIds));
+    await db.delete(usersTable).where(inArray(usersTable.id, createdIds));
   }
 });

@@ -119,6 +119,7 @@ import {
   insertConfirmedBookingWithDebit,
   listSharedMeetBusyWindows,
   lockClientCreditsAndRequireHours,
+  lockSatTutorCredits,
   notifyAdministratorsOfBooking,
   raiseLegacyCalendarManualEditAlert,
   recordBookingConfirmedAudit,
@@ -141,6 +142,7 @@ import {
   consultingSlugsForTutorKey,
   consultingTutorPhotoUrl,
   collegeConsultingTutorKeyForProfile,
+  VICTORIA_DISPLAY_NAME,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
   keepProvisionedPlaceholderDisplayName,
@@ -243,17 +245,30 @@ import {
 } from "../lib/tutor-assignment-reconciliation";
 import { recordSuccessfulLogin } from "../lib/login-activity";
 import {
-  ACCEPTED_SAT_CATALOG,
   ACCEPTED_SAT_CATALOG_SLUGS,
   RETIRED_TEST_SAT_HOUR_SLUG,
   SINGLE_SAT_SESSION_SLUG,
   TEN_SAT_SESSION_PACKAGE_SLUG,
   canBuySamaLiveCheckoutTest,
-  isAcceptedSatCatalogProduct,
   isRetiredSatTestProduct,
-  previewOffersFromCatalogProducts,
   SAMA_LIVE_CHECKOUT_TEST_SLUG,
 } from "../lib/sat-catalog";
+import {
+  SAT_TUTOR_PRODUCTS,
+  SAT_TUTOR_PRODUCT_SLUGS,
+  allowsLegacySatPool,
+  displayedSatDescription,
+  displayedSatHourlyCents,
+  displayedSatPriceCents,
+  isLegacySharedSatSlug,
+  isStandardSatTutorProduct,
+  previewOffersFromSatTutorProducts,
+  satSpendableHours,
+  satTutorHourSlug,
+  satTutorKeyForName,
+  satTutorKeyForSlug,
+  satTutorProductSortKey,
+} from "../lib/sat-tutor-pricing";
 import { selectAssignedPreviewBookingTutor } from "../lib/admin-client-preview";
 import {
   isLibraryAssetKind,
@@ -653,8 +668,8 @@ type AuthedRequest = Request & {
 const router: IRouter = Router();
 const XAVIER_NAME = "Xavier Morales";
 const EUNICE_NAME = "Eunice Chon";
-/** Prepaid SAT credits may be booked with either SAT tutor's calendar. */
-const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME] as const;
+/** SAT calendars. Hours are per tutor; legacy $130 hours also book Eunice and Victoria. */
+const SAT_BOOKING_TUTOR_NAMES = [XAVIER_NAME, EUNICE_NAME, VICTORIA_DISPLAY_NAME] as const;
 /** Legacy tutor compensation seed only — not used for student Checkout settlement. */
 const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const NIKA_NAME = "Nika Raiffe";
@@ -4339,19 +4354,48 @@ async function ensurePublicPlatformData(): Promise<void> {
   await ensureUpgradeSeedData();
 }
 
-async function listActiveAcceptedSatCatalogProducts() {
+async function ensureSatTutorProducts(): Promise<void> {
+  for (const product of SAT_TUTOR_PRODUCTS) {
+    await db
+      .insert(satProductsTable)
+      .values({
+        slug: product.slug,
+        name: product.name,
+        description: product.description,
+        durationHours: product.durationHours,
+        totalPriceCents: product.totalPriceCents,
+        effectiveHourlyRateCents: product.effectiveHourlyRateCents,
+        active: true,
+      })
+      .onConflictDoNothing({ target: satProductsTable.slug });
+  }
+}
+
+async function listActiveSatTutorProducts() {
   await ensurePublicPlatformData();
+  await ensureSatTutorProducts();
   const products = await db
     .select()
     .from(satProductsTable)
     .where(
       and(
         eq(satProductsTable.active, true),
-        inArray(satProductsTable.slug, [...ACCEPTED_SAT_CATALOG_SLUGS]),
+        inArray(satProductsTable.slug, [...SAT_TUTOR_PRODUCT_SLUGS]),
       ),
-    )
-    .orderBy(asc(satProductsTable.durationHours));
-  return products.filter((product) => isAcceptedSatCatalogProduct(product));
+    );
+  return products
+    .filter((product) => isStandardSatTutorProduct(product))
+    .sort((left, right) => satTutorProductSortKey(left.slug) - satTutorProductSortKey(right.slug));
+}
+
+async function satCreditCatalog() {
+  await ensureSatTutorProducts();
+  return db
+    .select({ id: satProductsTable.id, slug: satProductsTable.slug })
+    .from(satProductsTable)
+    .where(
+      inArray(satProductsTable.slug, [...SAT_TUTOR_PRODUCT_SLUGS, ...ACCEPTED_SAT_CATALOG_SLUGS]),
+    );
 }
 
 
@@ -5583,6 +5627,35 @@ function publicProductShape(product: {
   };
 }
 
+function publicSatProductForViewer(
+  product: {
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    durationHours: unknown;
+    totalPriceCents: number;
+    effectiveHourlyRateCents: number;
+  },
+  user: { clerkUserId?: string | null; email?: string | null },
+) {
+  const shape = publicProductShape(product);
+  const tutorKey = satTutorKeyForSlug(product.slug);
+  if (!tutorKey) return shape;
+  return {
+    ...shape,
+    description: displayedSatDescription(
+      { slug: product.slug, description: product.description, durationHours: Number(product.durationHours) },
+      user,
+    ),
+    totalPriceCents: displayedSatPriceCents(
+      { slug: product.slug, durationHours: Number(product.durationHours), totalPriceCents: product.totalPriceCents },
+      user,
+    ),
+    effectiveHourlyRateCents: displayedSatHourlyCents(tutorKey, user),
+  };
+}
+
 async function appendLiveCheckoutTestProduct<T extends { slug: string }>(
   products: T[],
   user: { email?: string | null; role?: string | null },
@@ -5619,8 +5692,13 @@ router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): 
     res.json(await appendLiveCheckoutTestProduct(products.map(publicProductShape), viewer));
     return;
   }
-  const products = await listActiveAcceptedSatCatalogProducts();
-  res.json(await appendLiveCheckoutTestProduct(products.map(publicProductShape), viewer));
+  const products = await listActiveSatTutorProducts();
+  res.json(
+    await appendLiveCheckoutTestProduct(
+      products.map((product) => publicSatProductForViewer(product, req.appUser!)),
+      viewer,
+    ),
+  );
 });
 
 router.get("/public/tutors", async (_req, res): Promise<void> => {
@@ -6921,11 +6999,47 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
+  const [catalog, entries] = await Promise.all([
+    satCreditCatalog(),
+    db
+      .select({
+        entryType: creditLedgerTable.entryType,
+        hours: creditLedgerTable.hours,
+        productId: creditLedgerTable.productId,
+      })
+      .from(creditLedgerTable)
+      .where(eq(creditLedgerTable.clientUserId, req.appUser!.id)),
+  ]);
+  const legacyProductIds = catalog
+    .filter((product) => isLegacySharedSatSlug(product.slug))
+    .map((product) => product.id);
   res.json(
-    tutors.map((tutor) => ({
-      ...tutor,
-      providerStatus: tutor.calendarStatus === "connected" ? "connected" : "disconnected",
-    })),
+    tutors.map((tutor) => {
+      const tutorKey = satTutorKeyForName(tutor.name);
+      const tutorProductIds = tutorKey
+        ? catalog.filter((product) => satTutorKeyForSlug(product.slug) === tutorKey).map((product) => product.id)
+        : [];
+      const connected = tutor.calendarStatus === "connected";
+      const subjects = tutor.subjects.some((subject) => subject.toLowerCase() === "sat")
+        ? tutor.subjects
+        : ["SAT", ...tutor.subjects];
+      return {
+        ...tutor,
+        name: personFirstName(tutor.name),
+        subjects,
+        providerStatus: connected ? ("connected" as const) : ("disconnected" as const),
+        hourlyRateCents: tutorKey ? displayedSatHourlyCents(tutorKey, req.appUser) : null,
+        prepaidHours: tutorKey
+          ? satSpendableHours(entries, {
+              tutorProductIds,
+              legacyProductIds,
+              allowLegacy: allowsLegacySatPool(tutorKey, req.appUser),
+            })
+          : 0,
+        bookable: connected,
+        serviceName: "SAT",
+      };
+    }),
   );
 });
 
@@ -6967,7 +7081,7 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
     res.json({
       tutor: {
         id: result.tutor.id,
-        name: result.tutor.name,
+        name: personFirstName(result.tutor.name),
         title: result.tutor.title,
         timezone: result.rule.timezone,
       },
@@ -7051,10 +7165,30 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     if (!slots.includes(start.toISOString())) {
       throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available. Choose another slot.");
     }
+    const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
+    if (!consulting && !tutorKey) {
+      throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
+    }
     const course = consulting
       ? await studentCollegeConsultingCourse(req.appUser!.id)
       : await studentCourseForBooking(req.appUser!.id);
     const consultingProduct = consulting ? await consultingProductForTutor(tutor) : null;
+    const satCreditArgs = tutorKey
+      ? await (async () => {
+          const catalog = await satCreditCatalog();
+          return {
+            tutorProductIds: catalog
+              .filter((product) => satTutorKeyForSlug(product.slug) === tutorKey)
+              .map((product) => product.id),
+            legacyProductIds: catalog
+              .filter((product) => isLegacySharedSatSlug(product.slug))
+              .map((product) => product.id),
+            tutorHourProductId:
+              catalog.find((product) => product.slug === satTutorHourSlug(tutorKey))?.id ?? null,
+            allowLegacy: allowsLegacySatPool(tutorKey, req.appUser),
+          };
+        })()
+      : null;
     if (consulting && !consultingProduct) {
       throw new BookingError(
         409,
@@ -7085,15 +7219,19 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
         throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
       }
-      const creditPool = consulting ? await consultingCreditProductIds(tutor) : null;
-      const excludedCreditProducts = consulting ? [] : await liveCheckoutTestProductIds();
-      await lockClientCreditsAndRequireHours(
-        tx,
-        req.appUser!.id,
-        durationMinutes / 60,
-        creditPool ?? consultingProduct?.id ?? null,
-        excludedCreditProducts,
-      );
+      const satDebits = satCreditArgs
+        ? await lockSatTutorCredits(tx, req.appUser!.id, durationMinutes / 60, satCreditArgs)
+        : null;
+      if (consulting) {
+        const creditPool = await consultingCreditProductIds(tutor);
+        await lockClientCreditsAndRequireHours(
+          tx,
+          req.appUser!.id,
+          durationMinutes / 60,
+          creditPool ?? consultingProduct?.id ?? null,
+          [],
+        );
+      }
       return insertConfirmedBookingWithDebit(tx, {
         courseId: course.id,
         clientUserId: req.appUser!.id,
@@ -7109,6 +7247,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
         durationMinutes,
         tutorName: tutor.name,
         productId: consultingProduct?.id ?? null,
+        ...(satDebits ? { debits: satDebits } : {}),
       });
     });
     try {
@@ -7507,7 +7646,11 @@ router.post(
           .returning();
         if (aligned) Object.assign(product, aligned);
       }
-      if (audience === "sat" && !isAcceptedSatCatalogProduct(product)) {
+      if (audience === "sat" && isLegacySharedSatSlug(product.slug)) {
+        res.status(403).json({ error: "Choose a tutor to buy SAT hours." });
+        return;
+      }
+      if (audience === "sat" && !isStandardSatTutorProduct(product)) {
         res.status(404).json({ error: "SAT product not found" });
         return;
       }
@@ -7524,6 +7667,10 @@ router.post(
         return;
       }
     }
+    const chargeCents =
+      !testCheckout && checkoutAudienceForSlug(req.appUser!.id, product.slug) === "sat"
+        ? displayedSatPriceCents(product, req.appUser)
+        : product.totalPriceCents;
     const [invoice, payment] = await db.transaction(async (tx) => {
       const [createdInvoice] = await tx
         .insert(invoicesTable)
@@ -7537,11 +7684,11 @@ router.post(
           lineItems: [{
             description: product.name,
             quantity: 1,
-            unitPriceCents: product.totalPriceCents,
+            unitPriceCents: chargeCents,
             productId: product.id,
           }],
-          subtotalCents: product.totalPriceCents,
-          totalCents: product.totalPriceCents,
+          subtotalCents: chargeCents,
+          totalCents: chargeCents,
           createdBy: req.appUser!.id,
         })
         .returning();
@@ -7551,9 +7698,9 @@ router.post(
           clientUserId: req.appUser!.id,
           invoiceId: createdInvoice!.id,
           productId: product.id,
-          amountCents: product.totalPriceCents,
+          amountCents: chargeCents,
           tutorShareCents: 0,
-          platformShareCents: product.totalPriceCents,
+          platformShareCents: chargeCents,
           status: "pending",
           method: "stripe_checkout",
           auditMetadata: {
@@ -7561,6 +7708,8 @@ router.post(
             owner: "accepted_admissions",
             customerEmail: req.appUser!.email,
             creditsGrantedOnPaidWebhook: product.durationHours,
+            catalogPriceCents: product.totalPriceCents,
+            clientPriceOverride: chargeCents !== product.totalPriceCents,
           },
         })
         .returning();
@@ -7575,6 +7724,7 @@ router.post(
         paymentId: payment.id,
         successUrl: `${origin}/portal/sat?payment=success`,
         cancelUrl: `${origin}/portal/sat?payment=canceled`,
+        unitAmountCents: chargeCents,
       });
       await db
         .update(paymentsTable)
@@ -8013,19 +8163,24 @@ router.post(
       res.status(400).json({ error: "Invoice total must be greater than zero" });
       return;
     }
+    const hostedChargeCents =
+      product && isStandardSatTutorProduct(product)
+        ? displayedSatPriceCents(product, client)
+        : product?.totalPriceCents;
     if (
       provider === "stripe_invoice" &&
       (!product ||
+        !isStandardSatTutorProduct(product) ||
         lineItems.length !== 1 ||
         lineItems[0]!.productId !== product.id ||
         lineItems[0]!.quantity !== 1 ||
-        lineItems[0]!.unitPriceCents !== product.totalPriceCents ||
+        lineItems[0]!.unitPriceCents !== hostedChargeCents ||
         discountCents !== 0 ||
         taxCents !== 0)
     ) {
       res.status(400).json({
         error:
-          "Stripe hosted invoices must use one catalog product at its current price; use Manual / offline for custom line items, tax, or discounts",
+          "Stripe hosted invoices must use one tutor SAT product at this client's price; use Manual / offline for custom line items, tax, or discounts",
       });
       return;
     }
@@ -8061,16 +8216,9 @@ router.post(
       | { tutorShareCents: number; platformShareCents: number }
       | undefined;
     if (provider === "stripe_invoice") {
-      if (!product || !isAcceptedSatCatalogProduct(product)) {
-        res.status(400).json({
-          error:
-            "Stripe invoices are available only for Accepted Admissions SAT catalog products at their current prices.",
-        });
-        return;
-      }
       stripeInvoiceAllocation = {
         tutorShareCents: 0,
-        platformShareCents: product.totalPriceCents,
+        platformShareCents: hostedChargeCents ?? product!.totalPriceCents,
       };
     }
     const [invoice, payment] = await db.transaction(async (tx) => {
@@ -8137,6 +8285,7 @@ router.post(
         invoiceId: invoice.id,
         paymentId: payment.id,
         daysUntilDue,
+        unitAmountCents: hostedChargeCents ?? product!.totalPriceCents,
       });
       const [updated] = await db
         .update(invoicesTable)
@@ -11723,7 +11872,7 @@ router.get(
             calendarStatus: tutorProfilesTable.calendarStatus,
           })
           .from(tutorProfilesTable),
-        listActiveAcceptedSatCatalogProducts(),
+        listActiveSatTutorProducts(),
         db
           .select()
           .from(sessionsTable)
@@ -11736,11 +11885,13 @@ router.get(
       assignedSatLinks,
       tutorProfiles,
     );
+    const tutorPreviewOffers = previewOffersFromSatTutorProducts(catalogProducts, client);
     let previewOffers =
-      previewOffersFromCatalogProducts(catalogProducts).length > 0
-        ? previewOffersFromCatalogProducts(catalogProducts)
-        : previewOffersFromCatalogProducts(
-            ACCEPTED_SAT_CATALOG.map((product) => ({ ...product, active: true })),
+      tutorPreviewOffers.length > 0
+        ? tutorPreviewOffers
+        : previewOffersFromSatTutorProducts(
+            SAT_TUTOR_PRODUCTS.map((product) => ({ ...product, active: true })),
+            client,
           );
     if (isNeelDharniUser(client.id)) {
       const consultingTutors = tutorProfiles.filter(
