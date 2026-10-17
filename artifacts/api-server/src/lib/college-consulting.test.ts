@@ -41,6 +41,7 @@ import {
   checkoutAudienceForSlug,
   clientMayBuyConsultingProduct,
   collegeConsultingTutorKeyForProfile,
+  clientPortalTutorTitle,
   consultingPreviewTutors,
   consultingSlugIsSatCatalogProduct,
   consultingCatalogAlignment,
@@ -660,6 +661,7 @@ test("provisioning and the migration do not send email or create Clerk users", a
     platform.indexOf("async function unresolvedSharedMeetOverlaps"),
   );
   assert.match(consultingList, /consultingTutorBiography/);
+  assert.match(consultingList, /clientPortalTutorTitle\(tutor\)/);
   assert.match(consultingList, /consultingTutorPhotoUrl/);
   assert.match(consultingList, /subjects: \[COLLEGE_CONSULTING_SUBJECT\]/);
   assert.match(consultingList, /bookable: connected/);
@@ -809,6 +811,18 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
   assert.equal(tutors[1]?.name, "Victoria");
   assert.equal(tutors[2]?.name, "Xavier");
   assert.equal(tutors[3]?.name, "Eunice");
+  assert.equal(tutors[3]?.title, consultingTutorBiography("eunice"));
+  assert.equal(tutors[0]?.title, "College Consulting Tutor");
+  assert.equal(tutors[1]?.title, "College Consulting Tutor");
+  assert.equal(tutors[2]?.title, "College Consulting Tutor");
+  assert.equal(
+    clientPortalTutorTitle({ name: "Eunice Chon", title: "Scholarship Tutor" }),
+    consultingTutorBiography("eunice"),
+  );
+  assert.equal(
+    clientPortalTutorTitle({ name: "Xavier Morales", title: "SAT & Math Tutor" }),
+    "SAT & Math Tutor",
+  );
   assert.equal(tutors[3]?.hourlyRateCents, 13_000);
   assert.equal(tutors[3]?.calendarConnected, false);
   assert.match(tutors[0]?.tagline ?? "", /Columbia/);

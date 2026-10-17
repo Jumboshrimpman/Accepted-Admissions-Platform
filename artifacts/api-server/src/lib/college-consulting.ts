@@ -542,6 +542,20 @@ export function consultingRateCentsForTutorKey(
   return collegeConsultingProductForTutorKey(tutorKey)!.hourlyRateCents;
 }
 
+/**
+ * The line under a tutor's name on client booking cards.
+ * Eunice's card uses her published bio. Other tutors keep their stored title.
+ */
+export function clientPortalTutorTitle(profile: {
+  name?: string | null;
+  email?: string | null;
+  userId?: string | null;
+  title?: string | null;
+}): string {
+  if (collegeConsultingTutorKeyForProfile(profile) === "eunice") return EUNICE_PUBLIC_BIOGRAPHY;
+  return profile.title?.trim() ?? "";
+}
+
 /** Consulting page bio. Nika's public roster biography stays on the team page. */
 export function consultingTutorBiography(tutorKey: CollegeConsultingTutorKey): string {
   if (tutorKey === "nika") return NIKA_CONSULTING_BIOGRAPHY;
@@ -750,7 +764,12 @@ export function consultingPreviewTutors(input: {
       tutorKey,
       id: profile?.id ?? `preview-${tutorKey}`,
       name: consultingTutorDisplayName(tutorKey),
-      title: filledPreviewText(profile?.title, fallback.title),
+      title: clientPortalTutorTitle({
+        name: profile?.name ?? fallback.name,
+        email: profile?.email,
+        userId: profile?.userId,
+        title: filledPreviewText(profile?.title, fallback.title),
+      }),
       tagline: filledPreviewText(profile?.tagline, fallback.tagline),
       biography:
         tutorKey === "xavier"

@@ -145,6 +145,7 @@ import {
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_SUBJECT,
+  clientPortalTutorTitle,
   consultingPreviewTutors,
   consultingTutorBiography,
   consultingTutorCredits,
@@ -7475,7 +7476,7 @@ async function consultingTutorList(clientUserId: string) {
     return {
       id: tutor.id,
       name: key ? consultingTutorDisplayName(key) : tutor.name,
-      title: tutor.title,
+      title: clientPortalTutorTitle(tutor),
       photoUrl: key ? consultingTutorPhotoUrl(key, tutor.photoUrl) : tutor.photoUrl,
       biography: key
         ? key === "xavier"
@@ -7579,6 +7580,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       return {
         ...tutor,
         name: personFirstName(tutor.name),
+        title: clientPortalTutorTitle(tutor),
         subjects,
         providerStatus: connected ? ("connected" as const) : ("disconnected" as const),
         hourlyRateCents: tutorKey ? displayedSatHourlyCents(tutorKey, req.appUser) : null,
@@ -13108,7 +13110,7 @@ router.get(
       ? {
           id: previewTutor.id,
           name: previewTutor.name,
-          title: previewTutor.title,
+          title: clientPortalTutorTitle(previewTutor),
           timezone: SAT_BOOKING_TIMEZONE,
         }
       : null;
@@ -13165,7 +13167,7 @@ router.get(
             tutor: {
               id: availability.tutor.id,
               name: availability.tutor.name,
-              title: availability.tutor.title,
+              title: clientPortalTutorTitle(availability.tutor),
               timezone: availability.rule.timezone,
             },
             providerStatus: availability.access ? "connected" : "disconnected",
