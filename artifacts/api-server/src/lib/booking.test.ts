@@ -554,8 +554,9 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const end = platformSource.indexOf('router.post("/booking/slot-holds/release"');
   const slice = platformSource.slice(start, end);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*adminWriter\.appCalendarId/);
-  assert.match(slice, /conferenceData: adminCalendarMeetConference\(created\.id\)/);
+  assert.doesNotMatch(slice, /adminCalendarMeetConference\(/);
   assert.match(slice, /createGoogleEventWithMeetFallback\(\s*token,\s*adminWriter\.appCalendarId/);
+  assert.match(slice, /manualCalendarInviteMessage\(\{[\s\S]*?meetUrl: SHARED_FALL_MEETING_URL/);
   assert.match(slice, /neelNikaCalendarEvent\(\{[\s\S]*?clientUserId: req\.appUser!\.id/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
   const reconnectBeforeDebit = slice.indexOf(

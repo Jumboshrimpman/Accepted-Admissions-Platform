@@ -240,6 +240,7 @@ export function generateAvailableSlots(
   busyWindows: BusyWindow[],
   bookedWindows: BusyWindow[],
   now = new Date(),
+  roomWindows: BusyWindow[] = [],
 ): string[] {
   if (durationMinutes <= 0 || from >= to) return [];
   const first = localParts(from, rule.timezone);
@@ -265,6 +266,8 @@ export function generateAvailableSlots(
         );
         const blocking = fixedDate ? bookedWindows : allBusy;
         if (overlapsBusyWindow(start, end, blocking, rule.bufferMinutes)) continue;
+        // The shared room has no buffer: the next session may start when the previous one ends.
+        if (overlapsBusyWindow(start, end, roomWindows, 0)) continue;
         slots.push(start.toISOString());
       }
     }

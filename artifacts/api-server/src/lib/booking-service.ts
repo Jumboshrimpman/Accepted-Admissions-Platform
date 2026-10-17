@@ -1,7 +1,8 @@
-import { and, asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import {
   adminNotificationsTable,
   auditLogsTable,
+  bookingSlotHoldsTable,
   coursesTable,
   creditLedgerTable,
   db,
@@ -12,7 +13,7 @@ import {
 } from "@workspace/db";
 import type { BusyWindow } from "./booking";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { SHARED_FALL_MEET_LOCK_KEY, SHARED_MEET_CONFLICT_MESSAGE, sessionClaimsSharedFallMeet, sharedMeetOccupancyWindows } from "./shared-meet-conflict.ts";
+import { SHARED_FALL_MEET_LOCK_KEY, SHARED_MEET_CONFLICT_MESSAGE, sharedMeetOccupancyWindows } from "./shared-meet-conflict.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   sessionScheduleChangeError,
@@ -151,9 +152,60 @@ export async function listSharedMeetBusyWindows(args: {
   return sharedMeetOccupancyWindows(rows);
 }
 
+function activeHoldOverlapWhere(args: {
+  start: Date;
+  end: Date;
+  ignoreHoldPaymentId?: string;
+}) {
+  return and(
+    isNull(bookingSlotHoldsTable.releasedAt),
+    sql`${bookingSlotHoldsTable.expiresAt} > now()`,
+    sql`${bookingSlotHoldsTable.startTime} < ${args.end}`,
+    sql`${bookingSlotHoldsTable.startTime} + (${bookingSlotHoldsTable.durationMinutes} * interval '1 minute') > ${args.start}`,
+    args.ignoreHoldPaymentId
+      ? sql`${bookingSlotHoldsTable.paymentId} <> ${args.ignoreHoldPaymentId}`
+      : sql`true`,
+  );
+}
+
+/** Confirmed sessions and active holds for every tutor. Back-to-back (end == start) is open. */
+export async function listGlobalRoomBusyWindows(args: {
+  start: Date;
+  end: Date;
+  excludeSessionId?: string;
+  ignoreHoldPaymentId?: string;
+}): Promise<BusyWindow[]> {
+  const [sessions, holds] = await Promise.all([
+    db
+      .select({
+        dateTime: sessionsTable.dateTime,
+        durationMinutes: sessionsTable.durationMinutes,
+      })
+      .from(sessionsTable)
+      .where(overlappingSessionWhere(args)),
+    db
+      .select({
+        startTime: bookingSlotHoldsTable.startTime,
+        durationMinutes: bookingSlotHoldsTable.durationMinutes,
+      })
+      .from(bookingSlotHoldsTable)
+      .where(activeHoldOverlapWhere(args)),
+  ]);
+  return [
+    ...sessions.map((session) => ({
+      start: session.dateTime.toISOString(),
+      end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
+    })),
+    ...holds.map((hold) => ({
+      start: hold.startTime.toISOString(),
+      end: new Date(hold.startTime.getTime() + Number(hold.durationMinutes) * 60_000).toISOString(),
+    })),
+  ];
+}
+
 /**
  * Serialize a shared-room write with the booking lock, then reject an overlap.
- * Sessions that do not claim the room skip the lock.
+ * Every invite uses the one Meet, so every session takes the lock.
  */
 export async function guardSharedMeetWrite(
   tx: Tx,
@@ -161,28 +213,17 @@ export async function guardSharedMeetWrite(
     start: Date;
     end: Date;
     excludeSessionId?: string;
+    ignoreHoldPaymentId?: string;
     courseId?: string | null;
     subject?: string | null;
   },
 ): Promise<void> {
-  const [course] = args.courseId
-    ? await tx
-        .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-        .from(coursesTable)
-        .where(eq(coursesTable.id, args.courseId))
-        .limit(1)
-    : [];
-  const claims = sessionClaimsSharedFallMeet({
-    term: course?.term,
-    courseMeetUrl: course?.meetUrl,
-    subject: args.subject,
-  });
-  if (!claims) return;
   await acquireSharedMeetLock(tx);
   await assertNoSharedMeetConflict(tx, {
     start: args.start,
     end: args.end,
     excludeSessionId: args.excludeSessionId,
+    ignoreHoldPaymentId: args.ignoreHoldPaymentId,
   });
 }
 
@@ -192,10 +233,23 @@ export async function assertNoSharedMeetConflict(
     start: Date;
     end: Date;
     excludeSessionId?: string;
+    ignoreHoldPaymentId?: string;
   },
 ): Promise<void> {
-  const rows = await overlappingSharedMeetCandidates(tx, args);
-  if (rows.some((row) => sessionClaimsSharedFallMeet(row))) {
+  const [session] = await tx
+    .select({ id: sessionsTable.id })
+    .from(sessionsTable)
+    .where(overlappingSessionWhere(args))
+    .limit(1);
+  if (session) {
+    throw new BookingServiceError(409, "SCHEDULE_CONFLICT", SHARED_MEET_CONFLICT_MESSAGE);
+  }
+  const [hold] = await tx
+    .select({ id: bookingSlotHoldsTable.id })
+    .from(bookingSlotHoldsTable)
+    .where(activeHoldOverlapWhere(args))
+    .limit(1);
+  if (hold) {
     throw new BookingServiceError(409, "SCHEDULE_CONFLICT", SHARED_MEET_CONFLICT_MESSAGE);
   }
 }
@@ -207,6 +261,7 @@ export async function assertNoScheduleConflict(
     start: Date;
     end: Date;
     excludeSessionId?: string;
+    ignoreHoldPaymentId?: string;
   },
 ): Promise<void> {
   await acquireSharedMeetLock(tx);
@@ -240,6 +295,7 @@ export async function assertNoScheduleConflict(
     start: args.start,
     end: args.end,
     excludeSessionId: args.excludeSessionId,
+    ignoreHoldPaymentId: args.ignoreHoldPaymentId,
   });
 }
 

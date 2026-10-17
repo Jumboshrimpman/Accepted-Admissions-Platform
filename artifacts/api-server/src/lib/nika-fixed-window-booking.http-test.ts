@@ -63,6 +63,15 @@ type CapturedWrite = {
   calendarId: string;
 };
 
+function assertSharedRoomInvite(write: CapturedWrite): void {
+  assert.match(write.url, /sendUpdates=none/);
+  assert.match(write.url, /conferenceDataVersion=1/);
+  assert.equal(write.conference, false);
+  assert.equal(write.location, NEEL_NIKA_MEET_URL);
+  assert.equal(write.description, NEEL_NIKA_MEET_URL);
+  assert.equal(write.conferenceUri, NEEL_NIKA_MEET_URL);
+}
+
 function testAuthMiddleware(user: AppUser) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const auth = Object.assign(
@@ -1337,7 +1346,7 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
       createdSessionIds.push(session.id);
       const createdWrite = calendar.writes.find((write) => write.method === "POST");
       assert.ok(createdWrite, JSON.stringify(calendar.writes));
-      assert.match(createdWrite.url, /sendUpdates=none$/);
+      assertSharedRoomInvite(createdWrite);
       assert.equal(createdWrite.attendees.includes(item.email), false);
       assert.deepEqual(createdWrite.attendees, [neel.email, ADMIN_EMAIL]);
 
@@ -1348,7 +1357,7 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
       assert.equal(rescheduled.status, 200, `${item.email} ${JSON.stringify(rescheduled.body)}`);
       const rescheduleWrite = calendar.writes.find((write) => write.method === "PATCH");
       assert.ok(rescheduleWrite, JSON.stringify(calendar.writes));
-      assert.match(rescheduleWrite.url, /sendUpdates=none$/);
+      assertSharedRoomInvite(rescheduleWrite);
       assert.equal(rescheduleWrite.attendees.includes(item.email), false);
 
       calendar.writes.length = 0;
@@ -1358,7 +1367,7 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
       assert.equal(edited.status, 200, `${item.email} ${JSON.stringify(edited.body)}`);
       const editWrite = calendar.writes.find((write) => write.method === "PATCH");
       assert.ok(editWrite, JSON.stringify(calendar.writes));
-      assert.match(editWrite.url, /sendUpdates=none$/);
+      assertSharedRoomInvite(editWrite);
       assert.equal(editWrite.attendees.includes(item.email), false);
 
       calendar.writes.length = 0;

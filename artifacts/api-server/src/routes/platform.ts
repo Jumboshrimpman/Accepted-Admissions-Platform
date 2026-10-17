@@ -114,7 +114,6 @@ import {
 } from "../lib/app-created-calendar";
 import {
   adminCalendarGrantCanWriteEvents,
-  adminCalendarMeetConference,
   bookingsUseAdminCalendarFallback,
   isNikaTutorProfile,
   manualCalendarInviteMessage,
@@ -127,7 +126,7 @@ import {
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
-  listSharedMeetBusyWindows,
+  listGlobalRoomBusyWindows,
   lockClientCreditsAndRequireHours,
   lockSatTutorCredits,
   notifyAdministratorsOfBooking,
@@ -5053,12 +5052,8 @@ function neelNikaCalendarEvent(args: {
   clientUserId?: string | null;
   tutorName?: string | null;
   tutorEmail?: string | null;
-}): { meetUrl: string | null; body: Record<string, unknown> } {
-  const meetUrl = neelNikaMeetUrl({
-    clientUserId: args.clientUserId,
-    tutorName: args.tutorName,
-    tutorEmail: args.tutorEmail,
-  });
+}): { meetUrl: string; body: Record<string, unknown> } {
+  const meetUrl = SHARED_FALL_MEETING_URL;
   return {
     meetUrl,
     body: {
@@ -5068,13 +5063,13 @@ function neelNikaCalendarEvent(args: {
         durationMinutes: args.durationMinutes,
         timeZone: args.timeZone,
         attendeeEmail: args.attendeeEmail,
-        location: meetUrl ?? args.location,
-        description: meetUrl ?? undefined,
+        location: meetUrl,
+        description: meetUrl,
         student: args.student,
         tutor: args.tutor,
         inviteTutor: args.inviteTutor,
       }),
-      ...(meetUrl ? { conferenceData: existingGoogleMeetConference(meetUrl) } : {}),
+      conferenceData: existingGoogleMeetConference(meetUrl),
     },
   };
 }
@@ -5221,7 +5216,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   const event = written.value;
   return {
     providerEventId: event.id ?? args.existing.providerEventId,
-    providerEventUrl: pinned.meetUrl ?? event.htmlLink ?? args.existing.providerEventUrl,
+    providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? args.existing.providerEventUrl,
   };
 }
 
@@ -5402,6 +5397,7 @@ type TutorSlotContext = {
   availabilityRule: AvailabilityRule;
   busyWindows: BusyWindow[];
   bookedWindows: BusyWindow[];
+  roomWindows: BusyWindow[];
   usesAdminCalendarFallback: boolean;
 };
 
@@ -5464,39 +5460,40 @@ async function loadTutorSlotContext(
       busyWindows = [];
     }
   }
-  const [bookedSessions, sharedMeetWindows] = await Promise.all([
-    db
-      .select({
-        id: sessionsTable.id,
-        dateTime: sessionsTable.dateTime,
-        durationMinutes: sessionsTable.durationMinutes,
-      })
-      .from(sessionsTable)
-      .where(
-        and(
-          tutor.userId
-            ? eq(sessionsTable.tutorUserId, tutor.userId)
-            : sql`false`,
-          inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
-          sql`${sessionsTable.status} <> 'archived'`,
-          sql`${sessionsTable.dateTime} < ${to}`,
-          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
-          excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
-        ),
+  const bookedSessions = await db
+    .select({
+      id: sessionsTable.id,
+      dateTime: sessionsTable.dateTime,
+      durationMinutes: sessionsTable.durationMinutes,
+    })
+    .from(sessionsTable)
+    .where(
+      and(
+        tutor.userId
+          ? eq(sessionsTable.tutorUserId, tutor.userId)
+          : sql`false`,
+        inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
+        sql`${sessionsTable.status} <> 'archived'`,
+        sql`${sessionsTable.dateTime} < ${to}`,
+        sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
+        excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
       ),
-    listSharedMeetBusyWindows({
+    );
+  await releaseExpiredSlotHolds(db, tutorProfileId);
+  const [heldSlots, roomWindows] = await Promise.all([
+    activeSlotHoldsOverlapping(db, {
+      tutorProfileId,
+      start: from,
+      end: to,
+      ignorePaymentId: ignoreHoldPaymentId,
+    }),
+    listGlobalRoomBusyWindows({
       start: from,
       end: to,
       excludeSessionId,
+      ignoreHoldPaymentId,
     }),
   ]);
-  await releaseExpiredSlotHolds(db, tutorProfileId);
-  const heldSlots = await activeSlotHoldsOverlapping(db, {
-    tutorProfileId,
-    start: from,
-    end: to,
-    ignorePaymentId: ignoreHoldPaymentId,
-  });
   const bookedWindows: BusyWindow[] = [
     ...bookedSessions.map((session) => ({
       start: session.dateTime.toISOString(),
@@ -5506,7 +5503,6 @@ async function loadTutorSlotContext(
       start: hold.startTime.toISOString(),
       end: new Date(hold.startTime.getTime() + Number(hold.durationMinutes) * 60_000).toISOString(),
     })),
-    ...sharedMeetWindows,
   ];
   const availabilityRule: AvailabilityRule = {
     timezone: rule.timezone,
@@ -5516,7 +5512,16 @@ async function loadTutorSlotContext(
     bufferMinutes: rule.bufferMinutes,
     blackoutDates: rule.blackoutDates,
   };
-  return { tutor, rule, access, availabilityRule, busyWindows, bookedWindows, usesAdminCalendarFallback };
+  return {
+    tutor,
+    rule,
+    access,
+    availabilityRule,
+    busyWindows,
+    bookedWindows,
+    roomWindows,
+    usesAdminCalendarFallback,
+  };
 }
 
 function projectTutorSlots(
@@ -5532,6 +5537,8 @@ function projectTutorSlots(
     durationMinutes,
     context.busyWindows,
     context.bookedWindows,
+    new Date(),
+    context.roomWindows,
   );
   const slots = context.access
     ? generated
@@ -7951,7 +7958,12 @@ async function respondWithPrepaidBooking(
         end,
         ignorePaymentId: holdPaymentId,
       });
-      await assertNoScheduleConflict(tx, { participantIds, start, end });
+      await assertNoScheduleConflict(tx, {
+        participantIds,
+        start,
+        end,
+        ignoreHoldPaymentId: holdPaymentId,
+      });
       if (!fixedWindow) {
         if (!access) {
           throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
@@ -8055,11 +8067,7 @@ async function respondWithPrepaidBooking(
             tutorEmail: tutor.email,
             start,
             durationMinutes,
-            meetUrl: neelNikaMeetUrl({
-              clientUserId: req.appUser!.id,
-              tutorName: tutor.name,
-              tutorEmail: tutor.email,
-            }),
+            meetUrl: SHARED_FALL_MEETING_URL,
           }),
         });
         await confirmBookedSession(created, true);
@@ -8097,21 +8105,18 @@ async function respondWithPrepaidBooking(
           tutorName: tutor.name,
           tutorEmail: tutor.email,
         });
-        const eventBody = pinned.meetUrl
-          ? pinned.body
-          : { ...pinned.body, conferenceData: adminCalendarMeetConference(created.id) };
         const event = await runTutorCalendarCall(adminAccess, (token) =>
           pinned.meetUrl
             ? createGoogleEventWithMeetFallback(
                 token,
                 adminWriter.appCalendarId,
-                eventBody,
+                pinned.body,
                 sendUpdates,
               )
             : createGoogleEvent(
                 token,
                 adminWriter.appCalendarId,
-                eventBody,
+                pinned.body,
                 sendUpdates,
               ),
         );
@@ -8983,7 +8988,7 @@ router.post(
       return [createdInvoice!, createdPayment!] as const;
     });
     } catch (error) {
-      if (error instanceof SlotHoldConflict) {
+      if (error instanceof SlotHoldConflict || error instanceof BookingServiceError) {
         res.status(error.status).json({ code: error.code, error: error.message });
         return;
       }
