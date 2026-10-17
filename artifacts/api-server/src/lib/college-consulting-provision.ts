@@ -21,6 +21,8 @@ import {
   SAMA_LIVE_CHECKOUT_TEST_SLUG,
 } from "./sat-catalog.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { SAT_TUTOR_PRODUCTS } from "./sat-tutor-pricing.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   COLLEGE_CONSULTING_COURSE_ID,
   COLLEGE_CONSULTING_LENGTH_PRODUCTS,
@@ -184,6 +186,14 @@ async function ensureCatalogProducts(tx: ProvisionTx): Promise<void> {
       .where(eq(satProductsTable.id, stored.id));
   }
   const extraProducts = [
+    ...SAT_TUTOR_PRODUCTS.map((product) => ({
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      durationHours: product.durationHours,
+      totalPriceCents: product.totalPriceCents,
+      effectiveHourlyRateCents: product.effectiveHourlyRateCents,
+    })),
     ...ACCEPTED_SAT_CATALOG.filter((product) => product.durationHours !== 1 && product.durationHours !== 10).map(
       (product) => ({
         slug: product.slug,

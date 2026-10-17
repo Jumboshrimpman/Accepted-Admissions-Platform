@@ -379,6 +379,13 @@
       "when": 1792200000000,
       "tag": "0057_session_lengths_and_checkout_test",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792300000000,
+      "tag": "0058_per_tutor_sat_rates",
+      "breakpoints": true
     }
   ]
 }

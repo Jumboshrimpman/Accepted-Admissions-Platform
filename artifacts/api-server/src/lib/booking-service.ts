@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, or, sql } from "drizzle-orm";
 import {
   adminNotificationsTable,
   auditLogsTable,
@@ -27,6 +27,8 @@ import {
 } from "./credit-hours.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { selfServeSatBookingForAccount } from "./session-schedule.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { satDebitPlan, type SatDebit } from "./sat-tutor-pricing.ts";
 
 export { remainingCreditHours } from "./credit-hours.ts";
 
@@ -287,6 +289,101 @@ async function debitProductId(
   return debit?.productId ?? null;
 }
 
+async function sessionDebitRows(tx: Tx, sessionId: string) {
+  return tx
+    .select({
+      productId: creditLedgerTable.productId,
+      hours: creditLedgerTable.hours,
+      fulfillmentKey: creditLedgerTable.fulfillmentKey,
+    })
+    .from(creditLedgerTable)
+    .where(
+      and(eq(creditLedgerTable.sessionId, sessionId), eq(creditLedgerTable.entryType, "debit")),
+    )
+    .orderBy(asc(creditLedgerTable.fulfillmentKey));
+}
+
+function indexedFulfillmentKey(baseKey: string, index: number): string {
+  return index === 0 ? baseKey : `${baseKey}:${index}`;
+}
+
+async function restoreSessionDebits(
+  tx: Tx,
+  args: {
+    sessionId: string;
+    clientUserId: string;
+    durationMinutes: number;
+    baseFulfillmentKey: string;
+    note: string;
+  },
+): Promise<number> {
+  const debits = await sessionDebitRows(tx, args.sessionId);
+  const restores =
+    debits.length > 0
+      ? debits.map((debit, index) => ({
+          productId: debit.productId,
+          hours: ledgerHours(debit.hours),
+          fulfillmentKey: indexedFulfillmentKey(args.baseFulfillmentKey, index),
+        }))
+      : [
+          {
+            productId: await debitProductId(tx, args.sessionId),
+            hours: ledgerHours(args.durationMinutes) / 60,
+            fulfillmentKey: args.baseFulfillmentKey,
+          },
+        ];
+  for (const restore of restores) {
+    await tx
+      .insert(creditLedgerTable)
+      .values({
+        clientUserId: args.clientUserId,
+        productId: restore.productId,
+        sessionId: args.sessionId,
+        entryType: "restored",
+        hours: restore.hours,
+        fulfillmentKey: restore.fulfillmentKey,
+        referenceType: "session",
+        referenceId: args.sessionId,
+        note: args.note,
+      })
+      .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
+  }
+  return restores.reduce((total, restore) => total + restore.hours, 0);
+}
+
+export async function lockSatTutorCredits(
+  tx: Tx,
+  clientUserId: string,
+  requiredHours: number,
+  args: {
+    tutorProductIds: readonly string[];
+    legacyProductIds: readonly string[];
+    tutorHourProductId: string | null;
+    allowLegacy: boolean;
+  },
+): Promise<SatDebit[]> {
+  await tx.execute(
+    sql`select id from credit_ledger where client_user_id = ${clientUserId} for update`,
+  );
+  const entries = await tx
+    .select({
+      entryType: creditLedgerTable.entryType,
+      hours: creditLedgerTable.hours,
+      productId: creditLedgerTable.productId,
+    })
+    .from(creditLedgerTable)
+    .where(eq(creditLedgerTable.clientUserId, clientUserId));
+  const plan = satDebitPlan(entries, { ...args, requiredHours });
+  if (!plan.ok) {
+    throw new BookingServiceError(
+      409,
+      "INSUFFICIENT_CREDIT",
+      "You do not have enough prepaid hours with this tutor for this session.",
+    );
+  }
+  return plan.debits;
+}
+
 export async function insertConfirmedBookingWithDebit(
   tx: Tx,
   args: {
@@ -300,6 +397,7 @@ export async function insertConfirmedBookingWithDebit(
     durationMinutes: number;
     tutorName: string;
     productId?: string | null;
+    debits?: readonly SatDebit[];
   },
 ): Promise<typeof sessionsTable.$inferSelect> {
   const [session] = await tx
@@ -318,21 +416,26 @@ export async function insertConfirmedBookingWithDebit(
     })
     .returning();
   if (!session) throw new BookingServiceError(500, "BOOKING_FAILED", "Session could not be created.");
-  const hours = ledgerHours(args.durationMinutes) / 60;
-  await tx.insert(creditLedgerTable).values({
-    clientUserId: args.clientUserId,
-    productId: args.productId ?? null,
-    sessionId: session.id,
-    entryType: "debit",
-    hours,
-    fulfillmentKey: sessionDebitFulfillmentKey(session.id),
-    referenceType: "session",
-    referenceId: session.id,
-    note:
-      args.subject === "SAT"
-        ? `Reserved SAT session with ${args.tutorName}`
-        : `Reserved ${args.subject} session with ${args.tutorName}`,
-  });
+  const planned =
+    args.debits && args.debits.length > 0
+      ? args.debits
+      : [{ productId: args.productId ?? null, hours: ledgerHours(args.durationMinutes) / 60 }];
+  for (const [index, debit] of planned.entries()) {
+    await tx.insert(creditLedgerTable).values({
+      clientUserId: args.clientUserId,
+      productId: debit.productId,
+      sessionId: session.id,
+      entryType: "debit",
+      hours: debit.hours,
+      fulfillmentKey: indexedFulfillmentKey(sessionDebitFulfillmentKey(session.id), index),
+      referenceType: "session",
+      referenceId: session.id,
+      note:
+        args.subject === "SAT"
+          ? `Reserved SAT session with ${args.tutorName}`
+          : `Reserved ${args.subject} session with ${args.tutorName}`,
+    });
+  }
   return session;
 }
 
@@ -354,22 +457,13 @@ export async function rollbackBookingAfterCalendarFailure(
       updatedAt: new Date(),
     })
     .where(eq(sessionsTable.id, args.sessionId));
-  const hours = ledgerHours(args.durationMinutes) / 60;
-  const productId = await debitProductId(tx, args.sessionId);
-  await tx
-    .insert(creditLedgerTable)
-    .values({
-      clientUserId: args.clientUserId,
-      productId,
-      sessionId: args.sessionId,
-      entryType: "restored",
-      hours,
-      fulfillmentKey: sessionCalendarFailRestoreFulfillmentKey(args.sessionId),
-      referenceType: "session",
-      referenceId: args.sessionId,
-      note: "Restored after calendar event creation failed",
-    })
-    .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
+  const hours = await restoreSessionDebits(tx, {
+    sessionId: args.sessionId,
+    clientUserId: args.clientUserId,
+    durationMinutes: args.durationMinutes,
+    baseFulfillmentKey: sessionCalendarFailRestoreFulfillmentKey(args.sessionId),
+    note: "Restored after calendar event creation failed",
+  });
   await tx.insert(auditLogsTable).values({
     actorUserId: args.actorUserId,
     action: "credit.restored",
@@ -424,23 +518,16 @@ export async function cancelBookingWithCreditPolicy(
     })
     .where(eq(sessionsTable.id, current.id))
     .returning();
-  const hours = ledgerHours(current.durationMinutes) / 60;
-  if (creditRestored && current.clientUserId) {
-    const productId = await debitProductId(tx, current.id);
-    await tx
-      .insert(creditLedgerTable)
-      .values({
-        clientUserId: current.clientUserId,
-        productId,
+  const hours = creditRestored && current.clientUserId
+    ? await restoreSessionDebits(tx, {
         sessionId: current.id,
-        entryType: "restored",
-        hours,
-        fulfillmentKey: sessionRestoreFulfillmentKey(current.id),
-        referenceType: "session",
-        referenceId: current.id,
+        clientUserId: current.clientUserId,
+        durationMinutes: current.durationMinutes,
+        baseFulfillmentKey: sessionRestoreFulfillmentKey(current.id),
         note: "Credit restored after eligible session cancellation",
       })
-      .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
+    : ledgerHours(current.durationMinutes) / 60;
+  if (creditRestored && current.clientUserId) {
     await tx.insert(auditLogsTable).values({
       actorUserId: args.actorUserId,
       action: "credit.restored",

@@ -128,24 +128,20 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
     assert.equal(preview.body.user.id, fixture.student.id);
     assert.equal(preview.body.user.displayName, fixture.student.displayName);
     assert.equal(preview.body.user.role, "student");
-    assert.equal(preview.body.previewOffer.name, "Single SAT Session");
+    assert.equal(preview.body.previewOffer.name, "SAT 1 hour with Eunice");
     assert.equal(preview.body.previewOffer.priceCents, 13000);
     assert.equal(preview.body.previewOffer.durationMinutes, 60);
     assert.equal(Array.isArray(preview.body.previewOffers), true);
-    assert.equal(
-      preview.body.previewOffers.some(
-        (offer: { slug?: string; name: string }) =>
-          offer.slug === "single-sat-session" || offer.name === "Single SAT Session",
-      ),
-      true,
-    );
-    assert.equal(
-      preview.body.previewOffers.some(
-        (offer: { slug?: string; name: string }) =>
-          offer.slug === "ten-sat-session-package" ||
-          offer.name === "Ten SAT Session Package",
-      ),
-      true,
+    assert.deepEqual(
+      preview.body.previewOffers.map((offer: { slug?: string; priceCents: number }) => ({
+        slug: offer.slug,
+        priceCents: offer.priceCents,
+      })),
+      [
+        { slug: "sat-eunice-60", priceCents: 13000 },
+        { slug: "sat-victoria-60", priceCents: 13000 },
+        { slug: "sat-xavier-60", priceCents: 20000 },
+      ],
     );
     if (preview.body.previewBooking.availability) {
       assert.equal(

@@ -340,7 +340,7 @@ describe("client availability calendar", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Buy a single hour \(\$130\) or the 10-hour package \(\$1,300\)/),
+        screen.getByText(/You need prepaid hours with this tutor before reserving/),
       ).toBeTruthy();
     });
     expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");

@@ -352,7 +352,7 @@ export function ClientDashboardView({
               Purchased credits unlock after a verified Stripe payment. A session uses its length in prepaid hours.
               {collegeConsulting
                 ? " Nika is $100/hour, Victoria is $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Hours do not transfer between tutors."
-                : " Pay $130/hour. A 1-hour session is $130, 1.5 hours is $195, and 2 hours is $260. A 10-hour package is $1,300."}
+                : " Choose Eunice, Victoria, or Xavier. A 1-hour, 1.5-hour, or 2-hour session uses that tutor’s hourly rate. Hours stay with the tutor you buy them for."}
             </CardDescription>
           </CardHeader>
           <CardContent>

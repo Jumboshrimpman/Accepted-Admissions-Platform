@@ -4,6 +4,7 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
+  availabilityRulesTable,
   courseMembershipsTable,
   coursesTable,
   db,
@@ -178,27 +179,16 @@ test("client preview books the assigned SAT tutor and lists the active catalog",
       ),
       true,
     );
-    assert.equal(
-      body.previewOffers.some(
-        (offer) =>
-          offer.slug === "single-sat-session" || offer.name === "Single SAT Session",
-      ),
-      true,
+    assert.deepEqual(
+      body.previewOffers.map((offer) => ({ slug: offer.slug, priceCents: offer.priceCents })),
+      [
+        { slug: "sat-eunice-60", priceCents: 13_000 },
+        { slug: "sat-victoria-60", priceCents: 13_000 },
+        { slug: "sat-xavier-60", priceCents: 20_000 },
+      ],
     );
-    assert.equal(
-      body.previewOffers.some(
-        (offer) =>
-          offer.slug === "ten-sat-session-package" ||
-          offer.name === "Ten SAT Session Package",
-      ),
-      true,
-    );
-    assert.equal(body.previewOffer.name, "Single SAT Session");
+    assert.equal(body.previewOffer.name, "SAT 1 hour with Eunice");
     assert.equal(body.previewOffer.priceCents, 13_000);
-    assert.equal(
-      body.previewOffers.some((offer) => offer.priceCents === 130_000),
-      true,
-    );
   } finally {
     await administratorServer?.close();
     if (previousAdminIds === undefined) {
@@ -230,6 +220,16 @@ test("client preview books the assigned SAT tutor and lists the active catalog",
         );
       if (courseId) {
         await db.delete(coursesTable).where(eq(coursesTable.id, courseId));
+      }
+      const profiles = await db
+        .select({ id: tutorProfilesTable.id })
+        .from(tutorProfilesTable)
+        .where(inArray(tutorProfilesTable.userId, userIds));
+      const profileIds = profiles.map((profile) => profile.id);
+      if (profileIds.length > 0) {
+        await db
+          .delete(availabilityRulesTable)
+          .where(inArray(availabilityRulesTable.tutorProfileId, profileIds));
       }
       await db
         .delete(tutorProfilesTable)

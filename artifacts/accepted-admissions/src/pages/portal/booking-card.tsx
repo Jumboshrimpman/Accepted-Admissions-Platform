@@ -152,7 +152,8 @@ function BookingTutorOption({
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              {tutor.serviceName === "College Consulting" && typeof tutor.hourlyRateCents === "number"
+              {(tutor.serviceName === "College Consulting" || tutor.serviceName === "SAT") &&
+              typeof tutor.hourlyRateCents === "number"
                 ? `$${Math.round(tutor.hourlyRateCents / 100)}/hr · `
                 : ""}
               {tutor.providerStatus === "connected"
@@ -466,13 +467,14 @@ export function BookingCard({
   };
 
   const collegeConsulting = tutors.some((tutor) => tutor.serviceName === "College Consulting");
-  const selectedTutorHours =
-    collegeConsulting && typeof selectedTutor?.prepaidHours === "number"
-      ? selectedTutor.prepaidHours
-      : remainingHours;
+  const scopedHours = selectedTutor?.prepaidHours;
+  const tutorScopedCredits = typeof scopedHours === "number";
+  const selectedTutorHours = tutorScopedCredits ? scopedHours : remainingHours;
   const busy = createBooking.isPending || cancelBooking.isPending || rescheduleBooking.isPending;
-  const upcomingReserved = bookedSessionList.upcoming.filter((session) =>
-    canCancelOrRescheduleSession(session),
+  const upcomingReserved = bookedSessionList.upcoming.filter(
+    (session) =>
+      canCancelOrRescheduleSession(session) &&
+      (!tutorScopedCredits || session.tutorProfileId === selectedTutor?.id),
   );
   const creditWall = bookingCreditWallState({
     remainingHours: selectedTutorHours,
@@ -519,11 +521,11 @@ export function BookingCard({
             <CardDescription className="mt-2 max-w-2xl">
               {collegeConsulting
                 ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier ($200/hr), then 1 hour, 1.5 hours, or 2 hours at that same rate. The full length is checked against that tutor’s Google Calendar and the shared Meet room. Cancel at least 24 hours ahead to restore the credit."
-                : "Choose Xavier or Eunice, then 1 hour ($130), 1.5 hours ($195), or 2 hours ($260). The full length is checked against their live Google Calendar. A 10-hour package is $1,300. Cancel at least 24 hours ahead to restore the credit."}
+                : "Choose Eunice, Victoria, or Xavier, then 1 hour, 1.5 hours, or 2 hours at that tutor’s rate. The full length is checked against their live Google Calendar. Cancel at least 24 hours ahead to restore the credit."}
             </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
-            {prepaidHoursBadgeLabel(remainingHours, purchasedHours, upcomingReserved.length > 0)}
+            {prepaidHoursBadgeLabel(selectedTutorHours, purchasedHours, upcomingReserved.length > 0)}
           </Badge>
         </div>
       </CardHeader>
@@ -688,7 +690,7 @@ export function BookingCard({
                     data-testid="booking-credit-available"
                   >
                     <p>
-                      You have {remainingHours} prepaid hour{remainingHours === 1 ? "" : "s"} ready to book.
+                      You have {selectedTutorHours} prepaid hour{selectedTutorHours === 1 ? "" : "s"} ready to book.
                       Pick a time above. After you reserve, you can change the date and time here until the session starts.
                     </p>
                   </div>
@@ -698,7 +700,7 @@ export function BookingCard({
                     <p>
                       {collegeConsulting
                         ? `You need a prepaid hour with ${selectedTutor?.name ?? "this tutor"} before reserving. Hours do not transfer between tutors.`
-                        : "You need a prepaid SAT credit before reserving. Buy a single hour ($130) or the 10-hour package ($1,300), then book Xavier or Eunice here."}
+                        : "You need prepaid hours with this tutor before reserving. Buy a 1-hour, 1.5-hour, or 2-hour session for them, then book here."}
                     </p>
                     <Button asChild className="mt-3 rounded-full" size="sm">
                       <Link href="/portal/sat">{collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT hours"}</Link>
