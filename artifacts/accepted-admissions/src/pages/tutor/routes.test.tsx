@@ -99,6 +99,19 @@ function stubTutorApis() {
         bookingEligible: true,
       };
     }
+    if (path === "/api/tutor/offered-availability") {
+      return {
+        from: "2026-10-17T14:00:00.000Z",
+        to: "2026-10-31T14:00:00.000Z",
+        timezone: "America/New_York",
+        providerStatus: "disconnected",
+        lengths: [
+          { durationMinutes: 60, slots: [] },
+          { durationMinutes: 90, slots: [] },
+          { durationMinutes: 120, slots: [] },
+        ],
+      };
+    }
     if (path === "/api/tutor/curriculum") {
       return {
         programs: [],

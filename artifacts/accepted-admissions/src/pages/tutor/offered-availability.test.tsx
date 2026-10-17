@@ -1,0 +1,83 @@
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  customFetch: vi.fn(),
+}));
+
+vi.mock("@workspace/api-client-react", () => ({
+  customFetch: mocks.customFetch,
+}));
+
+import { TutorOfferedAvailability } from "./offered-availability";
+
+const CONNECT_URL = "/api/calendar/connect?redirect=1&returnTo=%2Ftutor";
+
+afterEach(() => {
+  cleanup();
+  mocks.customFetch.mockReset();
+});
+
+describe("tutor offered availability", () => {
+  test("disconnected calendar tells the tutor clients cannot book and links to connect", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "disconnected",
+      lengths: [
+        { durationMinutes: 60, slots: [] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: [] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    const notice = await screen.findByTestId("tutor-offered-disconnected");
+    expect(notice.textContent).toContain(
+      "Clients cannot book you until Google Calendar is connected.",
+    );
+    expect(screen.getByRole("link", { name: "Connect Google Calendar" }).getAttribute("href")).toBe(
+      CONNECT_URL,
+    );
+    expect(screen.getByText(/Times are shown in ET \(America\/New_York\)/)).toBeTruthy();
+    expect(notice.textContent).not.toMatch(/@/);
+    expect(screen.queryByText(/Quinlan Piihold/)).toBeNull();
+  });
+
+  test("shows the same open times in the tutor timezone for 1 hour, 1.5 hours, and 2 hours", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "connected",
+      lengths: [
+        { durationMinutes: 60, slots: ["2026-10-20T19:00:00.000Z"] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: ["2026-10-20T19:00:00.000Z", "2026-10-20T21:00:00.000Z"] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    expect(await screen.findByRole("region", { name: "1 hour" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "1.5 hours" }).textContent).toContain("No open times");
+    const twoHours = screen.getByRole("region", { name: "2 hours" });
+    expect(twoHours.textContent).toContain("3:00 PM");
+    expect(twoHours.textContent).toContain("5:00 PM");
+    expect(twoHours.textContent).toContain("Tuesday, October 20, 2026");
+    expect(screen.getByTestId("tutor-offered-availability").textContent).not.toMatch(/@/);
+    expect(screen.queryByText(/Quinlan Piihold/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Connect Google Calendar" })).toBeNull();
+  });
+
+  test("hides the section when this login has no tutor profile", async () => {
+    const missing = new Error("Tutor profile not found") as Error & { status: number };
+    missing.status = 404;
+    mocks.customFetch.mockRejectedValue(missing);
+    render(<TutorOfferedAvailability />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("tutor-offered-availability")).toBeNull();
+    });
+  });
+});
