@@ -44,8 +44,9 @@ export const VICTORIA_PLACEHOLDER_DISPLAY_NAME = "Victoria";
 /** Temporary tutor login so the tutor portal and Google Calendar can be tested. */
 export const VICTORIA_PLACEHOLDER_EMAIL = "samakubba@icloud.com";
 /**
- * Future login. Recorded only. Do not provision a grant, user, or Clerk identity
- * for this address, and do not send mail to it.
+ * Tutor login. Migration 0069 stores this on her user, grant, and tutor profile.
+ * She is matched by email when she signs in. Do not email this address and do
+ * not create a Clerk user for it.
  */
 export const VICTORIA_INTENDED_EMAIL = "victoriawije7@gmail.com";
 /** First-party portrait, same /media/team path as Nika and Xavier. Not a public-team roster entry. */

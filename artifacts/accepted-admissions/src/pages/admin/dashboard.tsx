@@ -627,8 +627,11 @@ function ConsultingProvisionNotice({
           </p>
         ) : null}
         <p>
-          Victoria test login: {provision.victoriaLinked ? `${provision.victoriaEmail} at /login, then /tutor` : `not linked (${provision.victoriaStoppedReason ?? "stopped"})`}.
-          Intended email {provision.victoriaIntendedEmail} is not provisioned.
+          Victoria: {provision.victoriaLinked ? `${provision.victoriaEmail} at /login, then /tutor` : `not linked (${provision.victoriaStoppedReason ?? "stopped"})`}.
+          {provision.victoriaEmail?.trim().toLowerCase() ===
+          provision.victoriaIntendedEmail.trim().toLowerCase()
+            ? "Google sign-in uses that address. No invitation was sent."
+            : `Intended email ${provision.victoriaIntendedEmail} is not provisioned.`}
         </p>
         {provision.victoriaEmailOwner ? (
           <p data-testid="consulting-victoria-email-owner">
