@@ -26,11 +26,13 @@ export const XAVIER_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
 ] as const;
 
+/** Eunice Chon's published bio. Edit this sentence. Migration 0068 copies it onto her profile. */
 export const EUNICE_PUBLIC_BIOGRAPHY =
-  "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.";
+  "Harvard Class of 2025 with a background in History of Science. Incoming PhD Student at UC Berkeley.";
 
 export const EUNICE_LEGACY_PUBLIC_BIOGRAPHIES = [
   "Eunice Chon is a third-year at Harvard College studying History of Science and Philosophy, with a secondary in Global Health and Health Policy. She is passionate about disability advocacy and law, including mental health justice and activism. She is a Coca-Cola Scholar.",
+  "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.",
 ] as const;
 
 export const NIKA_PUBLIC_BIOGRAPHY =

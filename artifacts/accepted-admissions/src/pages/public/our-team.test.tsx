@@ -145,7 +145,7 @@ describe("OurTeam publication gate", () => {
       xavier:
         "Xavier is a 2024 graduate of Harvard where he studied Applied Math, Economics, and Philosophy. He was admitted to multiple Ivy League schools before choosing Harvard. He currently works in finance at Jane Street Capital on Strategy and Product. He was a 2024 Rhodes Scholar and 2026 Oxford graduate, studying Philosophy for his Masters. Xavier is also an incoming member of the 2030 Harvard Law School class.",
       eunice:
-        "Eunice is a Harvard 2024 graduate in History of Science and Philosophy at Harvard College, where she earned high honors. She is currently a doctoral student in History and a clinical researcher at Harvard Medical School/Massachusetts General Hospital.",
+        "Harvard Class of 2025 with a background in History of Science. Incoming PhD Student at UC Berkeley.",
       nika:
         "Nika Raiffe is a senior studying political science, law, and psychology in a dual degree between Columbia University and Sciences Po Paris. She is currently a summer business analyst in the Goldman Sachs Business Intelligence Group. She previously worked at Columbia's Irving Medical Center as a Research Intern on Relational Health.",
       kya: "Kya is a senior at Harvard studying economics and the History of Art and Literature.",
@@ -212,7 +212,9 @@ describe("OurTeam publication gate", () => {
     expect(within(xavierCard).getByText(/Jane Street Capital/)).toBeTruthy();
     expect(within(xavierCard).getByText(/multiple Ivy League schools before choosing Harvard/)).toBeTruthy();
     expect(within(xavierCard).queryByText(/2029 Harvard Law School/)).toBeNull();
-    expect(within(euniceCard).getByText(/Harvard Medical School\/Massachusetts General Hospital/)).toBeTruthy();
+    expect(within(euniceCard).getByText(/Harvard Class of 2025/)).toBeTruthy();
+    expect(within(euniceCard).getByText(/UC Berkeley/)).toBeTruthy();
+    expect(within(euniceCard).queryByText(/Harvard Medical School/)).toBeNull();
     expect(within(euniceCard).queryByText(/third-year at Harvard College/)).toBeNull();
     expect(within(nikaCard).getByText(/Goldman Sachs Business Intelligence Group/)).toBeTruthy();
     expect(within(nikaCard).getByText(/as a Research Intern on Relational Health/)).toBeTruthy();
