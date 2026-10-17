@@ -23,10 +23,7 @@ import { paymentRequiresCatalogProduct, isStripePaidSuccessEvent, stripeCheckout
 // @ts-expect-error Native Node test execution requires the source extension.
 import { stripeCatalogProductIdempotencyKey } from "./college-consulting.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
-import {
-  bookHeldCheckoutIfActive,
-  releaseSlotHoldForPayment,
-} from "./booking-slot-hold.ts";
+import { bookHeldCheckoutIfActive, releaseSlotHoldForPayment } from "./booking-slot-hold.ts";
 
 type StripeRecord = Record<string, unknown>;
 
