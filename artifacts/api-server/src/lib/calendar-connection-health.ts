@@ -33,7 +33,13 @@ export type CalendarConnectionHealth = {
   hasUpcomingBookableTime: boolean;
   estimatedTokenAgeDays: number | null;
   testingModeExpiryWarning: string | null;
+  /** Set when free/busy works but bookings and invites still need a reconnect. */
+  statusLabel: string | null;
 };
+
+/** Shown while the badge stays needs_reconnect. Free/busy success does not make the grant healthy. */
+export const FREE_BUSY_ONLY_RECONNECT_STATUS =
+  "Connected (free/busy only): reconnect to enable bookings and invites";
 
 const FEATURED_TUTOR_NAMES = [
   "xavier morales",
@@ -117,12 +123,7 @@ export function calendarHealthBadge(input: {
   appCalendarId?: string | null;
 }): CalendarHealthBadge {
   const error = input.lastError?.trim() ?? "";
-  // A refresh token that just completed free/busy is a working grant. Missing
-  // calendar.app.created or an app calendar id must not override that on the
-  // Connections page. Those grants still show primary and have no last error.
-  const workingGrant = input.hasRefreshToken && !error && freeBusySucceeded(input.lastFreeBusyAt);
   if (
-    !workingGrant &&
     calendarGrantNeedsReconnect({
       hasRefreshToken: input.hasRefreshToken,
       grantedScopes: input.grantedScopes,
@@ -136,6 +137,31 @@ export function calendarHealthBadge(input: {
   const reconnectError = /reconnect|revoked|invalid_grant|disconnected/i.test(error);
   if (previouslyConnected || reconnectError) return "needs_reconnect";
   return "not_connected";
+}
+
+/**
+ * A refresh token that can read free/busy but cannot write the app calendar
+ * stays needs_reconnect. The label says why, and the badge still alerts.
+ */
+export function freeBusyOnlyReconnectStatus(input: {
+  hasRefreshToken: boolean;
+  lastError?: string | null;
+  lastFreeBusyAt?: Date | string | null;
+  grantedScopes?: string | null;
+  appCalendarId?: string | null;
+}): string | null {
+  const error = input.lastError?.trim() ?? "";
+  if (!input.hasRefreshToken || error || !freeBusySucceeded(input.lastFreeBusyAt)) return null;
+  if (
+    !calendarGrantNeedsReconnect({
+      hasRefreshToken: input.hasRefreshToken,
+      grantedScopes: input.grantedScopes,
+      appCalendarId: input.appCalendarId,
+    })
+  ) {
+    return null;
+  }
+  return FREE_BUSY_ONLY_RECONNECT_STATUS;
 }
 
 export function calendarConnectionTestAdmission(input: {
@@ -388,6 +414,7 @@ export function buildCalendarConnectionHealth(input: {
       lastError: input.lastError,
       now,
     }),
+    statusLabel: freeBusyOnlyReconnectStatus(input),
   };
   return row;
 }

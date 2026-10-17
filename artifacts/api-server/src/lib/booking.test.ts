@@ -540,12 +540,27 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const slice = platformSource.slice(start, end);
   assert.match(slice, /if \(fixedWindow && !access\) \{\s*await confirmBookedSession\(created, false\)/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
+  const reconnectBeforeDebit = slice.indexOf("requireAppCalendarForBooking(access, fixedWindow)");
+  const debit = slice.indexOf("insertConfirmedBookingWithDebit");
+  const write = slice.indexOf("createGoogleEvent(");
+  assert.ok(reconnectBeforeDebit > 0 && reconnectBeforeDebit < debit && debit < write);
+  assert.match(slice, /error\.code === "CALENDAR_RECONNECT_REQUIRED"/);
+  assert.match(slice, /if \(!appCalendarId\) \{\s*throw new BookingError\(\s*409,\s*"CALENDAR_RECONNECT_REQUIRED"/);
+  const checkoutStart = platformSource.indexOf("async function assertDirectCheckoutSlotOpen");
+  const checkoutSlice = platformSource.slice(
+    checkoutStart,
+    platformSource.indexOf("type SessionWriteTx"),
+  );
+  assert.match(checkoutSlice, /requireAppCalendarForBooking\(access, fixedWindow\)/);
+  const payStart = platformSource.indexOf('"/payments/checkout"');
+  const paySlice = platformSource.slice(payStart, platformSource.indexOf("createCheckoutSession", payStart));
+  assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") > 0);
+  assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") < paySlice.length);
   assert.match(slice, /calendarInviteIncludesTutor\(/);
   assert.match(slice, /tutorEmail: tutor\.email/);
   assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
   const liveCheck = slice.indexOf("if (!fixedWindow) {");
-  const write = slice.indexOf("createGoogleEvent(");
   assert.ok(liveCheck > 0 && liveCheck < write);
   assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);
 });

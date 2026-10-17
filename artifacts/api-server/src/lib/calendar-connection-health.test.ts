@@ -9,6 +9,7 @@ import {
   calendarConnectionTestRetryMessage,
   calendarHealthBadge,
   calendarReconnectAlerts,
+  FREE_BUSY_ONLY_RECONNECT_STATUS,
   compareTutorConnectionOrder,
   errorPointsToTestingMode,
   estimatedTokenAgeDays,
@@ -25,15 +26,15 @@ import {
 
 const weekdayHours = { "1": [{ start: "07:00", end: "21:00" }] };
 
-test("a working primary-calendar grant stays connected without an app calendar id", () => {
+test("a free/busy grant without an app calendar still needs reconnect", () => {
   const checkedAt = "2026-10-17T18:16:49.000Z";
   const now = new Date("2026-10-17T18:20:00.000Z");
-  for (const tutor of [
+  const rows = [
     { name: "Xavier Morales", email: "xaver.rmz6@gmail.com" },
     { name: "Nika Raiffe", email: "nika.raiffe@gmail.com" },
     { name: "Eunice Chon", email: "eunice_chon@berkeley.edu" },
-  ]) {
-    const row = buildCalendarConnectionHealth({
+  ].map((tutor) =>
+    buildCalendarConnectionHealth({
       tutorProfileId: tutor.email,
       name: tutor.name,
       portalEmail: tutor.email,
@@ -51,17 +52,22 @@ test("a working primary-calendar grant stays connected without an app calendar i
       lastFreeBusyAt: checkedAt,
       lastError: null,
       now,
-    });
-    assert.equal(row.badge, "healthy");
+    }),
+  );
+  for (const row of rows) {
+    assert.equal(row.badge, "needs_reconnect");
+    assert.equal(row.statusLabel, FREE_BUSY_ONLY_RECONNECT_STATUS);
     assert.equal(row.connectionStatus, "connected");
     assert.equal(row.calendarIdMasked, "primary");
     assert.equal(row.hasRefreshToken, true);
     assert.equal(row.lastError, null);
     assert.equal(row.bookable, true);
     assert.equal(row.hasUpcomingBookableTime, true);
-    assert.equal(row.estimatedTokenAgeDays, 1);
-    assert.equal(row.googleAccountMasked, `${tutor.email.slice(0, 1)}***@${tutor.email.split("@")[1]}`);
   }
+  assert.deepEqual(
+    calendarReconnectAlerts(rows).map((row) => row.name),
+    ["Xavier Morales", "Nika Raiffe", "Eunice Chon"],
+  );
   assert.equal(
     calendarHealthBadge({
       hasRefreshToken: true,
@@ -69,7 +75,7 @@ test("a working primary-calendar grant stays connected without an app calendar i
       appCalendarId: null,
       lastFreeBusyAt: checkedAt,
     }),
-    "healthy",
+    "needs_reconnect",
   );
   assert.equal(
     calendarHealthBadge({
@@ -79,16 +85,32 @@ test("a working primary-calendar grant stays connected without an app calendar i
       appCalendarId: null,
       lastFreeBusyAt: checkedAt,
     }),
-    "healthy",
-  );
-  assert.equal(
-    calendarHealthBadge({
-      hasRefreshToken: true,
-      grantedScopes: null,
-      appCalendarId: null,
-    }),
     "needs_reconnect",
   );
+  const withoutFreeBusy = buildCalendarConnectionHealth({
+    tutorProfileId: "xavier",
+    name: "Xavier Morales",
+    portalEmail: "xaver.rmz6@gmail.com",
+    hasRefreshToken: true,
+    grantedScopes: null,
+    appCalendarId: null,
+    calendarId: "primary",
+  });
+  assert.equal(withoutFreeBusy.badge, "needs_reconnect");
+  assert.equal(withoutFreeBusy.statusLabel, null);
+  const ready = buildCalendarConnectionHealth({
+    tutorProfileId: "nika",
+    name: "Nika Raiffe",
+    portalEmail: "nika.raiffe@gmail.com",
+    hasRefreshToken: true,
+    grantedScopes:
+      "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.app.created",
+    appCalendarId: "cal-app",
+    calendarId: "cal-app",
+    lastFreeBusyAt: checkedAt,
+  });
+  assert.equal(ready.badge, "healthy");
+  assert.equal(ready.statusLabel, null);
 });
 
 test("badges distinguish a live grant, a lost grant, and no connection", () => {

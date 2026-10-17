@@ -22,6 +22,7 @@ export type CalendarConnectionHealthRow = {
   hasUpcomingBookableTime: boolean;
   estimatedTokenAgeDays: number | null;
   testingModeExpiryWarning: string | null;
+  statusLabel?: string | null;
 };
 
 const BADGE_LABEL = {
@@ -57,7 +58,9 @@ export function formatEstimatedTokenAge(days: number | null): string {
   return `${days} days`;
 }
 
-function reconnectIndicator(row: CalendarConnectionHealthRow): "Connected" | "Needs reconnect" | "Not connected" {
+function reconnectIndicator(row: CalendarConnectionHealthRow): string {
+  const precise = row.statusLabel?.trim();
+  if (row.badge === "needs_reconnect" && precise) return precise;
   if (row.badge === "needs_reconnect") return "Needs reconnect";
   if (row.badge === "not_connected" || row.connectionStatus === "disconnected") return "Not connected";
   return "Connected";
