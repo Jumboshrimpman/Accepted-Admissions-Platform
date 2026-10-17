@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MICHELLE_MAKAREM_CLERK_USER_ID } from "./calendar-pair-attendees.ts";
-import { checkoutLineItemFields } from "./payment-service.ts";
+import { checkoutLineItemFields, hostedInvoiceItemFields } from "./payment-service.ts";
 import {
   SAT_TUTOR_PRODUCTS,
   allowsLegacySatPool,
@@ -20,7 +20,8 @@ const michelle = {
   clerkUserId: MICHELLE_MAKAREM_CLERK_USER_ID,
   email: "someone-else@example.com",
 };
-const michelleEmail = { email: "MichaelMakarem@gmail.com" };
+const michelleEmail = { email: "MakaremMichelle7@gmail.com" };
+const retiredMichelleEmail = { email: "michaelmakarem@gmail.com" };
 const sophia = {
   id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
   email: "kubbasama@gmail.com",
@@ -66,6 +67,7 @@ test("Michelle keeps Xavier at $130 and Sophia sees $200", () => {
   assert.equal(isMichelleMakaremUser(michelle), true);
   assert.equal(isMichelleMakaremUser({ email: "makaremmichelle7@gmail.com" }), true);
   assert.equal(isMichelleMakaremUser(michelleEmail), true);
+  assert.equal(isMichelleMakaremUser(retiredMichelleEmail), false);
   assert.equal(isMichelleMakaremUser(sophia), false);
   assert.equal(isMichelleMakaremUser({ email: "kubbasama@gmail.com" }), false);
 
@@ -79,6 +81,11 @@ test("Michelle keeps Xavier at $130 and Sophia sees $200", () => {
     assert.equal(displayedSatPriceCents(product("sat-victoria-90"), user), 19_500);
   }
 
+  assert.equal(displayedSatHourlyCents("xavier", retiredMichelleEmail), 20_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-60"), retiredMichelleEmail), 20_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-90"), retiredMichelleEmail), 30_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-120"), retiredMichelleEmail), 40_000);
+  assert.equal(allowsLegacySatPool("xavier", retiredMichelleEmail), false);
   assert.equal(displayedSatHourlyCents("xavier", sophia), 20_000);
   assert.equal(displayedSatPriceCents(product("sat-xavier-60"), sophia), 20_000);
   assert.equal(displayedSatPriceCents(product("sat-xavier-90"), sophia), 30_000);
@@ -210,5 +217,35 @@ test("a client price override uses Checkout price_data and leaves the catalog pr
       "line_items[0][price]": "price_catalog_200",
       "line_items[0][quantity]": 1,
     },
+  );
+  assert.deepEqual(
+    hostedInvoiceItemFields({
+      catalogPriceCents: 20_000,
+      unitAmountCents: 13_000,
+      stripeProductId: "prod_xavier",
+      priceId: "price_catalog_200",
+    }),
+    {
+      "price_data[currency]": "usd",
+      "price_data[product]": "prod_xavier",
+      "price_data[unit_amount]": 13_000,
+    },
+  );
+  assert.equal(
+    Object.keys(
+      hostedInvoiceItemFields({
+        catalogPriceCents: 20_000,
+        unitAmountCents: 13_000,
+        stripeProductId: "prod_xavier",
+      }),
+    ).some((key) => key.startsWith("pricing[price_data]")),
+    false,
+  );
+  assert.deepEqual(
+    hostedInvoiceItemFields({
+      catalogPriceCents: 20_000,
+      priceId: "price_catalog_200",
+    }),
+    { "pricing[price]": "price_catalog_200" },
   );
 });

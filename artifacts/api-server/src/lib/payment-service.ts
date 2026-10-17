@@ -476,6 +476,24 @@ export function checkoutLineItemFields(args: {
   };
 }
 
+/** Invoice items take top-level price_data. Nested pricing[price_data] is rejected. */
+export function hostedInvoiceItemFields(args: {
+  catalogPriceCents: number;
+  unitAmountCents?: number;
+  priceId?: string;
+  stripeProductId?: string;
+}): Record<string, string | number> {
+  const chargeCents = args.unitAmountCents ?? args.catalogPriceCents;
+  if (chargeCents !== args.catalogPriceCents) {
+    return {
+      "price_data[currency]": "usd",
+      "price_data[product]": args.stripeProductId ?? "",
+      "price_data[unit_amount]": chargeCents,
+    };
+  }
+  return { "pricing[price]": args.priceId ?? "" };
+}
+
 export async function createCheckoutSession(args: {
   user: AppUser;
   product: typeof satProductsTable.$inferSelect;
@@ -569,13 +587,12 @@ export async function createHostedInvoice(args: {
       body: formData({
         customer: customerId,
         invoice: id,
-        ...(priceOverride
-          ? {
-              "pricing[price_data][currency]": "usd",
-              "pricing[price_data][product]": stripeProductId,
-              "pricing[price_data][unit_amount]": chargeCents,
-            }
-          : { "pricing[price]": priceId }),
+        ...hostedInvoiceItemFields({
+          catalogPriceCents: catalogCents,
+          unitAmountCents: chargeCents,
+          priceId,
+          stripeProductId,
+        }),
         "metadata[payment_id]": args.paymentId,
         "metadata[invoice_id]": args.invoiceId,
       }),

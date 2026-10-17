@@ -25,10 +25,6 @@ export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier"] as const;
 export type SatTutorKey = (typeof SAT_TUTOR_KEYS)[number];
 
 export const MICHELLE_XAVIER_SAT_HOURLY_CENTS = 13_000;
-export const MICHELLE_MAKAREM_EMAILS = [
-  MICHELLE_MAKAREM_EMAIL,
-  "michaelmakarem@gmail.com",
-] as const;
 
 const SAT_TUTORS = [
   { key: "eunice" as const, firstName: "Eunice", fullName: "Eunice Chon", hourlyCents: 13_000 },
@@ -99,7 +95,7 @@ export function isMichelleMakaremUser(user: MichelleIdentity | null | undefined)
   if (!user) return false;
   if (user.clerkUserId === MICHELLE_MAKAREM_CLERK_USER_ID) return true;
   const email = user.email?.trim().toLowerCase() ?? "";
-  return (MICHELLE_MAKAREM_EMAILS as readonly string[]).includes(email);
+  return email === MICHELLE_MAKAREM_EMAIL;
 }
 
 export function satTutorKeyForSlug(slug: string): SatTutorKey | null {
