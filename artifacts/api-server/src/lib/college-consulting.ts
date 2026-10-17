@@ -4,7 +4,7 @@ import { SAT_HOURLY_RATE_CENTS, isAcceptedSatCatalogProduct } from "./sat-catalo
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { remainingCreditHoursForProduct } from "./credit-hours.ts";
+import { remainingCreditHoursForProducts } from "./credit-hours.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
@@ -100,9 +100,87 @@ export const COLLEGE_CONSULTING_PRODUCTS = [
 
 export type CollegeConsultingTutorKey = (typeof COLLEGE_CONSULTING_PRODUCTS)[number]["tutorKey"];
 
-export const COLLEGE_CONSULTING_SLUGS = COLLEGE_CONSULTING_PRODUCTS.map(
-  (product) => product.slug,
-);
+/** 1.5h and 2h credits at the same hourly rate. The 1-hour rows stay unchanged. */
+export const COLLEGE_CONSULTING_LENGTH_PRODUCTS: ReadonlyArray<{
+  tutorKey: CollegeConsultingTutorKey;
+  slug: string;
+  name: string;
+  description: string;
+  durationHours: number;
+  totalPriceCents: number;
+  hourlyRateCents: number;
+}> = [
+  {
+    tutorKey: "nika",
+    slug: "college-consulting-nika-90",
+    name: "College Consulting 1.5 hours with Nika",
+    description: "One prepaid 90-minute College Consulting credit with Nika at $100/hour.",
+    durationHours: 1.5,
+    totalPriceCents: Math.round(NIKA_HOURLY_RATE_CENTS * 1.5),
+    hourlyRateCents: NIKA_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "nika",
+    slug: "college-consulting-nika-120",
+    name: "College Consulting 2 hours with Nika",
+    description: "One prepaid 120-minute College Consulting credit with Nika at $100/hour.",
+    durationHours: 2,
+    totalPriceCents: NIKA_HOURLY_RATE_CENTS * 2,
+    hourlyRateCents: NIKA_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "victoria",
+    slug: "college-consulting-victoria-90",
+    name: "College Consulting 1.5 hours with Victoria",
+    description: "One prepaid 90-minute College Consulting credit with Victoria at $130/hour.",
+    durationHours: 1.5,
+    totalPriceCents: Math.round(VICTORIA_HOURLY_RATE_CENTS * 1.5),
+    hourlyRateCents: VICTORIA_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "victoria",
+    slug: "college-consulting-victoria-120",
+    name: "College Consulting 2 hours with Victoria",
+    description: "One prepaid 120-minute College Consulting credit with Victoria at $130/hour.",
+    durationHours: 2,
+    totalPriceCents: VICTORIA_HOURLY_RATE_CENTS * 2,
+    hourlyRateCents: VICTORIA_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "xavier",
+    slug: "college-consulting-xavier-90",
+    name: "College Consulting 1.5 hours with Xavier Morales",
+    description:
+      "One prepaid 90-minute College Consulting credit with Xavier Morales at $200/hour for Neel Dharni.",
+    durationHours: 1.5,
+    totalPriceCents: Math.round(XAVIER_NEEL_HOURLY_RATE_CENTS * 1.5),
+    hourlyRateCents: XAVIER_NEEL_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "xavier",
+    slug: "college-consulting-xavier-120",
+    name: "College Consulting 2 hours with Xavier Morales",
+    description:
+      "One prepaid 120-minute College Consulting credit with Xavier Morales at $200/hour for Neel Dharni.",
+    durationHours: 2,
+    totalPriceCents: XAVIER_NEEL_HOURLY_RATE_CENTS * 2,
+    hourlyRateCents: XAVIER_NEEL_HOURLY_RATE_CENTS,
+  },
+];
+
+export const COLLEGE_CONSULTING_SLUGS = [
+  ...COLLEGE_CONSULTING_PRODUCTS.map((product) => product.slug),
+  ...COLLEGE_CONSULTING_LENGTH_PRODUCTS.map((product) => product.slug),
+];
+
+export function consultingSlugsForTutorKey(tutorKey: CollegeConsultingTutorKey): string[] {
+  return [
+    collegeConsultingProductForTutorKey(tutorKey)?.slug,
+    ...COLLEGE_CONSULTING_LENGTH_PRODUCTS.filter((product) => product.tutorKey === tutorKey).map(
+      (product) => product.slug,
+    ),
+  ].filter((slug): slug is string => Boolean(slug));
+}
 
 const CONSULTING_SLUG_SET = new Set<string>(COLLEGE_CONSULTING_SLUGS);
 
@@ -479,14 +557,15 @@ export function consultingTutorCredits(input: {
   calendars: Partial<Record<CollegeConsultingTutorKey, boolean>>;
 }): ConsultingTutorCredit[] {
   return COLLEGE_CONSULTING_PRODUCTS.map((product) => {
-    const row = input.products.find((item) => item.slug === product.slug);
+    const slugs = new Set(consultingSlugsForTutorKey(product.tutorKey));
+    const productIds = input.products
+      .filter((item) => slugs.has(item.slug))
+      .map((item) => item.id);
     return {
       tutorKey: product.tutorKey,
       name: consultingTutorDisplayName(product.tutorKey),
       hourlyRateCents: product.hourlyRateCents,
-      prepaidHours: row
-        ? remainingCreditHoursForProduct(input.entries, row.id)
-        : 0,
+      prepaidHours: remainingCreditHoursForProducts(input.entries, productIds),
       productSlug: product.slug,
       calendarConnected: input.calendars[product.tutorKey] === true,
     };

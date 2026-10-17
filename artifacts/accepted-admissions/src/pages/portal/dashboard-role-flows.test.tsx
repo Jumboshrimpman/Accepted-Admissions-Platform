@@ -359,12 +359,8 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.queryByTestId("prework-deadline-assignment-score")).toBeNull();
     expect(screen.queryByTestId("prework-deadline-assignment-complete")).toBeNull();
     expect(screen.getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
-    expect(screen.getByText("Your tutors")).toBeTruthy();
-    const roster = screen.getByTestId("client-tutor-roster");
-    expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);
-    expect(roster.textContent).toContain("SAT");
-    expect(within(roster).getAllByText("Nika Raiffe")).toHaveLength(1);
-    expect(roster.textContent).toContain("English");
+    expect(screen.queryByText("Your tutors")).toBeNull();
+    expect(screen.queryByTestId("client-tutor-roster")).toBeNull();
     expect(screen.getByText("One plan. Twelve focused meetings.")).toBeTruthy();
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
   });
@@ -1056,7 +1052,7 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
   });
 
-  test("Your tutors still lists Eunice (SAT) and Nika (English) when course tutors are empty", () => {
+  test("client portals do not list approved tutor relationships", () => {
     const base = dashboardForRole("student");
     mocks.dashboard = {
       ...base,
@@ -1066,11 +1062,9 @@ describe("authenticated role dashboard flows", () => {
     } as Dashboard;
     render(<FallWelcomeDashboard />);
 
-    const roster = screen.getByTestId("client-tutor-roster");
-    expect(within(roster).getAllByText("Eunice Chon")).toHaveLength(1);
-    expect(roster.textContent).toContain("SAT");
-    expect(within(roster).getAllByText("Nika Raiffe")).toHaveLength(1);
-    expect(roster.textContent).toContain("English");
+    expect(screen.queryByText("Your tutors")).toBeNull();
+    expect(screen.queryByTestId("client-tutor-roster")).toBeNull();
+    expect(screen.queryByText(/approved tutor relationships/i)).toBeNull();
   });
 
   test("Progress counts a session after quiz submit even when readiness is still ready", () => {
@@ -1129,7 +1123,7 @@ describe("authenticated role dashboard flows", () => {
 
     expect(screen.getByRole("status").textContent).toContain("Viewing as Taito Goto");
     expect(screen.getByRole("status").textContent).toContain("read-only");
-    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.queryByText("Your tutors")).toBeNull();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Join meeting/i })[0]?.getAttribute("href")).toBe(
       "https://meet.google.com/sat-room",
@@ -1187,7 +1181,7 @@ describe("authenticated role dashboard flows", () => {
     render(<ClientDashboardView dashboard={mocks.dashboard} adminPreview />);
 
     expect(screen.getByRole("status").textContent).toContain("Read-only client preview");
-    expect(screen.getByText("Your tutors")).toBeTruthy();
+    expect(screen.queryByText("Your tutors")).toBeNull();
     expect(screen.getAllByText("Taito’s SAT Session with Eunice").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Read only" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /Open session/i })).toBeNull();

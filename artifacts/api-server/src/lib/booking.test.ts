@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  bookingCalendarEventPayload,
   calendarEventPayload,
   generateAvailableSlots,
+  isBookablePortalDuration,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
   SAT_BOOKING_WEEKLY_HOURS,
@@ -247,4 +249,27 @@ test("event payload contains only the approved session details", () => {
     { email: "admin@acceptedadmissions.org" },
   ]);
   assert.equal("privateEventDetails" in event, false);
+});
+
+test("portal bookings accept 60, 90, and 120 minutes and block the full length", () => {
+  assert.equal(isBookablePortalDuration(60), true);
+  assert.equal(isBookablePortalDuration(90), true);
+  assert.equal(isBookablePortalDuration(120), true);
+  assert.equal(isBookablePortalDuration(30), false);
+  assert.equal(isBookablePortalDuration(180), false);
+  const start = new Date("2026-11-02T15:00:00.000Z");
+  const event = bookingCalendarEventPayload({
+    title: "Taito’s SAT Session with Xavier",
+    start,
+    durationMinutes: 90,
+    timeZone: "America/New_York",
+    attendeeEmail: "student@example.com",
+    student: { email: "student@example.com", name: "Taito Goto" },
+    tutor: { email: "tutor@example.com", name: "Xavier Morales" },
+  });
+  assert.equal(event.end.dateTime, new Date(start.getTime() + 90 * 60_000).toISOString());
+  assert.deepEqual(
+    event.attendees.map((attendee) => attendee.email),
+    ["student@example.com", "admin@acceptedadmissions.org"],
+  );
 });

@@ -16,7 +16,14 @@ import { envRoleCategoriesForIdentity } from "./access-config.ts";
 import { XAVIER_BOOKING_WEEKLY_HOURS } from "./booking.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  ACCEPTED_SAT_CATALOG,
+  SAMA_LIVE_CHECKOUT_TEST_PRICE_CENTS,
+  SAMA_LIVE_CHECKOUT_TEST_SLUG,
+} from "./sat-catalog.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
   COLLEGE_CONSULTING_COURSE_ID,
+  COLLEGE_CONSULTING_LENGTH_PRODUCTS,
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SUBJECT,
   COLLEGE_CONSULTING_TERM,
@@ -175,6 +182,41 @@ async function ensureCatalogProducts(tx: ProvisionTx): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(satProductsTable.id, stored.id));
+  }
+  const extraProducts = [
+    ...ACCEPTED_SAT_CATALOG.filter((product) => product.durationHours !== 1 && product.durationHours !== 10).map(
+      (product) => ({
+        slug: product.slug,
+        name: product.name,
+        description: product.description,
+        durationHours: product.durationHours,
+        totalPriceCents: product.totalPriceCents,
+        effectiveHourlyRateCents: product.effectiveHourlyRateCents,
+      }),
+    ),
+    ...COLLEGE_CONSULTING_LENGTH_PRODUCTS.map((product) => ({
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      durationHours: product.durationHours,
+      totalPriceCents: product.totalPriceCents,
+      effectiveHourlyRateCents: product.hourlyRateCents,
+    })),
+    {
+      slug: SAMA_LIVE_CHECKOUT_TEST_SLUG,
+      name: "Checkout test session",
+      description:
+        "A $1 checkout used to test live Stripe payment. It does not add a bookable tutor hour.",
+      durationHours: 1,
+      totalPriceCents: SAMA_LIVE_CHECKOUT_TEST_PRICE_CENTS,
+      effectiveHourlyRateCents: SAMA_LIVE_CHECKOUT_TEST_PRICE_CENTS,
+    },
+  ];
+  for (const product of extraProducts) {
+    await tx
+      .insert(satProductsTable)
+      .values({ ...product, active: true })
+      .onConflictDoNothing({ target: satProductsTable.slug });
   }
 }
 

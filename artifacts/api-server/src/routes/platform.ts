@@ -138,6 +138,7 @@ import {
   consultingTutorBiography,
   consultingTutorCredits,
   consultingTutorDisplayName,
+  consultingSlugsForTutorKey,
   consultingTutorPhotoUrl,
   collegeConsultingTutorKeyForProfile,
   isNeelDharniUser,
@@ -162,6 +163,7 @@ import {
   generateAvailableSlots,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
+  isBookablePortalDuration,
   satTutorWeeklyHours,
   type AvailabilityRule,
   type BusyWindow,
@@ -180,6 +182,7 @@ import {
   meetingUrlForTerm,
   satCommerceEmailForAccount,
   selfServeSatBookingForAccount,
+  personFirstName,
   sessionTitle,
   taitoSessionDateTime,
   twelveSessionPlanForEmail,
@@ -245,9 +248,11 @@ import {
   RETIRED_TEST_SAT_HOUR_SLUG,
   SINGLE_SAT_SESSION_SLUG,
   TEN_SAT_SESSION_PACKAGE_SLUG,
+  canBuySamaLiveCheckoutTest,
   isAcceptedSatCatalogProduct,
   isRetiredSatTestProduct,
   previewOffersFromCatalogProducts,
+  SAMA_LIVE_CHECKOUT_TEST_SLUG,
 } from "../lib/sat-catalog";
 import { selectAssignedPreviewBookingTutor } from "../lib/admin-client-preview";
 import {
@@ -3444,7 +3449,20 @@ async function michelleQuizMathRepairEnabled(input: {
   });
 }
 
-async function attemptShape(attemptId: string) {
+async function attemptResultForViewer(
+  attempt: { id: string; status: string },
+  viewerRole?: string,
+) {
+  if (attempt.status !== "submitted" && attempt.status !== "expired") return null;
+  const stored = await storedAttemptResult(attempt.id);
+  if (!stored || !viewerRole) return stored;
+  return {
+    ...stored,
+    studentName: studentNameForRole(viewerRole, stored.studentName),
+  };
+}
+
+async function attemptShape(attemptId: string, viewerRole?: string) {
   const [record] = await db
     .select({
       attempt: attemptsTable,
@@ -3491,10 +3509,7 @@ async function attemptShape(attemptId: string) {
     ...timing,
     remainingSeconds: remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
     currentQuestionIndex: normalizeQuestionIndex(attempt.currentQuestionIndex),
-    result:
-      attempt.status === "submitted" || attempt.status === "expired"
-        ? await storedAttemptResult(attempt.id)
-        : null,
+    result: await attemptResultForViewer(attempt, viewerRole),
     responses: saved.map((response) => {
       const question = questionById.get(response.questionId);
       return attemptResponseFeedbackShape({
@@ -4563,6 +4578,40 @@ function durationFromBody(value: unknown): number {
   return duration;
 }
 
+function rejectUnlistedPortalDuration(durationMinutes: number): void {
+  if (isBookablePortalDuration(durationMinutes)) return;
+  throw new BookingError(
+    400,
+    "INVALID_DURATION",
+    "Sessions must be 60, 90, or 120 minutes.",
+  );
+}
+
+function tutorStudentName(name: string | null | undefined): string {
+  return personFirstName(name, "Student");
+}
+
+function studentNameForRole(role: string, name: string): string {
+  return role === "tutor" ? tutorStudentName(name) : name;
+}
+
+async function liveCheckoutTestProductIds(): Promise<string[]> {
+  const rows = await db
+    .select({ id: satProductsTable.id })
+    .from(satProductsTable)
+    .where(eq(satProductsTable.slug, SAMA_LIVE_CHECKOUT_TEST_SLUG));
+  return rows.map((row) => row.id);
+}
+
+function withoutCheckoutTestHours<T extends { productId?: string | null }>(
+  entries: T[],
+  testProductIds: readonly string[],
+): T[] {
+  if (testProductIds.length === 0) return entries;
+  const excluded = new Set(testProductIds);
+  return entries.filter((entry) => !entry.productId || !excluded.has(entry.productId));
+}
+
 async function calendarAccess(tutorProfileId: string) {
   const [connection] = await db
     .select()
@@ -5065,6 +5114,20 @@ async function consultingProductForTutor(tutor: {
   return product ?? null;
 }
 
+async function consultingCreditProductIds(tutor: {
+  name: string;
+  email: string;
+  userId: string | null;
+}): Promise<string[]> {
+  const tutorKey = collegeConsultingTutorKeyForProfile(tutor);
+  if (!tutorKey) return [];
+  const rows = await db
+    .select({ id: satProductsTable.id })
+    .from(satProductsTable)
+    .where(inArray(satProductsTable.slug, consultingSlugsForTutorKey(tutorKey)));
+  return rows.map((row) => row.id);
+}
+
 async function studentCourseForBooking(userId: string): Promise<{ id: string; subject: string }> {
   const memberships = await db
     .select({ id: courseMembershipsTable.courseId, subject: courseMembershipsTable.subject })
@@ -5500,7 +5563,48 @@ router.get(
   },
 );
 
+function publicProductShape(product: {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  durationHours: unknown;
+  totalPriceCents: number;
+  effectiveHourlyRateCents: number;
+}) {
+  return {
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    description: product.description,
+    durationHours: product.durationHours,
+    totalPriceCents: product.totalPriceCents,
+    effectiveHourlyRateCents: product.effectiveHourlyRateCents,
+  };
+}
+
+async function appendLiveCheckoutTestProduct<T extends { slug: string }>(
+  products: T[],
+  user: { email?: string | null; role?: string | null },
+): Promise<Array<T | ReturnType<typeof publicProductShape>>> {
+  if (!canBuySamaLiveCheckoutTest(user)) return products;
+  if (products.some((product) => product.slug === SAMA_LIVE_CHECKOUT_TEST_SLUG)) return products;
+  const [row] = await db
+    .select()
+    .from(satProductsTable)
+    .where(
+      and(
+        eq(satProductsTable.slug, SAMA_LIVE_CHECKOUT_TEST_SLUG),
+        eq(satProductsTable.active, true),
+      ),
+    )
+    .limit(1);
+  if (!row) return products;
+  return [...products, publicProductShape(row)];
+}
+
 router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): Promise<void> => {
+  const viewer = { email: req.appUser?.email, role: req.appUser?.role };
   if (isNeelDharniUser(req.appUser?.id)) {
     const products = await db
       .select()
@@ -5512,31 +5616,11 @@ router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): 
         ),
       )
       .orderBy(asc(satProductsTable.effectiveHourlyRateCents), asc(satProductsTable.name));
-    res.json(
-      products.map((product) => ({
-        id: product.id,
-        slug: product.slug,
-        name: product.name,
-        description: product.description,
-        durationHours: product.durationHours,
-        totalPriceCents: product.totalPriceCents,
-        effectiveHourlyRateCents: product.effectiveHourlyRateCents,
-      })),
-    );
+    res.json(await appendLiveCheckoutTestProduct(products.map(publicProductShape), viewer));
     return;
   }
   const products = await listActiveAcceptedSatCatalogProducts();
-  res.json(
-    products.map((product) => ({
-      id: product.id,
-      slug: product.slug,
-      name: product.name,
-      description: product.description,
-      durationHours: product.durationHours,
-      totalPriceCents: product.totalPriceCents,
-      effectiveHourlyRateCents: product.effectiveHourlyRateCents,
-    })),
-  );
+  res.json(await appendLiveCheckoutTestProduct(products.map(publicProductShape), viewer));
 });
 
 router.get("/public/tutors", async (_req, res): Promise<void> => {
@@ -6208,13 +6292,18 @@ router.get(
           },
           session.id,
         );
-        return adminSessionShape(session, conflictWith);
+        return adminSessionShape(session, conflictWith, {
+          firstNameStudents: user.role === "tutor",
+        });
       }),
     );
     res.json(
       GetTutorCurriculumResponse.parse({
         programs: await Promise.all(courses.map(adminProgramShape)),
-        students,
+        students:
+          user.role === "tutor"
+            ? students.map((student) => ({ ...student, name: tutorStudentName(student.name) }))
+            : students,
         sessions,
         quizzes: await Promise.all(quizzes.map(adminAssignmentShape)),
         libraryAssets: libraryAssets.map((asset) => libraryAssetResponse(asset)),
@@ -6374,7 +6463,9 @@ router.post(
     }
     res
       .status(201)
-      .json(CreateTutorSessionResponse.parse(await adminSessionShape(created!)));
+      .json(CreateTutorSessionResponse.parse(await adminSessionShape(created!, [], {
+        firstNameStudents: user.role === "tutor",
+      })));
   },
 );
 
@@ -6861,14 +6952,8 @@ router.get("/booking/availability", async (req: AuthedRequest, res): Promise<voi
       if (Number(existingSession.durationMinutes) !== durationMinutes) {
         throw new BookingError(400, "INVALID_DURATION", "The requested duration does not match this existing session.");
       }
-    } else if (durationMinutes !== 60) {
-      throw new BookingError(
-        400,
-        "INVALID_DURATION",
-        isNeelDharniUser(req.appUser?.id)
-          ? "College Consulting sessions must be exactly 60 minutes."
-          : "SAT sessions must be exactly 60 minutes.",
-      );
+    } else {
+      rejectUnlistedPortalDuration(durationMinutes);
     }
     const result = await slotsForTutor(
       tutorProfileId,
@@ -6944,15 +7029,7 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     const consulting = isNeelDharniUser(req.appUser!.id);
-    if (durationMinutes !== 60) {
-      throw new BookingError(
-        400,
-        "INVALID_DURATION",
-        consulting
-          ? "College Consulting sessions must be exactly 60 minutes."
-          : "SAT sessions must be exactly 60 minutes.",
-      );
-    }
+    rejectUnlistedPortalDuration(durationMinutes);
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
       new Date(start.getTime() - 1),
@@ -7008,11 +7085,14 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
       if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
         throw new BookingError(409, "SLOT_UNAVAILABLE", "That time is no longer available.");
       }
+      const creditPool = consulting ? await consultingCreditProductIds(tutor) : null;
+      const excludedCreditProducts = consulting ? [] : await liveCheckoutTestProductIds();
       await lockClientCreditsAndRequireHours(
         tx,
         req.appUser!.id,
         durationMinutes / 60,
-        consultingProduct?.id ?? null,
+        creditPool ?? consultingProduct?.id ?? null,
+        excludedCreditProducts,
       );
       return insertConfirmedBookingWithDebit(tx, {
         courseId: course.id,
@@ -7329,7 +7409,8 @@ async function financialSummary(clientUserId: string) {
       .where(eq(creditLedgerTable.clientUserId, clientUserId))
       .orderBy(desc(creditLedgerTable.createdAt)),
   ]);
-  const creditSummary = creditHoursSummary(entries);
+  const bookableEntries = withoutCheckoutTestHours(entries, await liveCheckoutTestProductIds());
+  const creditSummary = creditHoursSummary(bookableEntries);
   return {
     ...creditSummary,
     remainingHours: creditSummary.remainingHours,
@@ -7376,7 +7457,7 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
 
 router.post(
   "/payments/checkout",
-  ensureRole(["student"]),
+  ensureRole(["student", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const productId = stringField((req.body ?? {}) as Record<string, unknown>, "productId");
     const [product] = await db
@@ -7393,48 +7474,55 @@ router.post(
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug);
-    if (audience === "forbidden") {
-      res.status(403).json({
-        error: isNeelDharniUser(req.appUser!.id)
-          ? "This account buys College Consulting hours only."
-          : "College Consulting checkout is not available for this account.",
-      });
+    const testCheckout = product.slug === SAMA_LIVE_CHECKOUT_TEST_SLUG;
+    if (testCheckout && !canBuySamaLiveCheckoutTest(req.appUser!)) {
+      res.status(403).json({ error: "This checkout is not available for this account." });
       return;
     }
-    const alignment = consultingCatalogAlignment(product);
-    if (alignment) {
-      const [aligned] = await db
-        .update(satProductsTable)
-        .set({
-          name: alignment.name,
-          description: alignment.description,
-          totalPriceCents: alignment.totalPriceCents,
-          effectiveHourlyRateCents: alignment.effectiveHourlyRateCents,
-          ...(alignment.clearStripeIds
-            ? { stripeProductId: null, stripePriceId: null }
-            : {}),
-          updatedAt: new Date(),
+    if (!testCheckout) {
+      const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug);
+      if (audience === "forbidden") {
+        res.status(403).json({
+          error: isNeelDharniUser(req.appUser!.id)
+            ? "This account buys College Consulting hours only."
+            : "College Consulting checkout is not available for this account.",
+        });
+        return;
+      }
+      const alignment = consultingCatalogAlignment(product);
+      if (alignment) {
+        const [aligned] = await db
+          .update(satProductsTable)
+          .set({
+            name: alignment.name,
+            description: alignment.description,
+            totalPriceCents: alignment.totalPriceCents,
+            effectiveHourlyRateCents: alignment.effectiveHourlyRateCents,
+            ...(alignment.clearStripeIds
+              ? { stripeProductId: null, stripePriceId: null }
+              : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(satProductsTable.id, product.id))
+          .returning();
+        if (aligned) Object.assign(product, aligned);
+      }
+      if (audience === "sat" && !isAcceptedSatCatalogProduct(product)) {
+        res.status(404).json({ error: "SAT product not found" });
+        return;
+      }
+      if (
+        audience === "sat" &&
+        !selfServeSatBookingForAccount({
+          role: req.appUser!.role,
+          email: req.appUser!.email,
         })
-        .where(eq(satProductsTable.id, product.id))
-        .returning();
-      if (aligned) Object.assign(product, aligned);
-    }
-    if (audience === "sat" && !isAcceptedSatCatalogProduct(product)) {
-      res.status(404).json({ error: "SAT product not found" });
-      return;
-    }
-    if (
-      audience === "sat" &&
-      !selfServeSatBookingForAccount({
-        role: req.appUser!.role,
-        email: req.appUser!.email,
-      })
-    ) {
-      res.status(403).json({
-        error: "SAT checkout is not available for this account.",
-      });
-      return;
+      ) {
+        res.status(403).json({
+          error: "SAT checkout is not available for this account.",
+        });
+        return;
+      }
     }
     const [invoice, payment] = await db.transaction(async (tx) => {
       const [createdInvoice] = await tx
@@ -8471,7 +8559,9 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, subjectUserId))
     .orderBy(desc(creditLedgerTable.createdAt));
-  const creditSummary = creditHoursSummary(entries);
+  const creditSummary = creditHoursSummary(
+    withoutCheckoutTestHours(entries, await liveCheckoutTestProductIds()),
+  );
   res.json({
     readOnly: req.appUser!.role === "viewer",
     ...creditSummary,
@@ -9441,6 +9531,7 @@ async function adminSessionConflicts(
 async function adminSessionShape(
   session: typeof sessionsTable.$inferSelect,
   conflictWith: string[] = [],
+  options: { firstNameStudents?: boolean } = {},
 ) {
   const [[course], people] = await Promise.all([
     db
@@ -9480,9 +9571,18 @@ async function adminSessionShape(
     meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
     calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
-      ? { id: session.clientUserId!, name: personById.get(session.clientUserId!)! }
+      ? {
+          id: session.clientUserId!,
+          name: options.firstNameStudents
+            ? tutorStudentName(personById.get(session.clientUserId!))
+            : personById.get(session.clientUserId!)!,
+        }
       : isTaitoFallSession(session)
-        ? { name: TAITO_STUDENT_DISPLAY_NAME }
+        ? {
+            name: options.firstNameStudents
+              ? tutorStudentName(TAITO_STUDENT_DISPLAY_NAME)
+              : TAITO_STUDENT_DISPLAY_NAME,
+          }
         : null,
     tutor: session.tutorUserId
       ? { id: session.tutorUserId, name: personById.get(session.tutorUserId) ?? "Unknown tutor" }
@@ -11157,7 +11257,7 @@ async function reviewSubmissionsForUser(user: AppUser) {
         assignmentId: assignment.id,
         assignmentTitle: assignment.title,
         studentUserId: student.id,
-        studentName: student.displayName,
+        studentName: studentNameForRole(user.role, student.displayName),
         sessionId: session?.id ?? null,
         sessionDateTime: session?.dateTime ?? null,
         status: attempt.status,
@@ -11207,7 +11307,11 @@ async function dashboardDataForUser(user: AppUser) {
   const studentShapeCached = (studentUserId: string) => {
     const cached = studentShapeCache.get(studentUserId);
     if (cached) return cached;
-    const pending = studentShape(studentUserId);
+    const pending = studentShape(studentUserId).then((student) =>
+      student && user.role === "tutor"
+        ? { ...student, name: tutorStudentName(student.name) }
+        : student,
+    );
     studentShapeCache.set(studentUserId, pending);
     return pending;
   };
@@ -11348,6 +11452,7 @@ async function dashboardDataForUser(user: AppUser) {
           .innerJoin(usersTable, eq(usersTable.id, tutorAssignmentsTable.studentUserId))
           .innerJoin(coursesTable, eq(coursesTable.id, tutorAssignmentsTable.courseId))
           .where(eq(tutorAssignmentsTable.tutorUserId, user.id))
+          .then((rows) => rows.map((row) => ({ ...row, name: tutorStudentName(row.name) })))
       : [];
   const reviewSubmissions =
     user.role === "tutor" || user.role === "administrator"
@@ -11424,12 +11529,14 @@ async function dashboardDataForUser(user: AppUser) {
     .from(satProductsTable)
     .where(inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]));
   const consultingProductIds = new Set(consultingProductRows.map((product) => product.id));
+  const checkoutTestProductIds = new Set(await liveCheckoutTestProductIds());
   const neelConsulting = isNeelDharniUser(subjectUserId);
-  const summaryEntries = creditEntries.filter((entry) =>
-    neelConsulting
+  const summaryEntries = creditEntries.filter((entry) => {
+    if (entry.productId && checkoutTestProductIds.has(entry.productId)) return false;
+    return neelConsulting
       ? Boolean(entry.productId && consultingProductIds.has(entry.productId))
-      : !entry.productId || !consultingProductIds.has(entry.productId),
-  );
+      : !entry.productId || !consultingProductIds.has(entry.productId);
+  });
   const creditSummary = creditHoursSummary(summaryEntries);
   const consultingCalendars = { nika: false, xavier: false, victoria: false };
   if (neelConsulting) {
@@ -11887,15 +11994,32 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     )
     .orderBy(desc(sessionArtifactsTable.updatedAt))
     .limit(1);
+  const sessionTutor = await sessionTutorShape(session);
+  const sessionStudent = await sessionStudentShape(session);
+  const tutorViewer = req.appUser!.role === "tutor";
+  const visibleStudent = sessionStudent
+    ? {
+        ...sessionStudent,
+        name: tutorViewer ? tutorStudentName(sessionStudent.name) : sessionStudent.name,
+      }
+    : sessionStudent;
   res.json(
     GetSessionResponse.parse({
-      ...publicSessionShape(session),
-      tutor: await sessionTutorShape(session),
+      ...publicSessionShape(
+        session,
+        tutorViewer
+          ? sessionDisplayTitle(
+              session,
+              sessionTitle(visibleStudent?.name, session.subject, sessionTutor?.name),
+            )
+          : session.title,
+      ),
+      tutor: sessionTutor,
       meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
       calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"
-          ? await sessionStudentShape(session)
+          ? visibleStudent
           : undefined,
       blocks:
         req.appUser!.role !== "administrator" && req.appUser!.role !== "tutor"
@@ -12082,6 +12206,11 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
     return;
   }
   const student = await sessionStudentShape(session);
+  const pdfStudentName =
+    req.appUser!.role === "tutor"
+      ? tutorStudentName(student?.name)
+      : student?.name ?? "Student";
+  const pdfTutor = req.appUser!.role === "tutor" ? await sessionTutorShape(session) : null;
   const sessionDateLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: session.timezone || "America/New_York",
     weekday: "short",
@@ -12095,9 +12224,15 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
   const pdf = renderSessionQuestionPdf({
     phase,
     includeAnswerKey,
-    sessionTitle: session.title,
+    sessionTitle:
+      req.appUser!.role === "tutor"
+        ? sessionDisplayTitle(
+            session,
+            sessionTitle(pdfStudentName, session.subject, pdfTutor?.name),
+          )
+        : session.title,
     sessionDateLabel,
-    studentName: student?.name ?? "Student",
+    studentName: pdfStudentName,
     sections,
   });
   const part = phase === "before_session" ? "pre-work" : "in-session";
@@ -12940,7 +13075,9 @@ router.get("/attempts/:attemptId", async (req: AuthedRequest, res): Promise<void
       await reopenBrokenEmptyAttempt(attempt.id);
     }
   }
-  res.json(GetAttemptResponse.parse(await attemptShape(attempt.id)));
+  res.json(
+    GetAttemptResponse.parse(await attemptShape(attempt.id, req.appUser!.role)),
+  );
 });
 
 router.get(
@@ -12970,10 +13107,16 @@ router.get(
         await finalizeAttemptResult(access.attempt.id, "expired", { prepareCurriculum: false });
       }
     }
-    const result = await storedAttemptResult(
+    const storedResult = await storedAttemptResult(
       params.data.attemptId,
       req.appUser!.role === "tutor" || req.appUser!.role === "administrator",
     );
+    const result = storedResult
+      ? {
+          ...storedResult,
+          studentName: studentNameForRole(req.appUser!.role, storedResult.studentName),
+        }
+      : storedResult;
     if (!result) {
       res.status(404).json({ error: "Attempt result not found" });
       return;
@@ -13482,7 +13625,7 @@ router.get(
             assignmentId: assignment.id,
             assignmentTitle: assignment.title,
             studentUserId: student.id,
-            studentName: student.displayName,
+            studentName: studentNameForRole(req.appUser!.role, student.displayName),
             sessionId: session?.id ?? null,
             sessionDateTime: session?.dateTime ?? null,
             status: attempt.status,
@@ -13540,9 +13683,15 @@ router.patch(
       })
       .where(eq(attemptsTable.id, attempt.id))
       .returning();
+    const reviewed = await storedAttemptResult(updated!.id, true);
     res.json(
       UpdateAttemptReviewResponse.parse(
-        await storedAttemptResult(updated!.id, true),
+        reviewed
+          ? {
+              ...reviewed,
+              studentName: studentNameForRole(req.appUser!.role, reviewed.studentName),
+            }
+          : reviewed,
       ),
     );
   },
@@ -14861,7 +15010,7 @@ router.get(
           id: item.id,
           attemptId: item.attemptId,
           questionId: item.questionId,
-          studentName: student.displayName,
+          studentName: studentNameForRole(req.appUser!.role, student.displayName),
           skill: item.skill,
           reason: item.reason,
           prediction: response?.prediction ?? null,
@@ -14949,7 +15098,7 @@ router.patch(
         id: updated.id,
         attemptId: updated.attemptId,
         questionId: updated.questionId,
-        studentName: student?.displayName ?? "Student",
+        studentName: studentNameForRole(req.appUser!.role, student?.displayName ?? "Student"),
         skill: updated.skill,
         reason: updated.reason,
         prediction: response?.prediction ?? null,

@@ -32,6 +32,7 @@ import {
   paymentCreditBannerCopy,
   paymentCreditBannerState,
   asCreditHours,
+  formatPrepaidCreditCount,
 } from "@/lib/portal-sat-payment";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
@@ -455,8 +456,8 @@ export default function PortalSat() {
               </CardTitle>
               <CardDescription>
                 {collegeConsulting
-                  ? "Nika is $100/hour. Victoria is $130/hour. Xavier is $200/hour. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
-                  : "Pay $130 for one hour or $1,300 for 10 hours. Then book below. Card details stay on Stripe Checkout."}
+                  ? "Nika is $100/hour, Victoria is $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Each tutor’s hours stay on that tutor. Card details stay on Stripe Checkout."
+                  : "Pay $130/hour. A 1-hour session is $130, 1.5 hours is $195, and 2 hours is $260. A 10-hour package is $1,300. Card details stay on Stripe Checkout."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -475,7 +476,7 @@ export default function PortalSat() {
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 {products.map((product) => {
-                  const credits = Math.round(product.durationHours);
+                  const credits = formatPrepaidCreditCount(product.durationHours);
                   const price = (product.totalPriceCents / 100).toLocaleString(undefined, {
                     style: "currency",
                     currency: "USD",
@@ -485,7 +486,7 @@ export default function PortalSat() {
                     <div key={product.id} className="rounded-xl border p-4" data-testid={`portal-sat-offer-${product.id}`}>
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-semibold">{portalCheckoutCopy(product.name)}</p>
-                        <Badge variant="secondary">{credits} credit{credits === 1 ? "" : "s"}</Badge>
+                        <Badge variant="secondary">{credits} credit{credits === "1" ? "" : "s"}</Badge>
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">{portalCheckoutCopy(product.description)}</p>
                       <p className="mt-3 font-display text-3xl">{price}</p>

@@ -7,6 +7,13 @@ import {
 
 export type { CalendarInviteParty };
 
+/** Portal bookings. 30, 150, and 180 stay rejected. */
+export const BOOKABLE_PORTAL_DURATIONS = [60, 90, 120] as const;
+
+export function isBookablePortalDuration(minutes: number): boolean {
+  return minutes === 60 || minutes === 90 || minutes === 120;
+}
+
 export type AvailabilityWindow = { start: string; end: string };
 export type AvailabilityRule = {
   timezone: string;

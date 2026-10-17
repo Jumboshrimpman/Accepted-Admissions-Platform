@@ -176,7 +176,7 @@ describe("client availability calendar", () => {
     expect(screen.queryByText(tutorTime(firstSlot))).toBeNull();
 
     fireEvent.click(screen.getByText(tutorTime(secondSlot)));
-    expect(screen.getByRole("button", { name: "Reserve this hour" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reserve this session" })).toBeTruthy();
     const hint = screen.getByTestId("booking-calendar-hint");
     expect(hint.textContent).toMatch(/Dates with open times are available to select/);
     expect(hint.className).toMatch(/mt-3/);
@@ -380,7 +380,7 @@ describe("client availability calendar", () => {
     expect(
       screen.queryByText(/You need a prepaid SAT credit before reserving/i),
     ).toBeNull();
-    expect(screen.queryByRole("button", { name: "Reserve this hour" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reserve this session" })).toBeNull();
     expect(screen.getAllByRole("button", { name: /Change time/i }).length).toBeGreaterThan(0);
     vi.unstubAllGlobals();
   });
@@ -449,7 +449,7 @@ describe("client availability calendar", () => {
     expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
     expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/remaining credit/i);
     fireEvent.click(screen.getByText("12:30 AM"));
-    expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Reserve this session" }).hasAttribute("disabled")).toBe(false);
     vi.unstubAllGlobals();
   });
 
@@ -465,7 +465,7 @@ describe("client availability calendar", () => {
     });
     expect(screen.queryByText(/You need a prepaid SAT credit before reserving/i)).toBeNull();
     fireEvent.click(screen.getByText("12:30 AM"));
-    expect(screen.getByRole("button", { name: "Reserve this hour" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Reserve this session" }).hasAttribute("disabled")).toBe(false);
     vi.unstubAllGlobals();
   });
 
@@ -487,7 +487,7 @@ describe("client availability calendar", () => {
     expect(screen.queryByRole("button", { name: /Change time/i })).toBeNull();
     expect(screen.getByTestId("booking-empty-sessions").textContent).toMatch(/No prepaid sessions reserved yet/i);
     fireEvent.click(screen.getByText("12:30 AM"));
-    expect(screen.queryByRole("button", { name: "Reserve this hour" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reserve this session" })).toBeNull();
     vi.unstubAllGlobals();
   });
 
