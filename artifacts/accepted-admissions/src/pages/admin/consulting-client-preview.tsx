@@ -97,9 +97,6 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
       <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white sm:px-9">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">College Consulting</p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight">Welcome back, {firstName}.</h2>
-        <p className="mt-3 max-w-2xl text-white/75">
-          Nika, Victoria, and Xavier. Each tutor keeps their own hours.
-        </p>
       </section>
 
       <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -115,9 +112,6 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
       <Card data-testid="consulting-preview-credits">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">College Consulting credits</CardTitle>
-          <CardDescription>
-            Nika is $100/hour. Victoria is $130/hour. Xavier is $200/hour. Hours do not transfer between tutors.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {tutors.length === 0 ? (
