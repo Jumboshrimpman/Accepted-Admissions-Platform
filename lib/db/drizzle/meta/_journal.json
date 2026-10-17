@@ -400,6 +400,13 @@
       "when": 1792400000000,
       "tag": "0060_nika_sat_sophia_michelle",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792500000000,
+      "tag": "0061_booking_notice_minutes",
+      "breakpoints": true
     }
   ]
 }

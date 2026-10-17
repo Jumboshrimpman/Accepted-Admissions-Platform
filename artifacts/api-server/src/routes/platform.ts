@@ -185,6 +185,7 @@ import { aliasLoginAccessOutcome, aliasSessionRole, requireAppRole } from "../li
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
   bookingCalendarEventPayload,
+  bookingNoticeMinutesForTutor,
   generateAvailableSlots,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
@@ -2021,7 +2022,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         tutorProfileId: tutor.id,
         timezone: SAT_BOOKING_TIMEZONE,
         weeklyHours,
-        bookingNoticeMinutes: 1440,
+        bookingNoticeMinutes: bookingNoticeMinutesForTutor(tutor.name),
         bufferMinutes: 15,
         blackoutDates: [],
       });

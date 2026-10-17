@@ -10,6 +10,15 @@ export type { CalendarInviteParty };
 /** Portal bookings. 30, 150, and 180 stay rejected. */
 export const BOOKABLE_PORTAL_DURATIONS = [60, 90, 120] as const;
 
+/** New tutors, and every tutor except Nika. */
+export const DEFAULT_BOOKING_NOTICE_MINUTES = 4 * 60;
+/** Nika Raiffe. Clients cannot book her inside this window. */
+export const NIKA_BOOKING_NOTICE_MINUTES = 8 * 60;
+
+export function bookingNoticeMinutesForTutor(name: string): number {
+  return name === "Nika Raiffe" ? NIKA_BOOKING_NOTICE_MINUTES : DEFAULT_BOOKING_NOTICE_MINUTES;
+}
+
 export function isBookablePortalDuration(minutes: number): boolean {
   return minutes === 60 || minutes === 90 || minutes === 120;
 }
