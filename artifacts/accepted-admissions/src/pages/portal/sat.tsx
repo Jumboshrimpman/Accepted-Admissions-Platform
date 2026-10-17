@@ -24,7 +24,7 @@ import {
   PORTAL_SAT_TUTOR_HREF,
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
-  showsSelfServeCollegeConsulting,
+  showsCollegeConsultingAccount,
   showsSelfServeSatCommerce,
 } from "@/lib/portal-sat";
 import {
@@ -223,7 +223,10 @@ export default function PortalSat() {
   }
 
   const commerceCredits = dashboard.data?.credits;
-  const collegeConsulting = showsSelfServeCollegeConsulting(commerceCredits);
+  const collegeConsulting = showsCollegeConsultingAccount({
+    userId: dashboard.data?.user?.id ?? currentUser?.id,
+    credits: commerceCredits,
+  });
   const showSatCommerce = showsSelfServeSatCommerce(commerceCredits) || collegeConsulting;
   if (!canPurchaseOrBookSatCredits(currentUser?.role) || !showSatCommerce) {
     const tutorDenied = currentUser?.role === "tutor";

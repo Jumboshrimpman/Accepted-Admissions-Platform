@@ -262,22 +262,15 @@ async function ensureCourse(tx: ProvisionTx): Promise<void> {
     );
 }
 
-/** Keep SAT subjects. Add College Consulting and leave an inactive profile alone. */
-async function ensureConsultingSubject(
+/** Turn an active consulting tutor on for booking. Leave subjects unchanged so Our Team keeps its published tags. */
+async function ensureConsultingBookable(
   tx: ProvisionTx,
-  profile: { id: string; subjects: string[] | null; bookingEligible: boolean; active: boolean },
+  profile: { id: string; bookingEligible: boolean; active: boolean },
 ): Promise<void> {
-  if (!profile.active) return;
-  const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
-  const subjectsChanged = subjects.length !== (profile.subjects ?? []).length;
-  if (!subjectsChanged && profile.bookingEligible) return;
+  if (!profile.active || profile.bookingEligible) return;
   await tx
     .update(tutorProfilesTable)
-    .set({
-      ...(subjectsChanged ? { subjects } : {}),
-      ...(profile.bookingEligible ? {} : { bookingEligible: true }),
-      updatedAt: new Date(),
-    })
+    .set({ bookingEligible: true, updatedAt: new Date() })
     .where(eq(tutorProfilesTable.id, profile.id));
 }
 
@@ -772,7 +765,7 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     );
   for (const profile of consultingRoster) {
     if (profile.name === CANONICAL_XAVIER_NAME && isRetiredXavierEmail(profile.email)) continue;
-    await ensureConsultingSubject(tx, profile);
+    await ensureConsultingBookable(tx, profile);
   }
   const nika = await ensureNika(tx);
   const neel = await ensurePlaceholderClient(tx, {

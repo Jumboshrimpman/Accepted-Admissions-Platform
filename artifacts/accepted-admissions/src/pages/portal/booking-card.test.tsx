@@ -817,4 +817,23 @@ describe("client availability calendar", () => {
     expect(screen.getByText("Upcoming SAT session")).toBeTruthy();
     expect(screen.queryByText("SAT capability test — Xavier")).toBeNull();
   });
+
+  test("a College Consulting fallback session does not use an SAT title", () => {
+    render(
+      <BookingCard
+        collegeConsulting
+        fallbackSessions={[
+          {
+            id: "consult-untitled",
+            dateTime: "2026-10-21T22:05:00.000Z",
+            timezone: "America/New_York",
+            durationMinutes: 60,
+            bookingStatus: "confirmed",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("College Consulting session")).toBeTruthy();
+    expect(screen.queryByText("SAT session")).toBeNull();
+  });
 });

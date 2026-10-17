@@ -426,6 +426,8 @@ describe("portal SAT book/pay", () => {
     expect(screen.queryByText("Upcoming SAT sessions")).toBeNull();
     expect(screen.queryByText("No upcoming SAT sessions are on this account yet.")).toBeNull();
     expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByText("SAT book and pay is unavailable")).toBeNull();
+    expect(screen.queryByText("SAT session")).toBeNull();
     expect(screen.queryByText("Michelle’s SAT Session with Xavier")).toBeNull();
     expect(await screen.findByText("College Consulting hour with Xavier")).toBeTruthy();
     expect(screen.getByText("$195")).toBeTruthy();

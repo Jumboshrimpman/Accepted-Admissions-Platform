@@ -184,7 +184,7 @@ function BookingTutorOption({
   );
 }
 
-function asListedBookingSession(session: ListedSession) {
+function asListedBookingSession(session: ListedSession, collegeConsulting = false) {
   const bookingStatus =
     session.bookingStatus === "rescheduled"
       ? "rescheduled"
@@ -201,8 +201,8 @@ function asListedBookingSession(session: ListedSession) {
         ? session.dateTime
         : new Date(session.dateTime).toISOString(),
     timezone: session.timezone,
-    subject: session.subject ?? "SAT",
-    title: session.title ?? "SAT session",
+    subject: session.subject ?? (collegeConsulting ? "College Consulting" : "SAT"),
+    title: session.title ?? (collegeConsulting ? "College Consulting session" : "SAT session"),
     durationMinutes: session.durationMinutes ?? 60,
     bookingStatus,
     meetingUrl: session.meetingUrl ?? null,
@@ -263,7 +263,7 @@ export function BookingCard({
   const fallbackListed = uniqueListedSessions(
     (fallbackSessions ?? [])
       .filter(isLiveListedSession)
-      .map((session) => asListedBookingSession(session)),
+      .map((session) => asListedBookingSession(session, collegeConsultingAccount)),
   );
   const sessions = uniqueListedSessions([
     ...queriedSessions,

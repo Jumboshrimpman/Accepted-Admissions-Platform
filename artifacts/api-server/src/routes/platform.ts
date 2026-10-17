@@ -5958,6 +5958,9 @@ router.get("/public/tutors", async (_req, res): Promise<void> => {
       })
       .map((tutor) => ({
         ...tutor,
+        subjects: tutor.subjects.filter(
+          (subject) => subject.trim().toLowerCase() !== "college consulting",
+        ),
         photoUrl: publicTeamPortrait(tutor.name, tutor.photoUrl),
       })),
   );

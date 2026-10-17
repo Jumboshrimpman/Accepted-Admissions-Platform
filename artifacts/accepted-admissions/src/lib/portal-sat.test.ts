@@ -9,6 +9,7 @@ import {
   isPortalHomePath,
   portalPathname,
   shouldShowSatPaymentReceipts,
+  showsCollegeConsultingAccount,
   showsSelfServeSatCommerce,
 } from "./portal-sat.ts";
 
@@ -35,6 +36,30 @@ test("Book SAT nav is only for self-serve students", () => {
   assert.equal(showsSelfServeSatCommerce(michelleCredits), true);
   assert.equal(showsSelfServeSatCommerce(taitoCredits), false);
   assert.equal(showsSelfServeSatCommerce(null), false);
+});
+
+test("Neel's account stays on College Consulting when the dashboard flag is missing", () => {
+  assert.equal(
+    showsCollegeConsultingAccount({
+      userId: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+      credits: { selfServeCollegeConsulting: false },
+    }),
+    true,
+  );
+  assert.equal(
+    showsCollegeConsultingAccount({
+      userId: "student-1",
+      credits: { selfServeCollegeConsulting: false },
+    }),
+    false,
+  );
+  assert.equal(
+    showsCollegeConsultingAccount({
+      userId: "student-1",
+      credits: { selfServeCollegeConsulting: true },
+    }),
+    true,
+  );
 });
 
 test("off-platform program clients skip Stripe booking and purchase gates", () => {

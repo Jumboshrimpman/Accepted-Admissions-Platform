@@ -6,6 +6,9 @@
 -- drizzle skip 0061 and 0062 because their timestamps are earlier.
 -- ON CONFLICT DO NOTHING so a rerun cannot clear stripe_product_id or stripe_price_id.
 -- No users, grants, Clerk invitations, or emails.
+-- booking_eligible turns Xavier and Eunice on for Neel's portal. Subjects stay as
+-- published. The public Our Team page reads tutor_profiles.subjects, so this
+-- migration does not add a College Consulting tag there.
 
 INSERT INTO "sat_products" (
   "slug",
@@ -89,14 +92,6 @@ ON CONFLICT ("slug") DO NOTHING;
 --> statement-breakpoint
 UPDATE "tutor_profiles"
 SET
-  "subjects" = (
-    SELECT COALESCE(jsonb_agg(DISTINCT subject), '[]'::jsonb)
-    FROM (
-      SELECT jsonb_array_elements_text(COALESCE("tutor_profiles"."subjects", '[]'::jsonb)) AS subject
-      UNION
-      SELECT 'College Consulting'
-    ) AS listed
-  ),
   "booking_eligible" = true,
   "updated_at" = now()
 WHERE "active" = true

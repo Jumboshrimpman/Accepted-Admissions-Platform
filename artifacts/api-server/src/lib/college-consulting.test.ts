@@ -682,6 +682,11 @@ test("provisioning and the migration do not send email or create Clerk users", a
   assert.match(rosterMigration, /xsfam6@gmail\.com/);
   assert.match(provision, /isRetiredXavierEmail\(profile\.email\)/);
   assert.match(rosterMigration, /booking_notice_minutes" = 240/);
+  assert.match(rosterMigration, /"booking_eligible" = true/);
+  assert.equal(rosterMigration.includes('"subjects"'), false);
+  assert.equal(provision.includes("ensureConsultingSubject"), false);
+  assert.match(provision, /ensureConsultingBookable/);
+  assert.match(platform, /toLowerCase\(\) !== "college consulting"/);
   assert.equal(rosterMigration.includes("INSERT INTO \"users\""), false);
   assert.equal(rosterMigration.includes("Nika Raiffe"), false);
   assert.match(index, /ensureCollegeConsultingProvision\(\)/);
