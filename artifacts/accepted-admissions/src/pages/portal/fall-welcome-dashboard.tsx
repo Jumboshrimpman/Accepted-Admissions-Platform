@@ -348,12 +348,6 @@ export function ClientDashboardView({
               <Target className="h-5 w-5 text-primary" />
               {collegeConsulting ? "College Consulting credits" : "SAT session credits"}
             </CardTitle>
-            <CardDescription>
-              Purchased credits unlock after a verified Stripe payment. A session uses its length in prepaid hours.
-              {collegeConsulting
-                ? " Nika is $100/hour, Victoria is $130/hour, and Xavier is $200/hour. 1.5-hour and 2-hour sessions use that same hourly rate. Hours do not transfer between tutors."
-                : " Choose Eunice, Victoria, or Xavier. A 1-hour, 1.5-hour, or 2-hour session uses that tutor’s hourly rate. Hours stay with the tutor you buy them for."}
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-3">

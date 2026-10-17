@@ -518,11 +518,6 @@ export function BookingCard({
               <CalendarClock className="h-5 w-5 text-primary" />
               {collegeConsulting ? "Book a College Consulting session" : "Book a prepaid SAT session"}
             </CardTitle>
-            <CardDescription className="mt-2 max-w-2xl">
-              {collegeConsulting
-                ? "Choose Nika ($100/hr), Victoria ($130/hr), or Xavier ($200/hr), then 1 hour, 1.5 hours, or 2 hours at that same rate. The full length is checked against that tutor’s Google Calendar and the shared Meet room. Cancel at least 24 hours ahead to restore the credit."
-                : "Choose Eunice, Victoria, or Xavier, then 1 hour, 1.5 hours, or 2 hours at that tutor’s rate. The full length is checked against their live Google Calendar. Cancel at least 24 hours ahead to restore the credit."}
-            </CardDescription>
           </div>
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">
             {prepaidHoursBadgeLabel(selectedTutorHours, purchasedHours, upcomingReserved.length > 0)}

@@ -344,6 +344,8 @@ describe("client availability calendar", () => {
       ).toBeTruthy();
     });
     expect(screen.getByRole("link", { name: /Purchase SAT hours/i }).getAttribute("href")).toBe("/portal/sat");
+    expect(screen.queryByText(/checked against their live Google Calendar/)).toBeNull();
+    expect(screen.queryByText(/Cancel at least 24 hours ahead to restore the credit/)).toBeNull();
     expect(screen.getByRole("tab", { name: "Eunice" })).toBeTruthy();
     vi.unstubAllGlobals();
   });
