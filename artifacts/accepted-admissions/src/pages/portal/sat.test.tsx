@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { PORTAL_SAT_PURCHASE_HREF } from "@/lib/portal-sat";
+import { PORTAL_SAT_PURCHASE_HREF, SOPHIA_SLEIMAN_SAT_USER_ID } from "@/lib/portal-sat";
 import {
   PAYMENT_CONFIRMING_TITLE,
   PAYMENT_GRANTED_TITLE,
@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   purchasedHours: 0 as number | string,
   usedHours: 0 as number | string,
   currentUser: {
-    data: { role: "student" as "student" | "tutor" | "administrator" | "viewer" },
+    data: {
+      role: "student" as "student" | "tutor" | "administrator" | "viewer",
+      id: undefined as string | undefined,
+    },
     isLoading: false,
   },
   dashboard: {
@@ -108,7 +111,7 @@ afterEach(() => {
   mocks.remainingHours = 0;
   mocks.purchasedHours = 0;
   mocks.usedHours = 0;
-  mocks.currentUser.data = { role: "student" };
+  mocks.currentUser.data = { role: "student", id: undefined };
   mocks.currentUser.isLoading = false;
   mocks.dashboard.data.user = { role: "student", id: "student-1", displayName: "Michelle" };
   vi.unstubAllGlobals();
@@ -160,6 +163,25 @@ beforeEach(() => {
 });
 
 describe("portal SAT book/pay", () => {
+  test("Sophia's page books Xavier or Eunice and keeps the removed pricing blurbs off", async () => {
+    mocks.currentUser.data = { role: "student", id: SOPHIA_SLEIMAN_SAT_USER_ID };
+    mocks.dashboard.data.user = {
+      role: "student",
+      id: SOPHIA_SLEIMAN_SAT_USER_ID,
+      displayName: "Sophia Sleiman",
+    };
+
+    render(<PortalSat />);
+
+    expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
+    expect(screen.getByText(/book Xavier or Eunice/i)).toBeTruthy();
+    expect(screen.queryByText(/Victoria/)).toBeNull();
+    expect(screen.queryByText("Your tutors")).toBeNull();
+    expect(screen.queryByText(/hourly rate/i)).toBeNull();
+    expect(screen.queryByText(/Hours stay with the tutor/i)).toBeNull();
+    expect((await screen.findByTestId("portal-sat-offer-prod-10")).textContent).toContain("$1,300");
+  });
+
   test("keeps purchase and booking inside the portal shell", async () => {
     render(<PortalSat />);
     expect(screen.getByTestId("portal-sat-page")).toBeTruthy();

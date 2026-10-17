@@ -11,6 +11,8 @@ import {
   displayedSatHourlyCents,
   displayedSatPriceCents,
   isLegacySharedSatSlug,
+  isSophiaSleimanUser,
+  satTutorRosterRefusalMessage,
   isMichelleMakaremUser,
   isStandardSatTutorProduct,
   previewOffersFromSatTutorProducts,
@@ -80,7 +82,7 @@ test("per-tutor SAT catalog stores the standard rates", () => {
   }), false);
 });
 
-test("Michelle keeps Xavier at $130 and Sophia sees $200", () => {
+test("Michelle and Sophia keep Xavier at $130 and other clients see $200", () => {
   assert.equal(isMichelleMakaremUser(michelle), true);
   assert.equal(isMichelleMakaremUser({ email: "makaremmichelle7@gmail.com" }), true);
   assert.equal(isMichelleMakaremUser(michelleEmail), true);
@@ -103,19 +105,38 @@ test("Michelle keeps Xavier at $130 and Sophia sees $200", () => {
   assert.equal(displayedSatPriceCents(product("sat-xavier-90"), retiredMichelleEmail), 30_000);
   assert.equal(displayedSatPriceCents(product("sat-xavier-120"), retiredMichelleEmail), 40_000);
   assert.equal(allowsLegacySatPool("xavier", retiredMichelleEmail), false);
-  assert.equal(displayedSatHourlyCents("xavier", sophia), 20_000);
-  assert.equal(displayedSatPriceCents(product("sat-xavier-60"), sophia), 20_000);
-  assert.equal(displayedSatPriceCents(product("sat-xavier-90"), sophia), 30_000);
-  assert.equal(displayedSatPriceCents(product("sat-xavier-120"), sophia), 40_000);
-  assert.equal(displayedSatDescription(product("sat-xavier-60"), sophia), product("sat-xavier-60").description);
-  assert.equal(allowsLegacySatPool("xavier", sophia), false);
+  assert.equal(isSophiaSleimanUser(sophia), true);
+  assert.equal(isSophiaSleimanUser(otherSatClient), false);
+  assert.equal(displayedSatHourlyCents("xavier", sophia), 13_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-60"), sophia), 13_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-90"), sophia), 19_500);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-120"), sophia), 26_000);
+  assert.match(displayedSatDescription(product("sat-xavier-60"), sophia), /\$130\/hour/);
+  assert.equal(displayedSatHourlyCents("eunice", sophia), 13_000);
+  assert.equal(canBookSatTutor("xavier", sophia), true);
+  assert.equal(canBookSatTutor("eunice", sophia), true);
+  assert.equal(canBookSatTutor("victoria", sophia), false);
+  assert.equal(canBookSatTutor("nika", sophia), false);
+  assert.equal(canBookSatTutor("victoria", otherSatClient), true);
+  assert.equal(canBookSatTutor("xavier", otherSatClient), true);
+  assert.equal(displayedSatHourlyCents("xavier", otherSatClient), 20_000);
+  assert.equal(allowsLegacySatPool("xavier", sophia), true);
+  assert.equal(allowsLegacySatPool("eunice", sophia), true);
+  assert.equal(allowsLegacySatPool("victoria", sophia), false);
+  assert.equal(allowsLegacySatPool("nika", sophia), false);
+  assert.equal(isLegacySharedSatSlug("ten-sat-session-package"), true);
+  assert.equal(satTutorRosterRefusalMessage(sophia), "Choose Eunice or Xavier for an SAT session.");
+  assert.equal(
+    satTutorRosterRefusalMessage(otherSatClient),
+    "Choose Eunice, Victoria, or Xavier for an SAT session.",
+  );
   assert.equal(allowsLegacySatPool("xavier", michelle), true);
   assert.equal(allowsLegacySatPool("eunice", sophia), true);
-  assert.equal(allowsLegacySatPool("victoria", sophia), true);
 });
 
-test("Nika SAT is $130 for Sophia and Michelle and hidden from other clients", () => {
-  for (const user of [sophia, michelle, michelleEmail]) {
+test("Nika SAT is $130 for Michelle and hidden from Sophia and other clients", () => {
+  assert.equal(canBookSatTutor("nika", sophia), false);
+  for (const user of [michelle, michelleEmail]) {
     assert.equal(canBookSatTutor("nika", user), true);
     assert.equal(displayedSatHourlyCents("nika", user), 13_000);
     assert.equal(displayedSatPriceCents(product("sat-nika-60"), user), 13_000);
@@ -261,9 +282,7 @@ test("admin preview lists one-hour tutor rates for the viewed client", () => {
     offers.map((offer) => ({ slug: offer.slug, priceCents: offer.priceCents, durationMinutes: offer.durationMinutes })),
     [
       { slug: "sat-eunice-60", priceCents: 13_000, durationMinutes: 60 },
-      { slug: "sat-victoria-60", priceCents: 13_000, durationMinutes: 60 },
-      { slug: "sat-xavier-60", priceCents: 20_000, durationMinutes: 60 },
-      { slug: "sat-nika-60", priceCents: 13_000, durationMinutes: 60 },
+      { slug: "sat-xavier-60", priceCents: 13_000, durationMinutes: 60 },
     ],
   );
   const strangerOffers = previewOffersFromSatTutorProducts(
