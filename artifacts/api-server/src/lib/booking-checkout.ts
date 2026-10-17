@@ -26,6 +26,8 @@ export type BookingCheckoutIntent = {
   tutorProfileId: string;
   startTime: string;
   durationMinutes: 60 | 90 | 120;
+  /** Set only when the browser asked for College Consulting. Callers still decide who may use it. */
+  service?: "college-consulting";
 };
 
 const CLIENT_PRICE_KEYS = [
@@ -130,12 +132,17 @@ export function bookingIntentFromBody(
   if (Number.isNaN(start.getTime())) {
     return { present: true, error: "Choose a tutor, a length, and an open time." };
   }
+  const subject = typeof body.subject === "string" ? body.subject.trim().toLowerCase() : "";
+  const serviceName = typeof body.service === "string" ? body.service.trim().toLowerCase() : "";
+  const consulting =
+    subject === "college consulting" || serviceName === "college-consulting";
   return {
     present: true,
     intent: {
       tutorProfileId,
       startTime: start.toISOString(),
       durationMinutes: duration as 60 | 90 | 120,
+      ...(consulting ? { service: "college-consulting" as const } : {}),
     },
   };
 }

@@ -145,8 +145,11 @@ import {
   consultingTutorPhotoUrl,
   collegeConsultingTutorKeyForProfile,
   VICTORIA_DISPLAY_NAME,
+  collegeConsultingServiceRequested,
   isNeelDharniUser,
   isNikaTemporaryViewEmail,
+  isSamaPostgradTestStudent,
+  samaCollegeConsultingBooking,
   keepProvisionedPlaceholderDisplayName,
   NEEL_DHARNI_USER_ID,
   NIKA_CONSULTING_EMAIL,
@@ -5885,7 +5888,11 @@ async function appendLiveCheckoutTestProduct<T extends { slug: string }>(
 
 router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): Promise<void> => {
   const viewer = { email: req.appUser?.email, role: req.appUser?.role };
-  if (isNeelDharniUser(req.appUser?.id)) {
+  const consultingCatalog =
+    isNeelDharniUser(req.appUser?.id) ||
+    (isSamaPostgradTestStudent(req.appUser) &&
+      collegeConsultingServiceRequested(req.query.service));
+  if (consultingCatalog) {
     const products = await db
       .select()
       .from(satProductsTable)
@@ -7290,7 +7297,11 @@ async function unresolvedSharedMeetOverlaps() {
 
 router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => {
   await ensureUpgradeSeedData();
-  if (isNeelDharniUser(req.appUser?.id)) {
+  const consultingList =
+    isNeelDharniUser(req.appUser?.id) ||
+    (isSamaPostgradTestStudent(req.appUser) &&
+      collegeConsultingServiceRequested(req.query.service));
+  if (consultingList) {
     res.json(await consultingTutorList(req.appUser!.id));
     return;
   }
@@ -7527,7 +7538,10 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
     const start = asDate(body.startTime);
     const durationMinutes = durationFromBody(body.durationMinutes);
     if (!tutorProfileId) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
-    const consulting = isNeelDharniUser(req.appUser!.id);
+    const consulting =
+      isNeelDharniUser(req.appUser!.id) ||
+      samaCollegeConsultingBooking(req.appUser, body.subject) ||
+      samaCollegeConsultingBooking(req.appUser, body.service);
     rejectUnlistedPortalDuration(durationMinutes);
     const [bookedTutor] = await db
       .select({
@@ -7886,6 +7900,7 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
       tutorProfileId: intent.tutorProfileId,
       startTime: intent.startTime,
       durationMinutes: intent.durationMinutes,
+      ...(intent.service === "college-consulting" ? { subject: "College Consulting" } : {}),
     };
     bookingRequest.bookingSlotTakenMessage = BOOKING_CHECKOUT_SLOT_TAKEN;
     bookingRequest.bookingHoldPaymentId = paymentId;
@@ -7924,6 +7939,7 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
       tutorProfileId: intent.tutorProfileId,
       startTime: intent.startTime,
       durationMinutes: intent.durationMinutes,
+      ...(intent.service === "college-consulting" ? { subject: "College Consulting" } : {}),
     },
     bookingSlotTakenMessage: BOOKING_CHECKOUT_SLOT_TAKEN,
     bookingHoldPaymentId: paymentId,
@@ -8222,6 +8238,7 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
 async function resolveDirectBookingProduct(
   user: AppUser,
   intent: { tutorProfileId: string; durationMinutes: number },
+  options: { consulting: boolean },
 ) {
   const [tutor] = await db
     .select({
@@ -8234,7 +8251,7 @@ async function resolveDirectBookingProduct(
     .where(eq(tutorProfilesTable.id, intent.tutorProfileId))
     .limit(1);
   if (!tutor) return { status: 404 as const, error: "A tutor is required." };
-  const consulting = isNeelDharniUser(user.id);
+  const consulting = options.consulting;
   const tutorKey = consulting
     ? collegeConsultingTutorKeyForProfile(tutor)
     : satTutorKeyForName(tutor.name);
@@ -8288,7 +8305,15 @@ router.post(
     let bookingIntent: ReturnType<typeof bookingIntentFromMetadata> = null;
     let bookingTutor: { id: string; userId: string | null } | null = null;
     if (intentResult.present && "intent" in intentResult) {
-      const resolved = await resolveDirectBookingProduct(req.appUser!, intentResult.intent);
+      const consultingCheckout =
+        isNeelDharniUser(req.appUser!.id) ||
+        samaCollegeConsultingBooking(req.appUser, body.subject) ||
+        samaCollegeConsultingBooking(req.appUser, body.service);
+      const resolved = await resolveDirectBookingProduct(
+        req.appUser!,
+        intentResult.intent,
+        { consulting: consultingCheckout },
+      );
       if ("error" in resolved) {
         res.status(resolved.status ?? 404).json({ error: resolved.error });
         return;
@@ -8299,6 +8324,16 @@ router.post(
       }
       product = resolved.product;
       bookingIntent = intentResult.intent;
+      if (
+        bookingIntent.service === "college-consulting" &&
+        !isSamaPostgradTestStudent(req.appUser)
+      ) {
+        bookingIntent = {
+          tutorProfileId: bookingIntent.tutorProfileId,
+          startTime: bookingIntent.startTime,
+          durationMinutes: bookingIntent.durationMinutes,
+        };
+      }
       bookingTutor = resolved.tutor;
     } else {
       const [listed] = await db
@@ -8323,7 +8358,7 @@ router.post(
       return;
     }
     if (!testCheckout) {
-      const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug);
+      const audience = checkoutAudienceForSlug(req.appUser!.id, product.slug, req.appUser);
       if (audience === "forbidden") {
         res.status(403).json({
           error: isNeelDharniUser(req.appUser!.id)
@@ -8379,7 +8414,7 @@ router.post(
       }
     }
     const chargeCents =
-      !testCheckout && checkoutAudienceForSlug(req.appUser!.id, product.slug) === "sat"
+      !testCheckout && checkoutAudienceForSlug(req.appUser!.id, product.slug, req.appUser) === "sat"
         ? displayedSatPriceCents(product, req.appUser)
         : product.totalPriceCents;
     if (bookingIntent) {

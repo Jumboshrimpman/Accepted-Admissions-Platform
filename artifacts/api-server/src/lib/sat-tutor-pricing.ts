@@ -10,8 +10,8 @@
  * legacy $130 pool.
  *
  * Nika's SAT rows are $130/hour. The shared SAT catalog shows every standard
- * tutor to every self-serve client, so Nika is limited to Sophia Sleiman and
- * Michelle Makarem. Her hours do not accept the legacy pool and do not book
+ * tutor to every self-serve client, so Nika is limited to Sophia Sleiman,
+ * Michelle Makarem, and Sama's test student. Her hours do not accept the legacy pool and do not book
  * another tutor. Neel's College Consulting prices are a separate catalog.
  */
 
@@ -20,6 +20,8 @@ import {
   MICHELLE_MAKAREM_EMAIL,
 } from "./calendar-pair-attendees.ts";
 import { ACCEPTED_SAT_CATALOG_SLUGS } from "./sat-catalog.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isSamaPostgradTestStudent } from "./college-consulting.ts";
 import {
   remainingCreditHours,
   remainingCreditHoursForProducts,
@@ -29,7 +31,7 @@ import {
 export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika"] as const;
 export type SatTutorKey = (typeof SAT_TUTOR_KEYS)[number];
 
-/** Sophia Sleiman. Nika's SAT portal is limited to this user id and Michelle. */
+/** Sophia Sleiman. Nika's SAT portal also includes Michelle and Sama's test student. */
 export const SOPHIA_SLEIMAN_SAT_USER_ID = "bf530aa6-faaa-43df-b3cf-140026f3313e";
 
 export const MICHELLE_XAVIER_SAT_HOURLY_CENTS = 13_000;
@@ -111,7 +113,7 @@ export type SatTutorViewer = MichelleIdentity & { id?: string | null };
 
 /**
  * Eunice, Victoria, and Xavier stay on the shared SAT roster.
- * Nika is bookable only for Sophia Sleiman and Michelle Makarem.
+ * Nika is bookable for Sophia Sleiman, Michelle Makarem, and Sama's test student.
  */
 export function canBookSatTutor(
   tutorKey: SatTutorKey,
@@ -120,6 +122,7 @@ export function canBookSatTutor(
   if (tutorKey !== "nika") return true;
   if (!user) return false;
   if (user.id === SOPHIA_SLEIMAN_SAT_USER_ID) return true;
+  if (isSamaPostgradTestStudent(user)) return true;
   return isMichelleMakaremUser(user);
 }
 
