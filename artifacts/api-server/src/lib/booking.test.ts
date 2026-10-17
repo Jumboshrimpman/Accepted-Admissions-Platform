@@ -8,6 +8,7 @@ import {
   bookingNoticeMinutesForTutor,
   calendarEventPayload,
   DEFAULT_BOOKING_NOTICE_MINUTES,
+  fixedDateHoursOpen,
   generateAvailableSlots,
   isBookablePortalDuration,
   NIKA_BOOKING_NOTICE_MINUTES,
@@ -115,6 +116,104 @@ test("Nika needs 8 hours of notice and every other tutor needs 4", () => {
   assert.equal(others[0], "2026-10-19T16:00:00.000Z");
   assert.equal(others.includes("2026-10-19T15:00:00.000Z"), false);
   assert.ok(others.every((slot) => slot >= "2026-10-19T16:00:00.000Z"));
+});
+
+test("Nika's fixed week offers only those windows and ignores Google busy", async () => {
+  const at = (day: string, time: string) =>
+    zonedDateTimeToUtc(day, time, "America/New_York").toISOString();
+  const hours = (day: string, fromHour: number, toHourInclusive: number, minute = 0) =>
+    Array.from({ length: toHourInclusive - fromHour + 1 }, (_, index) =>
+      at(day, `${String(fromHour + index).padStart(2, "0")}:${String(minute).padStart(2, "0")}`),
+    );
+  const migration = await readFile(
+    fileURLToPath(new URL("../../../../lib/db/drizzle/0062_availability_date_hours.sql", import.meta.url)),
+    "utf8",
+  );
+  const marker = `SET "date_hours" = '`;
+  const jsonStart = migration.indexOf(marker) + marker.length;
+  const dateHours = JSON.parse(migration.slice(jsonStart, migration.indexOf("'::jsonb", jsonStart))) as Record<
+    string,
+    { start: string; end: string }[]
+  >;
+  assert.equal(fixedDateHoursOpen(dateHours, "America/New_York", new Date(at("2026-10-21", "18:05"))), true);
+  assert.equal(fixedDateHoursOpen(dateHours, "America/New_York", new Date(at("2026-10-20", "16:00"))), false);
+  assert.equal(fixedDateHoursOpen(dateHours, "America/New_York", new Date(at("2026-11-16", "07:00"))), false);
+
+  const rule = {
+    timezone: "America/New_York",
+    weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
+    dateHours,
+    bookingNoticeMinutes: 480,
+    bufferMinutes: 15,
+    blackoutDates: [],
+  };
+  const now = new Date("2026-10-17T15:00:00.000Z");
+  const from = new Date("2026-10-19T04:00:00.000Z");
+  const weekEnd = new Date("2026-10-26T04:00:00.000Z");
+  const googleBusy = [{ start: at("2026-10-21", "18:00"), end: at("2026-10-21", "19:30") }];
+  const offered = (duration: number, booked: { start: string; end: string }[] = []) =>
+    generateAvailableSlots(rule, from, weekEnd, duration, googleBusy, booked, now);
+
+  assert.deepEqual(offered(60), [
+    at("2026-10-19", "21:00"),
+    at("2026-10-21", "18:05"),
+    at("2026-10-22", "16:00"),
+    at("2026-10-22", "18:00"),
+    ...hours("2026-10-23", 16, 19),
+    ...hours("2026-10-24", 13, 19),
+    ...hours("2026-10-25", 13, 19),
+  ]);
+  assert.deepEqual(offered(90), [
+    at("2026-10-23", "16:00"),
+    at("2026-10-23", "17:30"),
+    at("2026-10-24", "13:00"),
+    at("2026-10-24", "14:30"),
+    at("2026-10-24", "16:00"),
+    at("2026-10-24", "17:30"),
+    at("2026-10-25", "13:00"),
+    at("2026-10-25", "14:30"),
+    at("2026-10-25", "16:00"),
+    at("2026-10-25", "17:30"),
+  ]);
+  assert.deepEqual(offered(120), [
+    at("2026-10-23", "16:00"),
+    at("2026-10-23", "18:00"),
+    at("2026-10-24", "13:00"),
+    at("2026-10-24", "15:00"),
+    at("2026-10-24", "17:00"),
+    at("2026-10-25", "13:00"),
+    at("2026-10-25", "15:00"),
+    at("2026-10-25", "17:00"),
+  ]);
+  const held = offered(60, [{ start: at("2026-10-21", "18:05"), end: at("2026-10-21", "19:05") }]);
+  assert.equal(held.includes(at("2026-10-21", "18:05")), false);
+
+  const hidden = generateAvailableSlots(
+    rule,
+    new Date("2026-10-26T04:00:00.000Z"),
+    new Date("2026-11-16T05:00:00.000Z"),
+    60,
+    [],
+    [],
+    now,
+  );
+  assert.deepEqual(hidden, []);
+
+  const resumed = generateAvailableSlots(
+    rule,
+    new Date("2026-11-16T05:00:00.000Z"),
+    new Date("2026-11-17T05:00:00.000Z"),
+    60,
+    [{ start: at("2026-11-16", "07:00"), end: at("2026-11-16", "08:00") }],
+    [],
+    now,
+  );
+  assert.equal(resumed.includes(at("2026-11-16", "07:00")), false);
+  assert.equal(resumed[0], at("2026-11-16", "09:00"));
+
+  const insideNotice = new Date("2026-10-19T17:01:00.000Z");
+  const tooSoon = generateAvailableSlots(rule, from, weekEnd, 60, [], [], insideNotice);
+  assert.equal(tooSoon.includes(at("2026-10-19", "21:00")), false);
 });
 
 test("SAT booking hours expose 07:00–20:00 America/New_York weekday starts", () => {

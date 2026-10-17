@@ -186,7 +186,10 @@ import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../
 import {
   bookingCalendarEventPayload,
   bookingNoticeMinutesForTutor,
+  dateHoursIncludeOpenWindow,
+  fixedDateHoursOpen,
   generateAvailableSlots,
+  parseDateHours,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
   isBookablePortalDuration,
@@ -5109,24 +5112,38 @@ async function slotsForTutor(
     allowExistingSessionTutor,
     bookerUserId,
   );
-  const access = await calendarAccess(tutorProfileId);
-  if (!access) {
-    return { tutor, rule, access: null, slots: [] as string[] };
+  let calendar: Awaited<ReturnType<typeof calendarAccess>> = null;
+  try {
+    calendar = await calendarAccess(tutorProfileId);
+  } catch (error) {
+    if (!(error instanceof BookingError)) throw error;
+    calendar = null;
   }
-  const listed = await readTutorBusyWindows({
-    tutorProfileId,
-    connection: access.connection,
-    listBusy: () =>
-      runTutorCalendarCall(access, (token) =>
-        listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(access.connection), from, to),
-      ),
-    record: recordCalendarFreeBusyCheck,
-    warn: (fields, message) => logger.warn(fields, message),
-  });
-  if (listed.disconnected) {
-    return { tutor, rule, access: null, slots: [] as string[] };
+  let access = calendar;
+  let busyWindows: BusyWindow[] = [];
+  if (calendar) {
+    try {
+      const listed = await readTutorBusyWindows({
+        tutorProfileId,
+        connection: calendar.connection,
+        listBusy: () =>
+          runTutorCalendarCall(calendar, (token) =>
+            listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(calendar.connection), from, to),
+          ),
+        record: recordCalendarFreeBusyCheck,
+        warn: (fields, message) => logger.warn(fields, message),
+      });
+      if (listed.disconnected) {
+        access = null;
+      } else {
+        busyWindows = listed.busyWindows;
+      }
+    } catch (error) {
+      if (!(error instanceof BookingError)) throw error;
+      access = null;
+      busyWindows = [];
+    }
   }
-  const busyWindows = listed.busyWindows;
   const [bookedSessions, sharedMeetWindows] = await Promise.all([
     db
       .select({
@@ -5174,22 +5191,27 @@ async function slotsForTutor(
   const availabilityRule: AvailabilityRule = {
     timezone: rule.timezone,
     weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
+    dateHours: (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
     bookingNoticeMinutes: rule.bookingNoticeMinutes,
     bufferMinutes: rule.bufferMinutes,
     blackoutDates: rule.blackoutDates,
   };
+  const generated = generateAvailableSlots(
+    availabilityRule,
+    from,
+    to,
+    durationMinutes,
+    busyWindows,
+    bookedWindows,
+  );
+  const slots = access
+    ? generated
+    : generated.filter((slot) => fixedDateHoursOpen(availabilityRule.dateHours, availabilityRule.timezone, new Date(slot)));
   return {
     tutor,
     rule,
     access,
-    slots: generateAvailableSlots(
-      availabilityRule,
-      from,
-      to,
-      durationMinutes,
-      busyWindows,
-      bookedWindows,
-    ),
+    slots,
   };
 }
 
@@ -5203,7 +5225,7 @@ async function assertDirectCheckoutSlotOpen(
 ): Promise<void> {
   const start = new Date(intent.startTime);
   const end = new Date(start.getTime() + intent.durationMinutes * 60_000);
-  const { access, slots } = await slotsForTutor(
+  const { access, slots, rule } = await slotsForTutor(
     intent.tutorProfileId,
     new Date(start.getTime() - 1),
     new Date(end.getTime() + 1),
@@ -5212,14 +5234,21 @@ async function assertDirectCheckoutSlotOpen(
     false,
     userId,
   );
-  if (!access) {
+  const fixedWindow =
+    slots.includes(start.toISOString()) &&
+    fixedDateHoursOpen(
+      (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+      rule.timezone,
+      start,
+    );
+  if (!access && !fixedWindow) {
     throw new BookingError(
       409,
       "CALENDAR_DISCONNECTED",
       "This tutor's calendar is disconnected.",
     );
   }
-  if (!access.connection.appCalendarId?.trim()) {
+  if (!fixedWindow && !access?.connection.appCalendarId?.trim()) {
     throw new BookingError(
       409,
       "CALENDAR_RECONNECT_REQUIRED",
@@ -6220,6 +6249,82 @@ router.patch(
 );
 
 router.get(
+  "/admin/tutors/:id/date-hours",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorId = typeof req.params.id === "string" ? req.params.id : "";
+    const [rule] = await db
+      .select({
+        tutorProfileId: availabilityRulesTable.tutorProfileId,
+        timezone: availabilityRulesTable.timezone,
+        weeklyHours: availabilityRulesTable.weeklyHours,
+        dateHours: availabilityRulesTable.dateHours,
+        bookingNoticeMinutes: availabilityRulesTable.bookingNoticeMinutes,
+        bufferMinutes: availabilityRulesTable.bufferMinutes,
+        updatedAt: availabilityRulesTable.updatedAt,
+      })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, tutorId))
+      .limit(1);
+    if (!rule) {
+      res.status(404).json({ error: "This tutor has no availability rule." });
+      return;
+    }
+    res.json(rule);
+  },
+);
+
+router.put(
+  "/admin/tutors/:id/date-hours",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorId = typeof req.params.id === "string" ? req.params.id : "";
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const parsed = parseDateHours(body.dateHours);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    const saved = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(availabilityRulesTable)
+        .set({ dateHours: parsed.dateHours, updatedAt: new Date() })
+        .where(eq(availabilityRulesTable.tutorProfileId, tutorId))
+        .returning({
+          tutorProfileId: availabilityRulesTable.tutorProfileId,
+          dateHours: availabilityRulesTable.dateHours,
+          updatedAt: availabilityRulesTable.updatedAt,
+        });
+      if (!updated) return null;
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "availability.date_hours_updated",
+        entityType: "tutor_profile",
+        entityId: tutorId,
+        metadata: { dates: Object.keys(parsed.dateHours) },
+      });
+      return updated;
+    });
+    if (!saved) {
+      res.status(404).json({ error: "This tutor has no availability rule." });
+      return;
+    }
+    const [readBack] = await db
+      .select({
+        tutorProfileId: availabilityRulesTable.tutorProfileId,
+        dateHours: availabilityRulesTable.dateHours,
+        updatedAt: availabilityRulesTable.updatedAt,
+      })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, tutorId))
+      .limit(1);
+    res.json(readBack ?? saved);
+  },
+);
+
+router.get(
   "/admin/public-content",
   requireAppUser,
   ensureRole(["administrator"]),
@@ -7073,10 +7178,30 @@ async function consultingTutorList(clientUserId: string) {
     if (key) calendars[key] = tutor.calendarStatus === "connected";
   }
   const credits = consultingTutorCredits({ entries, products, calendars });
+  const rules = visible.length
+    ? await db
+        .select({
+          tutorProfileId: availabilityRulesTable.tutorProfileId,
+          dateHours: availabilityRulesTable.dateHours,
+        })
+        .from(availabilityRulesTable)
+        .where(
+          inArray(
+            availabilityRulesTable.tutorProfileId,
+            visible.map((tutor) => tutor.id),
+          ),
+        )
+    : [];
+  const openFixedWindows = new Set(
+    rules
+      .filter((rule) => dateHoursIncludeOpenWindow(rule.dateHours))
+      .map((rule) => rule.tutorProfileId),
+  );
   return visible.map((tutor) => {
     const key = collegeConsultingTutorKeyForProfile(tutor);
     const credit = credits.find((item) => item.tutorKey === key);
     const connected = tutor.calendarStatus === "connected";
+    const fixedOpen = openFixedWindows.has(tutor.id);
     return {
       id: tutor.id,
       name: key ? consultingTutorDisplayName(key) : tutor.name,
@@ -7093,7 +7218,7 @@ async function consultingTutorList(clientUserId: string) {
       providerStatus: connected ? ("connected" as const) : ("disconnected" as const),
       hourlyRateCents: credit?.hourlyRateCents ?? null,
       prepaidHours: credit?.prepaidHours ?? 0,
-      bookable: connected,
+      bookable: connected || fixedOpen,
       serviceName: COLLEGE_CONSULTING_SUBJECT,
     };
   });
@@ -7395,9 +7520,18 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       req.appUser!.id,
       holdPaymentId,
     );
-    if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
-    const appCalendarId = access.connection.appCalendarId?.trim();
-    if (!appCalendarId) {
+    const fixedWindow =
+      slots.includes(start.toISOString()) &&
+      fixedDateHoursOpen(
+        (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+        rule.timezone,
+        start,
+      );
+    if (!access && !fixedWindow) {
+      throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+    }
+    const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
+    if (!fixedWindow && !appCalendarId) {
       throw new BookingError(
         409,
         "CALENDAR_RECONNECT_REQUIRED",
@@ -7451,21 +7585,26 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         ignorePaymentId: holdPaymentId,
       });
       await assertNoScheduleConflict(tx, { participantIds, start, end });
-      let liveBusyWindows: BusyWindow[];
-      try {
-        liveBusyWindows = await runTutorCalendarCall(access, (token) =>
-          listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(access.connection), start, end),
-        );
-      } catch (error) {
-        if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") throw error;
-        throw new BookingError(
-          503,
-          "CALENDAR_UNAVAILABLE",
-          "The tutor calendar could not be checked. Your credit was not used.",
-        );
-      }
-      if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
-        throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
+      if (!fixedWindow) {
+        if (!access) {
+          throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+        }
+        let liveBusyWindows: BusyWindow[];
+        try {
+          liveBusyWindows = await runTutorCalendarCall(access, (token) =>
+            listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(access.connection), start, end),
+          );
+        } catch (error) {
+          if (error instanceof BookingError && error.code === "CALENDAR_DISCONNECTED") throw error;
+          throw new BookingError(
+            503,
+            "CALENDAR_UNAVAILABLE",
+            "The tutor calendar could not be checked. Your credit was not used.",
+          );
+        }
+        if (overlapsBusyWindow(start, end, liveBusyWindows, 0)) {
+          throw new BookingError(409, "SLOT_UNAVAILABLE", slotTakenMessage);
+        }
       }
       const satDebits = satCreditArgs
         ? await lockSatTutorCredits(tx, req.appUser!.id, durationMinutes / 60, satCreditArgs)
@@ -7498,7 +7637,35 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         ...(satDebits ? { debits: satDebits } : {}),
       });
     });
+    const confirmBookedSession = async (session: typeof created) => {
+      await recordBookingConfirmedAudit(req.appUser!.id, session);
+      await notifyAdministratorsOfBooking({
+        kind: "booking_confirmed",
+        sessionId: session.id,
+        title: consulting ? "College Consulting booking confirmed" : "SAT booking confirmed",
+        message: `${req.appUser!.displayName} booked ${session.title} at ${session.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
+      });
+      if (!consulting) {
+        try {
+          await ensureAutogeneratedSatPrework(session.id, req.appUser!.id);
+        } catch {
+          // Autogen must not roll back a confirmed SAT booking.
+        }
+      }
+      const onBooked = (req as AuthedRequest & {
+        onPrepaidBooked?: (sessionId: string) => Promise<void>;
+      }).onPrepaidBooked;
+      if (onBooked) await onBooked(session.id);
+      res.status(201).json(await bookingSessionShape(session));
+    };
+    if (fixedWindow && !access) {
+      await confirmBookedSession(created);
+      return;
+    }
     try {
+      if (!access) {
+        throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
+      }
       const student = {
         userId: req.appUser!.id,
         email: req.appUser!.email,
@@ -7550,26 +7717,12 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         .where(eq(sessionsTable.id, created.id))
         .returning();
       const confirmed = updated ?? created;
-      await recordBookingConfirmedAudit(req.appUser!.id, confirmed);
-      await notifyAdministratorsOfBooking({
-        kind: "booking_confirmed",
-        sessionId: confirmed.id,
-        title: consulting ? "College Consulting booking confirmed" : "SAT booking confirmed",
-        message: `${req.appUser!.displayName} booked ${confirmed.title} at ${confirmed.dateTime.toISOString()}. Meet: ${SHARED_FALL_MEETING_URL}`,
-      });
-      if (!consulting) {
-        try {
-          await ensureAutogeneratedSatPrework(confirmed.id, req.appUser!.id);
-        } catch {
-          // Autogen must not roll back a confirmed SAT booking.
-        }
-      }
-      const onBooked = (req as AuthedRequest & {
-        onPrepaidBooked?: (sessionId: string) => Promise<void>;
-      }).onPrepaidBooked;
-      if (onBooked) await onBooked(confirmed.id);
-      res.status(201).json(await bookingSessionShape(confirmed));
+      await confirmBookedSession(confirmed);
     } catch (error) {
+      if (fixedWindow) {
+        await confirmBookedSession(created);
+        return;
+      }
       await db.transaction(async (tx) => {
         await rollbackBookingAfterCalendarFailure(tx, {
           sessionId: created.id,

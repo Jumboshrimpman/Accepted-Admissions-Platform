@@ -27,6 +27,12 @@ export type AvailabilityWindow = { start: string; end: string };
 export type AvailabilityRule = {
   timezone: string;
   weeklyHours: Record<string, AvailabilityWindow[]>;
+  /**
+   * Civil dates in the tutor's timezone. A present key replaces weekly hours
+   * for that date. An empty list means the tutor is not bookable that day.
+   * Dates that are absent keep the weekly hours.
+   */
+  dateHours?: Record<string, AvailabilityWindow[]>;
   bookingNoticeMinutes: number;
   bufferMinutes: number;
   blackoutDates: string[];
@@ -114,6 +120,89 @@ function minutes(value: string): number {
   return hour * 60 + minute;
 }
 
+const CIVIL_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const CIVIL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Admin date overrides. Keys are YYYY-MM-DD. Windows are HH:MM, start before end. */
+export function parseDateHours(
+  value: unknown,
+): { ok: true; dateHours: Record<string, AvailabilityWindow[]> } | { ok: false; error: string } {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, error: "dateHours must be an object of dates." };
+  }
+  const dateHours: Record<string, AvailabilityWindow[]> = {};
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > 366) return { ok: false, error: "Too many dates." };
+  for (const [key, windows] of entries) {
+    const match = CIVIL_DATE.exec(key);
+    if (!match) return { ok: false, error: `Invalid date ${key}.` };
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const utc = new Date(Date.UTC(year, month - 1, day));
+    if (
+      utc.getUTCFullYear() !== year ||
+      utc.getUTCMonth() !== month - 1 ||
+      utc.getUTCDate() !== day
+    ) {
+      return { ok: false, error: `Invalid date ${key}.` };
+    }
+    if (!Array.isArray(windows)) return { ok: false, error: `Hours for ${key} must be a list.` };
+    if (windows.length > 12) return { ok: false, error: `Too many windows on ${key}.` };
+    const parsed: AvailabilityWindow[] = [];
+    for (const window of windows) {
+      if (!window || typeof window !== "object") {
+        return { ok: false, error: `Invalid window on ${key}.` };
+      }
+      const start = (window as { start?: unknown }).start;
+      const end = (window as { end?: unknown }).end;
+      if (
+        typeof start !== "string" ||
+        !CIVIL_TIME.test(start) ||
+        typeof end !== "string" ||
+        !CIVIL_TIME.test(end)
+      ) {
+        return { ok: false, error: `Windows on ${key} use 24-hour HH:MM.` };
+      }
+      if (minutes(start) >= minutes(end)) {
+        return { ok: false, error: `Window on ${key} must end after it starts.` };
+      }
+      parsed.push({ start, end });
+    }
+    dateHours[key] = parsed;
+  }
+  return { ok: true, dateHours };
+}
+
+function windowsForDate(rule: AvailabilityRule, key: string, weekday: string): AvailabilityWindow[] {
+  if (rule.dateHours && Object.prototype.hasOwnProperty.call(rule.dateHours, key)) {
+    return rule.dateHours[key] ?? [];
+  }
+  return rule.weeklyHours[weekday] ?? [];
+}
+
+export function civilDateKey(date: Date, timeZone: string): string {
+  return dateKey(localParts(date, timeZone));
+}
+
+/** A civil date with at least one fixed window. Empty and missing dates are not fixed openings. */
+export function fixedDateHoursOpen(
+  dateHours: Record<string, AvailabilityWindow[]> | null | undefined,
+  timeZone: string,
+  date: Date,
+): boolean {
+  const key = civilDateKey(date, timeZone);
+  if (!dateHours || !Object.prototype.hasOwnProperty.call(dateHours, key)) return false;
+  return (dateHours[key] ?? []).length > 0;
+}
+
+export function dateHoursIncludeOpenWindow(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value as Record<string, unknown>).some(
+    (windows) => Array.isArray(windows) && windows.length > 0,
+  );
+}
+
 export function overlapsBusyWindow(
   start: Date,
   end: Date,
@@ -151,13 +240,17 @@ export function generateAvailableSlots(
   ) {
     const key = cursor.toISOString().slice(0, 10);
     if (rule.blackoutDates.includes(key)) continue;
-    const windows = rule.weeklyHours[String(cursor.getUTCDay())] ?? [];
+    const windows = windowsForDate(rule, key, String(cursor.getUTCDay()));
     for (const window of windows) {
       for (let startMinutes = minutes(window.start); startMinutes + durationMinutes <= minutes(window.end); startMinutes += durationMinutes) {
         const start = zonedDateTimeToUtc(key, `${String(Math.floor(startMinutes / 60)).padStart(2, "0")}:${String(startMinutes % 60).padStart(2, "0")}`, rule.timezone);
         const end = new Date(start.getTime() + durationMinutes * 60_000);
         if (start < from || end > to || start < minimumStart) continue;
-        if (overlapsBusyWindow(start, end, allBusy, rule.bufferMinutes)) continue;
+        const fixedDate = Boolean(
+          rule.dateHours && Object.prototype.hasOwnProperty.call(rule.dateHours, key),
+        );
+        const blocking = fixedDate ? bookedWindows : allBusy;
+        if (overlapsBusyWindow(start, end, blocking, rule.bufferMinutes)) continue;
         slots.push(start.toISOString());
       }
     }

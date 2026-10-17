@@ -206,6 +206,23 @@ describe("client availability calendar", () => {
     expect(screen.getByText("This tutor needs to reconnect Google Calendar before times can be displayed.")).toBeTruthy();
     expect(screen.queryByText("Dates with open times are available to select.")).toBeNull();
   });
+
+  test("shows fixed times when the calendar is disconnected", async () => {
+    mocks.availabilityQuery.data = {
+      tutor: { timezone: tutorTimezone },
+      providerStatus: "disconnected",
+      slots: [firstSlot],
+    };
+
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("button", { name: /Xavier\b/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Available times with Xavier")).toBeTruthy();
+    });
+    expect(screen.queryByText("This tutor needs to reconnect Google Calendar before times can be displayed.")).toBeNull();
+    expect(screen.getByText(tutorTime(firstSlot))).toBeTruthy();
+  });
   test("shows tutor biography and switches calendars between tutors", async () => {
     mocks.tutorsQuery.data = [
       {

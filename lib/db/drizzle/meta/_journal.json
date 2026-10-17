@@ -407,6 +407,13 @@
       "when": 1792500000000,
       "tag": "0061_booking_notice_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792600000000,
+      "tag": "0062_availability_date_hours",
+      "breakpoints": true
     }
   ]
 }
