@@ -22,6 +22,7 @@ type OfferedAvailability = {
   providerStatus: "connected" | "disconnected" | "reconnect";
   offeredToClients?: boolean;
   availabilityDependsOnClient?: boolean;
+  usesAdminCalendarFallback?: boolean;
   lengths: OfferedLength[];
 };
 
@@ -113,6 +114,11 @@ export function TutorOfferedAvailability() {
         {clientSpecific ? (
           <p className="mb-4 text-sm text-muted-foreground" data-testid="tutor-offered-client-specific">
             Only approved clients can book you; those clients see these times.
+          </p>
+        ) : null}
+        {offer?.usesAdminCalendarFallback ? (
+          <p className="mb-4 text-sm font-medium" data-testid="tutor-offered-admin-fallback">
+            Bookings use admin calendar fallback
           </p>
         ) : null}
         {reconnect && !notOffered ? (

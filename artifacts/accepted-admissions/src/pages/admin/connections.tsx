@@ -23,6 +23,7 @@ export type CalendarConnectionHealthRow = {
   estimatedTokenAgeDays: number | null;
   testingModeExpiryWarning: string | null;
   statusLabel?: string | null;
+  usesAdminCalendarFallback?: boolean;
 };
 
 const BADGE_LABEL = {
@@ -239,6 +240,14 @@ export default function AdminConnections() {
                   "None"
                 )}
               </p>
+              {row.usesAdminCalendarFallback ? (
+                <p
+                  className="text-sm font-medium"
+                  data-testid={`admin-calendar-fallback-${row.tutorProfileId}`}
+                >
+                  Bookings use admin calendar fallback
+                </p>
+              ) : null}
               {row.testingModeExpiryWarning ? (
                 <p
                   role="status"

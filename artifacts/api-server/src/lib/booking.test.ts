@@ -538,9 +538,12 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const start = platformSource.indexOf("async function respondWithPrepaidBooking");
   const end = platformSource.indexOf('router.post("/booking/slot-holds/release"');
   const slice = platformSource.slice(start, end);
-  assert.match(slice, /if \(fixedWindow && !access\) \{\s*await confirmBookedSession\(created, false\)/);
+  assert.match(slice, /createGoogleEvent\(\s*token,\s*adminWriter\.appCalendarId/);
+  assert.match(slice, /conferenceData: adminCalendarMeetConference\(created\.id\)/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
-  const reconnectBeforeDebit = slice.indexOf("requireAppCalendarForBooking(access, fixedWindow)");
+  const reconnectBeforeDebit = slice.indexOf(
+    "adminCalendarForFixedWindowBooking(access, fixedWindow, tutor)",
+  );
   const debit = slice.indexOf("insertConfirmedBookingWithDebit");
   const write = slice.indexOf("createGoogleEvent(");
   assert.ok(reconnectBeforeDebit > 0 && reconnectBeforeDebit < debit && debit < write);
@@ -551,7 +554,7 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
     checkoutStart,
     platformSource.indexOf("type SessionWriteTx"),
   );
-  assert.match(checkoutSlice, /requireAppCalendarForBooking\(access, fixedWindow\)/);
+  assert.match(checkoutSlice, /adminCalendarForFixedWindowBooking\(access, fixedWindow, tutor\)/);
   const payStart = platformSource.indexOf('"/payments/checkout"');
   const paySlice = platformSource.slice(payStart, platformSource.indexOf("createCheckoutSession", payStart));
   assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") > 0);
@@ -560,6 +563,14 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   assert.match(slice, /tutorEmail: tutor\.email/);
   assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
+  assert.match(slice, /calendarPlan\.mode === "manual"/);
+  assert.match(slice, /kind: "manual_calendar_invite"/);
+  assert.match(slice, /calendarPlan\.mode === "manual"[\s\S]{0,900}confirmBookedSession\(created, true\)/);
+  assert.match(slice, /await confirmBookedSession\(created, false\)/);
+  const nikaGates = platformSource.match(
+    /isNikaTutorProfile\(\{\s*name: tutor\.name,\s*portalEmail: tutor\.email,?\s*\}\)/g,
+  );
+  assert.equal(nikaGates?.length, 2);
   const liveCheck = slice.indexOf("if (!fixedWindow) {");
   assert.ok(liveCheck > 0 && liveCheck < write);
   assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);

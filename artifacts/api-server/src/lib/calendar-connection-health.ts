@@ -1,4 +1,6 @@
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { bookingsUseAdminCalendarFallback } from "./admin-calendar-fallback.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { calendarGrantNeedsReconnect } from "./app-created-calendar.ts";
 
 export type CalendarHealthBadge =
@@ -35,6 +37,8 @@ export type CalendarConnectionHealth = {
   testingModeExpiryWarning: string | null;
   /** Set when free/busy works but bookings and invites still need a reconnect. */
   statusLabel: string | null;
+  /** Nika's fixed-window bookings are issued from the admin calendar until she reconnects. */
+  usesAdminCalendarFallback: boolean;
 };
 
 /** Shown while the badge stays needs_reconnect. Free/busy success does not make the grant healthy. */
@@ -415,6 +419,11 @@ export function buildCalendarConnectionHealth(input: {
       now,
     }),
     statusLabel: freeBusyOnlyReconnectStatus(input),
+    usesAdminCalendarFallback: bookingsUseAdminCalendarFallback({
+      name: input.name,
+      portalEmail: input.portalEmail,
+      appCalendarId: input.appCalendarId,
+    }),
   };
   return row;
 }

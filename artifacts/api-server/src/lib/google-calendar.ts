@@ -383,6 +383,7 @@ export type GoogleCalendarAttendee = {
 export type GoogleCalendarEvent = {
   id?: string;
   htmlLink?: string;
+  hangoutLink?: string;
   attendees?: GoogleCalendarAttendee[];
 };
 
@@ -1490,6 +1491,7 @@ export function googleCalendarEventWritePath(
   calendarId: string,
   eventId?: string,
   sendUpdates: GoogleCalendarSendUpdates = "all",
+  conferenceDataVersion = false,
 ): string {
   const id = calendarId.trim();
   if (!id) {
@@ -1501,7 +1503,9 @@ export function googleCalendarEventWritePath(
   }
   const base = `/calendar/v3/calendars/${encodeURIComponent(id)}/events`;
   const path = eventId ? `${base}/${encodeURIComponent(eventId)}` : base;
-  return `${path}?sendUpdates=${sendUpdates}`;
+  const params = new URLSearchParams({ sendUpdates });
+  if (conferenceDataVersion) params.set("conferenceDataVersion", "1");
+  return `${path}?${params.toString()}`;
 }
 
 export function isGoogleCalendarNotFound(error: unknown): boolean {
@@ -1540,9 +1544,10 @@ export async function createGoogleEvent(
   event: Record<string, unknown>,
   sendUpdates: GoogleCalendarSendUpdates = "all",
 ): Promise<GoogleCalendarEvent> {
+  const withConference = Boolean(event.conferenceData);
   return googleCalendarRequest<GoogleCalendarEvent>(
     accessToken,
-    googleCalendarEventWritePath(calendarId, undefined, sendUpdates),
+    googleCalendarEventWritePath(calendarId, undefined, sendUpdates, withConference),
     { method: "POST", body: JSON.stringify(event) },
   );
 }

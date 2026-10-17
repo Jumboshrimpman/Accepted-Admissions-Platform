@@ -2761,7 +2761,7 @@ components:
         id: { type: string }
         kind:
           type: string
-          enum: [guidance_request_assigned, booking_confirmed, booking_cancelled, legacy_calendar_event, client_intake_submitted, hard_sat_shortfall]
+          enum: [guidance_request_assigned, booking_confirmed, booking_cancelled, legacy_calendar_event, client_intake_submitted, hard_sat_shortfall, manual_calendar_invite]
         guidanceRequestId: { type: ["string", "null"] }
         sessionId: { type: ["string", "null"] }
         title: { type: string }

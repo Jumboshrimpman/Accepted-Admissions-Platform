@@ -39,6 +39,7 @@ type OfferedBody = {
   providerStatus?: string;
   offeredToClients?: boolean;
   availabilityDependsOnClient?: boolean;
+  usesAdminCalendarFallback?: boolean;
   lengths?: OfferedLength[];
   slots?: string[];
   tutor?: { timezone?: string };
@@ -588,6 +589,9 @@ test("tutors see only their own client-offered slots, with no client details", a
       assert.equal(serialized.includes("Xavier Morales"), false);
       assert.equal(xavierOffered.body.offeredToClients, true);
       assert.equal(xavierOffered.body.availabilityDependsOnClient, false);
+      assert.equal(xavierOffered.body.usesAdminCalendarFallback, false);
+      assert.equal(nikaOffered.body.usesAdminCalendarFallback, true);
+      assert.equal(fixedOffered.body.usesAdminCalendarFallback, false);
       assert.deepEqual(Object.keys(xavierOffered.body).sort(), [
         "availabilityDependsOnClient",
         "from",
@@ -596,6 +600,7 @@ test("tutors see only their own client-offered slots, with no client details", a
         "providerStatus",
         "timezone",
         "to",
+        "usesAdminCalendarFallback",
       ]);
       for (const length of xavierOffered.body.lengths ?? []) {
         assert.deepEqual(Object.keys(length).sort(), ["durationMinutes", "slots"]);

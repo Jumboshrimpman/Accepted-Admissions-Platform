@@ -163,6 +163,28 @@ describe("tutor offered availability", () => {
     expect((await screen.findByRole("region", { name: "1 hour" })).textContent).toContain("10:00 AM");
   });
 
+  test("Nika's card notes that bookings use the admin calendar fallback", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "disconnected",
+      offeredToClients: true,
+      availabilityDependsOnClient: true,
+      usesAdminCalendarFallback: true,
+      lengths: [
+        { durationMinutes: 60, slots: ["2026-10-21T22:05:00.000Z"] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: [] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    expect(await screen.findByTestId("tutor-offered-admin-fallback")).toBeTruthy();
+    expect(screen.getByText("Bookings use admin calendar fallback")).toBeTruthy();
+    expect((await screen.findByRole("region", { name: "1 hour" })).textContent).toContain("6:05 PM");
+  });
+
   test("hides the section when this login has no tutor profile", async () => {
     const missing = new Error("Tutor profile not found") as Error & { status: number };
     missing.status = 404;

@@ -1156,7 +1156,7 @@ test("Meet event create 401 refreshes once and does not disconnect a stored gran
     if (url === "https://oauth2.googleapis.com/token") {
       return jsonResponse(200, { access_token: "fresh-access", expires_in: 3600 });
     }
-    assert.match(url, /\/calendar\/v3\/calendars\/primary\/events\?sendUpdates=all$/);
+    assert.match(url, /\/calendar\/v3\/calendars\/primary\/events\?sendUpdates=all&conferenceDataVersion=1$/);
     assert.equal(init?.method, "POST");
     eventWrites += 1;
     const authorization = new Headers(init?.headers).get("authorization");
