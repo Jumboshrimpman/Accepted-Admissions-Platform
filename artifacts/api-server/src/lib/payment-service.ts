@@ -22,6 +22,11 @@ import { grantPaidPurchaseCredits } from "./payment-fulfillment.ts";
 import { paymentRequiresCatalogProduct, isStripePaidSuccessEvent, stripeCheckoutObjectIsPaid } from "./payment-fulfillment-rules.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { stripeCatalogProductIdempotencyKey } from "./college-consulting.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import {
+  bookHeldCheckoutIfActive,
+  releaseSlotHoldForPayment,
+} from "./booking-slot-hold.ts";
 
 type StripeRecord = Record<string, unknown>;
 
@@ -503,7 +508,17 @@ export async function createCheckoutSession(args: {
   cancelUrl: string;
   /** Charged amount. Differs from the catalog only for a per-client override. */
   unitAmountCents?: number;
-}): Promise<{ id: string; url: string; paymentIntentId?: string }> {
+  /** Unix seconds. Direct-checkout holds use the same instant. */
+  expiresAtUnix?: number;
+}): Promise<{ id: string; url: string; paymentIntentId?: string; expiresAt?: number }> {
+  if (process.env.STRIPE_CHECKOUT_TEST_DOUBLE === "1") {
+    return {
+      id: `cs_test_${args.paymentId}`,
+      url: `https://checkout.stripe.test/${args.paymentId}`,
+      paymentIntentId: `pi_test_${args.paymentId}`,
+      expiresAt: args.expiresAtUnix,
+    };
+  }
   const catalogCents = args.product.totalPriceCents;
   const chargeCents = args.unitAmountCents ?? catalogCents;
   const customerId = await ensureStripeCustomer(args.user);
@@ -526,6 +541,7 @@ export async function createCheckoutSession(args: {
       customer: customerId,
       success_url: args.successUrl,
       cancel_url: args.cancelUrl,
+      ...(args.expiresAtUnix ? { expires_at: args.expiresAtUnix } : {}),
       ...lineItems,
       "metadata[payment_id]": args.paymentId,
       "metadata[invoice_id]": args.invoiceId,
@@ -545,6 +561,7 @@ export async function createCheckoutSession(args: {
     id,
     url,
     paymentIntentId: recordString(session, "payment_intent"),
+    expiresAt: recordNumber(session, "expires_at"),
   };
 }
 
@@ -780,6 +797,7 @@ export async function processStripeWebhook(event: {
   type: string;
   data: { object: StripeRecord };
 }): Promise<void> {
+  let paidPaymentId: string | null = null;
   await db.transaction(async (tx) => {
     const [claimed] = await tx
       .insert(stripeWebhookEventsTable)
@@ -790,7 +808,15 @@ export async function processStripeWebhook(event: {
       })
       .onConflictDoNothing({ target: stripeWebhookEventsTable.providerEventId })
       .returning({ id: stripeWebhookEventsTable.id });
-    if (!claimed) return;
+    if (!claimed) {
+      if (isStripePaidSuccessEvent(event.type)) {
+        paidPaymentId =
+          metadataString(event.data.object, "payment_id") ??
+          recordString(event.data.object, "client_reference_id") ??
+          null;
+      }
+      return;
+    }
 
     const object = event.data.object;
     const row = await paymentForStripeObject(object, event.type);
@@ -847,6 +873,7 @@ export async function processStripeWebhook(event: {
         eventType: event.type,
         eventId: event.id,
       });
+      paidPaymentId = payment.id;
       return;
     }
 
@@ -883,6 +910,7 @@ export async function processStripeWebhook(event: {
 
     if (event.type === "checkout.session.expired" || event.type === "invoice.voided") {
       if (["paid", "refunded", "partially_refunded"].includes(payment.status)) return;
+      await releaseSlotHoldForPayment(tx, payment.id);
       await tx
         .update(paymentsTable)
         .set({
@@ -962,6 +990,9 @@ export async function processStripeWebhook(event: {
       }
     }
   });
+  if (paidPaymentId) {
+    await bookHeldCheckoutIfActive(paidPaymentId);
+  }
 }
 
 export type ReconcileCheckoutResult = {
