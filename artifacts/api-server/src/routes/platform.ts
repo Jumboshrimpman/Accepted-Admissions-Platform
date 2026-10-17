@@ -5079,27 +5079,6 @@ function neelNikaCalendarEvent(args: {
   };
 }
 
-async function pinnedNeelNikaMeet(
-  session: { clientUserId: string | null; tutorUserId: string | null },
-  tutorName?: string | null,
-): Promise<string | null> {
-  const fromName = neelNikaMeetUrl({
-    clientUserId: session.clientUserId,
-    tutorName,
-  });
-  if (fromName || !isNeelDharniUser(session.clientUserId) || !session.tutorUserId) return fromName;
-  const [profile] = await db
-    .select({ name: tutorProfilesTable.name, email: tutorProfilesTable.email })
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.userId, session.tutorUserId))
-    .limit(1);
-  return neelNikaMeetUrl({
-    clientUserId: session.clientUserId,
-    tutorName: profile?.name ?? tutorName,
-    tutorEmail: profile?.email,
-  });
-}
-
 async function syncGoogleCalendarForSessionChange(args: {
   existing: typeof sessionsTable.$inferSelect;
   next: {
@@ -8235,9 +8214,11 @@ async function respondWithPrepaidBooking(
     return null;
   } catch (error) {
     sendBookingError(error, res);
-    return error instanceof BookingError
-      ? error
-      : new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
+    if (error instanceof BookingError) return error;
+    if (error instanceof BookingServiceError) {
+      return new BookingError(error.status, error.code, error.message);
+    }
+    return new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
   }
 }
 
@@ -8263,22 +8244,22 @@ router.post("/booking/slot-holds/release", async (req: AuthedRequest, res): Prom
   }
 });
 
+const PAID_BOOKING_REFUSAL_CODES = new Set([
+  "SCHEDULE_CONFLICT",
+  "SLOT_UNAVAILABLE",
+  "BOOKING_UNAVAILABLE",
+  "CALENDAR_RECONNECT_REQUIRED",
+]);
+
 async function notifyPaidReconnectRefusal(args: {
   paymentId: string;
   clientName: string;
-  tutorProfileId: string;
   slotStartIso: string;
   sessionId?: string | null;
 }): Promise<void> {
-  const [tutor] = await db
-    .select({ name: tutorProfilesTable.name })
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.id, args.tutorProfileId))
-    .limit(1);
   await notifyPaidBookingReconnectRefusal({
     paymentId: args.paymentId,
     clientName: args.clientName,
-    tutorName: tutor?.name?.trim() || "Tutor",
     slotStartIso: args.slotStartIso,
     sessionId: args.sessionId,
   });
@@ -8349,16 +8330,15 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
       await rememberBookedPayment(paymentId, sessionId);
     };
     const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-    if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+    if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
       try {
         await notifyPaidReconnectRefusal({
           paymentId,
           clientName: req.appUser!.displayName,
-          tutorProfileId: intent.tutorProfileId,
           slotStartIso: intent.startTime,
         });
       } catch {
-        // The 409 is already on the wire. A later webhook retry can still notify.
+        // The refusal is already on the wire. A later webhook retry can still notify.
       }
     }
   } catch (error) {
@@ -8415,11 +8395,10 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
     },
   } as unknown as Response;
   const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-  if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+  if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
     await notifyPaidReconnectRefusal({
       paymentId,
       clientName: user.displayName,
-      tutorProfileId: intent.tutorProfileId,
       slotStartIso: intent.startTime,
     });
   }
@@ -11034,11 +11013,7 @@ async function adminSessionShape(
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl:
-      (await pinnedNeelNikaMeet(
-        session,
-        session.tutorUserId ? personById.get(session.tutorUserId) : null,
-      )) ?? meetingUrlForTerm(course?.term, course?.meetUrl),
+    meetingUrl: SHARED_FALL_MEETING_URL,
     calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
       ? {
@@ -12674,9 +12649,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
               ),
             ),
             tutor,
-            meetingUrl:
-              (await pinnedNeelNikaMeet(session, tutor?.name)) ??
-              meetingUrlForTerm(course.term, course.meetUrl ?? null),
+            meetingUrl: SHARED_FALL_MEETING_URL,
             calendarEventUrl: calendarEventUrlForSession(session),
           };
         }),
@@ -12762,19 +12735,6 @@ async function dashboardDataForUser(user: AppUser) {
   const courses = (
     await Promise.all(ids.map((id) => courseShape(id, user)))
   ).filter(Boolean);
-  const courseRows =
-    ids.length === 0
-      ? []
-      : await db
-           .select({ id: coursesTable.id, term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-          .from(coursesTable)
-          .where(inArray(coursesTable.id, ids));
-  const meetingUrls = new Map(
-    courseRows.map((course) => [
-      course.id,
-      meetingUrlForTerm(course.term, course.meetUrl),
-    ]),
-  );
   const scopedSessions = await dashboardSessionsForUser(user);
   const studentShapeCache = new Map<string, Promise<{ id: string; name: string } | null>>();
   const tutorShapeCache = new Map<
@@ -12880,9 +12840,7 @@ async function dashboardDataForUser(user: AppUser) {
         ...dashboardSessionShape(
           session,
           tutor,
-          (await pinnedNeelNikaMeet(session, tutor?.name)) ??
-            meetingUrls.get(session.courseId) ??
-            null,
+          SHARED_FALL_MEETING_URL,
           user.role === "tutor" || user.role === "administrator"
             ? session.clientUserId
               ? await studentShapeCached(session.clientUserId)
@@ -13095,9 +13053,7 @@ async function dashboardDataForUser(user: AppUser) {
             return dashboardSessionShape(
               session,
               tutor,
-              (await pinnedNeelNikaMeet(session, tutor?.name)) ??
-                meetingUrls.get(session.courseId) ??
-                null,
+              SHARED_FALL_MEETING_URL,
               user.role === "tutor" || user.role === "administrator"
                 ? student
                 : undefined,
@@ -13408,11 +13364,6 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     return;
   }
   const subjectUserId = await dataSubjectUserId(req.appUser!);
-  const [course] = await db
-    .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-    .from(coursesTable)
-    .where(eq(coursesTable.id, session.courseId))
-    .limit(1);
   const blocks = await db
     .select()
     .from(curriculumBlocksTable)
@@ -13505,9 +13456,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : session.title,
       ),
       tutor: sessionTutor,
-      meetingUrl:
-        (await pinnedNeelNikaMeet(session, sessionTutor?.name)) ??
-        meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
+      meetingUrl: SHARED_FALL_MEETING_URL,
       calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"

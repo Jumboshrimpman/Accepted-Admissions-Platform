@@ -5,7 +5,6 @@ import {
   ADMIN_CALENDAR_FALLBACK_NOTE,
   adminCalendarGrantCanWriteEvents,
   adminCalendarInviteHealth,
-  adminCalendarMeetConference,
   bookingsUseAdminCalendarFallback,
   manualCalendarInviteMessage,
 } from "./admin-calendar-fallback.ts";
@@ -107,7 +106,6 @@ test("only a connected admin grant with refresh, app calendar, and event-write s
     }),
     false,
   );
-  assert.equal(adminCalendarMeetConference("session-1").createRequest.conferenceSolutionKey.type, "hangoutsMeet");
   assert.deepEqual(adminCalendarInviteHealth([writable]), {
     healthy: true,
     accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,

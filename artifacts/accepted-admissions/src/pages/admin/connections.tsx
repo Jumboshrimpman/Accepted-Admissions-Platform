@@ -195,8 +195,8 @@ export default function AdminConnections() {
           <CardContent className="space-y-3">
             <p className="text-sm" data-testid="status-admin-calendar-invites">
               {adminCalendarInvites.healthy
-                ? "Invites send automatically from this account."
-                : "Invites are not sending automatically from this account."}
+                ? "admin@ sends invites only for Nika's fixed-window fallback."
+                : "admin@ sends invites only for Nika's fixed-window fallback. This account is not ready."}
             </p>
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
               <div>

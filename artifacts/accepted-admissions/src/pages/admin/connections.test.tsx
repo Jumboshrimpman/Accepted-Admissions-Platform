@@ -73,7 +73,7 @@ describe("Admin connections", () => {
     expect(screen.getByText("Admin calendar (invites)")).toBeTruthy();
     expect(screen.getByTestId("badge-admin-calendar-invites").textContent).toBe("Healthy");
     expect(screen.getByTestId("status-admin-calendar-invites").textContent).toBe(
-      "Invites send automatically from this account.",
+      "admin@ sends invites only for Nika's fixed-window fallback.",
     );
   });
 
@@ -93,6 +93,9 @@ describe("Admin connections", () => {
 
     expect(await screen.findByTestId("badge-admin-calendar-invites")).toBeTruthy();
     expect(screen.getByTestId("badge-admin-calendar-invites").textContent).toBe("Not ready");
+    expect(screen.getByTestId("status-admin-calendar-invites").textContent).toBe(
+      "admin@ sends invites only for Nika's fixed-window fallback. This account is not ready.",
+    );
     expect(screen.getByText("Event-write scope").parentElement?.textContent).toContain("No");
     expect(screen.getByText("Sessions calendar").parentElement?.textContent).toContain("No");
   });

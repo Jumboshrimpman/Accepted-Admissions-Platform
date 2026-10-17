@@ -53,7 +53,7 @@ test("every booking invite is pinned to the one Meet link", async () => {
     "utf8",
   );
   const eventStart = platform.indexOf("function neelNikaCalendarEvent");
-  const eventEnd = platform.indexOf("async function pinnedNeelNikaMeet");
+  const eventEnd = platform.indexOf("async function syncGoogleCalendarForSessionChange");
   const event = platform.slice(eventStart, eventEnd);
   assert.match(event, /const meetUrl = SHARED_FALL_MEETING_URL/);
   assert.match(event, /location: meetUrl/);

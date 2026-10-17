@@ -144,15 +144,3 @@ export function manualCalendarInviteMessage(args: {
   const meetUrl = args.meetUrl?.trim();
   return meetUrl ? `${base} Meet: ${meetUrl}.` : base;
 }
-
-/** conferenceData Meet link. Google requires conferenceDataVersion=1 on the write. */
-export function adminCalendarMeetConference(requestId: string): {
-  createRequest: { requestId: string; conferenceSolutionKey: { type: "hangoutsMeet" } };
-} {
-  return {
-    createRequest: {
-      requestId,
-      conferenceSolutionKey: { type: "hangoutsMeet" },
-    },
-  };
-}

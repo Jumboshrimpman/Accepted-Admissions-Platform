@@ -31,6 +31,8 @@ import {
 import { selfServeSatBookingForAccount } from "./session-schedule.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { satDebitPlan, type SatDebit } from "./sat-tutor-pricing.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { formatSessionInstantEt } from "./admin-calendar-fallback.ts";
 
 export { remainingCreditHours } from "./credit-hours.ts";
 
@@ -687,21 +689,19 @@ export const PAID_BOOKING_RECONNECT_REFUSAL_TITLE = "Paid booking kept the credi
 
 export function paidBookingReconnectRefusalMessage(args: {
   clientName: string;
-  tutorName: string;
   slotStartIso: string;
-  paymentId: string;
 }): string {
-  return `${args.clientName} paid for ${args.tutorName} at ${args.slotStartIso}. Google Calendar needs a reconnect, so no session was booked. The credit was kept. Payment ${args.paymentId}.`;
+  const when = formatSessionInstantEt(new Date(args.slotStartIso));
+  return `Paid booking refused: ${args.clientName.trim()} ${when}. Hours stay on the account; rebook manually.`;
 }
 
 /**
- * In-app only. One notice per administrator, once per payment or session.
+ * In-app only. One notice per administrator, once per payment.
  * A missing administrator list leaves the payment unmarked so a later admin can still be told.
  */
 export async function notifyPaidBookingReconnectRefusal(args: {
   paymentId: string;
   clientName: string;
-  tutorName: string;
   slotStartIso: string;
   sessionId?: string | null;
 }): Promise<void> {
