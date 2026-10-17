@@ -117,6 +117,50 @@ describe("tutor offered availability", () => {
     expect(notice.textContent).not.toMatch(/@/);
   });
 
+  test("a tutor who is not offered sees no times", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "disconnected",
+      offeredToClients: false,
+      availabilityDependsOnClient: false,
+      lengths: [
+        { durationMinutes: 60, slots: [] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: [] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    const notice = await screen.findByTestId("tutor-offered-not-listed");
+    expect(notice.textContent).toContain("You are not currently offered for booking.");
+    expect(screen.queryByRole("region", { name: "1 hour" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Connect Google Calendar" })).toBeNull();
+    expect(screen.queryByTestId("tutor-offered-client-specific")).toBeNull();
+  });
+
+  test("Nika's card notes that the times depend on who is booking", async () => {
+    mocks.customFetch.mockResolvedValue({
+      from: "2026-10-17T14:00:00.000Z",
+      to: "2026-10-31T14:00:00.000Z",
+      timezone: "America/New_York",
+      providerStatus: "disconnected",
+      offeredToClients: true,
+      availabilityDependsOnClient: true,
+      lengths: [
+        { durationMinutes: 60, slots: ["2026-10-21T14:00:00.000Z"] },
+        { durationMinutes: 90, slots: [] },
+        { durationMinutes: 120, slots: [] },
+      ],
+    });
+    render(<TutorOfferedAvailability />);
+
+    expect(await screen.findByTestId("tutor-offered-client-specific")).toBeTruthy();
+    expect(screen.getByText("The times a client sees depend on who is booking.")).toBeTruthy();
+    expect((await screen.findByRole("region", { name: "1 hour" })).textContent).toContain("10:00 AM");
+  });
+
   test("hides the section when this login has no tutor profile", async () => {
     const missing = new Error("Tutor profile not found") as Error & { status: number };
     missing.status = 404;

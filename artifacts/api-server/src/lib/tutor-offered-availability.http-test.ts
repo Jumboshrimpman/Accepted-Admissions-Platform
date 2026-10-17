@@ -37,6 +37,8 @@ type OfferedBody = {
   to?: string;
   timezone?: string;
   providerStatus?: string;
+  offeredToClients?: boolean;
+  availabilityDependsOnClient?: boolean;
   lengths?: OfferedLength[];
   slots?: string[];
   tutor?: { timezone?: string };
@@ -140,9 +142,11 @@ test("tutors see only their own client-offered slots, with no client details", a
   process.env.SESSION_SECRET = previousSecret || "offered-availability-test-secret";
   const originalFetch = globalThis.fetch.bind(globalThis);
   const busyWindows = [{ start: busyStart, end: new Date(Date.parse(busyStart) + 60 * 60_000).toISOString() }];
+  let freeBusyCalls = 0;
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(typeof input === "string" || input instanceof URL ? input : input.url);
     if (url.includes("/calendar/v3/freeBusy")) {
+      freeBusyCalls += 1;
       return Response.json({
         calendars: {
           primary: { busy: busyWindows },
@@ -161,6 +165,8 @@ test("tutors see only their own client-offered slots, with no client details", a
   let nikaServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let fixedServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let reconnectServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  let inactiveServer: Awaited<ReturnType<typeof startServer>> | undefined;
+  let ineligibleServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let studentServer: Awaited<ReturnType<typeof startServer>> | undefined;
   let failure: unknown;
   let cleanupError: unknown;
@@ -200,8 +206,8 @@ test("tutors see only their own client-offered slots, with no client details", a
 
     const xavierUser = await createUser(
       "tutor",
-      "Xavier Morales",
-      `offered-xavier-${suffix}@example.invalid`,
+      "Roster Wide Tutor",
+      `offered-wide-${suffix}@example.invalid`,
       "tutor",
     );
     const euniceUser = await createUser(
@@ -224,8 +230,20 @@ test("tutors see only their own client-offered slots, with no client details", a
     );
     const reconnectUser = await createUser(
       "tutor",
-      "Xavier Morales",
+      "Roster Reconnect Tutor",
       `offered-reconnect-${suffix}@example.invalid`,
+      "tutor",
+    );
+    const inactiveUser = await createUser(
+      "tutor",
+      "Roster Inactive Tutor",
+      `offered-inactive-${suffix}@example.invalid`,
+      "tutor",
+    );
+    const ineligibleUser = await createUser(
+      "tutor",
+      "Roster Ineligible Tutor",
+      `offered-ineligible-${suffix}@example.invalid`,
       "tutor",
     );
     const student = await createUser(
@@ -274,6 +292,8 @@ test("tutors see only their own client-offered slots, with no client details", a
       options?: {
         dateHours?: Record<string, { start: string; end: string }[]>;
         bookingNoticeMinutes?: number;
+        active?: boolean;
+        bookingEligible?: boolean;
       },
     ) => {
       const [profile] = await db
@@ -284,8 +304,8 @@ test("tutors see only their own client-offered slots, with no client details", a
           name,
           title: "SAT Tutor",
           subjects: ["SAT"],
-          active: true,
-          bookingEligible: true,
+          active: options?.active ?? true,
+          bookingEligible: options?.bookingEligible ?? true,
         })
         .returning();
       profileIds.push(profile!.id);
@@ -303,8 +323,18 @@ test("tutors see only their own client-offered slots, with no client details", a
       return profile!.id;
     };
 
-    const xavierProfileId = await createProfile(xavierUser, "Xavier Morales", { start: "07:00", end: "21:00" }, true);
-    const euniceProfileId = await createProfile(euniceUser, "Eunice Chon", { start: "07:00", end: "08:00" }, true);
+    const xavierProfileId = await createProfile(
+      xavierUser,
+      "Victoria Wijerathnayapa",
+      { start: "07:00", end: "21:00" },
+      true,
+    );
+    const euniceProfileId = await createProfile(
+      euniceUser,
+      "Victoria Wijerathnayapa",
+      { start: "07:00", end: "08:00" },
+      true,
+    );
     const nikaProfileId = await createProfile(nikaUser, "Nika Raiffe", { start: "07:00", end: "21:00" }, false);
     const openDay = localDateKey(2);
     const closedDay = localDateKey(3);
@@ -325,11 +355,31 @@ test("tutors see only their own client-offered slots, with no client details", a
     );
     const reconnectProfileId = await createProfile(
       reconnectUser,
-      "Xavier Morales",
+      "Victoria Wijerathnayapa",
       { start: "07:00", end: "21:00" },
       "reconnect",
       { bookingNoticeMinutes: 240 },
     );
+    const inactiveProfileId = await createProfile(
+      inactiveUser,
+      "Victoria Wijerathnayapa",
+      { start: "07:00", end: "21:00" },
+      true,
+      { active: false },
+    );
+    const ineligibleProfileId = await createProfile(
+      ineligibleUser,
+      "Victoria Wijerathnayapa",
+      { start: "07:00", end: "21:00" },
+      true,
+      { bookingEligible: false },
+    );
+    // Tutor login re-enables bookingEligible on the profile that shares the
+    // user email. Keep this row unmatched so the flag stays false.
+    await db
+      .update(tutorProfilesTable)
+      .set({ email: `offered-ineligible-profile-${suffix}@example.invalid` })
+      .where(eq(tutorProfilesTable.id, ineligibleProfileId));
 
     const [course] = await db
       .insert(coursesTable)
@@ -378,6 +428,8 @@ test("tutors see only their own client-offered slots, with no client details", a
     nikaServer = await startServer(nikaUser);
     fixedServer = await startServer(fixedUser);
     reconnectServer = await startServer(reconnectUser);
+    inactiveServer = await startServer(inactiveUser);
+    ineligibleServer = await startServer(ineligibleUser);
     studentServer = await startServer(student);
 
     const xavierOffered = await getJson(
@@ -394,6 +446,8 @@ test("tutors see only their own client-offered slots, with no client details", a
     );
     const fixedOffered = await getJson(fixedServer.baseUrl, "/api/tutor/offered-availability");
     const reconnectOffered = await getJson(reconnectServer.baseUrl, "/api/tutor/offered-availability");
+    const inactiveOffered = await getJson(inactiveServer.baseUrl, "/api/tutor/offered-availability");
+    const ineligibleOffered = await getJson(ineligibleServer.baseUrl, "/api/tutor/offered-availability");
     const studentOffered = await getJson(
       studentServer.baseUrl,
       `/api/tutor/offered-availability?tutorProfileId=${xavierProfileId}`,
@@ -493,21 +547,52 @@ test("tutors see only their own client-offered slots, with no client details", a
     await t.test("a disconnected calendar offers no slots", () => {
       assert.equal(nikaOffered.status, 200, nikaOffered.text);
       assert.equal(nikaOffered.body.providerStatus, "disconnected");
+      assert.equal(nikaOffered.body.offeredToClients, true);
+      assert.equal(nikaOffered.body.availabilityDependsOnClient, true);
       assert.equal(nikaOffered.body.timezone, TIMEZONE);
       for (const length of nikaOffered.body.lengths ?? []) {
         assert.deepEqual(length.slots, []);
       }
     });
 
+    await t.test("an inactive tutor and a tutor who is not booking eligible see no slots", () => {
+      for (const offered of [inactiveOffered, ineligibleOffered]) {
+        assert.equal(offered.status, 200, offered.text);
+        assert.equal(offered.body.offeredToClients, false, offered.text);
+        assert.equal(offered.body.availabilityDependsOnClient, false);
+        for (const length of offered.body.lengths ?? []) {
+          assert.deepEqual(length.slots, []);
+        }
+      }
+      assert.equal(inactiveOffered.text.includes(inactiveProfileId), false);
+      assert.equal(ineligibleOffered.text.includes(ineligibleProfileId), false);
+    });
+
+    await t.test("one tutor load reads free/busy once for every session length", async () => {
+      freeBusyCalls = 0;
+      const again = await getJson(xavierServer!.baseUrl, "/api/tutor/offered-availability");
+      assert.equal(again.status, 200, again.text);
+      assert.equal(freeBusyCalls, 1);
+      freeBusyCalls = 0;
+      const hidden = await getJson(inactiveServer!.baseUrl, "/api/tutor/offered-availability");
+      assert.equal(hidden.status, 200, hidden.text);
+      assert.equal(freeBusyCalls, 0);
+    });
+
     await t.test("held and booked times are omitted and the response has no client details", () => {
-      const serialized = `${xavierOffered.text}${euniceOffered.text}${nikaOffered.text}${fixedOffered.text}${reconnectOffered.text}`;
+      const serialized = `${xavierOffered.text}${euniceOffered.text}${nikaOffered.text}${fixedOffered.text}${reconnectOffered.text}${inactiveOffered.text}${ineligibleOffered.text}`;
       assert.equal(serialized.toLowerCase().includes("quinlan"), false);
       assert.equal(serialized.toLowerCase().includes(piiToken), false);
       assert.equal(serialized.includes(piiEmail), false);
       assert.equal(serialized.includes(payment!.id), false);
+      assert.equal(serialized.includes("Xavier Morales"), false);
+      assert.equal(xavierOffered.body.offeredToClients, true);
+      assert.equal(xavierOffered.body.availabilityDependsOnClient, false);
       assert.deepEqual(Object.keys(xavierOffered.body).sort(), [
+        "availabilityDependsOnClient",
         "from",
         "lengths",
+        "offeredToClients",
         "providerStatus",
         "timezone",
         "to",
@@ -531,6 +616,8 @@ test("tutors see only their own client-offered slots, with no client details", a
     await nikaServer?.close().catch(() => undefined);
     await fixedServer?.close().catch(() => undefined);
     await reconnectServer?.close().catch(() => undefined);
+    await inactiveServer?.close().catch(() => undefined);
+    await ineligibleServer?.close().catch(() => undefined);
     await studentServer?.close().catch(() => undefined);
     try {
       if (profileIds.length > 0) {

@@ -20,6 +20,8 @@ type OfferedAvailability = {
   to: string;
   timezone: string;
   providerStatus: "connected" | "disconnected" | "reconnect";
+  offeredToClients?: boolean;
+  availabilityDependsOnClient?: boolean;
   lengths: OfferedLength[];
 };
 
@@ -72,11 +74,14 @@ export function TutorOfferedAvailability() {
   if (hidden) return null;
 
   const timezone = offer?.timezone ?? "";
+  const notOffered = offer?.offeredToClients === false;
   const reconnect = offer?.providerStatus === "reconnect";
   const openSlotCount =
     offer?.lengths.reduce((count, length) => count + length.slots.length, 0) ?? 0;
-  const disconnectedWithoutSlots = offer?.providerStatus === "disconnected" && openSlotCount === 0;
-  const showSlots = Boolean(offer) && !reconnect && !disconnectedWithoutSlots;
+  const disconnectedWithoutSlots =
+    offer?.providerStatus === "disconnected" && openSlotCount === 0 && !notOffered;
+  const showSlots = Boolean(offer) && !notOffered && !reconnect && !disconnectedWithoutSlots;
+  const clientSpecific = offer?.availabilityDependsOnClient === true && !notOffered;
 
   return (
     <Card data-testid="tutor-offered-availability" className="border-primary/20 shadow-sm">
@@ -99,7 +104,18 @@ export function TutorOfferedAvailability() {
             {error}
           </p>
         ) : null}
-        {reconnect ? (
+        {notOffered ? (
+          <div className="rounded-xl border border-dashed p-4 text-sm" data-testid="tutor-offered-not-listed">
+            <p className="font-medium">You are not currently offered for booking.</p>
+            <p className="mt-1 text-muted-foreground">Clients do not see open times for you.</p>
+          </div>
+        ) : null}
+        {clientSpecific ? (
+          <p className="mb-4 text-sm text-muted-foreground" data-testid="tutor-offered-client-specific">
+            The times a client sees depend on who is booking.
+          </p>
+        ) : null}
+        {reconnect && !notOffered ? (
           <div className="rounded-xl border border-dashed p-4 text-sm" data-testid="tutor-offered-reconnect">
             <p className="font-medium">Reconnect Google Calendar to offer bookable times.</p>
             <p className="mt-1 text-muted-foreground">
