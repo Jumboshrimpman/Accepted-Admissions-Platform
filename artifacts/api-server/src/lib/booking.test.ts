@@ -5,9 +5,12 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   bookingCalendarEventPayload,
+  bookingNoticeMinutesForTutor,
   calendarEventPayload,
+  DEFAULT_BOOKING_NOTICE_MINUTES,
   generateAvailableSlots,
   isBookablePortalDuration,
+  NIKA_BOOKING_NOTICE_MINUTES,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
   SAT_BOOKING_WEEKLY_HOURS,
@@ -75,6 +78,43 @@ test("honors booking notice and blackout dates", () => {
     new Date("2026-08-30T00:00:00.000Z"),
   );
   assert.deepEqual(slots, []);
+});
+
+test("Nika needs 8 hours of notice and every other tutor needs 4", () => {
+  assert.equal(NIKA_BOOKING_NOTICE_MINUTES, 8 * 60);
+  assert.equal(DEFAULT_BOOKING_NOTICE_MINUTES, 4 * 60);
+  assert.equal(bookingNoticeMinutesForTutor("Nika Raiffe"), 480);
+  for (const name of ["Eunice Chon", "Victoria", "Xavier Morales", "New Tutor"]) {
+    assert.equal(bookingNoticeMinutesForTutor(name), 240);
+  }
+
+  const now = new Date("2026-10-19T12:00:00.000Z");
+  const mondayHours = {
+    timezone: "America/New_York",
+    weeklyHours: { "1": [{ start: "07:00", end: "21:00" }] },
+    bufferMinutes: 0,
+    blackoutDates: [],
+  };
+  const offered = (bookingNoticeMinutes: number) =>
+    generateAvailableSlots(
+      { ...mondayHours, bookingNoticeMinutes },
+      now,
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+      60,
+      [],
+      [],
+      now,
+    );
+
+  const nika = offered(480);
+  assert.equal(nika[0], "2026-10-19T20:00:00.000Z");
+  assert.equal(nika.includes("2026-10-19T19:00:00.000Z"), false);
+  assert.ok(nika.every((slot) => slot >= "2026-10-19T20:00:00.000Z"));
+
+  const others = offered(240);
+  assert.equal(others[0], "2026-10-19T16:00:00.000Z");
+  assert.equal(others.includes("2026-10-19T15:00:00.000Z"), false);
+  assert.ok(others.every((slot) => slot >= "2026-10-19T16:00:00.000Z"));
 });
 
 test("SAT booking hours expose 07:00–20:00 America/New_York weekday starts", () => {
