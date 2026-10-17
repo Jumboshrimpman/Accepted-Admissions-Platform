@@ -11,8 +11,9 @@
  *
  * Nika's SAT rows are $130/hour. The shared SAT catalog shows every standard
  * tutor to every self-serve client, so Nika is limited to Sophia Sleiman,
- * Michelle Makarem, and Sama's test student. Her hours do not accept the legacy pool and do not book
- * another tutor. Neel's College Consulting prices are a separate catalog.
+ * Michelle Makarem, and Sama's test student. Nika-tagged hours do not book
+ * another tutor. Sophia Sleiman's legacy $130 pool can also book Nika, one
+ * ledger hour per session hour. Neel's College Consulting prices are a separate catalog.
  */
 
 import {
@@ -193,12 +194,15 @@ export function displayedSatDescription(
   return descriptionFor(spec.firstName, length?.minutesLabel ?? "SAT", hourly);
 }
 
-/** Eunice and Victoria always accept the legacy $130 pool. Xavier does only for Michelle. Nika never does. */
+/**
+ * Eunice and Victoria always accept the legacy $130 pool. Xavier does only for Michelle.
+ * Nika does only for Sophia Sleiman, matched by portal user id, one ledger hour per session hour.
+ */
 export function allowsLegacySatPool(
   tutorKey: SatTutorKey,
-  user: MichelleIdentity | null | undefined,
+  user: (MichelleIdentity & { id?: string | null }) | null | undefined,
 ): boolean {
-  if (tutorKey === "nika") return false;
+  if (tutorKey === "nika") return user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
   if (tutorKey === "eunice" || tutorKey === "victoria") return true;
   return isMichelleMakaremUser(user);
 }
