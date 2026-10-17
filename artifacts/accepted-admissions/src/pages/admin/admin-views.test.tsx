@@ -1024,6 +1024,34 @@ describe("administrator overview", () => {
     expect(victoria.textContent).toContain("iCloud Owner");
     expect(victoria.textContent).toContain("samakubba@icloud.com");
     expect(victoria.textContent).toContain("tutor profile");
+    expect(screen.getByText(/Intended email victoriawije7@gmail.com is not provisioned/)).toBeTruthy();
+  });
+
+  test("shows Victoria's Google login once that address is stored", () => {
+    mocks.overview.consultingProvision = {
+      nikaEmail: "nika.raiffe@gmail.com",
+      nikaClerkUserId: null,
+      nikaBookable: true,
+      nikaSkipReason: null,
+      neelLinked: true,
+      neelUserId: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+      neelEmail: "ndharni300@gmail.com",
+      neelStoppedReason: null,
+      neelEmailOwner: null,
+      victoriaLinked: true,
+      victoriaUserId: "a91e7c34-6b20-4f8d-9d47-2c5b8e1a0d63",
+      victoriaPlaceholderEmail: "samakubba@icloud.com",
+      victoriaIntendedEmail: "victoriawije7@gmail.com",
+      victoriaEmail: "victoriawije7@gmail.com",
+      victoriaStoppedReason: null,
+      victoriaEmailOwner: null,
+    };
+
+    render(<AdminDashboard />);
+
+    expect(screen.getByText(/victoriawije7@gmail.com at \/login, then \/tutor/)).toBeTruthy();
+    expect(screen.getByText(/Google sign-in uses that address/)).toBeTruthy();
+    expect(screen.queryByText(/is not provisioned/)).toBeNull();
   });
 
   test("keeps a manual calendar invite alert until an admin resolves it", () => {
