@@ -77,6 +77,7 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
+  customFetch: () => new Promise(() => {}),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
