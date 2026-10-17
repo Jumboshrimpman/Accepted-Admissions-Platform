@@ -56,6 +56,56 @@ export function adminCalendarGrantCanWriteEvents(input: {
   return true;
 }
 
+export type AdminCalendarInviteHealth = {
+  healthy: boolean;
+  accountEmail: typeof ADMIN_CALENDAR_ACCOUNT_EMAIL;
+  hasRefreshToken: boolean;
+  hasWriteScope: boolean;
+  hasAppCalendar: boolean;
+};
+
+function grantBelongsToAdmin(input: {
+  googleAccountEmail?: string | null;
+  portalEmail?: string | null;
+  userEmail?: string | null;
+}): boolean {
+  return [input.googleAccountEmail, input.portalEmail, input.userEmail].some(
+    (email) => email?.trim().toLowerCase() === ADMIN_CALENDAR_ACCOUNT_EMAIL,
+  );
+}
+
+/** Same predicate booking uses for an automatic invite from the admin Google account. */
+export function adminCalendarInviteHealth(
+  rows: Array<{
+    googleAccountEmail?: string | null;
+    portalEmail?: string | null;
+    userEmail?: string | null;
+    status?: string | null;
+    hasRefreshToken: boolean;
+    grantedScopes?: string | null;
+    appCalendarId?: string | null;
+  }>,
+): AdminCalendarInviteHealth {
+  const writable = rows.find((row) => adminCalendarGrantCanWriteEvents(row));
+  if (writable) {
+    return {
+      healthy: true,
+      accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+      hasRefreshToken: true,
+      hasWriteScope: true,
+      hasAppCalendar: true,
+    };
+  }
+  const related = rows.find((row) => grantBelongsToAdmin(row));
+  return {
+    healthy: false,
+    accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+    hasRefreshToken: Boolean(related?.hasRefreshToken && related.status === "connected"),
+    hasWriteScope: Boolean(related && !grantLacksAppCreatedCalendar(related.grantedScopes ?? null)),
+    hasAppCalendar: Boolean(related?.appCalendarId?.trim()),
+  };
+}
+
 export const MANUAL_CALENDAR_INVITE_KIND = "manual_calendar_invite";
 
 /** Eastern wall time with an ET label, including during daylight saving. */

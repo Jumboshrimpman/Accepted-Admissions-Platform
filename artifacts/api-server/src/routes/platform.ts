@@ -114,6 +114,7 @@ import {
 } from "../lib/app-created-calendar";
 import {
   adminCalendarGrantCanWriteEvents,
+  adminCalendarInviteHealth,
   bookingsUseAdminCalendarFallback,
   isNikaTutorProfile,
   manualCalendarInviteMessage,
@@ -4652,8 +4653,8 @@ type FixedWindowCalendarPlan =
  * The admin Google account, when it has a refresh token and an app calendar.
  * Event writes use calendar.app.created, so the id has to be that secondary calendar.
  */
-async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
-  const rows = await db
+async function loadStoredCalendarGrants() {
+  return db
     .select({
       tutorProfileId: calendarConnectionsTable.tutorProfileId,
       appCalendarId: calendarConnectionsTable.appCalendarId,
@@ -4671,6 +4672,10 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
     )
     .leftJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
     .where(eq(calendarConnectionsTable.provider, "google"));
+}
+
+async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
+  const rows = await loadStoredCalendarGrants();
   const match = rows.find((row) =>
     adminCalendarGrantCanWriteEvents({
       googleAccountEmail: row.googleAccountEmail,
@@ -10162,8 +10167,24 @@ router.get(
   "/admin/calendar-connections",
   ensureRole(["administrator"]),
   async (_req: AuthedRequest, res): Promise<void> => {
-    const connections = await listPublicCalendarConnectionHealth();
-    res.json({ connections });
+    const [connections, grants] = await Promise.all([
+      listPublicCalendarConnectionHealth(),
+      loadStoredCalendarGrants(),
+    ]);
+    res.json({
+      connections,
+      adminCalendarInvites: adminCalendarInviteHealth(
+        grants.map((row) => ({
+          googleAccountEmail: row.googleAccountEmail,
+          portalEmail: row.portalEmail,
+          userEmail: row.userEmail,
+          status: row.status,
+          hasRefreshToken: Boolean(row.hasRefreshToken),
+          grantedScopes: row.grantedScopes,
+          appCalendarId: row.appCalendarId,
+        })),
+      ),
+    });
   },
 );
 

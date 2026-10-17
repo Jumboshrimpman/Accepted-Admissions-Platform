@@ -55,6 +55,48 @@ afterEach(() => {
 });
 
 describe("Admin connections", () => {
+  test("shows whether the admin invite calendar can send automatically", async () => {
+    customFetch.mockResolvedValue({
+      connections: [xavier],
+      adminCalendarInvites: {
+        healthy: true,
+        accountEmail: "admin@acceptedadmissions.org",
+        hasRefreshToken: true,
+        hasWriteScope: true,
+        hasAppCalendar: true,
+      },
+    });
+
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("admin-calendar-invites")).toBeTruthy();
+    expect(screen.getByText("Admin calendar (invites)")).toBeTruthy();
+    expect(screen.getByTestId("badge-admin-calendar-invites").textContent).toBe("Healthy");
+    expect(screen.getByTestId("status-admin-calendar-invites").textContent).toBe(
+      "Invites send automatically from this account.",
+    );
+  });
+
+  test("shows the admin invite calendar as not ready when the writer is missing a piece", async () => {
+    customFetch.mockResolvedValue({
+      connections: [],
+      adminCalendarInvites: {
+        healthy: false,
+        accountEmail: "admin@acceptedadmissions.org",
+        hasRefreshToken: true,
+        hasWriteScope: false,
+        hasAppCalendar: false,
+      },
+    });
+
+    render(<AdminConnections />);
+
+    expect(await screen.findByTestId("badge-admin-calendar-invites")).toBeTruthy();
+    expect(screen.getByTestId("badge-admin-calendar-invites").textContent).toBe("Not ready");
+    expect(screen.getByText("Event-write scope").parentElement?.textContent).toContain("No");
+    expect(screen.getByText("Sessions calendar").parentElement?.textContent).toContain("No");
+  });
+
   test("shows masked health for each tutor and runs a read-only free/busy test", async () => {
     customFetch.mockImplementation(async (url: string, options?: { method?: string }) => {
       if (String(url).endsWith("/test")) {
