@@ -85,11 +85,14 @@ export function manualCalendarInviteMessage(args: {
   tutorEmail: string;
   start: Date;
   durationMinutes: number;
+  meetUrl?: string | null;
 }): string {
   const nika = isNikaTutorProfile({ name: args.tutorName, portalEmail: args.tutorEmail });
   const tutorLabel = nika ? "Nika" : args.tutorName.trim();
   const tutorEmail = nika ? NIKA_TUTOR_EMAIL : args.tutorEmail.trim();
-  return `Send calendar invite manually: ${args.bookerName.trim()} booked ${tutorLabel} ${formatSessionInstantEt(args.start)}, ${args.durationMinutes} minutes. Invite ${args.bookerEmail.trim()}, ${tutorEmail}, ${ADMIN_CALENDAR_ACCOUNT_EMAIL}.`;
+  const base = `Send calendar invite manually: ${args.bookerName.trim()} booked ${tutorLabel} ${formatSessionInstantEt(args.start)}, ${args.durationMinutes} minutes. Invite ${args.bookerEmail.trim()}, ${tutorEmail}, ${ADMIN_CALENDAR_ACCOUNT_EMAIL}.`;
+  const meetUrl = args.meetUrl?.trim();
+  return meetUrl ? `${base} Meet: ${meetUrl}.` : base;
 }
 
 /** conferenceData Meet link. Google requires conferenceDataVersion=1 on the write. */

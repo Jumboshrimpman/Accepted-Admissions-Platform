@@ -61,6 +61,18 @@ test("a fixed window with no writer asks an admin to send Nika's invite by hand"
     }),
     "Send calendar invite manually: Neel Dharni booked Nika Oct 21, 2026, 6:05 PM ET, 60 minutes. Invite neel@example.invalid, nika.raiffe@gmail.com, admin@acceptedadmissions.org.",
   );
+  assert.equal(
+    manualCalendarInviteMessage({
+      bookerName: "Neel Dharni",
+      bookerEmail: "neel@example.invalid",
+      tutorName: "Nika Raiffe",
+      tutorEmail: "other@example.com",
+      start: new Date("2026-10-21T22:05:00.000Z"),
+      durationMinutes: 60,
+      meetUrl: "https://meet.google.com/rih-iayt-okb",
+    }),
+    "Send calendar invite manually: Neel Dharni booked Nika Oct 21, 2026, 6:05 PM ET, 60 minutes. Invite neel@example.invalid, nika.raiffe@gmail.com, admin@acceptedadmissions.org. Meet: https://meet.google.com/rih-iayt-okb.",
+  );
 });
 
 test("only a connected admin grant with refresh, app calendar, and event-write scope can issue invites", () => {

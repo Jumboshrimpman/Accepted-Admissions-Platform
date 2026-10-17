@@ -52,6 +52,7 @@ import {
   stripeCatalogProductIdempotencyKey,
   decidePlaceholderLink,
   isNeelDharniUser,
+  neelNikaMeetUrl,
   isNikaTemporaryViewEmail,
   NEEL_DISPLAY_NAME,
   NIKA_TEMPORARY_VIEW_EMAIL,
@@ -383,6 +384,30 @@ test("placeholder emails link without a known Clerk id and stop when another use
   );
   assert.equal(isNeelDharniUser(NEEL_DHARNI_USER_ID), true);
   assert.equal(isNeelDharniUser("existing-student"), false);
+  assert.equal(
+    neelNikaMeetUrl({
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Nika Raiffe",
+      tutorEmail: "other@example.com",
+    }),
+    "https://meet.google.com/rih-iayt-okb",
+  );
+  assert.equal(
+    neelNikaMeetUrl({
+      clientUserId: NEEL_DHARNI_USER_ID,
+      tutorName: "Eunice Chon",
+      tutorEmail: "eunice_chon@berkeley.edu",
+    }),
+    null,
+  );
+  assert.equal(
+    neelNikaMeetUrl({
+      clientUserId: "existing-student",
+      tutorName: "Nika Raiffe",
+      tutorEmail: "nika.raiffe@gmail.com",
+    }),
+    null,
+  );
 });
 
 test("sat and english tutor grants stay compatible only for a tutor placeholder", () => {

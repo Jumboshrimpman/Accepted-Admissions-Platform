@@ -1149,6 +1149,72 @@ test("freeBusy 403 and 500 keep a stored refresh token connected", async () => {
   });
 });
 
+test("an existing Meet is sent as conference entry points and dropped when Google rejects it", async () => {
+  const meetUrl = "https://meet.google.com/rih-iayt-okb";
+  const conference = googleCalendar.existingGoogleMeetConference(meetUrl);
+  assert.equal(conference.conferenceId, "rih-iayt-okb");
+  assert.equal(conference.entryPoints[0]?.uri, meetUrl);
+  assert.equal(conference.conferenceSolution.key.type, "hangoutsMeet");
+  assert.equal("createRequest" in conference, false);
+
+  const bodies: Array<Record<string, unknown>> = [];
+  let calls = 0;
+  await withGoogleOAuthFetch(async (input, init) => {
+    const url = String(input);
+    calls += 1;
+    bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    if (calls === 1) {
+      assert.match(url, /conferenceDataVersion=1$/);
+      return jsonResponse(400, {
+        error: {
+          code: 400,
+          message: "Invalid conference type value.",
+          errors: [{ reason: "invalid", message: "Invalid conference type value." }],
+        },
+      });
+    }
+    assert.equal(url.includes("conferenceDataVersion"), false);
+    return jsonResponse(200, { id: "evt-kept", htmlLink: "https://calendar.google.com/event?eid=kept" });
+  }, async () => {
+    const created = await googleCalendar.createGoogleEventWithMeetFallback("token", "cal-1", {
+      summary: "Neel with Nika",
+      location: meetUrl,
+      description: meetUrl,
+      conferenceData: conference,
+    });
+    assert.equal(created.id, "evt-kept");
+  });
+  assert.equal(calls, 2);
+  assert.equal(
+    (bodies[0]?.conferenceData as { entryPoints?: Array<{ uri?: string }> })?.entryPoints?.[0]?.uri,
+    meetUrl,
+  );
+  assert.equal("conferenceData" in (bodies[1] ?? {}), false);
+  assert.equal(bodies[1]?.location, meetUrl);
+  assert.equal(bodies[1]?.description, meetUrl);
+
+  let updateCalls = 0;
+  await withGoogleOAuthFetch(async (_input, init) => {
+    updateCalls += 1;
+    if (updateCalls === 1) {
+      return jsonResponse(400, { error: { code: 400, message: "Conference data is invalid." } });
+    }
+    assert.equal(String(init?.method), "PATCH");
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    assert.equal("conferenceData" in body, false);
+    return jsonResponse(200, { id: "evt-moved" });
+  }, async () => {
+    const updated = await googleCalendar.updateGoogleEventWithMeetFallback(
+      "token",
+      "cal-1",
+      "evt-1",
+      { location: meetUrl, description: meetUrl, conferenceData: conference },
+    );
+    assert.equal(updated.id, "evt-moved");
+  });
+  assert.equal(updateCalls, 2);
+});
+
 test("Meet event create 401 refreshes once and does not disconnect a stored grant", async () => {
   let eventWrites = 0;
   await withGoogleOAuthFetch(async (input, init) => {

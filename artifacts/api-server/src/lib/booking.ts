@@ -330,6 +330,7 @@ export function calendarEventPayload(
     tutor?: CalendarInviteParty | null;
     /** College Consulting adds the tutor. On her own calendar she is the organizer; Google still accepts her as an attendee. */
     inviteTutor?: boolean;
+    description?: string;
   } | null,
 ) {
   const existing = attendeeEmail.trim() ? [{ email: attendeeEmail }] : [];
@@ -337,9 +338,10 @@ export function calendarEventPayload(
   if (tutorEmail) existing.push({ email: tutorEmail });
   const extras = adminAttendeeEmailsForPair(parties?.student, parties?.tutor);
   const attendees = mergeCalendarAttendees(existing, extras);
+  const description = parties?.description?.trim() || "Accepted Admissions tutoring session";
   return {
     summary: title,
-    description: "Accepted Admissions tutoring session",
+    description,
     ...(location ? { location } : {}),
     start: { dateTime: start.toISOString(), timeZone },
     end: { dateTime: new Date(start.getTime() + durationMinutes * 60_000).toISOString(), timeZone },
@@ -355,6 +357,7 @@ export function bookingCalendarEventPayload(args: {
   timeZone: string;
   attendeeEmail: string;
   location?: string;
+  description?: string;
   student: CalendarInviteParty | null;
   tutor: CalendarInviteParty | null;
   inviteTutor?: boolean;
@@ -366,6 +369,11 @@ export function bookingCalendarEventPayload(args: {
     args.timeZone,
     args.attendeeEmail,
     args.location,
-    { student: args.student, tutor: args.tutor, inviteTutor: args.inviteTutor },
+    {
+      student: args.student,
+      tutor: args.tutor,
+      inviteTutor: args.inviteTutor,
+      description: args.description,
+    },
   );
 }

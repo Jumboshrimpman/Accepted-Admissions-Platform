@@ -34,9 +34,11 @@ import {
   classifyGoogleProviderError,
   createCalendarOAuthState,
   createGoogleEvent,
+  createGoogleEventWithMeetFallback,
   decryptCalendarToken,
   deleteGoogleEvent,
   googleCalendarSendUpdatesForSubjects,
+  existingGoogleMeetConference,
   exchangeGoogleCode,
   getGoogleCalendarEvent,
   getGoogleCalendarConfig,
@@ -60,6 +62,7 @@ import {
   patchGoogleEventAttendees,
   safeCalendarReturnTo,
   updateGoogleEvent,
+  updateGoogleEventWithMeetFallback,
   type CalendarOAuthOutcome,
 } from "../lib/google-calendar";
 import {
@@ -156,6 +159,7 @@ import {
   VICTORIA_DISPLAY_NAME,
   collegeConsultingServiceRequested,
   isNeelDharniUser,
+  neelNikaMeetUrl,
   isNikaTemporaryViewEmail,
   isSamaPostgradTestStudent,
   samaCollegeConsultingBooking,
@@ -5036,6 +5040,66 @@ async function calendarInviteParty(
   };
 }
 
+function neelNikaCalendarEvent(args: {
+  title: string;
+  start: Date;
+  durationMinutes: number;
+  timeZone: string;
+  attendeeEmail: string;
+  location?: string;
+  student: CalendarInviteParty | null;
+  tutor: CalendarInviteParty | null;
+  inviteTutor?: boolean;
+  clientUserId?: string | null;
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): { meetUrl: string | null; body: Record<string, unknown> } {
+  const meetUrl = neelNikaMeetUrl({
+    clientUserId: args.clientUserId,
+    tutorName: args.tutorName,
+    tutorEmail: args.tutorEmail,
+  });
+  return {
+    meetUrl,
+    body: {
+      ...bookingCalendarEventPayload({
+        title: args.title,
+        start: args.start,
+        durationMinutes: args.durationMinutes,
+        timeZone: args.timeZone,
+        attendeeEmail: args.attendeeEmail,
+        location: meetUrl ?? args.location,
+        description: meetUrl ?? undefined,
+        student: args.student,
+        tutor: args.tutor,
+        inviteTutor: args.inviteTutor,
+      }),
+      ...(meetUrl ? { conferenceData: existingGoogleMeetConference(meetUrl) } : {}),
+    },
+  };
+}
+
+async function pinnedNeelNikaMeet(
+  session: { clientUserId: string | null; tutorUserId: string | null },
+  tutorName?: string | null,
+): Promise<string | null> {
+  const fromName = neelNikaMeetUrl({
+    clientUserId: session.clientUserId,
+    tutorName,
+  });
+  if (fromName || !isNeelDharniUser(session.clientUserId) || !session.tutorUserId) return fromName;
+  const [profile] = await db
+    .select({ name: tutorProfilesTable.name, email: tutorProfilesTable.email })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, session.tutorUserId))
+    .limit(1);
+  return neelNikaMeetUrl({
+    clientUserId: session.clientUserId,
+    tutorName: profile?.name ?? tutorName,
+    tutorEmail: profile?.email,
+  });
+}
+
 async function syncGoogleCalendarForSessionChange(args: {
   existing: typeof sessionsTable.$inferSelect;
   next: {
@@ -5112,29 +5176,40 @@ async function syncGoogleCalendarForSessionChange(args: {
     calendarInviteParty(args.next.tutorUserId ?? args.existing.tutorUserId),
   ]);
   const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
+  const pinned = neelNikaCalendarEvent({
+    title: args.next.title,
+    start: args.next.dateTime,
+    durationMinutes: args.next.durationMinutes,
+    timeZone: args.next.timezone,
+    attendeeEmail: student.email ?? "",
+    location: SHARED_FALL_MEETING_URL,
+    student,
+    tutor,
+    inviteTutor: calendarInviteIncludesTutor(
+      args.existing.subject,
+      args.next.subject,
+      { tutorEmail },
+    ),
+    clientUserId: args.next.clientUserId,
+    tutorEmail,
+  });
   const written = await runTutorCalendarCall(access, (token) =>
     writeStoredSessionEvent(args.existing, token, () =>
-      updateGoogleEvent(
-        token,
-        calendarId,
-        args.existing.providerEventId!,
-        bookingCalendarEventPayload({
-          title: args.next.title,
-          start: args.next.dateTime,
-          durationMinutes: args.next.durationMinutes,
-          timeZone: args.next.timezone,
-          attendeeEmail: student.email ?? "",
-          location: SHARED_FALL_MEETING_URL,
-          student,
-          tutor,
-          inviteTutor: calendarInviteIncludesTutor(
-            args.existing.subject,
-            args.next.subject,
-            { tutorEmail },
+      pinned.meetUrl
+        ? updateGoogleEventWithMeetFallback(
+            token,
+            calendarId,
+            args.existing.providerEventId!,
+            pinned.body,
+            sendUpdates,
+          )
+        : updateGoogleEvent(
+            token,
+            calendarId,
+            args.existing.providerEventId!,
+            pinned.body,
+            sendUpdates,
           ),
-        }),
-        sendUpdates,
-      ),
     ),
   );
   if (written.status === "manual") {
@@ -5146,7 +5221,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   const event = written.value;
   return {
     providerEventId: event.id ?? args.existing.providerEventId,
-    providerEventUrl: event.htmlLink ?? args.existing.providerEventUrl,
+    providerEventUrl: pinned.meetUrl ?? event.htmlLink ?? args.existing.providerEventUrl,
   };
 }
 
@@ -5544,7 +5619,11 @@ async function bookingSessionShape(
 ) {
   const [tutorProfile] = session.tutorUserId
     ? await db
-        .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
+        .select({
+          id: tutorProfilesTable.id,
+          name: tutorProfilesTable.name,
+          email: tutorProfilesTable.email,
+        })
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1)
@@ -5560,7 +5639,12 @@ async function bookingSessionShape(
     title: session.title,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: SHARED_FALL_MEETING_URL,
+    meetingUrl:
+      neelNikaMeetUrl({
+        clientUserId: session.clientUserId,
+        tutorName: tutorProfile?.name,
+        tutorEmail: tutorProfile?.email,
+      }) ?? SHARED_FALL_MEETING_URL,
     calendarEventUrl: calendarEventUrlForSession(session),
     cancellationReason: session.cancellationReason,
     ...(extras.creditRestored !== undefined
@@ -7656,6 +7740,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       courseId: sessionsTable.courseId,
       tutorProfileId: tutorProfilesTable.id,
       tutorName: tutorProfilesTable.name,
+      tutorEmail: tutorProfilesTable.email,
       dateTime: sessionsTable.dateTime,
       timezone: sessionsTable.timezone,
       subject: sessionsTable.subject,
@@ -7682,7 +7767,12 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       title: session.title,
       durationMinutes: session.durationMinutes,
       bookingStatus: session.bookingStatus,
-      meetingUrl: SHARED_FALL_MEETING_URL,
+      meetingUrl:
+        neelNikaMeetUrl({
+          clientUserId: subjectUserId,
+          tutorName: session.tutorName,
+          tutorEmail: session.tutorEmail,
+        }) ?? SHARED_FALL_MEETING_URL,
       calendarEventUrl: calendarEventUrlForSession(session),
       cancellationReason: session.cancellationReason,
     })),
@@ -7965,6 +8055,11 @@ async function respondWithPrepaidBooking(
             tutorEmail: tutor.email,
             start,
             durationMinutes,
+            meetUrl: neelNikaMeetUrl({
+              clientUserId: req.appUser!.id,
+              tutorName: tutor.name,
+              tutorEmail: tutor.email,
+            }),
           }),
         });
         await confirmBookedSession(created, true);
@@ -7989,31 +8084,42 @@ async function respondWithPrepaidBooking(
         if (!adminAccess) {
           throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
         }
+        const pinned = neelNikaCalendarEvent({
+          title: created.title,
+          start,
+          durationMinutes,
+          timeZone: rule.timezone,
+          attendeeEmail: req.appUser!.email,
+          student,
+          tutor: tutorParty,
+          inviteTutor,
+          clientUserId: req.appUser!.id,
+          tutorName: tutor.name,
+          tutorEmail: tutor.email,
+        });
+        const eventBody = pinned.meetUrl
+          ? pinned.body
+          : { ...pinned.body, conferenceData: adminCalendarMeetConference(created.id) };
         const event = await runTutorCalendarCall(adminAccess, (token) =>
-          createGoogleEvent(
-            token,
-            adminWriter.appCalendarId,
-            {
-              ...bookingCalendarEventPayload({
-                title: created.title,
-                start,
-                durationMinutes,
-                timeZone: rule.timezone,
-                attendeeEmail: req.appUser!.email,
-                student,
-                tutor: tutorParty,
-                inviteTutor,
-              }),
-              conferenceData: adminCalendarMeetConference(created.id),
-            },
-            sendUpdates,
-          ),
+          pinned.meetUrl
+            ? createGoogleEventWithMeetFallback(
+                token,
+                adminWriter.appCalendarId,
+                eventBody,
+                sendUpdates,
+              )
+            : createGoogleEvent(
+                token,
+                adminWriter.appCalendarId,
+                eventBody,
+                sendUpdates,
+              ),
         );
         const [updated] = await db
           .update(sessionsTable)
           .set({
             providerEventId: event.id ?? null,
-            providerEventUrl: event.hangoutLink ?? event.htmlLink ?? null,
+            providerEventUrl: pinned.meetUrl ?? event.hangoutLink ?? event.htmlLink ?? null,
             providerCalendarId: adminWriter.appCalendarId,
             updatedAt: new Date(),
           })
@@ -8028,6 +8134,23 @@ async function respondWithPrepaidBooking(
       if (!appCalendarId) {
         throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
       }
+      const pinned = neelNikaCalendarEvent({
+        title: created.title,
+        start,
+        durationMinutes,
+        timeZone: rule.timezone,
+        attendeeEmail: req.appUser!.email,
+        location: SHARED_FALL_MEETING_URL,
+        student,
+        tutor: tutorParty,
+        inviteTutor: calendarInviteIncludesTutor(
+          consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+          { tutorEmail: tutor.email },
+        ),
+        clientUserId: req.appUser!.id,
+        tutorName: tutor.name,
+        tutorEmail: tutor.email,
+      });
       const written = await runTutorCalendarCall(access, (token) =>
         writeStoredSessionEvent(
           {
@@ -8037,28 +8160,19 @@ async function respondWithPrepaidBooking(
           },
           token,
           () =>
-            createGoogleEvent(
-              token,
-              appCalendarId,
-              bookingCalendarEventPayload({
-                title: created.title,
-                start,
-                durationMinutes,
-                timeZone: rule.timezone,
-                attendeeEmail: req.appUser!.email,
-                location: SHARED_FALL_MEETING_URL,
-                student,
-                tutor: tutorParty,
-                inviteTutor: calendarInviteIncludesTutor(
-                  consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
-                  { tutorEmail: tutor.email },
+            pinned.meetUrl
+              ? createGoogleEventWithMeetFallback(
+                  token,
+                  appCalendarId,
+                  pinned.body,
+                  sendUpdates,
+                )
+              : createGoogleEvent(
+                  token,
+                  appCalendarId,
+                  pinned.body,
+                  sendUpdates,
                 ),
-              }),
-              googleCalendarSendUpdatesForSubjects(
-                consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
-                { tutorEmail: tutor.email },
-              ),
-            ),
         ),
       );
       if (written.status === "manual") {
@@ -8073,7 +8187,7 @@ async function respondWithPrepaidBooking(
         .update(sessionsTable)
         .set({
           providerEventId: event.id ?? null,
-          providerEventUrl: event.htmlLink ?? null,
+          providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? null,
           providerCalendarId: appCalendarId,
           updatedAt: new Date(),
         })
@@ -8421,7 +8535,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       tutorEmail: profile.email,
     });
     const inviteAt = (startTime: Date, timeZone: string) =>
-      bookingCalendarEventPayload({
+      neelNikaCalendarEvent({
         title: session.title,
         start: startTime,
         durationMinutes: session.durationMinutes,
@@ -8431,18 +8545,30 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         student,
         tutor: tutorParty,
         inviteTutor: calendarInviteIncludesTutor(session.subject, { tutorEmail: profile.email }),
+        clientUserId: session.clientUserId,
+        tutorName: profile.name,
+        tutorEmail: profile.email,
       });
     const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
+    const moved = inviteAt(start, rule.timezone);
     const eventWrite = session.providerEventId
       ? await runTutorCalendarCall(writeAccess, (token) =>
           writeStoredSessionEvent(calendarSession, token, () =>
-            updateGoogleEvent(
-              token,
-              sessionEventCalendarId(session.providerCalendarId),
-              session.providerEventId!,
-              inviteAt(start, rule.timezone),
-              sendUpdates,
-            ),
+            moved.meetUrl
+              ? updateGoogleEventWithMeetFallback(
+                  token,
+                  sessionEventCalendarId(session.providerCalendarId),
+                  session.providerEventId!,
+                  moved.body,
+                  sendUpdates,
+                )
+              : updateGoogleEvent(
+                  token,
+                  sessionEventCalendarId(session.providerCalendarId),
+                  session.providerEventId!,
+                  moved.body,
+                  sendUpdates,
+                ),
           ),
         )
       : null;
@@ -8469,7 +8595,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             timezone: rule.timezone,
             bookingStatus: "rescheduled",
             providerEventId: event?.id ?? session.providerEventId,
-            providerEventUrl: event?.htmlLink ?? session.providerEventUrl,
+            providerEventUrl: event?.htmlLink ?? moved.meetUrl ?? session.providerEventUrl,
             updatedAt: new Date(),
           })
           .where(eq(sessionsTable.id, session.id))
@@ -8482,15 +8608,24 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     } catch (error) {
       if (session.providerEventId) {
         try {
+          const rewind = inviteAt(previousStart, session.timezone);
           await runTutorCalendarCall(writeAccess, (token) =>
             writeStoredSessionEvent(calendarSession, token, () =>
-              updateGoogleEvent(
-                token,
-                sessionEventCalendarId(session.providerCalendarId),
-                session.providerEventId!,
-                inviteAt(previousStart, session.timezone),
-                sendUpdates,
-              ),
+              rewind.meetUrl
+                ? updateGoogleEventWithMeetFallback(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    rewind.body,
+                    sendUpdates,
+                  )
+                : updateGoogleEvent(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    rewind.body,
+                    sendUpdates,
+                  ),
             ),
           );
         } catch {
@@ -10873,7 +11008,11 @@ async function adminSessionShape(
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
+    meetingUrl:
+      (await pinnedNeelNikaMeet(
+        session,
+        session.tutorUserId ? personById.get(session.tutorUserId) : null,
+      )) ?? meetingUrlForTerm(course?.term, course?.meetUrl),
     calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
       ? {
@@ -12509,7 +12648,9 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
               ),
             ),
             tutor,
-            meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
+            meetingUrl:
+              (await pinnedNeelNikaMeet(session, tutor?.name)) ??
+              meetingUrlForTerm(course.term, course.meetUrl ?? null),
             calendarEventUrl: calendarEventUrlForSession(session),
           };
         }),
@@ -12708,11 +12849,14 @@ async function dashboardDataForUser(user: AppUser) {
           : preparation
             ? "Take quiz"
             : "Open session plan";
+      const tutor = await sessionTutorShapeCached(session);
       return {
         ...dashboardSessionShape(
           session,
-          await sessionTutorShapeCached(session),
-          meetingUrls.get(session.courseId) ?? null,
+          tutor,
+          (await pinnedNeelNikaMeet(session, tutor?.name)) ??
+            meetingUrls.get(session.courseId) ??
+            null,
           user.role === "tutor" || user.role === "administrator"
             ? session.clientUserId
               ? await studentShapeCached(session.clientUserId)
@@ -12921,10 +13065,13 @@ async function dashboardDataForUser(user: AppUser) {
             const student = session.clientUserId
               ? await studentShapeCached(session.clientUserId)
               : null;
+            const tutor = await sessionTutorShapeCached(session);
             return dashboardSessionShape(
               session,
-              await sessionTutorShapeCached(session),
-              meetingUrls.get(session.courseId) ?? null,
+              tutor,
+              (await pinnedNeelNikaMeet(session, tutor?.name)) ??
+                meetingUrls.get(session.courseId) ??
+                null,
               user.role === "tutor" || user.role === "administrator"
                 ? student
                 : undefined,
@@ -13332,7 +13479,9 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : session.title,
       ),
       tutor: sessionTutor,
-      meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
+      meetingUrl:
+        (await pinnedNeelNikaMeet(session, sessionTutor?.name)) ??
+        meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
       calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"

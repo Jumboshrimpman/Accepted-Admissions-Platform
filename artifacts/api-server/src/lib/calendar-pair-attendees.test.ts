@@ -180,7 +180,7 @@ test("create and reschedule keep their existing sendUpdates and still invite adm
   const createStart = platformSource.indexOf('router.post("/booking/sessions"');
   const cancelStart = platformSource.indexOf('router.post("/booking/sessions/:sessionId/cancel"');
   const createSlice = platformSource.slice(createStart, cancelStart);
-  assert.match(createSlice, /bookingCalendarEventPayload\(/);
+  assert.match(createSlice, /neelNikaCalendarEvent\(/);
   assert.match(createSlice, /googleCalendarSendUpdatesForSubjects\(/);
   assert.doesNotMatch(createSlice, /patchGoogleEventAttendees/);
   assert.doesNotMatch(createSlice, /sendUpdates:\s*"none"/);
@@ -189,7 +189,7 @@ test("create and reschedule keep their existing sendUpdates and still invite adm
   );
   const rescheduleEnd = platformSource.indexOf("async function financialSummary");
   const rescheduleSlice = platformSource.slice(rescheduleStart, rescheduleEnd);
-  assert.match(rescheduleSlice, /bookingCalendarEventPayload\(/);
+  assert.match(rescheduleSlice, /neelNikaCalendarEvent\(/);
   assert.match(
     rescheduleSlice,
     /googleCalendarSendUpdatesForSubjects\(session\.subject, \{\s*tutorEmail: profile\.email,\s*\}\)/,
@@ -202,12 +202,10 @@ test("create and reschedule keep their existing sendUpdates and still invite adm
   );
   assert.match(
     platformSource,
-    /createGoogleEvent\([\s\S]*?bookingCalendarEventPayload\(/,
+    /function neelNikaCalendarEvent[\s\S]*?bookingCalendarEventPayload\(/,
   );
-  assert.match(
-    platformSource,
-    /updateGoogleEvent\([\s\S]*?bookingCalendarEventPayload\(/,
-  );
+  assert.match(platformSource, /createGoogleEvent\(/);
+  assert.match(platformSource, /updateGoogleEvent\(/);
   assert.equal(indexSource.includes("backfillAdminCalendarAttendees"), false);
   assert.equal(indexSource.includes("/admin/calendar-attendees/backfill"), false);
 });

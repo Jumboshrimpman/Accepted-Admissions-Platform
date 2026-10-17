@@ -480,6 +480,21 @@ test("College Consulting invites the student, Nika, and admin on her calendar", 
     inviteTutor: true,
   });
   assert.equal(event.location, "https://meet.google.com/rih-iayt-okb");
+  assert.equal(event.description, "Accepted Admissions tutoring session");
+  const pinned = bookingCalendarEventPayload({
+    title: "Neel’s College Consulting Session with Nika",
+    start: new Date("2026-10-20T01:00:00.000Z"),
+    durationMinutes: 60,
+    timeZone: "America/New_York",
+    attendeeEmail: "ndharni300@gmail.com",
+    location: "https://meet.google.com/rih-iayt-okb",
+    description: "https://meet.google.com/rih-iayt-okb",
+    student: { email: "ndharni300@gmail.com" },
+    tutor: { email: "nika.raiffe@gmail.com" },
+    inviteTutor: true,
+  });
+  assert.equal(pinned.description, "https://meet.google.com/rih-iayt-okb");
+  assert.equal(pinned.location, "https://meet.google.com/rih-iayt-okb");
   assert.deepEqual(
     event.attendees.map((attendee) => attendee.email),
     ["ndharni300@gmail.com", "nika.raiffe@gmail.com", "admin@acceptedadmissions.org"],
@@ -540,6 +555,8 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const slice = platformSource.slice(start, end);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*adminWriter\.appCalendarId/);
   assert.match(slice, /conferenceData: adminCalendarMeetConference\(created\.id\)/);
+  assert.match(slice, /createGoogleEventWithMeetFallback\(\s*token,\s*adminWriter\.appCalendarId/);
+  assert.match(slice, /neelNikaCalendarEvent\(\{[\s\S]*?clientUserId: req\.appUser!\.id/);
   assert.match(slice, /createGoogleEvent\(\s*token,\s*appCalendarId/);
   const reconnectBeforeDebit = slice.indexOf(
     "adminCalendarForFixedWindowBooking(access, fixedWindow, tutor)",
