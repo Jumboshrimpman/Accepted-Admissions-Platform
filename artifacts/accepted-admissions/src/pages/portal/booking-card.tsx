@@ -159,7 +159,7 @@ function BookingTutorOption({
                 ? "Calendar connected — times below"
                 : tutor.bookable === false
                   ? "Not bookable until Google Calendar is connected"
-                  : "Calendar connection needed before times appear"}
+                  : "Times are listed below"}
             </p>
           </div>
         </div>
@@ -694,7 +694,7 @@ export function BookingCard({
                 </div>
                 {availabilityQuery.isLoading ? (
                   <p className="mt-4 text-sm text-muted-foreground">Checking live availability…</p>
-                ) : availabilityQuery.data?.providerStatus === "disconnected" ? (
+                ) : availabilityQuery.data?.providerStatus === "disconnected" && availableSlots.length === 0 ? (
                   <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                     <Link2 className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>This tutor needs to reconnect Google Calendar before times can be displayed.</span>

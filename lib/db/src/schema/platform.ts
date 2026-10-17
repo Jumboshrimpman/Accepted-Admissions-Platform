@@ -837,7 +837,11 @@ export const availabilityRulesTable = pgTable("availability_rules", {
   tutorProfileId: uuid("tutor_profile_id").notNull().references(() => tutorProfilesTable.id),
   timezone: text("timezone").notNull().default("America/New_York"),
   weeklyHours: jsonb("weekly_hours").$type<Record<string, unknown>>().notNull().default({}),
-  bookingNoticeMinutes: numeric("booking_notice_minutes", { mode: "number" }).notNull().default(1440),
+  dateHours: jsonb("date_hours")
+    .$type<Record<string, { start: string; end: string }[]>>()
+    .notNull()
+    .default({}),
+  bookingNoticeMinutes: numeric("booking_notice_minutes", { mode: "number" }).notNull().default(240),
   bufferMinutes: numeric("buffer_minutes", { mode: "number" }).notNull().default(15),
   blackoutDates: jsonb("blackout_dates").$type<string[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

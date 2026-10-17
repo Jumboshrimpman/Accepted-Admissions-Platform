@@ -68,11 +68,33 @@ test("event writes notify attendees the same way create does", () => {
   );
 });
 
-test("College Consulting calendar writes do not email attendees", () => {
+test("only Nika's College Consulting calendar writes email attendees", () => {
   assert.equal(googleCalendarSendUpdatesForSubjects("College Consulting"), "none");
   assert.equal(googleCalendarSendUpdatesForSubjects("SAT", "College Consulting"), "none");
   assert.equal(googleCalendarSendUpdatesForSubjects("SAT"), "all");
   assert.equal(googleCalendarSendUpdatesForSubjects(null), "all");
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("College Consulting", {
+      tutorEmail: "nika.raiffe@gmail.com",
+    }),
+    "all",
+  );
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("College Consulting", {
+      tutorEmail: "samakubba@icloud.com",
+    }),
+    "none",
+  );
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("College Consulting", {
+      tutorEmail: "xaver.rmz6@gmail.com",
+    }),
+    "none",
+  );
+  assert.equal(
+    googleCalendarSendUpdatesForSubjects("SAT", { tutorEmail: "nika.raiffe@gmail.com" }),
+    "all",
+  );
   assert.match(
     googleCalendarEventWritePath("primary", undefined, "none"),
     /\/calendars\/primary\/events\?sendUpdates=none$/,
@@ -125,7 +147,7 @@ test("OAuth state is signed and scoped to the tutor profile, return path, and ca
 });
 
 test("admin reconnect state is signed to one tutor and expires", () => {
-  const now = Date.parse("2026-10-16T10:39:00.000Z");
+  const now = Date.now();
   const state = createCalendarOAuthState("tutor-xavier", "user-xavier", {
     purpose: "admin_reconnect",
     expiresInMs: ADMIN_CALENDAR_RECONNECT_TTL_MS,

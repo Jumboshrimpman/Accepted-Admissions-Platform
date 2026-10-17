@@ -190,7 +190,10 @@ test("create and reschedule keep their existing sendUpdates and still invite adm
   const rescheduleEnd = platformSource.indexOf("async function financialSummary");
   const rescheduleSlice = platformSource.slice(rescheduleStart, rescheduleEnd);
   assert.match(rescheduleSlice, /bookingCalendarEventPayload\(/);
-  assert.match(rescheduleSlice, /googleCalendarSendUpdatesForSubjects\(session\.subject\)/);
+  assert.match(
+    rescheduleSlice,
+    /googleCalendarSendUpdatesForSubjects\(session\.subject, \{\s*tutorEmail: profile\.email,\s*\}\)/,
+  );
   assert.match(rescheduleSlice, /inviteAt\(previousStart, session\.timezone\)/);
   assert.doesNotMatch(rescheduleSlice, /patchGoogleEventAttendees/);
   assert.match(

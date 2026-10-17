@@ -11,6 +11,8 @@ import {
   resolvePublicRequestOrigin,
   type ForwardedOriginInput,
 } from "./public-origin.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isNikaCollegeConsultingInvite } from "./booking.ts";
 
 export { resolvePublicRequestOrigin };
 
@@ -1467,10 +1469,17 @@ export async function listGoogleBusyWindows(
 
 export type GoogleCalendarSendUpdates = "all" | "none";
 
-/** College Consulting writes stay silent. SAT and every other subject still notify attendees. */
+/** SAT still mails attendees. College Consulting stays silent except Nika's bookings. */
 export function googleCalendarSendUpdatesForSubjects(
-  ...subjects: Array<string | null | undefined>
+  ...inputs: Array<string | null | undefined | { tutorEmail?: string | null }>
 ): GoogleCalendarSendUpdates {
+  const subjects: Array<string | null | undefined> = [];
+  let tutorEmail: string | null | undefined;
+  for (const input of inputs) {
+    if (input && typeof input === "object") tutorEmail = input.tutorEmail;
+    else subjects.push(input);
+  }
+  if (isNikaCollegeConsultingInvite(subjects, tutorEmail)) return "all";
   const consulting = subjects.some(
     (subject) => subject?.trim().toLowerCase() === "college consulting",
   );

@@ -13,7 +13,11 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { envRoleCategoriesForIdentity } from "./access-config.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { XAVIER_BOOKING_WEEKLY_HOURS } from "./booking.ts";
+import {
+  DEFAULT_BOOKING_NOTICE_MINUTES,
+  NIKA_BOOKING_NOTICE_MINUTES,
+  XAVIER_BOOKING_WEEKLY_HOURS,
+} from "./booking.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   ACCEPTED_SAT_CATALOG,
@@ -254,7 +258,11 @@ async function ensureCourse(tx: ProvisionTx): Promise<void> {
     );
 }
 
-async function ensureWeeklyHours(tx: ProvisionTx, tutorProfileId: string): Promise<void> {
+async function ensureWeeklyHours(
+  tx: ProvisionTx,
+  tutorProfileId: string,
+  bookingNoticeMinutes = DEFAULT_BOOKING_NOTICE_MINUTES,
+): Promise<void> {
   const [rule] = await tx
     .select({ id: availabilityRulesTable.id })
     .from(availabilityRulesTable)
@@ -265,7 +273,7 @@ async function ensureWeeklyHours(tx: ProvisionTx, tutorProfileId: string): Promi
     tutorProfileId,
     timezone: "America/New_York",
     weeklyHours: XAVIER_BOOKING_WEEKLY_HOURS,
-    bookingNoticeMinutes: 1440,
+    bookingNoticeMinutes,
     bufferMinutes: 15,
     blackoutDates: [],
   });
@@ -358,7 +366,7 @@ async function ensureNika(tx: ProvisionTx): Promise<{
       })
       .where(eq(tutorProfilesTable.id, profile.id));
   }
-  await ensureWeeklyHours(tx, profile.id);
+  await ensureWeeklyHours(tx, profile.id, NIKA_BOOKING_NOTICE_MINUTES);
   const resolvedClerk = isProductionClerkUserId(nikaUser.clerkUserId) ? nikaUser.clerkUserId : clerkUserId;
   return {
     clerkUserId: resolvedClerk,
