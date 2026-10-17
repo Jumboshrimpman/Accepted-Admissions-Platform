@@ -190,6 +190,7 @@ import {
 import { aliasLoginAccessOutcome, aliasSessionRole, requireAppRole } from "../lib/portal-login-aliases";
 import { sessionClaimsSharedFallMeet, upcomingSharedMeetOverlapPairs } from "../lib/shared-meet-conflict";
 import {
+  BOOKABLE_PORTAL_DURATIONS,
   bookingCalendarEventPayload,
   bookingNoticeMinutesForTutor,
   calendarInviteIncludesTutor,
@@ -5103,6 +5104,24 @@ function consultingTutorAllowed(tutor: {
   );
 }
 
+/** Students can be offered this tutor. Nika is included even though only some clients may book her. */
+function tutorOfferedToClients(tutor: {
+  name: string;
+  email: string;
+  userId: string | null;
+  active: boolean;
+  bookingEligible: boolean;
+}): boolean {
+  const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
+    tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
+  );
+  return (
+    tutor.active &&
+    tutor.bookingEligible &&
+    (onSharedRoster || tutor.name === NIKA_NAME || consultingTutorAllowed(tutor))
+  );
+}
+
 async function bookingTutor(
   tutorProfileId: string,
   allowExistingSessionTutor = false,
@@ -5157,6 +5176,108 @@ async function slotsForTutor(
   bookerUserId?: string,
   ignoreHoldPaymentId?: string,
 ) {
+  const context = await loadTutorSlotContext(
+    tutorProfileId,
+    from,
+    to,
+    excludeSessionId,
+    allowExistingSessionTutor,
+    bookerUserId,
+    ignoreHoldPaymentId,
+  );
+  return projectTutorSlots(context, from, to, durationMinutes);
+}
+
+/**
+ * Direct checkout must match an open grid slot before a hold or charge.
+ * An active hold is left for claimBookingSlotHold, which answers SLOT_HELD.
+ */
+async function assertDirectCheckoutSlotOpen(
+  userId: string,
+  intent: { tutorProfileId: string; startTime: string; durationMinutes: number },
+): Promise<void> {
+  const start = new Date(intent.startTime);
+  const end = new Date(start.getTime() + intent.durationMinutes * 60_000);
+  const { access, slots, rule } = await slotsForTutor(
+    intent.tutorProfileId,
+    new Date(start.getTime() - 1),
+    new Date(end.getTime() + 1),
+    intent.durationMinutes,
+    undefined,
+    false,
+    userId,
+  );
+  const fixedWindow =
+    slots.includes(start.toISOString()) &&
+    fixedDateHoursOpen(
+      (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+      rule.timezone,
+      start,
+    );
+  if (!slots.includes(start.toISOString())) {
+    const held = await activeSlotHoldsOverlapping(db, {
+      tutorProfileId: intent.tutorProfileId,
+      start,
+      end,
+    });
+    if (held.length > 0) return;
+    throw new BookingError(
+      409,
+      "SLOT_UNAVAILABLE",
+      "That time is no longer available. Choose another slot.",
+    );
+  }
+  if (!access && !fixedWindow) {
+    throw new BookingError(
+      409,
+      "CALENDAR_DISCONNECTED",
+      "This tutor's calendar is disconnected.",
+    );
+  }
+  requireAppCalendarForBooking(access, fixedWindow);
+  return;
+}
+
+type SessionWriteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function rejectHeldTutorSlot(
+  tx: SessionWriteTx,
+  tutorUserId: string | null | undefined,
+  start: Date,
+  end: Date,
+): Promise<void> {
+  if (!tutorUserId) return;
+  const [profile] = await tx
+    .select({ id: tutorProfilesTable.id })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, tutorUserId))
+    .limit(1);
+  if (!profile) return;
+  await assertSlotNotHeld(tx, {
+    tutorProfileId: profile.id,
+    start,
+    end,
+  });
+}
+
+type TutorSlotContext = {
+  tutor: Awaited<ReturnType<typeof bookingTutor>>["tutor"];
+  rule: Awaited<ReturnType<typeof bookingTutor>>["rule"];
+  access: Awaited<ReturnType<typeof calendarAccess>>;
+  availabilityRule: AvailabilityRule;
+  busyWindows: BusyWindow[];
+  bookedWindows: BusyWindow[];
+};
+
+async function loadTutorSlotContext(
+  tutorProfileId: string,
+  from: Date,
+  to: Date,
+  excludeSessionId?: string,
+  allowExistingSessionTutor = false,
+  bookerUserId?: string,
+  ignoreHoldPaymentId?: string,
+): Promise<TutorSlotContext> {
   if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
     throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
   }
@@ -5249,95 +5370,34 @@ async function slotsForTutor(
     bufferMinutes: rule.bufferMinutes,
     blackoutDates: rule.blackoutDates,
   };
+  return { tutor, rule, access, availabilityRule, busyWindows, bookedWindows };
+}
+
+function projectTutorSlots(
+  context: TutorSlotContext,
+  from: Date,
+  to: Date,
+  durationMinutes: number,
+) {
   const generated = generateAvailableSlots(
-    availabilityRule,
+    context.availabilityRule,
     from,
     to,
     durationMinutes,
-    busyWindows,
-    bookedWindows,
+    context.busyWindows,
+    context.bookedWindows,
   );
-  const slots = access
+  const slots = context.access
     ? generated
-    : generated.filter((slot) => fixedDateHoursOpen(availabilityRule.dateHours, availabilityRule.timezone, new Date(slot)));
+    : generated.filter((slot) =>
+        fixedDateHoursOpen(context.availabilityRule.dateHours, context.availabilityRule.timezone, new Date(slot)),
+      );
   return {
-    tutor,
-    rule,
-    access,
+    tutor: context.tutor,
+    rule: context.rule,
+    access: context.access,
     slots,
   };
-}
-
-/**
- * Direct checkout must match an open grid slot before a hold or charge.
- * An active hold is left for claimBookingSlotHold, which answers SLOT_HELD.
- */
-async function assertDirectCheckoutSlotOpen(
-  userId: string,
-  intent: { tutorProfileId: string; startTime: string; durationMinutes: number },
-): Promise<void> {
-  const start = new Date(intent.startTime);
-  const end = new Date(start.getTime() + intent.durationMinutes * 60_000);
-  const { access, slots, rule } = await slotsForTutor(
-    intent.tutorProfileId,
-    new Date(start.getTime() - 1),
-    new Date(end.getTime() + 1),
-    intent.durationMinutes,
-    undefined,
-    false,
-    userId,
-  );
-  const fixedWindow =
-    slots.includes(start.toISOString()) &&
-    fixedDateHoursOpen(
-      (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
-      rule.timezone,
-      start,
-    );
-  if (!slots.includes(start.toISOString())) {
-    const held = await activeSlotHoldsOverlapping(db, {
-      tutorProfileId: intent.tutorProfileId,
-      start,
-      end,
-    });
-    if (held.length > 0) return;
-    throw new BookingError(
-      409,
-      "SLOT_UNAVAILABLE",
-      "That time is no longer available. Choose another slot.",
-    );
-  }
-  if (!access && !fixedWindow) {
-    throw new BookingError(
-      409,
-      "CALENDAR_DISCONNECTED",
-      "This tutor's calendar is disconnected.",
-    );
-  }
-  requireAppCalendarForBooking(access, fixedWindow);
-  return;
-}
-
-type SessionWriteTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-async function rejectHeldTutorSlot(
-  tx: SessionWriteTx,
-  tutorUserId: string | null | undefined,
-  start: Date,
-  end: Date,
-): Promise<void> {
-  if (!tutorUserId) return;
-  const [profile] = await tx
-    .select({ id: tutorProfilesTable.id })
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.userId, tutorUserId))
-    .limit(1);
-  if (!profile) return;
-  await assertSlotNotHeld(tx, {
-    tutorProfileId: profile.id,
-    start,
-    end,
-  });
 }
 
 async function studentCollegeConsultingCourse(userId: string): Promise<{ id: string; subject: string }> {
@@ -6221,6 +6281,87 @@ router.get(
       active: profile.active,
       bookingEligible: profile.bookingEligible,
     });
+  },
+);
+
+const TUTOR_OFFERED_AVAILABILITY_HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
+
+router.get(
+  "/tutor/offered-availability",
+  requireAppUser,
+  ensureRole(["tutor", "administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    // Own profile only. A tutorProfileId query cannot select another tutor.
+    const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, false);
+    if (!profile) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const from = new Date();
+    const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
+    try {
+      const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
+        profile.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
+      );
+      // The client gates who may book this tutor. Slot math does not change.
+      // Nika and consulting-only tutors are limited to approved clients.
+      const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
+      const availabilityDependsOnClient = profile.name === NIKA_NAME || consultingOnly;
+      const offeredToClients = tutorOfferedToClients(profile);
+      if (!offeredToClients) {
+        const [rule] = await db
+          .select({ timezone: availabilityRulesTable.timezone })
+          .from(availabilityRulesTable)
+          .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+          .limit(1);
+        res.json({
+          from: from.toISOString(),
+          to: to.toISOString(),
+          timezone: rule?.timezone ?? "UTC",
+          providerStatus: "disconnected",
+          offeredToClients: false,
+          availabilityDependsOnClient,
+          lengths: BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) => ({
+            durationMinutes,
+            slots: [],
+          })),
+        });
+        return;
+      }
+      // allowExistingSessionTutor keeps the slot math for this tutor's own
+      // portal. offeredToClients above is the active and roster gate.
+      // One free/busy read is reused for 60, 90, and 120 minute lengths.
+      const context = await loadTutorSlotContext(profile.id, from, to, undefined, true);
+      const results = BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) =>
+        projectTutorSlots(context, from, to, durationMinutes),
+      );
+      const first = results[0];
+      // A live grant with a blank app calendar lists slots to students, then
+      // booking returns 409. Hide those unbookable times and ask for reconnect.
+      // A fully disconnected grant keeps the fixed-window slots students can book.
+      const needsReconnect = results.some(
+        (result) => result.access && !result.access.connection.appCalendarId?.trim(),
+      );
+      const connected = results.every((result) => result.access);
+      res.json({
+        from: from.toISOString(),
+        to: to.toISOString(),
+        timezone: first?.rule.timezone ?? "UTC",
+        providerStatus: needsReconnect
+          ? "reconnect"
+          : connected
+            ? "connected"
+            : "disconnected",
+        offeredToClients: true,
+        availabilityDependsOnClient,
+        lengths: results.map((result, index) => ({
+          durationMinutes: BOOKABLE_PORTAL_DURATIONS[index],
+          slots: needsReconnect ? [] : result.slots,
+        })),
+      });
+    } catch (error) {
+      sendBookingError(error, res);
+    }
   },
 );
 
