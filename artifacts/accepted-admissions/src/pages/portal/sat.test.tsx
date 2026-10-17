@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     data: {
       credits: {
         selfServeSatBooking: true,
+        selfServeCollegeConsulting: false,
         twelveSessionPlan: false,
         remainingHours: 0,
         purchasedHours: 0,
@@ -97,6 +98,7 @@ const defaultUpcomingSessions = mocks.dashboard.data.upcomingSessions;
 afterEach(() => {
   cleanup();
   mocks.dashboard.data.credits.selfServeSatBooking = true;
+  mocks.dashboard.data.credits.selfServeCollegeConsulting = false;
   mocks.dashboard.data.credits.twelveSessionPlan = false;
   mocks.dashboard.data.credits.remainingHours = 0;
   mocks.dashboard.data.credits.purchasedHours = 0;
@@ -370,5 +372,62 @@ describe("portal SAT book/pay", () => {
       expect(banner.textContent).toContain(PAYMENT_GRANTED_TITLE);
       expect(banner.textContent).toMatch(/reserved on the booked session/i);
     });
+  });
+
+  test("Neel sees College Consulting and no SAT booking copy", async () => {
+    mocks.dashboard.data.credits.selfServeSatBooking = false;
+    mocks.dashboard.data.credits.selfServeCollegeConsulting = true;
+    mocks.dashboard.data.user = {
+      role: "student",
+      id: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+      displayName: "Neel Dharni",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/api/credits")) {
+          return { ok: true, json: async () => ({ remainingHours: 0, purchasedHours: 0, usedHours: 0 }) };
+        }
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "xavier-hour",
+              slug: "college-consulting-xavier-hour",
+              name: "College Consulting hour with Xavier Morales",
+              description:
+                "One prepaid 60-minute College Consulting credit with Xavier Morales at $200/hour for Neel Dharni.",
+              durationHours: 1,
+              totalPriceCents: 20000,
+              effectiveHourlyRateCents: 20000,
+            },
+            {
+              id: "eunice-90",
+              slug: "college-consulting-eunice-90",
+              name: "College Consulting 1.5 hours with Eunice",
+              description: "One prepaid 90-minute College Consulting credit with Eunice at $130/hour.",
+              durationHours: 1.5,
+              totalPriceCents: 19500,
+              effectiveHourlyRateCents: 13000,
+            },
+          ],
+        };
+      }),
+    );
+    render(<PortalSat />);
+    expect(screen.getByRole("heading", { name: "College Consulting" })).toBeTruthy();
+    expect(screen.getByText("Upcoming College Consulting sessions")).toBeTruthy();
+    expect(screen.getByText("No upcoming College Consulting sessions are on this account yet.")).toBeTruthy();
+    expect(screen.getByText(/Xavier is \$200\/hour/)).toBeTruthy();
+    expect(screen.getByText(/Eunice are \$130\/hour/)).toBeTruthy();
+    expect(screen.getByText("Book a College Consulting session")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "SAT book and pay" })).toBeNull();
+    expect(screen.queryByText("Upcoming SAT sessions")).toBeNull();
+    expect(screen.queryByText("No upcoming SAT sessions are on this account yet.")).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByText("Michelle’s SAT Session with Xavier")).toBeNull();
+    expect(await screen.findByText("College Consulting hour with Xavier")).toBeTruthy();
+    expect(screen.getByText("$195")).toBeTruthy();
   });
 });

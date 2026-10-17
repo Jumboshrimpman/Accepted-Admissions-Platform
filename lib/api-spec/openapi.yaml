@@ -3126,7 +3126,7 @@ components:
       type: object
       required: [tutorKey, id, name, title, tagline, biography, hourlyRateCents, prepaidHours, calendarConnected]
       properties:
-        tutorKey: { type: string, enum: [nika, victoria, xavier] }
+        tutorKey: { type: string, enum: [nika, victoria, xavier, eunice] }
         id: { type: string }
         name: { type: string }
         title: { type: string }

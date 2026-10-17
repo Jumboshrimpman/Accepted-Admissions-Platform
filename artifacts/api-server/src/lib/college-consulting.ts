@@ -2,12 +2,17 @@ import { createHash } from "node:crypto";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { SAT_HOURLY_RATE_CENTS, isAcceptedSatCatalogProduct } from "./sat-catalog.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity.ts";
+import {
+  CANONICAL_XAVIER_EMAIL,
+  CANONICAL_XAVIER_NAME,
+  isRetiredXavierEmail,
+} from "./xavier-identity.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { remainingCreditHoursForProducts } from "./credit-hours.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   APPROVED_PUBLIC_TEAM_PORTRAITS,
+  EUNICE_PUBLIC_BIOGRAPHY,
   NIKA_BOOKING_TAGLINE,
   XAVIER_BOOKING_TAGLINE,
   XAVIER_PUBLIC_BIOGRAPHY,
@@ -62,11 +67,17 @@ export const VICTORIA_PREVIOUS_BIOGRAPHY =
 export const COLLEGE_CONSULTING_NIKA_SLUG = "college-consulting-nika-hour";
 export const COLLEGE_CONSULTING_XAVIER_SLUG = "college-consulting-xavier-hour";
 export const COLLEGE_CONSULTING_VICTORIA_SLUG = "college-consulting-victoria-hour";
+export const COLLEGE_CONSULTING_EUNICE_SLUG = "college-consulting-eunice-hour";
+
+export const EUNICE_CONSULTING_NAME = "Eunice Chon";
+export const EUNICE_CONSULTING_EMAIL = "eunice_chon@berkeley.edu";
 
 /** Neel's College Consulting rate. Michelle's SAT hours with Xavier stay on the SAT catalog. */
 export const NIKA_HOURLY_RATE_CENTS = 10_000;
 export const XAVIER_NEEL_HOURLY_RATE_CENTS = 20_000;
 export const VICTORIA_HOURLY_RATE_CENTS = SAT_HOURLY_RATE_CENTS;
+/** Same hourly rate as Eunice's SAT hours. 1.5h is $195 and 2h is $260. */
+export const EUNICE_HOURLY_RATE_CENTS = SAT_HOURLY_RATE_CENTS;
 
 export const COLLEGE_CONSULTING_PRODUCTS = [
   {
@@ -95,6 +106,14 @@ export const COLLEGE_CONSULTING_PRODUCTS = [
     description:
       "One prepaid 60-minute College Consulting credit with Victoria at $130/hour. Booking opens after her Google Calendar is connected.",
     hourlyRateCents: VICTORIA_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "eunice",
+    slug: COLLEGE_CONSULTING_EUNICE_SLUG,
+    tutorName: EUNICE_CONSULTING_NAME,
+    name: "College Consulting hour with Eunice",
+    description: "One prepaid 60-minute College Consulting credit with Eunice at $130/hour.",
+    hourlyRateCents: EUNICE_HOURLY_RATE_CENTS,
   },
 ] as const;
 
@@ -165,6 +184,24 @@ export const COLLEGE_CONSULTING_LENGTH_PRODUCTS: ReadonlyArray<{
     durationHours: 2,
     totalPriceCents: XAVIER_NEEL_HOURLY_RATE_CENTS * 2,
     hourlyRateCents: XAVIER_NEEL_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "eunice",
+    slug: "college-consulting-eunice-90",
+    name: "College Consulting 1.5 hours with Eunice",
+    description: "One prepaid 90-minute College Consulting credit with Eunice at $130/hour.",
+    durationHours: 1.5,
+    totalPriceCents: Math.round(EUNICE_HOURLY_RATE_CENTS * 1.5),
+    hourlyRateCents: EUNICE_HOURLY_RATE_CENTS,
+  },
+  {
+    tutorKey: "eunice",
+    slug: "college-consulting-eunice-120",
+    name: "College Consulting 2 hours with Eunice",
+    description: "One prepaid 120-minute College Consulting credit with Eunice at $130/hour.",
+    durationHours: 2,
+    totalPriceCents: EUNICE_HOURLY_RATE_CENTS * 2,
+    hourlyRateCents: EUNICE_HOURLY_RATE_CENTS,
   },
 ];
 
@@ -285,8 +322,13 @@ export function collegeConsultingTutorKeyForProfile(profile: {
   userId?: string | null;
 }): CollegeConsultingTutorKey | null {
   const email = normalizeConsultingEmail(profile.email);
+  const name = profile.name?.trim() ?? "";
   if (email === NIKA_CONSULTING_EMAIL) return "nika";
   if (email === normalizeConsultingEmail(CANONICAL_XAVIER_EMAIL)) return "xavier";
+  if (name === CANONICAL_XAVIER_NAME && !isRetiredXavierEmail(email)) return "xavier";
+  if (email === normalizeConsultingEmail(EUNICE_CONSULTING_EMAIL) || name === EUNICE_CONSULTING_NAME) {
+    return "eunice";
+  }
   if (profile.userId === VICTORIA_USER_ID) return "victoria";
   if (email === VICTORIA_PLACEHOLDER_EMAIL || email === VICTORIA_INTENDED_EMAIL) {
     return "victoria";
@@ -468,6 +510,7 @@ export function consultingRateCentsForTutorKey(
 export function consultingTutorBiography(tutorKey: CollegeConsultingTutorKey): string {
   if (tutorKey === "nika") return NIKA_CONSULTING_BIOGRAPHY;
   if (tutorKey === "victoria") return VICTORIA_BIOGRAPHY;
+  if (tutorKey === "eunice") return EUNICE_PUBLIC_BIOGRAPHY;
   return XAVIER_PUBLIC_BIOGRAPHY;
 }
 
@@ -480,14 +523,16 @@ export function consultingTutorPhotoUrl(
   const stored = storedPhotoUrl?.trim() ?? "";
   if (stored) return stored;
   if (tutorKey === "victoria") return VICTORIA_PHOTO_URL;
+  if (tutorKey === "eunice") return APPROVED_PUBLIC_TEAM_PORTRAITS["Eunice Chon"];
   return APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"];
 }
 
-/** Credits-page label. Nika and Victoria are first name only. Xavier stays his full name. */
+/** Credits-page label. Consulting cards use the first name. */
 export function consultingTutorDisplayName(tutorKey: CollegeConsultingTutorKey): string {
   if (tutorKey === "nika") return "Nika";
   if (tutorKey === "victoria") return "Victoria";
-  return "Xavier Morales";
+  if (tutorKey === "eunice") return "Eunice";
+  return "Xavier";
 }
 
 export type ConsultingCatalogAlignment = {
@@ -585,7 +630,12 @@ export type ConsultingPreviewTutor = {
   calendarConnected: boolean;
 };
 
-const CONSULTING_PREVIEW_ORDER: CollegeConsultingTutorKey[] = ["nika", "victoria", "xavier"];
+const CONSULTING_PREVIEW_ORDER: CollegeConsultingTutorKey[] = [
+  "nika",
+  "victoria",
+  "xavier",
+  "eunice",
+];
 
 const CONSULTING_PREVIEW_FALLBACKS: Record<
   CollegeConsultingTutorKey,
@@ -611,6 +661,13 @@ const CONSULTING_PREVIEW_FALLBACKS: Record<
     tagline: XAVIER_BOOKING_TAGLINE,
     biography: XAVIER_PUBLIC_BIOGRAPHY,
     photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
+  },
+  eunice: {
+    name: EUNICE_CONSULTING_NAME,
+    title: "College Consulting Tutor",
+    tagline: "",
+    biography: EUNICE_PUBLIC_BIOGRAPHY,
+    photoUrl: APPROVED_PUBLIC_TEAM_PORTRAITS["Eunice Chon"],
   },
 };
 

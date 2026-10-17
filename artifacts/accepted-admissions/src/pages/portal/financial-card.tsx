@@ -24,12 +24,14 @@ export function FinancialCard({
   previewOffer,
   previewOffers,
   adminPreview = false,
+  collegeConsulting = false,
   offPlatformBilling = false,
 }: {
   previewData?: FinancialSummary;
   previewOffer?: AdminClientPreviewOffer;
   previewOffers?: AdminClientPreviewOffer[];
   adminPreview?: boolean;
+  collegeConsulting?: boolean;
   offPlatformBilling?: boolean;
 }) {
   const query = useGetFinancials({
@@ -69,7 +71,13 @@ export function FinancialCard({
           <div>
             <CardTitle className="flex items-center gap-2">
                <WalletCards className="h-5 w-5 text-primary" />
-                {adminPreview ? "SAT session payment and receipts" : "Your SAT session payment"}
+                {collegeConsulting
+                  ? adminPreview
+                    ? "College Consulting payment and receipts"
+                    : "Your College Consulting payment"
+                  : adminPreview
+                    ? "SAT session payment and receipts"
+                    : "Your SAT session payment"}
             </CardTitle>
             <CardDescription className="mt-2">
               Stripe payment pages handle card details. This portal shows only verified account records.
@@ -105,7 +113,7 @@ export function FinancialCard({
         {adminPreview && (previewOffers?.length || previewOffer) && (
           <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              SAT purchase offers
+              {collegeConsulting ? "College Consulting purchase offers" : "SAT purchase offers"}
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {(previewOffers?.length ? previewOffers : previewOffer ? [previewOffer] : []).map((offer) => {
@@ -131,7 +139,10 @@ export function FinancialCard({
               })}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Checkout is unavailable in the administrator preview. A verified purchase provides prepaid hours with Eunice, Victoria, or Xavier at that client’s rate.
+              Checkout is unavailable in the administrator preview.{" "}
+              {collegeConsulting
+                ? "A verified purchase provides prepaid hours with Nika, Victoria, Xavier, or Eunice. Each tutor’s hours stay on that tutor."
+                : "A verified purchase provides prepaid hours with Eunice, Victoria, or Xavier at that client’s rate."}
             </p>
             <Button disabled variant="outline" className="mt-4 rounded-full">Checkout disabled in preview</Button>
           </div>
@@ -140,15 +151,21 @@ export function FinancialCard({
           remainingHours > 0 ? (
             <div className="flex flex-wrap gap-2">
               <Button asChild className="rounded-full">
-                <Link href="/portal/sat#booking-schedule">Book a SAT session</Link>
+                <Link href="/portal/sat#booking-schedule">
+                  {collegeConsulting ? "Book a College Consulting session" : "Book a SAT session"}
+                </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-full">
-                <Link href="/portal/sat">Buy more SAT credits</Link>
+                <Link href="/portal/sat">
+                  {collegeConsulting ? "Buy College Consulting hours" : "Buy more SAT credits"}
+                </Link>
               </Button>
             </div>
           ) : (
             <Button asChild className="rounded-full">
-              <Link href="/portal/sat">Purchase SAT session credits</Link>
+              <Link href="/portal/sat">
+                {collegeConsulting ? "Purchase College Consulting hours" : "Purchase SAT session credits"}
+              </Link>
             </Button>
           )
         )}

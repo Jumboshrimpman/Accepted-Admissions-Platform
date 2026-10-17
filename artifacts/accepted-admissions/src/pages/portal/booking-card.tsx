@@ -227,10 +227,12 @@ export function BookingCard({
   initialRemainingHours,
   initialPurchasedHours,
   fallbackSessions,
+  collegeConsulting: collegeConsultingAccount = false,
 }: {
   initialRemainingHours?: number | null;
   initialPurchasedHours?: number | null;
   fallbackSessions?: ListedSession[] | null;
+  collegeConsulting?: boolean;
 } = {}) {
   const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser();
@@ -548,7 +550,8 @@ export function BookingCard({
     );
   };
 
-  const collegeConsulting = tutors.some((tutor) => tutor.serviceName === "College Consulting");
+  const collegeConsulting =
+    collegeConsultingAccount || tutors.some((tutor) => tutor.serviceName === "College Consulting");
   const scopedHours = selectedTutor?.prepaidHours;
   const tutorScopedCredits = typeof scopedHours === "number";
   const selectedTutorHours = tutorScopedCredits ? scopedHours : remainingHours;

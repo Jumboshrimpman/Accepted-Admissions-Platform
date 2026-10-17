@@ -16,11 +16,13 @@ import { sharedMeetOverlapPairs } from "./shared-meet-conflict.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   COLLEGE_CONSULTING_LENGTH_PRODUCTS,
+  COLLEGE_CONSULTING_EUNICE_SLUG,
   COLLEGE_CONSULTING_NIKA_SLUG,
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SLUGS,
   COLLEGE_CONSULTING_VICTORIA_SLUG,
   COLLEGE_CONSULTING_XAVIER_SLUG,
+  EUNICE_HOURLY_RATE_CENTS,
   NEEL_DHARNI_USER_ID,
   NIKA_CONSULTING_BIOGRAPHY,
   NIKA_CONSULTING_PHOTO_URL,
@@ -38,6 +40,7 @@ import {
   XAVIER_NEEL_HOURLY_RATE_CENTS,
   checkoutAudienceForSlug,
   clientMayBuyConsultingProduct,
+  collegeConsultingTutorKeyForProfile,
   consultingPreviewTutors,
   consultingSlugIsSatCatalogProduct,
   consultingCatalogAlignment,
@@ -72,6 +75,7 @@ test("College Consulting prices are per tutor and SAT catalog stays $130", () =>
       [COLLEGE_CONSULTING_NIKA_SLUG, 10_000],
       [COLLEGE_CONSULTING_XAVIER_SLUG, 20_000],
       [COLLEGE_CONSULTING_VICTORIA_SLUG, 13_000],
+      [COLLEGE_CONSULTING_EUNICE_SLUG, 13_000],
     ],
   );
   const satSlugs = new Set<string>(ACCEPTED_SAT_CATALOG.map((product) => product.slug));
@@ -170,7 +174,9 @@ test("only Neel can buy consulting hours, and a Nika hour does not pay for Xavie
   assert.equal(credits.find((credit) => credit.tutorKey === "nika")?.hourlyRateCents, 10_000);
   assert.equal(credits.find((credit) => credit.tutorKey === "nika")?.name, "Nika");
   assert.equal(consultingTutorDisplayName("victoria"), "Victoria");
-  assert.equal(consultingTutorDisplayName("xavier"), "Xavier Morales");
+  assert.equal(consultingTutorDisplayName("xavier"), "Xavier");
+  assert.equal(consultingTutorDisplayName("eunice"), "Eunice");
+  assert.equal(EUNICE_HOURLY_RATE_CENTS, 13_000);
   assert.equal(credits.find((credit) => credit.tutorKey === "victoria")?.calendarConnected, false);
   assert.equal(credits.find((credit) => credit.tutorKey === "victoria")?.hourlyRateCents, 13_000);
 
@@ -183,6 +189,39 @@ test("only Neel can buy consulting hours, and a Nika hour does not pay for Xavie
   assert.equal(lengthBySlug.get("college-consulting-victoria-120")?.totalPriceCents, 26_000);
   assert.equal(lengthBySlug.get("college-consulting-xavier-90")?.totalPriceCents, 30_000);
   assert.equal(lengthBySlug.get("college-consulting-xavier-120")?.totalPriceCents, 40_000);
+  assert.equal(lengthBySlug.get("college-consulting-eunice-90")?.totalPriceCents, 19_500);
+  assert.equal(lengthBySlug.get("college-consulting-eunice-120")?.totalPriceCents, 26_000);
+  assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, "sat-eunice-60"), "forbidden");
+  assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, "sat-xavier-90"), "forbidden");
+  assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, COLLEGE_CONSULTING_EUNICE_SLUG), "consulting");
+  assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, "college-consulting-eunice-90"), "consulting");
+  assert.equal(checkoutAudienceForSlug("bf530aa6-faaa-43df-b3cf-140026f3313e", "sat-eunice-60"), "sat");
+  assert.equal(
+    checkoutAudienceForSlug("bf530aa6-faaa-43df-b3cf-140026f3313e", COLLEGE_CONSULTING_EUNICE_SLUG),
+    "forbidden",
+  );
+  assert.equal(
+    collegeConsultingTutorKeyForProfile({
+      name: "Xavier Morales",
+      email: "studio@example.com",
+    }),
+    "xavier",
+  );
+  assert.equal(
+    collegeConsultingTutorKeyForProfile({
+      name: "Xavier Morales",
+      email: "xsfam6@gmail.com",
+    }),
+    null,
+  );
+  assert.equal(
+    collegeConsultingTutorKeyForProfile({
+      name: "Eunice Chon",
+      email: "eunice_chon@berkeley.edu",
+    }),
+    "eunice",
+  );
+  assert.equal(consultingTutorBiography("eunice").includes("Chon"), false);
   assert.equal(
     consultingCatalogAlignment({
       slug: "college-consulting-nika-90",
@@ -622,6 +661,29 @@ test("provisioning and the migration do not send email or create Clerk users", a
   );
   assert.match(consultingList, /consultingTutorBiography/);
   assert.match(consultingList, /consultingTutorPhotoUrl/);
+  assert.match(consultingList, /subjects: \[COLLEGE_CONSULTING_SUBJECT\]/);
+  assert.match(consultingList, /bookable: connected/);
+  assert.match(platform, /SAT_BOOKING_CLOSED/);
+  assert.match(platform, /This account books College Consulting only/);
+  assert.match(provision, /EUNICE_CONSULTING_EMAIL/);
+  const rosterMigration = await readFile(
+    fileURLToPath(new URL("../../../../lib/db/drizzle/0064_neel_consulting_roster.sql", import.meta.url)),
+    "utf8",
+  );
+  assert.match(rosterMigration, /college-consulting-eunice-hour/);
+  assert.match(rosterMigration, /19500/);
+  assert.match(rosterMigration, /26000/);
+  assert.match(rosterMigration, /college-consulting-xavier-hour/);
+  assert.match(rosterMigration, /20000/);
+  assert.match(rosterMigration, /30000/);
+  assert.match(rosterMigration, /40000/);
+  assert.match(rosterMigration, /ON CONFLICT \("slug"\) DO NOTHING/);
+  assert.match(rosterMigration, /xavier\.rmz6@gmail\.com/);
+  assert.match(rosterMigration, /xsfam6@gmail\.com/);
+  assert.match(provision, /isRetiredXavierEmail\(profile\.email\)/);
+  assert.match(rosterMigration, /booking_notice_minutes" = 240/);
+  assert.equal(rosterMigration.includes("INSERT INTO \"users\""), false);
+  assert.equal(rosterMigration.includes("Nika Raiffe"), false);
   assert.match(index, /ensureCollegeConsultingProvision\(\)/);
   assert.match(provision, /const tutorEmails = \[CANONICAL_XAVIER_EMAIL\]/);
   assert.equal(/tutorEmails = \[[^\]]*NIKA_CONSULTING_EMAIL/.test(provision), false);
@@ -733,14 +795,17 @@ test("Neel admin preview lists Nika, Victoria, and Xavier without a live calenda
   });
   assert.deepEqual(
     tutors.map((tutor) => tutor.tutorKey),
-    ["nika", "victoria", "xavier"],
+    ["nika", "victoria", "xavier", "eunice"],
   );
   assert.equal(tutors[0]?.id, "preview-nika");
   assert.equal(tutors[0]?.prepaidHours, 2);
   assert.equal(tutors[0]?.hourlyRateCents, 10_000);
   assert.equal(tutors[0]?.name, "Nika");
   assert.equal(tutors[1]?.name, "Victoria");
-  assert.equal(tutors[2]?.name, "Xavier Morales");
+  assert.equal(tutors[2]?.name, "Xavier");
+  assert.equal(tutors[3]?.name, "Eunice");
+  assert.equal(tutors[3]?.hourlyRateCents, 13_000);
+  assert.equal(tutors[3]?.calendarConnected, false);
   assert.match(tutors[0]?.tagline ?? "", /Columbia/);
   assert.equal(tutors[1]?.id, "victoria-profile");
   assert.equal(tutors[1]?.tagline, VICTORIA_BOOKING_TAGLINE);

@@ -31,6 +31,9 @@ const CONSULTING: CheckoutCatalogProduct[] = [
   product("college-consulting-xavier-hour", 1, 20_000),
   product("college-consulting-xavier-90", 1.5, 30_000),
   product("college-consulting-xavier-120", 2, 40_000),
+  product("college-consulting-eunice-hour", 1, 13_000),
+  product("college-consulting-eunice-90", 1.5, 19_500),
+  product("college-consulting-eunice-120", 2, 26_000),
 ];
 
 const SHARED_SAT: CheckoutCatalogProduct[] = [
@@ -54,6 +57,9 @@ test("consulting checkout uses each tutor and length at the stored price", () =>
     ["xavier", 60, "college-consulting-xavier-hour", 20_000],
     ["xavier", 90, "college-consulting-xavier-90", 30_000],
     ["xavier", 120, "college-consulting-xavier-120", 40_000],
+    ["eunice", 60, "college-consulting-eunice-hour", 13_000],
+    ["eunice", 90, "college-consulting-eunice-90", 19_500],
+    ["eunice", 120, "college-consulting-eunice-120", 26_000],
   ] as const;
   for (const [tutorKey, minutes, slug, cents] of cases) {
     const selected = selectBookingCheckoutProduct({

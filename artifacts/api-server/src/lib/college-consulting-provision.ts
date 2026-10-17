@@ -33,6 +33,8 @@ import {
   COLLEGE_CONSULTING_PRODUCTS,
   COLLEGE_CONSULTING_SUBJECT,
   COLLEGE_CONSULTING_TERM,
+  EUNICE_CONSULTING_EMAIL,
+  EUNICE_CONSULTING_NAME,
   NEEL_DHARNI_USER_ID,
   NEEL_DISPLAY_NAME,
   NEEL_PLACEHOLDER_EMAIL,
@@ -66,6 +68,8 @@ import { SHARED_FALL_MEETING_URL } from "./session-schedule.ts";
 import {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
+  CANONICAL_XAVIER_NAME,
+  isRetiredXavierEmail,
 } from "./xavier-identity.ts";
 
 /**
@@ -256,6 +260,25 @@ async function ensureCourse(tx: ProvisionTx): Promise<void> {
         sql`${coursesTable.meetUrl} is null OR ${coursesTable.meetUrl} = ''`,
       ),
     );
+}
+
+/** Keep SAT subjects. Add College Consulting and leave an inactive profile alone. */
+async function ensureConsultingSubject(
+  tx: ProvisionTx,
+  profile: { id: string; subjects: string[] | null; bookingEligible: boolean; active: boolean },
+): Promise<void> {
+  if (!profile.active) return;
+  const subjects = [...new Set([...(profile.subjects ?? []), COLLEGE_CONSULTING_SUBJECT])];
+  const subjectsChanged = subjects.length !== (profile.subjects ?? []).length;
+  if (!subjectsChanged && profile.bookingEligible) return;
+  await tx
+    .update(tutorProfilesTable)
+    .set({
+      ...(subjectsChanged ? { subjects } : {}),
+      ...(profile.bookingEligible ? {} : { bookingEligible: true }),
+      updatedAt: new Date(),
+    })
+    .where(eq(tutorProfilesTable.id, profile.id));
 }
 
 async function ensureWeeklyHours(
@@ -729,6 +752,28 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
   await ensureCatalogProducts(tx);
   await ensureCourse(tx);
   await ensureBookingTaglines(tx);
+  const consultingRoster = await tx
+    .select({
+      id: tutorProfilesTable.id,
+      name: tutorProfilesTable.name,
+      email: tutorProfilesTable.email,
+      subjects: tutorProfilesTable.subjects,
+      bookingEligible: tutorProfilesTable.bookingEligible,
+      active: tutorProfilesTable.active,
+    })
+    .from(tutorProfilesTable)
+    .where(
+      or(
+        emailMatches(tutorProfilesTable.email, CANONICAL_XAVIER_EMAIL),
+        emailMatches(tutorProfilesTable.email, EUNICE_CONSULTING_EMAIL),
+        eq(tutorProfilesTable.name, CANONICAL_XAVIER_NAME),
+        eq(tutorProfilesTable.name, EUNICE_CONSULTING_NAME),
+      ),
+    );
+  for (const profile of consultingRoster) {
+    if (profile.name === CANONICAL_XAVIER_NAME && isRetiredXavierEmail(profile.email)) continue;
+    await ensureConsultingSubject(tx, profile);
+  }
   const nika = await ensureNika(tx);
   const neel = await ensurePlaceholderClient(tx, {
     targetUserId: NEEL_DHARNI_USER_ID,
@@ -764,6 +809,10 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
       .select({ id: usersTable.id, email: usersTable.email })
       .from(usersTable)
       .where(or(...tutorEmails.map((email) => emailMatches(usersTable.email, email))));
+    const euniceUsers = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(emailMatches(usersTable.email, EUNICE_CONSULTING_EMAIL));
     const xavierByClerk = tutors.some(
       (tutor: { id: string; email: string }) =>
         normalizeConsultingEmail(tutor.email) === normalizeConsultingEmail(CANONICAL_XAVIER_EMAIL),
@@ -779,6 +828,7 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     const tutorIds = [
       ...tutors.map((tutor: { id: string; email: string }) => tutor.id),
       ...(xavierByClerk ? [xavierByClerk.id] : []),
+      ...euniceUsers.map((tutor: { id: string }) => tutor.id),
       ...(victoria.linked && victoria.userId ? [victoria.userId] : []),
     ];
     const [nikaUser] = await tx
