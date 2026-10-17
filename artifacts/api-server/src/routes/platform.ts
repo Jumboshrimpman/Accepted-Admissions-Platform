@@ -34,9 +34,11 @@ import {
   classifyGoogleProviderError,
   createCalendarOAuthState,
   createGoogleEvent,
+  createGoogleEventWithMeetFallback,
   decryptCalendarToken,
   deleteGoogleEvent,
   googleCalendarSendUpdatesForSubjects,
+  existingGoogleMeetConference,
   exchangeGoogleCode,
   getGoogleCalendarEvent,
   getGoogleCalendarConfig,
@@ -60,6 +62,7 @@ import {
   patchGoogleEventAttendees,
   safeCalendarReturnTo,
   updateGoogleEvent,
+  updateGoogleEventWithMeetFallback,
   type CalendarOAuthOutcome,
 } from "../lib/google-calendar";
 import {
@@ -111,7 +114,7 @@ import {
 } from "../lib/app-created-calendar";
 import {
   adminCalendarGrantCanWriteEvents,
-  adminCalendarMeetConference,
+  adminCalendarInviteHealth,
   bookingsUseAdminCalendarFallback,
   isNikaTutorProfile,
   manualCalendarInviteMessage,
@@ -124,7 +127,7 @@ import {
   BookingServiceError,
   cancelBookingWithCreditPolicy,
   insertConfirmedBookingWithDebit,
-  listSharedMeetBusyWindows,
+  listGlobalRoomBusyWindows,
   lockClientCreditsAndRequireHours,
   lockSatTutorCredits,
   notifyAdministratorsOfBooking,
@@ -156,6 +159,7 @@ import {
   VICTORIA_DISPLAY_NAME,
   collegeConsultingServiceRequested,
   isNeelDharniUser,
+  neelNikaMeetUrl,
   isNikaTemporaryViewEmail,
   isSamaPostgradTestStudent,
   samaCollegeConsultingBooking,
@@ -4649,8 +4653,8 @@ type FixedWindowCalendarPlan =
  * The admin Google account, when it has a refresh token and an app calendar.
  * Event writes use calendar.app.created, so the id has to be that secondary calendar.
  */
-async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
-  const rows = await db
+async function loadStoredCalendarGrants() {
+  return db
     .select({
       tutorProfileId: calendarConnectionsTable.tutorProfileId,
       appCalendarId: calendarConnectionsTable.appCalendarId,
@@ -4668,6 +4672,10 @@ async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | nu
     )
     .leftJoin(usersTable, eq(usersTable.id, tutorProfilesTable.userId))
     .where(eq(calendarConnectionsTable.provider, "google"));
+}
+
+async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
+  const rows = await loadStoredCalendarGrants();
   const match = rows.find((row) =>
     adminCalendarGrantCanWriteEvents({
       googleAccountEmail: row.googleAccountEmail,
@@ -5036,6 +5044,41 @@ async function calendarInviteParty(
   };
 }
 
+function neelNikaCalendarEvent(args: {
+  title: string;
+  start: Date;
+  durationMinutes: number;
+  timeZone: string;
+  attendeeEmail: string;
+  location?: string;
+  student: CalendarInviteParty | null;
+  tutor: CalendarInviteParty | null;
+  inviteTutor?: boolean;
+  clientUserId?: string | null;
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): { meetUrl: string; body: Record<string, unknown> } {
+  const meetUrl = SHARED_FALL_MEETING_URL;
+  return {
+    meetUrl,
+    body: {
+      ...bookingCalendarEventPayload({
+        title: args.title,
+        start: args.start,
+        durationMinutes: args.durationMinutes,
+        timeZone: args.timeZone,
+        attendeeEmail: args.attendeeEmail,
+        location: meetUrl,
+        description: meetUrl,
+        student: args.student,
+        tutor: args.tutor,
+        inviteTutor: args.inviteTutor,
+      }),
+      conferenceData: existingGoogleMeetConference(meetUrl),
+    },
+  };
+}
+
 async function syncGoogleCalendarForSessionChange(args: {
   existing: typeof sessionsTable.$inferSelect;
   next: {
@@ -5112,29 +5155,40 @@ async function syncGoogleCalendarForSessionChange(args: {
     calendarInviteParty(args.next.tutorUserId ?? args.existing.tutorUserId),
   ]);
   const calendarId = sessionEventCalendarId(args.existing.providerCalendarId);
+  const pinned = neelNikaCalendarEvent({
+    title: args.next.title,
+    start: args.next.dateTime,
+    durationMinutes: args.next.durationMinutes,
+    timeZone: args.next.timezone,
+    attendeeEmail: student.email ?? "",
+    location: SHARED_FALL_MEETING_URL,
+    student,
+    tutor,
+    inviteTutor: calendarInviteIncludesTutor(
+      args.existing.subject,
+      args.next.subject,
+      { tutorEmail },
+    ),
+    clientUserId: args.next.clientUserId,
+    tutorEmail,
+  });
   const written = await runTutorCalendarCall(access, (token) =>
     writeStoredSessionEvent(args.existing, token, () =>
-      updateGoogleEvent(
-        token,
-        calendarId,
-        args.existing.providerEventId!,
-        bookingCalendarEventPayload({
-          title: args.next.title,
-          start: args.next.dateTime,
-          durationMinutes: args.next.durationMinutes,
-          timeZone: args.next.timezone,
-          attendeeEmail: student.email ?? "",
-          location: SHARED_FALL_MEETING_URL,
-          student,
-          tutor,
-          inviteTutor: calendarInviteIncludesTutor(
-            args.existing.subject,
-            args.next.subject,
-            { tutorEmail },
+      pinned.meetUrl
+        ? updateGoogleEventWithMeetFallback(
+            token,
+            calendarId,
+            args.existing.providerEventId!,
+            pinned.body,
+            sendUpdates,
+          )
+        : updateGoogleEvent(
+            token,
+            calendarId,
+            args.existing.providerEventId!,
+            pinned.body,
+            sendUpdates,
           ),
-        }),
-        sendUpdates,
-      ),
     ),
   );
   if (written.status === "manual") {
@@ -5146,7 +5200,7 @@ async function syncGoogleCalendarForSessionChange(args: {
   const event = written.value;
   return {
     providerEventId: event.id ?? args.existing.providerEventId,
-    providerEventUrl: event.htmlLink ?? args.existing.providerEventUrl,
+    providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? args.existing.providerEventUrl,
   };
 }
 
@@ -5327,6 +5381,7 @@ type TutorSlotContext = {
   availabilityRule: AvailabilityRule;
   busyWindows: BusyWindow[];
   bookedWindows: BusyWindow[];
+  roomWindows: BusyWindow[];
   usesAdminCalendarFallback: boolean;
 };
 
@@ -5389,39 +5444,40 @@ async function loadTutorSlotContext(
       busyWindows = [];
     }
   }
-  const [bookedSessions, sharedMeetWindows] = await Promise.all([
-    db
-      .select({
-        id: sessionsTable.id,
-        dateTime: sessionsTable.dateTime,
-        durationMinutes: sessionsTable.durationMinutes,
-      })
-      .from(sessionsTable)
-      .where(
-        and(
-          tutor.userId
-            ? eq(sessionsTable.tutorUserId, tutor.userId)
-            : sql`false`,
-          inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
-          sql`${sessionsTable.status} <> 'archived'`,
-          sql`${sessionsTable.dateTime} < ${to}`,
-          sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
-          excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
-        ),
+  const bookedSessions = await db
+    .select({
+      id: sessionsTable.id,
+      dateTime: sessionsTable.dateTime,
+      durationMinutes: sessionsTable.durationMinutes,
+    })
+    .from(sessionsTable)
+    .where(
+      and(
+        tutor.userId
+          ? eq(sessionsTable.tutorUserId, tutor.userId)
+          : sql`false`,
+        inArray(sessionsTable.bookingStatus, ["confirmed", "rescheduled"]),
+        sql`${sessionsTable.status} <> 'archived'`,
+        sql`${sessionsTable.dateTime} < ${to}`,
+        sql`${sessionsTable.dateTime} + (${sessionsTable.durationMinutes} * interval '1 minute') > ${from}`,
+        excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
       ),
-    listSharedMeetBusyWindows({
+    );
+  await releaseExpiredSlotHolds(db, tutorProfileId);
+  const [heldSlots, roomWindows] = await Promise.all([
+    activeSlotHoldsOverlapping(db, {
+      tutorProfileId,
+      start: from,
+      end: to,
+      ignorePaymentId: ignoreHoldPaymentId,
+    }),
+    listGlobalRoomBusyWindows({
       start: from,
       end: to,
       excludeSessionId,
+      ignoreHoldPaymentId,
     }),
   ]);
-  await releaseExpiredSlotHolds(db, tutorProfileId);
-  const heldSlots = await activeSlotHoldsOverlapping(db, {
-    tutorProfileId,
-    start: from,
-    end: to,
-    ignorePaymentId: ignoreHoldPaymentId,
-  });
   const bookedWindows: BusyWindow[] = [
     ...bookedSessions.map((session) => ({
       start: session.dateTime.toISOString(),
@@ -5431,7 +5487,6 @@ async function loadTutorSlotContext(
       start: hold.startTime.toISOString(),
       end: new Date(hold.startTime.getTime() + Number(hold.durationMinutes) * 60_000).toISOString(),
     })),
-    ...sharedMeetWindows,
   ];
   const availabilityRule: AvailabilityRule = {
     timezone: rule.timezone,
@@ -5441,7 +5496,16 @@ async function loadTutorSlotContext(
     bufferMinutes: rule.bufferMinutes,
     blackoutDates: rule.blackoutDates,
   };
-  return { tutor, rule, access, availabilityRule, busyWindows, bookedWindows, usesAdminCalendarFallback };
+  return {
+    tutor,
+    rule,
+    access,
+    availabilityRule,
+    busyWindows,
+    bookedWindows,
+    roomWindows,
+    usesAdminCalendarFallback,
+  };
 }
 
 function projectTutorSlots(
@@ -5457,6 +5521,8 @@ function projectTutorSlots(
     durationMinutes,
     context.busyWindows,
     context.bookedWindows,
+    new Date(),
+    context.roomWindows,
   );
   const slots = context.access
     ? generated
@@ -5544,7 +5610,11 @@ async function bookingSessionShape(
 ) {
   const [tutorProfile] = session.tutorUserId
     ? await db
-        .select({ id: tutorProfilesTable.id, name: tutorProfilesTable.name })
+        .select({
+          id: tutorProfilesTable.id,
+          name: tutorProfilesTable.name,
+          email: tutorProfilesTable.email,
+        })
         .from(tutorProfilesTable)
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1)
@@ -5560,7 +5630,12 @@ async function bookingSessionShape(
     title: session.title,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: SHARED_FALL_MEETING_URL,
+    meetingUrl:
+      neelNikaMeetUrl({
+        clientUserId: session.clientUserId,
+        tutorName: tutorProfile?.name,
+        tutorEmail: tutorProfile?.email,
+      }) ?? SHARED_FALL_MEETING_URL,
     calendarEventUrl: calendarEventUrlForSession(session),
     cancellationReason: session.cancellationReason,
     ...(extras.creditRestored !== undefined
@@ -7656,6 +7731,7 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       courseId: sessionsTable.courseId,
       tutorProfileId: tutorProfilesTable.id,
       tutorName: tutorProfilesTable.name,
+      tutorEmail: tutorProfilesTable.email,
       dateTime: sessionsTable.dateTime,
       timezone: sessionsTable.timezone,
       subject: sessionsTable.subject,
@@ -7682,7 +7758,12 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       title: session.title,
       durationMinutes: session.durationMinutes,
       bookingStatus: session.bookingStatus,
-      meetingUrl: SHARED_FALL_MEETING_URL,
+      meetingUrl:
+        neelNikaMeetUrl({
+          clientUserId: subjectUserId,
+          tutorName: session.tutorName,
+          tutorEmail: session.tutorEmail,
+        }) ?? SHARED_FALL_MEETING_URL,
       calendarEventUrl: calendarEventUrlForSession(session),
       cancellationReason: session.cancellationReason,
     })),
@@ -7861,7 +7942,12 @@ async function respondWithPrepaidBooking(
         end,
         ignorePaymentId: holdPaymentId,
       });
-      await assertNoScheduleConflict(tx, { participantIds, start, end });
+      await assertNoScheduleConflict(tx, {
+        participantIds,
+        start,
+        end,
+        ignoreHoldPaymentId: holdPaymentId,
+      });
       if (!fixedWindow) {
         if (!access) {
           throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
@@ -7965,6 +8051,7 @@ async function respondWithPrepaidBooking(
             tutorEmail: tutor.email,
             start,
             durationMinutes,
+            meetUrl: SHARED_FALL_MEETING_URL,
           }),
         });
         await confirmBookedSession(created, true);
@@ -7989,31 +8076,39 @@ async function respondWithPrepaidBooking(
         if (!adminAccess) {
           throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
         }
+        const pinned = neelNikaCalendarEvent({
+          title: created.title,
+          start,
+          durationMinutes,
+          timeZone: rule.timezone,
+          attendeeEmail: req.appUser!.email,
+          student,
+          tutor: tutorParty,
+          inviteTutor,
+          clientUserId: req.appUser!.id,
+          tutorName: tutor.name,
+          tutorEmail: tutor.email,
+        });
         const event = await runTutorCalendarCall(adminAccess, (token) =>
-          createGoogleEvent(
-            token,
-            adminWriter.appCalendarId,
-            {
-              ...bookingCalendarEventPayload({
-                title: created.title,
-                start,
-                durationMinutes,
-                timeZone: rule.timezone,
-                attendeeEmail: req.appUser!.email,
-                student,
-                tutor: tutorParty,
-                inviteTutor,
-              }),
-              conferenceData: adminCalendarMeetConference(created.id),
-            },
-            sendUpdates,
-          ),
+          pinned.meetUrl
+            ? createGoogleEventWithMeetFallback(
+                token,
+                adminWriter.appCalendarId,
+                pinned.body,
+                sendUpdates,
+              )
+            : createGoogleEvent(
+                token,
+                adminWriter.appCalendarId,
+                pinned.body,
+                sendUpdates,
+              ),
         );
         const [updated] = await db
           .update(sessionsTable)
           .set({
             providerEventId: event.id ?? null,
-            providerEventUrl: event.hangoutLink ?? event.htmlLink ?? null,
+            providerEventUrl: pinned.meetUrl ?? event.hangoutLink ?? event.htmlLink ?? null,
             providerCalendarId: adminWriter.appCalendarId,
             updatedAt: new Date(),
           })
@@ -8028,6 +8123,23 @@ async function respondWithPrepaidBooking(
       if (!appCalendarId) {
         throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
       }
+      const pinned = neelNikaCalendarEvent({
+        title: created.title,
+        start,
+        durationMinutes,
+        timeZone: rule.timezone,
+        attendeeEmail: req.appUser!.email,
+        location: SHARED_FALL_MEETING_URL,
+        student,
+        tutor: tutorParty,
+        inviteTutor: calendarInviteIncludesTutor(
+          consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
+          { tutorEmail: tutor.email },
+        ),
+        clientUserId: req.appUser!.id,
+        tutorName: tutor.name,
+        tutorEmail: tutor.email,
+      });
       const written = await runTutorCalendarCall(access, (token) =>
         writeStoredSessionEvent(
           {
@@ -8037,28 +8149,19 @@ async function respondWithPrepaidBooking(
           },
           token,
           () =>
-            createGoogleEvent(
-              token,
-              appCalendarId,
-              bookingCalendarEventPayload({
-                title: created.title,
-                start,
-                durationMinutes,
-                timeZone: rule.timezone,
-                attendeeEmail: req.appUser!.email,
-                location: SHARED_FALL_MEETING_URL,
-                student,
-                tutor: tutorParty,
-                inviteTutor: calendarInviteIncludesTutor(
-                  consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
-                  { tutorEmail: tutor.email },
+            pinned.meetUrl
+              ? createGoogleEventWithMeetFallback(
+                  token,
+                  appCalendarId,
+                  pinned.body,
+                  sendUpdates,
+                )
+              : createGoogleEvent(
+                  token,
+                  appCalendarId,
+                  pinned.body,
+                  sendUpdates,
                 ),
-              }),
-              googleCalendarSendUpdatesForSubjects(
-                consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
-                { tutorEmail: tutor.email },
-              ),
-            ),
         ),
       );
       if (written.status === "manual") {
@@ -8073,7 +8176,7 @@ async function respondWithPrepaidBooking(
         .update(sessionsTable)
         .set({
           providerEventId: event.id ?? null,
-          providerEventUrl: event.htmlLink ?? null,
+          providerEventUrl: event.htmlLink ?? pinned.meetUrl ?? null,
           providerCalendarId: appCalendarId,
           updatedAt: new Date(),
         })
@@ -8111,9 +8214,11 @@ async function respondWithPrepaidBooking(
     return null;
   } catch (error) {
     sendBookingError(error, res);
-    return error instanceof BookingError
-      ? error
-      : new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
+    if (error instanceof BookingError) return error;
+    if (error instanceof BookingServiceError) {
+      return new BookingError(error.status, error.code, error.message);
+    }
+    return new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
   }
 }
 
@@ -8139,22 +8244,22 @@ router.post("/booking/slot-holds/release", async (req: AuthedRequest, res): Prom
   }
 });
 
+const PAID_BOOKING_REFUSAL_CODES = new Set([
+  "SCHEDULE_CONFLICT",
+  "SLOT_UNAVAILABLE",
+  "BOOKING_UNAVAILABLE",
+  "CALENDAR_RECONNECT_REQUIRED",
+]);
+
 async function notifyPaidReconnectRefusal(args: {
   paymentId: string;
   clientName: string;
-  tutorProfileId: string;
   slotStartIso: string;
   sessionId?: string | null;
 }): Promise<void> {
-  const [tutor] = await db
-    .select({ name: tutorProfilesTable.name })
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.id, args.tutorProfileId))
-    .limit(1);
   await notifyPaidBookingReconnectRefusal({
     paymentId: args.paymentId,
     clientName: args.clientName,
-    tutorName: tutor?.name?.trim() || "Tutor",
     slotStartIso: args.slotStartIso,
     sessionId: args.sessionId,
   });
@@ -8225,16 +8330,15 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
       await rememberBookedPayment(paymentId, sessionId);
     };
     const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-    if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+    if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
       try {
         await notifyPaidReconnectRefusal({
           paymentId,
           clientName: req.appUser!.displayName,
-          tutorProfileId: intent.tutorProfileId,
           slotStartIso: intent.startTime,
         });
       } catch {
-        // The 409 is already on the wire. A later webhook retry can still notify.
+        // The refusal is already on the wire. A later webhook retry can still notify.
       }
     }
   } catch (error) {
@@ -8291,11 +8395,10 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
     },
   } as unknown as Response;
   const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-  if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+  if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
     await notifyPaidReconnectRefusal({
       paymentId,
       clientName: user.displayName,
-      tutorProfileId: intent.tutorProfileId,
       slotStartIso: intent.startTime,
     });
   }
@@ -8421,7 +8524,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
       tutorEmail: profile.email,
     });
     const inviteAt = (startTime: Date, timeZone: string) =>
-      bookingCalendarEventPayload({
+      neelNikaCalendarEvent({
         title: session.title,
         start: startTime,
         durationMinutes: session.durationMinutes,
@@ -8431,18 +8534,30 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         student,
         tutor: tutorParty,
         inviteTutor: calendarInviteIncludesTutor(session.subject, { tutorEmail: profile.email }),
+        clientUserId: session.clientUserId,
+        tutorName: profile.name,
+        tutorEmail: profile.email,
       });
     const calendarSession = onAdminCalendar ? { ...session, tutorUserId: null } : session;
+    const moved = inviteAt(start, rule.timezone);
     const eventWrite = session.providerEventId
       ? await runTutorCalendarCall(writeAccess, (token) =>
           writeStoredSessionEvent(calendarSession, token, () =>
-            updateGoogleEvent(
-              token,
-              sessionEventCalendarId(session.providerCalendarId),
-              session.providerEventId!,
-              inviteAt(start, rule.timezone),
-              sendUpdates,
-            ),
+            moved.meetUrl
+              ? updateGoogleEventWithMeetFallback(
+                  token,
+                  sessionEventCalendarId(session.providerCalendarId),
+                  session.providerEventId!,
+                  moved.body,
+                  sendUpdates,
+                )
+              : updateGoogleEvent(
+                  token,
+                  sessionEventCalendarId(session.providerCalendarId),
+                  session.providerEventId!,
+                  moved.body,
+                  sendUpdates,
+                ),
           ),
         )
       : null;
@@ -8469,7 +8584,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
             timezone: rule.timezone,
             bookingStatus: "rescheduled",
             providerEventId: event?.id ?? session.providerEventId,
-            providerEventUrl: event?.htmlLink ?? session.providerEventUrl,
+            providerEventUrl: event?.htmlLink ?? moved.meetUrl ?? session.providerEventUrl,
             updatedAt: new Date(),
           })
           .where(eq(sessionsTable.id, session.id))
@@ -8482,15 +8597,24 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     } catch (error) {
       if (session.providerEventId) {
         try {
+          const rewind = inviteAt(previousStart, session.timezone);
           await runTutorCalendarCall(writeAccess, (token) =>
             writeStoredSessionEvent(calendarSession, token, () =>
-              updateGoogleEvent(
-                token,
-                sessionEventCalendarId(session.providerCalendarId),
-                session.providerEventId!,
-                inviteAt(previousStart, session.timezone),
-                sendUpdates,
-              ),
+              rewind.meetUrl
+                ? updateGoogleEventWithMeetFallback(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    rewind.body,
+                    sendUpdates,
+                  )
+                : updateGoogleEvent(
+                    token,
+                    sessionEventCalendarId(session.providerCalendarId),
+                    session.providerEventId!,
+                    rewind.body,
+                    sendUpdates,
+                  ),
             ),
           );
         } catch {
@@ -8848,7 +8972,7 @@ router.post(
       return [createdInvoice!, createdPayment!] as const;
     });
     } catch (error) {
-      if (error instanceof SlotHoldConflict) {
+      if (error instanceof SlotHoldConflict || error instanceof BookingServiceError) {
         res.status(error.status).json({ code: error.code, error: error.message });
         return;
       }
@@ -10022,8 +10146,24 @@ router.get(
   "/admin/calendar-connections",
   ensureRole(["administrator"]),
   async (_req: AuthedRequest, res): Promise<void> => {
-    const connections = await listPublicCalendarConnectionHealth();
-    res.json({ connections });
+    const [connections, grants] = await Promise.all([
+      listPublicCalendarConnectionHealth(),
+      loadStoredCalendarGrants(),
+    ]);
+    res.json({
+      connections,
+      adminCalendarInvites: adminCalendarInviteHealth(
+        grants.map((row) => ({
+          googleAccountEmail: row.googleAccountEmail,
+          portalEmail: row.portalEmail,
+          userEmail: row.userEmail,
+          status: row.status,
+          hasRefreshToken: Boolean(row.hasRefreshToken),
+          grantedScopes: row.grantedScopes,
+          appCalendarId: row.appCalendarId,
+        })),
+      ),
+    });
   },
 );
 
@@ -10873,7 +11013,7 @@ async function adminSessionShape(
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl),
+    meetingUrl: SHARED_FALL_MEETING_URL,
     calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
       ? {
@@ -12509,7 +12649,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
               ),
             ),
             tutor,
-            meetingUrl: meetingUrlForTerm(course.term, course.meetUrl ?? null),
+            meetingUrl: SHARED_FALL_MEETING_URL,
             calendarEventUrl: calendarEventUrlForSession(session),
           };
         }),
@@ -12595,19 +12735,6 @@ async function dashboardDataForUser(user: AppUser) {
   const courses = (
     await Promise.all(ids.map((id) => courseShape(id, user)))
   ).filter(Boolean);
-  const courseRows =
-    ids.length === 0
-      ? []
-      : await db
-           .select({ id: coursesTable.id, term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-          .from(coursesTable)
-          .where(inArray(coursesTable.id, ids));
-  const meetingUrls = new Map(
-    courseRows.map((course) => [
-      course.id,
-      meetingUrlForTerm(course.term, course.meetUrl),
-    ]),
-  );
   const scopedSessions = await dashboardSessionsForUser(user);
   const studentShapeCache = new Map<string, Promise<{ id: string; name: string } | null>>();
   const tutorShapeCache = new Map<
@@ -12708,11 +12835,12 @@ async function dashboardDataForUser(user: AppUser) {
           : preparation
             ? "Take quiz"
             : "Open session plan";
+      const tutor = await sessionTutorShapeCached(session);
       return {
         ...dashboardSessionShape(
           session,
-          await sessionTutorShapeCached(session),
-          meetingUrls.get(session.courseId) ?? null,
+          tutor,
+          SHARED_FALL_MEETING_URL,
           user.role === "tutor" || user.role === "administrator"
             ? session.clientUserId
               ? await studentShapeCached(session.clientUserId)
@@ -12921,10 +13049,11 @@ async function dashboardDataForUser(user: AppUser) {
             const student = session.clientUserId
               ? await studentShapeCached(session.clientUserId)
               : null;
+            const tutor = await sessionTutorShapeCached(session);
             return dashboardSessionShape(
               session,
-              await sessionTutorShapeCached(session),
-              meetingUrls.get(session.courseId) ?? null,
+              tutor,
+              SHARED_FALL_MEETING_URL,
               user.role === "tutor" || user.role === "administrator"
                 ? student
                 : undefined,
@@ -13235,11 +13364,6 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
     return;
   }
   const subjectUserId = await dataSubjectUserId(req.appUser!);
-  const [course] = await db
-    .select({ term: coursesTable.term, meetUrl: coursesTable.meetUrl })
-    .from(coursesTable)
-    .where(eq(coursesTable.id, session.courseId))
-    .limit(1);
   const blocks = await db
     .select()
     .from(curriculumBlocksTable)
@@ -13332,7 +13456,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : session.title,
       ),
       tutor: sessionTutor,
-      meetingUrl: meetingUrlForTerm(course?.term, course?.meetUrl ?? null),
+      meetingUrl: SHARED_FALL_MEETING_URL,
       calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"

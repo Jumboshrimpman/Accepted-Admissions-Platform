@@ -7,7 +7,9 @@ export const TAITO_STUDENT_DISPLAY_NAME = "Taito";
 export const TAITO_STUDENT_EMAIL = "taito0525@gmail.com";
 export const EUNICE_TUTOR_EMAIL = "eunice_chon@berkeley.edu";
 export const NIKA_TUTOR_EMAIL = "nika.raiffe@gmail.com";
-export const SHARED_FALL_MEETING_URL = "https://meet.google.com/rih-iayt-okb";
+/** Every booking invite joins this existing Meet. One room, so sessions cannot overlap. */
+export const NEEL_NIKA_MEET_URL = "https://meet.google.com/rih-iayt-okb";
+export const SHARED_FALL_MEETING_URL = NEEL_NIKA_MEET_URL;
 
 export function isFall2026Term(term: string | null | undefined): boolean {
   return term?.trim().toLowerCase() === "fall 2026";

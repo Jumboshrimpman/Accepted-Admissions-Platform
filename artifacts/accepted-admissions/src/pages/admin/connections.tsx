@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import CalendarAttendeeBackfill from "./calendar-attendee-backfill";
 
+export type AdminCalendarInvitesRow = {
+  healthy: boolean;
+  accountEmail: string;
+  hasRefreshToken: boolean;
+  hasWriteScope: boolean;
+  hasAppCalendar: boolean;
+};
+
 export type CalendarConnectionHealthRow = {
   tutorProfileId: string;
   name: string;
@@ -74,8 +82,13 @@ function badgeClass(badge: CalendarConnectionHealthRow["badge"]): string {
   return "border-transparent bg-muted text-muted-foreground hover:bg-muted";
 }
 
+function yesNo(value: boolean): string {
+  return value ? "Yes" : "No";
+}
+
 export default function AdminConnections() {
   const [connections, setConnections] = useState<CalendarConnectionHealthRow[]>([]);
+  const [adminCalendarInvites, setAdminCalendarInvites] = useState<AdminCalendarInvitesRow | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -85,10 +98,12 @@ export default function AdminConnections() {
 
   const refresh = async () => {
     try {
-      const payload = await customFetch<{ connections: CalendarConnectionHealthRow[] }>(
-        "/api/admin/calendar-connections",
-      );
+      const payload = await customFetch<{
+        connections: CalendarConnectionHealthRow[];
+        adminCalendarInvites?: AdminCalendarInvitesRow | null;
+      }>("/api/admin/calendar-connections");
       setConnections(payload.connections ?? []);
+      setAdminCalendarInvites(payload.adminCalendarInvites ?? null);
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load calendar connections.");
@@ -162,6 +177,43 @@ export default function AdminConnections() {
       {loading ? <p className="text-sm text-muted-foreground">Loading connections…</p> : null}
       {!loading && connections.length === 0 ? (
         <p className="text-sm text-muted-foreground">No tutor profiles to show.</p>
+      ) : null}
+      {adminCalendarInvites ? (
+        <Card data-testid="admin-calendar-invites">
+          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-xl">Admin calendar (invites)</CardTitle>
+              <CardDescription>{adminCalendarInvites.accountEmail}</CardDescription>
+            </div>
+            <Badge
+              className={badgeClass(adminCalendarInvites.healthy ? "healthy" : "needs_reconnect")}
+              data-testid="badge-admin-calendar-invites"
+            >
+              {adminCalendarInvites.healthy ? "Healthy" : "Not ready"}
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm" data-testid="status-admin-calendar-invites">
+              {adminCalendarInvites.healthy
+                ? "admin@ sends invites only for Nika's fixed-window fallback."
+                : "admin@ sends invites only for Nika's fixed-window fallback. This account is not ready."}
+            </p>
+            <dl className="grid gap-3 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-muted-foreground">Refresh token</dt>
+                <dd>{yesNo(adminCalendarInvites.hasRefreshToken)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Event-write scope</dt>
+                <dd>{yesNo(adminCalendarInvites.hasWriteScope)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Sessions calendar</dt>
+                <dd>{yesNo(adminCalendarInvites.hasAppCalendar)}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
       ) : null}
       <div className="space-y-4">
         {connections.map((row) => (

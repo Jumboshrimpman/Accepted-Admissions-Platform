@@ -17,6 +17,10 @@ import {
   XAVIER_BOOKING_TAGLINE,
   XAVIER_PUBLIC_BIOGRAPHY,
 } from "./public-team-roster.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { isNikaTutorProfile } from "./admin-calendar-fallback.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { NEEL_NIKA_MEET_URL } from "./session-schedule.ts";
 
 /** Stable client id. Bookings stay on this id when the login email changes. */
 export const NEEL_DHARNI_USER_ID = "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19";
@@ -241,6 +245,17 @@ const TEMP_NIKA_VIEW_DISABLED = new Set(["", "off", "disabled", "none", "false"]
 
 export function isNeelDharniUser(userId: string | null | undefined): boolean {
   return userId === NEEL_DHARNI_USER_ID;
+}
+
+/** Neel booking Nika. Other students, and Neel with anyone else, stay on their own Meet. */
+export function neelNikaMeetUrl(input: {
+  clientUserId?: string | null;
+  tutorName?: string | null;
+  tutorEmail?: string | null;
+}): string | null {
+  if (!isNeelDharniUser(input.clientUserId)) return null;
+  if (!isNikaTutorProfile({ name: input.tutorName, portalEmail: input.tutorEmail })) return null;
+  return NEEL_NIKA_MEET_URL;
 }
 
 /**

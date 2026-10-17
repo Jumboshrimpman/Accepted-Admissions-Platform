@@ -56,6 +56,56 @@ export function adminCalendarGrantCanWriteEvents(input: {
   return true;
 }
 
+export type AdminCalendarInviteHealth = {
+  healthy: boolean;
+  accountEmail: typeof ADMIN_CALENDAR_ACCOUNT_EMAIL;
+  hasRefreshToken: boolean;
+  hasWriteScope: boolean;
+  hasAppCalendar: boolean;
+};
+
+function grantBelongsToAdmin(input: {
+  googleAccountEmail?: string | null;
+  portalEmail?: string | null;
+  userEmail?: string | null;
+}): boolean {
+  return [input.googleAccountEmail, input.portalEmail, input.userEmail].some(
+    (email) => email?.trim().toLowerCase() === ADMIN_CALENDAR_ACCOUNT_EMAIL,
+  );
+}
+
+/** Same predicate booking uses for an automatic invite from the admin Google account. */
+export function adminCalendarInviteHealth(
+  rows: Array<{
+    googleAccountEmail?: string | null;
+    portalEmail?: string | null;
+    userEmail?: string | null;
+    status?: string | null;
+    hasRefreshToken: boolean;
+    grantedScopes?: string | null;
+    appCalendarId?: string | null;
+  }>,
+): AdminCalendarInviteHealth {
+  const writable = rows.find((row) => adminCalendarGrantCanWriteEvents(row));
+  if (writable) {
+    return {
+      healthy: true,
+      accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+      hasRefreshToken: true,
+      hasWriteScope: true,
+      hasAppCalendar: true,
+    };
+  }
+  const related = rows.find((row) => grantBelongsToAdmin(row));
+  return {
+    healthy: false,
+    accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+    hasRefreshToken: Boolean(related?.hasRefreshToken && related.status === "connected"),
+    hasWriteScope: Boolean(related && !grantLacksAppCreatedCalendar(related.grantedScopes ?? null)),
+    hasAppCalendar: Boolean(related?.appCalendarId?.trim()),
+  };
+}
+
 export const MANUAL_CALENDAR_INVITE_KIND = "manual_calendar_invite";
 
 /** Eastern wall time with an ET label, including during daylight saving. */
@@ -85,21 +135,12 @@ export function manualCalendarInviteMessage(args: {
   tutorEmail: string;
   start: Date;
   durationMinutes: number;
+  meetUrl?: string | null;
 }): string {
   const nika = isNikaTutorProfile({ name: args.tutorName, portalEmail: args.tutorEmail });
   const tutorLabel = nika ? "Nika" : args.tutorName.trim();
   const tutorEmail = nika ? NIKA_TUTOR_EMAIL : args.tutorEmail.trim();
-  return `Send calendar invite manually: ${args.bookerName.trim()} booked ${tutorLabel} ${formatSessionInstantEt(args.start)}, ${args.durationMinutes} minutes. Invite ${args.bookerEmail.trim()}, ${tutorEmail}, ${ADMIN_CALENDAR_ACCOUNT_EMAIL}.`;
-}
-
-/** conferenceData Meet link. Google requires conferenceDataVersion=1 on the write. */
-export function adminCalendarMeetConference(requestId: string): {
-  createRequest: { requestId: string; conferenceSolutionKey: { type: "hangoutsMeet" } };
-} {
-  return {
-    createRequest: {
-      requestId,
-      conferenceSolutionKey: { type: "hangoutsMeet" },
-    },
-  };
+  const base = `Send calendar invite manually: ${args.bookerName.trim()} booked ${tutorLabel} ${formatSessionInstantEt(args.start)}, ${args.durationMinutes} minutes. Invite ${args.bookerEmail.trim()}, ${tutorEmail}, ${ADMIN_CALENDAR_ACCOUNT_EMAIL}.`;
+  const meetUrl = args.meetUrl?.trim();
+  return meetUrl ? `${base} Meet: ${meetUrl}.` : base;
 }

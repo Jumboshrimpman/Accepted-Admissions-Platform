@@ -37,6 +37,7 @@ import {
   NEEL_DHARNI_USER_ID,
   VICTORIA_PLACEHOLDER_EMAIL,
 } from "./college-consulting";
+import { NEEL_NIKA_MEET_URL } from "./session-schedule";
 import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity";
 import { processStripeWebhook } from "./payment-service";
 import {
@@ -56,8 +57,20 @@ type CapturedWrite = {
   url: string;
   attendees: string[];
   conference: boolean;
+  location?: string;
+  description?: string;
+  conferenceUri?: string;
   calendarId: string;
 };
+
+function assertSharedRoomInvite(write: CapturedWrite): void {
+  assert.match(write.url, /sendUpdates=none/);
+  assert.match(write.url, /conferenceDataVersion=1/);
+  assert.equal(write.conference, false);
+  assert.equal(write.location, NEEL_NIKA_MEET_URL);
+  assert.equal(write.description, NEEL_NIKA_MEET_URL);
+  assert.equal(write.conferenceUri, NEEL_NIKA_MEET_URL);
+}
 
 function testAuthMiddleware(user: AppUser) {
   return (req: Request, _res: Response, next: NextFunction): void => {
@@ -157,13 +170,26 @@ function installCalendarMock(appCalendarId: string) {
       if (url.includes("/events")) {
         let attendees: string[] = [];
         let conference = false;
+        let location: string | undefined;
+        let description: string | undefined;
+        let conferenceUri: string | undefined;
         if (typeof init?.body === "string") {
           const parsed = JSON.parse(init.body) as {
             attendees?: { email: string }[];
-            conferenceData?: { createRequest?: { conferenceSolutionKey?: { type?: string } } };
+            location?: string;
+            description?: string;
+            conferenceData?: {
+              createRequest?: { conferenceSolutionKey?: { type?: string } };
+              entryPoints?: { entryPointType?: string; uri?: string }[];
+            };
           };
           attendees = (parsed.attendees ?? []).map((attendee) => attendee.email);
+          location = parsed.location;
+          description = parsed.description;
           conference = parsed.conferenceData?.createRequest?.conferenceSolutionKey?.type === "hangoutsMeet";
+          conferenceUri = parsed.conferenceData?.entryPoints?.find(
+            (entry) => entry.entryPointType === "video",
+          )?.uri;
         }
         const calendarMatch = url.match(/\/calendars\/([^/]+)\/events/);
         writes.push({
@@ -171,6 +197,9 @@ function installCalendarMock(appCalendarId: string) {
           url,
           attendees,
           conference,
+          location,
+          description,
+          conferenceUri,
           calendarId: calendarMatch ? decodeURIComponent(calendarMatch[1]!) : "",
         });
         if ((init?.method ?? "POST") === "DELETE") return new Response(null, { status: 204 });
@@ -572,7 +601,12 @@ test("Neel books Nika's fixed Wednesday window: offered, held, confirmed, invite
     createdSessionIds.push(booked[0]!.id);
     const invite = calendar.writes.find((write) => write.method === "POST");
     assert.ok(invite, JSON.stringify(calendar.writes));
-    assert.match(invite.url, /sendUpdates=all$/);
+    assert.match(invite.url, /sendUpdates=all/);
+    assert.match(invite.url, /conferenceDataVersion=1/);
+    assert.equal(invite.conference, false);
+    assert.equal(invite.location, NEEL_NIKA_MEET_URL);
+    assert.equal(invite.description, NEEL_NIKA_MEET_URL);
+    assert.equal(invite.conferenceUri, NEEL_NIKA_MEET_URL);
     assert.deepEqual(invite.attendees, [neel.email, NIKA_EMAIL, ADMIN_EMAIL]);
 
     const title = "College Consulting booking confirmed";
@@ -944,6 +978,7 @@ test("Neel books a fixed Nika slot with a blank app calendar and no admin grant"
       tutorEmail: profile.email,
       start: new Date(NIKA_START),
       durationMinutes: 60,
+      meetUrl: NEEL_NIKA_MEET_URL,
     });
     const administrators = await db
       .select({ id: usersTable.id })
@@ -1311,7 +1346,7 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
       createdSessionIds.push(session.id);
       const createdWrite = calendar.writes.find((write) => write.method === "POST");
       assert.ok(createdWrite, JSON.stringify(calendar.writes));
-      assert.match(createdWrite.url, /sendUpdates=none$/);
+      assertSharedRoomInvite(createdWrite);
       assert.equal(createdWrite.attendees.includes(item.email), false);
       assert.deepEqual(createdWrite.attendees, [neel.email, ADMIN_EMAIL]);
 
@@ -1322,7 +1357,7 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
       assert.equal(rescheduled.status, 200, `${item.email} ${JSON.stringify(rescheduled.body)}`);
       const rescheduleWrite = calendar.writes.find((write) => write.method === "PATCH");
       assert.ok(rescheduleWrite, JSON.stringify(calendar.writes));
-      assert.match(rescheduleWrite.url, /sendUpdates=none$/);
+      assertSharedRoomInvite(rescheduleWrite);
       assert.equal(rescheduleWrite.attendees.includes(item.email), false);
 
       calendar.writes.length = 0;
@@ -1332,7 +1367,7 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
       assert.equal(edited.status, 200, `${item.email} ${JSON.stringify(edited.body)}`);
       const editWrite = calendar.writes.find((write) => write.method === "PATCH");
       assert.ok(editWrite, JSON.stringify(calendar.writes));
-      assert.match(editWrite.url, /sendUpdates=none$/);
+      assertSharedRoomInvite(editWrite);
       assert.equal(editWrite.attendees.includes(item.email), false);
 
       calendar.writes.length = 0;
@@ -1704,6 +1739,7 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
       tutorEmail: profile.email,
       start: new Date(laterStart),
       durationMinutes: 60,
+      meetUrl: NEEL_NIKA_MEET_URL,
     });
     const notices = await db
       .select({ id: adminNotificationsTable.id, kind: adminNotificationsTable.kind, title: adminNotificationsTable.title })
@@ -1786,14 +1822,17 @@ test("Neel books a disconnected Nika fixed window on the admin calendar", async 
     assert.equal(booked.length, 1);
     assert.equal(booked[0]?.bookingStatus, "confirmed");
     assert.equal(booked[0]?.providerCalendarId, adminCalendarId);
-    assert.equal(booked[0]?.providerEventUrl, "https://meet.google.com/admin-fallback-meet");
+    assert.equal(booked[0]?.providerEventUrl, NEEL_NIKA_MEET_URL);
     createdSessionIds.push(booked[0]!.id);
     const invite = calendar.writes.slice(writesBefore).find((write) => write.method === "POST");
     assert.ok(invite, JSON.stringify(calendar.writes.slice(writesBefore)));
     assert.equal(invite.calendarId, adminCalendarId);
     assert.match(invite.url, /sendUpdates=all/);
     assert.match(invite.url, /conferenceDataVersion=1/);
-    assert.equal(invite.conference, true);
+    assert.equal(invite.conference, false);
+    assert.equal(invite.location, NEEL_NIKA_MEET_URL);
+    assert.equal(invite.description, NEEL_NIKA_MEET_URL);
+    assert.equal(invite.conferenceUri, NEEL_NIKA_MEET_URL);
     assert.deepEqual(invite.attendees, [neel.email, NIKA_EMAIL, ADMIN_EMAIL]);
     assert.equal(
       calendar.writes.slice(writesBefore).some((write) => write.calendarId.includes("nika-own")),
