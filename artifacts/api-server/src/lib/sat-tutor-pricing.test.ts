@@ -122,8 +122,10 @@ test("Nika SAT is $130 for Sophia and Michelle and hidden from other clients", (
     assert.equal(displayedSatPriceCents(product("sat-nika-90"), user), 19_500);
     assert.equal(displayedSatPriceCents(product("sat-nika-120"), user), 26_000);
     assert.match(displayedSatDescription(product("sat-nika-60"), user), /with Nika at \$130\/hour/);
-    assert.equal(allowsLegacySatPool("nika", user), false);
   }
+  assert.equal(allowsLegacySatPool("nika", sophia), true);
+  assert.equal(allowsLegacySatPool("nika", michelle), false);
+  assert.equal(allowsLegacySatPool("nika", michelleEmail), false);
   assert.equal(canBookSatTutor("nika", otherSatClient), false);
   assert.equal(
     canBookSatTutor("nika", {
@@ -176,6 +178,90 @@ test("Nika SAT is $130 for Sophia and Michelle and hidden from other clients", (
     allowLegacy: false,
   });
   assert.equal(euniceFromNika.ok, false);
+});
+
+test("Sophia's package hours debit on Nika and Xavier stays a separate $200 charge", () => {
+  const packageHours = [
+    { entryType: "original", hours: 10, productId: "ten-sat-session-package" },
+  ];
+  const legacyArgs = {
+    tutorProductIds: ["sat-nika-60"],
+    legacyProductIds: ["ten-sat-session-package"],
+    tutorHourProductId: "sat-nika-60",
+  };
+  assert.equal(allowsLegacySatPool("nika", sophia), true);
+  assert.equal(
+    allowsLegacySatPool("nika", { email: sophia.email, clerkUserId: sophia.clerkUserId }),
+    false,
+  );
+  assert.equal(allowsLegacySatPool("nika", michelle), false);
+  assert.equal(allowsLegacySatPool("nika", otherSatClient), false);
+  assert.equal(allowsLegacySatPool("eunice", sophia), true);
+  assert.equal(allowsLegacySatPool("victoria", otherSatClient), true);
+  assert.equal(allowsLegacySatPool("xavier", sophia), false);
+  assert.equal(allowsLegacySatPool("xavier", michelle), true);
+
+  assert.equal(
+    satSpendableHours(packageHours, {
+      ...legacyArgs,
+      allowLegacy: allowsLegacySatPool("nika", sophia),
+    }),
+    10,
+  );
+  const nikaHour = satDebitPlan(packageHours, {
+    ...legacyArgs,
+    requiredHours: 1,
+    allowLegacy: allowsLegacySatPool("nika", sophia),
+  });
+  assert.equal(nikaHour.ok, true);
+  if (nikaHour.ok) assert.deepEqual(nikaHour.debits, [{ productId: null, hours: 1 }]);
+  const nikaNinety = satDebitPlan(packageHours, {
+    ...legacyArgs,
+    requiredHours: 90 / 60,
+    allowLegacy: allowsLegacySatPool("nika", sophia),
+  });
+  assert.equal(nikaNinety.ok, true);
+  if (nikaNinety.ok) assert.deepEqual(nikaNinety.debits, [{ productId: null, hours: 1.5 }]);
+
+  const michelleNika = satDebitPlan(packageHours, {
+    ...legacyArgs,
+    requiredHours: 1,
+    allowLegacy: allowsLegacySatPool("nika", michelle),
+  });
+  assert.equal(michelleNika.ok, false);
+  const otherNika = satDebitPlan(packageHours, {
+    ...legacyArgs,
+    requiredHours: 1,
+    allowLegacy: allowsLegacySatPool("nika", otherSatClient),
+  });
+  assert.equal(otherNika.ok, false);
+
+  const xavierFromPackage = satDebitPlan(packageHours, {
+    requiredHours: 1,
+    tutorProductIds: ["sat-xavier-60"],
+    legacyProductIds: ["ten-sat-session-package"],
+    tutorHourProductId: "sat-xavier-60",
+    allowLegacy: allowsLegacySatPool("xavier", sophia),
+  });
+  assert.equal(xavierFromPackage.ok, false);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-60"), sophia), 20_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-90"), sophia), 30_000);
+  assert.equal(displayedSatPriceCents(product("sat-xavier-120"), sophia), 40_000);
+  assert.equal(
+    displayedSatPriceCents(product("sat-xavier-60"), sophia),
+    product("sat-xavier-60").totalPriceCents,
+  );
+  assert.deepEqual(
+    checkoutLineItemFields({
+      catalogPriceCents: product("sat-xavier-60").totalPriceCents,
+      unitAmountCents: displayedSatPriceCents(product("sat-xavier-60"), sophia),
+      priceId: "price_xavier_200",
+    }),
+    {
+      "line_items[0][price]": "price_xavier_200",
+      "line_items[0][quantity]": 1,
+    },
+  );
 });
 
 test("legacy $130 hours book Eunice, Victoria, and Michelle's Xavier only", () => {
