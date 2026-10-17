@@ -5,6 +5,7 @@ import {
   coursesTable,
   creditLedgerTable,
   db,
+  paymentsTable,
   sessionsTable,
   usersTable,
   type AppUser,
@@ -623,6 +624,97 @@ export async function raiseLegacyCalendarManualEditAlert(
       status: "unread",
     })),
   );
+}
+
+export const PAID_BOOKING_RECONNECT_REFUSAL_KIND = "calendar_reconnect_booking_refused";
+export const PAID_BOOKING_RECONNECT_REFUSAL_TITLE = "Paid booking kept the credit";
+
+export function paidBookingReconnectRefusalMessage(args: {
+  clientName: string;
+  tutorName: string;
+  slotStartIso: string;
+  paymentId: string;
+}): string {
+  return `${args.clientName} paid for ${args.tutorName} at ${args.slotStartIso}. Google Calendar needs a reconnect, so no session was booked. The credit was kept. Payment ${args.paymentId}.`;
+}
+
+/**
+ * In-app only. One notice per administrator, once per payment or session.
+ * A missing administrator list leaves the payment unmarked so a later admin can still be told.
+ */
+export async function notifyPaidBookingReconnectRefusal(args: {
+  paymentId: string;
+  clientName: string;
+  tutorName: string;
+  slotStartIso: string;
+  sessionId?: string | null;
+}): Promise<void> {
+  const message = paidBookingReconnectRefusalMessage(args);
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select id from payments where id = ${args.paymentId} for update`);
+    const [payment] = await tx
+      .select({ auditMetadata: paymentsTable.auditMetadata })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, args.paymentId))
+      .limit(1);
+    if (!payment) return;
+    const metadata = payment.auditMetadata ?? {};
+    if (metadata.calendarReconnectRefusalNotified === true) return;
+    const alreadyNotified = await tx
+      .select({ id: adminNotificationsTable.id })
+      .from(adminNotificationsTable)
+      .where(
+        args.sessionId
+          ? or(
+              and(
+                eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND),
+                eq(adminNotificationsTable.message, message),
+              ),
+              and(
+                eq(adminNotificationsTable.sessionId, args.sessionId),
+                eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND),
+              ),
+            )
+          : and(
+              eq(adminNotificationsTable.kind, PAID_BOOKING_RECONNECT_REFUSAL_KIND),
+              eq(adminNotificationsTable.message, message),
+            ),
+      )
+      .limit(1);
+    if (alreadyNotified.length > 0) {
+      await tx
+        .update(paymentsTable)
+        .set({
+          auditMetadata: { ...metadata, calendarReconnectRefusalNotified: true },
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentsTable.id, args.paymentId));
+      return;
+    }
+    const administrators = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.role, "administrator"));
+    if (administrators.length === 0) return;
+    await tx.insert(adminNotificationsTable).values(
+      administrators.map((admin) => ({
+        recipientUserId: admin.id,
+        kind: PAID_BOOKING_RECONNECT_REFUSAL_KIND,
+        guidanceRequestId: null,
+        sessionId: args.sessionId ?? null,
+        title: PAID_BOOKING_RECONNECT_REFUSAL_TITLE,
+        message,
+        status: "unread" as const,
+      })),
+    );
+    await tx
+      .update(paymentsTable)
+      .set({
+        auditMetadata: { ...metadata, calendarReconnectRefusalNotified: true },
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, args.paymentId));
+  });
 }
 
 export async function notifyAdministratorsOfBooking(args: {

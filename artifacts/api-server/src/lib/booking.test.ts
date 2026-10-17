@@ -563,4 +563,37 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const liveCheck = slice.indexOf("if (!fixedWindow) {");
   assert.ok(liveCheck > 0 && liveCheck < write);
   assert.match(slice.slice(liveCheck, write), /listGoogleBusyWindows/);
+  const unpaidStart = platformSource.indexOf('router.post("/booking/sessions"');
+  const unpaidSlice = platformSource.slice(unpaidStart, start);
+  assert.doesNotMatch(unpaidSlice, /notifyPaid/);
+  const paidStart = platformSource.indexOf('router.post("/booking/sessions/from-payment"');
+  const paidSlice = platformSource.slice(
+    paidStart,
+    platformSource.indexOf("setHeldCheckoutBooker(", paidStart),
+  );
+  const webhookAt = paidSlice.indexOf("async function bookActiveHoldForPayment");
+  const returnSlice = paidSlice.slice(0, webhookAt);
+  const webhookSlice = paidSlice.slice(webhookAt);
+  assert.match(returnSlice, /refusal\?\.code === "CALENDAR_RECONNECT_REQUIRED"/);
+  assert.match(returnSlice, /await notifyPaidReconnectRefusal\(/);
+  assert.match(webhookSlice, /refusal\?\.code === "CALENDAR_RECONNECT_REQUIRED"/);
+  assert.match(webhookSlice, /await notifyPaidReconnectRefusal\(/);
+  assert.match(returnSlice, /try \{\s*await notifyPaidReconnectRefusal\(/);
+  assert.doesNotMatch(webhookSlice, /try \{\s*await notifyPaidReconnectRefusal\(/);
+});
+
+test("a paid reconnect refusal notice stays in the app and fires once", async () => {
+  const source = await readFile(
+    fileURLToPath(new URL("./booking-service.ts", import.meta.url)),
+    "utf8",
+  );
+  const start = source.indexOf("export const PAID_BOOKING_RECONNECT_REFUSAL_KIND");
+  const slice = source.slice(start, source.indexOf("export function requireStudentBooker"));
+  assert.match(slice, /calendar_reconnect_booking_refused/);
+  assert.match(slice, /Paid booking kept the credit/);
+  assert.match(slice, /The credit was kept/);
+  assert.match(slice, /calendarReconnectRefusalNotified/);
+  assert.match(slice, /for update/);
+  assert.match(slice, /if \(administrators\.length === 0\) return/);
+  assert.doesNotMatch(slice, /sendEmail|mailto:|resend|nodemailer/);
 });

@@ -121,6 +121,7 @@ import {
   lockClientCreditsAndRequireHours,
   lockSatTutorCredits,
   notifyAdministratorsOfBooking,
+  notifyPaidBookingReconnectRefusal,
   raiseLegacyCalendarManualEditAlert,
   recordBookingConfirmedAudit,
   sessionBookingConfirmed,
@@ -7543,7 +7544,10 @@ router.post("/booking/sessions", async (req: AuthedRequest, res): Promise<void> 
   await respondWithPrepaidBooking(req, res);
 });
 
-async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Promise<void> {
+async function respondWithPrepaidBooking(
+  req: AuthedRequest,
+  res: Response,
+): Promise<BookingError | null> {
   try {
     requireStudentBooker(req.appUser!);
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -7733,7 +7737,7 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
     };
     if (fixedWindow && !access) {
       await confirmBookedSession(created, false);
-      return;
+      return null;
     }
     try {
       if (!access) {
@@ -7811,7 +7815,7 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         } else if (!res.headersSent) {
           res.status(201).json(await bookingSessionShape(created));
         }
-        return;
+        return null;
       }
       await db.transaction(async (tx) => {
         await rollbackBookingAfterCalendarFailure(tx, {
@@ -7828,8 +7832,12 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
         "The tutor calendar could not be updated. Your credit was not used.",
       );
     }
+    return null;
   } catch (error) {
     sendBookingError(error, res);
+    return error instanceof BookingError
+      ? error
+      : new BookingError(500, "BOOKING_UNAVAILABLE", "Booking service temporarily unavailable");
   }
 }
 
@@ -7854,6 +7862,27 @@ router.post("/booking/slot-holds/release", async (req: AuthedRequest, res): Prom
     sendBookingError(error, res);
   }
 });
+
+async function notifyPaidReconnectRefusal(args: {
+  paymentId: string;
+  clientName: string;
+  tutorProfileId: string;
+  slotStartIso: string;
+  sessionId?: string | null;
+}): Promise<void> {
+  const [tutor] = await db
+    .select({ name: tutorProfilesTable.name })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.id, args.tutorProfileId))
+    .limit(1);
+  await notifyPaidBookingReconnectRefusal({
+    paymentId: args.paymentId,
+    clientName: args.clientName,
+    tutorName: tutor?.name?.trim() || "Tutor",
+    slotStartIso: args.slotStartIso,
+    sessionId: args.sessionId,
+  });
+}
 
 router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): Promise<void> => {
   try {
@@ -7919,7 +7948,19 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
     bookingRequest.onPrepaidBooked = async (sessionId: string) => {
       await rememberBookedPayment(paymentId, sessionId);
     };
-    await respondWithPrepaidBooking(bookingRequest, res);
+    const refusal = await respondWithPrepaidBooking(bookingRequest, res);
+    if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+      try {
+        await notifyPaidReconnectRefusal({
+          paymentId,
+          clientName: req.appUser!.displayName,
+          tutorProfileId: intent.tutorProfileId,
+          slotStartIso: intent.startTime,
+        });
+      } catch {
+        // The 409 is already on the wire. A later webhook retry can still notify.
+      }
+    }
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -7973,7 +8014,15 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
       return this;
     },
   } as unknown as Response;
-  await respondWithPrepaidBooking(bookingRequest, res);
+  const refusal = await respondWithPrepaidBooking(bookingRequest, res);
+  if (refusal?.code === "CALENDAR_RECONNECT_REQUIRED") {
+    await notifyPaidReconnectRefusal({
+      paymentId,
+      clientName: user.displayName,
+      tutorProfileId: intent.tutorProfileId,
+      slotStartIso: intent.startTime,
+    });
+  }
   if (status >= 500) {
     throw new Error("Held checkout could not be booked.");
   }
