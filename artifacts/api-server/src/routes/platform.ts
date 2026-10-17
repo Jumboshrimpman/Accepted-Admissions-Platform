@@ -162,6 +162,17 @@ import {
   selectBookingCheckoutProduct,
 } from "../lib/booking-checkout";
 import {
+  activeSlotHoldsOverlapping,
+  assertSlotNotHeld,
+  checkoutHoldExpiresAt,
+  checkoutHoldExpiresAtUnix,
+  claimBookingSlotHold,
+  releaseExpiredSlotHolds,
+  releaseSlotHoldForPayment,
+  setHeldCheckoutBooker,
+  SlotHoldConflict,
+} from "../lib/booking-slot-hold";
+import {
   remainingCreditHours,
   remainingCreditHoursForProducts,
 } from "../lib/credit-hours";
@@ -639,6 +650,7 @@ import {
   attemptsTable,
   auditLogsTable,
   availabilityRulesTable,
+  bookingSlotHoldsTable,
   calendarConnectionsTable,
   clientRequestsTable,
   courseMembershipsTable,
@@ -5052,6 +5064,7 @@ async function slotsForTutor(
   excludeSessionId?: string,
   allowExistingSessionTutor = false,
   bookerUserId?: string,
+  ignoreHoldPaymentId?: string,
 ) {
   if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
     throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
@@ -5103,10 +5116,21 @@ async function slotsForTutor(
       excludeSessionId,
     }),
   ]);
+  await releaseExpiredSlotHolds(db, tutorProfileId);
+  const heldSlots = await activeSlotHoldsOverlapping(db, {
+    tutorProfileId,
+    start: from,
+    end: to,
+    ignorePaymentId: ignoreHoldPaymentId,
+  });
   const bookedWindows: BusyWindow[] = [
     ...bookedSessions.map((session) => ({
       start: session.dateTime.toISOString(),
       end: new Date(session.dateTime.getTime() + session.durationMinutes * 60_000).toISOString(),
+    })),
+    ...heldSlots.map((hold) => ({
+      start: hold.startTime.toISOString(),
+      end: new Date(hold.startTime.getTime() + Number(hold.durationMinutes) * 60_000).toISOString(),
     })),
     ...sharedMeetWindows,
   ];
@@ -5247,7 +5271,11 @@ async function sessionForActor(sessionId: string, user: AppUser) {
 }
 
 function sendBookingError(error: unknown, res: Response): void {
-  if (error instanceof BookingError || error instanceof BookingServiceError) {
+  if (
+    error instanceof BookingError ||
+    error instanceof BookingServiceError ||
+    error instanceof SlotHoldConflict
+  ) {
     res.status(error.status).json({ code: error.code, error: error.message });
     return;
   }
@@ -7241,6 +7269,8 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
     const slotTakenMessage =
       (req as AuthedRequest & { bookingSlotTakenMessage?: string }).bookingSlotTakenMessage ??
       "That time is no longer available. Choose another slot.";
+    const holdPaymentId = (req as AuthedRequest & { bookingHoldPaymentId?: string })
+      .bookingHoldPaymentId;
     const { tutor, rule, access, slots } = await slotsForTutor(
       tutorProfileId,
       new Date(start.getTime() - 1),
@@ -7249,6 +7279,7 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       undefined,
       false,
       req.appUser!.id,
+      holdPaymentId,
     );
     if (!access) throw new BookingError(409, "CALENDAR_DISCONNECTED", "This tutor's calendar is disconnected.");
     const appCalendarId = access.connection.appCalendarId?.trim();
@@ -7299,6 +7330,12 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
       );
       await acquireBookingLocks(tx, participantIds, start.toISOString());
       const end = new Date(start.getTime() + durationMinutes * 60_000);
+      await assertSlotNotHeld(tx, {
+        tutorProfileId,
+        start,
+        end,
+        ignorePaymentId: holdPaymentId,
+      });
       await assertNoScheduleConflict(tx, { participantIds, start, end });
       let liveBusyWindows: BusyWindow[];
       try {
@@ -7439,6 +7476,28 @@ async function respondWithPrepaidBooking(req: AuthedRequest, res: Response): Pro
   }
 }
 
+router.post("/booking/slot-holds/release", async (req: AuthedRequest, res): Promise<void> => {
+  try {
+    requireStudentBooker(req.appUser!);
+    const paymentId = stringField((req.body ?? {}) as Record<string, unknown>, "paymentId");
+    if (!paymentId) throw new BookingError(400, "PAYMENT_REQUIRED", "A payment is required.");
+    const [payment] = await db
+      .select({ id: paymentsTable.id, status: paymentsTable.status })
+      .from(paymentsTable)
+      .where(and(eq(paymentsTable.id, paymentId), eq(paymentsTable.clientUserId, req.appUser!.id)))
+      .limit(1);
+    if (!payment) throw new BookingError(404, "PAYMENT_NOT_FOUND", "That payment could not be found.");
+    if (payment.status === "paid") {
+      res.json({ released: false });
+      return;
+    }
+    await releaseSlotHoldForPayment(db, payment.id);
+    res.json({ released: true });
+  } catch (error) {
+    sendBookingError(error, res);
+  }
+});
+
 router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): Promise<void> => {
   try {
     requireStudentBooker(req.appUser!);
@@ -7489,6 +7548,7 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
     const bookingRequest = req as AuthedRequest & {
       body: Record<string, unknown>;
       bookingSlotTakenMessage?: string;
+      bookingHoldPaymentId?: string;
       onPrepaidBooked?: (sessionId: string) => Promise<void>;
     };
     bookingRequest.body = {
@@ -7497,6 +7557,7 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
       durationMinutes: intent.durationMinutes,
     };
     bookingRequest.bookingSlotTakenMessage = BOOKING_CHECKOUT_SLOT_TAKEN;
+    bookingRequest.bookingHoldPaymentId = paymentId;
     bookingRequest.onPrepaidBooked = async (sessionId: string) => {
       await rememberBookedPayment(paymentId, sessionId);
     };
@@ -7505,6 +7566,61 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
     sendBookingError(error, res);
   }
 });
+
+/**
+ * Webhook booking is limited to an active hold. If the hold has expired, this
+ * returns without creating a session so the hours stay on the account.
+ */
+async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, paymentId))
+    .limit(1);
+  if (!payment || payment.status !== "paid" || !payment.clientUserId) return;
+  if (bookedSessionIdFromMetadata(payment.auditMetadata)) return;
+  const intent = bookingIntentFromMetadata(payment.auditMetadata);
+  if (!intent) return;
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, payment.clientUserId))
+    .limit(1);
+  if (!user || user.id !== payment.clientUserId) return;
+  const bookingRequest = {
+    appUser: user,
+    body: {
+      tutorProfileId: intent.tutorProfileId,
+      startTime: intent.startTime,
+      durationMinutes: intent.durationMinutes,
+    },
+    bookingSlotTakenMessage: BOOKING_CHECKOUT_SLOT_TAKEN,
+    bookingHoldPaymentId: paymentId,
+    onPrepaidBooked: async (sessionId: string) => {
+      await rememberBookedPayment(paymentId, sessionId);
+    },
+  } as AuthedRequest & {
+    bookingSlotTakenMessage?: string;
+    bookingHoldPaymentId?: string;
+    onPrepaidBooked?: (sessionId: string) => Promise<void>;
+  };
+  let status = 200;
+  const res = {
+    status(code: number) {
+      status = code;
+      return this;
+    },
+    json() {
+      return this;
+    },
+  } as unknown as Response;
+  await respondWithPrepaidBooking(bookingRequest, res);
+  if (status >= 500) {
+    throw new Error("Held checkout could not be booked.");
+  }
+}
+
+setHeldCheckoutBooker(bookActiveHoldForPayment);
 
 router.post("/booking/sessions/:sessionId/cancel", async (req: AuthedRequest, res): Promise<void> => {
   try {
@@ -7624,6 +7740,11 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     try {
       updated = await db.transaction(async (tx) => {
         await acquireBookingLocks(tx, participantIds, start.toISOString());
+        await assertSlotNotHeld(tx, {
+          tutorProfileId: profile.id,
+          start,
+          end,
+        });
         await assertNoScheduleConflict(tx, {
           participantIds,
           start,
@@ -7811,7 +7932,7 @@ async function resolveDirectBookingProduct(
     .where(and(eq(satProductsTable.id, selected.id), eq(satProductsTable.active, true)))
     .limit(1);
   if (!product) return { status: 404 as const, error: "No checkout product matches this tutor and length." };
-  return { product };
+  return { product, tutor };
 }
 
 router.post(
@@ -7827,10 +7948,11 @@ router.post(
     }
     let product: typeof satProductsTable.$inferSelect | undefined;
     let bookingIntent: ReturnType<typeof bookingIntentFromMetadata> = null;
+    let bookingTutor: { id: string; userId: string | null } | null = null;
     if (intentResult.present && "intent" in intentResult) {
       const resolved = await resolveDirectBookingProduct(req.appUser!, intentResult.intent);
       if ("error" in resolved) {
-        res.status(resolved.status).json({ error: resolved.error });
+        res.status(resolved.status ?? 404).json({ error: resolved.error });
         return;
       }
       if (requestedProductId && requestedProductId !== resolved.product.id) {
@@ -7839,6 +7961,7 @@ router.post(
       }
       product = resolved.product;
       bookingIntent = intentResult.intent;
+      bookingTutor = resolved.tutor;
     } else {
       const [listed] = await db
         .select()
@@ -7914,7 +8037,11 @@ router.post(
       !testCheckout && checkoutAudienceForSlug(req.appUser!.id, product.slug) === "sat"
         ? displayedSatPriceCents(product, req.appUser)
         : product.totalPriceCents;
-    const [invoice, payment] = await db.transaction(async (tx) => {
+    const holdExpiresAt = bookingIntent ? checkoutHoldExpiresAt() : null;
+    let invoice: typeof invoicesTable.$inferSelect;
+    let payment: typeof paymentsTable.$inferSelect;
+    try {
+      [invoice, payment] = await db.transaction(async (tx) => {
       const [createdInvoice] = await tx
         .insert(invoicesTable)
         .values({
@@ -7957,15 +8084,33 @@ router.post(
           },
         })
         .returning();
-      return [createdInvoice!, createdPayment!];
+      if (bookingIntent && holdExpiresAt && bookingTutor) {
+        await claimBookingSlotHold(tx, {
+          tutorProfileId: bookingIntent.tutorProfileId,
+          tutorUserId: bookingTutor.userId,
+          clientUserId: req.appUser!.id,
+          paymentId: createdPayment!.id,
+          start: new Date(bookingIntent.startTime),
+          durationMinutes: bookingIntent.durationMinutes,
+          expiresAt: holdExpiresAt,
+        });
+      }
+      return [createdInvoice!, createdPayment!] as const;
     });
+    } catch (error) {
+      if (error instanceof SlotHoldConflict) {
+        res.status(error.status).json({ code: error.code, error: error.message });
+        return;
+      }
+      throw error;
+    }
     try {
       const origin = publicAppOrigin();
       const successUrl = bookingIntent
         ? `${origin}/portal?payment=success&bookPayment=${payment.id}`
         : `${origin}/portal/sat?payment=success`;
       const cancelUrl = bookingIntent
-        ? `${origin}/portal?payment=canceled`
+        ? `${origin}/portal?payment=canceled&bookPayment=${payment.id}`
         : `${origin}/portal/sat?payment=canceled`;
       const checkout = await createCheckoutSession({
         user: req.appUser!,
@@ -7975,7 +8120,17 @@ router.post(
         successUrl,
         cancelUrl,
         unitAmountCents: chargeCents,
+        expiresAtUnix: holdExpiresAt ? checkoutHoldExpiresAtUnix(holdExpiresAt) : undefined,
       });
+      if (holdExpiresAt && checkout.expiresAt) {
+        await db
+          .update(bookingSlotHoldsTable)
+          .set({
+            expiresAt: new Date(checkout.expiresAt * 1000),
+            updatedAt: new Date(),
+          })
+          .where(eq(bookingSlotHoldsTable.paymentId, payment.id));
+      }
       await db
         .update(paymentsTable)
         .set({
@@ -7992,6 +8147,7 @@ router.post(
       });
     } catch (error) {
       await db.transaction(async (tx) => {
+        await releaseSlotHoldForPayment(tx, payment.id);
         await tx
           .update(paymentsTable)
           .set({

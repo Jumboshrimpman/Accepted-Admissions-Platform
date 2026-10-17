@@ -351,6 +351,19 @@ export function BookingCard({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentId = params.get("bookPayment");
+    if (params.get("payment") === "canceled" && paymentId) {
+      fetch(apiPath("/api/booking/slot-holds/release"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ paymentId }),
+      }).finally(() => {
+        params.delete("bookPayment");
+        params.delete("payment");
+        const query = params.toString();
+        window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+      });
+      return;
+    }
     if (params.get("payment") !== "success" || !paymentId) return;
     let cancelled = false;
     setCheckoutBusy(true);

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   jsonb,
@@ -548,6 +549,39 @@ export const paymentsTable = pgTable(
   },
   (table) => [
     uniqueIndex("payment_provider_event_idx").on(table.providerEventId),
+  ],
+);
+
+/**
+ * A direct-checkout hold for one tutor slot. Active rows block other clients.
+ * Released rows stay for audit and drop out of the partial unique index.
+ */
+export const bookingSlotHoldsTable = pgTable(
+  "booking_slot_holds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tutorProfileId: uuid("tutor_profile_id")
+      .notNull()
+      .references(() => tutorProfilesTable.id),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => paymentsTable.id, { onDelete: "cascade" }),
+    startTime: timestamp("start_time", { withTimezone: true }).notNull(),
+    durationMinutes: numeric("duration_minutes", { mode: "number" }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("booking_slot_holds_payment_idx").on(table.paymentId),
+    uniqueIndex("booking_slot_holds_active_slot_idx")
+      .on(table.tutorProfileId, table.startTime, table.durationMinutes)
+      .where(sql`${table.releasedAt} is null`),
+    index("booking_slot_holds_tutor_expires_idx").on(table.tutorProfileId, table.expiresAt),
   ],
 );
 

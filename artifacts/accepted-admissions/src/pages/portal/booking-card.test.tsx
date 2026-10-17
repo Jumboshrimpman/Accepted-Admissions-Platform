@@ -314,6 +314,9 @@ describe("client availability calendar", () => {
     expect(photo?.className).toContain("max-w-28");
     expect(screen.getByRole("tab", { name: "Victoria" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Victoria Wijerathnayapa" })).toBeNull();
+    expect(screen.queryByText(/unlock after a verified Stripe payment/)).toBeNull();
+    expect(screen.queryByText(/checked against their live Google Calendar/)).toBeNull();
+    expect(screen.queryByText(/checked against that tutor/)).toBeNull();
   });
 
   test("sends a short-credit client to checkout for the chosen tutor and length", async () => {
@@ -402,6 +405,7 @@ describe("client availability calendar", () => {
       expect(screen.queryByText(/full price list/i)).toBeTruthy();
       expect(screen.queryByText(/unlock after a verified Stripe payment/)).toBeNull();
       expect(screen.queryByText(/checked against their live Google Calendar/)).toBeNull();
+      expect(screen.queryByText(/checked against that tutor/)).toBeNull();
       expect(screen.queryByText(/Choose Eunice, Victoria, or Xavier, then/)).toBeNull();
       expect(screen.queryByText(/Hours stay with the tutor you buy them for/)).toBeNull();
       expect(screen.queryByText(/Nika is \$100\/hour/)).toBeNull();

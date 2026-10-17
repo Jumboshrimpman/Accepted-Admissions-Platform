@@ -386,6 +386,13 @@
       "when": 1792300000000,
       "tag": "0058_per_tutor_sat_rates",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792300000001,
+      "tag": "0059_booking_slot_holds",
+      "breakpoints": true
     }
   ]
 }

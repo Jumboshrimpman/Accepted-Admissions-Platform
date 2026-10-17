@@ -1381,6 +1381,59 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByTestId("adaptive-next-practice").textContent).toMatch(/Practice Algebra next/);
   });
 
+  test("Sophia's SAT credits and Neel's consulting credits omit checkout blurbs", () => {
+    const phrases = [
+      /unlock after a verified Stripe payment/,
+      /checked against their live Google Calendar/,
+      /checked against that tutor/,
+    ];
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
+        displayName: "Sophia Sleiman",
+        email: "sophia.sleiman@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+    } as Dashboard;
+    const sophia = render(<FallWelcomeDashboard />);
+    expect(screen.getByText("SAT session credits")).toBeTruthy();
+    for (const phrase of phrases) expect(screen.queryByText(phrase)).toBeNull();
+    sophia.unmount();
+
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+        displayName: "Neel Dharni",
+        email: "neel.dharni@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeCollegeConsulting: true,
+        selfServeSatBooking: false,
+        twelveSessionPlan: false,
+      },
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    expect(screen.getByText("College Consulting credits")).toBeTruthy();
+    for (const phrase of phrases) expect(screen.queryByText(phrase)).toBeNull();
+  });
+
   test("Michelle can self-serve SAT booking for Xavier or Eunice", () => {
     mocks.dashboard = {
       ...dashboardForRole("student"),
