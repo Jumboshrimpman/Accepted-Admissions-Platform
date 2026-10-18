@@ -119,13 +119,17 @@ export function adminCalendarInviteHealth(
     googleAccountEmail?: string | null;
     portalEmail?: string | null;
     userEmail?: string | null;
+    title?: string | null;
+    bookingEligible?: boolean | null;
     status?: string | null;
     hasRefreshToken: boolean;
     grantedScopes?: string | null;
     appCalendarId?: string | null;
   }>,
 ): AdminCalendarInviteHealth {
-  const writable = rows.find((row) => adminCalendarGrantCanWriteEvents(row));
+  const writable = rows.find(
+    (row) => isAdminPortalCalendarAccount(row) && adminCalendarGrantCanWriteEvents(row),
+  );
   if (writable) {
     return {
       healthy: true,

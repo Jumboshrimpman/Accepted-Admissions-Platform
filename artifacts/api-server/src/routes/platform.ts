@@ -10192,6 +10192,8 @@ router.get(
           googleAccountEmail: row.googleAccountEmail,
           portalEmail: row.portalEmail,
           userEmail: row.userEmail,
+          title: row.title,
+          bookingEligible: row.bookingEligible,
           status: row.status,
           hasRefreshToken: Boolean(row.hasRefreshToken),
           grantedScopes: row.grantedScopes,
