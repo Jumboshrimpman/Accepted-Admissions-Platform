@@ -4,6 +4,7 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
+  adminNotificationsTable,
   auditLogsTable,
   availabilityRulesTable,
   bookingSlotHoldsTable,
@@ -38,6 +39,7 @@ const RACE_START = "2026-10-27T19:00:00.000Z";
 const PAID_START = "2026-10-28T19:00:00.000Z";
 const TAKEN_START = "2026-10-29T19:00:00.000Z";
 const EXPIRE_START = "2026-10-30T19:00:00.000Z";
+const DUPLICATE_START = "2026-11-03T19:00:00.000Z";
 
 function testAuthMiddleware(user: AppUser) {
   return (req: Request, _res: Response, next: NextFunction): void => {
@@ -113,6 +115,7 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
   const originalFetch = globalThis.fetch.bind(globalThis);
   const appCalendarId = `app-cal-${suffix}`;
   let busyWindows: Array<{ start: string; end: string }> = [];
+  let eventWriteDelayMs = 0;
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const url = String(
       typeof input === "string" || input instanceof URL ? input : input.url,
@@ -126,6 +129,9 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
       });
     }
     if (url.includes("/events")) {
+      if (eventWriteDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, eventWriteDelayMs));
+      }
       return Response.json({
         id: `evt-${randomUUID()}`,
         htmlLink: "https://calendar.google.com/calendar/event?eid=slot-hold",
@@ -206,7 +212,7 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
       .values({
         clerkUserId: `slot-hold-a:${suffix}`,
         email: `slot-hold-a-${suffix}@example.invalid`,
-        displayName: "Ada Holder",
+        displayName: `Ada ${suffix}`,
         role: "student",
       })
       .returning();
@@ -398,6 +404,58 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
       paidSessions[0]?.id,
     );
 
+    eventWriteDelayMs = 400;
+    const duplicateCheckout = await postJson(serverA.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: profileId,
+      durationMinutes: 60,
+      startTime: DUPLICATE_START,
+    });
+    assert.equal(duplicateCheckout.status, 201, JSON.stringify(duplicateCheckout.body));
+    const duplicatePaymentId = String(duplicateCheckout.body.paymentId);
+    createdPaymentIds.push(duplicatePaymentId);
+    const duplicateObject = {
+      id: `cs_test_${duplicatePaymentId}`,
+      payment_status: "paid",
+      amount_total: 20_000,
+      latest_charge: `ch_hold_dup_${suffix}`,
+      metadata: { payment_id: duplicatePaymentId },
+      client_reference_id: duplicatePaymentId,
+    };
+    await Promise.all([
+      processStripeWebhook({
+        id: `evt_hold_dup_checkout_${suffix}`,
+        type: "checkout.session.completed",
+        data: { object: duplicateObject },
+      }),
+      processStripeWebhook({
+        id: `evt_hold_dup_intent_${suffix}`,
+        type: "payment_intent.succeeded",
+        data: { object: { ...duplicateObject, id: `pi_hold_dup_${suffix}` } },
+      }),
+    ]);
+    eventWriteDelayMs = 0;
+    const duplicateSessions = await db
+      .select()
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.clientUserId, studentA!.id),
+          eq(sessionsTable.dateTime, new Date(DUPLICATE_START)),
+        ),
+      );
+    assert.equal(duplicateSessions.length, 1);
+    assert.equal(duplicateSessions[0]?.bookingStatus, "confirmed");
+    const duplicateRefusals = await db
+      .select({ id: adminNotificationsTable.id })
+      .from(adminNotificationsTable)
+      .where(
+        and(
+          eq(adminNotificationsTable.kind, "calendar_reconnect_booking_refused"),
+          eq(adminNotificationsTable.recipientUserId, adminUser!.id),
+        ),
+      );
+    assert.equal(duplicateRefusals.length, 0);
+
     const takenCheckout = await postJson(serverA.baseUrl, "/api/payments/checkout", {
       tutorProfileId: profileId,
       durationMinutes: 60,
@@ -444,6 +502,21 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
     });
     assert.equal(fallback.status, 409, JSON.stringify(fallback.body));
     assert.match(String(fallback.body.error), /hours are on your account/);
+    let genuineRefusals: { id: string }[] = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      genuineRefusals = await db
+        .select({ id: adminNotificationsTable.id })
+        .from(adminNotificationsTable)
+        .where(
+          and(
+            eq(adminNotificationsTable.kind, "calendar_reconnect_booking_refused"),
+            eq(adminNotificationsTable.recipientUserId, adminUser!.id),
+          ),
+        );
+      if (genuineRefusals.length > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(genuineRefusals.length, 1, JSON.stringify(fallback.body));
     const adaCredits = await db
       .select()
       .from(creditLedgerTable)
@@ -454,8 +527,8 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
     const debited = adaCredits
       .filter((row) => row.entryType === "debit")
       .reduce((sum, row) => sum + Number(row.hours), 0);
-    assert.equal(purchased, 2);
-    assert.equal(debited, 1);
+    assert.equal(purchased, 3);
+    assert.equal(debited, 2);
 
     const expireCheckout = await postJson(serverA.baseUrl, "/api/payments/checkout", {
       tutorProfileId: profileId,
@@ -587,6 +660,8 @@ test("direct checkout holds a slot until payment, expiry, or cancel", async (t) 
           `evt_hold_paid_${suffix}`,
           `evt_hold_late_${suffix}`,
           `evt_hold_expired_${suffix}`,
+          `evt_hold_dup_checkout_${suffix}`,
+          `evt_hold_dup_intent_${suffix}`,
         ]),
       );
     if (createdUserIds.length > 0) {

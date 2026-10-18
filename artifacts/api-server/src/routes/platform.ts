@@ -174,7 +174,6 @@ import { collegeConsultingProvisionStatus } from "../lib/college-consulting-prov
 import {
   BOOKING_CHECKOUT_PAYMENT_PENDING,
   BOOKING_CHECKOUT_SLOT_TAKEN,
-  bookedSessionIdFromMetadata,
   bookingIntentFromBody,
   bookingIntentFromMetadata,
   selectBookingCheckoutProduct,
@@ -185,10 +184,14 @@ import {
   checkoutHoldExpiresAt,
   checkoutHoldExpiresAtUnix,
   claimBookingSlotHold,
+  claimPaymentBooking,
+  clearPaymentBookingClaim,
+  liveBookedSessionForPayment,
   releaseExpiredSlotHolds,
   releaseSlotHoldForPayment,
   setHeldCheckoutBooker,
   SlotHoldConflict,
+  withPaymentBookingLock,
 } from "../lib/booking-slot-hold";
 import {
   remainingCreditHours,
@@ -7995,7 +7998,7 @@ async function respondWithPrepaidBooking(
           [],
         );
       }
-      return insertConfirmedBookingWithDebit(tx, {
+      const session = await insertConfirmedBookingWithDebit(tx, {
         courseId: course.id,
         clientUserId: req.appUser!.id,
         tutorUserId: tutor.userId,
@@ -8012,6 +8015,8 @@ async function respondWithPrepaidBooking(
         productId: consultingProduct?.id ?? null,
         ...(satDebits ? { debits: satDebits } : {}),
       });
+      if (holdPaymentId) await claimPaymentBooking(tx, holdPaymentId, session.id);
+      return session;
     });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {
       if (!(await sessionBookingConfirmed(session.id))) {
@@ -8227,6 +8232,7 @@ async function respondWithPrepaidBooking(
           durationMinutes,
           actorUserId: req.appUser!.id,
         });
+        if (holdPaymentId) await clearPaymentBookingClaim(tx, holdPaymentId, created.id);
       });
       if (error instanceof BookingError) throw error;
       throw new BookingError(
@@ -8316,55 +8322,71 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
     if (!payment || payment.status !== "paid") {
       throw new BookingError(409, "PAYMENT_NOT_CONFIRMED", BOOKING_CHECKOUT_PAYMENT_PENDING);
     }
-    const existingSessionId = bookedSessionIdFromMetadata(payment.auditMetadata);
-    if (existingSessionId) {
-      const [existing] = await db
+    await withPaymentBookingLock(paymentId, async () => {
+      const [lockedPayment] = await db
         .select()
-        .from(sessionsTable)
-        .where(eq(sessionsTable.id, existingSessionId))
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId))
         .limit(1);
-      if (existing && existing.bookingStatus !== "cancelled") {
-        res.status(201).json(await bookingSessionShape(existing));
-        return;
+      if (!lockedPayment || lockedPayment.status !== "paid") {
+        throw new BookingError(409, "PAYMENT_NOT_CONFIRMED", BOOKING_CHECKOUT_PAYMENT_PENDING);
       }
-    }
-    const intent = bookingIntentFromMetadata(payment.auditMetadata);
-    if (!intent) {
-      throw new BookingError(
-        409,
-        "BOOKING_INTENT_MISSING",
-        "This payment is not tied to a chosen time. Your hours are on your account. Choose another time.",
-      );
-    }
-    const bookingRequest = req as AuthedRequest & {
-      body: Record<string, unknown>;
-      bookingSlotTakenMessage?: string;
-      bookingHoldPaymentId?: string;
-      onPrepaidBooked?: (sessionId: string) => Promise<void>;
-    };
-    bookingRequest.body = {
-      tutorProfileId: intent.tutorProfileId,
-      startTime: intent.startTime,
-      durationMinutes: intent.durationMinutes,
-      ...(intent.service === "college-consulting" ? { subject: "College Consulting" } : {}),
-    };
-    bookingRequest.bookingSlotTakenMessage = BOOKING_CHECKOUT_SLOT_TAKEN;
-    bookingRequest.bookingHoldPaymentId = paymentId;
-    bookingRequest.onPrepaidBooked = async (sessionId: string) => {
-      await rememberBookedPayment(paymentId, sessionId);
-    };
-    const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-    if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
-      try {
-        await notifyPaidReconnectRefusal({
-          paymentId,
-          clientName: req.appUser!.displayName,
-          slotStartIso: intent.startTime,
-        });
-      } catch {
-        // The refusal is already on the wire. A later webhook retry can still notify.
+      const live = await liveBookedSessionForPayment(lockedPayment.auditMetadata);
+      if (live) {
+        const [existing] = await db
+          .select()
+          .from(sessionsTable)
+          .where(eq(sessionsTable.id, live.id))
+          .limit(1);
+        if (existing) {
+          res.status(201).json(await bookingSessionShape(existing));
+          return;
+        }
       }
-    }
+      const intent = bookingIntentFromMetadata(lockedPayment.auditMetadata);
+      if (!intent) {
+        throw new BookingError(
+          409,
+          "BOOKING_INTENT_MISSING",
+          "This payment is not tied to a chosen time. Your hours are on your account. Choose another time.",
+        );
+      }
+      const bookingRequest = req as AuthedRequest & {
+        body: Record<string, unknown>;
+        bookingSlotTakenMessage?: string;
+        bookingHoldPaymentId?: string;
+        onPrepaidBooked?: (sessionId: string) => Promise<void>;
+      };
+      bookingRequest.body = {
+        tutorProfileId: intent.tutorProfileId,
+        startTime: intent.startTime,
+        durationMinutes: intent.durationMinutes,
+        ...(intent.service === "college-consulting" ? { subject: "College Consulting" } : {}),
+      };
+      bookingRequest.bookingSlotTakenMessage = BOOKING_CHECKOUT_SLOT_TAKEN;
+      bookingRequest.bookingHoldPaymentId = paymentId;
+      bookingRequest.onPrepaidBooked = async (sessionId: string) => {
+        await rememberBookedPayment(paymentId, sessionId);
+      };
+      const refusal = await respondWithPrepaidBooking(bookingRequest, res);
+      if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
+        const [after] = await db
+          .select({ auditMetadata: paymentsTable.auditMetadata })
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, paymentId))
+          .limit(1);
+        if (await liveBookedSessionForPayment(after?.auditMetadata)) return;
+        try {
+          await notifyPaidReconnectRefusal({
+            paymentId,
+            clientName: req.appUser!.displayName,
+            slotStartIso: intent.startTime,
+          });
+        } catch {
+          // The refusal is already on the wire. A later webhook retry can still notify.
+        }
+      }
+    });
   } catch (error) {
     sendBookingError(error, res);
   }
@@ -8375,60 +8397,68 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
  * returns without creating a session so the hours stay on the account.
  */
 async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
-  const [payment] = await db
-    .select()
-    .from(paymentsTable)
-    .where(eq(paymentsTable.id, paymentId))
-    .limit(1);
-  if (!payment || payment.status !== "paid" || !payment.clientUserId) return;
-  if (bookedSessionIdFromMetadata(payment.auditMetadata)) return;
-  const intent = bookingIntentFromMetadata(payment.auditMetadata);
-  if (!intent) return;
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, payment.clientUserId))
-    .limit(1);
-  if (!user || user.id !== payment.clientUserId) return;
-  const bookingRequest = {
-    appUser: user,
-    body: {
-      tutorProfileId: intent.tutorProfileId,
-      startTime: intent.startTime,
-      durationMinutes: intent.durationMinutes,
-      ...(intent.service === "college-consulting" ? { subject: "College Consulting" } : {}),
-    },
-    bookingSlotTakenMessage: BOOKING_CHECKOUT_SLOT_TAKEN,
-    bookingHoldPaymentId: paymentId,
-    onPrepaidBooked: async (sessionId: string) => {
-      await rememberBookedPayment(paymentId, sessionId);
-    },
-  } as AuthedRequest & {
-    bookingSlotTakenMessage?: string;
-    bookingHoldPaymentId?: string;
-    onPrepaidBooked?: (sessionId: string) => Promise<void>;
-  };
-  let status = 200;
-  const res = {
-    status(code: number) {
-      status = code;
-      return this;
-    },
-    json() {
-      return this;
-    },
-  } as unknown as Response;
-  const refusal = await respondWithPrepaidBooking(bookingRequest, res);
-  if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
-    await notifyPaidReconnectRefusal({
-      paymentId,
-      clientName: user.displayName,
-      slotStartIso: intent.startTime,
-    });
-  }
-  if (status >= 500) {
-    throw new Error("Held checkout could not be booked.");
-  }
+  await withPaymentBookingLock(paymentId, async () => {
+    const [payment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, paymentId))
+      .limit(1);
+    if (!payment || payment.status !== "paid" || !payment.clientUserId) return;
+    if (await liveBookedSessionForPayment(payment.auditMetadata)) return;
+    const intent = bookingIntentFromMetadata(payment.auditMetadata);
+    if (!intent) return;
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, payment.clientUserId))
+      .limit(1);
+    if (!user || user.id !== payment.clientUserId) return;
+    const bookingRequest = {
+      appUser: user,
+      body: {
+        tutorProfileId: intent.tutorProfileId,
+        startTime: intent.startTime,
+        durationMinutes: intent.durationMinutes,
+        ...(intent.service === "college-consulting" ? { subject: "College Consulting" } : {}),
+      },
+      bookingSlotTakenMessage: BOOKING_CHECKOUT_SLOT_TAKEN,
+      bookingHoldPaymentId: paymentId,
+      onPrepaidBooked: async (sessionId: string) => {
+        await rememberBookedPayment(paymentId, sessionId);
+      },
+    } as AuthedRequest & {
+      bookingSlotTakenMessage?: string;
+      bookingHoldPaymentId?: string;
+      onPrepaidBooked?: (sessionId: string) => Promise<void>;
+    };
+    let status = 200;
+    const res = {
+      status(code: number) {
+        status = code;
+        return this;
+      },
+      json() {
+        return this;
+      },
+    } as unknown as Response;
+    const refusal = await respondWithPrepaidBooking(bookingRequest, res);
+    if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
+      const [after] = await db
+        .select({ auditMetadata: paymentsTable.auditMetadata })
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId))
+        .limit(1);
+      if (await liveBookedSessionForPayment(after?.auditMetadata)) return;
+      await notifyPaidReconnectRefusal({
+        paymentId,
+        clientName: user.displayName,
+        slotStartIso: intent.startTime,
+      });
+    }
+    if (status >= 500) {
+      throw new Error("Held checkout could not be booked.");
+    }
+  });
 }
 
 setHeldCheckoutBooker(bookActiveHoldForPayment);

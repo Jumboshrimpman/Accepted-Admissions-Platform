@@ -252,6 +252,54 @@ test("Nika's fixed week offers only those windows and ignores Google busy", asyn
   assert.equal(tooSoon.includes(at("2026-10-19", "21:00")), false);
 });
 
+test("dropping Nika's date hours from Oct 26 uses weekly hours and keeps Oct 19", () => {
+  const at = (day: string, time: string) =>
+    zonedDateTimeToUtc(day, time, "America/New_York").toISOString();
+  const opened = {
+    "2026-10-17": [],
+    "2026-10-18": [],
+    "2026-10-19": [{ start: "21:00", end: "22:00" }],
+    "2026-10-20": [],
+    "2026-10-21": [{ start: "18:05", end: "19:30" }],
+    "2026-10-22": [{ start: "16:00", end: "17:00" }, { start: "18:00", end: "19:00" }],
+    "2026-10-23": [{ start: "16:00", end: "20:00" }],
+    "2026-10-24": [{ start: "13:00", end: "20:00" }],
+    "2026-10-25": [{ start: "13:00", end: "20:00" }],
+  };
+  const rule = {
+    timezone: "America/New_York",
+    weeklyHours: { "1": [{ start: "07:00", end: "21:00" }] },
+    dateHours: opened,
+    bookingNoticeMinutes: 0,
+    bufferMinutes: 0,
+    blackoutDates: [],
+  };
+  const now = new Date("2026-10-16T15:00:00.000Z");
+  const monday = generateAvailableSlots(
+    rule,
+    new Date("2026-10-26T04:00:00.000Z"),
+    new Date("2026-10-27T04:00:00.000Z"),
+    60,
+    [{ start: at("2026-10-26", "12:00"), end: at("2026-10-26", "13:00") }],
+    [],
+    now,
+  );
+  assert.equal(monday.includes(at("2026-10-26", "07:00")), true);
+  assert.equal(monday.includes(at("2026-10-26", "11:00")), true);
+  assert.equal(monday.includes(at("2026-10-26", "12:00")), false);
+  assert.equal(monday.includes(at("2026-10-26", "20:00")), true);
+  const octoberNineteenth = generateAvailableSlots(
+    rule,
+    new Date("2026-10-19T04:00:00.000Z"),
+    new Date("2026-10-20T04:00:00.000Z"),
+    60,
+    [],
+    [],
+    now,
+  );
+  assert.deepEqual(octoberNineteenth, [at("2026-10-19", "21:00")]);
+});
+
 test("one closed date does not turn the rest of the week off", () => {
   const closedChristmas = generateAvailableSlots(
     {
