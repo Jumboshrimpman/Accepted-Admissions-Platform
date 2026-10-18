@@ -160,7 +160,7 @@ export const GetAdminOverviewResponse = zod.object({
 })).describe('Private guidance form submissions, visible only to administrators.'),
   "notifications": zod.array(zod.object({
   "id": zod.string(),
-  "kind": zod.enum(['guidance_request_assigned', 'booking_confirmed', 'booking_cancelled', 'legacy_calendar_event', 'client_intake_submitted', 'hard_sat_shortfall', 'manual_calendar_invite']),
+  "kind": zod.enum(['guidance_request_assigned', 'booking_confirmed', 'booking_cancelled', 'legacy_calendar_event', 'client_intake_submitted', 'hard_sat_shortfall', 'manual_calendar_invite', 'calendar_reconnect_booking_refused', 'prework_not_startable', 'question_report']),
   "guidanceRequestId": zod.string().nullish(),
   "sessionId": zod.string().nullish(),
   "title": zod.string(),
@@ -189,7 +189,7 @@ export const UpdateAdminNotificationBody = zod.object({
 
 export const UpdateAdminNotificationResponse = zod.object({
   "id": zod.string(),
-  "kind": zod.enum(['guidance_request_assigned', 'booking_confirmed', 'booking_cancelled', 'legacy_calendar_event', 'client_intake_submitted', 'hard_sat_shortfall', 'manual_calendar_invite']),
+  "kind": zod.enum(['guidance_request_assigned', 'booking_confirmed', 'booking_cancelled', 'legacy_calendar_event', 'client_intake_submitted', 'hard_sat_shortfall', 'manual_calendar_invite', 'calendar_reconnect_booking_refused', 'prework_not_startable', 'question_report']),
   "guidanceRequestId": zod.string().nullish(),
   "sessionId": zod.string().nullish(),
   "title": zod.string(),

@@ -17,4 +17,7 @@ export const AdminNotificationKind = {
   client_intake_submitted: 'client_intake_submitted',
   hard_sat_shortfall: 'hard_sat_shortfall',
   manual_calendar_invite: 'manual_calendar_invite',
+  calendar_reconnect_booking_refused: 'calendar_reconnect_booking_refused',
+  prework_not_startable: 'prework_not_startable',
+  question_report: 'question_report',
 } as const;

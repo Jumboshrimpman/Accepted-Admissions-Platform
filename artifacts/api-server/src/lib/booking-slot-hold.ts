@@ -2,8 +2,12 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   bookingSlotHoldsTable,
   db,
+  paymentsTable,
+  pool,
   sessionsTable,
 } from "@workspace/db";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { bookedSessionIdFromMetadata } from "./booking-checkout.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { acquireSharedMeetLock, assertNoSharedMeetConflict } from "./booking-service.ts";
 
@@ -232,4 +236,94 @@ export async function bookHeldCheckoutIfActive(paymentId: string): Promise<void>
   if (!heldCheckoutBooker) return;
   if (!(await holdIsActiveForPayment(paymentId))) return;
   await heldCheckoutBooker(paymentId);
+}
+
+/**
+ * One checkout and one payment-intent webhook can book the same payment at once.
+ * The lock is session-scoped on one pooled client so both callers share it.
+ */
+export async function withPaymentBookingLock<T>(
+  paymentId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  let locked = false;
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtextextended($1::text, 0))", [paymentId]);
+    locked = true;
+    return await run();
+  } finally {
+    try {
+      if (locked) {
+        await client.query("SELECT pg_advisory_unlock(hashtextextended($1::text, 0))", [paymentId]);
+      }
+    } finally {
+      client.release();
+    }
+  }
+}
+
+function paymentAuditMetadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}
+
+/** Records the session on the payment inside the booking transaction, before the calendar write. */
+export async function claimPaymentBooking(
+  tx: Tx,
+  paymentId: string,
+  sessionId: string,
+): Promise<void> {
+  const [payment] = await tx
+    .select({ auditMetadata: paymentsTable.auditMetadata })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, paymentId))
+    .limit(1);
+  if (!payment) return;
+  await tx
+    .update(paymentsTable)
+    .set({
+      auditMetadata: { ...paymentAuditMetadata(payment.auditMetadata), bookedSessionId: sessionId },
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, paymentId));
+}
+
+export async function clearPaymentBookingClaim(
+  tx: Tx,
+  paymentId: string,
+  sessionId: string,
+): Promise<void> {
+  const [payment] = await tx
+    .select({ auditMetadata: paymentsTable.auditMetadata })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, paymentId))
+    .limit(1);
+  if (!payment) return;
+  const metadata = paymentAuditMetadata(payment.auditMetadata);
+  if (metadata.bookedSessionId !== sessionId) return;
+  delete metadata.bookedSessionId;
+  await tx
+    .update(paymentsTable)
+    .set({
+      auditMetadata: metadata,
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, paymentId));
+}
+
+/** A confirmed session already tied to this payment. Cancelled sessions are not live. */
+export async function liveBookedSessionForPayment(
+  auditMetadata: unknown,
+): Promise<{ id: string } | null> {
+  const sessionId = bookedSessionIdFromMetadata(auditMetadata);
+  if (!sessionId) return null;
+  const [session] = await db
+    .select({ id: sessionsTable.id, bookingStatus: sessionsTable.bookingStatus })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, sessionId))
+    .limit(1);
+  if (!session || session.bookingStatus === "cancelled") return null;
+  return { id: session.id };
 }
