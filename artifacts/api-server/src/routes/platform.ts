@@ -113,8 +113,8 @@ import {
   sessionEventCalendarId,
 } from "../lib/app-created-calendar";
 import {
-  adminCalendarGrantCanWriteEvents,
   adminCalendarInviteHealth,
+  selectStoredAdminCalendarWriter,
   bookingsUseAdminCalendarFallback,
   isNikaTutorProfile,
   manualCalendarInviteMessage,
@@ -205,6 +205,7 @@ import {
   BOOKABLE_PORTAL_DURATIONS,
   bookingCalendarEventPayload,
   bookingNoticeMinutesForTutor,
+  googleAccountOrganizesAsTutor,
   tutorAttendeeForOrganizer,
   dateHoursIncludeOpenWindow,
   fixedDateHoursOpen,
@@ -4672,6 +4673,8 @@ async function loadStoredCalendarGrants() {
       googleAccountEmail: calendarConnectionsTable.googleAccountEmail,
       portalEmail: tutorProfilesTable.email,
       userEmail: usersTable.email,
+      title: tutorProfilesTable.title,
+      bookingEligible: tutorProfilesTable.bookingEligible,
     })
     .from(calendarConnectionsTable)
     .innerJoin(
@@ -4684,16 +4687,11 @@ async function loadStoredCalendarGrants() {
 
 async function findStoredAdminCalendarWriter(): Promise<AdminCalendarWriter | null> {
   const rows = await loadStoredCalendarGrants();
-  const match = rows.find((row) =>
-    adminCalendarGrantCanWriteEvents({
-      googleAccountEmail: row.googleAccountEmail,
-      portalEmail: row.portalEmail,
-      userEmail: row.userEmail,
-      status: row.status,
+  const match = selectStoredAdminCalendarWriter(
+    rows.map((row) => ({
+      ...row,
       hasRefreshToken: Boolean(row.hasRefreshToken),
-      grantedScopes: row.grantedScopes,
-      appCalendarId: row.appCalendarId,
-    }),
+    })),
   );
   const appCalendarId = match?.appCalendarId?.trim() ?? "";
   if (!match || !appCalendarId) return null;
@@ -5132,13 +5130,12 @@ async function syncGoogleCalendarForSessionChange(args: {
         .limit(1)
     : [];
   const tutorEmail = tutorProfile?.email ?? null;
-  const adminWriter = await findStoredAdminCalendarWriter();
-  const onAdminCalendar = Boolean(
-    adminWriter &&
-      args.existing.providerCalendarId?.trim() === adminWriter.appCalendarId,
+  const organizerIsTutor = googleAccountOrganizesAsTutor(
+    access.connection.googleAccountEmail,
+    tutorEmail,
   );
   const tutorAttendee = tutorAttendeeForOrganizer({
-    organizerIsTutor: !onAdminCalendar,
+    organizerIsTutor,
     tutorEmail,
     subjects: [args.existing.subject, args.next.subject],
   });
@@ -5181,7 +5178,7 @@ async function syncGoogleCalendarForSessionChange(args: {
     attendeeEmail: student.email ?? "",
     location: SHARED_FALL_MEETING_URL,
     student,
-    tutor: tutorAttendee.inviteTutor && onAdminCalendar
+    tutor: tutorAttendee.inviteTutor && !organizerIsTutor
       ? { ...tutor, email: tutorEmail ?? tutor.email }
       : tutor,
     inviteTutor: tutorAttendee.inviteTutor,
@@ -8083,16 +8080,26 @@ async function respondWithPrepaidBooking(
         consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT",
         { tutorEmail: tutor.email },
       );
+      const writingAccess = adminWriter
+        ? await calendarAccess(adminWriter.tutorProfileId)
+        : access;
+      if (adminWriter && !writingAccess) {
+        throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
+      }
+      const organizerIsTutor = googleAccountOrganizesAsTutor(
+        writingAccess?.connection.googleAccountEmail,
+        tutor.email,
+      );
       const tutorAttendee = tutorAttendeeForOrganizer({
-        organizerIsTutor: !adminWriter,
+        organizerIsTutor,
         tutorEmail: tutor.email,
         subjects: [consulting ? COLLEGE_CONSULTING_SUBJECT : "SAT"],
       });
-      const tutorForEvent = tutorAttendee.inviteTutor && adminWriter
+      const tutorForEvent = tutorAttendee.inviteTutor && !organizerIsTutor
         ? { ...tutorParty, email: tutor.email }
         : tutorParty;
       if (adminWriter) {
-        const adminAccess = await calendarAccess(adminWriter.tutorProfileId);
+        const adminAccess = writingAccess;
         if (!adminAccess) {
           throw new BookingError(409, "CALENDAR_RECONNECT_REQUIRED", CALENDAR_RECONNECT_MESSAGE);
         }
@@ -8540,8 +8547,12 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
     const sendUpdates = googleCalendarSendUpdatesForSubjects(session.subject, {
       tutorEmail: profile.email,
     });
+    const organizerIsTutor = googleAccountOrganizesAsTutor(
+      writeAccess.connection.googleAccountEmail,
+      profile.email,
+    );
     const tutorAttendee = tutorAttendeeForOrganizer({
-      organizerIsTutor: !onAdminCalendar,
+      organizerIsTutor,
       tutorEmail: profile.email,
       subjects: [session.subject],
     });
@@ -8554,7 +8565,7 @@ router.post("/booking/sessions/:sessionId/reschedule", async (req: AuthedRequest
         attendeeEmail,
         location: SHARED_FALL_MEETING_URL,
         student,
-        tutor: tutorAttendee.inviteTutor && onAdminCalendar
+        tutor: tutorAttendee.inviteTutor && !organizerIsTutor
           ? { ...tutorParty, email: profile.email }
           : tutorParty,
         inviteTutor: tutorAttendee.inviteTutor,

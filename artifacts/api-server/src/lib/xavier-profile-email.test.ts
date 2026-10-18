@@ -11,6 +11,10 @@ const journal = await readFile(
   fileURLToPath(new URL("../../../../lib/db/drizzle/meta/_journal.json", import.meta.url)),
   "utf8",
 );
+const alignmentSource = await readFile(
+  fileURLToPath(new URL("./calendar-profile.ts", import.meta.url)),
+  "utf8",
+);
 const executable = migrationSql.replace(/^--.*$/gm, "");
 
 test("Xavier profile email migration updates only tutor_profiles", () => {
@@ -30,4 +34,14 @@ test("Xavier profile email migration updates only tutor_profiles", () => {
   );
   assert.equal(entry.idx, 71);
   assert.ok(entry.when > 1792740000000);
+});
+
+test("Xavier calendar alignment accepts the spelled profile email", () => {
+  const start = alignmentSource.indexOf("export async function xavierCalendarIdentityAlignment");
+  const slice = alignmentSource.slice(start);
+  assert.match(slice, /isXavierProfileEmail\(profile\.email\)/);
+  assert.match(
+    slice,
+    /isCanonicalXavierEmail\(profile\.email\) \|\| isXavierProfileEmail\(profile\.email\)/,
+  );
 });

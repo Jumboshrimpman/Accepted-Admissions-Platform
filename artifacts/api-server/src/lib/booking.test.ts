@@ -15,6 +15,7 @@ import {
   bookingNoticeMinutesForTutor,
   calendarEventPayload,
   calendarInviteIncludesTutor,
+  googleAccountOrganizesAsTutor,
   tutorAttendeeForOrganizer,
   missingCalendarInviteMessage,
   MISSING_CALENDAR_INVITE_TITLE,
@@ -553,6 +554,45 @@ test("College Consulting invites the student, Nika, and admin on her calendar", 
   assert.equal(MISSING_CALENDAR_INVITE_TITLE, "No Google Calendar invite was sent");
 });
 
+test("a non-Nika tutor whose connection google_account_email is admin@ is invited on a new booking", () => {
+  const profileEmail = "eunice_chon@berkeley.edu";
+  const organizerIsTutor = googleAccountOrganizesAsTutor(
+    "admin@acceptedadmissions.org",
+    profileEmail,
+  );
+  assert.equal(organizerIsTutor, false);
+  assert.equal(
+    googleAccountOrganizesAsTutor(" Eunice_Chon@Berkeley.edu ", profileEmail),
+    true,
+  );
+  const attendee = tutorAttendeeForOrganizer({
+    organizerIsTutor,
+    tutorEmail: profileEmail,
+    subjects: ["SAT"],
+  });
+  const event = bookingCalendarEventPayload({
+    title: "Michelle’s SAT Session with Eunice",
+    start: new Date("2026-10-26T16:00:00.000Z"),
+    durationMinutes: 60,
+    timeZone: "America/New_York",
+    attendeeEmail: "makaremmichelle7@gmail.com",
+    location: "https://meet.google.com/rih-iayt-okb",
+    description: "https://meet.google.com/rih-iayt-okb",
+    student: { email: "makaremmichelle7@gmail.com" },
+    tutor: { email: attendee.tutorEmail ?? "" },
+    inviteTutor: attendee.inviteTutor,
+  });
+  assert.equal(event.location, "https://meet.google.com/rih-iayt-okb");
+  assert.deepEqual(
+    event.attendees.map((attendee) => attendee.email),
+    [
+      "makaremmichelle7@gmail.com",
+      profileEmail,
+      "admin@acceptedadmissions.org",
+    ],
+  );
+});
+
 test("an event organized by another Google account invites every tutor's profile email", () => {
   const xavier = tutorAttendeeForOrganizer({
     organizerIsTutor: false,
@@ -654,10 +694,28 @@ test("a connected fixed-window booking writes her calendar and a disconnected on
   const paySlice = platformSource.slice(payStart, platformSource.indexOf("createCheckoutSession", payStart));
   assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") > 0);
   assert.ok(paySlice.indexOf("assertDirectCheckoutSlotOpen") < paySlice.length);
+  assert.match(slice, /googleAccountOrganizesAsTutor\(/);
+  assert.match(slice, /writingAccess\?\.connection\.googleAccountEmail/);
   assert.match(slice, /tutorAttendeeForOrganizer\(\{/);
-  assert.match(slice, /organizerIsTutor: !adminWriter/);
   assert.match(slice, /tutorEmail: tutor\.email/);
   assert.match(slice, /email: tutor\.email/);
+  assert.doesNotMatch(slice, /organizerIsTutor: !adminWriter/);
+  const syncStart = platformSource.indexOf("async function syncGoogleCalendarForSessionChange");
+  const syncSlice = platformSource.slice(
+    syncStart,
+    platformSource.indexOf("function consultingTutorAllowed"),
+  );
+  assert.match(syncSlice, /googleAccountOrganizesAsTutor\(\s*access\.connection\.googleAccountEmail/);
+  assert.doesNotMatch(syncSlice, /providerCalendarId\?\.trim\(\) === adminWriter\.appCalendarId/);
+  const rescheduleStart = platformSource.indexOf('"/booking/sessions/:sessionId/reschedule"');
+  const rescheduleSlice = platformSource.slice(
+    rescheduleStart,
+    platformSource.indexOf("router.post(", rescheduleStart + 10),
+  );
+  assert.match(
+    rescheduleSlice,
+    /googleAccountOrganizesAsTutor\(\s*writeAccess\.connection\.googleAccountEmail/,
+  );
   assert.match(slice, /await confirmBookedSession\(confirmed, true\)/);
   assert.match(slice, /MISSING_CALENDAR_INVITE_TITLE/);
   assert.match(slice, /calendarPlan\.mode === "manual"/);

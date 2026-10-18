@@ -74,6 +74,45 @@ function grantBelongsToAdmin(input: {
   );
 }
 
+/** Title of the non-bookable profile created for a portal user's own calendar grant. */
+export const ADMIN_CALENDAR_PROFILE_TITLE = "Calendar account";
+
+/**
+ * The admin writer is the admin portal user's own calendar profile.
+ * A tutor profile is never the writer, even when its Google account is admin@.
+ */
+export function isAdminPortalCalendarAccount(input: {
+  title?: string | null;
+  bookingEligible?: boolean | null;
+  userEmail?: string | null;
+}): boolean {
+  return (
+    input.title?.trim() === ADMIN_CALENDAR_PROFILE_TITLE &&
+    input.bookingEligible === false &&
+    input.userEmail?.trim().toLowerCase() === ADMIN_CALENDAR_ACCOUNT_EMAIL
+  );
+}
+
+export function selectStoredAdminCalendarWriter<
+  T extends {
+    appCalendarId?: string | null;
+    googleAccountEmail?: string | null;
+    portalEmail?: string | null;
+    userEmail?: string | null;
+    title?: string | null;
+    bookingEligible?: boolean | null;
+    status?: string | null;
+    hasRefreshToken: boolean;
+    grantedScopes?: string | null;
+  },
+>(rows: T[]): T | null {
+  const match = rows.find(
+    (row) => isAdminPortalCalendarAccount(row) && adminCalendarGrantCanWriteEvents(row),
+  );
+  if (!match?.appCalendarId?.trim()) return null;
+  return match;
+}
+
 /** Same predicate booking uses for an automatic invite from the admin Google account. */
 export function adminCalendarInviteHealth(
   rows: Array<{

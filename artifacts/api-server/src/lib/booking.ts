@@ -310,6 +310,19 @@ export function calendarInviteIncludesTutor(...inputs: CalendarInviteInput[]): b
 }
 
 /**
+ * The tutor is the organizer only when the grant that writes the event
+ * belongs to the same Google account as the tutor profile email.
+ */
+export function googleAccountOrganizesAsTutor(
+  googleAccountEmail: string | null | undefined,
+  tutorProfileEmail: string | null | undefined,
+): boolean {
+  const google = googleAccountEmail?.trim().toLowerCase() ?? "";
+  const profile = tutorProfileEmail?.trim().toLowerCase() ?? "";
+  return google.length > 0 && google === profile;
+}
+
+/**
  * Guest list for a booking invite.
  * On the tutor's own Google account the tutor is the organizer, so only Nika's
  * consulting sessions add her. On any other account, including admin@, every
