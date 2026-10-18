@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingCard } from "@/pages/portal/booking-card";
+import { EssayEditingOffer, EssayRequestsPanel, isEssayProductSlug } from "@/components/essay-editing-panel";
 import { portalCheckoutCopy } from "@/lib/consulting-tutor-display";
 import {
   PORTAL_BEGIN_RESCHEDULE_EVENT,
@@ -506,6 +507,10 @@ export default function PortalSat() {
         </CardContent>
       </Card>
 
+          {collegeConsulting ? (
+            <EssayEditingOffer products={products.filter((product) => isEssayProductSlug(product.slug))} />
+          ) : null}
+          {collegeConsulting ? <EssayRequestsPanel mode="client" /> : null}
           <Card data-testid="portal-sat-purchase">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -536,7 +541,7 @@ export default function PortalSat() {
                 </p>
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
-                {products.map((product) => {
+                {products.filter((product) => !isEssayProductSlug(product.slug)).map((product) => {
                   const credits = formatPrepaidCreditCount(product.durationHours);
                   const price = (product.totalPriceCents / 100).toLocaleString(undefined, {
                     style: "currency",

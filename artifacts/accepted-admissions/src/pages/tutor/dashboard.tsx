@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
+import { EssayRequestsPanel } from "@/components/essay-editing-panel";
 import { TutorOfferedAvailability } from "@/pages/tutor/offered-availability";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
@@ -198,6 +199,7 @@ export default function TutorDashboard() {
       </section>
 
       <TutorOfferedAvailability />
+      <EssayRequestsPanel mode="tutor" />
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7">
