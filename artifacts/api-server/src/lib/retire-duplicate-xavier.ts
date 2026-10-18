@@ -22,6 +22,7 @@ import {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
   CANONICAL_XAVIER_NAME,
+  XAVIER_PROFILE_EMAIL,
   RETIRED_XAVIER_CLERK_USER_ID,
   RETIRED_XAVIER_EMAILS,
   SUPERSEDED_XAVIER_GRANT_NOTE,
@@ -152,26 +153,16 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
   const profiles = await db.select().from(tutorProfilesTable);
   const winnerProfile =
     profiles.find(
-      (profile) => normalizeEmail(profile.email) === CANONICAL_XAVIER_EMAIL,
+      (profile) =>
+        profile.userId === winner?.id && profile.name === CANONICAL_XAVIER_NAME,
     ) ??
     profiles.find(
       (profile) =>
-        profile.userId === winner?.id && profile.name === CANONICAL_XAVIER_NAME,
+        normalizeEmail(profile.email) === XAVIER_PROFILE_EMAIL ||
+        normalizeEmail(profile.email) === CANONICAL_XAVIER_EMAIL,
     );
 
   if (winnerProfile) {
-    await db
-      .update(tutorProfilesTable)
-      .set({
-        email: CANONICAL_XAVIER_EMAIL,
-        name: CANONICAL_XAVIER_NAME,
-        userId: winnerProfile.userId ?? winner?.id ?? winnerProfile.userId,
-        active: true,
-        bookingEligible: true,
-        publicApproved: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(tutorProfilesTable.id, winnerProfile.id));
 
     const loserProfiles = profiles.filter((profile) => {
       if (profile.id === winnerProfile.id) return false;
@@ -235,7 +226,8 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
           bookingEligible: false,
           publicApproved: false,
           email:
-            normalizeEmail(profile.email) === CANONICAL_XAVIER_EMAIL
+            normalizeEmail(profile.email) === CANONICAL_XAVIER_EMAIL ||
+            normalizeEmail(profile.email) === XAVIER_PROFILE_EMAIL
               ? `retired+xavier-duplicate-${profile.id.slice(0, 8)}@retired.accepted.local`
               : profile.email,
           internalNotes: [profile.internalNotes, SUPERSEDED_XAVIER_GRANT_NOTE]
@@ -245,6 +237,18 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
         })
         .where(eq(tutorProfilesTable.id, profile.id));
     }
+    await db
+      .update(tutorProfilesTable)
+      .set({
+        email: XAVIER_PROFILE_EMAIL,
+        name: CANONICAL_XAVIER_NAME,
+        userId: winnerProfile.userId ?? winner?.id ?? winnerProfile.userId,
+        active: true,
+        bookingEligible: true,
+        publicApproved: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(tutorProfilesTable.id, winnerProfile.id));
   }
 
   const grants = await db.select().from(portalAccessGrantsTable);

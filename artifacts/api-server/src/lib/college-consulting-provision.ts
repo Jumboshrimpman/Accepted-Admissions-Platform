@@ -69,7 +69,9 @@ import {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
   CANONICAL_XAVIER_NAME,
+  XAVIER_PROFILE_EMAIL,
   isRetiredXavierEmail,
+  isXavierProfileEmail,
 } from "./xavier-identity.ts";
 
 /**
@@ -758,13 +760,20 @@ async function provisionCollegeConsulting(tx: ProvisionTx): Promise<CollegeConsu
     .where(
       or(
         emailMatches(tutorProfilesTable.email, CANONICAL_XAVIER_EMAIL),
+        emailMatches(tutorProfilesTable.email, XAVIER_PROFILE_EMAIL),
         emailMatches(tutorProfilesTable.email, EUNICE_CONSULTING_EMAIL),
         eq(tutorProfilesTable.name, CANONICAL_XAVIER_NAME),
         eq(tutorProfilesTable.name, EUNICE_CONSULTING_NAME),
       ),
     );
   for (const profile of consultingRoster) {
-    if (profile.name === CANONICAL_XAVIER_NAME && isRetiredXavierEmail(profile.email)) continue;
+    if (
+      profile.name === CANONICAL_XAVIER_NAME &&
+      isRetiredXavierEmail(profile.email) &&
+      !isXavierProfileEmail(profile.email)
+    ) {
+      continue;
+    }
     await ensureConsultingBookable(tx, profile);
   }
   const nika = await ensureNika(tx);

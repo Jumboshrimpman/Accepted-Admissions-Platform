@@ -4,6 +4,7 @@ import { SAT_HOURLY_RATE_CENTS, isAcceptedSatCatalogProduct } from "./sat-catalo
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
   CANONICAL_XAVIER_EMAIL,
+  XAVIER_PROFILE_EMAIL,
   CANONICAL_XAVIER_NAME,
   isRetiredXavierEmail,
 } from "./xavier-identity.ts";
@@ -369,7 +370,12 @@ export function collegeConsultingTutorKeyForProfile(profile: {
   const email = normalizeConsultingEmail(profile.email);
   const name = profile.name?.trim() ?? "";
   if (email === NIKA_CONSULTING_EMAIL) return "nika";
-  if (email === normalizeConsultingEmail(CANONICAL_XAVIER_EMAIL)) return "xavier";
+  if (
+    email === normalizeConsultingEmail(CANONICAL_XAVIER_EMAIL) ||
+    email === normalizeConsultingEmail(XAVIER_PROFILE_EMAIL)
+  ) {
+    return "xavier";
+  }
   if (name === CANONICAL_XAVIER_NAME && !isRetiredXavierEmail(email)) return "xavier";
   if (email === normalizeConsultingEmail(EUNICE_CONSULTING_EMAIL) || name === EUNICE_CONSULTING_NAME) {
     return "eunice";

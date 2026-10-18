@@ -309,6 +309,27 @@ export function calendarInviteIncludesTutor(...inputs: CalendarInviteInput[]): b
   return isNikaCollegeConsultingInvite(subjects, tutorEmail);
 }
 
+/**
+ * Guest list for a booking invite.
+ * On the tutor's own Google account the tutor is the organizer, so only Nika's
+ * consulting sessions add her. On any other account, including admin@, every
+ * tutor is added from the tutor profile email.
+ */
+export function tutorAttendeeForOrganizer(input: {
+  organizerIsTutor: boolean;
+  tutorEmail?: string | null;
+  subjects: Array<string | null | undefined>;
+}): { inviteTutor: boolean; tutorEmail: string | null } {
+  const tutorEmail = input.tutorEmail?.trim() || null;
+  if (!input.organizerIsTutor) {
+    return { inviteTutor: Boolean(tutorEmail), tutorEmail };
+  }
+  return {
+    inviteTutor: calendarInviteIncludesTutor(...input.subjects, { tutorEmail }),
+    tutorEmail,
+  };
+}
+
 export const MISSING_CALENDAR_INVITE_TITLE = "No Google Calendar invite was sent";
 
 /** In-app admin copy when a fixed-window session is confirmed without a Google event. */
