@@ -553,10 +553,12 @@ import {
 import { conceptsForTemplateDrafts, validateExtractedSourceText } from "../lib/content-source-text";
 import {
   eligiblePlaceholderArchiveIds,
+  homeworkWithStudentAttempt,
   hydrateMistakePrompts,
   placeholderArchiveApplyIds,
   selectActivePrework,
   selectStatusHomework,
+  sessionAttemptUserId,
   shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "../lib/session-homework";
@@ -13788,13 +13790,19 @@ async function listAssignmentsForUser(
         .select({ count: sql<number>`count(*)` })
         .from(assignmentQuestionsTable)
         .where(eq(assignmentQuestionsTable.assignmentId, assignment.id));
+      const attemptUserId = sessionAttemptUserId({
+        role: user.role,
+        viewerUserId: subjectUserId,
+        sessionClientUserId: linkedSession?.clientUserId,
+        sessionScoped: Boolean(sessionId),
+      });
       const attempts = await db
         .select()
         .from(attemptsTable)
         .where(
           and(
             eq(attemptsTable.assignmentId, assignment.id),
-              eq(attemptsTable.userId, subjectUserId),
+            eq(attemptsTable.userId, attemptUserId),
           ),
         )
         .orderBy(desc(attemptsTable.startedAt));
@@ -13878,21 +13886,24 @@ async function adaptiveCurriculumForSession(
   user: AppUser,
 ) {
   const summaries = await listAssignmentsForUser(user, session.courseId, session.id);
-  const homework = selectActivePrework(summaries);
+  const selectedHomework = selectActivePrework(summaries);
   const subjectUserId = session.clientUserId ?? (await dataSubjectUserId(user));
-  const [latestAttempt] = homework
+  const [latestAttempt] = selectedHomework
     ? await db
         .select()
         .from(attemptsTable)
         .where(
           and(
-            eq(attemptsTable.assignmentId, homework.id),
+            eq(attemptsTable.assignmentId, selectedHomework.id),
             eq(attemptsTable.userId, subjectUserId),
           ),
         )
         .orderBy(desc(attemptsTable.startedAt))
         .limit(1)
     : [];
+  const homework = selectedHomework
+    ? homeworkWithStudentAttempt(selectedHomework, latestAttempt)
+    : null;
   const result = latestAttempt?.result as
     | { items?: AdaptiveResultItem[] }
     | null
@@ -13909,11 +13920,14 @@ async function adaptiveCurriculumForSession(
   } | null = null;
   const sessionStudent =
     Boolean(session.clientUserId) && subjectUserId === session.clientUserId;
-  const homeworkHasResults = summaries.some(
-    (item) =>
-      item?.deliveryPhase === "before_session" &&
-      (item.latestAttemptStatus === "submitted" || item.latestAttemptStatus === "expired"),
-  );
+  const homeworkHasResults =
+    homework?.latestAttemptStatus === "submitted" ||
+    homework?.latestAttemptStatus === "expired" ||
+    summaries.some(
+      (item) =>
+        item?.deliveryPhase === "before_session" &&
+        (item.latestAttemptStatus === "submitted" || item.latestAttemptStatus === "expired"),
+    );
   const hardSession = (await satDifficultyForSession(session)) === "hard";
   const [storedPrep] = await db
     .select()

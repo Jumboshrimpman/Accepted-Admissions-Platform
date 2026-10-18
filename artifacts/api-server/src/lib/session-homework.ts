@@ -21,6 +21,11 @@ export type SessionHomeworkCandidate = {
   questionCount?: number | null;
   /** `session_prework_plans.assignmentId` for this row's session. */
   planAssignmentId?: string | null;
+  /**
+   * Latest attempt on this copy for the session's student.
+   * Absent means the caller did not load attempts; do not treat that as "not submitted".
+   */
+  latestAttemptStatus?: string | null;
 };
 
 /** Session homework status lists: one row per assignment, no archived leftovers. */
@@ -465,10 +470,64 @@ function preworkIdentity(item: SessionHomeworkCandidate): string | null {
   return item.assignmentId ?? item.id ?? null;
 }
 
+const STUDENT_ATTEMPT_STATUSES = new Set(["active", "paused", "submitted", "expired"]);
+
+function preworkHasStudentResult(item: SessionHomeworkCandidate): boolean {
+  return item.latestAttemptStatus === "submitted" || item.latestAttemptStatus === "expired";
+}
+
+/**
+ * Staff opening one session should read that session's student attempts.
+ * An unscoped tutor or admin list stays on the viewer, so dashboards do not
+ * change. Students and viewers already use their own subject id.
+ */
+export function sessionAttemptUserId(input: {
+  role: string;
+  viewerUserId: string;
+  sessionClientUserId?: string | null;
+  sessionScoped: boolean;
+}): string {
+  if (
+    input.sessionScoped &&
+    (input.role === "tutor" || input.role === "administrator") &&
+    input.sessionClientUserId
+  ) {
+    return input.sessionClientUserId;
+  }
+  return input.viewerUserId;
+}
+
+/**
+ * The Before Session block reads these fields. Copy the session student's
+ * attempt onto the chosen homework so a tutor or admin does not keep a blank
+ * viewer attempt.
+ */
+export function homeworkWithStudentAttempt<
+  T extends {
+    latestAttemptId?: string | null;
+    latestAttemptStatus?: string | null;
+    latestScore?: number | null;
+  },
+>(
+  homework: T,
+  attempt: { id?: string | null; status?: string | null; score?: number | null } | null | undefined,
+): T {
+  const status =
+    attempt?.status && STUDENT_ATTEMPT_STATUSES.has(attempt.status) ? attempt.status : null;
+  return {
+    ...homework,
+    latestAttemptId: attempt?.id ?? null,
+    latestAttemptStatus: status,
+    latestScore: attempt?.score ?? null,
+  };
+}
+
 /**
  * Prefer the live session pre-work copy. Archived replace/remove leftovers must not hide missed items.
  * An empty shell listed ahead of the real set must not win: a plan row with questions wins,
  * otherwise the live before-session copy with the most questions.
+ * A submitted or expired student attempt outranks an unattempted replacement, including
+ * when the session plan points at that replacement.
  */
 export function selectActivePrework<T extends SessionHomeworkCandidate>(
   assignments: readonly T[],
@@ -482,7 +541,9 @@ export function selectActivePrework<T extends SessionHomeworkCandidate>(
   if (live.length === 0) return null;
   const questioned = live.filter((item) => (item.questionCount ?? 0) > 0);
   const pool = questioned.length > 0 ? questioned : live;
-  const planned = pool.find((item) => {
+  const withResults = pool.filter(preworkHasStudentResult);
+  const ranked = withResults.length > 0 ? withResults : pool;
+  const planned = ranked.find((item) => {
     const id = preworkIdentity(item);
     return Boolean(
       id &&
@@ -492,7 +553,7 @@ export function selectActivePrework<T extends SessionHomeworkCandidate>(
     );
   });
   if (planned) return planned;
-  return [...pool].sort(
+  return [...ranked].sort(
     (left, right) => (right.questionCount ?? 0) - (left.questionCount ?? 0),
   )[0] ?? null;
 }
