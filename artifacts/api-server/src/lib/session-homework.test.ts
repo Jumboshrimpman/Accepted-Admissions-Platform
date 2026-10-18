@@ -10,7 +10,9 @@ import {
   isInSessionHomeworkCompletion,
   planAssignmentIdAfterPreworkArchive,
   planAssignmentIdAfterPreworkPublish,
+  homeworkWithStudentAttempt,
   selectActivePrework,
+  sessionAttemptUserId,
   selectInSessionHomeworkQuestionIds,
   eligiblePlaceholderArchiveIds,
   futurePlaceholderSatHomework,
@@ -756,6 +758,98 @@ test("selectActivePrework prefers the questioned set over an empty shell", () =>
   };
   assert.equal(selectActivePrework([empty, diagnostic])?.id, "english-24");
   assert.equal(selectActivePrework([diagnostic, empty])?.questionCount, 24);
+});
+
+test("selectActivePrework prefers a submitted copy over an unattempted plan replacement", () => {
+  const submitted = {
+    id: "41444e0a-submitted",
+    title: "Hard math — 40 questions",
+    deliveryPhase: "before_session" as const,
+    status: "published",
+    questionCount: 40,
+    planAssignmentId: "replacement-plan",
+    latestAttemptStatus: "submitted" as const,
+  };
+  const replacement = {
+    id: "replacement-plan",
+    title: "Hard math — 40 questions",
+    deliveryPhase: "before_session" as const,
+    status: "published",
+    questionCount: 40,
+    planAssignmentId: "replacement-plan",
+    latestAttemptStatus: null,
+  };
+  assert.equal(selectActivePrework([replacement, submitted])?.id, "41444e0a-submitted");
+  assert.equal(selectActivePrework([submitted, replacement])?.id, "41444e0a-submitted");
+  assert.equal(
+    selectActivePrework([{ ...replacement, latestAttemptStatus: "submitted" }, submitted])?.id,
+    "replacement-plan",
+  );
+  assert.equal(
+    selectActivePrework([
+      { ...submitted, latestAttemptStatus: undefined },
+      { ...replacement, latestAttemptStatus: undefined },
+    ])?.id,
+    "replacement-plan",
+  );
+});
+
+test("session attempt lookup uses the student on a staff session page", () => {
+  assert.equal(
+    sessionAttemptUserId({
+      role: "tutor",
+      viewerUserId: "tutor-xavier",
+      sessionClientUserId: "student-michelle",
+      sessionScoped: true,
+    }),
+    "student-michelle",
+  );
+  assert.equal(
+    sessionAttemptUserId({
+      role: "administrator",
+      viewerUserId: "admin-user",
+      sessionClientUserId: "student-michelle",
+      sessionScoped: true,
+    }),
+    "student-michelle",
+  );
+  assert.equal(
+    sessionAttemptUserId({
+      role: "tutor",
+      viewerUserId: "tutor-xavier",
+      sessionClientUserId: "student-michelle",
+      sessionScoped: false,
+    }),
+    "tutor-xavier",
+  );
+  assert.equal(
+    sessionAttemptUserId({
+      role: "student",
+      viewerUserId: "student-michelle",
+      sessionClientUserId: "student-michelle",
+      sessionScoped: true,
+    }),
+    "student-michelle",
+  );
+  const blankViewerHomework = {
+    id: "41444e0a-submitted",
+    latestAttemptId: null,
+    latestAttemptStatus: null,
+    latestScore: null,
+  };
+  assert.deepEqual(
+    homeworkWithStudentAttempt(blankViewerHomework, {
+      id: "attempt-michelle",
+      status: "submitted",
+      score: 13,
+    }),
+    {
+      id: "41444e0a-submitted",
+      latestAttemptId: "attempt-michelle",
+      latestAttemptStatus: "submitted",
+      latestScore: 13,
+    },
+  );
 });
 
 test("selectActivePrework ignores archived session copies left by replace/remove", () => {
