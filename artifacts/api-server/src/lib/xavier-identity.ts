@@ -1,5 +1,8 @@
 export const CANONICAL_XAVIER_NAME = "Xavier Morales";
+/** Login and Clerk still use this address. Do not rewrite users.email to the profile spelling. */
 export const CANONICAL_XAVIER_EMAIL = "xaver.rmz6@gmail.com";
+/** Tutor profile and calendar guest address. Spelled with an i. */
+export const XAVIER_PROFILE_EMAIL = "xavier.rmz6@gmail.com";
 export const CANONICAL_XAVIER_CLERK_USER_ID =
   "user_3IxUfoT1xRnDsqhlx5NN1eGfRg6";
 
@@ -53,6 +56,12 @@ export function isCanonicalXavierEmail(
   email: string | null | undefined,
 ): boolean {
   return Boolean(email) && normalizeEmail(email!) === CANONICAL_XAVIER_EMAIL;
+}
+
+export function isXavierProfileEmail(
+  email: string | null | undefined,
+): boolean {
+  return Boolean(email) && normalizeEmail(email!) === XAVIER_PROFILE_EMAIL;
 }
 
 export function isRetiredXavierIdentity(

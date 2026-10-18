@@ -5,6 +5,8 @@ import { readFile } from "node:fs/promises";
 const {
   CANONICAL_XAVIER_CLERK_USER_ID,
   CANONICAL_XAVIER_EMAIL,
+  XAVIER_PROFILE_EMAIL,
+  isXavierProfileEmail,
   RETIRED_XAVIER_CLERK_USER_ID,
   isCanonicalXavierEmail,
   isRetiredXavierClerkUserId,
@@ -34,6 +36,9 @@ test("treats misspelled and historical Xavier emails as retired", () => {
     true,
   );
   assert.equal(isRetiredXavierEmail(CANONICAL_XAVIER_EMAIL), false);
+  assert.equal(isXavierProfileEmail(" Xavier.RMZ6@gmail.com "), true);
+  assert.equal(isRetiredXavierEmail(XAVIER_PROFILE_EMAIL), true);
+  assert.equal(XAVIER_PROFILE_EMAIL, "xavier.rmz6@gmail.com");
   assert.equal(isCanonicalXavierEmail(" Xaver.RMZ6@Gmail.com "), true);
 });
 

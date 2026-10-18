@@ -218,6 +218,13 @@ test("only Neel can buy consulting hours, and a Nika hour does not pay for Xavie
   );
   assert.equal(
     collegeConsultingTutorKeyForProfile({
+      name: "Xavier Morales",
+      email: "xavier.rmz6@gmail.com",
+    }),
+    "xavier",
+  );
+  assert.equal(
+    collegeConsultingTutorKeyForProfile({
       name: "Eunice Chon",
       email: "eunice_chon@berkeley.edu",
     }),

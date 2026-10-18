@@ -7,6 +7,7 @@ import {
   adminCalendarInviteHealth,
   bookingsUseAdminCalendarFallback,
   manualCalendarInviteMessage,
+  selectStoredAdminCalendarWriter,
 } from "./admin-calendar-fallback.ts";
 import { GOOGLE_CALENDAR_APP_CREATED_SCOPE, GOOGLE_CALENDAR_FREEBUSY_SCOPE } from "./google-calendar.ts";
 
@@ -75,6 +76,71 @@ test("a fixed window with no writer asks an admin to send Nika's invite by hand"
   );
 });
 
+test("a tutor profile authorized as admin@ is never the admin calendar writer", () => {
+  const writableTutor = {
+    tutorProfileId: "xavier-profile",
+    title: "SAT & Math Tutor",
+    bookingEligible: true,
+    userEmail: "xaver.rmz6@gmail.com",
+    portalEmail: "xavier.rmz6@gmail.com",
+    googleAccountEmail: "admin@acceptedadmissions.org",
+    status: "connected",
+    hasRefreshToken: true,
+    grantedScopes: WRITE_SCOPES,
+    appCalendarId: "xavier-cal",
+  };
+  const adminAccount = {
+    tutorProfileId: "admin-profile",
+    title: "Calendar account",
+    bookingEligible: false,
+    userEmail: " Admin@AcceptedAdmissions.org ",
+    portalEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+    googleAccountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+    status: "connected",
+    hasRefreshToken: true,
+    grantedScopes: WRITE_SCOPES,
+    appCalendarId: "admin-cal",
+  };
+  assert.equal(selectStoredAdminCalendarWriter([writableTutor]), null);
+  assert.equal(
+    selectStoredAdminCalendarWriter([writableTutor, adminAccount])?.tutorProfileId,
+    "admin-profile",
+  );
+  assert.equal(
+    selectStoredAdminCalendarWriter([{ ...adminAccount, bookingEligible: true }]),
+    null,
+  );
+  assert.equal(
+    selectStoredAdminCalendarWriter([{ ...adminAccount, title: "SAT & Math Tutor" }]),
+    null,
+  );
+});
+
+test("a tutor grant on admin@ is not a healthy admin calendar invite", () => {
+  assert.deepEqual(
+    adminCalendarInviteHealth([
+      {
+        title: "SAT & Math Tutor",
+        bookingEligible: true,
+        userEmail: "xaver.rmz6@gmail.com",
+        portalEmail: "xavier.rmz6@gmail.com",
+        googleAccountEmail: "admin@acceptedadmissions.org",
+        status: "connected",
+        hasRefreshToken: true,
+        grantedScopes: WRITE_SCOPES,
+        appCalendarId: "xavier-cal",
+      },
+    ]),
+    {
+      healthy: false,
+      accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+      hasRefreshToken: true,
+      hasWriteScope: true,
+      hasAppCalendar: true,
+    },
+  );
+});
+
 test("only a connected admin grant with refresh, app calendar, and event-write scope can issue invites", () => {
   const writable = {
     googleAccountEmail: " Admin@AcceptedAdmissions.org ",
@@ -106,7 +172,13 @@ test("only a connected admin grant with refresh, app calendar, and event-write s
     }),
     false,
   );
-  assert.deepEqual(adminCalendarInviteHealth([writable]), {
+  const adminProfile = {
+    ...writable,
+    title: "Calendar account",
+    bookingEligible: false,
+    userEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
+  };
+  assert.deepEqual(adminCalendarInviteHealth([adminProfile]), {
     healthy: true,
     accountEmail: ADMIN_CALENDAR_ACCOUNT_EMAIL,
     hasRefreshToken: true,

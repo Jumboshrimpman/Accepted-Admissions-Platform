@@ -33,6 +33,7 @@ import {
   CANONICAL_XAVIER_NAME,
   RETIRED_XAVIER_EMAILS,
   isCanonicalXavierEmail,
+  isXavierProfileEmail,
 } from "./xavier-identity.ts";
 
 export type CalendarTutorProfile = typeof tutorProfilesTable.$inferSelect;
@@ -232,6 +233,7 @@ export async function xavierCalendarIdentityAlignment(): Promise<{
     const email = normalizeEmail(profile.email);
     return (
       email === CANONICAL_XAVIER_EMAIL ||
+      isXavierProfileEmail(profile.email) ||
       RETIRED_XAVIER_EMAILS.includes(email as (typeof RETIRED_XAVIER_EMAILS)[number]) ||
       profile.name === CANONICAL_XAVIER_NAME ||
       (email.endsWith("@retired.accepted.local") && /xavier/i.test(profile.name ?? ""))
@@ -283,7 +285,7 @@ export async function xavierCalendarIdentityAlignment(): Promise<{
         mapped.some(
           (profile) =>
             profile.linkedToCanonicalUser &&
-            isCanonicalXavierEmail(profile.email) &&
+            (isCanonicalXavierEmail(profile.email) || isXavierProfileEmail(profile.email)) &&
             profile.active &&
             !profile.retired,
         ),
