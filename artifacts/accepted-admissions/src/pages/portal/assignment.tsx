@@ -89,9 +89,9 @@ import {
 } from "@/lib/quiz-figure-primary";
 import { splitQuizRichText } from "@/lib/quiz-rich-text";
 import {
+  quizMathRepairScope,
   repairMichelleQuizMathText,
   repairMichelleQuizQuestionFields,
-  shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
 import { splitWrittenFeedback, writtenQuestionNote } from "@/lib/written-quiz-feedback";
 
@@ -212,7 +212,7 @@ function WrittenFeedbackLetter({ feedback, label }: { feedback: string; label: s
 }
 
 function ResultView({ result }: { result: AttemptResult }) {
-  const repairStackedMath = shouldRepairMichelleQuizMath({
+  const repairStackedMath = quizMathRepairScope({
     clientName: result.studentName,
     assignmentTitle: result.assignmentTitle,
   });
@@ -740,7 +740,7 @@ export default function PortalAssignment() {
     if (!attemptId && assignment?.latestAttemptId) setAttemptId(assignment.latestAttemptId);
   }, [assignment?.latestAttemptId, attemptId]);
 
-  const repairStackedMath = shouldRepairMichelleQuizMath({
+  const repairStackedMath = quizMathRepairScope({
     clientEmail: currentUser?.email,
     clientName: currentUser?.displayName,
     assignmentTitle: assignment?.title,

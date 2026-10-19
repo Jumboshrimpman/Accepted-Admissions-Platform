@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  quizMathRepairScope,
   repairMichelleQuizQuestionFields,
   repairStackedMathNotation,
   shouldRepairMichelleQuizMath,
@@ -36,4 +37,36 @@ test("repairs Michelle flattened tutor-UI smash and ignores Taito titles", () =>
   );
   assert.equal(fields.prompt, "x + 45 = 48");
   assert.equal(fields.explanation, "yields x = 3");
+});
+
+test("shared SAT pre-work repairs the Q2 explanation and leaves real stems alone", () => {
+  assert.equal(
+    quizMathRepairScope({
+      assignmentTitle: "SAT pre-work (30–50 questions) — SAT capability test",
+    }),
+    "explanation",
+  );
+  const q2 = ["x", "4", "6", "18", "+ + =", "or", "x", "10", "18", "+ ="].join("\n");
+  const repaired = repairMichelleQuizQuestionFields(
+    {
+      prompt: "x/19 = 684",
+      stimulus: "4 100\n5 250",
+      explanation: q2,
+      choices: [{ text: "x/19 = 684" }, { text: "28%\n50" }, { text: "x/88 = 240" }],
+    },
+    quizMathRepairScope({
+      assignmentTitle: "SAT pre-work (30–50 questions) — SAT capability test",
+    }),
+  );
+  assert.equal(repaired.prompt, "x/19 = 684");
+  assert.equal(repaired.stimulus, "4 100\n5 250");
+  assert.equal(repaired.choices?.[0]?.text, "x/19 = 684");
+  assert.equal(repaired.choices?.[1]?.text, "28%\n50");
+  assert.equal(repaired.choices?.[2]?.text, "x/88 = 240");
+  assert.match(repaired.explanation ?? "", /x \+ 4 \+ 6 = 18/);
+  assert.match(repaired.explanation ?? "", /x \+ 10 = 18/);
+  assert.doesNotMatch(repaired.explanation ?? "", /\(6\/4\)x/);
+  assert.equal(repairStackedMathNotation("x/19 = 684", "stem"), "x/19 = 684");
+  assert.equal(repairStackedMathNotation("4 100\n5 250", "stem"), "4 100\n5 250");
+  assert.equal(repairStackedMathNotation("28%\n50", "stem"), "28%\n50");
 });

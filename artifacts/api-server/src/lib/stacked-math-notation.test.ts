@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isMichelleClientEmail,
+  quizMathRepairScope,
   repairMichelleQuizMathText,
   repairMichelleQuizQuestionFields,
   repairStackedMathNotation,
@@ -202,4 +203,78 @@ test("question-field helper repairs prompt, choices, and explanation together", 
     false,
   );
   assert.equal(raw.prompt, "x 45 48 + =");
+  const stems = repairMichelleQuizQuestionFields(
+    {
+      prompt: "x/19 = 684",
+      stimulus: "4 100\n5 250",
+      explanation: "x/19 = 684",
+      choices: [{ text: "28%\n50" }, { text: "x/88 = 240" }],
+    },
+    true,
+  );
+  assert.equal(stems.prompt, "x/19 = 684");
+  assert.equal(stems.stimulus, "4 100\n5 250");
+  assert.equal(stems.choices?.[0]?.text, "28%\n50");
+  assert.equal(stems.choices?.[1]?.text, "x/88 = 240");
+  assert.equal(stems.explanation, "19x = 684");
+});
+
+test("shared SAT pre-work repairs the Q2 explanation and leaves real stems alone", () => {
+  assert.equal(
+    quizMathRepairScope({
+      clientEmail: "taito0525@gmail.com",
+      sessionTitle: "Taito’s SAT Session with Eunice",
+      assignmentTitle: "SAT pre-work (30–50 questions) — Taito’s SAT Session with Eunice",
+    }),
+    "explanation",
+  );
+  assert.equal(
+    quizMathRepairScope({
+      sessionTitle: "Michelle’s SAT Session with Xavier",
+      assignmentTitle: "In-session homework completion",
+    }),
+    "all",
+  );
+  const q2 = [
+    "x",
+    "4",
+    "6",
+    "18",
+    "+ + =",
+    ", or",
+    "x",
+    "10",
+    "18",
+    "+ =",
+  ].join("\n");
+  const repaired = repairMichelleQuizQuestionFields(
+    {
+      prompt: "x/19 = 684",
+      stimulus: "4 100\n5 250",
+      explanation: q2,
+      choices: [{ text: "x/19 = 684" }, { text: "28%\n50" }, { text: "x/88 = 240" }],
+    },
+    "explanation",
+  );
+  assert.equal(repaired.prompt, "x/19 = 684");
+  assert.equal(repaired.stimulus, "4 100\n5 250");
+  assert.equal(repaired.choices?.[0]?.text, "x/19 = 684");
+  assert.equal(repaired.choices?.[1]?.text, "28%\n50");
+  assert.equal(repaired.choices?.[2]?.text, "x/88 = 240");
+  assert.match(repaired.explanation ?? "", /x \+ 4 \+ 6 = 18/);
+  assert.match(repaired.explanation ?? "", /x \+ 10 = 18/);
+  assert.doesNotMatch(repaired.explanation ?? "", /\(6\/4\)x/);
+  assert.equal(repairStackedMathNotation("x/19 = 684", "stem"), "x/19 = 684");
+  assert.equal(repairStackedMathNotation("x/88 = 240", "stem"), "x/88 = 240");
+  assert.equal(repairStackedMathNotation("x/21 = 120", "stem"), "x/21 = 120");
+  assert.equal(repairStackedMathNotation("300\n8", "stem"), "300\n8");
+  assert.equal(repairStackedMathNotation("28%\n50", "stem"), "28%\n50");
+  assert.equal(repairStackedMathNotation("4 100\n5 250", "stem"), "4 100\n5 250");
+  assert.equal(repairStackedMathNotation("16\nr =", "stem"), "16\nr =");
+  assert.notEqual(repairStackedMathNotation("y\n94\n120 =", "stem"), "y/120 = 94");
+  assert.equal(repairStackedMathNotation("y\n94\n120 ="), "y/120 = 94");
+  assert.equal(repairStackedMathNotation("x/88 = 240"), "x/240 = 88");
+  assert.equal(repairStackedMathNotation("x/21 = 120"), "x = 21,120");
+  assert.equal(repairStackedMathNotation("300\n8"), "8/300");
+  assert.equal(repairStackedMathNotation("%\n75"), "75%");
 });

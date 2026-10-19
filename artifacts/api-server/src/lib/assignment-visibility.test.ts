@@ -260,6 +260,40 @@ test("Michelle stacked-math repair rebuilds smashed equations only when opted in
   assert.match(repaired.explanation, /x = 3/);
 });
 
+test("SAT pre-work math repair rewrites the explanation and leaves stems alone", () => {
+  const question = {
+    id: "shared-sat-prework-q2",
+    subject: "SAT Math",
+    questionType: "multiple_choice",
+    prompt: "x/19 = 684",
+    stimulus: "4 100\n5 250",
+    choices: [
+      { id: "a", label: "A", text: "x/19 = 684" },
+      { id: "b", label: "B", text: "28%\n50" },
+      { id: "c", label: "C", text: "x/88 = 240" },
+    ],
+    correctAnswer: "a",
+    explanation: ["x", "4", "6", "18", "+ + =", "or", "x", "10", "18", "+ ="].join("\n"),
+  };
+  const raw = assignmentQuestionShape(question, { position: 2 }, { includeKeys: true });
+  const repaired = assignmentQuestionShape(question, { position: 2 }, {
+    includeKeys: true,
+    repairStackedMath: "explanation",
+  });
+  assert.equal(repaired.prompt, raw.prompt);
+  assert.equal(repaired.stimulus, raw.stimulus);
+  assert.deepEqual(repaired.choices, raw.choices);
+  assert.equal(repaired.prompt, "x/19 = 684");
+  assert.equal(repaired.stimulus, "4 100\n5 250");
+  assert.equal(repaired.choices?.[0]?.text, "x/19 = 684");
+  assert.equal(repaired.choices?.[2]?.text, "x/88 = 240");
+  assert.doesNotMatch(repaired.choices?.[1]?.text ?? "", /2850%/);
+  assert.match(repaired.explanation ?? "", /x \+ 4 \+ 6 = 18/);
+  assert.match(repaired.explanation ?? "", /x \+ 10 = 18/);
+  assert.doesNotMatch(repaired.explanation ?? "", /\(6\/4\)x/);
+  assert.notEqual(repaired.explanation, raw.explanation);
+});
+
 test("unfinished-homework copy is rewritten for students and kept detectable", () => {
   const livePlanCopy =
     "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";
