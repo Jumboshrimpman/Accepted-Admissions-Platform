@@ -35,6 +35,7 @@ import {
   type CollectionStub,
   type ParsedBankRecord,
 } from "./sat-bank-import.ts";
+import { choiceTextsMatch, remapStoredChoiceLetter } from "./choice-letter-remap.ts";
 import { originalHardSatBankRecords } from "./original-hard-sat.ts";
 import {
   auditQuizItems,
@@ -135,6 +136,16 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function choiceLetters(value: unknown): Array<{ id: string; text: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as { id?: unknown; text?: unknown };
+    if (typeof row.id !== "string" || typeof row.text !== "string") return [];
+    return [{ id: row.id, text: row.text }];
+  });
 }
 
 function asChoices(value: unknown): Array<{ id: string; label: string; text: string }> {
@@ -737,6 +748,36 @@ export async function ensureOfficialExtractsImported(): Promise<{
   }
 }
 
+async function remapStoredLettersBeforeChoiceRewrite(
+  questionId: string,
+  previousChoices: unknown,
+  nextChoices: unknown,
+): Promise<void> {
+  const previous = choiceLetters(previousChoices);
+  const next = choiceLetters(nextChoices);
+  if (!choiceTextsMatch(previous, next)) return;
+  const responses = await db
+    .select({
+      id: responsesTable.id,
+      finalAnswer: responsesTable.finalAnswer,
+      prediction: responsesTable.prediction,
+    })
+    .from(responsesTable)
+    .where(eq(responsesTable.questionId, questionId));
+  for (const response of responses) {
+    const finalAnswer = remapStoredChoiceLetter(previous, next, response.finalAnswer);
+    const prediction = remapStoredChoiceLetter(previous, next, response.prediction);
+    if (finalAnswer === response.finalAnswer && prediction === response.prediction) continue;
+    await db
+      .update(responsesTable)
+      .set({
+        finalAnswer: finalAnswer ?? null,
+        prediction: prediction ?? null,
+      })
+      .where(eq(responsesTable.id, response.id));
+  }
+}
+
 async function materializeBankQuestionInternal(bankQuestionId: string): Promise<{
   questionId: string;
   action: "update" | "insert";
@@ -783,6 +824,7 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
         id: questionsTable.id,
         generationMethod: questionsTable.generationMethod,
         tags: questionsTable.tags,
+        choices: questionsTable.choices,
       })
       .from(questionsTable)
       .where(eq(questionsTable.id, bank.linkedQuestionId))
@@ -791,6 +833,7 @@ async function materializeBankQuestionInternal(bankQuestionId: string): Promise<
       if (isSessionLocalQuestionFork(linked)) {
         return { questionId: linked.id, action: "update" };
       }
+      await remapStoredLettersBeforeChoiceRewrite(linked.id, linked.choices, content.choices);
       await db
         .update(questionsTable)
         .set({ ...content, tags: bankTags })
