@@ -96,6 +96,79 @@ test("seeded IELTS-style reading items are original, complete MCQs", () => {
   );
 });
 
+const DIAGNOSTIC_CORRECT_TEXT: Record<string, string> = {
+  "What is the main purpose of the passage?":
+    "To describe a shared refrigeration model and its practical effects",
+  "How is a stall’s weekly cooperative fee determined?":
+    "By the cubic metres of space reserved",
+  "What change reduced extension cords on the pedestrian lane?":
+    "Vendors now collect labelled crates from one loading door",
+  "Why did the board add a short-stay shelf with a higher hourly rate?":
+    "To address part-time vendors who felt they were subsidising overnight storage",
+  "According to the energy officer, why did the harbour underwrite the first year’s maintenance?":
+    "Because the cooperative’s demand is steadier than many independent freezers",
+  "In the final paragraph, “underwrite” is closest in meaning to":
+    "financially guarantee",
+  "What problem does the volunteer network mainly try to solve?":
+    "Forecast models that miss frost differences inside the valley",
+  "When are the volunteer readings taken?": "At 7 a.m. local time",
+  "What caused a gauge to under-report for about two weeks?":
+    "A snow-laden branch bent the gauge",
+  "Why is the western hollow described as the valley’s most sensitive site?":
+    "It is consistently the first location to frost",
+  "How has the regional agriculture office supported the volunteers?":
+    "By replacing cracked gauges and printing waterproof cards",
+  "What does Mara Chen believe should come next?":
+    "Adding a second observer at the hollow rather than costlier equipment",
+  "What is the passage mainly about?":
+    "How a city tool-lending service is used and governed",
+  "Which items have been borrowed most often?":
+    "A tile cutter, a wallpaper steamer, and a soil-testing kit",
+  "What happens to a tool that is returned with a cut power cord?":
+    "It is tagged and kept out of circulation until a technician signs it off",
+  "Why does the tile cutter’s card mention ceramic tile and not pruning trees?":
+    "The insurance rider covers intended use, not homemade modifications",
+  "Where do borrowers mainly live, according to the housing office data?":
+    "In two postcodes with many rented terraces",
+  "How does Idris respond to the claim that the library is a gift to hobbyists?":
+    "He points to short loans and few repeat names in a month",
+  "What change does the passage describe?":
+    "A limited night check of high-impact parts to prevent morning cancellations",
+  "What problem triggered the new night procedure?":
+    "Three morning services were cancelled when a door-seal kit was missing",
+  "What do the night technicians confirm about the twenty parts?":
+    "That they are physically present, labelled, and not left in a cab",
+  "Why was heating the cage part of the compromise with the union?":
+    "Because extra walking was unpopular and two cleaning tasks were dropped in exchange",
+  "The operations manager’s phrase “a cheap honesty layer” refers to":
+    "a simple physical check that exposes false computer stock",
+  "How does the manager keep the twenty-part list from going stale?":
+    "By comparing cancellation codes with the list each quarter and swapping two items",
+};
+
+test("diagnostic reading keys are spread across A–D without lettered explanations", () => {
+  const diagnostic = ieltsStyleReadingItems().filter((item) => item.set === "diagnostic");
+  assert.equal(diagnostic.length, 24);
+  const counts = { a: 0, b: 0, c: 0, d: 0 };
+  let run = 0;
+  let previous = "";
+  for (const item of diagnostic) {
+    counts[item.correctAnswer] += 1;
+    run = item.correctAnswer === previous ? run + 1 : 1;
+    previous = item.correctAnswer;
+    assert.ok(run < 3, `correct-letter run of ${run} at ${item.prompt}`);
+    assert.doesNotMatch(
+      item.explanation,
+      /\b(?:option|choice|answer|letter)\s+[A-D]\b/i,
+      item.explanation,
+    );
+    const correct = item.choices.find((choice) => choice.id === item.correctAnswer);
+    assert.equal(correct?.text, DIAGNOSTIC_CORRECT_TEXT[item.prompt], item.prompt);
+    assert.equal(new Set(item.choices.map((choice) => choice.text)).size, 4);
+  }
+  assert.deepEqual(counts, { a: 6, b: 6, c: 6, d: 6 });
+});
+
 test("English assign selects diagnostic module 1 and later routine modules without overlap", () => {
   const pool = ieltsStyleReadingItems().map((item, index) => ({
     id: `${item.passageId}-${index}`,
