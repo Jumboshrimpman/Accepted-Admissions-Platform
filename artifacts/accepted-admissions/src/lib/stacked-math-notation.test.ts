@@ -69,4 +69,33 @@ test("shared SAT pre-work repairs the Q2 explanation and leaves real stems alone
   assert.equal(repairStackedMathNotation("x/19 = 684", "stem"), "x/19 = 684");
   assert.equal(repairStackedMathNotation("4 100\n5 250", "stem"), "4 100\n5 250");
   assert.equal(repairStackedMathNotation("28%\n50", "stem"), "28%\n50");
+  const michelle = repairMichelleQuizQuestionFields(
+    {
+      prompt: "x/19 = 684",
+      stimulus: "4 100\n5 250",
+      explanation: "x/19 = 684",
+      choices: [{ text: "x/88 = 240" }, { text: "28%\n50" }],
+    },
+    quizMathRepairScope({
+      clientEmail: "makaremmichelle7@gmail.com",
+      assignmentTitle: "SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier",
+    }),
+    "sat-pt10-math-m1-q25",
+  );
+  assert.equal(
+    quizMathRepairScope({
+      clientEmail: "makaremmichelle7@gmail.com",
+      assignmentTitle: "SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier",
+    }),
+    "all",
+  );
+  assert.equal(michelle.prompt, "x/19 = 684");
+  assert.equal(michelle.stimulus, "4 100\n5 250");
+  assert.equal(michelle.choices?.[0]?.text, "x/88 = 240");
+  assert.equal(michelle.choices?.[1]?.text, "28%\n50");
+  assert.equal(michelle.explanation, "19x = 684");
+  assert.equal(
+    repairStackedMathNotation("x/19 = 684", "explanation", "sat-pt11-math-m1-q22"),
+    "x/19 = 684",
+  );
 });

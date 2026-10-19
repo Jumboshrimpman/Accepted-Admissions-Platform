@@ -645,6 +645,7 @@ import {
   studentSafeAssignmentInstructions,
 } from "../lib/assignment-visibility";
 import {
+  bankSourceKeyFromTags,
   quizMathRepairScope,
   repairMichelleAttemptResultItems,
   repairMichelleQuizMathText,
@@ -3599,6 +3600,7 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
             id: questionsTable.id,
             correctAnswer: questionsTable.correctAnswer,
             explanation: questionsTable.explanation,
+            tags: questionsTable.tags,
           })
           .from(questionsTable)
           .where(inArray(questionsTable.id, revealedIds))
@@ -3628,7 +3630,12 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
           storedCorrect: response.correct,
           studentAnswer: response.finalAnswer,
           correctAnswer: question?.correctAnswer,
-          explanation: repairMichelleQuizMathText(question?.explanation, repairStackedMath),
+          explanation: repairMichelleQuizMathText(
+            question?.explanation,
+            repairStackedMath,
+            "explanation",
+            bankSourceKeyFromTags(question?.tags),
+          ),
         }),
       });
     }),
@@ -3793,9 +3800,28 @@ async function storedAttemptResult(
     sessionTitle: attempt.sessionTitle,
     assignmentTitle: attempt.assignmentTitle,
   });
+  const questionIds = [
+    ...new Set(
+      display.items.map((item) => item.questionId).filter((id) => UUID_PATTERN.test(id)),
+    ),
+  ];
+  const tagRows =
+    questionIds.length === 0
+      ? []
+      : await db
+          .select({ id: questionsTable.id, tags: questionsTable.tags })
+          .from(questionsTable)
+          .where(inArray(questionsTable.id, questionIds));
+  const sourceKeyByQuestion = new Map(
+    tagRows.map((row) => [row.id, bankSourceKeyFromTags(row.tags)]),
+  );
   return {
     ...display,
-    items: repairMichelleAttemptResultItems(display.items, repairStackedMath),
+    items: repairMichelleAttemptResultItems(
+      display.items,
+      repairStackedMath,
+      (item) => sourceKeyByQuestion.get(item.questionId) ?? null,
+    ),
     assignmentId: attempt.assignmentId,
     assignmentTitle: includeTutorFields
       ? attempt.assignmentTitle
@@ -3977,7 +4003,12 @@ async function finalizeAttemptResult(
     prediction: response?.prediction ?? null,
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,
-    explanation: repairMichelleQuizMathText(question.explanation, repairStackedMath),
+    explanation: repairMichelleQuizMathText(
+      question.explanation,
+      repairStackedMath,
+      "explanation",
+      bankSourceKeyFromTags(question.tags),
+    ),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -13718,7 +13749,12 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
         choices: shaped.choices,
         figures,
         correctAnswer: "correctAnswer" in shaped ? shaped.correctAnswer : null,
-        explanation: repairMichelleQuizMathText(row.question.explanation, repairStackedMath),
+        explanation: repairMichelleQuizMathText(
+          row.question.explanation,
+          repairStackedMath,
+          "explanation",
+          bankSourceKeyFromTags(row.question.tags),
+        ),
       });
     }
     if (questions.length > 0) sections.push({ title: plan.title, questions });
@@ -14746,6 +14782,7 @@ router.put(
         id: assignmentQuestionsTable.id,
         correctAnswer: questionsTable.correctAnswer,
         explanation: questionsTable.explanation,
+        tags: questionsTable.tags,
       })
       .from(assignmentQuestionsTable)
       .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
@@ -14856,6 +14893,8 @@ router.put(
             explanation: repairMichelleQuizMathText(
               belongsToAssignment.explanation,
               repairStackedMath,
+              "explanation",
+              bankSourceKeyFromTags(belongsToAssignment.tags),
             ),
           }),
         }),

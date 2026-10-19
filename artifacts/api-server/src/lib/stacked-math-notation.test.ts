@@ -157,7 +157,11 @@ test("repairs the other broken shared SAT pre-work equations", () => {
   );
   assert.match(repairStackedMathNotation("length\n35\nwidth\n10\n=\n, or l\n35\n10\nw ="), /length\/width = 35\/10/);
   assert.match(repairStackedMathNotation("length\n35\nwidth\n10\n=\n, or l\n35\n10\nw ="), /l\/w = 35\/10/);
-  assert.equal(repairStackedMathNotation("x/19 = 684"), "19x = 684");
+  assert.equal(repairStackedMathNotation("x/19 = 684"), "x/19 = 684");
+  assert.equal(
+    repairStackedMathNotation("x/19 = 684", "explanation", "sat-pt10-math-m1-q25"),
+    "19x = 684",
+  );
   assert.doesNotMatch(repairStackedMathNotation("Dividing both sides of this equation by 3\nyields\n25\nx ="), /3\/25/);
 });
 
@@ -216,10 +220,33 @@ test("question-field helper repairs prompt, choices, and explanation together", 
   assert.equal(stems.stimulus, "4 100\n5 250");
   assert.equal(stems.choices?.[0]?.text, "28%\n50");
   assert.equal(stems.choices?.[1]?.text, "x/88 = 240");
-  assert.equal(stems.explanation, "19x = 684");
+  assert.equal(stems.explanation, "x/19 = 684");
+  const keyed = repairMichelleQuizQuestionFields(
+    { prompt: "x/19 = 684", explanation: "x/19 = 684" },
+    "all",
+    "sat-pt10-math-m1-q25",
+  );
+  assert.equal(keyed.prompt, "x/19 = 684");
+  assert.equal(keyed.explanation, "19x = 684");
 });
 
 test("shared SAT pre-work repairs the Q2 explanation and leaves real stems alone", () => {
+  assert.equal(
+    quizMathRepairScope({
+      clientEmail: "makaremmichelle7@gmail.com",
+      clientName: "Michelle Makarem",
+      assignmentTitle: "SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier",
+    }),
+    "all",
+  );
+  assert.equal(
+    quizMathRepairScope({
+      clientName: "Michelle",
+      sessionTitle: "Michelle’s SAT Session with Xavier",
+      assignmentTitle: "SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier",
+    }),
+    "all",
+  );
   assert.equal(
     quizMathRepairScope({
       clientEmail: "taito0525@gmail.com",
@@ -272,9 +299,29 @@ test("shared SAT pre-work repairs the Q2 explanation and leaves real stems alone
   assert.equal(repairStackedMathNotation("4 100\n5 250", "stem"), "4 100\n5 250");
   assert.equal(repairStackedMathNotation("16\nr =", "stem"), "16\nr =");
   assert.notEqual(repairStackedMathNotation("y\n94\n120 =", "stem"), "y/120 = 94");
-  assert.equal(repairStackedMathNotation("y\n94\n120 ="), "y/120 = 94");
-  assert.equal(repairStackedMathNotation("x/88 = 240"), "x/240 = 88");
-  assert.equal(repairStackedMathNotation("x/21 = 120"), "x = 21,120");
-  assert.equal(repairStackedMathNotation("300\n8"), "8/300");
+  assert.notEqual(repairStackedMathNotation("y\n94\n120 ="), "y/120 = 94");
+  assert.equal(
+    repairStackedMathNotation("y\n94\n120 =", "explanation", "sat-pt11-math-m1-q22"),
+    "y/120 = 94",
+  );
+  assert.equal(repairStackedMathNotation("x/88 = 240"), "x/88 = 240");
+  assert.equal(
+    repairStackedMathNotation("x/88 = 240", "explanation", "sat-pt11-math-m1-q22"),
+    "x/240 = 88",
+  );
+  assert.equal(repairStackedMathNotation("x/21 = 120"), "x/21 = 120");
+  assert.equal(
+    repairStackedMathNotation("x/21 = 120", "explanation", "sat-pt11-math-m1-q22"),
+    "x = 21,120",
+  );
+  assert.equal(repairStackedMathNotation("300\n8"), "300\n8");
+  assert.equal(
+    repairStackedMathNotation("300\n8", "explanation", "sat-pt11-math-m1-q10"),
+    "8/300",
+  );
+  assert.equal(
+    repairStackedMathNotation("x/19 = 684", "explanation", "sat-pt11-math-m1-q22"),
+    "x/19 = 684",
+  );
   assert.equal(repairStackedMathNotation("%\n75"), "75%");
 });

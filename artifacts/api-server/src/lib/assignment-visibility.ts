@@ -6,6 +6,7 @@ import { skillLabelForBank } from "./sat-bank-skill.ts";
 import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
 import { repairKnownSatBankQuestion } from "./sat-bank-display-repair.ts";
 import {
+  bankSourceKeyFromTags,
   repairMichelleQuizMathText,
   type QuizMathRepairScope,
   type StackedMathField,
@@ -211,8 +212,14 @@ export function assignmentQuestionShape(
   options?: { includeKeys?: boolean; repairStackedMath?: boolean | QuizMathRepairScope },
 ) {
   question = repairKnownSatBankQuestion(question);
+  const sourceKey = bankSourceKeyFromTags(question.tags);
   const repairMath = (text: string, field: StackedMathField) =>
-    repairMichelleQuizMathText(text, options?.repairStackedMath ?? false, field);
+    repairMichelleQuizMathText(
+      text,
+      options?.repairStackedMath ?? false,
+      field,
+      field === "explanation" ? sourceKey : null,
+    );
   const existingChoices = assignmentChoices(question.choices);
   const facing = studentFacingFigurePrimaryFields({
     prompt: question.prompt,

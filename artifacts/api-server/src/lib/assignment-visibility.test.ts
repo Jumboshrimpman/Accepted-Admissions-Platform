@@ -294,6 +294,38 @@ test("SAT pre-work math repair rewrites the explanation and leaves stems alone",
   assert.notEqual(repaired.explanation, raw.explanation);
 });
 
+test("Michelle full repair still skips item-specific rewrites on stems", () => {
+  const question = {
+    id: "michelle-shared-prework",
+    subject: "SAT Math",
+    questionType: "multiple_choice",
+    prompt: "x/19 = 684",
+    stimulus: "4 100\n5 250",
+    choices: [
+      { id: "a", label: "A", text: "x/88 = 240" },
+      { id: "b", label: "B", text: "28%\n50" },
+    ],
+    tags: ["sat-pt10-math-m1-q25"],
+    correctAnswer: "a",
+    explanation: "x/19 = 684",
+  };
+  const repaired = assignmentQuestionShape(question, { position: 1 }, {
+    includeKeys: true,
+    repairStackedMath: "all",
+  });
+  assert.equal(repaired.prompt, "x/19 = 684");
+  assert.equal(repaired.stimulus, "4 100\n5 250");
+  assert.equal(repaired.choices?.[0]?.text, "x/88 = 240");
+  assert.doesNotMatch(repaired.choices?.[1]?.text ?? "", /2850%/);
+  assert.equal(repaired.explanation, "19x = 684");
+  const other = assignmentQuestionShape(
+    { ...question, tags: ["sat-pt11-math-m1-q22"], explanation: "x/19 = 684" },
+    { position: 1 },
+    { includeKeys: true, repairStackedMath: "all" },
+  );
+  assert.equal(other.explanation, "x/19 = 684");
+});
+
 test("unfinished-homework copy is rewritten for students and kept detectable", () => {
   const livePlanCopy =
     "Homework was not finished. The live plan now carries the unfinished prep so the student and tutor can complete it together.";

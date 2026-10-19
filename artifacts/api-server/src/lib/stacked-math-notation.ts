@@ -14,8 +14,8 @@ export type StackedMathField = "explanation" | "stem";
 const SHARED_SAT_PREWORK = /SAT pre-work\s*\(30/i;
 
 /**
- * Shared SAT pre-work repairs explanation text only. Michelle's other quizzes
- * may still rebuild smashed equations in the prompt, stimulus, and choices.
+ * Michelle keeps full repair, including on a shared SAT pre-work title.
+ * Other students' shared SAT pre-work repairs explanation text only.
  */
 export function quizMathRepairScope(input: {
   clientEmail?: string | null;
@@ -23,12 +23,26 @@ export function quizMathRepairScope(input: {
   sessionTitle?: string | null;
   assignmentTitle?: string | null;
 }): QuizMathRepairScope {
-  if (SHARED_SAT_PREWORK.test(input.assignmentTitle ?? "")) return "explanation";
   if (isMichelleClientEmail(input.clientEmail)) return "all";
   const hay = [input.clientName, input.sessionTitle, input.assignmentTitle]
     .filter(Boolean)
     .join(" ");
-  return /michelle/i.test(hay) ? "all" : "off";
+  if (/michelle/i.test(hay)) return "all";
+  if (SHARED_SAT_PREWORK.test(input.assignmentTitle ?? "")) return "explanation";
+  return "off";
+}
+
+/** College Board ids stored on materialized question tags. */
+const BANK_SOURCE_KEY = /^sat-pt\d+-(?:math|rw)-m\d+-q\d+$/;
+const PERCENT_INCREASE_KEY = "sat-pt10-math-m1-q25";
+const CUSTOMER_SAMPLE_KEY = "sat-pt11-math-m1-q10";
+const SEAL_LENGTH_KEY = "sat-pt11-math-m1-q22";
+
+export function bankSourceKeyFromTags(tags: readonly string[] | null | undefined): string | null {
+  for (const tag of tags ?? []) {
+    if (BANK_SOURCE_KEY.test(tag)) return tag;
+  }
+  return null;
 }
 
 export function shouldRepairMichelleQuizMath(input: {
@@ -56,7 +70,11 @@ const EXTRACTED_NUMBER = String.raw`((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)`;
  * park the operators after them. Put those equations back inline, and correct
  * the stacks whose extracted order had changed the math.
  */
-function restoreExtractedMathLayout(text: string, field: StackedMathField): string {
+function restoreExtractedMathLayout(
+  text: string,
+  field: StackedMathField,
+  sourceKey?: string | null,
+): string {
   let value = text.replace(/\uF06C/g, "l");
   value = value.replace(/\n+n\s*\n+SAT ANSWER EXPLANATIONS\s+n\s+[A-Z][A-Z0-9 :]+/g, "");
   value = value.replace(/\n+SAT ANSWER EXPLANATIONS\s+n\s+[A-Z][A-Z0-9 :]+/g, "");
@@ -71,7 +89,7 @@ function restoreExtractedMathLayout(text: string, field: StackedMathField): stri
     value = value.replace(/\b(\d{1,3}) (\d{3})\b/g, "$1,$2");
   }
 
-  const rules: Array<[RegExp, string, StackedMathField?]> = [
+  const rules: Array<[RegExp, string, { field?: StackedMathField; sourceKey?: string }?]> = [
     [/\bk\nk\n100\n29\b/g, "((29/100)k)/k"],
     [/\bk\n100\n29\b/g, "(29/100)k"],
     [/(?<!k\n)100\n29\b/g, "29/100"],
@@ -97,19 +115,19 @@ function restoreExtractedMathLayout(text: string, field: StackedMathField): stri
     [/7\nw \+/g, "w + 7"],
     [/\(\s*\n\)\s*\nl\n3\.5\n7\nx\nw\n\+\n=\n\+/g, "l + x = 3.5(w + 7)"],
     [/l\n3\.5\n24\.5\nx\nw\n\+\n=\n\+/g, "l + x = 3.5w + 24.5"],
-    [/(30,000)\n300\n8\na\n\^k\nh/g, "$1*(8/300)", "explanation"],
-    [/\b300\n8\b/g, "8/300", "explanation"],
+    [/(30,000)\n300\n8\na\n\^k\nh/g, "$1*(8/300)", { field: "explanation", sourceKey: CUSTOMER_SAMPLE_KEY }],
+    [/\b300\n8\b/g, "8/300", { field: "explanation", sourceKey: CUSTOMER_SAMPLE_KEY }],
     [/feet per minute\n(\d+)/g, "$1 feet per minute"],
     [/,\nfeet\n(\d{1,3}(?:,\d{3})+|\d+)/g, "$1 feet"],
     [/b\n43\.2\n196\.8\n2\n2\n2\n\+\n=/g, "b^2 + 43.2^2 = 196.8^2"],
     [/b\n43 2\n196 8\n2\n2\n2\n\+\n=/g, "b^2 + 43.2^2 = 196.8^2"],
     [/b\n(1,866\.24)\n(38,730\.24)\n2\n\+\n=/g, "b^2 + $1 = $2"],
     [/b\n(36,864)\n2=/g, "b^2 = $1"],
-    [/x\/88 = 240/g, "x/240 = 88", "explanation"],
-    [/x\/240 = 88\s*\^\s*\n?\^h\s*\n?h/g, "x = 21,120", "explanation"],
-    [/x\/21 = 120/g, "x = 21,120", "explanation"],
-    [/y\n94\n120 =/g, "y/120 = 94", "explanation"],
-    [/y\n120 94\n=\s*\^\s*\n?\^h\s*\n?h/g, "y = 11,280", "explanation"],
+    [/x\/88 = 240/g, "x/240 = 88", { field: "explanation", sourceKey: SEAL_LENGTH_KEY }],
+    [/x\/240 = 88\s*\^\s*\n?\^h\s*\n?h/g, "x = 21,120", { field: "explanation", sourceKey: SEAL_LENGTH_KEY }],
+    [/x\/21 = 120/g, "x = 21,120", { field: "explanation", sourceKey: SEAL_LENGTH_KEY }],
+    [/y\n94\n120 =/g, "y/120 = 94", { field: "explanation", sourceKey: SEAL_LENGTH_KEY }],
+    [/y\n120 94\n=\s*\^\s*\n?\^h\s*\n?h/g, "y = 11,280", { field: "explanation", sourceKey: SEAL_LENGTH_KEY }],
     [/(21,120)\n(11,280)\n\+/g, "$1 + $2"],
     [/360\n(32,400)/g, "$1/360"],
     [/x x\n7 9\n-\n\^\s*\n?\^h\s*h?/g, "9x(x - 7)"],
@@ -117,7 +135,7 @@ function restoreExtractedMathLayout(text: string, field: StackedMathField): stri
     [/V x\nx x\/9 = -7\s*(?:\^\s*){1,3}h\s*h/g, "V(x) = 9x(x - 7)"],
     [/\bx\n7\n-/g, "x - 7"],
     [/x\n0\n>/g, "x > 0"],
-    [/%\n(\d{1,3}(?:,\d{3})+|\d+)/g, "$1%", "explanation"],
+    [/%\n(\d{1,3}(?:,\d{3})+|\d+)/g, "$1%", { field: "explanation" }],
     [/f\(x\)\nx\/100 = 201\s*\^h/g, "f(x) = (201/100)x"],
     [/f\(x\)\nx\/2 = 01\s*\^h/g, "f(x) = 2.01x"],
     [/f\(x\)\n2 01 x\n=\s*(?:\^\s*){1,3}h\s*h/g, "f(x) = 2.01^x"],
@@ -125,11 +143,12 @@ function restoreExtractedMathLayout(text: string, field: StackedMathField): stri
     [/\.\n2 01\b/g, "2.01"],
     [/x\nx\n684\n,\n100\n(1,800)\n\+\n=\nb\nl/g, "x + ($1/100)x = 684"],
     [/x\nx\n18\n684\n\+\n=/g, "x + 18x = 684"],
-    [/x\/19 = 684/g, "19x = 684", "explanation"],
-    [/(?:^|\n)(\d+)\n([A-Za-z]) =/g, "\n$2 = $1", "explanation"],
+    [/x\/19 = 684/g, "19x = 684", { field: "explanation", sourceKey: PERCENT_INCREASE_KEY }],
+    [/(?:^|\n)(\d+)\n([A-Za-z]) =/g, "\n$2 = $1", { field: "explanation" }],
   ];
-  for (const [pattern, replacement, onlyField] of rules) {
-    if (onlyField && field !== onlyField) continue;
+  for (const [pattern, replacement, scope] of rules) {
+    if (scope?.field && field !== scope.field) continue;
+    if (scope?.sourceKey && sourceKey !== scope.sourceKey) continue;
     value = value.replace(pattern, replacement);
   }
   value = value.replace(/(?:^|\n)[ \t]*[.,][ \t]*(?=\n)/g, "\n");
@@ -146,9 +165,10 @@ function restoreExtractedMathLayout(text: string, field: StackedMathField): stri
 export function repairStackedMathNotation(
   text: string | null | undefined,
   field: StackedMathField = "explanation",
+  sourceKey?: string | null,
 ): string {
   if (!text) return "";
-  let value = restoreExtractedMathLayout(text.replace(/\r\n/g, "\n"), field);
+  let value = restoreExtractedMathLayout(text.replace(/\r\n/g, "\n"), field, sourceKey);
 
   value = value.replace(new RegExp(String.raw`\b([A-Za-z])\n${EXTRACTED_NUMBER}\s+${EXTRACTED_NUMBER}\n=\n\^h`, "g"), "$1 = $2($3)");
   value = value.replace(new RegExp(String.raw`\b([A-Za-z])\n${EXTRACTED_NUMBER}\s+${EXTRACTED_NUMBER}\n${EXTRACTED_NUMBER}\n\+\n=\n\^h`, "g"), "$1 + $2($3) = $4");
@@ -192,12 +212,13 @@ export function repairMichelleQuizMathText(
   text: string | null | undefined,
   enabled: boolean | QuizMathRepairScope,
   field: StackedMathField = "explanation",
+  sourceKey?: string | null,
 ): string {
   const raw = text ?? "";
   const scope = normalizeQuizMathRepairScope(enabled);
   if (scope === "off") return raw;
   if (scope === "explanation" && field !== "explanation") return raw;
-  return repairStackedMathNotation(raw, field);
+  return repairStackedMathNotation(raw, field, sourceKey);
 }
 
 export function repairMichelleQuizQuestionFields<
@@ -207,7 +228,7 @@ export function repairMichelleQuizQuestionFields<
     explanation?: string | null;
     choices?: Array<{ text: string }> | null | undefined;
   },
->(item: T, enabled: boolean | QuizMathRepairScope): T {
+>(item: T, enabled: boolean | QuizMathRepairScope, sourceKey?: string | null): T {
   const scope = normalizeQuizMathRepairScope(enabled);
   if (scope === "off") return item;
   return {
@@ -220,7 +241,7 @@ export function repairMichelleQuizQuestionFields<
         : item.stimulus,
     explanation:
       item.explanation != null
-        ? repairMichelleQuizMathText(item.explanation, scope, "explanation")
+        ? repairMichelleQuizMathText(item.explanation, scope, "explanation", sourceKey)
         : item.explanation,
     choices: item.choices?.map((choice) => ({
       ...choice,
@@ -236,6 +257,12 @@ export function repairMichelleAttemptResultItems<
     explanation?: string | null;
     choices?: Array<{ text: string }> | null | undefined;
   },
->(items: readonly T[], enabled: boolean | QuizMathRepairScope): T[] {
-  return items.map((item) => repairMichelleQuizQuestionFields(item, enabled));
+>(
+  items: readonly T[],
+  enabled: boolean | QuizMathRepairScope,
+  sourceKeyForItem?: (item: T) => string | null | undefined,
+): T[] {
+  return items.map((item) =>
+    repairMichelleQuizQuestionFields(item, enabled, sourceKeyForItem?.(item)),
+  );
 }
