@@ -4,6 +4,7 @@ import { xavierCalendarIdentityAlignment } from "./lib/calendar-profile";
 import { reconnectStoredGoogleCalendarGrants } from "./lib/calendar-persistence";
 import { retireDuplicateXavierIdentities } from "./lib/retire-duplicate-xavier";
 import { ensureOfficialExtractsImported } from "./lib/sat-bank-service";
+import { ensureTaitoOct30HardPrework } from "./lib/sat-hard-sets";
 import { ensureXavierSatCapabilitySession } from "./lib/xavier-sat-capability-session";
 import { resetSamaXavierSatCapabilityAttempts } from "./lib/reset-sama-xavier-capability";
 import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-up";
@@ -43,6 +44,9 @@ void ensureRyoTaitoParentMirror()
       void ensureOfficialExtractsImported()
         .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
         .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
+        .then(() => ensureTaitoOct30HardPrework())
+        .then((result) => logger.info({ action: result.action }, "Taito Oct 30 hard pre-work check"))
+        .catch(() => logger.warn("Taito Oct 30 hard pre-work check skipped"))
         .then(() =>
           retireDuplicateXavierIdentities().catch((err) =>
             logger.warn({ err }, "Xavier identity retirement skipped"),

@@ -563,6 +563,7 @@ import {
   hydrateMistakePrompts,
   placeholderArchiveApplyIds,
   selectActivePrework,
+  selectLatestStudentAttempt,
   selectStatusHomework,
   sessionAttemptUserId,
   shouldRepublishSeededHomework,
@@ -644,9 +645,11 @@ import {
   studentSafeAssignmentInstructions,
 } from "../lib/assignment-visibility";
 import {
+  bankSourceKeyFromTags,
+  quizMathRepairScope,
   repairMichelleAttemptResultItems,
   repairMichelleQuizMathText,
-  shouldRepairMichelleQuizMath,
+  type QuizMathRepairScope,
 } from "../lib/stacked-math-notation";
 import {
   skillBreakdownFromItems,
@@ -3523,18 +3526,14 @@ async function michelleQuizMathRepairEnabled(input: {
   sessionTitle?: string | null;
   clientEmail?: string | null;
   clientName?: string | null;
-}): Promise<boolean> {
-  if (
-    shouldRepairMichelleQuizMath({
-      clientEmail: input.clientEmail,
-      clientName: input.clientName,
-      sessionTitle: input.sessionTitle,
-      assignmentTitle: input.assignmentTitle,
-    })
-  ) {
-    return true;
-  }
-  if (!input.sessionId) return false;
+}): Promise<QuizMathRepairScope> {
+  const direct = quizMathRepairScope({
+    clientEmail: input.clientEmail,
+    clientName: input.clientName,
+    sessionTitle: input.sessionTitle,
+    assignmentTitle: input.assignmentTitle,
+  });
+  if (direct !== "off" || !input.sessionId) return direct;
   const [row] = await db
     .select({
       title: sessionsTable.title,
@@ -3545,8 +3544,8 @@ async function michelleQuizMathRepairEnabled(input: {
     .leftJoin(usersTable, eq(usersTable.id, sessionsTable.clientUserId))
     .where(eq(sessionsTable.id, input.sessionId))
     .limit(1);
-  if (!row) return false;
-  return shouldRepairMichelleQuizMath({
+  if (!row) return "off";
+  return quizMathRepairScope({
     clientEmail: row.email,
     clientName: row.displayName,
     sessionTitle: row.title,
@@ -3601,6 +3600,7 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
             id: questionsTable.id,
             correctAnswer: questionsTable.correctAnswer,
             explanation: questionsTable.explanation,
+            tags: questionsTable.tags,
           })
           .from(questionsTable)
           .where(inArray(questionsTable.id, revealedIds))
@@ -3630,7 +3630,12 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
           storedCorrect: response.correct,
           studentAnswer: response.finalAnswer,
           correctAnswer: question?.correctAnswer,
-          explanation: repairMichelleQuizMathText(question?.explanation, repairStackedMath),
+          explanation: repairMichelleQuizMathText(
+            question?.explanation,
+            repairStackedMath,
+            "explanation",
+            bankSourceKeyFromTags(question?.tags),
+          ),
         }),
       });
     }),
@@ -3789,15 +3794,34 @@ async function storedAttemptResult(
     .limit(1);
   if (!attempt?.result) return null;
   const display = withDisplaySkills(attempt.result as AttemptResultPayload, attempt.assignmentTitle);
-  const repairStackedMath = shouldRepairMichelleQuizMath({
+  const repairStackedMath = quizMathRepairScope({
     clientEmail: attempt.studentEmail,
     clientName: attempt.studentName,
     sessionTitle: attempt.sessionTitle,
     assignmentTitle: attempt.assignmentTitle,
   });
+  const questionIds = [
+    ...new Set(
+      display.items.map((item) => item.questionId).filter((id) => UUID_PATTERN.test(id)),
+    ),
+  ];
+  const tagRows =
+    questionIds.length === 0
+      ? []
+      : await db
+          .select({ id: questionsTable.id, tags: questionsTable.tags })
+          .from(questionsTable)
+          .where(inArray(questionsTable.id, questionIds));
+  const sourceKeyByQuestion = new Map(
+    tagRows.map((row) => [row.id, bankSourceKeyFromTags(row.tags)]),
+  );
   return {
     ...display,
-    items: repairMichelleAttemptResultItems(display.items, repairStackedMath),
+    items: repairMichelleAttemptResultItems(
+      display.items,
+      repairStackedMath,
+      (item) => sourceKeyByQuestion.get(item.questionId) ?? null,
+    ),
     assignmentId: attempt.assignmentId,
     assignmentTitle: includeTutorFields
       ? attempt.assignmentTitle
@@ -3965,7 +3989,7 @@ async function finalizeAttemptResult(
   }
   const { correctCount, totalCount, score } = scoreAttemptItems(scoredItems);
   const timing = await timerSummary(attempt.attempt.id);
-  const repairStackedMath = shouldRepairMichelleQuizMath({
+  const repairStackedMath = quizMathRepairScope({
     clientEmail: attempt.student.email,
     clientName: attempt.student.displayName,
     sessionTitle: attempt.session?.title,
@@ -3979,7 +4003,12 @@ async function finalizeAttemptResult(
     prediction: response?.prediction ?? null,
     finalAnswer: response?.finalAnswer ?? null,
     correctAnswer: question.correctAnswer,
-    explanation: repairMichelleQuizMathText(question.explanation, repairStackedMath),
+    explanation: repairMichelleQuizMathText(
+      question.explanation,
+      repairStackedMath,
+      "explanation",
+      bankSourceKeyFromTags(question.tags),
+    ),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -7289,7 +7318,7 @@ router.post(
         CreateTutorSessionQuestionResponse.parse(
           assignmentQuestionShape(question, link ?? { position: 0, predictionFirst: false }, {
             includeKeys: true,
-            repairStackedMath: shouldRepairMichelleQuizMath({
+            repairStackedMath: quizMathRepairScope({
               sessionTitle: session.title,
               assignmentTitle: assignment.title,
             }),
@@ -11107,14 +11136,28 @@ async function adminSessionShape(
 }
 
 async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSelect) {
-  const [[course], [session], [questionCount], [submissionCount]] = await Promise.all([
+  const [[course], [session], [questionCount], [submissionCount], attempts] = await Promise.all([
     db.select({ title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, assignment.courseId)).limit(1),
     assignment.sessionId
-      ? db.select({ title: sessionsTable.title }).from(sessionsTable).where(eq(sessionsTable.id, assignment.sessionId)).limit(1)
+      ? db
+          .select({ title: sessionsTable.title, clientUserId: sessionsTable.clientUserId })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.id, assignment.sessionId))
+          .limit(1)
       : Promise.resolve([]),
     db.select({ count: sql<number>`count(*)` }).from(assignmentQuestionsTable).where(eq(assignmentQuestionsTable.assignmentId, assignment.id)),
     db.select({ count: sql<number>`count(*)` }).from(attemptsTable).where(and(eq(attemptsTable.assignmentId, assignment.id), inArray(attemptsTable.status, ["submitted", "expired"]))),
+    db
+      .select({
+        id: attemptsTable.id,
+        status: attemptsTable.status,
+        userId: attemptsTable.userId,
+        startedAt: attemptsTable.startedAt,
+      })
+      .from(attemptsTable)
+      .where(eq(attemptsTable.assignmentId, assignment.id)),
   ]);
+  const latestAttempt = selectLatestStudentAttempt(attempts, session?.clientUserId ?? null);
   return {
     id: assignment.id,
     courseId: assignment.courseId,
@@ -11131,6 +11174,8 @@ async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSe
     maxAttempts: assignment.maxAttempts,
     questionCount: Number(questionCount?.count ?? 0),
     submissionCount: Number(submissionCount?.count ?? 0),
+    latestAttemptId: latestAttempt?.id ?? null,
+    latestAttemptStatus: latestAttempt?.status ?? null,
   };
 }
 
@@ -13704,7 +13749,12 @@ router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res):
         choices: shaped.choices,
         figures,
         correctAnswer: "correctAnswer" in shaped ? shaped.correctAnswer : null,
-        explanation: repairMichelleQuizMathText(row.question.explanation, repairStackedMath),
+        explanation: repairMichelleQuizMathText(
+          row.question.explanation,
+          repairStackedMath,
+          "explanation",
+          bankSourceKeyFromTags(row.question.tags),
+        ),
       });
     }
     if (questions.length > 0) sections.push({ title: plan.title, questions });
@@ -14732,6 +14782,7 @@ router.put(
         id: assignmentQuestionsTable.id,
         correctAnswer: questionsTable.correctAnswer,
         explanation: questionsTable.explanation,
+        tags: questionsTable.tags,
       })
       .from(assignmentQuestionsTable)
       .innerJoin(questionsTable, eq(questionsTable.id, assignmentQuestionsTable.questionId))
@@ -14842,6 +14893,8 @@ router.put(
             explanation: repairMichelleQuizMathText(
               belongsToAssignment.explanation,
               repairStackedMath,
+              "explanation",
+              bankSourceKeyFromTags(belongsToAssignment.tags),
             ),
           }),
         }),
@@ -16172,7 +16225,7 @@ router.patch(
           UpdateAssignmentQuestionResponse.parse(
             assignmentQuestionShape(edited.question, updated ?? { position: 0, predictionFirst: false }, {
               includeKeys: true,
-              repairStackedMath: shouldRepairMichelleQuizMath({
+              repairStackedMath: quizMathRepairScope({
                 sessionTitle: ownedSession.title,
                 assignmentTitle: record.assignment.title,
               }),

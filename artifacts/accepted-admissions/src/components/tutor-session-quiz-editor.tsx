@@ -22,8 +22,8 @@ import {
 } from "@/lib/session-quiz-edit";
 import { quizEditorChoiceValue } from "@/lib/quiz-editor-answer-key";
 import {
+  quizMathRepairScope,
   repairMichelleQuizMathText,
-  shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
 import { quizShowsFormattedMath } from "@/lib/quiz-math";
 import { QuizMathText } from "@/components/quiz-math-text";
@@ -82,7 +82,7 @@ export function TutorSessionQuizEditor({
   if (!assignmentId) return null;
 
   const questions = assignment?.questions ?? [];
-  const repairStackedMath = shouldRepairMichelleQuizMath({
+  const repairStackedMath = quizMathRepairScope({
     clientEmail,
     clientName,
     sessionTitle,
@@ -262,9 +262,9 @@ export function TutorSessionQuizEditor({
                     <div>
                       <p className="text-sm">
                         {quizShowsFormattedMath(assignment?.title) ? (
-                          <QuizMathText text={repairMichelleQuizMathText(question.prompt, repairStackedMath)} />
+                          <QuizMathText text={repairMichelleQuizMathText(question.prompt, repairStackedMath, "stem")} />
                         ) : (
-                          repairMichelleQuizMathText(question.prompt, repairStackedMath)
+                          repairMichelleQuizMathText(question.prompt, repairStackedMath, "stem")
                         )}
                       </p>
                       {mcq && question.correctAnswer ? (

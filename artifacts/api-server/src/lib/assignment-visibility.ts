@@ -5,7 +5,12 @@ import {
 import { skillLabelForBank } from "./sat-bank-skill.ts";
 import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
 import { repairKnownSatBankQuestion } from "./sat-bank-display-repair.ts";
-import { repairMichelleQuizMathText } from "./stacked-math-notation.ts";
+import {
+  bankSourceKeyFromTags,
+  repairMichelleQuizMathText,
+  type QuizMathRepairScope,
+  type StackedMathField,
+} from "./stacked-math-notation.ts";
 
 export function isAssignmentListedForRole(
   role: string | null | undefined,
@@ -204,11 +209,17 @@ export function assignmentQuestionShape(
     extractGaps?: Record<string, unknown> | null;
   },
   assignmentQuestion: { position: number; predictionFirst?: boolean | null },
-  options?: { includeKeys?: boolean; repairStackedMath?: boolean },
+  options?: { includeKeys?: boolean; repairStackedMath?: boolean | QuizMathRepairScope },
 ) {
   question = repairKnownSatBankQuestion(question);
-  const repairMath = (text: string) =>
-    repairMichelleQuizMathText(text, Boolean(options?.repairStackedMath));
+  const sourceKey = bankSourceKeyFromTags(question.tags);
+  const repairMath = (text: string, field: StackedMathField) =>
+    repairMichelleQuizMathText(
+      text,
+      options?.repairStackedMath ?? false,
+      field,
+      field === "explanation" ? sourceKey : null,
+    );
   const existingChoices = assignmentChoices(question.choices);
   const facing = studentFacingFigurePrimaryFields({
     prompt: question.prompt,
@@ -236,16 +247,16 @@ export function assignmentQuestionShape(
     subject: question.subject?.trim() || "SAT",
     questionType,
     prompt: figurePrimary
-      ? repairMath(facing.prompt)
-      : repairMath(stripBankFigureComments(facing.prompt) || "Question prompt is unavailable."),
+      ? repairMath(facing.prompt, "stem")
+      : repairMath(stripBankFigureComments(facing.prompt) || "Question prompt is unavailable.", "stem"),
     stimulus: figurePrimary
       ? facing.stimulus
-        ? repairMath(facing.stimulus)
+        ? repairMath(facing.stimulus, "stem")
         : facing.stimulus
       : facing.stimulus
-        ? repairMath(stripBankFigureComments(facing.stimulus))
+        ? repairMath(stripBankFigureComments(facing.stimulus), "stem")
         : null,
-    choices: rawChoices?.map((choice) => ({ ...choice, text: repairMath(choice.text) })),
+    choices: rawChoices?.map((choice) => ({ ...choice, text: repairMath(choice.text, "stem") })),
     skill: skillLabelForBank({
       skill: question.skill,
       domain: question.domain,
@@ -259,7 +270,7 @@ export function assignmentQuestionShape(
   return {
     ...shaped,
     correctAnswer: question.correctAnswer?.trim() || "",
-    explanation: repairMath(question.explanation?.trim() || ""),
+    explanation: repairMath(question.explanation?.trim() || "", "explanation"),
   };
 }
 

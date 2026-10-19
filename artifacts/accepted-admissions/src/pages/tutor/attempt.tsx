@@ -24,8 +24,8 @@ import {
   type AttemptWrongAnswers,
 } from "@/lib/wrong-answers";
 import {
+  quizMathRepairScope,
   repairMichelleQuizQuestionFields,
-  shouldRepairMichelleQuizMath,
 } from "@/lib/stacked-math-notation";
 import { writtenQuestionNote } from "@/lib/written-quiz-feedback";
 import { quizShowsFormattedMath } from "@/lib/quiz-math";
@@ -73,7 +73,7 @@ export default function TutorAttempt() {
   const updateReview = useUpdateAttemptReview();
   const visibleItems = useMemo(() => {
     if (!result) return [];
-    const repairStackedMath = shouldRepairMichelleQuizMath({
+    const repairStackedMath = quizMathRepairScope({
       clientName: result.studentName,
       assignmentTitle: result.assignmentTitle,
     });

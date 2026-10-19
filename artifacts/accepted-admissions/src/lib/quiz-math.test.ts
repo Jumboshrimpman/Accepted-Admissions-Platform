@@ -5,6 +5,10 @@ import { quizMathPlain, quizShowsFormattedMath } from "./quiz-math.ts";
 test("formatted math is limited to the authored follow-up quizzes", () => {
   assert.equal(quizShowsFormattedMath("Factoring Quiz"), true);
   assert.equal(quizShowsFormattedMath("SAT Math Problems"), true);
+  assert.equal(
+    quizShowsFormattedMath("SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier"),
+    true,
+  );
   assert.equal(quizShowsFormattedMath(" Practice quiz "), false);
   assert.equal(quizShowsFormattedMath("Geometry Area and Volume"), false);
   assert.equal(quizShowsFormattedMath(null), false);

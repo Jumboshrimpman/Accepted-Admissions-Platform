@@ -51,6 +51,7 @@ import {
   sessionPreworkQuizzes,
 } from "@/lib/assignable-bank-quizzes";
 import { questionStatusHelp, questionStatusLabel } from "@/lib/question-status";
+import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { filterPeopleByQuery, isSupersededAccessGrant, isVisiblePeopleTutor, mergeSessionPeople, personOptionLabel } from "@/lib/session-people";
 import { useCloneAdminAssignmentToSession } from "@/lib/clone-admin-assignment";
 import { previewableStudents } from "@/lib/previewable-students";
@@ -995,9 +996,16 @@ function SessionCard({
                           <Link href={`/tutor/attempts/${item.attemptId}`}>Review {item.studentName}</Link>
                         </Button>
                       ))}
-                      {reviews.filter((item) => item.assignmentId === quiz.id).length === 0 && quiz.status !== "archived" && (
-                        <span className="text-xs text-muted-foreground">No attempt yet</span>
-                      )}
+                      {quiz.status !== "archived" ? (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          data-testid={`session-prework-status-${quiz.id}`}
+                        >
+                          {describeAssignmentCompletion({
+                            attemptStatus: quiz.latestAttemptStatus,
+                          }).label}
+                        </span>
+                      ) : null}
                       {reviews.some((item) => item.assignmentId === quiz.id) ? (
                         <ClearHomeworkButton sessionId={session.id} assignmentId={quiz.id} testId={`clear-homework-${session.id}`} onCleared={onChanged} />
                       ) : null}

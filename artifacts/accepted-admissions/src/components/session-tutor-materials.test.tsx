@@ -79,7 +79,7 @@ describe("session tutor materials", () => {
         canDownloadPdfs
       />,
     );
-    expect(screen.getByTestId("tutor-completion-badge-pre").textContent).toBe("Paused");
+    expect(screen.getByTestId("tutor-completion-badge-pre").textContent).toBe("In progress");
     expect(screen.getByTestId("tutor-completion-badge-home").textContent).toBe("Not started");
     expect(screen.getByTestId("tutor-completion-pre").textContent).toMatch(/Pre-work/);
     expect(screen.getByTestId("tutor-completion-home").textContent).toMatch(/Homework/);
@@ -136,7 +136,7 @@ describe("session tutor materials", () => {
         canDownloadPdfs={false}
       />,
     );
-    expect(screen.getByTestId("tutor-completion-badge-pre").textContent).toBe("Paused");
+    expect(screen.getByTestId("tutor-completion-badge-pre").textContent).toBe("In progress");
     expect(screen.queryByTestId("download-prework-questions")).toBeNull();
     expect(screen.queryByTestId("download-prework-answer-key")).toBeNull();
   });

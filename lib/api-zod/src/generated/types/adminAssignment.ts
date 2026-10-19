@@ -27,4 +27,8 @@ export interface AdminAssignment {
   maxAttempts: number;
   questionCount: number;
   submissionCount: number;
+  /** @nullable */
+  latestAttemptId?: string | null;
+  /** Latest attempt for the session student. Paused and active are both in progress. */
+  latestAttemptStatus?: "active" | "paused" | "submitted" | "expired" | null;
 }
