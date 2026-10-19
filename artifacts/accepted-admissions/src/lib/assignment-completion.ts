@@ -6,11 +6,8 @@ export function describeAssignmentCompletion(input: {
   submittedAt?: string | Date | null;
   timezone?: string | null;
 }): { kind: AssignmentCompletionKind; label: string } {
-  if (input.attemptStatus === "active") {
+  if (input.attemptStatus === "active" || input.attemptStatus === "paused") {
     return { kind: "in_progress", label: "In progress" };
-  }
-  if (input.attemptStatus === "paused") {
-    return { kind: "paused", label: "Paused" };
   }
   if (input.attemptStatus === "submitted" || input.attemptStatus === "expired") {
     const score =

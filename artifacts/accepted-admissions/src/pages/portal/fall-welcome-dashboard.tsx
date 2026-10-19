@@ -36,6 +36,7 @@ import {
   type QuizSessionRef,
 } from "@/lib/student-quiz-list";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
+import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { sessionsForDashboardRole } from "@/lib/dashboard-session-scope";
 import { BookingCard, ClientPreviewBookingCard } from "@/pages/portal/booking-card";
 import { FinancialCard } from "@/pages/portal/financial-card";
@@ -95,7 +96,11 @@ function materialDownloadName(url: string): string | undefined {
 
 function readinessLabel(session: CurriculumSession): string {
   if (session.readiness === "complete") return "Complete";
-  if (session.readiness === "in_progress") return "In progress";
+  if (session.readiness === "in_progress") {
+    return describeAssignmentCompletion({
+      attemptStatus: session.preparation?.latestAttemptStatus ?? "active",
+    }).label;
+  }
   if (session.readiness === "not_started") return "Preparation due";
   if (session.readiness === "unavailable") return "Unavailable";
   return session.latestResult ? "Ready · result available" : "Ready";

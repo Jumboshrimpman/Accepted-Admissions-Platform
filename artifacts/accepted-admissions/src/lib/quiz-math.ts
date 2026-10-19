@@ -9,7 +9,9 @@ export const FREE_RESPONSE_FORMAT_HINT = "Type exponents as x^2.";
 const FORMATTED_QUIZ_TITLES = new Set(["Factoring Quiz", "SAT Math Problems"]);
 
 export function quizShowsFormattedMath(title?: string | null): boolean {
-  return FORMATTED_QUIZ_TITLES.has((title ?? "").trim());
+  const trimmed = (title ?? "").trim();
+  if (FORMATTED_QUIZ_TITLES.has(trimmed)) return true;
+  return /SAT pre-work\s*\(30/i.test(trimmed);
 }
 
 export type MathExpr =

@@ -9,6 +9,7 @@ import {
   db,
   remediationRetriesTable,
   sessionsTable,
+  tutorProfilesTable,
   usersTable,
 } from "@workspace/db";
 import { assignPreworkFromBank, materializeHardSatQuestion } from "./sat-bank-service.ts";
@@ -28,7 +29,12 @@ import {
   type HardSatCandidate,
   type SatDifficulty,
 } from "./sat-set-difficulty.ts";
-import { normalizedSessionSubject } from "./session-schedule.ts";
+import {
+  EUNICE_TUTOR_EMAIL,
+  TAITO_STUDENT_EMAIL,
+  matchesTaitoScheduledDate,
+  normalizedSessionSubject,
+} from "./session-schedule.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
 
@@ -843,4 +849,74 @@ export async function ensureHardSatSessionSets(
     return { difficulty, inSessionStatus: "unavailable" };
   }
   return { difficulty, inSessionStatus: inSession.status };
+}
+
+/** Taito's Oct 30 SAT hour with Eunice. Michelle's Oct 25 set is a different student. */
+export function isTaitoOct30EuniceSession(input: {
+  subject: string;
+  dateTime: Date;
+  timezone?: string | null;
+  studentEmail?: string | null;
+  tutorEmail?: string | null;
+  clientUserId?: string | null;
+}): boolean {
+  if (normalizedSessionSubject(input.subject) !== "SAT") return false;
+  if ((input.studentEmail ?? "").trim().toLowerCase() !== TAITO_STUDENT_EMAIL) return false;
+  if ((input.tutorEmail ?? "").trim().toLowerCase() !== EUNICE_TUTOR_EMAIL) return false;
+  return matchesTaitoScheduledDate(
+    {
+      dateTime: input.dateTime,
+      timezone: input.timezone,
+      email: input.studentEmail,
+      clientUserId: input.clientUserId,
+    },
+    "2026-10-30",
+  );
+}
+
+/**
+ * Point Taito's Oct 30 pre-work at the existing hard module 2 set when that
+ * copy has no attempts. Other sessions, including Michelle's Oct 25 set, stay.
+ */
+export async function ensureTaitoOct30HardPrework(): Promise<{
+  action: "missing" | "unchanged" | "assigned" | "blocked" | "shortfall";
+}> {
+  const [student] = await db
+    .select({ id: usersTable.id, email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.email, TAITO_STUDENT_EMAIL))
+    .limit(1);
+  if (!student) return { action: "missing" };
+  const [tutor] = await db
+    .select({ userId: tutorProfilesTable.userId, email: tutorProfilesTable.email })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.email, EUNICE_TUTOR_EMAIL))
+    .limit(1);
+  if (!tutor?.userId) return { action: "missing" };
+  const sessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.clientUserId, student.id),
+        eq(sessionsTable.tutorUserId, tutor.userId),
+        ne(sessionsTable.status, "archived"),
+      ),
+    );
+  const session = sessions.find((row) =>
+    isTaitoOct30EuniceSession({
+      subject: row.subject,
+      dateTime: row.dateTime,
+      timezone: row.timezone,
+      studentEmail: student.email,
+      tutorEmail: tutor.email,
+      clientUserId: row.clientUserId,
+    }),
+  );
+  if (!session) return { action: "missing" };
+  const result = await ensureHardSatPrework(session);
+  if (result.action === "assigned") return { action: "assigned" };
+  if (result.action === "blocked-by-attempts") return { action: "blocked" };
+  if (result.action === "shortfall") return { action: "shortfall" };
+  return { action: "unchanged" };
 }

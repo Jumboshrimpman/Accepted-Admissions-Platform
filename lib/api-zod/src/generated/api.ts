@@ -316,7 +316,9 @@ export const GetAdminCurriculumResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "maxAttempts": zod.number(),
   "questionCount": zod.number(),
-  "submissionCount": zod.number()
+  "submissionCount": zod.number(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
 })),
   "blocks": zod.array(zod.object({
   "id": zod.string(),
@@ -1029,7 +1031,9 @@ export const CreateAdminAssignmentResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "maxAttempts": zod.number(),
   "questionCount": zod.number(),
-  "submissionCount": zod.number()
+  "submissionCount": zod.number(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
 })
 
 
@@ -1081,7 +1085,9 @@ export const UpdateAdminAssignmentResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "maxAttempts": zod.number(),
   "questionCount": zod.number(),
-  "submissionCount": zod.number()
+  "submissionCount": zod.number(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
 })
 
 
@@ -1113,7 +1119,9 @@ export const CloneAdminAssignmentToSessionResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "maxAttempts": zod.number(),
   "questionCount": zod.number(),
-  "submissionCount": zod.number()
+  "submissionCount": zod.number(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
 })
 
 
@@ -1414,7 +1422,9 @@ export const GetTutorCurriculumResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "maxAttempts": zod.number(),
   "questionCount": zod.number(),
-  "submissionCount": zod.number()
+  "submissionCount": zod.number(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
 })),
   "libraryAssets": zod.array(zod.object({
   "id": zod.string(),
@@ -1535,7 +1545,9 @@ export const CreateTutorReusableQuizResponse = zod.object({
   "timeLimitMinutes": zod.number(),
   "maxAttempts": zod.number(),
   "questionCount": zod.number(),
-  "submissionCount": zod.number()
+  "submissionCount": zod.number(),
+  "latestAttemptId": zod.string().nullish(),
+  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
 })
 
 

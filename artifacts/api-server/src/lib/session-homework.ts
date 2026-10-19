@@ -28,6 +28,24 @@ export type SessionHomeworkCandidate = {
   latestAttemptStatus?: string | null;
 };
 
+/**
+ * The attempt the admin list, tutor session, and student dashboard should share.
+ * When a session student is known, other people's attempts do not count.
+ * The most recently started attempt wins.
+ */
+export function selectLatestStudentAttempt<T extends { userId: string; startedAt: Date }>(
+  attempts: readonly T[],
+  studentUserId: string | null | undefined,
+): T | null {
+  const pool = studentUserId
+    ? attempts.filter((attempt) => attempt.userId === studentUserId)
+    : [...attempts];
+  return (
+    [...pool].sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime())[0] ??
+    null
+  );
+}
+
 /** Session homework status lists: one row per assignment, no archived leftovers. */
 export type StatusHomeworkCandidate = {
   id?: string;

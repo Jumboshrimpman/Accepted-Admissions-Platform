@@ -563,6 +563,7 @@ import {
   hydrateMistakePrompts,
   placeholderArchiveApplyIds,
   selectActivePrework,
+  selectLatestStudentAttempt,
   selectStatusHomework,
   sessionAttemptUserId,
   shouldRepublishSeededHomework,
@@ -11107,14 +11108,28 @@ async function adminSessionShape(
 }
 
 async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSelect) {
-  const [[course], [session], [questionCount], [submissionCount]] = await Promise.all([
+  const [[course], [session], [questionCount], [submissionCount], attempts] = await Promise.all([
     db.select({ title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, assignment.courseId)).limit(1),
     assignment.sessionId
-      ? db.select({ title: sessionsTable.title }).from(sessionsTable).where(eq(sessionsTable.id, assignment.sessionId)).limit(1)
+      ? db
+          .select({ title: sessionsTable.title, clientUserId: sessionsTable.clientUserId })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.id, assignment.sessionId))
+          .limit(1)
       : Promise.resolve([]),
     db.select({ count: sql<number>`count(*)` }).from(assignmentQuestionsTable).where(eq(assignmentQuestionsTable.assignmentId, assignment.id)),
     db.select({ count: sql<number>`count(*)` }).from(attemptsTable).where(and(eq(attemptsTable.assignmentId, assignment.id), inArray(attemptsTable.status, ["submitted", "expired"]))),
+    db
+      .select({
+        id: attemptsTable.id,
+        status: attemptsTable.status,
+        userId: attemptsTable.userId,
+        startedAt: attemptsTable.startedAt,
+      })
+      .from(attemptsTable)
+      .where(eq(attemptsTable.assignmentId, assignment.id)),
   ]);
+  const latestAttempt = selectLatestStudentAttempt(attempts, session?.clientUserId ?? null);
   return {
     id: assignment.id,
     courseId: assignment.courseId,
@@ -11131,6 +11146,8 @@ async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSe
     maxAttempts: assignment.maxAttempts,
     questionCount: Number(questionCount?.count ?? 0),
     submissionCount: Number(submissionCount?.count ?? 0),
+    latestAttemptId: latestAttempt?.id ?? null,
+    latestAttemptStatus: latestAttempt?.status ?? null,
   };
 }
 

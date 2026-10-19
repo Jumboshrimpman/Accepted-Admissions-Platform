@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { describeAssignmentCompletion } from "./assignment-completion.ts";
 
-test("assignment completion badges name not started, in progress, paused, and submitted", () => {
+test("assignment completion badges name not started, in progress, and submitted", () => {
   assert.equal(describeAssignmentCompletion({ attemptStatus: null }).label, "Not started");
   assert.equal(describeAssignmentCompletion({}).label, "Not started");
   assert.equal(describeAssignmentCompletion({ attemptStatus: "active" }).label, "In progress");
-  assert.equal(describeAssignmentCompletion({ attemptStatus: "paused" }).label, "Paused");
+  assert.equal(describeAssignmentCompletion({ attemptStatus: "paused" }).label, "In progress");
+  assert.equal(
+    describeAssignmentCompletion({ attemptStatus: "active" }).label,
+    describeAssignmentCompletion({ attemptStatus: "paused" }).label,
+  );
+  assert.notEqual(describeAssignmentCompletion({ attemptStatus: "paused" }).label, "No attempt yet");
   assert.equal(
     describeAssignmentCompletion({
       attemptStatus: "submitted",

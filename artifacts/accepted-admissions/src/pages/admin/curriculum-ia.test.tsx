@@ -611,6 +611,21 @@ describe("curriculum bank IA", () => {
     expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/Which transition best connects/);
   });
 
+  test("a paused pre-work attempt is in progress on the session card, not missing", () => {
+    mocks.location = "/admin/curriculum?section=sessions";
+    mocks.curriculum.assignments[0]!.sessionId = "session-1";
+    mocks.curriculum.assignments[0]!.latestAttemptStatus = "paused";
+    mocks.curriculum.submissions = [];
+
+    render(<AdminCurriculum />);
+    fireEvent.click(screen.getByRole("button", { name: /All/ }));
+
+    const status = screen.getByTestId("session-prework-status-quiz-1");
+    expect(status.textContent).toBe("In progress");
+    expect(screen.queryByText("No attempt yet")).toBeNull();
+    expect(screen.queryByText("Paused")).toBeNull();
+  });
+
   test("opening a quiz from Sessions via URL shows its questions", () => {
     mocks.location = "/admin/curriculum?section=sessions";
     const view = render(<AdminCurriculum />);

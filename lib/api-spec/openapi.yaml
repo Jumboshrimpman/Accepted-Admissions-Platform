@@ -2937,6 +2937,10 @@ components:
         maxAttempts: { type: number }
         questionCount: { type: number }
         submissionCount: { type: number }
+        latestAttemptId: { type: ["string", "null"] }
+        latestAttemptStatus:
+          type: ["string", "null"]
+          enum: [active, paused, submitted, expired, null]
     AdminAssignmentInput:
       type: object
       required: [courseId, title, subject, instructions, deliveryPhase, timeLimitMinutes]

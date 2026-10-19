@@ -12,6 +12,7 @@ import {
   planAssignmentIdAfterPreworkPublish,
   homeworkWithStudentAttempt,
   selectActivePrework,
+  selectLatestStudentAttempt,
   sessionAttemptUserId,
   selectInSessionHomeworkQuestionIds,
   eligiblePlaceholderArchiveIds,
@@ -24,6 +25,19 @@ import {
   shouldRepublishSeededHomework,
   wrongAnswersOnly,
 } from "./session-homework.ts";
+
+test("latest pre-work attempt is the session student's most recently started one", () => {
+  const earlier = new Date("2026-10-20T12:00:00.000Z");
+  const later = new Date("2026-10-21T12:00:00.000Z");
+  const attempts = [
+    { id: "viewer", userId: "viewer", startedAt: later, status: "active" },
+    { id: "paused", userId: "student", startedAt: earlier, status: "paused" },
+    { id: "older", userId: "student", startedAt: new Date("2026-10-01T12:00:00.000Z"), status: "submitted" },
+  ];
+  assert.equal(selectLatestStudentAttempt(attempts, "student")?.id, "paused");
+  assert.equal(selectLatestStudentAttempt(attempts, null)?.id, "viewer");
+  assert.equal(selectLatestStudentAttempt([], "student"), null);
+});
 
 test("status homework hides archived leftovers and keeps one current diagnostic", () => {
   const listed = selectStatusHomework([
