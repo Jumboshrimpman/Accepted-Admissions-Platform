@@ -26,7 +26,12 @@ import {
   isFormSubmissionResolved,
   unresolvedFormSubmissions,
 } from "@/lib/form-submissions";
+import { EnglishPacketDownloads } from "@/components/session-tutor-materials";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
+import {
+  isTaitoEnglishPacketSession,
+  viewerMayDownloadEnglishPacket,
+} from "@/lib/english-packet-downloads";
 import { QuestionReportsQueue } from "./question-reports-queue";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
@@ -364,9 +369,20 @@ export default function AdminDashboard() {
                 <p className="font-semibold">{displaySessionTitle(session.title, session.subject)}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{formatSessionDateTime(session)}</p>
               </div>
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/tutor/sessions/${session.id}`}>Open session</Link>
-              </Button>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/tutor/sessions/${session.id}`}>Open session</Link>
+                </Button>
+                {viewerMayDownloadEnglishPacket({ role: "administrator" }) &&
+                isTaitoEnglishPacketSession({
+                  dateTime: session.dateTime,
+                  timezone: session.timezone,
+                  subject: session.subject,
+                  studentName: session.student?.name,
+                }) ? (
+                  <EnglishPacketDownloads sessionId={session.id} />
+                ) : null}
+              </div>
             </div>
           ))}
           {upcomingSessions.length === 0 && (

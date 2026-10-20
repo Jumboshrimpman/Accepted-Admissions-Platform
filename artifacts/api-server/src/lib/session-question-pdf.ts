@@ -21,10 +21,14 @@ export type SessionQuestionPdfQuestion = {
   figures?: SessionQuestionPdfFigure[];
   correctAnswer?: string | null;
   explanation?: string | null;
+  /** Tutor-review items print the explanation without an "Answer:" line. */
+  suppressAnswerLine?: boolean;
 };
 
 export type SessionQuestionPdfSection = {
   title: string;
+  /** Printed once, ahead of the numbered questions in this section. */
+  passage?: string | null;
   questions: SessionQuestionPdfQuestion[];
 };
 
@@ -34,6 +38,10 @@ export type SessionQuestionPdfInput = {
   sessionTitle: string;
   sessionDateLabel: string;
   studentName: string;
+  /** Replaces the default pre-work / in-session heading. */
+  documentTitle?: string | null;
+  /** Short note under the heading. Printed on every document, never as an answer. */
+  preamble?: string | null;
   /** One untitled block. Prefer `sections` when the session has more than one assignment. */
   questions?: SessionQuestionPdfQuestion[];
   sections?: SessionQuestionPdfSection[];
@@ -856,7 +864,9 @@ function drawQuestion(
     pdf.paragraph(`${choice.label}. ${stripMarkdownFigures(choice.text)}`, 11);
   }
   if (includeAnswerKey) {
-    pdf.paragraph(`Answer: ${(question.correctAnswer ?? "").trim() || "—"}`, 11);
+    if (!question.suppressAnswerLine) {
+      pdf.paragraph(`Answer: ${(question.correctAnswer ?? "").trim() || "—"}`, 11);
+    }
     if (question.explanation?.trim()) pdf.paragraph(question.explanation, 10);
   }
   pdf.paragraph(" ", 8);
@@ -864,11 +874,12 @@ function drawQuestion(
 
 export function renderSessionQuestionPdf(input: SessionQuestionPdfInput): Buffer {
   const pdf = new QuestionPdf([
-    phaseTitle(input.phase, input.includeAnswerKey),
+    input.documentTitle?.trim() || phaseTitle(input.phase, input.includeAnswerKey),
     input.sessionTitle,
     input.sessionDateLabel,
     `Student: ${input.studentName}`,
   ]);
+  if (input.preamble?.trim()) pdf.paragraph(input.preamble, 10);
   const sections =
     input.sections && input.sections.length > 0
       ? input.sections
@@ -876,6 +887,7 @@ export function renderSessionQuestionPdf(input: SessionQuestionPdfInput): Buffer
   let number = 1;
   for (const section of sections) {
     if (section.title.trim()) pdf.sectionTitle(section.title);
+    if (section.passage?.trim()) pdf.paragraph(section.passage, 11);
     for (const question of section.questions) {
       drawQuestion(pdf, question, number, input.includeAnswerKey);
       number += 1;

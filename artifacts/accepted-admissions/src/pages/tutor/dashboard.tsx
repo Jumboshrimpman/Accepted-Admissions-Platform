@@ -29,7 +29,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import { TutorOfferedAvailability } from "@/pages/tutor/offered-availability";
+import { EnglishPacketDownloads } from "@/components/session-tutor-materials";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import {
+  isTaitoEnglishPacketSession,
+  viewerMayDownloadEnglishPacket,
+} from "@/lib/english-packet-downloads";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
 import {
@@ -235,18 +240,29 @@ export default function TutorDashboard() {
                       </span>
                     </p>
                   </div>
-                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                    <Button asChild className="flex-1 sm:flex-none">
-                      <Link href={`/tutor/sessions/${session.id}`}>
-                        Open workspace
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <SessionJoinActions
-                      meetingUrl={session.meetingUrl}
-                      calendarEventUrl={session.calendarEventUrl}
-                      className="flex flex-wrap gap-2 sm:w-auto"
-                    />
+                  <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+                    <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+                      <Button asChild className="flex-1 sm:flex-none">
+                        <Link href={`/tutor/sessions/${session.id}`}>
+                          Open workspace
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <SessionJoinActions
+                        meetingUrl={session.meetingUrl}
+                        calendarEventUrl={session.calendarEventUrl}
+                        className="flex flex-wrap gap-2 sm:w-auto"
+                      />
+                    </div>
+                    {viewerMayDownloadEnglishPacket(dashboard.user) &&
+                    isTaitoEnglishPacketSession({
+                      dateTime: session.dateTime,
+                      timezone: session.timezone,
+                      subject: session.subject,
+                      studentName: session.student?.name,
+                    }) ? (
+                      <EnglishPacketDownloads sessionId={session.id} />
+                    ) : null}
                   </div>
                 </div>
               ))}
