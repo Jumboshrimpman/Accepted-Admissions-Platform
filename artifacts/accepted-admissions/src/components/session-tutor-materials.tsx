@@ -63,6 +63,82 @@ async function downloadSessionQuestionPdf(
   window.setTimeout(() => URL.revokeObjectURL(url), PDF_OBJECT_URL_REVOKE_DELAY_MS);
 }
 
+async function downloadEnglishPacketPdf(sessionId: string, answers: boolean) {
+  const blob = await customFetch<Blob>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/english-packet-pdf${answers ? "?answers=1" : ""}`,
+    { responseType: "blob" },
+  );
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = answers ? "english-answer-key.pdf" : "english-questions.pdf";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), PDF_OBJECT_URL_REVOKE_DELAY_MS);
+}
+
+function EnglishPacketButton({
+  sessionId,
+  answers,
+  label,
+  testId,
+}: {
+  sessionId: string;
+  answers: boolean;
+  label: string;
+  testId: string;
+}) {
+  const [pending, setPending] = useState(false);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      data-testid={testId}
+      disabled={pending}
+      onClick={() => {
+        setPending(true);
+        void downloadEnglishPacketPdf(sessionId, answers)
+          .catch((error: unknown) => {
+            const status = downloadErrorStatus(error);
+            toast({
+              variant: "destructive",
+              title: status === 403 ? "Download not allowed" : "Could not download the PDF",
+              description:
+                status === 403
+                  ? "This account cannot download that PDF."
+                  : status === 404
+                    ? "No English packet is attached to this session."
+                    : "Try again in a moment.",
+            });
+          })
+          .finally(() => setPending(false));
+      }}
+    >
+      <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
+      {pending ? "Preparing PDF…" : label}
+    </Button>
+  );
+}
+
+export function EnglishPacketDownloads({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="flex flex-wrap gap-2" data-testid="english-packet-downloads">
+      <EnglishPacketButton
+        sessionId={sessionId}
+        answers={false}
+        label="Download English questions (PDF)"
+        testId="download-english-questions"
+      />
+      <EnglishPacketButton
+        sessionId={sessionId}
+        answers
+        label="Download English answer key (PDF)"
+        testId="download-english-answer-key"
+      />
+    </div>
+  );
+}
+
 function PdfDownloadButton({
   sessionId,
   phase,
@@ -156,6 +232,7 @@ export function SessionTutorMaterials({
   duringTitle,
   duringQuestionCount,
   canDownloadPdfs = false,
+  suppressPreworkPdfs = false,
 }: {
   sessionId: string;
   timezone?: string | null;
@@ -166,6 +243,7 @@ export function SessionTutorMaterials({
   duringTitle?: string | null;
   duringQuestionCount?: number | null;
   canDownloadPdfs?: boolean;
+  suppressPreworkPdfs?: boolean;
 }) {
   const phaseFor = (assignmentId: string) =>
     assignments.find((assignment) => assignment.id === assignmentId)?.deliveryPhase ?? "before_session";
@@ -189,7 +267,7 @@ export function SessionTutorMaterials({
       attemptId: null,
     });
   }
-  const showPreworkPdf = Boolean(beforeAssignmentId);
+  const showPreworkPdf = Boolean(beforeAssignmentId) && !suppressPreworkPdfs;
   const showInSessionPdf = Boolean(duringAssignmentId) && (duringQuestionCount ?? 0) > 0;
   if (prework.length === 0 && homeworkRows.length === 0 && !showPreworkPdf && !showInSessionPdf) {
     return null;

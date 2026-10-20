@@ -58,9 +58,14 @@ import { SessionJoinActions } from "@/components/session-join-actions";
 import { CurriculumBlockView } from "@/components/curriculum-block-view";
 import { TutorSessionQuizEditor } from "@/components/tutor-session-quiz-editor";
 import {
+  EnglishPacketDownloads,
   SessionTutorMaterials,
   viewerMayDownloadSessionPdfs,
 } from "@/components/session-tutor-materials";
+import {
+  isTaitoEnglishPacketSession,
+  viewerMayDownloadEnglishPacket,
+} from "@/lib/english-packet-downloads";
 import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
@@ -88,6 +93,21 @@ export default function TutorSession() {
       (assignment) => assignment.deliveryPhase === "during_session",
     )?.id ?? "";
   const visibleHomework = sessionStatusHomework(session?.homework ?? []);
+  const englishPacketSession = Boolean(
+    session &&
+      isTaitoEnglishPacketSession({
+        dateTime: session.dateTime,
+        timezone: session.timezone,
+        subject: session.subject,
+        studentName: session.student?.name,
+      }),
+  );
+  const showEnglishPacket =
+    englishPacketSession &&
+    viewerMayDownloadEnglishPacket({
+      role: currentUser?.role,
+      email: currentUser?.email,
+    });
   const liveBeforeAssignments = (session?.assignments ?? []).filter(
     (assignment) =>
       assignment.deliveryPhase === "before_session" &&
@@ -517,6 +537,17 @@ export default function TutorSession() {
         </TabsList>
 
         <TabsContent value="curriculum" className="space-y-4">
+          {showEnglishPacket ? (
+            <div className="rounded-xl border bg-background p-4" data-testid="english-packet-panel">
+              <p className="font-semibold">English session packet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Questions and the separate answer key for this session, from the practice bank.
+              </p>
+              <div className="mt-3">
+                <EnglishPacketDownloads sessionId={sessionId} />
+              </div>
+            </div>
+          ) : null}
           <SessionTutorMaterials
             sessionId={sessionId}
             timezone={session.timezone}
@@ -535,6 +566,7 @@ export default function TutorSession() {
               viewerUserId: currentUser?.id,
               sessionTutor: session.tutor,
             })}
+            suppressPreworkPdfs={englishPacketSession}
           />
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="pb-3">

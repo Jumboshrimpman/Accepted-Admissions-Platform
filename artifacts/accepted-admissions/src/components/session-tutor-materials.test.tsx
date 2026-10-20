@@ -2,7 +2,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { customFetch } from "@workspace/api-client-react";
-import { SessionTutorMaterials, viewerMayDownloadSessionPdfs } from "./session-tutor-materials";
+import {
+  isTaitoEnglishPacketSession,
+  viewerMayDownloadEnglishPacket,
+} from "@/lib/english-packet-downloads";
+import {
+  EnglishPacketDownloads,
+  SessionTutorMaterials,
+  viewerMayDownloadSessionPdfs,
+} from "./session-tutor-materials";
 
 const toast = vi.hoisted(() => vi.fn());
 
@@ -207,5 +215,131 @@ describe("session tutor materials", () => {
       vi.advanceTimersByTime(1000);
     });
     expect(revoke).toHaveBeenCalledWith("blob:questions");
+  });
+
+  test("hides the database pre-work PDFs when the English packet is shown", () => {
+    render(
+      <SessionTutorMaterials
+        sessionId="session-1"
+        assignments={[
+          { id: "pre", deliveryPhase: "before_session" },
+          { id: "during", deliveryPhase: "during_session" },
+        ]}
+        homework={[]}
+        beforeAssignmentId="pre"
+        duringAssignmentId="during"
+        duringQuestionCount={3}
+        canDownloadPdfs
+        suppressPreworkPdfs
+      />,
+    );
+    expect(screen.queryByTestId("download-prework-questions")).toBeNull();
+    expect(screen.queryByTestId("download-prework-answer-key")).toBeNull();
+    expect(screen.getByTestId("download-in-session-questions")).toBeTruthy();
+  });
+});
+
+function PacketPreview({
+  role,
+  email,
+  subject,
+  dateTime,
+  studentName,
+}: {
+  role: string;
+  email?: string;
+  subject: string;
+  dateTime: string;
+  studentName?: string;
+}) {
+  const show =
+    viewerMayDownloadEnglishPacket({ role, email }) &&
+    isTaitoEnglishPacketSession({
+      dateTime,
+      timezone: "Asia/Tokyo",
+      subject,
+      studentName,
+    });
+  if (!show) return null;
+  return <EnglishPacketDownloads sessionId="sess-english" />;
+}
+
+describe("english packet downloads", () => {
+  test("Nika and admin see the buttons on an English session", () => {
+    render(
+      <PacketPreview
+        role="tutor"
+        email="nika.raiffe@gmail.com"
+        subject="IELTS"
+        dateTime="2026-10-23T12:00:00.000Z"
+        studentName="Taito"
+      />,
+    );
+    expect(screen.getByTestId("download-english-questions")).toBeTruthy();
+    expect(screen.getByTestId("download-english-answer-key")).toBeTruthy();
+  });
+
+  test("Eunice, a student, and a SAT session do not see the buttons", () => {
+    const { rerender } = render(
+      <PacketPreview
+        role="tutor"
+        email="eunice_chon@berkeley.edu"
+        subject="IELTS"
+        dateTime="2026-10-23T12:00:00.000Z"
+        studentName="Taito"
+      />,
+    );
+    expect(screen.queryByTestId("english-packet-downloads")).toBeNull();
+    rerender(
+      <PacketPreview
+        role="student"
+        email="taito0525@gmail.com"
+        subject="IELTS"
+        dateTime="2026-11-13T12:00:00.000Z"
+        studentName="Taito"
+      />,
+    );
+    expect(screen.queryByTestId("english-packet-downloads")).toBeNull();
+    rerender(
+      <PacketPreview
+        role="tutor"
+        email="nika.raiffe@gmail.com"
+        subject="SAT"
+        dateTime="2026-10-23T12:00:00.000Z"
+        studentName="Taito"
+      />,
+    );
+    expect(screen.queryByTestId("english-packet-downloads")).toBeNull();
+    rerender(
+      <PacketPreview
+        role="administrator"
+        email="admin@acceptedadmissions.org"
+        subject="English"
+        dateTime="2026-12-04T12:00:00.000Z"
+        studentName="Taito Goto"
+      />,
+    );
+    expect(screen.getByTestId("download-english-answer-key")).toBeTruthy();
+  });
+
+  test("the answer-key button requests the bank PDF with answers=1", async () => {
+    vi.mocked(customFetch).mockResolvedValue(new Blob(["%PDF"]));
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:english");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    render(<EnglishPacketDownloads sessionId="sess-english" />);
+    fireEvent.click(screen.getByTestId("download-english-questions"));
+    await waitFor(() => {
+      expect(customFetch).toHaveBeenCalledWith(
+        "/api/sessions/sess-english/english-packet-pdf",
+        expect.objectContaining({ responseType: "blob" }),
+      );
+    });
+    fireEvent.click(screen.getByTestId("download-english-answer-key"));
+    await waitFor(() => {
+      expect(customFetch).toHaveBeenCalledWith(
+        "/api/sessions/sess-english/english-packet-pdf?answers=1",
+        expect.objectContaining({ responseType: "blob" }),
+      );
+    });
   });
 });

@@ -623,6 +623,12 @@ import {
   updateSessionAssignmentQuestionContent,
 } from "../lib/session-question-edit";
 import {
+  buildEnglishSessionPacket,
+  decideEnglishPacketPdfAccess,
+  englishPacketPdfFilename,
+  renderEnglishSessionPacketPdf,
+} from "../lib/english-session-packet";
+import {
   decideSessionQuestionPdfAccess,
   extractMarkdownFigures,
   readQuizFigure,
@@ -13599,6 +13605,90 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
       homework,
     }),
   );
+});
+
+router.get("/sessions/:sessionId/english-packet-pdf", async (req: AuthedRequest, res): Promise<void> => {
+  const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId : "";
+  const includeAnswerKey = req.query.answers === "1" || req.query.answers === "true";
+  if (!UUID_PATTERN.test(sessionId)) {
+    res.status(400).json({ error: "Invalid session id" });
+    return;
+  }
+  const access = decideEnglishPacketPdfAccess({
+    role: req.appUser!.role,
+    requesterEmail: req.appUser!.email,
+    includeAnswerKey,
+    temporaryTutorAlias: req.temporaryTutorAlias,
+    configuredViewEmail: process.env.TEMP_NIKA_VIEW_EMAIL,
+  });
+  if (!access.ok) {
+    res.status(access.status).json({ error: access.error });
+    return;
+  }
+  const [session] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, sessionId))
+    .limit(1);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  let clientEmail: string | null = null;
+  let taitoUserId: string | null = null;
+  if (session.clientUserId) {
+    const people = await db
+      .select({ id: usersTable.id, email: usersTable.email })
+      .from(usersTable)
+      .where(
+        or(
+          eq(usersTable.id, session.clientUserId),
+          sql`lower(${usersTable.email}) = ${TAITO_STUDENT_EMAIL}`,
+        ),
+      );
+    clientEmail = people.find((person) => person.id === session.clientUserId)?.email ?? null;
+    taitoUserId =
+      people.find((person) => person.email?.trim().toLowerCase() === TAITO_STUDENT_EMAIL)?.id ??
+      null;
+  }
+  const packet = buildEnglishSessionPacket({
+    dateTime: session.dateTime,
+    subject: session.subject,
+    timezone: session.timezone,
+    email: clientEmail,
+    clientUserId: session.clientUserId,
+    taitoUserId,
+  });
+  if (!packet) {
+    res.status(404).json({ error: "No English packet is attached to this session." });
+    return;
+  }
+  const student = await sessionStudentShape(session);
+  const pdfStudentName =
+    req.appUser!.role === "tutor" ? tutorStudentName(student?.name) : student?.name ?? "Student";
+  const sessionDateLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: session.timezone || "America/New_York",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(session.dateTime);
+  const pdf = renderEnglishSessionPacketPdf(packet, {
+    includeAnswerKey,
+    sessionTitle: session.title,
+    sessionDateLabel,
+    studentName: pdfStudentName,
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${englishPacketPdfFilename(includeAnswerKey)}"`,
+  );
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
 });
 
 router.get("/sessions/:sessionId/question-pdf", async (req: AuthedRequest, res): Promise<void> => {
