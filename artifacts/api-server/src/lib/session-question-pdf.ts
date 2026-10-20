@@ -7,7 +7,7 @@ import { CANONICAL_APP_ORIGIN, resolveConfiguredAppOrigin } from "./public-origi
 import { selectStatusHomework, type StatusHomeworkCandidate } from "./session-homework.ts";
 import { sessionPreworkDedupeSlot } from "./session-prework-dedupe.ts";
 
-export type SessionQuestionPdfPhase = "before_session" | "during_session";
+export type SessionQuestionPdfPhase = "all" | "before_session" | "during_session";
 
 export type SessionQuestionPdfFigure = {
   alt: string;
@@ -150,62 +150,65 @@ function statusHomeworkCandidate(assignment: SessionPdfAssignment): StatusHomewo
   };
 }
 
-/**
- * Pre-work PDFs use the same collapse as the student homework list, then
- * put the bank section first and any other surviving homework after it.
- * In-session PDFs use the hard-question bank when that assignment exists,
- * and never repeat a question that is already on pre-work.
- */
-export function selectSessionPdfSections(input: {
-  phase: SessionQuestionPdfPhase;
-  assignments: readonly SessionPdfAssignment[];
-}): SessionPdfSectionPlan[] {
-  const live = input.assignments.filter(
+function liveSessionAssignments(
+  assignments: readonly SessionPdfAssignment[],
+): SessionPdfAssignment[] {
+  return assignments.filter(
     (assignment) =>
       assignment.status !== "archived" && !isPostSessionFollowUpTitle(assignment.title),
   );
-  const preworkQuestionIds = new Set<string>();
-  for (const assignment of live) {
+}
+
+function preworkQuestionIds(assignments: readonly SessionPdfAssignment[]): Set<string> {
+  const ids = new Set<string>();
+  for (const assignment of assignments) {
     if (assignment.deliveryPhase !== "before_session") continue;
-    for (const question of assignment.questions) preworkQuestionIds.add(question.id);
+    for (const question of assignment.questions) ids.add(question.id);
   }
+  return ids;
+}
 
-  if (input.phase === "before_session") {
-    const before = live.filter((assignment) => assignment.deliveryPhase === "before_session");
-    const byId = new Map(before.map((assignment) => [assignment.id, assignment]));
-    const listed = selectStatusHomework(before.map(statusHomeworkCandidate));
-    const selected = listed.flatMap((item) => {
-      const id = item.id ?? item.assignmentId;
-      const assignment = id ? byId.get(id) : undefined;
-      return assignment ? [assignment] : [];
-    });
-    const banks = selected.filter(
-      (assignment) => sessionPreworkDedupeSlot(assignment.title) === "sat-bank-prework",
-    );
-    const others = selected.filter(
-      (assignment) => sessionPreworkDedupeSlot(assignment.title) !== "sat-bank-prework",
-    );
-    return [...banks, ...others]
-      .map((assignment) => ({
-        assignmentId: assignment.id,
-        title: assignment.title.trim() || "Pre-work",
-        questionIds: orderedQuestionIds(assignment),
-      }))
-      .filter((section) => section.questionIds.length > 0);
-  }
+function preworkPdfSections(assignments: readonly SessionPdfAssignment[]): SessionPdfSectionPlan[] {
+  const before = assignments.filter((assignment) => assignment.deliveryPhase === "before_session");
+  const byId = new Map(before.map((assignment) => [assignment.id, assignment]));
+  const listed = selectStatusHomework(before.map(statusHomeworkCandidate));
+  const selected = listed.flatMap((item) => {
+    const id = item.id ?? item.assignmentId;
+    const assignment = id ? byId.get(id) : undefined;
+    return assignment ? [assignment] : [];
+  });
+  const banks = selected.filter(
+    (assignment) => sessionPreworkDedupeSlot(assignment.title) === "sat-bank-prework",
+  );
+  const others = selected.filter(
+    (assignment) => sessionPreworkDedupeSlot(assignment.title) !== "sat-bank-prework",
+  );
+  return [...banks, ...others]
+    .map((assignment) => ({
+      assignmentId: assignment.id,
+      title: assignment.title.trim() || "Pre-work",
+      questionIds: orderedQuestionIds(assignment),
+    }))
+    .filter((section) => section.questionIds.length > 0);
+}
 
-  const during = live
+function duringPdfSections(
+  assignments: readonly SessionPdfAssignment[],
+  mode: "hard-bank" | "every-set",
+): SessionPdfSectionPlan[] {
+  const alreadyOnPrework = preworkQuestionIds(assignments);
+  const during = assignments
     .filter((assignment) => assignment.deliveryPhase === "during_session")
     .sort(
       (left, right) => assignmentCreatedMs(left.createdAt) - assignmentCreatedMs(right.createdAt),
     );
   const hardBanks = during.filter((assignment) => isHardQuestionBankTitle(assignment.title));
-  const pool = hardBanks.length > 0 ? hardBanks : during;
+  const pool = mode === "hard-bank" && hardBanks.length > 0 ? hardBanks : during;
   const seen = new Set<string>();
   const sections: SessionPdfSectionPlan[] = [];
   for (const assignment of pool) {
     const questionIds = orderedQuestionIds(assignment).filter((id) => {
-      if (preworkQuestionIds.has(id) || seen.has(id)) return false;
+      if (alreadyOnPrework.has(id) || seen.has(id)) return false;
       seen.add(id);
       return true;
     });
@@ -217,6 +220,62 @@ export function selectSessionPdfSections(input: {
     });
   }
   return sections;
+}
+
+function followUpPdfSections(
+  assignments: readonly SessionPdfAssignment[],
+): SessionPdfSectionPlan[] {
+  return assignments
+    .filter(
+      (assignment) =>
+        assignment.status !== "archived" && isPostSessionFollowUpTitle(assignment.title),
+    )
+    .sort(
+      (left, right) => assignmentCreatedMs(left.createdAt) - assignmentCreatedMs(right.createdAt),
+    )
+    .map((assignment) => ({
+      assignmentId: assignment.id,
+      title: assignment.title.trim() || "Follow-up quiz",
+      questionIds: orderedQuestionIds(assignment),
+    }))
+    .filter((section) => section.questionIds.length > 0);
+}
+
+function dedupePdfSections(sections: readonly SessionPdfSectionPlan[]): SessionPdfSectionPlan[] {
+  const seen = new Set<string>();
+  const unique: SessionPdfSectionPlan[] = [];
+  for (const section of sections) {
+    const questionIds = section.questionIds.filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (questionIds.length === 0) continue;
+    unique.push({ ...section, questionIds });
+  }
+  return unique;
+}
+
+/**
+ * Pre-work PDFs use the same collapse as the student homework list, then
+ * put the bank section first and any other surviving homework after it.
+ * In-session PDFs use the hard-question bank when that assignment exists,
+ * and never repeat a question that is already on pre-work.
+ * The combined PDF prints pre-work, every in-session or homework set, then
+ * follow-up quizzes, without repeating a question.
+ */
+export function selectSessionPdfSections(input: {
+  phase: SessionQuestionPdfPhase;
+  assignments: readonly SessionPdfAssignment[];
+}): SessionPdfSectionPlan[] {
+  const live = liveSessionAssignments(input.assignments);
+  if (input.phase === "before_session") return preworkPdfSections(live);
+  if (input.phase === "during_session") return duringPdfSections(live, "hard-bank");
+  return dedupePdfSections([
+    ...preworkPdfSections(live),
+    ...duringPdfSections(live, "every-set"),
+    ...followUpPdfSections(input.assignments),
+  ]);
 }
 
 const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
@@ -840,7 +899,12 @@ class QuestionPdf {
 }
 
 function phaseTitle(phase: SessionQuestionPdfPhase, includeAnswerKey: boolean): string {
-  const part = phase === "before_session" ? "Pre-work questions" : "In-session questions";
+  const part =
+    phase === "before_session"
+      ? "Pre-work questions"
+      : phase === "during_session"
+        ? "In-session questions"
+        : "Session questions";
   return includeAnswerKey ? `${part} — answer key` : part;
 }
 

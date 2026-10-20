@@ -217,11 +217,11 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
     expect(screen.getByTestId("tutor-completion-badge-quiz-1").textContent).toMatch(/Submitted · 80%/);
     expect(screen.getByTestId("tutor-completion-quiz-1").textContent).toMatch(/Review attempt/);
-    expect(screen.getByTestId("download-prework-questions").textContent).toMatch(
-      /Download pre-work questions \(PDF\)/,
+    expect(screen.getByTestId("download-session-questions").textContent).toMatch(
+      /Download questions \(PDF\)/,
     );
-    expect(screen.getByTestId("download-prework-answer-key").textContent).toMatch(/answer key/);
-    expect(screen.getByTestId("download-in-session-questions")).toBeTruthy();
+    expect(screen.getByTestId("download-session-answer-key").textContent).toMatch(/answer key/);
+    expect(screen.queryByTestId("download-english-questions")).toBeNull();
     expect(screen.getByText("1 assignment")).toBeTruthy();
     expect(screen.queryAllByText("Full-length SAT diagnostic — Taito’s SAT Session with Eunice")).toHaveLength(0);
     expect(screen.getByRole("link", { name: /Review right \/ wrong answers/i }).getAttribute("href")).toBe(
@@ -291,8 +291,7 @@ describe("tutor session review page", () => {
     currentUserState.id = "tutor-other";
     render(<TutorSession />);
     expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
-    expect(screen.queryByTestId("download-prework-questions")).toBeNull();
-    expect(screen.queryByTestId("download-prework-answer-key")).toBeNull();
-    expect(screen.queryByTestId("download-in-session-questions")).toBeNull();
+    expect(screen.queryByTestId("download-session-questions")).toBeNull();
+    expect(screen.queryByTestId("download-session-answer-key")).toBeNull();
   });
 });

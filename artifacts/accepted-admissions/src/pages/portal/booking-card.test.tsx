@@ -80,7 +80,25 @@ vi.mock("@workspace/api-client-react", () => ({
   useRescheduleBookingSession: () => mocks.rescheduleBooking,
 }));
 
-import { BookingCard } from "./booking-card";
+import { BookingCard, resolveBookableTutorId } from "./booking-card";
+
+test("a session card user id still resolves to that tutor's profile", () => {
+  expect(
+    resolveBookableTutorId(
+      { tutorProfileId: "user-nika", tutorName: "Nika Raiffe" },
+      [
+        { id: "profile-eunice", name: "Eunice" },
+        { id: "profile-nika", name: "Nika" },
+      ],
+    ),
+  ).toBe("profile-nika");
+  expect(
+    resolveBookableTutorId(
+      { tutorProfileId: "profile-xavier", tutorName: "Xavier Morales" },
+      [{ id: "profile-xavier", name: "Xavier" }],
+    ),
+  ).toBe("profile-xavier");
+});
 import { NEEL_DHARNI_USER_ID } from "@/lib/portal-sat";
 
 const firstSlotInstant = new Date();

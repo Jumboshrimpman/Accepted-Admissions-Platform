@@ -165,7 +165,11 @@ test("the download route is read-only and uses the tutor access check", async ()
   assert.match(slice, /UUID_PATTERN\.test\(sessionId\)/);
   assert.match(slice, /status\(400\)/);
   assert.match(slice, /decideSessionQuestionPdfAccess/);
+  assert.match(slice, /phaseRaw === "" \|\| phaseRaw === "all"/);
   assert.match(slice, /selectSessionPdfSections/);
+  const accessAt = slice.indexOf("decideSessionQuestionPdfAccess");
+  const renderAt = slice.indexOf("renderSessionQuestionPdf");
+  assert.ok(accessAt > 0 && renderAt > accessAt);
   assert.match(slice, /session\.clientUserId/);
   assert.match(slice, /attemptCount/);
   assert.match(slice, /planAssignmentId/);
@@ -480,6 +484,14 @@ test("session 37062b4f PDFs keep the bank, topic homework, and hard set apart", 
       questions: [...homeworkIds, ...bankIds.slice(0, 11)].map((id, position) => ({ id, position })),
     },
     {
+      id: "during-homework",
+      title: "Session homework — unique set",
+      deliveryPhase: "during_session",
+      status: "published",
+      createdAt: "2026-10-16T00:30:00.000Z",
+      questions: [{ id: "unique-hw", position: 0 }],
+    },
+    {
       id: "hard-bank",
       title: "Hard-question bank — leftover time",
       deliveryPhase: "during_session",
@@ -579,6 +591,44 @@ test("session 37062b4f PDFs keep the bank, topic homework, and hard set apart", 
   assert.doesNotMatch(duringText, /best supported by the survey/);
   assert.doesNotMatch(duringText, /Evidence and Inference/);
   assertLinesFit(pdfTextRuns(duringPdf).filter((run) => run.size === 12));
+
+  const combined = selectSessionPdfSections({ phase: "all", assignments });
+  assert.deepEqual(
+    combined.map((section) => section.assignmentId),
+    ["910009f3", "f00b3046", "during-homework", "hard-bank", "geometry-follow-up"],
+  );
+  assert.deepEqual(
+    combined.find((section) => section.assignmentId === "geometry-follow-up")?.questionIds,
+    ["geom-1"],
+  );
+  questionById.set("unique-hw", { prompt: "Unique homework item" });
+  const combinedPdf = renderSessionQuestionPdf({
+    phase: "all",
+    includeAnswerKey: true,
+    sessionTitle: "Michelle's SAT Session with Xavier",
+    sessionDateLabel: "Sun, Oct 25, 2026, 12:00 PM EDT",
+    studentName: "Michelle",
+    sections: [
+      ...toSections(combined.filter((section) => section.assignmentId !== "geometry-follow-up")),
+      {
+        title: "Geometry Area and Volume",
+        questions: [
+          {
+            prompt: "Find the volume of the prism.",
+            correctAnswer: "12",
+            explanation: "Use the prism formula.",
+          },
+        ],
+      },
+    ],
+  });
+  const combinedText = combinedPdf.toString("latin1");
+  assert.match(combinedText, /Session questions/);
+  assert.match(combinedText, /answer key/);
+  assert.match(combinedText, /Geometry Area/);
+  assert.match(combinedText, /\(Answer:\)/);
+  assert.match(combinedText, /\(12\)/);
+  assert.doesNotMatch(combinedText, /\\frac/);
 });
 
 test("pre-work keeps the attempted plan bank and prints duplicate topic homework once", () => {

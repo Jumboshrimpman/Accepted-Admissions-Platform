@@ -231,11 +231,23 @@ export function resolveBookableTutorId(
   session: { tutorProfileId?: string | null; tutorName?: string | null },
   tutors: { id: string; name: string }[],
 ): string | null {
-  if (session.tutorProfileId) return session.tutorProfileId;
+  if (
+    session.tutorProfileId &&
+    (tutors.length === 0 || tutors.some((tutor) => tutor.id === session.tutorProfileId))
+  ) {
+    return session.tutorProfileId;
+  }
   const needle = session.tutorName?.trim().toLowerCase();
   if (needle) {
-    const match = tutors.find((tutor) => tutor.name.trim().toLowerCase() === needle);
-    if (match) return match.id;
+    const exact = tutors.find((tutor) => tutor.name.trim().toLowerCase() === needle);
+    if (exact) return exact.id;
+    const first = needle.split(/\s+/)[0] ?? "";
+    if (first.length > 1) {
+      const byFirst = tutors.filter(
+        (tutor) => (tutor.name.trim().toLowerCase().split(/\s+/)[0] ?? "") === first,
+      );
+      if (byFirst.length === 1) return byFirst[0]!.id;
+    }
   }
   return tutors.length === 1 ? tutors[0]!.id : null;
 }
