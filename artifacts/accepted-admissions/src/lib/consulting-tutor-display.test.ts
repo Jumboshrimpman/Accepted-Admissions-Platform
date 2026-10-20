@@ -29,6 +29,14 @@ test("college consulting labels use Nika and Victoria's first names only", () =>
     portalBookingTutorPhoto("Xavier Morales", "/media/team/xavier-morales.jpg"),
     "/media/team/xavier-morales.jpg",
   );
+  assert.equal(portalBookingTutorPhoto("Xavier Morales", null), "/media/team/xavier-morales.jpg");
+  assert.equal(portalBookingTutorPhoto("Xavier", null), "/media/team/xavier-morales.jpg");
+  assert.equal(portalBookingTutorPhoto("Xavier", "   "), "/media/team/xavier-morales.jpg");
+  assert.equal(
+    portalBookingTutorPhoto("Xavier Morales", "https://example.com/xavier-custom.jpg"),
+    "https://example.com/xavier-custom.jpg",
+  );
+  assert.equal(portalBookingTutorPhoto("Blank Tutor", null), null);
   assert.equal(
     portalCheckoutCopy("College Consulting hour with Xavier Morales"),
     "College Consulting hour with Xavier",

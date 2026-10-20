@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import {
+  availabilityRulesTable,
   calendarConnectionsTable,
   courseMembershipsTable,
   db,
@@ -26,6 +27,7 @@ import {
   RETIRED_XAVIER_CLERK_USER_ID,
   RETIRED_XAVIER_EMAILS,
   SUPERSEDED_XAVIER_GRANT_NOTE,
+  chooseXavierProfileToKeep,
   isRetiredXavierClerkUserId,
   retiredXavierClerkMarker,
 } from "./xavier-identity";
@@ -151,16 +153,31 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
   }
 
   const profiles = await db.select().from(tutorProfilesTable);
-  const winnerProfile =
-    profiles.find(
-      (profile) =>
-        profile.userId === winner?.id && profile.name === CANONICAL_XAVIER_NAME,
-    ) ??
-    profiles.find(
-      (profile) =>
-        normalizeEmail(profile.email) === XAVIER_PROFILE_EMAIL ||
-        normalizeEmail(profile.email) === CANONICAL_XAVIER_EMAIL,
+  const ruleRows = await db
+    .select({ tutorProfileId: availabilityRulesTable.tutorProfileId })
+    .from(availabilityRulesTable);
+  const ruleCounts = new Map<string, number>();
+  for (const rule of ruleRows) {
+    ruleCounts.set(rule.tutorProfileId, (ruleCounts.get(rule.tutorProfileId) ?? 0) + 1);
+  }
+  const xavierCandidates = profiles.filter((profile) => {
+    const email = normalizeEmail(profile.email);
+    return (
+      profile.name === CANONICAL_XAVIER_NAME ||
+      email === XAVIER_PROFILE_EMAIL ||
+      email === CANONICAL_XAVIER_EMAIL ||
+      email.startsWith("retired+xavier-duplicate-")
     );
+  });
+  const winnerProfile = chooseXavierProfileToKeep(
+    xavierCandidates.map((profile) => ({
+      ...profile,
+      availabilityRuleCount: ruleCounts.get(profile.id) ?? 0,
+    })),
+  );
+  let winnerRuleCount = winnerProfile
+    ? ruleCounts.get(winnerProfile.id) ?? 0
+    : 0;
 
   if (winnerProfile) {
 
@@ -218,6 +235,14 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
         .update(tutorCompensationRatesTable)
         .set({ tutorProfileId: winnerProfile.id })
         .where(eq(tutorCompensationRatesTable.tutorProfileId, profile.id));
+      if (winnerRuleCount === 0) {
+        const movedRules = await db
+          .update(availabilityRulesTable)
+          .set({ tutorProfileId: winnerProfile.id, updatedAt: new Date() })
+          .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+          .returning({ id: availabilityRulesTable.id });
+        winnerRuleCount += movedRules.length;
+      }
       await db
         .update(tutorProfilesTable)
         .set({

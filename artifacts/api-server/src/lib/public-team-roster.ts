@@ -304,8 +304,14 @@ export function publicTeamPortrait(name: string, storedPhotoUrl: string | null) 
   if (name === "Kya Brooks") {
     return APPROVED_PUBLIC_TEAM_PORTRAITS["Kya Brooks"];
   }
-  if (!storedPhotoUrl) return storedPhotoUrl;
-  return rewriteLegacyWixMediaUrl(storedPhotoUrl);
+  const stored = storedPhotoUrl?.trim() ?? "";
+  if (!stored) {
+    if (name in APPROVED_PUBLIC_TEAM_PORTRAITS) {
+      return APPROVED_PUBLIC_TEAM_PORTRAITS[name as PublicTutorName];
+    }
+    return storedPhotoUrl;
+  }
+  return rewriteLegacyWixMediaUrl(stored);
 }
 
 export const MIRRORED_PORTRAIT_RECONCILIATIONS = [
