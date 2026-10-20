@@ -101,7 +101,16 @@ test("repair keeps the original Xavier profile and leaves Michelle's Oct 25 sess
         tutor_profile_id uuid NOT NULL,
         provider text NOT NULL DEFAULT 'google',
         status text NOT NULL DEFAULT 'disconnected',
+        calendar_id text,
+        app_calendar_id text,
+        granted_scopes text,
+        encrypted_access_token text,
         encrypted_refresh_token text,
+        access_token_expires_at timestamptz,
+        connected_at timestamptz,
+        google_account_email text,
+        last_token_refresh_at timestamptz,
+        last_freebusy_at timestamptz,
         updated_at timestamptz NOT NULL DEFAULT now(),
         UNIQUE (tutor_profile_id, provider)
       );
@@ -304,6 +313,167 @@ test("repair keeps the original Xavier profile and leaves Michelle's Oct 25 sess
     assert.equal(stillOne.rows[0]?.count, 1);
     const sessionAgain = await client.query(`SELECT row_to_json(sessions) AS row FROM sessions`);
     assert.deepEqual(sessionAgain.rows, beforeSession.rows);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
+});
+
+test("keeper takes the blank row's newer calendar grant when both have tokens", async (t) => {
+  if (!process.env.DATABASE_URL) {
+    t.skip("DATABASE_URL is required");
+    return;
+  }
+  const client = await pool.connect();
+  const schema = `xavier_grant_choice_${randomUUID().replaceAll("-", "")}`;
+  const userId = "10000000-0000-4000-8000-000000000011";
+  const originalId = "20000000-0000-4000-8000-000000000011";
+  const blankId = "05575f9d-a83c-45f5-ad37-e9c10adc58b6";
+  try {
+    await client.query("BEGIN");
+    await client.query(`CREATE SCHEMA "${schema}"`);
+    await client.query(`SET LOCAL search_path TO "${schema}", public`);
+    await client.query(`
+      CREATE TABLE users (
+        id uuid PRIMARY KEY,
+        clerk_user_id text NOT NULL UNIQUE,
+        email text NOT NULL UNIQUE
+      );
+      CREATE TABLE tutor_profiles (
+        id uuid PRIMARY KEY,
+        user_id uuid,
+        email text NOT NULL UNIQUE,
+        name text NOT NULL,
+        photo_url text,
+        photo_alt_text text,
+        biography text,
+        linkedin_url text,
+        active boolean NOT NULL DEFAULT true,
+        booking_eligible boolean NOT NULL DEFAULT false,
+        public_approved boolean NOT NULL DEFAULT false,
+        calendar_status text NOT NULL DEFAULT 'disconnected',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE availability_rules (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE calendar_connections (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid NOT NULL,
+        provider text NOT NULL DEFAULT 'google',
+        status text NOT NULL DEFAULT 'disconnected',
+        calendar_id text,
+        app_calendar_id text,
+        granted_scopes text,
+        encrypted_access_token text,
+        encrypted_refresh_token text,
+        access_token_expires_at timestamptz,
+        connected_at timestamptz,
+        google_account_email text,
+        last_token_refresh_at timestamptz,
+        last_freebusy_at timestamptz,
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (tutor_profile_id, provider)
+      );
+      CREATE TABLE tutor_compensation_rates (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid NOT NULL
+      );
+      CREATE TABLE payments (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE booking_slot_holds (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE tutor_payout_obligations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE stripe_transfers (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        tutor_profile_id uuid NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await client.query(
+      `INSERT INTO users (id, clerk_user_id, email)
+       VALUES ($1, 'user_3IxUfoT1xRnDsqhlx5NN1eGfRg6', 'xaver.rmz6@gmail.com')`,
+      [userId],
+    );
+    await client.query(
+      `INSERT INTO tutor_profiles (
+         id, user_id, email, name, photo_url, photo_alt_text, biography, linkedin_url,
+         active, booking_eligible, public_approved, created_at
+       ) VALUES
+       ($1, NULL, 'retired+xavier-duplicate-20000000@retired.accepted.local', 'Xavier Morales',
+        '/media/team/xavier-morales.jpg', 'Xavier Morales, SAT and Math Tutor',
+        'Original biography', 'https://www.linkedin.com/in/xavier-morales-8830821a5/',
+        false, false, false, '2024-01-01T00:00:00Z'),
+       ($2, $3, 'xavier.rmz6@gmail.com', 'Xavier Morales',
+        NULL, NULL, NULL, NULL, true, true, true, '2026-10-19T03:13:00Z')`,
+      [originalId, blankId, userId],
+    );
+    await client.query(
+      `INSERT INTO availability_rules (tutor_profile_id) VALUES ($1)`,
+      [originalId],
+    );
+    await client.query(
+      `INSERT INTO calendar_connections (
+         tutor_profile_id, provider, status, encrypted_refresh_token, connected_at, google_account_email
+       ) VALUES
+       ($1, 'google', 'connected', 'enc:keeper-old', '2024-06-01T00:00:00Z', 'xaver.rmz6@gmail.com'),
+       ($2, 'google', 'connected', 'enc:blank-new', '2026-10-19T03:13:00Z', 'xavier.rmz6@gmail.com')`,
+      [originalId, blankId],
+    );
+
+    await client.query(migrationSql);
+
+    const keeperGrant = await client.query<{
+      encrypted_refresh_token: string;
+      connected_at: Date;
+      google_account_email: string;
+      status: string;
+    }>(
+      `SELECT encrypted_refresh_token, connected_at, google_account_email, status
+       FROM calendar_connections WHERE tutor_profile_id = $1`,
+      [originalId],
+    );
+    assert.equal(keeperGrant.rowCount, 1);
+    assert.equal(keeperGrant.rows[0]?.encrypted_refresh_token, "enc:blank-new");
+    assert.equal(keeperGrant.rows[0]?.google_account_email, "xavier.rmz6@gmail.com");
+    assert.equal(keeperGrant.rows[0]?.status, "connected");
+    assert.equal(
+      new Date(keeperGrant.rows[0]!.connected_at).toISOString(),
+      "2026-10-19T03:13:00.000Z",
+    );
+    const blankGrant = await client.query<{ encrypted_refresh_token: string | null }>(
+      `SELECT encrypted_refresh_token FROM calendar_connections WHERE tutor_profile_id = $1`,
+      [blankId],
+    );
+    assert.equal(blankGrant.rows[0]?.encrypted_refresh_token ?? null, null);
+    const active = await client.query(
+      `SELECT id FROM tutor_profiles WHERE name = 'Xavier Morales' AND active = true`,
+    );
+    assert.equal(active.rows[0]?.id, originalId);
+
+    const stamp = await client.query(
+      `SELECT updated_at, encrypted_refresh_token FROM calendar_connections WHERE tutor_profile_id = $1`,
+      [originalId],
+    );
+    await client.query(migrationSql);
+    const rerun = await client.query(
+      `SELECT updated_at, encrypted_refresh_token FROM calendar_connections WHERE tutor_profile_id = $1`,
+      [originalId],
+    );
+    assert.deepEqual(rerun.rows, stamp.rows);
   } finally {
     await client.query("ROLLBACK");
     client.release();

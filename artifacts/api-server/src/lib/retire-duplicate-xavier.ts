@@ -197,6 +197,8 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
           id: calendarConnectionsTable.id,
           status: calendarConnectionsTable.status,
           encryptedRefreshToken: calendarConnectionsTable.encryptedRefreshToken,
+          connectedAt: calendarConnectionsTable.connectedAt,
+          googleAccountEmail: calendarConnectionsTable.googleAccountEmail,
         })
         .from(calendarConnectionsTable)
         .where(eq(calendarConnectionsTable.tutorProfileId, winnerProfile.id))
@@ -206,6 +208,8 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
           id: calendarConnectionsTable.id,
           status: calendarConnectionsTable.status,
           encryptedRefreshToken: calendarConnectionsTable.encryptedRefreshToken,
+          connectedAt: calendarConnectionsTable.connectedAt,
+          googleAccountEmail: calendarConnectionsTable.googleAccountEmail,
         })
         .from(calendarConnectionsTable)
         .where(eq(calendarConnectionsTable.tutorProfileId, profile.id))

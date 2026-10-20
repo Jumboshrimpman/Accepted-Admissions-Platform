@@ -33,6 +33,12 @@ DECLARE
   moved_payouts integer := 0;
   moved_transfers integer := 0;
   token_on_keeper boolean;
+  better_blank_grant boolean;
+  blank_conn record;
+  keeper_conn record;
+  replace_grant boolean;
+  blank_email text;
+  keeper_grant_email text;
 BEGIN
   SELECT tp.id INTO keeper
   FROM "tutor_profiles" AS tp
@@ -93,6 +99,37 @@ BEGIN
     WHERE cc."tutor_profile_id" = keeper
       AND NULLIF(btrim(cc."encrypted_refresh_token"), '') IS NOT NULL
   ) INTO token_on_keeper;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM "calendar_connections" AS blank
+    JOIN "tutor_profiles" AS tp ON tp."id" = blank."tutor_profile_id"
+    LEFT JOIN "calendar_connections" AS keeper_cc
+      ON keeper_cc."tutor_profile_id" = keeper
+     AND keeper_cc."provider" = blank."provider"
+    WHERE tp."name" = 'Xavier Morales'
+      AND tp."id" <> keeper
+      AND NULLIF(btrim(blank."encrypted_refresh_token"), '') IS NOT NULL
+      AND (
+        keeper_cc."id" IS NULL
+        OR NULLIF(btrim(keeper_cc."encrypted_refresh_token"), '') IS NULL
+        OR (
+          lower(blank."google_account_email") IN ('xaver.rmz6@gmail.com', 'xavier.rmz6@gmail.com')
+          AND lower(keeper_cc."google_account_email") = 'admin@acceptedadmissions.org'
+        )
+        OR (
+          NOT (
+            lower(keeper_cc."google_account_email") IN ('xaver.rmz6@gmail.com', 'xavier.rmz6@gmail.com')
+            AND lower(blank."google_account_email") = 'admin@acceptedadmissions.org'
+          )
+          AND blank."connected_at" IS NOT NULL
+          AND (
+            keeper_cc."connected_at" IS NULL
+            OR blank."connected_at" > keeper_cc."connected_at"
+          )
+        )
+      )
+  ) INTO better_blank_grant;
 
   SELECT COUNT(*) INTO stray
   FROM "tutor_profiles" AS tp
@@ -161,6 +198,7 @@ BEGIN
        WHERE "name" = 'Xavier Morales' AND "linkedin_url" IS NOT NULL
      ))
      AND (NOT token_on_keeper OR keeper_status = 'connected')
+     AND NOT better_blank_grant
      AND stray = 0
   THEN
     RAISE NOTICE 'xavier_profile_repair already=1';
@@ -237,21 +275,79 @@ BEGIN
     );
   GET DIAGNOSTICS moved_rules = ROW_COUNT;
 
-  UPDATE "calendar_connections" AS src
-  SET
-    "tutor_profile_id" = keeper,
-    "status" = CASE
-      WHEN NULLIF(btrim(src."encrypted_refresh_token"), '') IS NOT NULL THEN 'connected'
-      ELSE src."status"
-    END,
-    "updated_at" = now()
-  WHERE src."tutor_profile_id" = ANY(blank_ids)
-    AND NOT EXISTS (
-      SELECT 1 FROM "calendar_connections" AS dst
-      WHERE dst."tutor_profile_id" = keeper
-        AND dst."provider" = src."provider"
-    );
-  GET DIAGNOSTICS moved_calendars = ROW_COUNT;
+  FOR blank_conn IN
+    SELECT *
+    FROM "calendar_connections"
+    WHERE "tutor_profile_id" = ANY(blank_ids)
+      AND NULLIF(btrim("encrypted_refresh_token"), '') IS NOT NULL
+  LOOP
+    SELECT * INTO keeper_conn
+    FROM "calendar_connections"
+    WHERE "tutor_profile_id" = keeper
+      AND "provider" = blank_conn.provider
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+      replace_grant := true;
+    ELSE
+      blank_email := lower(COALESCE(blank_conn.google_account_email, ''));
+      keeper_grant_email := lower(COALESCE(keeper_conn.google_account_email, ''));
+      IF NULLIF(btrim(keeper_conn.encrypted_refresh_token), '') IS NULL THEN
+        replace_grant := true;
+      ELSIF blank_email IN ('xaver.rmz6@gmail.com', 'xavier.rmz6@gmail.com')
+            AND keeper_grant_email = 'admin@acceptedadmissions.org' THEN
+        replace_grant := true;
+      ELSIF keeper_grant_email IN ('xaver.rmz6@gmail.com', 'xavier.rmz6@gmail.com')
+            AND blank_email = 'admin@acceptedadmissions.org' THEN
+        replace_grant := false;
+      ELSIF blank_conn.connected_at IS NOT NULL
+            AND (
+              keeper_conn.connected_at IS NULL
+              OR blank_conn.connected_at > keeper_conn.connected_at
+            ) THEN
+        replace_grant := true;
+      ELSE
+        replace_grant := false;
+      END IF;
+    END IF;
+
+    IF replace_grant AND NOT FOUND THEN
+      UPDATE "calendar_connections"
+      SET
+        "tutor_profile_id" = keeper,
+        "status" = 'connected',
+        "updated_at" = now()
+      WHERE "id" = blank_conn.id;
+      moved_calendars := moved_calendars + 1;
+    ELSIF replace_grant THEN
+      UPDATE "calendar_connections"
+      SET
+        "status" = 'connected',
+        "calendar_id" = COALESCE(blank_conn.calendar_id, "calendar_id"),
+        "app_calendar_id" = COALESCE(blank_conn.app_calendar_id, "app_calendar_id"),
+        "granted_scopes" = COALESCE(blank_conn.granted_scopes, "granted_scopes"),
+        "encrypted_access_token" = blank_conn.encrypted_access_token,
+        "encrypted_refresh_token" = blank_conn.encrypted_refresh_token,
+        "access_token_expires_at" = blank_conn.access_token_expires_at,
+        "connected_at" = blank_conn.connected_at,
+        "google_account_email" = blank_conn.google_account_email,
+        "last_token_refresh_at" = blank_conn.last_token_refresh_at,
+        "last_freebusy_at" = blank_conn.last_freebusy_at,
+        "updated_at" = now()
+      WHERE "id" = keeper_conn.id;
+      UPDATE "calendar_connections"
+      SET
+        "status" = 'disconnected',
+        "encrypted_access_token" = NULL,
+        "encrypted_refresh_token" = NULL,
+        "access_token_expires_at" = NULL,
+        "connected_at" = NULL,
+        "google_account_email" = NULL,
+        "updated_at" = now()
+      WHERE "id" = blank_conn.id;
+      moved_calendars := moved_calendars + 1;
+    END IF;
+  END LOOP;
 
   UPDATE "tutor_profiles"
   SET "calendar_status" = 'connected', "updated_at" = now()

@@ -7,7 +7,7 @@ import {
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { encryptCalendarToken, googleAccessTokenExpiresAt } from "./google-calendar.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { adoptedGoogleCalendarConnectionStatus, connectionHasRefreshToken, encryptedRefreshTokenAfterConnect } from "./calendar-connection-adopt.ts";
+import { adoptedGoogleCalendarConnectionStatus, connectionHasRefreshToken, encryptedRefreshTokenAfterConnect, shouldAdoptLoserCalendarConnection } from "./calendar-connection-adopt.ts";
 
 export {
   connectionHasRefreshToken,
@@ -150,7 +150,7 @@ export async function adoptGoogleCalendarConnection(
         ),
       )
       .limit(1);
-    if (to && connectionHasRefreshToken(to) && to.id !== from.id) {
+    if (to && to.id !== from.id && !shouldAdoptLoserCalendarConnection(to, from)) {
       return to;
     }
 
