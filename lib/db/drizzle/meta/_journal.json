@@ -470,6 +470,13 @@
       "when": 1792770000000,
       "tag": "0073_ielts_diagnostic_answer_spread",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792780000000,
+      "tag": "0074_close_nika_after_oct25",
+      "breakpoints": true
     }
   ]
 }
