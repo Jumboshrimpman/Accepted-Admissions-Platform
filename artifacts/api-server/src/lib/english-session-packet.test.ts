@@ -3,13 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   buildEnglishSessionPacket,
-  decideEnglishPacketPdfAccess,
-  englishPacketPdfFilename,
   renderEnglishSessionPacketPdf,
   type EnglishSessionPacket,
 } from "./english-session-packet.ts";
 import { renderSessionQuestionPdf } from "./session-question-pdf.ts";
-import { NIKA_TUTOR_EMAIL, taitoSessionDateTime } from "./session-schedule.ts";
+import { taitoSessionDateTime } from "./session-schedule.ts";
 
 function sessionOn(dateKey: string, subject = "IELTS", email?: string) {
   return {
@@ -153,87 +151,19 @@ test("passage text and fractions render through the PDF text engine", () => {
   assert.doesNotMatch(text, /\(Answer:\)/);
 });
 
-test("students, viewers, and other tutors cannot download either English packet PDF", () => {
-  for (const role of ["student", "viewer"] as const) {
-    for (const includeAnswerKey of [false, true]) {
-      const decision = decideEnglishPacketPdfAccess({
-        role,
-        requesterEmail: "taito0525@gmail.com",
-        includeAnswerKey,
-      });
-      assert.equal(decision.ok, false);
-      assert.equal(decision.status, 403);
-    }
-  }
-  const eunice = decideEnglishPacketPdfAccess({
-    role: "tutor",
-    requesterEmail: "eunice_chon@berkeley.edu",
-    includeAnswerKey: true,
-  });
-  assert.equal(eunice.ok, false);
-  assert.equal(eunice.status, 403);
-  assert.equal(
-    decideEnglishPacketPdfAccess({
-      role: "tutor",
-      requesterEmail: NIKA_TUTOR_EMAIL,
-      includeAnswerKey: true,
-    }).ok,
-    true,
-  );
-  assert.equal(
-    decideEnglishPacketPdfAccess({
-      role: "administrator",
-      requesterEmail: "admin@acceptedadmissions.org",
-      includeAnswerKey: true,
-    }).ok,
-    true,
-  );
-  assert.equal(
-    decideEnglishPacketPdfAccess({
-      role: "tutor",
-      requesterEmail: NIKA_TUTOR_EMAIL,
-      includeAnswerKey: true,
-      temporaryTutorAlias: "xsfam6@example.com",
-    }).ok,
-    false,
-  );
-  assert.equal(
-    decideEnglishPacketPdfAccess({
-      role: "tutor",
-      requesterEmail: NIKA_TUTOR_EMAIL,
-      includeAnswerKey: false,
-      temporaryTutorAlias: "xsfam6@example.com",
-    }).ok,
-    true,
-  );
-  assert.equal(
-    decideEnglishPacketPdfAccess({
-      role: "student",
-      requesterEmail: NIKA_TUTOR_EMAIL,
-      includeAnswerKey: true,
-      temporaryTutorAlias: "xsfam6@example.com",
-      configuredViewEmail: "nika.raiffe@gmail.com",
-    }).ok,
-    false,
-  );
-});
-
-test("the English packet route checks access before rendering and does not write", async () => {
+test("English sessions use the shared question PDF route instead of a Nika email check", async () => {
   const source = await readFile(new URL("../routes/platform.ts", import.meta.url), "utf8");
-  const start = source.indexOf('"/sessions/:sessionId/english-packet-pdf"');
+  assert.equal(source.includes('"/sessions/:sessionId/english-packet-pdf"'), false);
+  assert.equal(source.includes("decideEnglishPacketPdfAccess"), false);
+  assert.equal(source.includes("NIKA_TUTOR_EMAIL"), false);
+  const start = source.indexOf('"/sessions/:sessionId/question-pdf"');
   assert.ok(start > 0);
-  const end = source.indexOf('"/sessions/:sessionId/question-pdf"', start);
-  assert.ok(end > start);
-  const slice = source.slice(start, end);
-  const accessAt = slice.indexOf("decideEnglishPacketPdfAccess");
-  const renderAt = slice.indexOf("renderEnglishSessionPacketPdf");
+  const slice = source.slice(start, source.indexOf("async function listAssignmentsForUser", start));
+  const accessAt = slice.indexOf("decideSessionQuestionPdfAccess");
+  const aliasAt = slice.indexOf("temporaryAliasMayDownloadAnswerKey");
+  const renderAt = slice.indexOf("renderSessionQuestionPdf");
   assert.ok(accessAt > 0);
-  assert.ok(renderAt > accessAt);
-  assert.match(slice, /temporaryTutorAlias/);
-  assert.match(slice, /buildEnglishSessionPacket/);
-  assert.match(slice, /englishPacketPdfFilename\(includeAnswerKey\)/);
-  assert.equal(englishPacketPdfFilename(false), "english-questions.pdf");
-  assert.equal(englishPacketPdfFilename(true), "english-answer-key.pdf");
-  assert.match(slice, /private, no-store/);
-  assert.doesNotMatch(slice, /sendGuidance|sendEmail|sendMail|insert\(attemptsTable|update\(attemptsTable|update\(sessionsTable/);
+  assert.ok(aliasAt > accessAt);
+  assert.ok(renderAt > aliasAt);
+  assert.match(slice, /sessionTutorUserId: session\.tutorUserId/);
 });

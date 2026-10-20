@@ -29,12 +29,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
 import { TutorOfferedAvailability } from "@/pages/tutor/offered-availability";
-import { EnglishPacketDownloads } from "@/components/session-tutor-materials";
-import { SessionJoinActions } from "@/components/session-join-actions";
 import {
-  isTaitoEnglishPacketSession,
-  viewerMayDownloadEnglishPacket,
-} from "@/lib/english-packet-downloads";
+  SessionQuestionDownloads,
+  sessionOffersQuestionPdfs,
+  viewerMayDownloadSessionPdfs,
+} from "@/components/session-tutor-materials";
+import { SessionJoinActions } from "@/components/session-join-actions";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { upcomingSessionsForDashboard } from "@/lib/dashboard-session-scope";
 import {
@@ -254,14 +254,13 @@ export default function TutorDashboard() {
                         className="flex flex-wrap gap-2 sm:w-auto"
                       />
                     </div>
-                    {viewerMayDownloadEnglishPacket(dashboard.user) &&
-                    isTaitoEnglishPacketSession({
-                      dateTime: session.dateTime,
-                      timezone: session.timezone,
-                      subject: session.subject,
-                      studentName: session.student?.name,
-                    }) ? (
-                      <EnglishPacketDownloads sessionId={session.id} />
+                    {viewerMayDownloadSessionPdfs({
+                      role: dashboard.user.role,
+                      viewerUserId: dashboard.user.id,
+                      sessionTutor: session.tutor,
+                    }) &&
+                    sessionOffersQuestionPdfs(dashboard.assignments, session.id) ? (
+                      <SessionQuestionDownloads sessionId={session.id} />
                     ) : null}
                   </div>
                 </div>

@@ -26,12 +26,11 @@ import {
   isFormSubmissionResolved,
   unresolvedFormSubmissions,
 } from "@/lib/form-submissions";
-import { EnglishPacketDownloads } from "@/components/session-tutor-materials";
-import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import {
-  isTaitoEnglishPacketSession,
-  viewerMayDownloadEnglishPacket,
-} from "@/lib/english-packet-downloads";
+  SessionQuestionDownloads,
+  sessionOffersQuestionPdfs,
+} from "@/components/session-tutor-materials";
+import { SessionListDisclosure } from "@/components/session-list-disclosure";
 import { QuestionReportsQueue } from "./question-reports-queue";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
@@ -373,14 +372,8 @@ export default function AdminDashboard() {
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/tutor/sessions/${session.id}`}>Open session</Link>
                 </Button>
-                {viewerMayDownloadEnglishPacket({ role: "administrator" }) &&
-                isTaitoEnglishPacketSession({
-                  dateTime: session.dateTime,
-                  timezone: session.timezone,
-                  subject: session.subject,
-                  studentName: session.student?.name,
-                }) ? (
-                  <EnglishPacketDownloads sessionId={session.id} />
+                {sessionOffersQuestionPdfs(curriculum?.assignments ?? [], session.id) ? (
+                  <SessionQuestionDownloads sessionId={session.id} />
                 ) : null}
               </div>
             </div>

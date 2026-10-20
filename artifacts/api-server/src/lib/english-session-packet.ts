@@ -5,14 +5,12 @@ import {
 } from "./ielts-style-bank-content.ts";
 import { selectIeltsStylePreworkItems } from "./ielts-style-bank-select.ts";
 import {
-  NIKA_TUTOR_EMAIL,
   TAITO_ENGLISH_DATE_KEYS,
   isEnglishSessionSubject,
   matchesTaitoScheduledDate,
 } from "./session-schedule.ts";
 import {
   renderSessionQuestionPdf,
-  temporaryAliasMayDownloadAnswerKey,
   type SessionQuestionPdfSection,
 } from "./session-question-pdf.ts";
 
@@ -46,44 +44,6 @@ type ReadingPoolItem = {
   passageId: string;
   questionIndex: number;
 };
-
-/**
- * Students, viewers, and tutors other than Nika never receive these files.
- * The temporary Nika alias may download questions, not the answer key.
- */
-export function decideEnglishPacketPdfAccess(input: {
-  role: string;
-  requesterEmail?: string | null;
-  includeAnswerKey: boolean;
-  temporaryTutorAlias?: string | null;
-  configuredViewEmail?: string | null;
-}): { ok: true; status: 200 } | { ok: false; status: 403; error: string } {
-  const email = input.requesterEmail?.trim().toLowerCase() ?? "";
-  const allowed =
-    input.role === "administrator" ||
-    (input.role === "tutor" && email === NIKA_TUTOR_EMAIL);
-  if (!allowed) {
-    return {
-      ok: false,
-      status: 403,
-      error: "This account cannot download English session packets.",
-    };
-  }
-  if (
-    !temporaryAliasMayDownloadAnswerKey({
-      temporaryTutorAlias: input.temporaryTutorAlias,
-      includeAnswerKey: input.includeAnswerKey,
-      configuredViewEmail: input.configuredViewEmail,
-    })
-  ) {
-    return {
-      ok: false,
-      status: 403,
-      error: "This temporary login cannot download answer keys.",
-    };
-  }
-  return { ok: true, status: 200 };
-}
 
 function readingPool(): ReadingPoolItem[] {
   return IELTS_STYLE_PASSAGES.flatMap((passage) =>
@@ -205,8 +165,4 @@ export function renderEnglishSessionPacketPdf(
     studentName: input.studentName,
     sections: packet.sections,
   });
-}
-
-export function englishPacketPdfFilename(includeAnswerKey: boolean): string {
-  return includeAnswerKey ? "english-answer-key.pdf" : "english-questions.pdf";
 }

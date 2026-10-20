@@ -13,15 +13,28 @@ const PDF_OBJECT_URL_REVOKE_DELAY_MS = 1000;
 export function viewerMayDownloadSessionPdfs(input: {
   role?: string | null;
   viewerUserId?: string | null;
-  sessionTutor?: { id?: string | null; specialty?: string | null } | null;
+  sessionTutor?: { id?: string | null } | null;
 }): boolean {
   if (input.role === "administrator") return true;
   if (input.role !== "tutor") return false;
-  const tutor = input.sessionTutor;
-  if (tutor?.specialty === "Assigned tutor" && tutor.id) {
-    return Boolean(input.viewerUserId) && input.viewerUserId === tutor.id;
-  }
-  return true;
+  const tutorId = input.sessionTutor?.id;
+  return Boolean(tutorId) && Boolean(input.viewerUserId) && input.viewerUserId === tutorId;
+}
+
+export function sessionOffersQuestionPdfs(
+  assignments: readonly {
+    sessionId?: string | null;
+    status?: string | null;
+    questionCount?: number | null;
+  }[],
+  sessionId: string,
+): boolean {
+  return assignments.some(
+    (assignment) =>
+      assignment.sessionId === sessionId &&
+      assignment.status !== "archived" &&
+      (assignment.questionCount ?? 0) > 0,
+  );
 }
 
 function downloadErrorStatus(error: unknown): number | null {
@@ -43,40 +56,24 @@ type AssignmentRow = {
   id: string;
   deliveryPhase?: string | null;
   title?: string | null;
+  questionCount?: number | null;
+  status?: string | null;
 };
 
-async function downloadSessionQuestionPdf(
-  sessionId: string,
-  phase: "before_session" | "during_session",
-  answers: boolean,
-) {
+async function downloadSessionQuestionPdf(sessionId: string, answers: boolean) {
   const blob = await customFetch<Blob>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/question-pdf?phase=${phase}${answers ? "&answers=1" : ""}`,
+    `/api/sessions/${encodeURIComponent(sessionId)}/question-pdf${answers ? "?answers=1" : ""}`,
     { responseType: "blob" },
   );
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  const part = phase === "before_session" ? "pre-work" : "in-session";
-  link.download = `${part}-${answers ? "answer-key" : "questions"}.pdf`;
+  link.download = answers ? "session-answer-key.pdf" : "session-questions.pdf";
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), PDF_OBJECT_URL_REVOKE_DELAY_MS);
 }
 
-async function downloadEnglishPacketPdf(sessionId: string, answers: boolean) {
-  const blob = await customFetch<Blob>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/english-packet-pdf${answers ? "?answers=1" : ""}`,
-    { responseType: "blob" },
-  );
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = answers ? "english-answer-key.pdf" : "english-questions.pdf";
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), PDF_OBJECT_URL_REVOKE_DELAY_MS);
-}
-
-function EnglishPacketButton({
+function PdfDownloadButton({
   sessionId,
   answers,
   label,
@@ -97,7 +94,7 @@ function EnglishPacketButton({
       disabled={pending}
       onClick={() => {
         setPending(true);
-        void downloadEnglishPacketPdf(sessionId, answers)
+        void downloadSessionQuestionPdf(sessionId, answers)
           .catch((error: unknown) => {
             const status = downloadErrorStatus(error);
             toast({
@@ -107,7 +104,7 @@ function EnglishPacketButton({
                 status === 403
                   ? "This account cannot download that PDF."
                   : status === 404
-                    ? "No English packet is attached to this session."
+                    ? "No questions are attached to this session."
                     : "Try again in a moment.",
             });
           })
@@ -120,68 +117,22 @@ function EnglishPacketButton({
   );
 }
 
-export function EnglishPacketDownloads({ sessionId }: { sessionId: string }) {
+export function SessionQuestionDownloads({ sessionId }: { sessionId: string }) {
   return (
-    <div className="flex flex-wrap gap-2" data-testid="english-packet-downloads">
-      <EnglishPacketButton
+    <div className="flex flex-wrap gap-2" data-testid="session-question-downloads">
+      <PdfDownloadButton
         sessionId={sessionId}
         answers={false}
-        label="Download English questions (PDF)"
-        testId="download-english-questions"
+        label="Download questions (PDF)"
+        testId="download-session-questions"
       />
-      <EnglishPacketButton
+      <PdfDownloadButton
         sessionId={sessionId}
         answers
-        label="Download English answer key (PDF)"
-        testId="download-english-answer-key"
+        label="Download answer key (PDF)"
+        testId="download-session-answer-key"
       />
     </div>
-  );
-}
-
-function PdfDownloadButton({
-  sessionId,
-  phase,
-  answers,
-  label,
-  testId,
-}: {
-  sessionId: string;
-  phase: "before_session" | "during_session";
-  answers: boolean;
-  label: string;
-  testId: string;
-}) {
-  const [pending, setPending] = useState(false);
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      data-testid={testId}
-      disabled={pending}
-      onClick={() => {
-        setPending(true);
-        void downloadSessionQuestionPdf(sessionId, phase, answers)
-          .catch((error: unknown) => {
-            const status = downloadErrorStatus(error);
-            toast({
-              variant: "destructive",
-              title: status === 403 ? "Download not allowed" : "Could not download the PDF",
-              description:
-                status === 403
-                  ? "This account cannot download that PDF."
-                  : status === 404
-                    ? "No questions for this part yet."
-                    : "Try again in a moment.",
-            });
-          })
-          .finally(() => setPending(false));
-      }}
-    >
-      <FileDown className="mr-2 h-4 w-4" />
-      {pending ? "Preparing PDF…" : label}
-    </Button>
   );
 }
 
@@ -232,7 +183,6 @@ export function SessionTutorMaterials({
   duringTitle,
   duringQuestionCount,
   canDownloadPdfs = false,
-  suppressPreworkPdfs = false,
 }: {
   sessionId: string;
   timezone?: string | null;
@@ -243,7 +193,6 @@ export function SessionTutorMaterials({
   duringTitle?: string | null;
   duringQuestionCount?: number | null;
   canDownloadPdfs?: boolean;
-  suppressPreworkPdfs?: boolean;
 }) {
   const phaseFor = (assignmentId: string) =>
     assignments.find((assignment) => assignment.id === assignmentId)?.deliveryPhase ?? "before_session";
@@ -267,16 +216,21 @@ export function SessionTutorMaterials({
       attemptId: null,
     });
   }
-  const showPreworkPdf = Boolean(beforeAssignmentId) && !suppressPreworkPdfs;
-  const showInSessionPdf = Boolean(duringAssignmentId) && (duringQuestionCount ?? 0) > 0;
-  if (prework.length === 0 && homeworkRows.length === 0 && !showPreworkPdf && !showInSessionPdf) {
+  const hasQuestionSets =
+    Boolean(beforeAssignmentId) ||
+    (Boolean(duringAssignmentId) && (duringQuestionCount ?? 0) > 0) ||
+    assignments.some(
+      (assignment) => assignment.status !== "archived" && (assignment.questionCount ?? 0) > 0,
+    ) ||
+    homework.some((item) => isPostSessionFollowUpQuiz(item));
+  if (prework.length === 0 && homeworkRows.length === 0 && !hasQuestionSets) {
     return null;
   }
   return (
     <div className="rounded-xl border bg-background p-4" data-testid="tutor-session-materials">
       <p className="font-semibold">Pre-work and homework</p>
       <p className="mt-1 text-sm text-muted-foreground">
-        Completion for this session, plus question PDFs when a quiz is attached.
+        Completion for this session, plus one questions PDF and one answer key when a quiz is attached.
       </p>
       <div className="mt-3 space-y-3">
         {prework.map((row) => (
@@ -286,44 +240,9 @@ export function SessionTutorMaterials({
           <CompletionRow key={row.assignmentId} kind="Homework" timezone={timezone} row={row} />
         ))}
       </div>
-      {canDownloadPdfs && (showPreworkPdf || showInSessionPdf) ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {showPreworkPdf ? (
-            <>
-              <PdfDownloadButton
-                sessionId={sessionId}
-                phase="before_session"
-                answers={false}
-                label="Download pre-work questions (PDF)"
-                testId="download-prework-questions"
-              />
-              <PdfDownloadButton
-                sessionId={sessionId}
-                phase="before_session"
-                answers
-                label="Download pre-work answer key (PDF)"
-                testId="download-prework-answer-key"
-              />
-            </>
-          ) : null}
-          {showInSessionPdf ? (
-            <>
-              <PdfDownloadButton
-                sessionId={sessionId}
-                phase="during_session"
-                answers={false}
-                label="Download in-session questions (PDF)"
-                testId="download-in-session-questions"
-              />
-              <PdfDownloadButton
-                sessionId={sessionId}
-                phase="during_session"
-                answers
-                label="Download in-session answer key (PDF)"
-                testId="download-in-session-answer-key"
-              />
-            </>
-          ) : null}
+      {canDownloadPdfs && hasQuestionSets ? (
+        <div className="mt-4">
+          <SessionQuestionDownloads sessionId={sessionId} />
         </div>
       ) : null}
     </div>
