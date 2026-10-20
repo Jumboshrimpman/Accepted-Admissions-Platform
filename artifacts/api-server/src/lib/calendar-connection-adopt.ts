@@ -103,16 +103,54 @@ export function adoptedGoogleCalendarConnectionStatus(from: {
   return from?.status === "connected" ? "connected" : "disconnected";
 }
 
+const XAVIER_OWN_GMAILS = new Set([
+  "xaver.rmz6@gmail.com",
+  "xavier.rmz6@gmail.com",
+]);
+const ADMIN_CALENDAR_GMAIL = "admin@acceptedadmissions.org";
+
+export type CalendarGrantChoice = {
+  status?: string | null;
+  encryptedRefreshToken?: string | null;
+  connectedAt?: Date | string | null;
+  googleAccountEmail?: string | null;
+};
+
+function grantAccountEmail(connection: CalendarGrantChoice | null | undefined): string {
+  return connection?.googleAccountEmail?.trim().toLowerCase() ?? "";
+}
+
+function connectedAtMillis(connection: CalendarGrantChoice | null | undefined): number | null {
+  if (!connection?.connectedAt) return null;
+  const millis = new Date(connection.connectedAt).getTime();
+  return Number.isNaN(millis) ? null : millis;
+}
+
+/**
+ * Whether the duplicate's Google grant should replace the keeper's.
+ * A missing keeper token always yields. When both tokens exist, Xavier's own
+ * Gmail beats admin@acceptedadmissions.org, and otherwise the newer
+ * connected_at wins. Equal or unknown times stay put so a rerun is a no-op.
+ */
 export function shouldAdoptLoserCalendarConnection(
-  winner: {
-    status?: string | null;
-    encryptedRefreshToken?: string | null;
-  } | null,
-  loser: { encryptedRefreshToken?: string | null } | null,
+  winner: CalendarGrantChoice | null,
+  loser: CalendarGrantChoice | null,
 ): boolean {
-  // A disconnected canonical row may still hold a valid refresh token.
-  // Never replace that grant with a retired duplicate's token.
-  return Boolean(
-    connectionHasRefreshToken(loser) && !connectionHasRefreshToken(winner),
-  );
+  if (!connectionHasRefreshToken(loser)) return false;
+  if (!connectionHasRefreshToken(winner)) return true;
+
+  const winnerEmail = grantAccountEmail(winner);
+  const loserEmail = grantAccountEmail(loser);
+  const winnerIsXavier = XAVIER_OWN_GMAILS.has(winnerEmail);
+  const loserIsXavier = XAVIER_OWN_GMAILS.has(loserEmail);
+  const winnerIsAdmin = winnerEmail === ADMIN_CALENDAR_GMAIL;
+  const loserIsAdmin = loserEmail === ADMIN_CALENDAR_GMAIL;
+  if (loserIsXavier && winnerIsAdmin) return true;
+  if (winnerIsXavier && loserIsAdmin) return false;
+
+  const winnerAt = connectedAtMillis(winner);
+  const loserAt = connectedAtMillis(loser);
+  if (loserAt == null) return false;
+  if (winnerAt == null) return true;
+  return loserAt > winnerAt;
 }

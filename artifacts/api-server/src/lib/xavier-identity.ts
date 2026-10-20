@@ -64,6 +64,56 @@ export function isXavierProfileEmail(
   return Boolean(email) && normalizeEmail(email!) === XAVIER_PROFILE_EMAIL;
 }
 
+/** Login spelling and profile spelling for one address. Other addresses stay as given. */
+export function xavierEmailSpellings(email: string): string[] {
+  const normalized = normalizeEmail(email);
+  const at = normalized.lastIndexOf("@");
+  if (at <= 0) return [normalized];
+  const local = normalized.slice(0, at);
+  const domain = normalized.slice(at + 1);
+  if (local === "xaver.rmz6" || local === "xavier.rmz6") {
+    return [`xaver.rmz6@${domain}`, `xavier.rmz6@${domain}`];
+  }
+  return [normalized];
+}
+
+export type XavierProfileKeepCandidate = {
+  id: string;
+  photoUrl?: string | null;
+  createdAt?: Date | string | null;
+  availabilityRuleCount?: number | null;
+};
+
+function xavierProfileHasPhoto(profile: XavierProfileKeepCandidate): boolean {
+  return Boolean(profile.photoUrl?.trim());
+}
+
+function xavierProfileCreatedAt(profile: XavierProfileKeepCandidate): number {
+  if (!profile.createdAt) return Number.POSITIVE_INFINITY;
+  const ms = new Date(profile.createdAt).getTime();
+  return Number.isNaN(ms) ? Number.POSITIVE_INFINITY : ms;
+}
+
+/**
+ * Keep the original profile: a photo, then availability rules, then the
+ * oldest created_at. Array order never decides.
+ */
+export function chooseXavierProfileToKeep<T extends XavierProfileKeepCandidate>(
+  profiles: readonly T[],
+): T | null {
+  if (profiles.length === 0) return null;
+  return [...profiles].sort((a, b) => {
+    const photo = Number(xavierProfileHasPhoto(b)) - Number(xavierProfileHasPhoto(a));
+    if (photo !== 0) return photo;
+    const rules =
+      Number((b.availabilityRuleCount ?? 0) > 0) - Number((a.availabilityRuleCount ?? 0) > 0);
+    if (rules !== 0) return rules;
+    const created = xavierProfileCreatedAt(a) - xavierProfileCreatedAt(b);
+    if (created !== 0) return created;
+    return a.id.localeCompare(b.id);
+  })[0]!;
+}
+
 export function isRetiredXavierIdentity(
   clerkUserId?: string | null,
   email?: string | null,

@@ -182,6 +182,18 @@ test("locks Kya's public portrait even when the stored value is blank or drifted
     publicTeamPortrait("Michael Pecorara", LEGACY_WIX_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"]),
     APPROVED_PUBLIC_TEAM_PORTRAITS["Michael Pecorara"],
   );
+  assert.equal(
+    publicTeamPortrait("Xavier Morales", null),
+    APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
+  );
+  assert.equal(
+    publicTeamPortrait("Xavier Morales", "  "),
+    APPROVED_PUBLIC_TEAM_PORTRAITS["Xavier Morales"],
+  );
+  assert.equal(
+    publicTeamPortrait("Xavier Morales", "https://example.com/xavier-custom.jpg"),
+    "https://example.com/xavier-custom.jpg",
+  );
 });
 
 test("reconciles only the known mirrored offset without positional image lookup", () => {

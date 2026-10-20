@@ -7700,6 +7700,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
       return {
         ...tutor,
         name: personFirstName(tutor.name),
+        photoUrl: publicTeamPortrait(tutor.name, tutor.photoUrl),
         title: clientPortalTutorTitle(tutor),
         subjects,
         providerStatus: connected ? ("connected" as const) : ("disconnected" as const),

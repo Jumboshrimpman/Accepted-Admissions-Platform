@@ -36,6 +36,70 @@ test("Xavier identity remaps adopt a loser refresh token only when the winner ha
     ),
     false,
   );
+  assert.equal(
+    shouldAdoptLoserCalendarConnection(
+      {
+        status: "connected",
+        encryptedRefreshToken: "keeper-old",
+        connectedAt: "2024-01-01T00:00:00.000Z",
+        googleAccountEmail: "xaver.rmz6@gmail.com",
+      },
+      {
+        encryptedRefreshToken: "blank-new",
+        connectedAt: "2026-10-19T03:13:00.000Z",
+        googleAccountEmail: "xavier.rmz6@gmail.com",
+      },
+    ),
+    true,
+  );
+  assert.equal(
+    shouldAdoptLoserCalendarConnection(
+      {
+        status: "connected",
+        encryptedRefreshToken: "keeper-new",
+        connectedAt: "2026-10-19T03:13:00.000Z",
+        googleAccountEmail: "xaver.rmz6@gmail.com",
+      },
+      {
+        encryptedRefreshToken: "blank-old",
+        connectedAt: "2024-01-01T00:00:00.000Z",
+        googleAccountEmail: "xavier.rmz6@gmail.com",
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    shouldAdoptLoserCalendarConnection(
+      {
+        status: "connected",
+        encryptedRefreshToken: "keeper-xavier",
+        connectedAt: "2024-01-01T00:00:00.000Z",
+        googleAccountEmail: "xaver.rmz6@gmail.com",
+      },
+      {
+        encryptedRefreshToken: "blank-admin",
+        connectedAt: "2026-10-19T03:13:00.000Z",
+        googleAccountEmail: "admin@acceptedadmissions.org",
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    shouldAdoptLoserCalendarConnection(
+      {
+        status: "connected",
+        encryptedRefreshToken: "keeper-admin",
+        connectedAt: "2026-10-19T03:13:00.000Z",
+        googleAccountEmail: "admin@acceptedadmissions.org",
+      },
+      {
+        encryptedRefreshToken: "blank-xavier",
+        connectedAt: "2024-01-01T00:00:00.000Z",
+        googleAccountEmail: "xavier.rmz6@gmail.com",
+      },
+    ),
+    true,
+  );
 });
 
 test("Google returns no new refresh_token on reconnect keeps prior", () => {

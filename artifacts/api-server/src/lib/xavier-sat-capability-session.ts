@@ -1,6 +1,7 @@
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   assignmentsTable,
+  availabilityRulesTable,
   courseMembershipsTable,
   coursesTable,
   db,
@@ -21,6 +22,14 @@ import {
   TAITO_FALL_2026_SESSIONS,
   TAITO_STUDENT_EMAIL,
 } from "./session-schedule.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import {
+  CANONICAL_XAVIER_EMAIL,
+  CANONICAL_XAVIER_NAME,
+  XAVIER_PROFILE_EMAIL,
+  chooseXavierProfileToKeep,
+  xavierEmailSpellings,
+} from "./xavier-identity.ts";
 
 export const XAVIER_SAT_CAPABILITY_SESSION_TITLE = "SAT capability test — Xavier";
 export const XAVIER_TUTOR_EMAIL = "xaver.rmz6@gmail.com";
@@ -197,11 +206,7 @@ async function resolveXavierUser(options: XavierSatCapabilitySeedOptions) {
     user = updated ?? user;
   }
 
-  const [profile] = await db
-    .select()
-    .from(tutorProfilesTable)
-    .where(eq(tutorProfilesTable.email, email))
-    .limit(1);
+  const profile = await findExistingXavierProfile(user.id, email);
   if (profile) {
     if (profile.userId !== user.id) {
       await db
@@ -210,11 +215,15 @@ async function resolveXavierUser(options: XavierSatCapabilitySeedOptions) {
         .where(eq(tutorProfilesTable.id, profile.id));
     }
   } else {
+    const spellings = xavierEmailSpellings(email);
+    const profileEmail = spellings.includes(XAVIER_PROFILE_EMAIL)
+      ? XAVIER_PROFILE_EMAIL
+      : email;
     await db
       .insert(tutorProfilesTable)
       .values({
         userId: user.id,
-        email,
+        email: profileEmail,
         name: "Xavier Morales",
         title: "SAT & Math Tutor",
         subjects: ["SAT", "Math"],
@@ -225,6 +234,54 @@ async function resolveXavierUser(options: XavierSatCapabilitySeedOptions) {
   }
 
   return user;
+}
+
+async function findExistingXavierProfile(userId: string, email: string) {
+  const spellings = xavierEmailSpellings(email);
+  const realXavier =
+    spellings.includes(CANONICAL_XAVIER_EMAIL) || spellings.includes(XAVIER_PROFILE_EMAIL);
+  const filters = [
+    and(
+      eq(tutorProfilesTable.userId, userId),
+      eq(tutorProfilesTable.name, CANONICAL_XAVIER_NAME),
+    ),
+    sql`lower(${tutorProfilesTable.email}) in (${sql.join(
+      spellings.map((spelling) => sql`${spelling}`),
+      sql`, `,
+    )})`,
+  ];
+  if (realXavier) {
+    filters.push(
+      and(
+        eq(tutorProfilesTable.name, CANONICAL_XAVIER_NAME),
+        sql`lower(${tutorProfilesTable.email}) like 'retired+xavier-duplicate-%@retired.accepted.local'`,
+      ),
+    );
+  }
+  const rows = await db
+    .select()
+    .from(tutorProfilesTable)
+    .where(or(...filters));
+  if (rows.length === 0) return null;
+  const ruleRows = await db
+    .select({ tutorProfileId: availabilityRulesTable.tutorProfileId })
+    .from(availabilityRulesTable)
+    .where(
+      inArray(
+        availabilityRulesTable.tutorProfileId,
+        rows.map((row) => row.id),
+      ),
+    );
+  const counts = new Map<string, number>();
+  for (const rule of ruleRows) {
+    counts.set(rule.tutorProfileId, (counts.get(rule.tutorProfileId) ?? 0) + 1);
+  }
+  return chooseXavierProfileToKeep(
+    rows.map((row) => ({
+      ...row,
+      availabilityRuleCount: counts.get(row.id) ?? 0,
+    })),
+  );
 }
 
 async function resolveStudent(options: XavierSatCapabilitySeedOptions): Promise<{

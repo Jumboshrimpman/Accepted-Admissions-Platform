@@ -477,6 +477,13 @@
       "when": 1792780000000,
       "tag": "0074_close_nika_after_oct25",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792790000000,
+      "tag": "0075_restore_xavier_public_profile",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import {
   coursesTable,
   db,
   sessionsTable,
+  tutorAssignmentsTable,
   tutorProfilesTable,
   usersTable,
 } from "@workspace/db";
@@ -132,6 +133,82 @@ async function createUser(input: {
   const [user] = await db.insert(usersTable).values(input).returning();
   return user!;
 }
+
+test("fresh boot with profile email xavier.rmz6 does not insert a second profile", async () => {
+  const suffix = randomUUID().slice(0, 8);
+  const domain = `fixture-${suffix}.invalid`;
+  const loginEmail = `xaver.rmz6@${domain}`;
+  const profileEmail = `xavier.rmz6@${domain}`;
+  const title = `SAT capability test — Xavier spelling ${suffix}`;
+  const course = await createCourse(suffix);
+  const xavier = await createUser({
+    email: loginEmail,
+    displayName: "Xavier Morales",
+    role: "tutor",
+    clerkUserId: `xavier-spelling:${suffix}`,
+  });
+  const [profile] = await db
+    .insert(tutorProfilesTable)
+    .values({
+      userId: xavier.id,
+      email: profileEmail,
+      name: "Xavier Morales",
+      title: "SAT & Math Tutor",
+      photoUrl: "/media/team/xavier-morales.jpg",
+      subjects: ["SAT", "Math"],
+      bookingEligible: true,
+      publicApproved: true,
+    })
+    .returning();
+
+  try {
+    const seeded = await ensureXavierSatCapabilitySession({
+      now: new Date("2026-09-06T18:00:00.000Z"),
+      courseId: course.id,
+      attachPrework: false,
+      identities: {
+        title,
+        xavierEmail: loginEmail,
+        xavierClerkUserId: xavier.clerkUserId,
+        xavierDuplicateClerkUserId: `xavier-spelling-dup:${suffix}`,
+        samaEmail: `missing-sama-spelling-${suffix}@example.invalid`,
+        samaClerkUserId: `missing-sama-spelling:${suffix}`,
+        taitoEmail: `missing-taito-spelling-${suffix}@example.invalid`,
+      },
+    });
+    assert.equal(seeded.tutorUserId, xavier.id);
+    const again = await ensureXavierSatCapabilitySession({
+      now: new Date("2026-09-20T18:00:00.000Z"),
+      courseId: course.id,
+      attachPrework: false,
+      identities: {
+        title,
+        xavierEmail: loginEmail,
+        xavierClerkUserId: xavier.clerkUserId,
+        xavierDuplicateClerkUserId: `xavier-spelling-dup:${suffix}`,
+        samaEmail: `missing-sama-spelling-${suffix}@example.invalid`,
+        samaClerkUserId: `missing-sama-spelling:${suffix}`,
+        taitoEmail: `missing-taito-spelling-${suffix}@example.invalid`,
+      },
+    });
+    assert.equal(again.created, false);
+    const profiles = await db
+      .select({ id: tutorProfilesTable.id, email: tutorProfilesTable.email })
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.userId, xavier.id));
+    assert.equal(profiles.length, 1);
+    assert.equal(profiles[0]?.id, profile!.id);
+    assert.equal(profiles[0]?.email, profileEmail);
+  } finally {
+    await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course.id));
+    await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course.id));
+    await db
+      .delete(tutorProfilesTable)
+      .where(inArray(tutorProfilesTable.email, [loginEmail, profileEmail]));
+    await db.delete(coursesTable).where(eq(coursesTable.id, course.id));
+    await db.delete(usersTable).where(eq(usersTable.id, xavier.id));
+  }
+});
 
 test("seeds one Xavier SAT capability session for Sama and stays idempotent", async () => {
   const suffix = randomUUID();
@@ -555,6 +632,7 @@ test("does not rewrite Taito Oct 2 diagnostic homework or steal the session duri
     assert.equal(oct2?.hasHomework, true);
   } finally {
     await db.delete(assignmentsTable).where(eq(assignmentsTable.courseId, course.id));
+    await db.delete(tutorAssignmentsTable).where(eq(tutorAssignmentsTable.courseId, course.id));
     await db.delete(courseMembershipsTable).where(eq(courseMembershipsTable.courseId, course.id));
     await db.delete(sessionsTable).where(eq(sessionsTable.courseId, course.id));
     await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.email, xavier.email));
