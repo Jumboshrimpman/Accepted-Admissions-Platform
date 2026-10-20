@@ -14,6 +14,7 @@ const {
   isRetiredXavierEmail,
   isRetiredXavierIdentity,
   isSupersededAccessGrant,
+  profileNotesWithoutSupersededMarker,
   retiredXavierClerkMarker,
   xavierEmailSpellings,
 } =
@@ -42,6 +43,20 @@ test("treats misspelled and historical Xavier emails as retired", () => {
   assert.equal(isRetiredXavierEmail(XAVIER_PROFILE_EMAIL), true);
   assert.equal(XAVIER_PROFILE_EMAIL, "xavier.rmz6@gmail.com");
   assert.equal(isCanonicalXavierEmail(" Xaver.RMZ6@Gmail.com "), true);
+});
+
+test("restored Xavier notes drop the superseded marker and keep other lines", () => {
+  assert.equal(profileNotesWithoutSupersededMarker(null), null);
+  assert.equal(
+    profileNotesWithoutSupersededMarker(
+      "Harvard biography.\nSUPERSEDED: duplicate Xavier Clerk user.",
+    ),
+    "Harvard biography.",
+  );
+  assert.equal(
+    profileNotesWithoutSupersededMarker("SUPERSEDED: duplicate Xavier Clerk user."),
+    null,
+  );
 });
 
 test("retired identity is clerk-or-email", () => {
