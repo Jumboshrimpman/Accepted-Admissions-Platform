@@ -484,6 +484,13 @@
       "when": 1792790000000,
       "tag": "0075_restore_xavier_public_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792800000000,
+      "tag": "0076_xavier_connections_superseded_note",
+      "breakpoints": true
     }
   ]
 }

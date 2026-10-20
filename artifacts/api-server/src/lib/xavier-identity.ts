@@ -18,6 +18,19 @@ export const RETIRED_XAVIER_EMAILS = [
 export const SUPERSEDED_XAVIER_GRANT_NOTE =
   "SUPERSEDED: duplicate Xavier Clerk user. Canonical SAT tutor is user_3IxUfoT1xRnDsqhlx5NN1eGfRg6 / xaver.rmz6@gmail.com.";
 
+/** Drop retirement lines so a restored public profile is not hidden from Connections. */
+export function profileNotesWithoutSupersededMarker(
+  notes: string | null | undefined,
+): string | null {
+  if (!notes) return null;
+  const cleaned = notes
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("SUPERSEDED:"))
+    .join("\n");
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 const RETIRED_XAVIER_EMAIL_SET = new Set<string>(RETIRED_XAVIER_EMAILS);
 
 function normalizeEmail(email: string): string {

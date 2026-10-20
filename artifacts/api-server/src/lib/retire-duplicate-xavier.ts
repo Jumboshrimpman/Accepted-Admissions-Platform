@@ -28,6 +28,7 @@ import {
   RETIRED_XAVIER_EMAILS,
   SUPERSEDED_XAVIER_GRANT_NOTE,
   chooseXavierProfileToKeep,
+  profileNotesWithoutSupersededMarker,
   isRetiredXavierClerkUserId,
   retiredXavierClerkMarker,
 } from "./xavier-identity";
@@ -275,6 +276,7 @@ async function retireDuplicateXavierIdentityRecords(): Promise<void> {
         active: true,
         bookingEligible: true,
         publicApproved: true,
+        internalNotes: profileNotesWithoutSupersededMarker(winnerProfile.internalNotes),
         updatedAt: new Date(),
       })
       .where(eq(tutorProfilesTable.id, winnerProfile.id));
