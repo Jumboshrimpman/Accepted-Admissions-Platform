@@ -28,6 +28,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@workspace/api-client-react", () => ({
   getGetDashboardQueryKey: () => ["dashboard"],
   getGetFinancialsQueryKey: () => ["financials"],
+  getGetBillingHistoryQueryKey: () => ["billing-history"],
+  useGetBillingHistory: () => ({
+    data: { readOnly: false, payments: [] },
+    isLoading: false,
+    error: null,
+  }),
   getListReviewQueueQueryKey: () => ["review-queue"],
   getGetBookingAvailabilityQueryKey: () => ["availability"],
   getListBookingSessionsQueryKey: () => ["sessions"],
@@ -1407,7 +1413,9 @@ describe("authenticated role dashboard flows", () => {
       },
     } as Dashboard;
     const sophia = render(<FallWelcomeDashboard />);
-    expect(screen.getByText("SAT session credits")).toBeTruthy();
+    const sophiaCredits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
+    expect(sophiaCredits.open).toBe(false);
+    expect(sophiaCredits.textContent).toContain("SAT session credits · 0 prepaid hours total");
     for (const phrase of phrases) expect(screen.queryByText(phrase)).toBeNull();
     sophia.unmount();
 
@@ -1431,7 +1439,9 @@ describe("authenticated role dashboard flows", () => {
       },
     } as Dashboard;
     render(<FallWelcomeDashboard />);
-    expect(screen.getByText("College Consulting credits")).toBeTruthy();
+    const neelCredits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
+    expect(neelCredits.open).toBe(false);
+    expect(neelCredits.textContent).toContain("College Consulting credits · 1 prepaid hour total");
     expect(screen.getByRole("button", { name: "Book a College Consulting session" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Buy College Consulting hours" }).getAttribute("href")).toBe(
       "/portal/sat",
@@ -1532,7 +1542,9 @@ describe("authenticated role dashboard flows", () => {
     } as Dashboard;
     render(<FallWelcomeDashboard />);
 
-    expect(screen.getByTestId("client-credit-balance")).toBeTruthy();
+    const credits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
+    expect(credits.open).toBe(false);
+    expect(credits.textContent).toContain("SAT session credits · 1 prepaid hour total");
     expect(screen.getByText("Currently reserved or completed")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Book a SAT session" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Buy more SAT credits/i }).getAttribute("href")).toBe(

@@ -5,14 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
-
-export type DashboardMaterialKind =
-  (typeof DashboardMaterialKind)[keyof typeof DashboardMaterialKind];
-
-export const DashboardMaterialKind = {
-  external_link: "external_link",
-  file_link: "file_link",
-} as const;
+import type { DashboardMaterialKind } from './dashboardMaterialKind';
 
 export interface DashboardMaterial {
   id: string;

@@ -149,7 +149,7 @@ export const GetAdminOverviewResponse = zod.object({
   "assignedStaffUserId": zod.string().nullable(),
   "followUpNotes": zod.string().nullable(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']),
-  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedAt": zod.coerce.date().nullable().describe('When an administrator resolved this public form submission. Null while it should keep alerting.'),
   "resolvedByUserId": zod.string().nullable(),
   "resolvedByName": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -217,7 +217,7 @@ export const UpdateAdminGuidanceRequestBody = zod.object({
   "assignedStaffUserId": zod.string().nullish(),
   "followUpNotes": zod.string().max(updateAdminGuidanceRequestBodyFollowUpNotesMax).nullish(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']).optional(),
-  "resolved": zod.boolean().optional()
+  "resolved": zod.boolean().optional().describe('True marks the submission resolved by the signed-in administrator and clears the alert. False reopens it.')
 })
 
 export const UpdateAdminGuidanceRequestResponse = zod.object({
@@ -244,7 +244,7 @@ export const UpdateAdminGuidanceRequestResponse = zod.object({
   "assignedStaffUserId": zod.string().nullable(),
   "followUpNotes": zod.string().nullable(),
   "conversionStatus": zod.enum(['unqualified', 'qualified', 'converted', 'lost']),
-  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedAt": zod.coerce.date().nullable().describe('When an administrator resolved this public form submission. Null while it should keep alerting.'),
   "resolvedByUserId": zod.string().nullable(),
   "resolvedByName": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -318,7 +318,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })),
   "blocks": zod.array(zod.object({
   "id": zod.string(),
@@ -733,6 +733,14 @@ export const GetAdminClientDashboardResponse = zod.object({
   "latestAttemptId": zod.string().nullish(),
   "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })),
+  "materials": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "url": zod.string(),
+  "kind": zod.enum(['external_link', 'file_link'])
+})).optional().describe('Published session files the student can download, including follow-up notes attached to a meeting.'),
   "recentScores": zod.array(zod.object({
   "label": zod.string(),
   "score": zod.number(),
@@ -803,14 +811,6 @@ export const GetAdminClientDashboardResponse = zod.object({
   "examples": zod.array(zod.string()).optional()
 })).optional()
 })),
-  "materials": zod.array(zod.object({
-  "id": zod.string(),
-  "sessionId": zod.string(),
-  "title": zod.string(),
-  "description": zod.string().nullable(),
-  "url": zod.string(),
-  "kind": zod.enum(['external_link', 'file_link'])
-})).optional(),
   "openReviewCount": zod.number()
 }).and(zod.object({
   "adminPreview": zod.literal(true),
@@ -933,7 +933,7 @@ export const GetAdminClientDashboardResponse = zod.object({
   "title": zod.string(),
   "tagline": zod.string(),
   "biography": zod.string(),
-  "photoUrl": zod.string().nullable(),
+  "photoUrl": zod.string().nullish(),
   "hourlyRateCents": zod.number(),
   "prepaidHours": zod.number(),
   "calendarConnected": zod.boolean()
@@ -1033,7 +1033,7 @@ export const CreateAdminAssignmentResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })
 
 
@@ -1087,7 +1087,7 @@ export const UpdateAdminAssignmentResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })
 
 
@@ -1121,7 +1121,7 @@ export const CloneAdminAssignmentToSessionResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })
 
 
@@ -1424,7 +1424,7 @@ export const GetTutorCurriculumResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })),
   "libraryAssets": zod.array(zod.object({
   "id": zod.string(),
@@ -1547,7 +1547,7 @@ export const CreateTutorReusableQuizResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.enum(['active', 'paused', 'submitted', 'expired']).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })
 
 
@@ -1863,6 +1863,31 @@ export const GetFinancialsResponse = zod.object({
   "referenceType": zod.string().nullish(),
   "referenceId": zod.string().nullish(),
   "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * Returns the signed-in client's own records. A parent viewer sees the linked student. An administrator may pass clientId for a student they can preview. Card numbers, receipt URLs, and provider ids are not included. No live payment-provider request is made.
+ * @summary List one client's stored payments and purchases
+ */
+export const GetBillingHistoryQueryParams = zod.object({
+  "clientId": zod.coerce.string().optional()
+})
+
+export const GetBillingHistoryResponse = zod.object({
+  "readOnly": zod.boolean(),
+  "payments": zod.array(zod.object({
+  "id": zod.string(),
+  "purchasedAt": zod.string(),
+  "label": zod.string(),
+  "service": zod.string(),
+  "tutorName": zod.string().nullish(),
+  "hours": zod.number().nullish(),
+  "sessionTitle": zod.string().nullish(),
+  "sessionStart": zod.string().nullish(),
+  "amountCents": zod.number().nullish(),
+  "status": zod.string()
 }))
 })
 
@@ -2472,6 +2497,14 @@ export const GetDashboardResponse = zod.object({
   "latestAttemptId": zod.string().nullish(),
   "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
 })),
+  "materials": zod.array(zod.object({
+  "id": zod.string(),
+  "sessionId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "url": zod.string(),
+  "kind": zod.enum(['external_link', 'file_link'])
+})).optional().describe('Published session files the student can download, including follow-up notes attached to a meeting.'),
   "recentScores": zod.array(zod.object({
   "label": zod.string(),
   "score": zod.number(),
@@ -2542,14 +2575,6 @@ export const GetDashboardResponse = zod.object({
   "examples": zod.array(zod.string()).optional()
 })).optional()
 })),
-  "materials": zod.array(zod.object({
-  "id": zod.string(),
-  "sessionId": zod.string(),
-  "title": zod.string(),
-  "description": zod.string().nullable(),
-  "url": zod.string(),
-  "kind": zod.enum(['external_link', 'file_link'])
-})).optional(),
   "openReviewCount": zod.number()
 })
 
@@ -2566,7 +2591,11 @@ export const ListBookingTutorsResponseItem = zod.object({
   "tagline": zod.string().nullish(),
   "subjects": zod.array(zod.string()),
   "calendarStatus": zod.string(),
-  "providerStatus": zod.enum(['connected', 'disconnected'])
+  "providerStatus": zod.enum(['connected', 'disconnected']),
+  "hourlyRateCents": zod.number().nullish(),
+  "prepaidHours": zod.number().optional(),
+  "bookable": zod.boolean().optional(),
+  "serviceName": zod.string().nullish()
 })
 export const ListBookingTutorsResponse = zod.array(ListBookingTutorsResponseItem)
 
@@ -2626,7 +2655,7 @@ export const createBookingSessionBodyDurationMinutesDefault = 60;
 export const CreateBookingSessionBody = zod.object({
   "tutorProfileId": zod.string(),
   "startTime": zod.coerce.date(),
-  "durationMinutes": zod.union([zod.literal(60), zod.literal(90), zod.literal(120)]).default(createBookingSessionBodyDurationMinutesDefault)
+  "durationMinutes": zod.union([zod.literal(60),zod.literal(90),zod.literal(120)]).default(createBookingSessionBodyDurationMinutesDefault)
 })
 
 export const CreateBookingSessionResponse = zod.object({
@@ -3398,7 +3427,7 @@ export const StartAttemptResponse = zod.object({
   "prediction": zod.string().nullable(),
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
-  "flagged": zod.boolean(),
+  "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -3521,7 +3550,7 @@ export const GetAttemptResponse = zod.object({
   "prediction": zod.string().nullable(),
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
-  "flagged": zod.boolean(),
+  "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -3887,7 +3916,7 @@ export const SaveAttemptResponseResponse = zod.object({
   "prediction": zod.string().nullable(),
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
-  "flagged": zod.boolean(),
+  "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -3906,17 +3935,17 @@ export const PauseAttemptParams = zod.object({
 
 export const pauseAttemptBodyCurrentQuestionIndexMin = 0;
 
-export const pauseAttemptBodyFinalAnswerMax = 2000;
+export const pauseAttemptBodyResponsesItemFinalAnswerMax = 2000;
 
 
 
 export const PauseAttemptBody = zod.object({
   "currentQuestionIndex": zod.number().min(pauseAttemptBodyCurrentQuestionIndexMin).optional().describe('Zero-based question index to restore when the student resumes.'),
   "responses": zod.array(zod.object({
-    "questionId": zod.string(),
-    "finalAnswer": zod.string().max(pauseAttemptBodyFinalAnswerMax).nullish(),
-    "flagged": zod.boolean().optional()
-  })).optional().describe('In-progress answers to store before the attempt is paused.')
+  "questionId": zod.string(),
+  "finalAnswer": zod.string().max(pauseAttemptBodyResponsesItemFinalAnswerMax).nullish(),
+  "flagged": zod.boolean().optional()
+})).optional().describe('In-progress answers to store before the attempt is paused. Save for later sends these so a selection that has not autosaved yet is kept.\n')
 })
 
 export const pauseAttemptResponseCurrentQuestionIndexMin = 0;
@@ -3938,7 +3967,7 @@ export const PauseAttemptResponse = zod.object({
   "prediction": zod.string().nullable(),
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
-  "flagged": zod.boolean(),
+  "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),
@@ -4061,7 +4090,7 @@ export const ResumeAttemptResponse = zod.object({
   "prediction": zod.string().nullable(),
   "predictionLocked": zod.boolean(),
   "finalAnswer": zod.string().nullable(),
-  "flagged": zod.boolean(),
+  "flagged": zod.boolean().describe('Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored.\n'),
   "savedAt": zod.coerce.date().optional(),
   "revealed": zod.boolean().optional(),
   "correct": zod.boolean().nullish(),

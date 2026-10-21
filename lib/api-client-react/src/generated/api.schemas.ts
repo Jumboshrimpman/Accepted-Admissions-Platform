@@ -140,6 +140,29 @@ export interface FinancialSummary {
   credits: CreditLedgerEntry[];
 }
 
+export interface BillingHistoryPayment {
+  id: string;
+  purchasedAt: string;
+  label: string;
+  service: string;
+  /** @nullable */
+  tutorName?: string | null;
+  /** @nullable */
+  hours?: number | null;
+  /** @nullable */
+  sessionTitle?: string | null;
+  /** @nullable */
+  sessionStart?: string | null;
+  /** @nullable */
+  amountCents?: number | null;
+  status: string;
+}
+
+export interface BillingHistory {
+  readOnly: boolean;
+  payments: BillingHistoryPayment[];
+}
+
 export interface CheckoutInput {
   productId: string;
 }
@@ -382,9 +405,11 @@ export interface BookingTutor {
   subjects: string[];
   calendarStatus: string;
   providerStatus: BookingTutorProviderStatus;
+  /** @nullable */
   hourlyRateCents?: number | null;
   prepaidHours?: number;
   bookable?: boolean;
+  /** @nullable */
   serviceName?: string | null;
 }
 
@@ -788,9 +813,9 @@ export interface AdminGuidanceRequest {
   followUpNotes: string | null;
   conversionStatus: AdminGuidanceConversionStatus;
   /**
-   * When an administrator resolved this public form submission. Null while it should keep alerting.
-   * @nullable
-   */
+     * When an administrator resolved this public form submission. Null while it should keep alerting.
+     * @nullable
+     */
   resolvedAt: string | null;
   /** @nullable */
   resolvedByUserId: string | null;
@@ -854,50 +879,6 @@ export interface AdminOverview {
   notifications: AdminNotification[];
   /** Conflicting role categories only; identity values are intentionally omitted. */
   accessConflicts: AdminOverviewAccessConflictsItem[];
-  consultingProvision?: {
-    nikaEmail: string;
-    nikaClerkUserId: string | null;
-    nikaBookable?: boolean;
-    nikaSkipReason?: string | null;
-    neelLinked: boolean;
-    neelUserId: string;
-    neelEmail: string | null;
-    neelStoppedReason: string | null;
-    neelEmailOwner?: {
-      userId: string;
-      role: string;
-      displayName: string;
-      email: string;
-    } | null;
-    victoriaLinked: boolean;
-    victoriaUserId: string;
-    victoriaPlaceholderEmail: string;
-    victoriaIntendedEmail: string;
-    victoriaEmail: string | null;
-    victoriaStoppedReason: string | null;
-    victoriaEmailOwner?: {
-      userId: string;
-      role: string;
-      displayName: string;
-      email: string;
-    } | null;
-  };
-  sharedMeetOverlaps?: {
-    overlapKey: string;
-    leftSessionId: string;
-    rightSessionId: string;
-    leftTitle: string;
-    rightTitle: string;
-    start: string;
-    end: string;
-  }[];
-  /** Tutors who still have upcoming bookable time and need Google Calendar reconnected. */
-  calendarReconnectAlerts?: {
-    tutorProfileId: string;
-    name: string;
-    estimatedTokenAgeDays?: number | null;
-    testingModeExpiryWarning?: string | null;
-  }[];
 }
 
 export type AdminNotificationUpdateStatus = typeof AdminNotificationUpdateStatus[keyof typeof AdminNotificationUpdateStatus];
@@ -1163,6 +1144,19 @@ export const AdminAssignmentStatus = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
+export type AdminAssignmentLatestAttemptStatus = typeof AdminAssignmentLatestAttemptStatus[keyof typeof AdminAssignmentLatestAttemptStatus] | null;
+
+
+export const AdminAssignmentLatestAttemptStatus = {
+  active: 'active',
+  paused: 'paused',
+  submitted: 'submitted',
+  expired: 'expired',
+} as const;
+
 export interface AdminAssignment {
   id: string;
   courseId: string;
@@ -1184,8 +1178,8 @@ export interface AdminAssignment {
   submissionCount: number;
   /** @nullable */
   latestAttemptId?: string | null;
-  /** Latest attempt for the session student. Paused and active are both in progress. */
-  latestAttemptStatus?: "active" | "paused" | "submitted" | "expired" | null;
+  /** @nullable */
+  latestAttemptStatus?: AdminAssignmentLatestAttemptStatus;
 }
 
 export type AdminAssignmentInputDeliveryPhase = typeof AdminAssignmentInputDeliveryPhase[keyof typeof AdminAssignmentInputDeliveryPhase];
@@ -1734,6 +1728,33 @@ export type CurriculumSession = Session & ({
   latestResult: CurriculumSessionLatestResult;
 });
 
+export type DashboardMaterialKind = typeof DashboardMaterialKind[keyof typeof DashboardMaterialKind];
+
+
+export const DashboardMaterialKind = {
+  external_link: 'external_link',
+  file_link: 'file_link',
+} as const;
+
+export interface DashboardMaterial {
+  id: string;
+  sessionId: string;
+  title: string;
+  /** @nullable */
+  description: string | null;
+  url: string;
+  kind: DashboardMaterialKind;
+}
+
+export type DashboardCreditsCollegeConsultingTutorsItem = {
+  tutorKey: string;
+  name: string;
+  hourlyRateCents: number;
+  prepaidHours: number;
+  productSlug: string;
+  calendarConnected: boolean;
+};
+
 export interface DashboardCredits {
   purchasedHours: number;
   usedHours: number;
@@ -1741,14 +1762,7 @@ export interface DashboardCredits {
   readOnly: boolean;
   selfServeSatBooking: boolean;
   selfServeCollegeConsulting?: boolean;
-  collegeConsultingTutors?: {
-    tutorKey: string;
-    name: string;
-    hourlyRateCents: number;
-    prepaidHours: number;
-    productSlug: string;
-    calendarConnected: boolean;
-  }[];
+  collegeConsultingTutors?: DashboardCreditsCollegeConsultingTutorsItem[];
   /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }
@@ -1812,24 +1826,6 @@ export type DashboardRecentScoresItem = {
   date: string;
 };
 
-export type DashboardMaterialKind = typeof DashboardMaterialKind[keyof typeof DashboardMaterialKind];
-
-
-export const DashboardMaterialKind = {
-  external_link: 'external_link',
-  file_link: 'file_link',
-} as const;
-
-export interface DashboardMaterial {
-  id: string;
-  sessionId: string;
-  title: string;
-  /** @nullable */
-  description: string | null;
-  url: string;
-  kind: DashboardMaterialKind;
-}
-
 export interface Dashboard {
   user: CurrentUser;
   welcomeMessage?: string;
@@ -1879,14 +1875,25 @@ export interface AdminClientPreviewBooking {
   sessions: BookingSession[];
 }
 
+export type AdminClientPreviewConsultingTutorTutorKey = typeof AdminClientPreviewConsultingTutorTutorKey[keyof typeof AdminClientPreviewConsultingTutorTutorKey];
+
+
+export const AdminClientPreviewConsultingTutorTutorKey = {
+  nika: 'nika',
+  victoria: 'victoria',
+  xavier: 'xavier',
+  eunice: 'eunice',
+} as const;
+
 export interface AdminClientPreviewConsultingTutor {
-  tutorKey: "nika" | "victoria" | "xavier" | "eunice";
+  tutorKey: AdminClientPreviewConsultingTutorTutorKey;
   id: string;
   name: string;
   title: string;
   tagline: string;
   biography: string;
-  photoUrl: string | null;
+  /** @nullable */
+  photoUrl?: string | null;
   hourlyRateCents: number;
   prepaidHours: number;
   calendarConnected: boolean;
@@ -2116,7 +2123,7 @@ export interface SessionHomework {
   attemptStatus: SessionHomeworkAttemptStatus;
   /** @nullable */
   score: number | null;
-  /** Present for the assigned tutor and administrators. */
+  /** @nullable */
   submittedAt?: string | null;
   mistakeCount: number;
   analysis: AttemptAnalysis | null;
@@ -2306,6 +2313,7 @@ export interface AttemptResponse {
   predictionLocked: boolean;
   /** @nullable */
   finalAnswer: string | null;
+  /** Review mark for the current question. The student stays in the quiz and can return to it. The answer is still scored. */
   flagged: boolean;
   savedAt?: string;
   revealed?: boolean;
@@ -2357,12 +2365,15 @@ export interface TimerEvent {
   at: string;
 }
 
-export interface AttemptProgressResponseInput {
+export type AttemptProgressInputResponsesItem = {
   questionId: string;
-  /** @nullable */
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
   finalAnswer?: string | null;
   flagged?: boolean;
-}
+};
 
 export interface AttemptProgressInput {
   /**
@@ -2370,8 +2381,8 @@ export interface AttemptProgressInput {
      * @minimum 0
      */
   currentQuestionIndex?: number;
-  /** In-progress answers to store before the attempt is paused. */
-  responses?: AttemptProgressResponseInput[];
+  /** In-progress answers to store before the attempt is paused. Save for later sends these so a selection that has not autosaved yet is kept. */
+  responses?: AttemptProgressInputResponsesItem[];
 }
 
 export type AttemptStatus = typeof AttemptStatus[keyof typeof AttemptStatus];
@@ -3357,6 +3368,10 @@ export type ResetFirstSatPreworkBody = {
 
 export type ResetSessionPreworkBody = {
   reassignDiagnostic?: boolean;
+};
+
+export type GetBillingHistoryParams = {
+clientId?: string;
 };
 
 export type GetBookingAvailabilityParams = {

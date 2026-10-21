@@ -25,6 +25,12 @@ vi.mock("@workspace/api-client-react", () => ({
     data: null,
     isLoading: false,
   }),
+  getGetBillingHistoryQueryKey: () => ["billing-history"],
+  useGetBillingHistory: () => ({
+    data: { readOnly: true, payments: [] },
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 import AdminClientPreview from "./client-preview";
@@ -986,7 +992,25 @@ describe("administrator client preview", () => {
 
     render(<AdminClientPreview />);
 
-    expect(screen.getByTestId("consulting-preview-dashboard").textContent).toContain("Welcome back, Neel.");
+    const consultingDashboard = screen.getByTestId("consulting-preview-dashboard");
+    const sectionText = consultingDashboard.textContent ?? "";
+    expect(consultingDashboard.firstElementChild).toBe(screen.getByTestId("consulting-preview-sessions"));
+    expect(sectionText.indexOf("Upcoming sessions")).toBeLessThan(sectionText.indexOf("Welcome back, Neel."));
+    expect(sectionText.indexOf("Welcome back, Neel.")).toBeLessThan(sectionText.indexOf("College Consulting credits"));
+    expect(sectionText.indexOf("College Consulting credits")).toBeLessThan(sectionText.indexOf("Billing history"));
+    expect(sectionText.indexOf("Billing history")).toBeLessThan(sectionText.indexOf("Tutors"));
+    const credits = screen.getByTestId("consulting-preview-credits") as HTMLDetailsElement;
+    expect(credits.open).toBe(false);
+    expect(credits.textContent).toContain("College Consulting credits · 1 prepaid hour total");
+    const billing = screen.getByTestId("billing-history") as HTMLDetailsElement;
+    expect(billing.open).toBe(false);
+    expect(billing.textContent).toContain("Billing history (0 payments)");
+    fireEvent.click(billing.querySelector("summary")!);
+    expect(billing.open).toBe(true);
+    expect(screen.getByTestId("billing-history-empty").textContent).toContain(
+      "No payments or purchases are on file.",
+    );
+    expect(sectionText).toContain("Welcome back, Neel.");
     expect(screen.queryByText(/Each tutor keeps their own hours/i)).toBeNull();
     expect(screen.queryByText(/Hours do not transfer between tutors/i)).toBeNull();
     expect(screen.queryByText(/Nika is \$100\/hour/)).toBeNull();

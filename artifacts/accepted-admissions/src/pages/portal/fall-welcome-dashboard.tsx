@@ -10,6 +10,7 @@ import {
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, ExternalLink, Eye, FileText, Sparkles, Target } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { BillingHistorySection } from "@/pages/portal/billing-history";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -357,14 +358,14 @@ export function ClientDashboardView({
       )}
 
       {showPurchaseCard ? (
-        <Card data-testid="client-credit-balance">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
+        <details className="rounded-2xl border bg-card" data-testid="client-credit-balance">
+          <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
+            <span className="inline-flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
-              {collegeConsulting ? "College Consulting credits" : "SAT session credits"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+              {collegeConsulting ? "College Consulting credits" : "SAT session credits"} · {dashboard.credits.purchasedHours} prepaid hour{dashboard.credits.purchasedHours === 1 ? "" : "s"} total
+            </span>
+          </summary>
+          <div className="space-y-3 border-t px-5 py-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Purchased</p>
@@ -466,8 +467,12 @@ export function ClientDashboardView({
                 ) : null}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </details>
+      ) : null}
+
+      {!offPlatformBilling && dashboard.user.role !== "viewer" ? (
+        <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
       ) : null}
 
       {studentSatCommerce && showSelfServeBooking ? (

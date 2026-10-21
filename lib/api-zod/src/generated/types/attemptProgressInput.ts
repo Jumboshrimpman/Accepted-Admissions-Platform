@@ -5,13 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
-
-export interface AttemptProgressResponseInput {
-  questionId: string;
-  /** @nullable */
-  finalAnswer?: string | null;
-  flagged?: boolean;
-}
+import type { AttemptProgressInputResponsesItem } from './attemptProgressInputResponsesItem';
 
 export interface AttemptProgressInput {
   /**
@@ -19,6 +13,6 @@ export interface AttemptProgressInput {
      * @minimum 0
      */
   currentQuestionIndex?: number;
-  /** In-progress answers to store before the attempt is paused. */
-  responses?: AttemptProgressResponseInput[];
+  /** In-progress answers to store before the attempt is paused. Save for later sends these so a selection that has not autosaved yet is kept. */
+  responses?: AttemptProgressInputResponsesItem[];
 }

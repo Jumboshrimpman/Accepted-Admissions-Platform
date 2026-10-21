@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AdminClientDashboard } from "@workspace/api-client-react";
 import { CalendarClock, Eye } from "lucide-react";
+import { BillingHistorySection } from "@/pages/portal/billing-history";
 import {
   CONSULTING_TUTOR_PHOTO_CLASS,
   consultingCreditsTutorLabel,
@@ -91,63 +92,10 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
     (left, right) => new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime(),
   );
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
+  const prepaidHoursTotal = tutors.reduce((sum, tutor) => sum + tutor.prepaidHours, 0);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-8" data-testid="consulting-preview-dashboard">
-      <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white sm:px-9">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">College Consulting</p>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Welcome back, {firstName}.</h2>
-      </section>
-
-      <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <Eye className="mt-0.5 h-5 w-5 shrink-0" />
-        <div>
-          <p className="font-semibold">Read-only College Consulting preview</p>
-          <p className="mt-1 text-amber-800" data-testid="consulting-preview-readonly">
-            Booking, checkout, and email stay off. This view does not change the calendar.
-          </p>
-        </div>
-      </div>
-
-      <Card data-testid="consulting-preview-credits">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">College Consulting credits</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {tutors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No College Consulting credits are on file.</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-3">
-              {tutors.map((tutor: ConsultingPreviewTutorCard) => (
-                <div key={tutor.tutorKey} className="rounded-xl border p-4" data-testid={`consulting-preview-credit-${tutor.tutorKey}`}>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {consultingCreditsTutorLabel(tutor.name)}
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold">{tutor.prepaidHours}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {tutor.prepaidHours === 0 ? "No prepaid hours yet" : "Prepaid hours"} · {dollars(tutor.hourlyRateCents)}/hr
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card data-testid="consulting-preview-tutors">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Tutors</CardTitle>
-          <CardDescription>Taglines and bios match the student booking cards. Choosing a time is disabled here.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {tutors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">College Consulting tutors are not available in this preview.</p>
-          ) : (
-            tutors.map((tutor: ConsultingPreviewTutorCard) => <TutorPreviewCard key={tutor.tutorKey} tutor={tutor} />)
-          )}
-        </CardContent>
-      </Card>
-
       <Card data-testid="consulting-preview-sessions">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -172,6 +120,62 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
                 </li>
               ))}
             </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white sm:px-9">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">College Consulting</p>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight">Welcome back, {firstName}.</h2>
+      </section>
+
+      <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <Eye className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <p className="font-semibold">Read-only College Consulting preview</p>
+          <p className="mt-1 text-amber-800" data-testid="consulting-preview-readonly">
+            Booking, checkout, and email stay off. This view does not change the calendar.
+          </p>
+        </div>
+      </div>
+
+      <details className="rounded-2xl border bg-card" data-testid="consulting-preview-credits">
+        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
+          College Consulting credits · {prepaidHoursTotal} prepaid hour{prepaidHoursTotal === 1 ? "" : "s"} total
+        </summary>
+        <div className="space-y-3 border-t px-5 py-4">
+          {tutors.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No College Consulting credits are on file.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {tutors.map((tutor: ConsultingPreviewTutorCard) => (
+                <div key={tutor.tutorKey} className="rounded-xl border p-4" data-testid={`consulting-preview-credit-${tutor.tutorKey}`}>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {consultingCreditsTutorLabel(tutor.name)}
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">{tutor.prepaidHours}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {tutor.prepaidHours === 0 ? "No prepaid hours yet" : "Prepaid hours"} · {dollars(tutor.hourlyRateCents)}/hr
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </details>
+
+      <BillingHistorySection clientId={dashboard.user.id} />
+
+      <Card data-testid="consulting-preview-tutors">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Tutors</CardTitle>
+          <CardDescription>Taglines and bios match the student booking cards. Choosing a time is disabled here.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {tutors.length === 0 ? (
+            <p className="text-sm text-muted-foreground">College Consulting tutors are not available in this preview.</p>
+          ) : (
+            tutors.map((tutor: ConsultingPreviewTutorCard) => <TutorPreviewCard key={tutor.tutorKey} tutor={tutor} />)
           )}
         </CardContent>
       </Card>

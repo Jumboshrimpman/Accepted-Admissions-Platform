@@ -811,6 +811,31 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/FinancialSummary" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /billing-history:
+    get:
+      operationId: getBillingHistory
+      tags: [portal]
+      summary: List one client's stored payments and purchases
+      description: >
+        Returns the signed-in client's own records. A parent viewer sees the linked
+        student. An administrator may pass clientId for a student they can preview.
+        Card numbers, receipt URLs, and provider ids are not included. No live
+        payment-provider request is made.
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Billing history for one client
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingHistory" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /payments/checkout:
     post:
       operationId: createPaymentCheckout
@@ -2315,6 +2340,28 @@ components:
         credits:
           type: array
           items: { $ref: "#/components/schemas/CreditLedgerEntry" }
+    BillingHistory:
+      type: object
+      required: [readOnly, payments]
+      properties:
+        readOnly: { type: boolean }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/BillingHistoryPayment" }
+    BillingHistoryPayment:
+      type: object
+      required: [id, purchasedAt, label, service, status]
+      properties:
+        id: { type: string }
+        purchasedAt: { type: string }
+        label: { type: string }
+        service: { type: string }
+        tutorName: { type: ["string", "null"] }
+        hours: { type: ["number", "null"] }
+        sessionTitle: { type: ["string", "null"] }
+        sessionStart: { type: ["string", "null"] }
+        amountCents: { type: ["number", "null"] }
+        status: { type: string }
     CheckoutInput:
       type: object
       required: [productId]
