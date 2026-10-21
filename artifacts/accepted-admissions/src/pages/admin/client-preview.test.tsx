@@ -999,6 +999,9 @@ describe("administrator client preview", () => {
     expect(sectionText.indexOf("Welcome back, Neel.")).toBeLessThan(sectionText.indexOf("College Consulting credits"));
     expect(sectionText.indexOf("College Consulting credits")).toBeLessThan(sectionText.indexOf("Billing history"));
     expect(sectionText.indexOf("Billing history")).toBeLessThan(sectionText.indexOf("Tutors"));
+    const credits = screen.getByTestId("consulting-preview-credits") as HTMLDetailsElement;
+    expect(credits.open).toBe(false);
+    expect(credits.textContent).toContain("College Consulting credits · 1 prepaid hour total");
     const billing = screen.getByTestId("billing-history") as HTMLDetailsElement;
     expect(billing.open).toBe(false);
     expect(billing.textContent).toContain("Billing history (0 payments)");

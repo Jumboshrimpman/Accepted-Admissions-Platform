@@ -92,6 +92,7 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
     (left, right) => new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime(),
   );
   const firstName = dashboard.user.displayName.trim().split(/\s+/)[0] || "there";
+  const prepaidHoursTotal = tutors.reduce((sum, tutor) => sum + tutor.prepaidHours, 0);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-8" data-testid="consulting-preview-dashboard">
@@ -138,11 +139,11 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
         </div>
       </div>
 
-      <Card data-testid="consulting-preview-credits">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">College Consulting credits</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <details className="rounded-2xl border bg-card" data-testid="consulting-preview-credits">
+        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
+          College Consulting credits · {prepaidHoursTotal} prepaid hour{prepaidHoursTotal === 1 ? "" : "s"} total
+        </summary>
+        <div className="space-y-3 border-t px-5 py-4">
           {tutors.length === 0 ? (
             <p className="text-sm text-muted-foreground">No College Consulting credits are on file.</p>
           ) : (
@@ -160,8 +161,8 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       <BillingHistorySection clientId={dashboard.user.id} />
 
