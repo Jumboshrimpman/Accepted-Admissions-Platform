@@ -471,7 +471,9 @@ export function ClientDashboardView({
         </details>
       ) : null}
 
-      <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
+      {!offPlatformBilling && dashboard.user.role !== "viewer" ? (
+        <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
+      ) : null}
 
       {studentSatCommerce && showSelfServeBooking ? (
         <BookingCard
