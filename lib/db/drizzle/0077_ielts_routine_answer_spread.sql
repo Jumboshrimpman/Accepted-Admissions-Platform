@@ -2,6 +2,9 @@
 -- Only question rows attached to those two English sessions are rewritten.
 -- Choice text stays the same; letters follow the new order, including responses
 -- and submitted result snapshots on those sessions. A second run is a no-op.
+-- A question also linked to a non-target session, or to an assignment with no
+-- session, is left alone. A stored key is rewritten only when that letter's
+-- choice text is the new key's choice text.
 -- Sessions, invites, calendar events, tutors, and the question bank are not updated.
 
 DO $spread$
@@ -77,8 +80,7 @@ BEGIN
     FROM assignment_questions AS other_aq
     JOIN assignments AS other_a ON other_a.id = other_aq.assignment_id
     WHERE other_aq.question_id = q.id
-      AND other_a.session_id IS NOT NULL
-      AND other_a.session_id NOT IN (SELECT id FROM ielts_routine_target_sessions)
+      AND (other_a.session_id IS NULL OR other_a.session_id NOT IN (SELECT id FROM ielts_routine_target_sessions))
   );
 
   FOR question_row IN
@@ -97,6 +99,15 @@ BEGIN
       ) = (
         SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
         FROM jsonb_array_elements(target.new_choices) AS elem
+      )
+      AND (
+        SELECT elem->>'text'
+        FROM jsonb_array_elements(q.choices) AS elem
+        WHERE elem->>'id' = lower(trim(q.correct_answer))
+      ) = (
+        SELECT elem->>'text'
+        FROM jsonb_array_elements(target.new_choices) AS elem
+        WHERE elem->>'id' = target.new_correct
       )
     ORDER BY q.id
   LOOP

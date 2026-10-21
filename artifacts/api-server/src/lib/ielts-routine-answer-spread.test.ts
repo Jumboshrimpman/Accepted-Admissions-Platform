@@ -349,3 +349,268 @@ test("0077 remaps only Nov 13 and Dec 4 English question rows", async (t) => {
     client.release();
   }
 });
+
+test("0077 leaves a question shared with a session_id NULL assignment untouched", async (t) => {
+  if (!process.env.DATABASE_URL) {
+    t.skip("DATABASE_URL is required");
+    return;
+  }
+  const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
+  const client = await pool.connect();
+  const suffix = `routine-null-session-${Date.now()}`;
+  try {
+    await client.query("BEGIN");
+    const existingTaito = await client.query<{ id: string }>(
+      `select id from users where lower(trim(email)) = 'taito0525@gmail.com' limit 1`,
+    );
+    const taito =
+      existingTaito.rows[0] ??
+      (
+        await client.query<{ id: string }>(
+          `insert into users (clerk_user_id, email, display_name)
+           values ($1, 'taito0525@gmail.com', 'Taito')
+           returning id`,
+          [`clerk-taito-${suffix}`],
+        )
+      ).rows[0]!;
+    const tutor = await client.query<{ id: string }>(
+      `insert into users (clerk_user_id, email, display_name)
+       values ($1, $2, 'Tutor Example')
+       returning id`,
+      [`clerk-tutor-${suffix}`, `tutor-${suffix}@example.invalid`],
+    );
+    const course = await client.query<{ id: string }>(
+      `insert into courses (title, subject, term)
+       values ('English', 'IELTS', '2026')
+       returning id`,
+    );
+    const november = await client.query<{ id: string }>(
+      `insert into sessions (
+         course_id, client_user_id, tutor_user_id, date_time, timezone, subject, title
+       )
+       values (
+         $1, $2, $3, '2026-11-13T12:00:00Z', 'Asia/Tokyo', 'IELTS', 'November English'
+       )
+       returning id`,
+      [course.rows[0]!.id, taito.id, tutor.rows[0]!.id],
+    );
+    const shared = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values ('IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'b', 'Stored explanation.')
+       returning id`,
+      [novemberPrompt, JSON.stringify(oldNovemberChoices)],
+    );
+    const onlyNovember = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values ('IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'b', 'Stored explanation.')
+       returning id`,
+      [novemberPrompt, JSON.stringify(oldNovemberChoices)],
+    );
+    const novemberAssignment = await client.query<{ id: string }>(
+      `insert into assignments (course_id, session_id, title, subject, instructions, status, time_limit_minutes)
+       values ($1, $2, 'Nov pre-work', 'IELTS', 'Read', 'published', 20)
+       returning id`,
+      [course.rows[0]!.id, november.rows[0]!.id],
+    );
+    const unscheduled = await client.query<{ id: string }>(
+      `insert into assignments (course_id, session_id, title, subject, instructions, status, time_limit_minutes)
+       values ($1, null, 'Unscheduled copy', 'IELTS', 'Read', 'published', 20)
+       returning id`,
+      [course.rows[0]!.id],
+    );
+    await client.query(
+      `insert into assignment_questions (assignment_id, question_id, position)
+       values ($1, $2, 0), ($3, $2, 0), ($1, $4, 1)`,
+      [novemberAssignment.rows[0]!.id, shared.rows[0]!.id, unscheduled.rows[0]!.id, onlyNovember.rows[0]!.id],
+    );
+    const nullAttempt = await client.query<{ id: string }>(
+      `insert into attempts (assignment_id, user_id, status, result)
+       values ($1, $2, 'submitted', $3::jsonb)
+       returning id`,
+      [
+        unscheduled.rows[0]!.id,
+        taito.id,
+        JSON.stringify({
+          items: [
+            {
+              questionId: shared.rows[0]!.id,
+              finalAnswer: "b",
+              correctAnswer: "b",
+              choices: oldNovemberChoices,
+            },
+          ],
+        }),
+      ],
+    );
+    await client.query(
+      `insert into responses (attempt_id, question_id, final_answer, prediction, correct)
+       values ($1, $2, 'b', 'b', true)`,
+      [nullAttempt.rows[0]!.id, shared.rows[0]!.id],
+    );
+
+    await client.query(sql);
+    await client.query(sql);
+
+    const sharedRow = await client.query<{ correct_answer: string; choices: unknown }>(
+      `select correct_answer, choices from questions where id = $1`,
+      [shared.rows[0]!.id],
+    );
+    assert.equal(sharedRow.rows[0]?.correct_answer, "b");
+    assert.deepEqual(sharedRow.rows[0]?.choices, oldNovemberChoices);
+    const sharedResponse = await client.query<{ final_answer: string }>(
+      `select final_answer from responses where attempt_id = $1 and question_id = $2`,
+      [nullAttempt.rows[0]!.id, shared.rows[0]!.id],
+    );
+    assert.equal(sharedResponse.rows[0]?.final_answer, "b");
+    const stored = await client.query<{ result: { items: Array<Record<string, unknown>> } }>(
+      `select result from attempts where id = $1`,
+      [nullAttempt.rows[0]!.id],
+    );
+    assert.equal(stored.rows[0]?.result.items[0]?.finalAnswer, "b");
+    assert.equal(stored.rows[0]?.result.items[0]?.correctAnswer, "b");
+
+    const rewritten = await client.query<{ correct_answer: string }>(
+      `select correct_answer from questions where id = $1`,
+      [onlyNovember.rows[0]!.id],
+    );
+    assert.equal(rewritten.rows[0]?.correct_answer, "c");
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
+});
+
+test("0077 leaves a row whose stored key disagrees with the bank untouched", async (t) => {
+  if (!process.env.DATABASE_URL) {
+    t.skip("DATABASE_URL is required");
+    return;
+  }
+  const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
+  const client = await pool.connect();
+  const suffix = `routine-key-mismatch-${Date.now()}`;
+  try {
+    await client.query("BEGIN");
+    const existingTaito = await client.query<{ id: string }>(
+      `select id from users where lower(trim(email)) = 'taito0525@gmail.com' limit 1`,
+    );
+    const taito =
+      existingTaito.rows[0] ??
+      (
+        await client.query<{ id: string }>(
+          `insert into users (clerk_user_id, email, display_name)
+           values ($1, 'taito0525@gmail.com', 'Taito')
+           returning id`,
+          [`clerk-taito-${suffix}`],
+        )
+      ).rows[0]!;
+    const tutor = await client.query<{ id: string }>(
+      `insert into users (clerk_user_id, email, display_name)
+       values ($1, $2, 'Tutor Example')
+       returning id`,
+      [`clerk-tutor-${suffix}`, `tutor-${suffix}@example.invalid`],
+    );
+    const course = await client.query<{ id: string }>(
+      `insert into courses (title, subject, term)
+       values ('English', 'IELTS', '2026')
+       returning id`,
+    );
+    const november = await client.query<{ id: string }>(
+      `insert into sessions (
+         course_id, client_user_id, tutor_user_id, date_time, timezone, subject, title
+       )
+       values (
+         $1, $2, $3, '2026-11-13T12:00:00Z', 'Asia/Tokyo', 'IELTS', 'November English'
+       )
+       returning id`,
+      [course.rows[0]!.id, taito.id, tutor.rows[0]!.id],
+    );
+    const disagreed = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values ('IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'a', 'Stored explanation.')
+       returning id`,
+      [novemberPrompt, JSON.stringify(oldNovemberChoices)],
+    );
+    const agreed = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values ('IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'b', 'Stored explanation.')
+       returning id`,
+      [novemberPrompt, JSON.stringify(oldNovemberChoices)],
+    );
+    const assignment = await client.query<{ id: string }>(
+      `insert into assignments (course_id, session_id, title, subject, instructions, status, time_limit_minutes)
+       values ($1, $2, 'Nov pre-work', 'IELTS', 'Read', 'published', 20)
+       returning id`,
+      [course.rows[0]!.id, november.rows[0]!.id],
+    );
+    await client.query(
+      `insert into assignment_questions (assignment_id, question_id, position)
+       values ($1, $2, 0), ($1, $3, 1)`,
+      [assignment.rows[0]!.id, disagreed.rows[0]!.id, agreed.rows[0]!.id],
+    );
+    const attempt = await client.query<{ id: string }>(
+      `insert into attempts (assignment_id, user_id, status, result)
+       values ($1, $2, 'submitted', $3::jsonb)
+       returning id`,
+      [
+        assignment.rows[0]!.id,
+        taito.id,
+        JSON.stringify({
+          items: [
+            {
+              questionId: disagreed.rows[0]!.id,
+              finalAnswer: "a",
+              correctAnswer: "a",
+              choices: oldNovemberChoices,
+            },
+          ],
+        }),
+      ],
+    );
+    await client.query(
+      `insert into responses (attempt_id, question_id, final_answer, prediction, correct)
+       values ($1, $2, 'a', 'a', false)`,
+      [attempt.rows[0]!.id, disagreed.rows[0]!.id],
+    );
+
+    await client.query(sql);
+    await client.query(sql);
+
+    const disagreedRow = await client.query<{ correct_answer: string; choices: unknown }>(
+      `select correct_answer, choices from questions where id = $1`,
+      [disagreed.rows[0]!.id],
+    );
+    assert.equal(disagreedRow.rows[0]?.correct_answer, "a");
+    assert.deepEqual(disagreedRow.rows[0]?.choices, oldNovemberChoices);
+    const disagreedResponse = await client.query<{ final_answer: string; prediction: string }>(
+      `select final_answer, prediction from responses where attempt_id = $1 and question_id = $2`,
+      [attempt.rows[0]!.id, disagreed.rows[0]!.id],
+    );
+    assert.equal(disagreedResponse.rows[0]?.final_answer, "a");
+    assert.equal(disagreedResponse.rows[0]?.prediction, "a");
+    const stored = await client.query<{ result: { items: Array<Record<string, unknown>> } }>(
+      `select result from attempts where id = $1`,
+      [attempt.rows[0]!.id],
+    );
+    assert.equal(stored.rows[0]?.result.items[0]?.finalAnswer, "a");
+    assert.equal(stored.rows[0]?.result.items[0]?.correctAnswer, "a");
+    assert.deepEqual(stored.rows[0]?.result.items[0]?.choices, oldNovemberChoices);
+
+    const agreedRow = await client.query<{ correct_answer: string; choices: Array<{ id: string; text: string }> }>(
+      `select correct_answer, choices from questions where id = $1`,
+      [agreed.rows[0]!.id],
+    );
+    assert.equal(agreedRow.rows[0]?.correct_answer, "c");
+    assert.equal(agreedRow.rows[0]?.choices.find((choice) => choice.id === "c")?.text, correctText);
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
+});
