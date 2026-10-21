@@ -221,9 +221,16 @@ import {
   isBookablePortalDuration,
   satTutorWeeklyHours,
   type AvailabilityRule,
+  type AvailabilityWindow,
   type BusyWindow,
   type CalendarInviteParty,
 } from "../lib/booking";
+import {
+  mergeDateHours,
+  selfServeDateHoursError,
+  selfServeDateHoursView,
+  tutorMayEditOwnDateHours,
+} from "../lib/self-serve-availability";
 import {
   SHARED_FALL_MEETING_URL,
   TAITO_FALL_2026_SESSIONS,
@@ -2064,6 +2071,9 @@ async function ensureUpgradeSeedData(): Promise<void> {
       .from(availabilityRulesTable)
       .where(eq(availabilityRulesTable.tutorProfileId, tutor.id))
       .limit(1);
+    // Per-date windows are edited by an administrator or by a tutor on the
+    // self-serve allowlist. Startup leaves that column alone so a later edit
+    // is not replaced by the original pinned map.
     const weeklyHours = satTutorWeeklyHours(tutor.name);
     if (!rule) {
       await db.insert(availabilityRulesTable).values({
@@ -6721,6 +6731,121 @@ router.put(
       .where(eq(availabilityRulesTable.tutorProfileId, tutorId))
       .limit(1);
     res.json(readBack ?? saved);
+  },
+);
+
+async function selfServeAvailabilityTutor(req: AuthedRequest) {
+  if (req.temporaryTutorAlias) return null;
+  const profile = await resolveCalendarProfileForUser(req.appUser!, undefined, false);
+  if (!profile || !tutorMayEditOwnDateHours(profile.id)) return null;
+  return profile;
+}
+
+function storedDateHours(value: unknown): Record<string, AvailabilityWindow[]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, AvailabilityWindow[]>;
+}
+
+router.get(
+  "/tutor/date-hours",
+  requireAppUser,
+  ensureRole(["tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const profile = await selfServeAvailabilityTutor(req);
+    if (!profile) {
+      res.status(403).json({ error: "You cannot edit booking availability." });
+      return;
+    }
+    const [rule] = await db
+      .select({
+        timezone: availabilityRulesTable.timezone,
+        dateHours: availabilityRulesTable.dateHours,
+      })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+      .limit(1);
+    if (!rule) {
+      res.status(404).json({ error: "This tutor has no availability rule." });
+      return;
+    }
+    res.json(
+      selfServeDateHoursView({
+        tutorProfileId: profile.id,
+        timezone: rule.timezone,
+        dateHours: storedDateHours(rule.dateHours),
+      }),
+    );
+  },
+);
+
+router.put(
+  "/tutor/date-hours",
+  requireAppUser,
+  ensureRole(["tutor"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const profile = await selfServeAvailabilityTutor(req);
+    if (!profile) {
+      res.status(403).json({ error: "You cannot edit booking availability." });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const parsed = parseDateHours(body.dateHours);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+    if (Object.keys(parsed.dateHours).length === 0) {
+      res.status(400).json({ error: "Choose a date to update." });
+      return;
+    }
+    const [rule] = await db
+      .select({
+        timezone: availabilityRulesTable.timezone,
+        dateHours: availabilityRulesTable.dateHours,
+      })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+      .limit(1);
+    if (!rule) {
+      res.status(404).json({ error: "This tutor has no availability rule." });
+      return;
+    }
+    const dateError = selfServeDateHoursError(parsed.dateHours, { timeZone: rule.timezone });
+    if (dateError) {
+      res.status(400).json({ error: dateError });
+      return;
+    }
+    const merged = mergeDateHours(storedDateHours(rule.dateHours), parsed.dateHours);
+    const saved = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(availabilityRulesTable)
+        .set({ dateHours: merged, updatedAt: new Date() })
+        .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+        .returning({
+          timezone: availabilityRulesTable.timezone,
+          dateHours: availabilityRulesTable.dateHours,
+        });
+      if (!updated) return null;
+      await tx.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "availability.date_hours_updated",
+        entityType: "tutor_profile",
+        entityId: profile.id,
+        metadata: { dates: Object.keys(parsed.dateHours) },
+      });
+      return updated;
+    });
+    if (!saved) {
+      res.status(404).json({ error: "This tutor has no availability rule." });
+      return;
+    }
+    res.json(
+      selfServeDateHoursView({
+        tutorProfileId: profile.id,
+        timezone: saved.timezone,
+        dateHours: storedDateHours(saved.dateHours),
+      }),
+    );
   },
 );
 
