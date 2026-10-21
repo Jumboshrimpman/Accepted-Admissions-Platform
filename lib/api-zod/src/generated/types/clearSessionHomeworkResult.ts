@@ -5,11 +5,12 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { ClearSessionHomeworkResultDeliveryPhase } from './clearSessionHomeworkResultDeliveryPhase';
 
 export interface ClearSessionHomeworkResult {
   sessionId: string;
   assignmentIds: string[];
   deletedAttempts: number;
   keptAssignments: number;
-  deliveryPhase: "before_session" | "during_session";
+  deliveryPhase: ClearSessionHomeworkResultDeliveryPhase;
 }

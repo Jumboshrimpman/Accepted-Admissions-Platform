@@ -5,6 +5,7 @@
  * Accepted Admissions learning platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardCreditsCollegeConsultingTutorsItem } from './dashboardCreditsCollegeConsultingTutorsItem';
 
 export interface DashboardCredits {
   purchasedHours: number;
@@ -13,14 +14,7 @@ export interface DashboardCredits {
   readOnly: boolean;
   selfServeSatBooking: boolean;
   selfServeCollegeConsulting?: boolean;
-  collegeConsultingTutors?: {
-    tutorKey: string;
-    name: string;
-    hourlyRateCents: number;
-    prepaidHours: number;
-    productSlug: string;
-    calendarConnected: boolean;
-  }[];
+  collegeConsultingTutors?: DashboardCreditsCollegeConsultingTutorsItem[];
   /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }

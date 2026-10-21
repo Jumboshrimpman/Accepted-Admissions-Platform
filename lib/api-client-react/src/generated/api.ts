@@ -61,6 +61,7 @@ import type {
   AttemptSubmission,
   AttemptWrongAnswers,
   BadRequestResponse,
+  BillingHistory,
   BookingAvailability,
   BookingConflictResponse,
   BookingInput,
@@ -95,6 +96,7 @@ import type {
   GenerateQuestionsInput,
   GetAdminCurriculumParams,
   GetAttemptResultParams,
+  GetBillingHistoryParams,
   GetBookingAvailabilityParams,
   GetCalendarConnectUrl200,
   GetCalendarConnectUrlParams,
@@ -2827,6 +2829,91 @@ export function useGetFinancials<TData = Awaited<ReturnType<typeof getFinancials
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetFinancialsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetBillingHistoryUrl = (params?: GetBillingHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/billing-history?${stringifiedParams}` : `/api/billing-history`
+}
+
+/**
+ * Returns the signed-in client's own records. A parent viewer sees the linked student. An administrator may pass clientId for a student they can preview. Card numbers, receipt URLs, and provider ids are not included. No live payment-provider request is made.
+ * @summary List one client's stored payments and purchases
+ */
+export const getBillingHistory = async (params?: GetBillingHistoryParams, options?: Parameters<typeof customFetch>[1]): Promise<BillingHistory> => {
+
+  return customFetch<BillingHistory>(getGetBillingHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBillingHistoryQueryKey = (params?: GetBillingHistoryParams,) => {
+    return [
+    `/api/billing-history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetBillingHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getBillingHistory>>, TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(params?: GetBillingHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBillingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBillingHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillingHistory>>> = ({ signal }) => getBillingHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBillingHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBillingHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getBillingHistory>>>
+export type GetBillingHistoryQueryError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>
+
+
+/**
+ * @summary List one client's stored payments and purchases
+ */
+
+export function useGetBillingHistory<TData = Awaited<ReturnType<typeof getBillingHistory>>, TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ForbiddenResponse | NotFoundResponse>>(
+ params?: GetBillingHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBillingHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBillingHistoryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -5624,7 +5711,7 @@ export const getPauseAttemptUrl = (attemptId: string,) => {
 }
 
 /**
- * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item. Save for later does not call this endpoint.
+ * Marks the attempt paused and stops the timer. Optional currentQuestionIndex is stored so Resume returns the student to the same item. Optional responses are written before the attempt is paused so the latest answers are not lost if autosave has not finished. An invalid response does not pause the attempt. Save for later does not call this endpoint.
  * @summary Pause an active attempt
  */
 export const pauseAttempt = async (attemptId: string,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AdminClientDashboard } from "@workspace/api-client-react";
 import { CalendarClock, Eye } from "lucide-react";
+import { BillingHistorySection } from "@/pages/portal/billing-history";
 import {
   CONSULTING_TUTOR_PHOTO_CLASS,
   consultingCreditsTutorLabel,
@@ -161,6 +162,8 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
           )}
         </CardContent>
       </Card>
+
+      <BillingHistorySection clientId={dashboard.user.id} />
 
       <Card data-testid="consulting-preview-tutors">
         <CardHeader className="pb-3">

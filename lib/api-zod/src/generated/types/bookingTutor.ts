@@ -20,4 +20,10 @@ export interface BookingTutor {
   subjects: string[];
   calendarStatus: string;
   providerStatus: BookingTutorProviderStatus;
+  /** @nullable */
+  hourlyRateCents?: number | null;
+  prepaidHours?: number;
+  bookable?: boolean;
+  /** @nullable */
+  serviceName?: string | null;
 }

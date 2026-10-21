@@ -139,6 +139,7 @@ import {
   rollbackBookingAfterCalendarFailure,
   sessionScheduleChangeError,
 } from "../lib/booking-service";
+import { loadBillingHistory, resolveBillingHistoryAccess } from "../lib/billing-history";
 import { summarizeCreditHours } from "../lib/credit-hours";
 import {
   checkoutAudienceForSlug,
@@ -427,6 +428,8 @@ import {
   GetCourseResponse,
   GetCurrentUserResponse,
   UpdateCurrentUserBody,
+  GetBillingHistoryQueryParams,
+  GetBillingHistoryResponse,
   GetDashboardResponse,
   GetSessionParams,
   GetSessionResponse,
@@ -8820,6 +8823,42 @@ router.get("/financials", async (req: AuthedRequest, res): Promise<void> => {
       ? "connected"
       : "connected_webhook_setup_required",
   });
+});
+
+router.get("/billing-history", async (req: AuthedRequest, res): Promise<void> => {
+  const query = GetBillingHistoryQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: "Invalid billing history request" });
+    return;
+  }
+  const requested = query.data.clientId?.trim() || null;
+  if (requested && !UUID_PATTERN.test(requested)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+  const subjectUserId = await dataSubjectUserId(req.appUser!);
+  const adminClientFound =
+    Boolean(requested) &&
+    requested !== subjectUserId &&
+    req.appUser!.role === "administrator" &&
+    (Boolean(await clientForAdminPreview(req.appUser!, requested!)) || isNeelDharniUser(requested!));
+  const access = resolveBillingHistoryAccess({
+    role: req.appUser!.role,
+    subjectUserId,
+    requestedClientId: requested,
+    adminClientFound,
+  });
+  if (!access.ok) {
+    res.status(access.status).json({ error: access.error });
+    return;
+  }
+  const payments = await loadBillingHistory(access.clientId);
+  res.json(
+    GetBillingHistoryResponse.parse({
+      readOnly: access.readOnly,
+      payments,
+    }),
+  );
 });
 
 

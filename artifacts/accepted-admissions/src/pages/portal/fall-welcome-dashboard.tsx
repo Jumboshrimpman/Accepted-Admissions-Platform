@@ -10,6 +10,7 @@ import {
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, ExternalLink, Eye, FileText, Sparkles, Target } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { BillingHistorySection } from "@/pages/portal/billing-history";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -469,6 +470,8 @@ export function ClientDashboardView({
           </CardContent>
         </Card>
       ) : null}
+
+      <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
 
       {studentSatCommerce && showSelfServeBooking ? (
         <BookingCard

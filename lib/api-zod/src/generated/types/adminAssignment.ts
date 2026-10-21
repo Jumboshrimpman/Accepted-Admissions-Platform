@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminAssignmentDeliveryPhase } from './adminAssignmentDeliveryPhase';
+import type { AdminAssignmentLatestAttemptStatus } from './adminAssignmentLatestAttemptStatus';
 import type { AdminAssignmentStatus } from './adminAssignmentStatus';
 
 export interface AdminAssignment {
@@ -29,6 +30,6 @@ export interface AdminAssignment {
   submissionCount: number;
   /** @nullable */
   latestAttemptId?: string | null;
-  /** Latest attempt for the session student. Paused and active are both in progress. */
-  latestAttemptStatus?: "active" | "paused" | "submitted" | "expired" | null;
+  /** @nullable */
+  latestAttemptStatus?: AdminAssignmentLatestAttemptStatus;
 }
