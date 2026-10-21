@@ -28,6 +28,7 @@ import {
   remainingCreditHoursForProducts,
   roundCreditHours,
 } from "./credit-hours.ts";
+import { VICTORIA_BOOKING_ENABLED } from "./victoria-booking.ts";
 
 export const SAT_TUTOR_KEYS = ["eunice", "victoria", "xavier", "nika"] as const;
 export type SatTutorKey = (typeof SAT_TUTOR_KEYS)[number];
@@ -113,13 +114,15 @@ export function isMichelleMakaremUser(user: MichelleIdentity | null | undefined)
 export type SatTutorViewer = MichelleIdentity & { id?: string | null };
 
 /**
- * Eunice, Victoria, and Xavier stay on the shared SAT roster.
+ * Eunice and Xavier stay on the shared SAT roster.
+ * Victoria is omitted while VICTORIA_BOOKING_ENABLED is false. Her hour-pool rules stay.
  * Nika is bookable for Sophia Sleiman, Michelle Makarem, and Sama's test student.
  */
 export function canBookSatTutor(
   tutorKey: SatTutorKey,
   user: SatTutorViewer | null | undefined,
 ): boolean {
+  if (tutorKey === "victoria" && !VICTORIA_BOOKING_ENABLED) return false;
   if (tutorKey !== "nika") return true;
   if (!user) return false;
   if (user.id === SOPHIA_SLEIMAN_SAT_USER_ID) return true;

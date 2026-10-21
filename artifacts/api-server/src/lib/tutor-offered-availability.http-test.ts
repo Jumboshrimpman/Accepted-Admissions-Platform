@@ -225,7 +225,7 @@ test("tutors see only their own client-offered slots, with no client details", a
     );
     const fixedUser = await createUser(
       "tutor",
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       `offered-fixed-${suffix}@example.invalid`,
       "tutor",
     );
@@ -326,13 +326,13 @@ test("tutors see only their own client-offered slots, with no client details", a
 
     const xavierProfileId = await createProfile(
       xavierUser,
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       { start: "07:00", end: "21:00" },
       true,
     );
     const euniceProfileId = await createProfile(
       euniceUser,
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       { start: "07:00", end: "08:00" },
       true,
     );
@@ -341,7 +341,7 @@ test("tutors see only their own client-offered slots, with no client details", a
     const closedDay = localDateKey(3);
     const fixedProfileId = await createProfile(
       fixedUser,
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       { start: "07:00", end: "21:00" },
       false,
       {
@@ -356,21 +356,21 @@ test("tutors see only their own client-offered slots, with no client details", a
     );
     const reconnectProfileId = await createProfile(
       reconnectUser,
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       { start: "07:00", end: "21:00" },
       "reconnect",
       { bookingNoticeMinutes: 240 },
     );
     const inactiveProfileId = await createProfile(
       inactiveUser,
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       { start: "07:00", end: "21:00" },
       true,
       { active: false },
     );
     const ineligibleProfileId = await createProfile(
       ineligibleUser,
-      "Victoria Wijerathnayapa",
+      "Eunice Chon",
       { start: "07:00", end: "21:00" },
       true,
       { bookingEligible: false },

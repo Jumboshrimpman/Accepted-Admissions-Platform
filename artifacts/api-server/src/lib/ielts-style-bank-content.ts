@@ -473,11 +473,11 @@ A visiting food-science student asked why Leila does not automate the room. She 
         "Why does Wren Street Bakery keep fermentation cards?",
         [
           "To hide a secret recipe from apprentices",
-          "To record conditions so staff can see why dough behaves differently",
           "To satisfy a city hygiene inspector’s weekly visit",
+          "To record conditions so staff can see why dough behaves differently",
           "To advertise supermarket yeast in the window",
         ],
-        "b",
+        "c",
         "The cards track time, temperatures, and notes so staff can see environmental effects.",
       ),
       mcq(
@@ -498,12 +498,12 @@ A visiting food-science student asked why Leila does not automate the room. She 
         "medium",
         "How did the log reveal the supermarket-yeast shortcut?",
         [
-          "The card still said “unfed” while the dough had risen on commercial yeast",
           "Customers posted photos of sachets",
           "The food-science student inspected the mixer",
           "The city banned sourdough",
+          "The card still said “unfed” while the dough had risen on commercial yeast",
         ],
-        "a",
+        "d",
         "The mismatch between an unfed card and a risen dough exposed the shortcut.",
       ),
       mcq(
@@ -525,11 +525,11 @@ A visiting food-science student asked why Leila does not automate the room. She 
         "Why does Leila prefer cards to a fully automated room?",
         [
           "Because HVAC controllers are illegal in bakeries",
-          "Because she wants staff to keep noticing the starter before it fails in public",
           "Because customers dislike identical loaves",
+          "Because she wants staff to keep noticing the starter before it fails in public",
           "Because the student asked her to refuse technology",
         ],
-        "b",
+        "c",
         "She says a perfect room would mean nobody notices the starter until a public failure.",
       ),
       mcq(
@@ -566,11 +566,11 @@ Parents still worry about students standing near an edge. The school’s rule is
         "What is the club’s main task?",
         [
           "To rebuild the cliff-top path each autumn",
-          "To record yearly change in the path’s outer edge with a repeatable method",
           "To post urgent collapse warnings on social media",
           "To replace picnic benches for the town",
+          "To record yearly change in the path’s outer edge with a repeatable method",
         ],
-        "b",
+        "d",
         "They measure edge movement with posts, photos, and notes; they do not rebuild or forecast.",
       ),
       mcq(
@@ -591,12 +591,12 @@ Parents still worry about students standing near an edge. The school’s rule is
         "medium",
         "What contrast did the first two seasons show?",
         [
-          "The whole path moved 40 centimetres evenly",
           "A clay section lost far more ground than a rocky knuckle",
+          "The whole path moved 40 centimetres evenly",
           "Official maps were more accurate than photographs",
           "Drone clips were required by the committee",
         ],
-        "b",
+        "a",
         "The clay near the steps lost 40 cm; the rocky knuckle barely changed.",
       ),
       mcq(
@@ -604,12 +604,12 @@ Parents still worry about students standing near an edge. The school’s rule is
         "medium",
         "Why were the students’ photographs useful in committee?",
         [
-          "They were time-stamped comparisons rather than a dramatic one-off clip",
           "They proved the path should be closed entirely",
           "They showed students standing on the lip",
+          "They were time-stamped comparisons rather than a dramatic one-off clip",
           "They replaced the need for an engineer",
         ],
-        "a",
+        "c",
         "The text contrasts boring time-stamped photos with a dramatic visitor drone clip.",
       ),
       mcq(
@@ -631,11 +631,11 @@ Parents still worry about students standing near an edge. The school’s rule is
         "The final sentence suggests the project’s discipline is",
         [
           "to turn measurements into panic",
-          "to keep the same method and refuse sensational claims",
           "to train students as professional engineers in one term",
           "to update official maps every week",
+          "to keep the same method and refuse sensational claims",
         ],
-        "b",
+        "d",
         "A new cohort inherits the same posts and the same refusal to turn a tape measure into a panic.",
       ),
     ],
@@ -659,11 +659,11 @@ Complaints arrived from people who had memorised the old clock-face. The operato
         "What was wrong with the old twenty-minute clock-face?",
         [
           "The crossing never took eleven minutes even in good weather",
-          "Small loading delays stacked onto the next departure",
           "The harbour wanted to ban bicycles",
           "Factory workers refused to use the ferry",
+          "Small loading delays stacked onto the next departure",
         ],
-        "b",
+        "d",
         "Late loading caused the next departure to inherit the delay.",
       ),
       mcq(
@@ -685,11 +685,11 @@ Complaints arrived from people who had memorised the old clock-face. The operato
         "Why did the harbour reject a fourth boat?",
         [
           "Passengers preferred a slower crossing",
-          "The pontoons cannot berth four vessels, and a spare crew was not funded",
           "The school boat already used four berths",
+          "The pontoons cannot berth four vessels, and a spare crew was not funded",
           "The ticket scanner cannot handle four departures",
         ],
-        "b",
+        "c",
         "Berthing limits and an unfunded spare crew blocked the extra boat.",
       ),
       mcq(
@@ -724,11 +724,11 @@ Complaints arrived from people who had memorised the old clock-face. The operato
         "What lesson did the harbour record?",
         [
           "Passengers will never accept a new timetable",
-          "A neat clock-face is a poor substitute for real loading time",
           "Bicycles should be banned from wet ramps",
           "School boats should be cancelled in winter",
+          "A neat clock-face is a poor substitute for real loading time",
         ],
-        "b",
+        "d",
         "The closing sentence says a tidy clock-face does not replace the minutes a bicycle needs on a wet ramp.",
       ),
     ],
@@ -752,11 +752,11 @@ The compromise sent back for legal drafting was narrower than either camp wanted
         "What is the hearing mainly trying to decide?",
         [
           "Whether to ban all urban bees",
-          "How to regulate hive placement and neighbour impacts without a total ban",
           "Whether tomatoes need bees to survive",
+          "How to regulate hive placement and neighbour impacts without a total ban",
           "How to replace casual-trading permits",
         ],
-        "b",
+        "c",
         "The draft and compromise set registration and placement rules; they are not a ban.",
       ),
       mcq(
@@ -764,12 +764,12 @@ The compromise sent back for legal drafting was narrower than either camp wanted
         "easy",
         "What did the original draft require besides registration?",
         [
-          "A city-owned honey shop",
           "A water source on the same lot and a two-metre flyway barrier",
+          "A city-owned honey shop",
           "Five hives next to every playground",
           "A ban on rooftop gardens",
         ],
-        "b",
+        "a",
         "The first paragraph lists registration, an on-lot water source, and a two-metre flyway barrier.",
       ),
       mcq(
@@ -777,12 +777,12 @@ The compromise sent back for legal drafting was narrower than either camp wanted
         "medium",
         "Why did beekeepers object to a rigid two-metre barrier rule?",
         [
-          "Because rooftop hives already launch above head height",
           "Because they wanted to sell honey without a permit",
           "Because allergists supported five hives",
           "Because the chair disliked tomatoes",
+          "Because rooftop hives already launch above head height",
         ],
-        "a",
+        "d",
         "They said a rooftop hive on a four-storey building already leaves above head height.",
       ),
       mcq(
@@ -791,11 +791,11 @@ The compromise sent back for legal drafting was narrower than either camp wanted
         "What limit applies to lots adjoining playgrounds in the compromise?",
         [
           "No hives at all",
-          "Two hives rather than five",
           "Five hives and a honey stall",
+          "Two hives rather than five",
           "Unlimited rooftop hives",
         ],
-        "b",
+        "c",
         "The compromise allows two hives, not five, on lots adjoining playgrounds.",
       ),
       mcq(

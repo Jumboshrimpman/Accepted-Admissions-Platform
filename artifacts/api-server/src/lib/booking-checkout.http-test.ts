@@ -340,6 +340,11 @@ test("direct checkout and credit pools apply to every bookable client", async (t
           startTime: "2026-12-01T15:00:00.000Z",
           durationMinutes: 60,
         });
+        if (tutorKey === "victoria") {
+          assert.equal(booked.response.status, 404, JSON.stringify(booked.body));
+          assert.equal(booked.body.code, "TUTOR_NOT_FOUND");
+          continue;
+        }
         assert.equal(booked.response.status, 409, JSON.stringify(booked.body));
         assert.equal(booked.body.code, "INSUFFICIENT_CREDIT");
       }
@@ -456,6 +461,23 @@ test("direct checkout and credit pools apply to every bookable client", async (t
         amountCents: 1,
         priceCents: 1,
       });
+      if (tutorKey === "victoria") {
+        assert.equal(checkout.response.status, 404, `${slug} ${JSON.stringify(checkout.body)}`);
+        const payments = await db
+          .select()
+          .from(paymentsTable)
+          .where(eq(paymentsTable.clientUserId, neel!.id));
+        assert.equal(
+          payments.some((row) => {
+            const intent = (row.auditMetadata as { bookingIntent?: { startTime?: string } } | null)
+              ?.bookingIntent;
+            return intent?.startTime === startTime;
+          }),
+          false,
+          slug,
+        );
+        continue;
+      }
       assert.equal(checkout.response.status, 502, `${slug} ${JSON.stringify(checkout.body)}`);
       assert.equal("url" in checkout.body && Boolean(checkout.body.url), false);
       const payments = await db
@@ -489,13 +511,15 @@ test("direct checkout and credit pools apply to every bookable client", async (t
         slug: "sat-eunice-60",
         cents: 13_000,
       },
-      {
-        tutorProfileId: satVictoriaProfile!.id,
-        durationMinutes: 120,
-        slug: "sat-victoria-120",
-        cents: 26_000,
-      },
     ];
+    const hiddenVictoria = await postJson(satServer.baseUrl, "/api/payments/checkout", {
+      tutorProfileId: satVictoriaProfile!.id,
+      durationMinutes: 120,
+      startTime: nextOpenStart(120),
+      amountCents: 1,
+      totalPriceCents: 1,
+    });
+    assert.equal(hiddenVictoria.response.status, 404, JSON.stringify(hiddenVictoria.body));
     for (const item of satCheckouts) {
       const product = await productBySlug(item.slug);
       assert.ok(product, item.slug);

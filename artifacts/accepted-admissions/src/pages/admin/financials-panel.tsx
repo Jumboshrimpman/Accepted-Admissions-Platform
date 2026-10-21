@@ -292,7 +292,7 @@ export function AdminFinancialsPanel() {
         <section className="space-y-3 rounded-2xl border p-4">
           <div>
             <h3 className="font-semibold">Authoritative SAT catalog</h3>
-            <p className="text-sm text-muted-foreground">Signed-in checkout sells SAT hours with Eunice ($130/hour), Victoria ($130/hour), and Xavier ($200/hour). 1.5-hour and 2-hour sessions use that hourly rate. Michelle Makarem’s Xavier checkout stays $130/hour. Existing prepaid $130 hours remain spendable with Eunice and Victoria, and with Xavier for Michelle.</p>
+            <p className="text-sm text-muted-foreground">Signed-in checkout sells SAT hours with Eunice ($130/hour) and Xavier ($200/hour). Victoria is hidden from booking for now; her $130/hour rate, grants, past sessions, and prepaid hours stay. 1.5-hour and 2-hour sessions use that hourly rate. Michelle Makarem’s Xavier checkout stays $130/hour. Existing prepaid $130 hours remain spendable with Eunice, and with Xavier for Michelle.</p>
           </div>
           <div className="hidden grid gap-3 md:grid-cols-5">
             <Input placeholder="Slug, e.g. sat-5-hour-package" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
