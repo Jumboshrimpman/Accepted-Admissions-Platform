@@ -94,6 +94,34 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 pb-8" data-testid="consulting-preview-dashboard">
+      <Card data-testid="consulting-preview-sessions">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <CalendarClock className="h-5 w-5 text-primary" />
+            Upcoming sessions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {sessions.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="consulting-preview-empty-sessions">
+              No upcoming College Consulting sessions.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {sessions.map((session: ConsultingPreviewSession) => (
+                <li key={session.id} className="rounded-xl border p-4" data-testid={`consulting-preview-session-${session.id}`}>
+                  <p className="font-medium">{session.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {new Date(session.dateTime).toLocaleString()}
+                    {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       <section className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white sm:px-9">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">College Consulting</p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight">Welcome back, {firstName}.</h2>
@@ -144,34 +172,6 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
             <p className="text-sm text-muted-foreground">College Consulting tutors are not available in this preview.</p>
           ) : (
             tutors.map((tutor: ConsultingPreviewTutorCard) => <TutorPreviewCard key={tutor.tutorKey} tutor={tutor} />)
-          )}
-        </CardContent>
-      </Card>
-
-      <Card data-testid="consulting-preview-sessions">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <CalendarClock className="h-5 w-5 text-primary" />
-            Upcoming sessions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sessions.length === 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid="consulting-preview-empty-sessions">
-              No upcoming College Consulting sessions.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {sessions.map((session: ConsultingPreviewSession) => (
-                <li key={session.id} className="rounded-xl border p-4" data-testid={`consulting-preview-session-${session.id}`}>
-                  <p className="font-medium">{session.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {new Date(session.dateTime).toLocaleString()}
-                    {session.tutor?.name ? ` · ${session.tutor.name}` : ""}
-                  </p>
-                </li>
-              ))}
-            </ul>
           )}
         </CardContent>
       </Card>

@@ -986,7 +986,12 @@ describe("administrator client preview", () => {
 
     render(<AdminClientPreview />);
 
-    expect(screen.getByTestId("consulting-preview-dashboard").textContent).toContain("Welcome back, Neel.");
+    const consultingDashboard = screen.getByTestId("consulting-preview-dashboard");
+    const sectionText = consultingDashboard.textContent ?? "";
+    expect(consultingDashboard.firstElementChild).toBe(screen.getByTestId("consulting-preview-sessions"));
+    expect(sectionText.indexOf("Upcoming sessions")).toBeLessThan(sectionText.indexOf("Welcome back, Neel."));
+    expect(sectionText.indexOf("Welcome back, Neel.")).toBeLessThan(sectionText.indexOf("College Consulting credits"));
+    expect(sectionText).toContain("Welcome back, Neel.");
     expect(screen.queryByText(/Each tutor keeps their own hours/i)).toBeNull();
     expect(screen.queryByText(/Hours do not transfer between tutors/i)).toBeNull();
     expect(screen.queryByText(/Nika is \$100\/hour/)).toBeNull();
