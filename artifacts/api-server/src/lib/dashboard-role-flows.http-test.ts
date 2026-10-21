@@ -139,7 +139,6 @@ test("HTTP client dashboard preview is administrator-only, student-scoped, and p
       })),
       [
         { slug: "sat-eunice-60", priceCents: 13000 },
-        { slug: "sat-victoria-60", priceCents: 13000 },
         { slug: "sat-xavier-60", priceCents: 20000 },
       ],
     );

@@ -187,14 +187,13 @@ test("authenticated GET /api/public/products lists live SAT prices and omits the
       );
     }
     const eunice = products.find((product) => product.slug === "sat-eunice-60");
-    const victoria = products.find((product) => product.slug === "sat-victoria-90");
     const xavier = products.find((product) => product.slug === "sat-xavier-60");
     assert.equal(Number(eunice?.totalPriceCents), SINGLE_SAT_SESSION_PRICE_CENTS);
-    assert.equal(Number(victoria?.totalPriceCents), 19_500);
+    assert.equal(products.some((product) => product.slug.startsWith("sat-victoria")), false);
     assert.equal(Number(xavier?.totalPriceCents), 20_000);
     assert.equal(
-      products.filter((product) => /^(sat-eunice|sat-victoria|sat-xavier)-/.test(product.slug)).length,
-      9,
+      products.filter((product) => /^(sat-eunice|sat-xavier)-/.test(product.slug)).length,
+      6,
     );
     assert.equal(
       products.some((product) => product.slug.startsWith("sat-nika-")),

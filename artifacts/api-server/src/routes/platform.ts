@@ -324,6 +324,10 @@ import {
   satTutorKeyForSlug,
   satTutorProductSortKey,
 } from "../lib/sat-tutor-pricing";
+import {
+  satBookingTutorChoiceMessage,
+  victoriaBookingRefused,
+} from "../lib/victoria-booking";
 import { selectAssignedPreviewBookingTutor } from "../lib/admin-client-preview";
 import {
   isLibraryAssetKind,
@@ -738,12 +742,16 @@ const XAVIER_TUTOR_SHARE_CENTS = 6_500;
 const NIKA_NAME = "Nika Raiffe";
 const NIKA_EMAIL = "nika.raiffe@gmail.com";
 
+function sharedSatBookingTutorNames(): string[] {
+  return SAT_BOOKING_TUTOR_NAMES.filter((name) => !victoriaBookingRefused({ name }));
+}
+
 function satPortalTutorNames(user: {
   id?: string | null;
   clerkUserId?: string | null;
   email?: string | null;
 } | null | undefined): string[] {
-  const names: string[] = [...SAT_BOOKING_TUTOR_NAMES];
+  const names: string[] = sharedSatBookingTutorNames();
   if (canBookSatTutor("nika", user)) names.push(NIKA_NAME);
   return names;
 }
@@ -5257,6 +5265,7 @@ function consultingTutorAllowed(tutor: {
   active: boolean;
   bookingEligible: boolean;
 }): boolean {
+  if (victoriaBookingRefused(tutor)) return false;
   return (
     tutor.active &&
     tutor.bookingEligible &&
@@ -5272,9 +5281,7 @@ function tutorOfferedToClients(tutor: {
   active: boolean;
   bookingEligible: boolean;
 }): boolean {
-  const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
-    tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
-  );
+  const onSharedRoster = sharedSatBookingTutorNames().includes(tutor.name);
   return (
     tutor.active &&
     tutor.bookingEligible &&
@@ -5295,10 +5302,12 @@ async function bookingTutor(
   if (!tutor || (!allowExistingSessionTutor && !tutor.active)) {
     throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
   }
+  if (victoriaBookingRefused(tutor)) {
+    throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
+  }
   if (!allowExistingSessionTutor) {
     const onSharedRoster =
-      tutor.bookingEligible &&
-      SAT_BOOKING_TUTOR_NAMES.includes(tutor.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number]);
+      tutor.bookingEligible && sharedSatBookingTutorNames().includes(tutor.name);
     const onNikaRoster =
       tutor.bookingEligible &&
       tutor.name === NIKA_NAME &&
@@ -6159,16 +6168,18 @@ router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): 
     (isSamaPostgradTestStudent(req.appUser) &&
       collegeConsultingServiceRequested(req.query.service));
   if (consultingCatalog) {
-    const products = await db
-      .select()
-      .from(satProductsTable)
-      .where(
-        and(
-          eq(satProductsTable.active, true),
-          inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]),
-        ),
-      )
-      .orderBy(asc(satProductsTable.effectiveHourlyRateCents), asc(satProductsTable.name));
+    const products = (
+      await db
+        .select()
+        .from(satProductsTable)
+        .where(
+          and(
+            eq(satProductsTable.active, true),
+            inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]),
+          ),
+        )
+        .orderBy(asc(satProductsTable.effectiveHourlyRateCents), asc(satProductsTable.name))
+    ).filter((product) => !victoriaBookingRefused({ slug: product.slug }));
     res.json(await appendLiveCheckoutTestProduct(products.map(publicProductShape), viewer));
     return;
   }
@@ -6492,9 +6503,7 @@ router.get(
     const from = new Date();
     const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
     try {
-      const onSharedRoster = SAT_BOOKING_TUTOR_NAMES.includes(
-        profile.name as (typeof SAT_BOOKING_TUTOR_NAMES)[number],
-      );
+      const onSharedRoster = sharedSatBookingTutorNames().includes(profile.name);
       // The client gates who may book this tutor. Slot math does not change.
       // Nika and consulting-only tutors are limited to approved clients.
       const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
@@ -7838,7 +7847,7 @@ async function assertPrepaidHoursForTutor(
   } else {
     const tutorKey = satTutorKeyForName(tutor.name);
     if (!tutorKey || !canBookSatTutor(tutorKey, user)) {
-      throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
+      throw new BookingError(403, "INVALID_TUTOR", satBookingTutorChoiceMessage());
     }
     const catalog = await satCreditCatalog();
     const excluded = new Set(await liveCheckoutTestProductIds());
@@ -7948,7 +7957,7 @@ async function respondWithPrepaidBooking(
     const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
     if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
-      throw new BookingError(403, "INVALID_TUTOR", "Choose Eunice, Victoria, or Xavier for an SAT session.");
+      throw new BookingError(403, "INVALID_TUTOR", satBookingTutorChoiceMessage());
     }
     const course = consulting
       ? await studentCollegeConsultingCourse(req.appUser!.id)
@@ -8830,11 +8839,14 @@ async function resolveDirectBookingProduct(
     .where(eq(tutorProfilesTable.id, intent.tutorProfileId))
     .limit(1);
   if (!tutor) return { status: 404 as const, error: "A tutor is required." };
+  if (victoriaBookingRefused(tutor)) {
+    return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
+  }
   const consulting = options.consulting;
   const tutorKey = consulting
     ? collegeConsultingTutorKeyForProfile(tutor)
     : satTutorKeyForName(tutor.name);
-  if (!tutorKey || (!consulting && !canBookSatTutor(tutorKey, user))) {
+  if (!tutorKey || (!consulting && !canBookSatTutor(tutorKey, user)) || victoriaBookingRefused({ tutorKey })) {
     return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
   }
   const products = await db
@@ -8929,6 +8941,10 @@ router.post(
     }
     if (!product) {
       res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    if (victoriaBookingRefused({ slug: product.slug })) {
+      res.status(404).json({ error: "This tutor cannot be checked out from the booking calendar." });
       return;
     }
     const testCheckout = product.slug === SAMA_LIVE_CHECKOUT_TEST_SLUG;
@@ -13289,6 +13305,7 @@ router.get(
       assignedSatLinks,
       tutorProfiles,
     );
+    if (previewTutor && victoriaBookingRefused(previewTutor)) previewTutor = undefined;
     const tutorPreviewOffers = previewOffersFromSatTutorProducts(catalogProducts, client);
     let previewOffers =
       tutorPreviewOffers.length > 0
@@ -13299,7 +13316,10 @@ router.get(
           );
     if (isNeelDharniUser(client.id)) {
       const consultingTutors = tutorProfiles.filter(
-        (tutor) => tutor.active && collegeConsultingTutorKeyForProfile(tutor),
+        (tutor) =>
+          tutor.active &&
+          collegeConsultingTutorKeyForProfile(tutor) &&
+          !victoriaBookingRefused(tutor),
       );
       const assigned = consultingTutors.filter((tutor) =>
         assignedSatLinks.some(
@@ -13320,8 +13340,11 @@ router.get(
             inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]),
           ),
         );
-      if (consultingRows.length > 0) {
-        previewOffers = consultingRows.map((product) => ({
+      const visibleConsultingRows = consultingRows.filter(
+        (product) => !victoriaBookingRefused({ slug: product.slug }),
+      );
+      if (visibleConsultingRows.length > 0) {
+        previewOffers = visibleConsultingRows.map((product) => ({
           slug: product.slug,
           name: product.name,
           description: product.description,
@@ -13385,7 +13408,7 @@ router.get(
         profiles: tutorProfiles,
         prepaidHours,
         calendars,
-      });
+      }).filter((tutor) => !victoriaBookingRefused({ tutorKey: tutor.tutorKey }));
     } else if (!previewTutor || !previewTutorShape) {
       previewBooking = {
         calendarStatus: "unavailable",

@@ -1319,6 +1319,16 @@ test("Victoria and Xavier consulting writes stay silent with no tutor guest", as
         durationMinutes: 60,
         startTime: item.start,
       });
+      if (item.email === VICTORIA_PLACEHOLDER_EMAIL) {
+        assert.equal(checkout.status, 404, `${item.email} ${JSON.stringify(checkout.body)}`);
+        assert.equal(calendar.writes.length, 0);
+        const [hiddenSession] = await db
+          .select()
+          .from(sessionsTable)
+          .where(and(eq(sessionsTable.clientUserId, neel.id), eq(sessionsTable.dateTime, new Date(item.start))));
+        assert.equal(hiddenSession, undefined);
+        continue;
+      }
       assert.equal(checkout.status, 201, `${item.email} ${JSON.stringify(checkout.body)}`);
       const paymentId = String(checkout.body.paymentId);
       createdPaymentIds.push(paymentId);

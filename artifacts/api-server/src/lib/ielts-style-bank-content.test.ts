@@ -14,6 +14,7 @@ import {
   IELTS_STYLE_DIAGNOSTIC_COUNT,
   IELTS_STYLE_ROUTINE_COUNT,
   canAssignCleanEnglishQuizSet,
+  ieltsStyleSourceKey,
   isStudentUsableEnglishQuizItem,
   selectIeltsStylePreworkItems,
 } from "./ielts-style-bank-select.ts";
@@ -167,6 +168,91 @@ test("diagnostic reading keys are spread across A–D without lettered explanati
     assert.equal(new Set(item.choices.map((choice) => choice.text)).size, 4);
   }
   assert.deepEqual(counts, { a: 6, b: 6, c: 6, d: 6 });
+});
+
+const ROUTINE_CORRECT_TEXT: Record<string, string> = {
+  "Why does Wren Street Bakery keep fermentation cards?":
+    "To record conditions so staff can see why dough behaves differently",
+  "What problem first led Leila to introduce the cards?":
+    "A humid week produced split, overly acidic loaves",
+  "How did the log reveal the supermarket-yeast shortcut?":
+    "The card still said “unfed” while the dough had risen on commercial yeast",
+  "What does Leila choose to do when a sourdough batch is slow?":
+    "Delay the bake or sell the batch as rolls with an explanation",
+  "Why does Leila prefer cards to a fully automated room?":
+    "Because she wants staff to keep noticing the starter before it fails in public",
+  "In the first paragraph, “sluggish” most nearly describes":
+    "a starter that is slow to show activity",
+  "What is the club’s main task?":
+    "To record yearly change in the path’s outer edge with a repeatable method",
+  "What condition did the coastal engineer set?":
+    "Students must not post claims that the cliff is collapsing tomorrow",
+  "What contrast did the first two seasons show?":
+    "A clay section lost far more ground than a rocky knuckle",
+  "Why were the students’ photographs useful in committee?":
+    "They were time-stamped comparisons rather than a dramatic one-off clip",
+  "What must the club do if a measuring post is lost to a slump?":
+    "Mark the gap and wait for the engineer",
+  "The final sentence suggests the project’s discipline is":
+    "to keep the same method and refuse sensational claims",
+  "What was wrong with the old twenty-minute clock-face?":
+    "Small loading delays stacked onto the next departure",
+  "Why was the :20 sailing the most unreliable?":
+    "It coincided with the school boat and a fish-plant shift change",
+  "Why did the harbour reject a fourth boat?":
+    "The pontoons cannot berth four vessels, and a spare crew was not funded",
+  "Which morning sailings kept their original time, and why?":
+    "The :00 sailings, so factory workers would not miss the plant whistle",
+  "Why did the operator publish “about 15 minutes including loading”?":
+    "To match scanner data instead of an optimistic eleven-minute promise",
+  "What lesson did the harbour record?":
+    "A neat clock-face is a poor substitute for real loading time",
+  "What is the hearing mainly trying to decide?":
+    "How to regulate hive placement and neighbour impacts without a total ban",
+  "What did the original draft require besides registration?":
+    "A water source on the same lot and a two-metre flyway barrier",
+  "Why did beekeepers object to a rigid two-metre barrier rule?":
+    "Because rooftop hives already launch above head height",
+  "What limit applies to lots adjoining playgrounds in the compromise?":
+    "Two hives rather than five",
+  "Why did omitting honey sales from the draft make some councillors nervous and others relieved?":
+    "Because the hearing had mixed nuisance, allergy, and cottage sales into one argument",
+  "The chair’s kept sentence emphasises that the city is":
+    "regulating pavement flight paths, not requiring residents to like bees",
+};
+
+test("Nov 13 and Dec 4 reading keys are spread across A–D", () => {
+  const items = ieltsStyleReadingItems();
+  const routine1 = items.filter((item) => item.set === "routine-1");
+  const routine2 = items.filter((item) => item.set === "routine-2");
+  assert.equal(routine1.map((item) => item.correctAnswer).join(""), "cadbcadbacbd");
+  assert.equal(routine2.map((item) => item.correctAnswer).join(""), "dbcabdcadcab");
+  for (const set of [routine1, routine2]) {
+    const counts = { a: 0, b: 0, c: 0, d: 0 };
+    let run = 0;
+    let previous = "";
+    for (const item of set) {
+      counts[item.correctAnswer] += 1;
+      run = item.correctAnswer === previous ? run + 1 : 1;
+      previous = item.correctAnswer;
+      assert.ok(run < 3, item.prompt);
+      assert.doesNotMatch(item.explanation, /\b(?:option|choice|answer|letter)\s+[A-D]\b/i);
+      const correct = item.choices.find((choice) => choice.id === item.correctAnswer);
+      assert.equal(correct?.text, ROUTINE_CORRECT_TEXT[item.prompt], item.prompt);
+      assert.equal(new Set(item.choices.map((choice) => choice.text)).size, 4);
+    }
+    assert.deepEqual(counts, { a: 3, b: 3, c: 3, d: 3 });
+  }
+  const firstRoutine = items.findIndex((item) => item.set === "routine-1");
+  const firstDecember = items.findIndex((item) => item.set === "routine-2");
+  assert.equal(
+    ieltsStyleSourceKey({ section: "reading", module: 2, questionNumber: firstRoutine + 1 }),
+    "ielts-style-original-reading-m2-q25",
+  );
+  assert.equal(
+    ieltsStyleSourceKey({ section: "reading", module: 3, questionNumber: firstDecember + 1 }),
+    "ielts-style-original-reading-m3-q37",
+  );
 });
 
 test("English assign selects diagnostic module 1 and later routine modules without overlap", () => {

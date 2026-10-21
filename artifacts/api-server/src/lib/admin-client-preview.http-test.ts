@@ -183,7 +183,6 @@ test("client preview books the assigned SAT tutor and lists the active catalog",
       body.previewOffers.map((offer) => ({ slug: offer.slug, priceCents: offer.priceCents })),
       [
         { slug: "sat-eunice-60", priceCents: 13_000 },
-        { slug: "sat-victoria-60", priceCents: 13_000 },
         { slug: "sat-xavier-60", priceCents: 20_000 },
       ],
     );
