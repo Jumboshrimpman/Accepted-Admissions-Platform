@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
+import { TutorDateHoursEditor } from "@/pages/tutor/date-hours-editor";
 import { TutorOfferedAvailability } from "@/pages/tutor/offered-availability";
 import {
   SessionQuestionDownloads,
@@ -201,6 +202,8 @@ export default function TutorDashboard() {
           Sessions and student work that need you today.
         </p>
       </section>
+
+      <TutorDateHoursEditor />
 
       <TutorOfferedAvailability />
 
