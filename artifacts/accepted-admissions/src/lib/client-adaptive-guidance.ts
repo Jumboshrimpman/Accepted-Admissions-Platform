@@ -30,7 +30,12 @@ export function parseAccuracyHint(label: string | null | undefined): number | nu
 export function usableGuidanceTheme(label: string | null | undefined): string | null {
   if (!label?.trim() || hasExtractPlaceholder(label)) return null;
   const stripped = stripSkillMeta(label);
-  if (!stripped || hasExtractPlaceholder(stripped) || isCoarseSectionLabel(stripped)) {
+  if (
+    !stripped ||
+    hasExtractPlaceholder(stripped) ||
+    isCoarseSectionLabel(stripped) ||
+    /no major weakness|no repeated missed|no incorrect|those misses are/i.test(stripped)
+  ) {
     return null;
   }
   if (stripped.length > 48 || /^(practice |review |keep the next )/i.test(stripped)) {

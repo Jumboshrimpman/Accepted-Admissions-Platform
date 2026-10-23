@@ -223,8 +223,12 @@ function ResultView({ result }: { result: AttemptResult }) {
     ? Math.round((result.correctCount / result.totalCount) * 100)
     : 0;
   const estimated = result.estimatedSatScore;
+  const nonSatQuiz = /ielts|\benglish\b/i.test(result.assignmentTitle);
   const showEstimated =
-    result.homeworkKind === "diagnostic" || result.scoreReporting === "estimated_diagnostic";
+    !nonSatQuiz &&
+    (result.homeworkKind === "diagnostic" || result.scoreReporting === "estimated_diagnostic") &&
+    estimated?.rangeLow != null &&
+    estimated.rangeHigh != null;
   const formatMath = quizShowsFormattedMath(result.assignmentTitle);
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-20 animate-in fade-in">
@@ -239,11 +243,13 @@ function ResultView({ result }: { result: AttemptResult }) {
                 {result.status === "expired" ? "Time expired" : "Submitted"}
               </Badge>
               <h1 className="text-3xl font-bold">
-                {result.homeworkKind === "diagnostic"
-                  ? "Diagnostic result"
-                  : result.homeworkKind === "routine"
-                    ? "Pre-work result"
-                    : "Your SAT result"}
+                {nonSatQuiz
+                  ? "English result"
+                  : result.homeworkKind === "diagnostic"
+                    ? "Diagnostic result"
+                    : result.homeworkKind === "routine"
+                      ? "Pre-work result"
+                      : "Your SAT result"}
               </h1>
               <p className="mt-2 text-white/80">
                 {result.correctCount} of {result.totalCount} correct · {formatTime(result.activeSeconds)}{" "}

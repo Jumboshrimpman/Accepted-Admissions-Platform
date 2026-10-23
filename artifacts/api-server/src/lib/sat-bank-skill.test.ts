@@ -119,3 +119,24 @@ test("prefers a real domain when the stored skill is only a section name", () =>
     ["Algebra"],
   );
 });
+
+test("IELTS items do not fall back to the SAT section label", () => {
+  assert.equal(
+    skillLabelForBank({ skill: "", subject: "IELTS Reading", domain: "IELTS Reading" }),
+    "IELTS Reading",
+  );
+  assert.equal(
+    skillLabelForBank({ skill: null, section: "writing", subject: "IELTS Writing" }),
+    "IELTS Writing",
+  );
+  assert.equal(
+    skillLabelForBank({ skill: "", section: "rw", subject: "SAT Reading & Writing" }),
+    "Reading and Writing",
+  );
+  assert.deepEqual(
+    usefulFocusLabels([
+      "Practice No major weakness identified in this set. next — those misses are the fastest way to raise this set.",
+    ]),
+    [],
+  );
+});

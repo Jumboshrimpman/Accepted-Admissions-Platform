@@ -59,12 +59,19 @@ export function isCoarseSectionLabel(label: string | null | undefined): boolean 
 }
 
 /** Distinct, tutor-useful focus labels — never Math + SAT Math + RW noise. */
+/** Coaching filler must not be treated as a skill to practice. */
+export function isGuidanceFiller(label: string | null | undefined): boolean {
+  return /no major weakness|no repeated missed|no incorrect|those misses are/i.test(
+    label ?? "",
+  );
+}
+
 export function usefulFocusLabels(labels: readonly string[], limit = 3): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of labels) {
     const label = raw.replace(/\s*\(\d+% accuracy\)\s*$/i, "").trim();
-    if (!label || isCoarseSectionLabel(label)) continue;
+    if (!label || isCoarseSectionLabel(label) || isGuidanceFiller(label)) continue;
     const key = normalizeFocusKey(label);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -72,6 +79,28 @@ export function usefulFocusLabels(labels: readonly string[], limit = 3): string[
     if (out.length >= limit) break;
   }
   return out;
+}
+
+export function isIeltsSkillContext(input: {
+  section?: string | null;
+  domain?: string | null;
+  subject?: string | null;
+  examFamily?: string | null;
+}): boolean {
+  const section = (input.section ?? "").trim().toLowerCase();
+  if (section === "reading" || section === "writing") return true;
+  const blob = `${input.subject ?? ""} ${input.domain ?? ""} ${input.examFamily ?? ""}`.toLowerCase();
+  return blob.includes("ielts") || /\benglish\b/.test(blob);
+}
+
+export function ieltsSkillFallback(input: {
+  section?: string | null;
+  domain?: string | null;
+  subject?: string | null;
+}): "IELTS Reading" | "IELTS Writing" {
+  const blob = `${input.subject ?? ""} ${input.domain ?? ""} ${input.section ?? ""}`.toLowerCase();
+  if (blob.includes("writing") && !blob.includes("reading")) return "IELTS Writing";
+  return "IELTS Reading";
 }
 
 function inferSection(input: {
@@ -102,6 +131,7 @@ export function skillLabelForBank(input: {
   if (skill && !isCoarseSectionLabel(skill)) return skill;
   const domain = input.domain?.trim() ?? "";
   if (domain && !isCoarseSectionLabel(domain)) return domain;
+  if (isIeltsSkillContext(input)) return ieltsSkillFallback(input);
   const section = inferSection(input);
   return section ? sectionSkillLabel(section) : "General";
 }

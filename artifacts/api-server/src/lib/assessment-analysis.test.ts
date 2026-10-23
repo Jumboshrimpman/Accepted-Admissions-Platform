@@ -4,6 +4,10 @@ import test from "node:test";
 import { buildAttemptAnalysis, describeSessionPrepMode, hasExtractPlaceholder, prepCopyBeforeTheMeeting, projectSatScores, projectSatSectionScore, qualitativeClientCopy, toClientAdaptiveGuidance, tutorAlertFields } from "./assessment-analysis.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { FULL_SAT_DIAGNOSTIC_QUESTIONS } from "./sat-assessment-content.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { ieltsStyleReadingItems } from "./ielts-style-bank-content.ts";
+// @ts-expect-error Node's strip-types test runner resolves the source extension directly.
+import { skillBreakdownFromItems } from "./sat-bank-skill.ts";
 
 test("projects section accuracy onto the Digital SAT 200–800 band", () => {
   assert.equal(projectSatSectionScore(0), 200);
@@ -245,4 +249,57 @@ test("never emits Skill not in extract on student adaptive guidance", () => {
   });
   assert.match(sectionOnly.missedSkill, /Math is the leak/);
   assert.match(sectionOnly.nextPractice, /Practice Math next/);
+});
+
+test("all-correct IELTS diagnostic fills skills without SAT labels", () => {
+  const diagnostic = ieltsStyleReadingItems().filter((item) => item.set === "diagnostic");
+  assert.equal(diagnostic.length, 24);
+  const items = diagnostic.map((item) => ({
+    correct: true,
+    skill: item.skill,
+    subject: "IELTS Reading",
+    domain: item.domain,
+    prompt: item.prompt,
+  }));
+  const analysis = buildAttemptAnalysis(skillBreakdownFromItems(items), items, 100, {
+    assignmentTitle: "IELTS-style diagnostic reading — Taito’s English Session",
+    homeworkKind: "diagnostic",
+  });
+
+  assert.equal(analysis.label, "Accuracy summary");
+  assert.doesNotMatch(analysis.label, /SAT/i);
+  assert.doesNotMatch(analysis.feedback, /Estimated SAT/i);
+  assert.doesNotMatch(analysis.nextFocus.join(" "), /those misses are/i);
+  assert.doesNotMatch(analysis.weaknesses.join(" "), /No major weakness identified in this set/i);
+  assert.match(analysis.sessionOpener ?? "", /Homework is clean/i);
+  assert.deepEqual(
+    (analysis.sectionBreakdown ?? []).map((row) => row.label),
+    ["IELTS Reading"],
+  );
+  assert.equal(analysis.sectionBreakdown?.[0]?.section, "other");
+  const covered = (analysis.skipRehash ?? []).reduce((sum, line) => {
+    const match = /(\d+)\/(\d+)/.exec(line);
+    return sum + (match ? Number(match[2]) : 0);
+  }, 0);
+  assert.equal(covered, 24);
+  assert.ok((analysis.skipRehash ?? []).some((line) => /Writer's views/.test(line)));
+  assert.ok((analysis.skipRehash ?? []).some((line) => /Vocabulary in context/.test(line)));
+});
+
+test("a reading diagnostic without an English or IELTS title stays an SAT estimate", () => {
+  const analysis = buildAttemptAnalysis(
+    [{ skill: "Transitions", correct: 0, total: 1, accuracy: 0 }],
+    [
+      {
+        correct: false,
+        skill: "Transitions",
+        subject: "SAT Reading & Writing",
+        domain: "Expression of Ideas",
+      },
+    ],
+    0,
+    { assignmentTitle: "Reading diagnostic", homeworkKind: "diagnostic" },
+  );
+  assert.match(analysis.label, /estimated SAT score range/i);
+  assert.equal(analysis.sectionBreakdown?.[0]?.label, "Reading and Writing");
 });

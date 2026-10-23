@@ -65,6 +65,10 @@ import { describeAssignmentCompletion } from "@/lib/assignment-completion";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { prepSummaryBeforeMeeting } from "@/lib/quiz-content";
 import { studentPreworkDeadlineCopy } from "@/lib/student-prework-deadline";
+import {
+  recommendedPracticeEmptyCopy,
+  tutorNotesForSubmittedResult,
+} from "@/lib/session-result-fill";
 
 export default function TutorSession() {
   const params = useParams();
@@ -119,12 +123,13 @@ export default function TutorSession() {
       ? adaptive?.sessionPrep?.duringAssignmentId
       : null,
   );
-  const { data: duringAssignment } = useGetAssignment(duringAssignmentId, {
+  const duringAssignmentQuery = useGetAssignment(duringAssignmentId, {
     query: {
       enabled: Boolean(duringAssignmentId),
       queryKey: getGetAssignmentQueryKey(duringAssignmentId),
     },
   });
+  const duringAssignment = duringAssignmentQuery.data;
   const createBlock = useCreateCurriculumBlock();
   const updateBlock = useUpdateCurriculumBlock();
   const saveArtifact = useUpsertSessionArtifact();
@@ -161,6 +166,22 @@ export default function TutorSession() {
   }
 
   if (error || !session) return <div>Session not found</div>;
+
+  const submittedPrework = (session.homework ?? []).some(
+    (item) => item.attemptStatus === "submitted" || item.attemptStatus === "expired",
+  );
+  const submittedMistakeCount = (session.homework ?? [])
+    .filter((item) => item.attemptStatus === "submitted" || item.attemptStatus === "expired")
+    .reduce((sum, item) => sum + (item.mistakeCount ?? 0), 0);
+  const shownTutorNotes = tutorNotesForSubmittedResult(session.tutorNotes ?? tutorNotes, {
+    submitted: submittedPrework,
+    mistakeCount: submittedMistakeCount,
+  });
+  const duringQuestionCount = duringAssignment
+    ? duringAssignment.questions.length
+    : duringAssignmentQuery.isLoading
+      ? (adaptive?.sessionPrep?.attachedQuestionCount ?? 0)
+      : 0;
 
   const shownPrep = adaptive?.sessionPrep
     ? prepSummaryBeforeMeeting({
@@ -350,7 +371,7 @@ export default function TutorSession() {
             <div className="rounded-xl border bg-background p-4">
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Notes</p>
               <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">
-                {session.tutorNotes ?? tutorNotes ?? "No tutor notes saved yet."}
+                {shownTutorNotes.trim() ? shownTutorNotes : "No tutor notes saved yet."}
               </p>
             </div>
           </div>
@@ -494,7 +515,25 @@ export default function TutorSession() {
                   </div>
                 ))}
                 {!adaptive || adaptive.recommendations.filter((item) => item.status === "recommended").length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Recommendations will appear after a completed result.</p>
+                  <p className="text-sm text-muted-foreground" data-testid="recommended-practice-empty">
+                    {recommendedPracticeEmptyCopy({
+                      submitted: submittedPrework,
+                      mistakeCount: submittedMistakeCount,
+                    })}
+                  </p>
+                ) : null}
+                {submittedPrework &&
+                submittedMistakeCount === 0 &&
+                (adaptive?.recommendations.filter((item) => item.status === "recommended").length ?? 0) === 0 &&
+                (adaptive?.hardQuestions.length ?? 0) > 0 ? (
+                  <ul className="space-y-2" data-testid="recommended-hard-practice">
+                    {adaptive!.hardQuestions.slice(0, 3).map((question) => (
+                      <li key={question.id} className="rounded-lg bg-muted/50 p-3 text-sm">
+                        <span className="font-medium">{question.skill}</span>
+                        <span className="text-muted-foreground"> · {question.prompt}</span>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </div>
             </div>
@@ -525,11 +564,7 @@ export default function TutorSession() {
             beforeAssignmentId={beforeAssignmentId}
             duringAssignmentId={duringAssignmentId}
             duringTitle={duringAssignment?.title}
-            duringQuestionCount={
-              duringAssignment?.questions.length ??
-              adaptive?.sessionPrep?.attachedQuestionCount ??
-              0
-            }
+            duringQuestionCount={duringQuestionCount}
             canDownloadPdfs={viewerMayDownloadSessionPdfs({
               role: currentUser?.role,
               viewerUserId: currentUser?.id,
@@ -648,8 +683,8 @@ export default function TutorSession() {
                 <div className="rounded-xl border bg-background p-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <p className="font-semibold">During Session</p>
-                    <Badge variant="secondary">
-                      {duringAssignment?.questions.length ?? 0} questions
+                    <Badge variant="secondary" data-testid="during-session-question-count">
+                      {duringQuestionCount} questions
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -687,6 +722,7 @@ export default function TutorSession() {
                         }))
                 }
                 reviewHref={adaptive?.homework?.latestAttemptId ? `/tutor/attempts/${adaptive.homework.latestAttemptId}` : visibleHomework.find((item) => item.attemptId)?.attemptId ? `/tutor/attempts/${visibleHomework.find((item) => item.attemptId)!.attemptId}` : null}
+                submitted={submittedPrework}
               />
 
               {adaptive && adaptive.recommendations.length > 0 && (
@@ -829,7 +865,10 @@ export default function TutorSession() {
                   <Badge variant="outline">Tutor only</Badge>
                 </div>
                 <Textarea
-                  value={tutorNotes}
+                  value={tutorNotesForSubmittedResult(tutorNotes, {
+                    submitted: submittedPrework,
+                    mistakeCount: submittedMistakeCount,
+                  })}
                   onChange={(event) => setTutorNotes(event.target.value)}
                   placeholder="Write prompts, misconceptions to probe, or a plan for working through incomplete homework."
                   className="min-h-24"

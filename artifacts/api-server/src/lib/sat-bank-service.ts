@@ -22,6 +22,7 @@ import {
   sessionsTable,
   timerEventsTable,
 } from "@workspace/db";
+import { isNonSatQuiz } from "./assessment-analysis.ts";
 import {
   STAGED_COLLECTION_STUBS,
   collectionStubsFromManifest,
@@ -87,7 +88,11 @@ import {
 } from "./sat-set-difficulty.ts";
 
 export { shouldReplaceFirstSessionPrework };
-import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-weakness.ts";
+import {
+  groupMissesByWeakness,
+  shouldPersistSessionWeaknessGroups,
+  weaknessGroupsNeedRebuild,
+} from "./sat-bank-weakness.ts";
 import { isEnglishSessionSubject, isTaitoFirstSatSession } from "./session-schedule.ts";
 import { isBrokenEmptyAttempt } from "./student-attempt-guards.ts";
 import {
@@ -1855,10 +1860,16 @@ export async function getSessionLesson(sessionId: string) {
       explanation?: string;
     }>;
   } | null;
+  const missedItems = (result?.items ?? []).filter((item) => item.correct === false);
+  // A perfect result has no weakness rows. Rebuilding on every read writes
+  // during GET and can leave the lesson request hanging.
   if (
-    attempt &&
-    result?.items &&
-    (groups.length === 0 || weaknessGroupsNeedRebuild(groups))
+    shouldPersistSessionWeaknessGroups({
+      hasSubmittedItems: Boolean(attempt && result?.items),
+      missCount: missedItems.length,
+      storedGroupCount: groups.length,
+      needsRebuild: weaknessGroupsNeedRebuild(groups),
+    })
   ) {
     await persistWeaknessGroups({
       sessionId,
@@ -1931,14 +1942,19 @@ export async function getSessionLesson(sessionId: string) {
       ? []
       : await db.select().from(bankQuestionsTable).where(inArray(bankQuestionsTable.id, retryBankIds));
   const retryBankById = new Map(retryBanks.map((row) => [row.id, row]));
+  const nonSat = isNonSatQuiz({
+    assignmentTitle: assignment?.title,
+    items: result?.items,
+  });
   const scoreReporting =
-    plan?.homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
+    !nonSat && plan?.homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
   return {
     sessionId,
     homeworkKind: plan?.homeworkKind ?? null,
     scoreReporting,
-    scoreHonesty:
-      scoreReporting === "none"
+    scoreHonesty: nonSat
+      ? "This English set reports accuracy only. It is not an official IELTS band or an SAT score."
+      : scoreReporting === "none"
         ? "This 30–50 question pre-work reports accuracy only. It is not an official SAT score."
         : "Estimated SAT score range based on College Board scoring-guide methodology for linear paper/digital practice. Not an official College Board adaptive digital score.",
     plan: plan
@@ -1967,7 +1983,7 @@ export async function getSessionLesson(sessionId: string) {
           domain: group.domain || context?.domain,
           subject: context?.subject,
         }),
-        domain: group.domain,
+        domain: group.domain ?? "",
         missCount: asFiniteNumber(group.missCount),
         priority: asFiniteNumber(group.priority),
         questionIds,

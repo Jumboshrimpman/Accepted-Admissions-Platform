@@ -28,7 +28,8 @@ export function TutorAnalysisBrief({
   const focus = usefulFocusLabels(nextFocus);
   const clusterLine = formatMissClusters(missClusters);
   const sectionLine = formatSectionBreakdown(sectionBreakdown);
-  const skipLine = skipRehash.slice(0, 3).join(" · ");
+  const skipShown = missClusters.length === 0 ? skipRehash : skipRehash.slice(0, 3);
+  const skipLine = skipShown.join(" · ");
   if (!opener && !sectionLine && !clusterLine && !skipLine && focus.length === 0) {
     return null;
   }
@@ -50,7 +51,10 @@ export function TutorAnalysisBrief({
       ) : null}
       {skipLine ? (
         <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground/80">Skip:</span> {skipLine}
+          <span className="font-medium text-foreground/80">
+            {missClusters.length === 0 ? "Skills:" : "Skip:"}
+          </span>{" "}
+          {skipLine}
         </p>
       ) : null}
       {focus.length > 0 && !clusterLine ? (

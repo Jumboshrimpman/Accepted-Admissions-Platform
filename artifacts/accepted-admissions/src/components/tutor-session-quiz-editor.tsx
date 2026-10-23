@@ -61,12 +61,13 @@ export function TutorSessionQuizEditor({
   onChanged?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { data: assignment } = useGetAssignment(assignmentId, {
+  const assignmentQuery = useGetAssignment(assignmentId, {
     query: {
       enabled: Boolean(assignmentId),
       queryKey: getGetAssignmentQueryKey(assignmentId),
     },
   });
+  const assignment = assignmentQuery.data;
   const updateQuestion = useUpdateAssignmentQuestion();
   const removeQuestion = useRemoveQuestionFromAssignment();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,7 +167,9 @@ export function TutorSessionQuizEditor({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{questions.length} questions</Badge>
+          <Badge variant="outline" data-testid="tutor-session-question-count">
+            {assignmentQuery.isLoading ? "…" : `${questions.length} questions`}
+          </Badge>
           <Button
             size="sm"
             variant="outline"
@@ -180,7 +183,9 @@ export function TutorSessionQuizEditor({
         </div>
       </div>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-      {questions.length === 0 ? (
+      {assignmentQuery.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading questions…</p>
+      ) : questions.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (
         questions.map((question, index) => {

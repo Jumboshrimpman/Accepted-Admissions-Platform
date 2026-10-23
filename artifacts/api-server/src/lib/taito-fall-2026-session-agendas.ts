@@ -224,10 +224,10 @@ If Xavier (not Eunice) runs this hour, use this same agenda. Keep the capability
 ## 2026-10-23 — Reading diagnostic (24Q)
 
 - **0–5:** Remind: original practice, not an official IELTS band.
-- **5–20:** Passage-level debrief (which of the four diagnostic passages hurt most). Re-read one short paragraph for gist vs detail.
+- **5–20:** Passage-level debrief. If a passage was missed, start there. If the set was clean, re-read one short paragraph for gist vs detail.
 - **20–35:** Skill clinic: supported / contradicted / not stated using the same homework passage (do not copy official true / false / not-given items).
 - **35–50:** Writing warm-up from the original bank (rooftop gardens or ferry table) — outline or 10-min paragraph; tutor-review only.
-- **50–60:** Assign Nov 13 routine 12Q. Vocab notebook: five words from diagnostic misses.
+- **50–60:** Assign Nov 13 routine 12Q. Vocab notebook: five words from the diagnostic passages.
 `.trim(),
   },
   {

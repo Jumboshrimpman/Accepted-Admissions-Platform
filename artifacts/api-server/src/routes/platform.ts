@@ -254,11 +254,13 @@ import {
   buildAttemptAnalysis,
   clientCurrentFocusLine,
   hasExtractPlaceholder,
+  isNonSatQuiz,
   prepCopyBeforeTheMeeting,
   toClientAdaptiveGuidance,
   tutorAlertFields,
   type AttemptAnalysis,
 } from "../lib/assessment-analysis";
+import { dedupeListedQuestions } from "../lib/adaptive-question-list";
 import { buildStudentWrittenFeedback } from "../lib/written-quiz-feedback";
 import {
   HARD_BANK_SEED_QUESTIONS,
@@ -3874,11 +3876,13 @@ function withDisplaySkills(
     }),
   }));
   const breakdown = skillBreakdownFromItems(items);
+  const title = assignmentTitle ?? result.assignmentTitle;
+  const nonSat = isNonSatQuiz({ assignmentTitle: title, items });
   const analysis = deterministicAnalysis(
     breakdown,
     items,
     result.score,
-    assignmentTitle ?? result.assignmentTitle,
+    title,
     result.homeworkKind ?? null,
   );
   return {
@@ -3890,10 +3894,16 @@ function withDisplaySkills(
       score: result.score,
       correctCount: result.correctCount,
       totalCount: result.totalCount,
-      assignmentTitle: assignmentTitle ?? result.assignmentTitle,
+      assignmentTitle: title,
       homeworkKind: result.homeworkKind ?? null,
       items: items.filter((item) => !item.flagged),
     }),
+    ...(nonSat
+      ? {
+          scoreReporting: "none" as const,
+          estimatedSatScore: null,
+        }
+      : {}),
   };
 }
 
@@ -4061,8 +4071,13 @@ async function finalizeAttemptResult(
     attempt.assignment.title,
     homeworkKind,
   );
+  const nonSatResult = isNonSatQuiz({
+    assignmentTitle: attempt.assignment.title,
+    subject: attempt.assignment.subject,
+    items: scoredForAnalysis,
+  });
   const scoreReporting =
-    homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
+    !nonSatResult && homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
   const estimatedSatScore =
     scoreReporting === "estimated_diagnostic"
       ? estimateSatScoreFromScoringGuide(scoredForAnalysis)
@@ -14382,14 +14397,15 @@ async function adaptiveCurriculumForSession(
         ),
       );
     hardQuestions.push(
-      ...hardPool
-        .filter(
-          (question) =>
-            subjectFamily(question.subject) === subjectFamily(session.subject) &&
-            !usedQuestionIds.has(question.id),
-        )
-        .slice(0, 8)
-        .map((question, index) => adaptiveQuestionShape(question, index)),
+      ...dedupeListedQuestions(
+        hardPool
+          .filter(
+            (question) =>
+              subjectFamily(question.subject) === subjectFamily(session.subject) &&
+              !usedQuestionIds.has(question.id),
+          )
+          .map((question, index) => adaptiveQuestionShape(question, index)),
+      ).slice(0, 8),
     );
   }
   const blocks = await db
