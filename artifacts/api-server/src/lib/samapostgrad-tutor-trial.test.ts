@@ -13,7 +13,9 @@ import {
   VICTORIA_USER_ID,
   checkoutAudienceForSlug,
   clientMayBuyConsultingProduct,
+  collegeConsultingDashboardEnabled,
   isSamaPostgradTestStudent,
+  ledgerEntriesForConsultingDashboard,
   samaCollegeConsultingBooking,
 } from "./college-consulting.ts";
 import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity.ts";
@@ -94,4 +96,41 @@ test("samapostgrad can buy consulting and SAT, and consulting is request-scoped"
     durationMinutes: 60,
   });
   assert.equal(sat.present && "intent" in sat && sat.intent.service, undefined);
+});
+
+test("samapostgrad dashboard uses consulting credits without becoming Neel", () => {
+  assert.equal(
+    collegeConsultingDashboardEnabled({
+      userId: "sama-user",
+      email: SAMA_POSTGRAD_TEST_EMAIL,
+      clerkUserId: SAMA_POSTGRAD_TEST_CLERK_USER_ID,
+    }),
+    true,
+  );
+  assert.equal(
+    collegeConsultingDashboardEnabled({
+      userId: "sama-user",
+      clerkUserId: SAMA_POSTGRAD_TEST_CLERK_USER_ID,
+    }),
+    true,
+  );
+  assert.equal(collegeConsultingDashboardEnabled({ userId: "other-student" }), false);
+  assert.equal(
+    collegeConsultingDashboardEnabled({ userId: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19" }),
+    true,
+  );
+  const consultingIds = new Set(["consulting-nika"]);
+  const entries = [
+    { productId: "consulting-nika", hours: 1 },
+    { productId: "sat-nika", hours: 4 },
+    { productId: null, hours: 2 },
+  ];
+  assert.deepEqual(
+    ledgerEntriesForConsultingDashboard(entries, consultingIds, true).map((entry) => entry.productId),
+    ["consulting-nika"],
+  );
+  assert.deepEqual(
+    ledgerEntriesForConsultingDashboard(entries, consultingIds, false).map((entry) => entry.productId),
+    ["sat-nika", null],
+  );
 });

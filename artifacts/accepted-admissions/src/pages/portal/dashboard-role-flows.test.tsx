@@ -1453,6 +1453,40 @@ describe("authenticated role dashboard flows", () => {
     for (const phrase of phrases) expect(screen.queryByText(phrase)).toBeNull();
   });
 
+  test("samapostgrad with the consulting flag uses Neel's purchase actions", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "sama-user",
+        displayName: "Sama Test",
+        email: "samapostgrad@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeCollegeConsulting: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    const credits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
+    expect(credits.textContent).toContain("College Consulting credits · 0 prepaid hours total");
+    expect(screen.getByRole("link", { name: "Purchase College Consulting hours" }).getAttribute("href")).toBe(
+      "/portal/sat",
+    );
+    expect(screen.getAllByText("Book a College Consulting session").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Book College Consulting" })).toBeNull();
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy more SAT credits/i })).toBeNull();
+  });
+
   test("Michelle can self-serve SAT booking for Xavier or Eunice", () => {
     mocks.dashboard = {
       ...dashboardForRole("student"),

@@ -392,7 +392,10 @@ export function BookingCard({
   const rescheduleBooking = useRescheduleBookingSession();
 
   const refreshCredits = () => {
-    fetch(apiPath("/api/credits"))
+    const creditsPath = consultingCatalog
+      ? "/api/credits?service=college-consulting"
+      : "/api/credits";
+    fetch(apiPath(creditsPath))
       .then((response) => {
         if (!response.ok) throw new Error("Credits unavailable");
         return response.json() as Promise<CreditResponse>;
@@ -411,7 +414,7 @@ export function BookingCard({
 
   useEffect(() => {
     refreshCredits();
-  }, []);
+  }, [consultingCatalog]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

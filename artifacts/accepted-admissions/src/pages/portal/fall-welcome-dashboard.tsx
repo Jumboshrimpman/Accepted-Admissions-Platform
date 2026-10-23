@@ -478,6 +478,9 @@ export function ClientDashboardView({
       {studentSatCommerce && showSelfServeBooking ? (
         <BookingCard
           collegeConsulting={collegeConsulting}
+          consultingCatalog={
+            collegeConsulting && isSamaPostgradTestEmail(dashboard.user.email)
+          }
           initialRemainingHours={dashboard.credits.remainingHours}
           initialPurchasedHours={dashboard.credits.purchasedHours}
           fallbackSessions={[
