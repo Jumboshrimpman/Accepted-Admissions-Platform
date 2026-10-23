@@ -22,7 +22,7 @@ import {
   sessionsTable,
   timerEventsTable,
 } from "@workspace/db";
-import { isNonSatQuiz } from "./assessment-analysis.ts";
+import { isNonSatQuiz, quizScoreReporting } from "./assessment-analysis.ts";
 import {
   STAGED_COLLECTION_STUBS,
   collectionStubsFromManifest,
@@ -1942,12 +1942,14 @@ export async function getSessionLesson(sessionId: string) {
       ? []
       : await db.select().from(bankQuestionsTable).where(inArray(bankQuestionsTable.id, retryBankIds));
   const retryBankById = new Map(retryBanks.map((row) => [row.id, row]));
-  const nonSat = isNonSatQuiz({
+  const lessonQuiz = {
     assignmentTitle: assignment?.title,
+    subject: assignment?.subject,
+    homeworkKind: plan?.homeworkKind ?? null,
     items: result?.items,
-  });
-  const scoreReporting =
-    !nonSat && plan?.homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
+  };
+  const nonSat = isNonSatQuiz(lessonQuiz);
+  const scoreReporting = quizScoreReporting(lessonQuiz);
   return {
     sessionId,
     homeworkKind: plan?.homeworkKind ?? null,

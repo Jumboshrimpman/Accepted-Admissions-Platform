@@ -255,6 +255,7 @@ import {
   clientCurrentFocusLine,
   hasExtractPlaceholder,
   isNonSatQuiz,
+  quizScoreReporting,
   prepCopyBeforeTheMeeting,
   toClientAdaptiveGuidance,
   tutorAlertFields,
@@ -3878,6 +3879,11 @@ function withDisplaySkills(
   const breakdown = skillBreakdownFromItems(items);
   const title = assignmentTitle ?? result.assignmentTitle;
   const nonSat = isNonSatQuiz({ assignmentTitle: title, items });
+  const scoreReporting = quizScoreReporting({
+    assignmentTitle: title,
+    homeworkKind: result.homeworkKind ?? null,
+    items,
+  });
   const analysis = deterministicAnalysis(
     breakdown,
     items,
@@ -3903,7 +3909,9 @@ function withDisplaySkills(
           scoreReporting: "none" as const,
           estimatedSatScore: null,
         }
-      : {}),
+      : scoreReporting === "estimated_diagnostic"
+        ? { scoreReporting }
+        : {}),
   };
 }
 
@@ -4071,13 +4079,12 @@ async function finalizeAttemptResult(
     attempt.assignment.title,
     homeworkKind,
   );
-  const nonSatResult = isNonSatQuiz({
+  const scoreReporting = quizScoreReporting({
     assignmentTitle: attempt.assignment.title,
     subject: attempt.assignment.subject,
+    homeworkKind,
     items: scoredForAnalysis,
   });
-  const scoreReporting =
-    !nonSatResult && homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
   const estimatedSatScore =
     scoreReporting === "estimated_diagnostic"
       ? estimateSatScoreFromScoringGuide(scoredForAnalysis)

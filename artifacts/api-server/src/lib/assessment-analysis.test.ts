@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { buildAttemptAnalysis, describeSessionPrepMode, hasExtractPlaceholder, prepCopyBeforeTheMeeting, projectSatScores, projectSatSectionScore, qualitativeClientCopy, toClientAdaptiveGuidance, tutorAlertFields } from "./assessment-analysis.ts";
+import { buildAttemptAnalysis, describeSessionPrepMode, hasExtractPlaceholder, isNonSatQuiz, prepCopyBeforeTheMeeting, projectSatScores, projectSatSectionScore, qualitativeClientCopy, quizScoreReporting, toClientAdaptiveGuidance, tutorAlertFields } from "./assessment-analysis.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { FULL_SAT_DIAGNOSTIC_QUESTIONS } from "./sat-assessment-content.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
@@ -284,6 +284,52 @@ test("all-correct IELTS diagnostic fills skills without SAT labels", () => {
   assert.equal(covered, 24);
   assert.ok((analysis.skipRehash ?? []).some((line) => /Writer's views/.test(line)));
   assert.ok((analysis.skipRehash ?? []).some((line) => /Vocabulary in context/.test(line)));
+});
+
+test("an SAT diagnostic with a Standard English Conventions item keeps estimated_diagnostic", () => {
+  const items = [
+    {
+      correct: false,
+      skill: "Boundaries",
+      subject: "SAT Reading & Writing",
+      domain: "Standard English Conventions",
+      prompt: "Which punctuation completes the sentence?",
+    },
+    {
+      correct: true,
+      skill: "Transitions",
+      subject: "SAT Reading & Writing",
+      domain: "Expression of Ideas",
+      prompt: "Which transition connects the paragraphs?",
+    },
+  ];
+  const quiz = {
+    assignmentTitle: "Full-length SAT diagnostic",
+    subject: "SAT",
+    examFamily: "sat",
+    homeworkKind: "diagnostic" as const,
+    items,
+  };
+  assert.equal(isNonSatQuiz(quiz), false);
+  assert.equal(quizScoreReporting(quiz), "estimated_diagnostic");
+  const analysis = buildAttemptAnalysis(
+    [
+      { skill: "Boundaries", correct: 0, total: 1, accuracy: 0 },
+      { skill: "Transitions", correct: 1, total: 1, accuracy: 100 },
+    ],
+    items,
+    50,
+    { assignmentTitle: quiz.assignmentTitle, homeworkKind: "diagnostic" },
+  );
+  assert.match(analysis.label, /estimated SAT score range/i);
+  assert.notEqual(analysis.label, "Accuracy summary");
+  const rw = analysis.sectionBreakdown?.find((row) => row.section === "rw");
+  assert.equal(rw?.label, "Reading and Writing");
+  assert.equal(rw?.total, 2);
+  assert.equal(
+    analysis.sectionBreakdown?.some((row) => /ielts/i.test(row.label)),
+    false,
+  );
 });
 
 test("a reading diagnostic without an English or IELTS title stays an SAT estimate", () => {

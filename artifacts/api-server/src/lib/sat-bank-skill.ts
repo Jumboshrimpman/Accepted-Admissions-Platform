@@ -81,16 +81,41 @@ export function usefulFocusLabels(labels: readonly string[], limit = 3): string[
   return out;
 }
 
+function isSatSubject(subject: string | null | undefined): boolean {
+  const value = subject ?? "";
+  return /\b(sat|psat)\b/i.test(value) && !/\bielts\b/i.test(value);
+}
+
+/** SAT Bluebook domain. The word "English" here is not an IELTS/English quiz. */
+export function isStandardEnglishConventions(value: string | null | undefined): boolean {
+  return (value ?? "").trim().toLowerCase() === "standard english conventions";
+}
+
+/**
+ * IELTS/English comes from the quiz exam family, assignment title, or session
+ * subject. Item domains are ignored. "Standard English Conventions" and SAT
+ * subjects never count.
+ */
 export function isIeltsSkillContext(input: {
   section?: string | null;
   domain?: string | null;
   subject?: string | null;
   examFamily?: string | null;
+  assignmentTitle?: string | null;
 }): boolean {
+  if (isStandardEnglishConventions(input.domain) || isStandardEnglishConventions(input.subject)) {
+    return false;
+  }
+  const family = (input.examFamily ?? "").trim().toLowerCase();
+  if (family === "sat" || family === "psat") return false;
+  if (family === "ielts") return true;
+  const subjectIsSat = isSatSubject(input.subject);
   const section = (input.section ?? "").trim().toLowerCase();
-  if (section === "reading" || section === "writing") return true;
-  const blob = `${input.subject ?? ""} ${input.domain ?? ""} ${input.examFamily ?? ""}`.toLowerCase();
-  return blob.includes("ielts") || /\benglish\b/.test(blob);
+  if ((section === "reading" || section === "writing") && !subjectIsSat) return true;
+  const identity = `${input.assignmentTitle ?? ""} ${input.subject ?? ""}`;
+  if (/\bielts\b/i.test(identity)) return true;
+  if (subjectIsSat) return false;
+  return /\benglish\b/i.test(identity);
 }
 
 export function ieltsSkillFallback(input: {

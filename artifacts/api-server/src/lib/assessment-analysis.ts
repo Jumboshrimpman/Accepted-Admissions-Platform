@@ -186,33 +186,64 @@ function sectionLabel(section: SectionBreakdownRow["section"]): string {
 export function isNonSatQuiz(input: {
   assignmentTitle?: string | null;
   subject?: string | null;
+  examFamily?: string | null;
   items?: ReadonlyArray<Pick<AnalysisItem, "subject" | "domain" | "skill">> | null;
 }): boolean {
-  return isIeltsSkillContext({
-    subject: [input.assignmentTitle, input.subject, ...(input.items ?? []).map((item) => item.subject)]
-      .filter(Boolean)
-      .join(" "),
-    domain: (input.items ?? []).map((item) => item.domain).filter(Boolean).join(" "),
-  });
+  if (
+    isIeltsSkillContext({
+      assignmentTitle: input.assignmentTitle,
+      subject: input.subject,
+      examFamily: input.examFamily,
+    })
+  ) {
+    return true;
+  }
+  // Question subjects can say "IELTS Reading". Domains, including Standard
+  // English Conventions, are not a quiz-family signal.
+  return (input.items ?? []).some((item) => isIeltsSkillContext({ subject: item.subject }));
 }
 
-function sectionBucket(item: AnalysisItem): {
+export function quizScoreReporting(input: {
+  assignmentTitle?: string | null;
+  subject?: string | null;
+  examFamily?: string | null;
+  homeworkKind?: "diagnostic" | "routine" | null;
+  items?: ReadonlyArray<Pick<AnalysisItem, "subject" | "domain" | "skill">> | null;
+}): "none" | "estimated_diagnostic" {
+  if (isNonSatQuiz(input)) return "none";
+  return input.homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
+}
+
+function sectionBucket(item: AnalysisItem, quizIsEnglish: boolean): {
   key: string;
   section: SectionBreakdownRow["section"];
   label: string;
 } {
-  if (isIeltsSkillContext(item)) {
-    const label = ieltsSkillFallback(item);
+  if (quizIsEnglish || isIeltsSkillContext({ subject: item.subject })) {
+    const label = ieltsSkillFallback({ subject: item.subject });
     return { key: label, section: "other", label };
   }
   const section = classifySection(item);
   return { key: section, section, label: sectionLabel(section) };
 }
 
-export function buildSectionBreakdown(items: AnalysisItem[]): SectionBreakdownRow[] {
+export function buildSectionBreakdown(
+  items: AnalysisItem[],
+  quiz?: {
+    assignmentTitle?: string | null;
+    subject?: string | null;
+    examFamily?: string | null;
+  },
+): SectionBreakdownRow[] {
+  const quizIsEnglish = isNonSatQuiz({
+    assignmentTitle: quiz?.assignmentTitle,
+    subject: quiz?.subject,
+    examFamily: quiz?.examFamily,
+    items,
+  });
   const buckets = new Map<string, { section: SectionBreakdownRow["section"]; label: string; correct: number; total: number }>();
   for (const item of items) {
-    const bucket = sectionBucket(item);
+    const bucket = sectionBucket(item, quizIsEnglish);
     const current = buckets.get(bucket.key) ?? {
       section: bucket.section,
       label: bucket.label,
@@ -575,7 +606,9 @@ export function buildAttemptAnalysis(
     homeworkKind?: "diagnostic" | "routine" | null;
   } = {},
 ): AttemptAnalysis {
-  const sectionBreakdown = buildSectionBreakdown(items);
+  const sectionBreakdown = buildSectionBreakdown(items, {
+    assignmentTitle: options.assignmentTitle,
+  });
   const missClusters = buildMissClusters(items);
   const usefulBreakdown = breakdown.filter((row) => !isCoarseSectionLabel(row.skill));
   const strengths = usefulBreakdown
