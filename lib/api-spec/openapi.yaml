@@ -4008,6 +4008,11 @@ components:
               prepaidHours: { type: number }
               productSlug: { type: string }
               calendarConnected: { type: boolean }
+        creditsRemainingLabel:
+          type: string
+          description: >
+            Collapsed header for Neel, Michelle, and Sophia. Names each remaining
+            credit pool. Omitted for every other client.
         twelveSessionPlan:
           type: boolean
           description: >

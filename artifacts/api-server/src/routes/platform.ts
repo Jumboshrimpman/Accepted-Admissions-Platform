@@ -140,7 +140,12 @@ import {
   sessionScheduleChangeError,
 } from "../lib/booking-service";
 import { loadBillingHistory, resolveBillingHistoryAccess } from "../lib/billing-history";
-import { summarizeCreditHours } from "../lib/credit-hours";
+import { remainingCreditHoursForProducts, summarizeCreditHours } from "../lib/credit-hours";
+import {
+  michelleCreditsRemainingLabel,
+  neelCreditsRemainingLabel,
+  sophiaCreditsRemainingLabel,
+} from "../lib/credits-remaining-label";
 import {
   checkoutAudienceForSlug,
   consultingCatalogAlignment,
@@ -324,7 +329,9 @@ import {
   displayedSatHourlyCents,
   displayedSatPriceCents,
   isLegacySharedSatSlug,
+  isMichelleMakaremUser,
   isStandardSatTutorProduct,
+  legacySatHours,
   previewOffersFromSatTutorProducts,
   satSpendableHours,
   satTutorHourSlug,
@@ -13234,9 +13241,9 @@ async function dashboardDataForUser(user: AppUser) {
       : [];
   const [billingUser] =
     user.id === subjectUserId
-      ? [{ email: user.email }]
+      ? [{ email: user.email, clerkUserId: user.clerkUserId }]
       : await db
-          .select({ email: usersTable.email })
+          .select({ email: usersTable.email, clerkUserId: usersTable.clerkUserId })
           .from(usersTable)
           .where(eq(usersTable.id, subjectUserId))
           .limit(1);
@@ -13293,6 +13300,60 @@ async function dashboardDataForUser(user: AppUser) {
         calendars: consultingCalendars,
       })
     : undefined;
+  const sophiaSat = subjectUserId === SOPHIA_SLEIMAN_SAT_USER_ID;
+  const michelleSat = isMichelleMakaremUser({
+    email: billingUser?.email,
+    clerkUserId: billingUser?.clerkUserId,
+  });
+  let creditsRemainingLabel: string | undefined;
+  if (neelConsulting) {
+    creditsRemainingLabel = neelCreditsRemainingLabel(
+      (collegeConsultingTutors ?? []).map((tutor) => ({
+        tutorKey: tutor.tutorKey,
+        name: tutor.name,
+        hours: tutor.prepaidHours,
+      })),
+      creditSummary.remainingHours,
+    );
+  } else if (sophiaSat || michelleSat) {
+    const catalogRows = await db
+      .select({ id: satProductsTable.id, slug: satProductsTable.slug })
+      .from(satProductsTable)
+      .where(
+        inArray(satProductsTable.slug, [
+          ...SAT_TUTOR_PRODUCT_SLUGS,
+          ...ACCEPTED_SAT_CATALOG_SLUGS,
+        ]),
+      );
+    const legacyIds = catalogRows
+      .filter((product) => ACCEPTED_SAT_CATALOG_SLUGS.has(product.slug))
+      .map((product) => product.id);
+    const taggedHours = (tutorKey: "eunice" | "victoria" | "xavier" | "nika") =>
+      remainingCreditHoursForProducts(
+        summaryEntries,
+        catalogRows
+          .filter((product) => satTutorKeyForSlug(product.slug) === tutorKey)
+          .map((product) => product.id),
+      );
+    const legacyHours = legacySatHours(summaryEntries, legacyIds);
+    creditsRemainingLabel = sophiaSat
+      ? sophiaCreditsRemainingLabel({
+          legacyHours,
+          xavierHours: taggedHours("xavier"),
+          euniceHours: taggedHours("eunice"),
+          victoriaHours: taggedHours("victoria"),
+          nikaHours: taggedHours("nika"),
+        })
+      : michelleCreditsRemainingLabel({
+          legacyHours,
+          tagged: [
+            { name: "Eunice", hours: taggedHours("eunice") },
+            { name: "Victoria", hours: taggedHours("victoria") },
+            { name: "Xavier", hours: taggedHours("xavier") },
+            { name: "Nika", hours: taggedHours("nika") },
+          ],
+        });
+  }
   const visibleSessionIds = scopedSessions.map((session) => session.id);
   const materialBlocks =
     visibleSessionIds.length === 0
@@ -13380,6 +13441,7 @@ async function dashboardDataForUser(user: AppUser) {
             }),
         selfServeCollegeConsulting: neelConsulting,
         ...(collegeConsultingTutors ? { collegeConsultingTutors } : {}),
+        ...(creditsRemainingLabel ? { creditsRemainingLabel } : {}),
         twelveSessionPlan: twelveSessionPlanForEmail(commerceEmail),
       },
       progress: {

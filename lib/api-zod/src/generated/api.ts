@@ -762,6 +762,7 @@ export const GetAdminClientDashboardResponse = zod.object({
   "productSlug": zod.string(),
   "calendarConnected": zod.boolean()
 })).optional(),
+  "creditsRemainingLabel": zod.string().optional().describe('Collapsed header for Neel, Michelle, and Sophia. Names each remaining credit pool. Omitted for every other client.\n'),
   "twelveSessionPlan": zod.boolean().describe('True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan \/ twelve focused meetings” copy.\n')
 }),
   "progress": zod.object({
@@ -2526,6 +2527,7 @@ export const GetDashboardResponse = zod.object({
   "productSlug": zod.string(),
   "calendarConnected": zod.boolean()
 })).optional(),
+  "creditsRemainingLabel": zod.string().optional().describe('Collapsed header for Neel, Michelle, and Sophia. Names each remaining credit pool. Omitted for every other client.\n'),
   "twelveSessionPlan": zod.boolean().describe('True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan \/ twelve focused meetings” copy.\n')
 }),
   "progress": zod.object({
