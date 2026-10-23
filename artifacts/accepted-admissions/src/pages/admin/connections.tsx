@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -310,6 +311,14 @@ export default function AdminConnections() {
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    href={`/admin/tutors/${row.tutorProfileId}/preview`}
+                    data-testid={`link-preview-tutor-${row.tutorProfileId}`}
+                  >
+                    Preview
+                  </Link>
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

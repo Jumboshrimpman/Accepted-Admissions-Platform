@@ -15,7 +15,7 @@ type OfferedLength = {
   slots: string[];
 };
 
-type OfferedAvailability = {
+export type OfferedAvailability = {
   from: string;
   to: string;
   timezone: string;
@@ -44,13 +44,34 @@ function slotsByDay(slots: string[], timezone: string): Array<{ dayKey: string; 
   return [...groups.entries()].map(([dayKey, daySlots]) => ({ dayKey, slots: daySlots }));
 }
 
-export function TutorOfferedAvailability() {
+export function TutorOfferedAvailability({
+  preview,
+  googleBusyTimesOmitted = false,
+}: {
+  /** Administrator preview. Null hides the card. Omit this prop on the live dashboard. */
+  preview?: OfferedAvailability | null;
+  googleBusyTimesOmitted?: boolean;
+} = {}) {
+  const readOnly = preview !== undefined;
   const [offer, setOffer] = useState<OfferedAvailability | null>(null);
   const [loading, setLoading] = useState(true);
   const [hidden, setHidden] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!readOnly) return;
+    if (!preview) {
+      setHidden(true);
+      setLoading(false);
+      return;
+    }
+    setOffer(preview);
+    setHidden(false);
+    setLoading(false);
+  }, [preview, readOnly]);
+
+  useEffect(() => {
+    if (readOnly) return;
     let cancelled = false;
     (async () => {
       try {
@@ -70,7 +91,7 @@ export function TutorOfferedAvailability() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readOnly]);
 
   if (hidden) return null;
 
@@ -128,12 +149,14 @@ export function TutorOfferedAvailability() {
               The sessions calendar is missing, so a booking would be refused. No times are shown until
               you reconnect.
             </p>
+            {readOnly ? null : (
             <a
               className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
               href={calendarConnectUrl("tutor_dashboard")}
             >
               Reconnect Google Calendar
             </a>
+            )}
           </div>
         ) : null}
         {disconnectedWithoutSlots ? (
@@ -142,13 +165,20 @@ export function TutorOfferedAvailability() {
             <p className="mt-1 text-muted-foreground">
               No times are being offered until the calendar connection is in place.
             </p>
+            {readOnly ? null : (
             <a
               className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
               href={calendarConnectUrl("tutor_dashboard")}
             >
               Connect Google Calendar
             </a>
+            )}
           </div>
+        ) : null}
+        {googleBusyTimesOmitted ? (
+          <p className="mb-4 text-sm text-muted-foreground" data-testid="tutor-offered-preview-stored">
+            Preview did not refresh Google Calendar. Open times below use saved hours and existing bookings.
+          </p>
         ) : null}
         {showSlots && offer ? (
           <div className="max-h-96 space-y-6 overflow-y-auto">

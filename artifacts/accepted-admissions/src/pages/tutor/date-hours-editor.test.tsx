@@ -80,4 +80,16 @@ describe("tutor date hours editor", () => {
       });
     });
   });
+
+  test("preview shows saved hours and does not offer a save", () => {
+    render(<TutorDateHoursEditor preview={saved} />);
+
+    expect(screen.getByText("Set your bookable hours")).toBeTruthy();
+    expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("This date is closed.");
+    expect(screen.getByTestId("tutor-date-hours-other-dates").textContent).toContain("10:00 AM");
+    expect(screen.queryByRole("button", { name: "Save this date" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add a window" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark this date closed" })).toBeNull();
+    expect(mocks.customFetch).not.toHaveBeenCalled();
+  });
 });

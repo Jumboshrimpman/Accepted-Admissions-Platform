@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 type DateWindow = { start: string; end: string };
 
-type DateHoursState = {
+export type DateHoursState = {
   tutorProfileId: string;
   timezone: string;
   dateHours: Record<string, DateWindow[]>;
@@ -64,18 +64,47 @@ function errorMessage(error: unknown, fallback: string): string {
   return detail || fallback;
 }
 
-export function TutorDateHoursEditor() {
-  const [state, setState] = useState<DateHoursState | null>(null);
-  const [hidden, setHidden] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+export function TutorDateHoursEditor({
+  preview,
+}: {
+  /** Administrator preview. Null hides the card. Omit this prop on the live dashboard. */
+  preview?: DateHoursState | null;
+} = {}) {
+  const readOnly = preview !== undefined;
+  const initialPreview = preview ?? null;
+  const [state, setState] = useState<DateHoursState | null>(initialPreview);
+  const [hidden, setHidden] = useState(readOnly && !initialPreview);
+  const [loaded, setLoaded] = useState(readOnly);
   const [loadError, setLoadError] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [windows, setWindows] = useState<DateWindow[]>([]);
+  const [selectedDate, setSelectedDate] = useState(
+    initialPreview?.editorDates[0] ?? initialPreview?.today ?? "",
+  );
+  const [windows, setWindows] = useState<DateWindow[]>(
+    initialPreview
+      ? windowsFor(initialPreview, initialPreview.editorDates[0] ?? initialPreview.today)
+      : [],
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
 
   useEffect(() => {
+    if (!readOnly) return;
+    if (!preview) {
+      setHidden(true);
+      setLoaded(true);
+      return;
+    }
+    const date = preview.editorDates[0] ?? preview.today;
+    setState(preview);
+    setSelectedDate(date);
+    setWindows(windowsFor(preview, date));
+    setHidden(false);
+    setLoaded(true);
+  }, [preview, readOnly]);
+
+  useEffect(() => {
+    if (readOnly) return;
     let cancelled = false;
     (async () => {
       try {
@@ -105,7 +134,7 @@ export function TutorDateHoursEditor() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readOnly]);
 
   if (!loaded || hidden) return null;
 
@@ -164,9 +193,9 @@ export function TutorDateHoursEditor() {
           Set your bookable hours
         </CardTitle>
         <CardDescription className="mt-1 max-w-2xl">
-          Pick a date in the next 8 weeks. Add the hours clients can book, or mark the date closed.
-          Save this date before you pick another one. Saving one date leaves every other date as it is.
-          Times are {timezoneCaption(state.timezone)}. Sessions already on the calendar stay booked.
+          {readOnly
+            ? `Saved hours for the next 8 weeks. This preview cannot change them. Times are ${timezoneCaption(state.timezone)}.`
+            : `Pick a date in the next 8 weeks. Add the hours clients can book, or mark the date closed. Save this date before you pick another one. Saving one date leaves every other date as it is. Times are ${timezoneCaption(state.timezone)}. Sessions already on the calendar stay booked.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 px-6 pb-6 sm:px-7">
@@ -201,6 +230,8 @@ export function TutorDateHoursEditor() {
           )}
         </div>
 
+        {readOnly ? null : (
+        <>
         <div className="space-y-3" data-testid="tutor-date-hours-windows">
           {windows.map((window, index) => (
             <div key={`${selectedDate}-${index}`} className="flex flex-wrap items-end gap-2">
@@ -297,6 +328,8 @@ export function TutorDateHoursEditor() {
             Mark this date closed
           </Button>
         </div>
+        </>
+        )}
 
         <div data-testid="tutor-date-hours-other-dates">
           <p className="text-sm font-medium">Other open dates</p>

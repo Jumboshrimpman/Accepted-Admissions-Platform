@@ -102,6 +102,47 @@ function clearCalendarReturnQuery(): void {
 
 export function CalendarConnectionCard({
   location,
+  preview,
+}: {
+  location: CalendarConnectionLocation;
+  preview?: { status: "connected" | "disconnected" };
+}) {
+  if (preview) return <CalendarConnectionPreview status={preview.status} />;
+  return <CalendarConnectionLive location={location} />;
+}
+
+function CalendarConnectionPreview({
+  status,
+}: {
+  status: "connected" | "disconnected";
+}) {
+  const connected = status === "connected";
+  return (
+    <Card className="border-primary/10 shadow-lg shadow-primary/5" data-testid="tutor-calendar-preview">
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <CalendarCheck2 className="h-5 w-5 text-primary" />
+              Google Calendar
+            </CardTitle>
+            <CardDescription className="mt-2 max-w-2xl">
+              {connected
+                ? "This tutor's calendar is connected. Connect, disconnect, and refresh stay off in preview."
+                : "This tutor's calendar is not connected. Connect, disconnect, and refresh stay off in preview."}
+            </CardDescription>
+          </div>
+          <Badge variant={connected ? "default" : "secondary"} className="w-fit rounded-full px-3 py-1">
+            {connected ? "Connected" : "Disconnected"}
+          </Badge>
+        </div>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function CalendarConnectionLive({
+  location,
 }: {
   location: CalendarConnectionLocation;
 }) {
