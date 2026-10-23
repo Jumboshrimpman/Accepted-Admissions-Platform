@@ -623,6 +623,8 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
   const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
   assert.match(sql, /pg_timezone_names/);
   assert.match(sql, /ielts_jsonb_array/);
+  assert.match(sql, /count\(DISTINCT elem->>'id'\)/);
+  assert.doesNotMatch(sql, /SELECT elem->>'text'/);
   assert.doesNotMatch(sql, /AT TIME ZONE\s+(COALESCE\(NULLIF\(s\.timezone|s\.timezone)/i);
   const client = await pool.connect();
   const suffix = `routine-bad-shape-${Date.now()}`;
@@ -719,15 +721,60 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
        returning id`,
       [novemberPrompt],
     );
+    const duplicateChoiceIds = [
+      { id: "a", label: "A", text: distractorText },
+      { id: "a", label: "A", text: "To satisfy a city hygiene inspector’s weekly visit" },
+      { id: "b", label: "B", text: correctText },
+      { id: "d", label: "D", text: "To advertise supermarket yeast in the window" },
+    ];
+    const twoCorrectChoices = [
+      { id: "b", label: "B", text: correctText },
+      { id: "b", label: "B", text: distractorText },
+      { id: "c", label: "C", text: "To satisfy a city hygiene inspector’s weekly visit" },
+      { id: "d", label: "D", text: "To advertise supermarket yeast in the window" },
+    ];
+    const duplicateIds = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values (
+         'IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'b', 'Stored explanation.'
+       )
+       returning id`,
+      [novemberPrompt, JSON.stringify(duplicateChoiceIds)],
+    );
+    const zeroMatches = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values (
+         'IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'z', 'Stored explanation.'
+       )
+       returning id`,
+      [novemberPrompt, JSON.stringify(oldNovemberChoices)],
+    );
+    const twoMatches = await client.query<{ id: string }>(
+      `insert into questions (
+         subject, domain, skill, question_type, difficulty, prompt, choices, correct_answer, explanation
+       )
+       values (
+         'IELTS', 'IELTS Reading', 'Main idea', 'mcq', 'medium', $1, $2::jsonb, 'b', 'Stored explanation.'
+       )
+       returning id`,
+      [novemberPrompt, JSON.stringify(twoCorrectChoices)],
+    );
     await client.query(
       `insert into assignment_questions (assignment_id, question_id, position)
-       values ($1, $2, 0), ($1, $3, 1), ($1, $4, 2), ($1, $5, 3)`,
+       values ($1, $2, 0), ($1, $3, 1), ($1, $4, 2), ($1, $5, 3), ($1, $6, 4), ($1, $7, 5), ($1, $8, 6)`,
       [
         assignment.rows[0]!.id,
         goodQuestion,
         nullChoices.rows[0]!.id,
         objectChoices.rows[0]!.id,
         scalarChoices.rows[0]!.id,
+        duplicateIds.rows[0]!.id,
+        zeroMatches.rows[0]!.id,
+        twoMatches.rows[0]!.id,
       ],
     );
 
@@ -756,6 +803,13 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
       correctAnswer: "b",
       prediction: "b",
     };
+    const untouchedItems = [
+      "not-an-object",
+      5,
+      null,
+      ["nested"],
+      { prompt: "no question id", finalAnswer: "b" },
+    ];
     const mixed = await client.query<{ id: string }>(
       `insert into attempts (assignment_id, user_id, status, result)
        values ($1, $2, 'submitted', $3::jsonb)
@@ -763,7 +817,9 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
       [
         assignment.rows[0]!.id,
         taito.id,
-        JSON.stringify({ items: [goodItem, nullChoiceItem, scalarChoiceItem, fallbackItem] }),
+        JSON.stringify({
+          items: [goodItem, nullChoiceItem, scalarChoiceItem, fallbackItem, ...untouchedItems],
+        }),
       ],
     );
     const nullItems = await client.query<{ id: string }>(
@@ -778,10 +834,25 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
        returning id`,
       [assignment.rows[0]!.id, taito.id, JSON.stringify({ items: { questionId: goodQuestion } })],
     );
+    const scalarResult = await client.query<{ id: string }>(
+      `insert into attempts (assignment_id, user_id, status, result)
+       values ($1, $2, 'active', '"paused"'::jsonb)
+       returning id`,
+      [assignment.rows[0]!.id, taito.id],
+    );
     await client.query(
       `insert into responses (attempt_id, question_id, final_answer, prediction, correct)
-       values ($1, $2, 'b', 'b', true)`,
-      [mixed.rows[0]!.id, goodQuestion],
+       values ($1, $2, 'b', 'b', true),
+              ($1, $3, 'b', 'b', true),
+              ($1, $4, 'b', 'b', false),
+              ($1, $5, 'z', 'z', false)`,
+      [
+        mixed.rows[0]!.id,
+        goodQuestion,
+        duplicateIds.rows[0]!.id,
+        twoMatches.rows[0]!.id,
+        zeroMatches.rows[0]!.id,
+      ],
     );
 
     await client.query(sql);
@@ -831,6 +902,11 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
     assert.equal(items[2]?.choices, "saved-and-exit");
     assert.equal(items[3]?.finalAnswer, "c");
     assert.equal(items[3]?.correctAnswer, "c");
+    assert.equal(items[4], "not-an-object");
+    assert.equal(items[5], 5);
+    assert.equal(items[6], null);
+    assert.deepEqual(items[7], ["nested"]);
+    assert.deepEqual(items[8], { prompt: "no question id", finalAnswer: "b" });
 
     const paused = await client.query<{ result: { items: unknown; paused?: boolean } }>(
       `select result from attempts where id = $1`,
@@ -843,6 +919,41 @@ test("0077 tolerates invalid timezones and non-array JSON and still spreads good
       [objectItems.rows[0]!.id],
     );
     assert.deepEqual(objectResult.rows[0]?.result.items, { questionId: goodQuestion });
+    const scalarStored = await client.query<{ result: unknown }>(
+      `select result from attempts where id = $1`,
+      [scalarResult.rows[0]!.id],
+    );
+    assert.equal(scalarStored.rows[0]?.result, "paused");
+
+    const duplicateRow = await client.query<{ correct_answer: string; choices: unknown }>(
+      `select correct_answer, choices from questions where id = $1`,
+      [duplicateIds.rows[0]!.id],
+    );
+    assert.equal(duplicateRow.rows[0]?.correct_answer, "b");
+    assert.deepEqual(duplicateRow.rows[0]?.choices, duplicateChoiceIds);
+    const zeroRow = await client.query<{ correct_answer: string; choices: unknown }>(
+      `select correct_answer, choices from questions where id = $1`,
+      [zeroMatches.rows[0]!.id],
+    );
+    assert.equal(zeroRow.rows[0]?.correct_answer, "z");
+    assert.deepEqual(zeroRow.rows[0]?.choices, oldNovemberChoices);
+    const twoRow = await client.query<{ correct_answer: string; choices: unknown }>(
+      `select correct_answer, choices from questions where id = $1`,
+      [twoMatches.rows[0]!.id],
+    );
+    assert.equal(twoRow.rows[0]?.correct_answer, "b");
+    assert.deepEqual(twoRow.rows[0]?.choices, twoCorrectChoices);
+    const skippedAnswers = await client.query<{ question_id: string; final_answer: string }>(
+      `select question_id, final_answer from responses
+       where attempt_id = $1 and question_id = any($2::uuid[])`,
+      [
+        mixed.rows[0]!.id,
+        [duplicateIds.rows[0]!.id, zeroMatches.rows[0]!.id, twoMatches.rows[0]!.id],
+      ],
+    );
+    assert.equal(skippedAnswers.rows.find((row) => row.question_id === duplicateIds.rows[0]!.id)?.final_answer, "b");
+    assert.equal(skippedAnswers.rows.find((row) => row.question_id === twoMatches.rows[0]!.id)?.final_answer, "b");
+    assert.equal(skippedAnswers.rows.find((row) => row.question_id === zeroMatches.rows[0]!.id)?.final_answer, "z");
 
     const answer = await client.query<{ final_answer: string }>(
       `select final_answer from responses where attempt_id = $1 and question_id = $2`,
