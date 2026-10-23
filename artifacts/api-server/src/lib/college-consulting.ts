@@ -281,12 +281,44 @@ export function collegeConsultingServiceRequested(value: unknown): boolean {
   return normalized === COLLEGE_CONSULTING_SUBJECT.toLowerCase() || normalized === "college-consulting";
 }
 
-/** Sama can book consulting only when the request names that service. SAT stays the default. */
+/** Sama can book consulting only when the request names that service. SAT stays available. */
 export function samaCollegeConsultingBooking(
   user: { clerkUserId?: string | null; email?: string | null } | null | undefined,
   requested: unknown,
 ): boolean {
   return isSamaPostgradTestStudent(user) && collegeConsultingServiceRequested(requested);
+}
+
+/**
+ * Signed-in College Consulting dashboard. Neel is always on it.
+ * Sama's test student matches by Clerk id or email and does not become Neel.
+ */
+export function collegeConsultingDashboardEnabled(input: {
+  userId?: string | null;
+  email?: string | null;
+  clerkUserId?: string | null;
+}): boolean {
+  return (
+    isNeelDharniUser(input.userId) ||
+    isSamaPostgradTestStudent({
+      email: input.email,
+      clerkUserId: input.clerkUserId,
+    })
+  );
+}
+
+/** Consulting dashboards count consulting products only. SAT dashboards exclude them. */
+export function ledgerEntriesForConsultingDashboard<T extends { productId?: string | null }>(
+  entries: readonly T[],
+  consultingProductIds: ReadonlySet<string>,
+  consultingDashboard: boolean,
+): T[] {
+  return entries.filter((entry) => {
+    const consulting = Boolean(entry.productId && consultingProductIds.has(entry.productId));
+    return consultingDashboard
+      ? consulting
+      : !entry.productId || !consultingProductIds.has(entry.productId);
+  });
 }
 
 /** Keep provisioned client names when Clerk attaches on first sign-in. */

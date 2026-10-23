@@ -459,4 +459,111 @@ describe("portal SAT book/pay", () => {
     expect(await screen.findByText("College Consulting hour with Xavier")).toBeTruthy();
     expect(screen.getByText("$195")).toBeTruthy();
   });
+
+  test("samapostgrad sees Neel's consulting offers and can still open SAT", async () => {
+    mocks.dashboard.data.credits.selfServeSatBooking = true;
+    mocks.dashboard.data.credits.selfServeCollegeConsulting = true;
+    mocks.dashboard.data.user = {
+      role: "student",
+      id: "sama-user",
+      displayName: "Sama Test",
+      email: "samapostgrad@gmail.com",
+    };
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo) => {
+        const url = String(input);
+        urls.push(url);
+        if (url.includes("/api/credits")) {
+          return { ok: true, json: async () => ({ remainingHours: 0, purchasedHours: 0, usedHours: 0 }) };
+        }
+        if (url.includes("/api/booking/tutors")) {
+          return {
+            ok: true,
+            json: async () => [
+              {
+                id: "tutor-nika",
+                name: "Nika",
+                title: "College consulting",
+                photoUrl: null,
+                biography: null,
+                subjects: ["College Consulting"],
+                calendarStatus: "connected",
+                providerStatus: "connected",
+                hourlyRateCents: 10000,
+                prepaidHours: 0,
+                bookable: true,
+                serviceName: "College Consulting",
+                tagline: null,
+              },
+            ],
+          };
+        }
+        if (url.includes("service=college-consulting")) {
+          return {
+            ok: true,
+            json: async () => [
+              {
+                id: "nika-hour",
+                slug: "college-consulting-nika-hour",
+                name: "College Consulting hour with Nika",
+                description: "One prepaid 60-minute College Consulting credit with Nika at $100/hour.",
+                durationHours: 1,
+                totalPriceCents: 10000,
+                effectiveHourlyRateCents: 10000,
+              },
+              {
+                id: "xavier-hour",
+                slug: "college-consulting-xavier-hour",
+                name: "College Consulting hour with Xavier Morales",
+                description:
+                  "One prepaid 60-minute College Consulting credit with Xavier Morales at $200/hour for Neel Dharni.",
+                durationHours: 1,
+                totalPriceCents: 20000,
+                effectiveHourlyRateCents: 20000,
+              },
+            ],
+          };
+        }
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "sat-hour",
+              slug: "sat-eunice-60",
+              name: "SAT hour with Eunice",
+              description: "One prepaid SAT hour.",
+              durationHours: 1,
+              totalPriceCents: 13000,
+              effectiveHourlyRateCents: 13000,
+            },
+          ],
+        };
+      }),
+    );
+    const view = render(<PortalSat />);
+    expect(screen.getByRole("heading", { name: "College Consulting" })).toBeTruthy();
+    expect(await screen.findByText("College Consulting hour with Nika")).toBeTruthy();
+    expect(screen.getByText("$100")).toBeTruthy();
+    expect(screen.getByText("$200")).toBeTruthy();
+    expect(screen.getByText(/for Neel Dharni/)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Continue to secure checkout" }).length).toBe(2);
+    const satLink = screen.getByRole("link", { name: "Open SAT booking" });
+    expect(satLink.getAttribute("href")).toBe("/portal/sat?flow=sat");
+    expect(urls.some((url) => url.includes("/api/public/products?service=college-consulting"))).toBe(true);
+    expect(urls.some((url) => url.includes("/api/booking/tutors?service=college-consulting"))).toBe(true);
+    expect(urls.some((url) => url.includes("/api/credits?service=college-consulting"))).toBe(true);
+    view.unmount();
+
+    urls.length = 0;
+    mocks.location = "/portal/sat?flow=sat";
+    render(<PortalSat />);
+    expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
+    expect(await screen.findByText("SAT hour with Eunice")).toBeTruthy();
+    expect(screen.queryByText("College Consulting hour with Nika")).toBeNull();
+    const consultingLink = screen.getByRole("link", { name: "Open College Consulting booking" });
+    expect(consultingLink.getAttribute("href")).toBe("/portal/sat?flow=consulting");
+    expect(urls.some((url) => url.includes("/api/public/products") && !url.includes("service=college-consulting"))).toBe(true);
+  });
 });

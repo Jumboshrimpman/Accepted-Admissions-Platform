@@ -158,8 +158,10 @@ import {
   consultingTutorPhotoUrl,
   collegeConsultingTutorKeyForProfile,
   VICTORIA_DISPLAY_NAME,
+  collegeConsultingDashboardEnabled,
   collegeConsultingServiceRequested,
   isNeelDharniUser,
+  ledgerEntriesForConsultingDashboard,
   neelNikaMeetUrl,
   isNikaTemporaryViewEmail,
   isSamaPostgradTestStudent,
@@ -10264,14 +10266,42 @@ router.get("/credits", async (req: AuthedRequest, res): Promise<void> => {
     .from(creditLedgerTable)
     .where(eq(creditLedgerTable.clientUserId, subjectUserId))
     .orderBy(desc(creditLedgerTable.createdAt));
-  const creditSummary = creditHoursSummary(
-    withoutCheckoutTestHours(entries, await liveCheckoutTestProductIds()),
-  );
+  let visibleEntries = withoutCheckoutTestHours(entries, await liveCheckoutTestProductIds());
+  if (collegeConsultingServiceRequested(req.query.service)) {
+    const identity =
+      req.appUser!.id === subjectUserId
+        ? req.appUser!
+        : (
+            await db
+              .select({ email: usersTable.email, clerkUserId: usersTable.clerkUserId })
+              .from(usersTable)
+              .where(eq(usersTable.id, subjectUserId))
+              .limit(1)
+          )[0];
+    if (
+      collegeConsultingDashboardEnabled({
+        userId: subjectUserId,
+        email: identity?.email,
+        clerkUserId: identity?.clerkUserId,
+      })
+    ) {
+      const consultingProducts = await db
+        .select({ id: satProductsTable.id })
+        .from(satProductsTable)
+        .where(inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]));
+      visibleEntries = ledgerEntriesForConsultingDashboard(
+        visibleEntries,
+        new Set(consultingProducts.map((product) => product.id)),
+        true,
+      );
+    }
+  }
+  const creditSummary = creditHoursSummary(visibleEntries);
   res.json({
     readOnly: req.appUser!.role === "viewer",
     ...creditSummary,
     remainingHours: creditSummary.remainingHours,
-    entries,
+    entries: visibleEntries,
     providerStatus: {
       payments: process.env.STRIPE_WEBHOOK_SECRET
         ? "connected"
@@ -13234,9 +13264,9 @@ async function dashboardDataForUser(user: AppUser) {
       : [];
   const [billingUser] =
     user.id === subjectUserId
-      ? [{ email: user.email }]
+      ? [{ email: user.email, clerkUserId: user.clerkUserId }]
       : await db
-          .select({ email: usersTable.email })
+          .select({ email: usersTable.email, clerkUserId: usersTable.clerkUserId })
           .from(usersTable)
           .where(eq(usersTable.id, subjectUserId))
           .limit(1);
@@ -13263,12 +13293,18 @@ async function dashboardDataForUser(user: AppUser) {
   const consultingProductIds = new Set(consultingProductRows.map((product) => product.id));
   const checkoutTestProductIds = new Set(await liveCheckoutTestProductIds());
   const neelConsulting = isNeelDharniUser(subjectUserId);
-  const summaryEntries = creditEntries.filter((entry) => {
-    if (entry.productId && checkoutTestProductIds.has(entry.productId)) return false;
-    return neelConsulting
-      ? Boolean(entry.productId && consultingProductIds.has(entry.productId))
-      : !entry.productId || !consultingProductIds.has(entry.productId);
+  const consultingDashboard = collegeConsultingDashboardEnabled({
+    userId: subjectUserId,
+    email: billingUser?.email,
+    clerkUserId: billingUser?.clerkUserId,
   });
+  const summaryEntries = ledgerEntriesForConsultingDashboard(
+    creditEntries.filter(
+      (entry) => !entry.productId || !checkoutTestProductIds.has(entry.productId),
+    ),
+    consultingProductIds,
+    consultingDashboard,
+  );
   const creditSummary = creditHoursSummary(summaryEntries);
   const consultingCalendars = { nika: false, xavier: false, victoria: false, eunice: false };
   if (neelConsulting) {
@@ -13378,7 +13414,7 @@ async function dashboardDataForUser(user: AppUser) {
               role: user.role,
               email: commerceEmail,
             }),
-        selfServeCollegeConsulting: neelConsulting,
+        selfServeCollegeConsulting: consultingDashboard,
         ...(collegeConsultingTutors ? { collegeConsultingTutors } : {}),
         twelveSessionPlan: twelveSessionPlanForEmail(commerceEmail),
       },
@@ -13478,23 +13514,31 @@ router.get(
             SAT_TUTOR_PRODUCTS.map((product) => ({ ...product, active: true })),
             client,
           );
-    if (isNeelDharniUser(client.id)) {
-      const consultingTutors = tutorProfiles.filter(
-        (tutor) =>
-          tutor.active &&
-          collegeConsultingTutorKeyForProfile(tutor) &&
-          !victoriaBookingRefused(tutor),
-      );
-      const assigned = consultingTutors.filter((tutor) =>
-        assignedSatLinks.some(
-          (link) =>
-            link.tutorUserId === tutor.userId &&
-            link.subject.trim().toLowerCase() === COLLEGE_CONSULTING_SUBJECT.toLowerCase(),
-        ),
-      );
-      const pool = assigned.length > 0 ? assigned : consultingTutors;
-      const connected = pool.filter((tutor) => tutor.calendarStatus === "connected");
-      previewTutor = connected[0] ?? pool[0];
+    if (
+      collegeConsultingDashboardEnabled({
+        userId: client.id,
+        email: client.email,
+        clerkUserId: client.clerkUserId,
+      })
+    ) {
+      if (isNeelDharniUser(client.id)) {
+        const consultingTutors = tutorProfiles.filter(
+          (tutor) =>
+            tutor.active &&
+            collegeConsultingTutorKeyForProfile(tutor) &&
+            !victoriaBookingRefused(tutor),
+        );
+        const assigned = consultingTutors.filter((tutor) =>
+          assignedSatLinks.some(
+            (link) =>
+              link.tutorUserId === tutor.userId &&
+              link.subject.trim().toLowerCase() === COLLEGE_CONSULTING_SUBJECT.toLowerCase(),
+          ),
+        );
+        const pool = assigned.length > 0 ? assigned : consultingTutors;
+        const connected = pool.filter((tutor) => tutor.calendarStatus === "connected");
+        previewTutor = connected[0] ?? pool[0];
+      }
       const consultingRows = await db
         .select()
         .from(satProductsTable)

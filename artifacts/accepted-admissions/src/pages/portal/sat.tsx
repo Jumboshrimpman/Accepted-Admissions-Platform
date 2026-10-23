@@ -90,8 +90,14 @@ export default function PortalSat() {
   const [reconcilingPayment, setReconcilingPayment] = useState(false);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
+  const flow = new URLSearchParams(query).get("flow");
   const samaTrial = isSamaPostgradTestEmail(currentUser?.email ?? dashboard.data?.user?.email);
-  const consultingFlow = samaTrial && new URLSearchParams(query).get("flow") === "consulting";
+  const accountConsulting = showsCollegeConsultingAccount({
+    userId: dashboard.data?.user?.id ?? currentUser?.id,
+    credits: dashboard.data?.credits,
+  });
+  const collegeConsulting =
+    !(samaTrial && flow === "sat") && (accountConsulting || (samaTrial && flow === "consulting"));
 
   useEffect(() => {
     const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
@@ -109,11 +115,11 @@ export default function PortalSat() {
   }, [location, setLocation]);
 
   useEffect(() => {
-    if (userLoading) return;
+    if (userLoading || dashboard.isLoading) return;
     let cancelled = false;
     setLoadingProducts(true);
     setProductError(false);
-    const productPath = consultingFlow
+    const productPath = collegeConsulting
       ? "/api/public/products?service=college-consulting"
       : "/api/public/products";
     fetch(apiPath(productPath))
@@ -150,7 +156,7 @@ export default function PortalSat() {
     return () => {
       cancelled = true;
     };
-  }, [consultingFlow, userLoading]);
+  }, [collegeConsulting, dashboard.isLoading, userLoading]);
 
   useEffect(() => {
     if (!awaitingWebhook || dashboard.isLoading || !dashboard.data || baselineHours !== null) return;
@@ -195,7 +201,9 @@ export default function PortalSat() {
             () => undefined,
           );
         }
-        const response = await fetch(apiPath("/api/credits"));
+        const response = await fetch(
+          apiPath(collegeConsulting ? "/api/credits?service=college-consulting" : "/api/credits"),
+        );
         if (!response.ok) throw new Error("credits");
         return response.json() as Promise<{
           remainingHours?: number;
@@ -231,7 +239,7 @@ export default function PortalSat() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [awaitingWebhook, baselineHours, baselinePurchasedHours, creditPollTimedOut, queryClient]);
+  }, [awaitingWebhook, baselineHours, baselinePurchasedHours, collegeConsulting, creditPollTimedOut, queryClient]);
 
   if (dashboard.isLoading || userLoading) {
     return (
@@ -243,11 +251,6 @@ export default function PortalSat() {
   }
 
   const commerceCredits = dashboard.data?.credits;
-  const collegeConsulting =
-    showsCollegeConsultingAccount({
-      userId: dashboard.data?.user?.id ?? currentUser?.id,
-      credits: commerceCredits,
-    }) || consultingFlow;
   const showSatCommerce = showsSelfServeSatCommerce(commerceCredits) || collegeConsulting;
   if (!canPurchaseOrBookSatCredits(currentUser?.role) || !showSatCommerce) {
     const tutorDenied = currentUser?.role === "tutor";
@@ -366,11 +369,15 @@ export default function PortalSat() {
         {samaTrial ? (
           <p className="mt-3 text-sm">
             <Link
-              href={consultingFlow ? PORTAL_SAT_PURCHASE_HREF : `${PORTAL_SAT_PURCHASE_HREF}?flow=consulting`}
+              href={
+                collegeConsulting
+                  ? `${PORTAL_SAT_PURCHASE_HREF}?flow=sat`
+                  : `${PORTAL_SAT_PURCHASE_HREF}?flow=consulting`
+              }
               className="font-medium text-primary underline-offset-4 hover:underline"
               data-testid="link-sama-tutor-trial-switch"
             >
-              {consultingFlow ? "Open SAT booking" : "Open College Consulting booking"}
+              {collegeConsulting ? "Open SAT booking" : "Open College Consulting booking"}
             </Link>
           </p>
         ) : null}
@@ -405,7 +412,13 @@ export default function PortalSat() {
                   setReconcilingPayment(true);
                   fetch(apiPath("/api/payments/reconcile-checkout"), { method: "POST" })
                     .catch(() => undefined)
-                    .then(() => fetch(apiPath("/api/credits")))
+                    .then(() =>
+                      fetch(
+                        apiPath(
+                          collegeConsulting ? "/api/credits?service=college-consulting" : "/api/credits",
+                        ),
+                      ),
+                    )
                     .then(async (response) => {
                       if (!response || !response.ok) throw new Error("credits");
                       return response.json() as Promise<{
@@ -572,7 +585,7 @@ export default function PortalSat() {
           </Card>
           <BookingCard
             collegeConsulting={collegeConsulting}
-            consultingCatalog={consultingFlow}
+            consultingCatalog={samaTrial && collegeConsulting}
             initialRemainingHours={remainingHours}
             initialPurchasedHours={purchasedHours}
             fallbackSessions={upcomingSat}
