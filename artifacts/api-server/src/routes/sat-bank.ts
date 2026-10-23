@@ -465,8 +465,13 @@ router.get(
       res.status(404).json({ error: "Session not found" });
       return;
     }
-    const lesson = await getSessionLesson(session.id);
-    res.json(GetSessionLessonResponse.parse(lesson));
+    try {
+      const lesson = await getSessionLesson(session.id);
+      res.json(GetSessionLessonResponse.parse(lesson));
+    } catch (error) {
+      req.log?.warn({ err: error }, "Session lesson could not be loaded");
+      res.status(500).json({ error: "Session lesson could not be loaded." });
+    }
   },
 );
 

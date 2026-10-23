@@ -7,7 +7,10 @@ import {
 } from "./sat-scoring-guide.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  ieltsSkillFallback,
   isCoarseSectionLabel,
+  isGuidanceFiller,
+  isIeltsSkillContext,
   isMissingExtractSkill,
   normalizeFocusKey,
   usefulFocusLabels,
@@ -180,31 +183,85 @@ function sectionLabel(section: SectionBreakdownRow["section"]): string {
   return "Other";
 }
 
-export function buildSectionBreakdown(items: AnalysisItem[]): SectionBreakdownRow[] {
-  const buckets = new Map<
-    SectionBreakdownRow["section"],
-    { correct: number; total: number }
-  >();
+export function isNonSatQuiz(input: {
+  assignmentTitle?: string | null;
+  subject?: string | null;
+  examFamily?: string | null;
+  items?: ReadonlyArray<Pick<AnalysisItem, "subject" | "domain" | "skill">> | null;
+}): boolean {
+  if (
+    isIeltsSkillContext({
+      assignmentTitle: input.assignmentTitle,
+      subject: input.subject,
+      examFamily: input.examFamily,
+    })
+  ) {
+    return true;
+  }
+  // Question subjects can say "IELTS Reading". Domains, including Standard
+  // English Conventions, are not a quiz-family signal.
+  return (input.items ?? []).some((item) => isIeltsSkillContext({ subject: item.subject }));
+}
+
+export function quizScoreReporting(input: {
+  assignmentTitle?: string | null;
+  subject?: string | null;
+  examFamily?: string | null;
+  homeworkKind?: "diagnostic" | "routine" | null;
+  items?: ReadonlyArray<Pick<AnalysisItem, "subject" | "domain" | "skill">> | null;
+}): "none" | "estimated_diagnostic" {
+  if (isNonSatQuiz(input)) return "none";
+  return input.homeworkKind === "diagnostic" ? "estimated_diagnostic" : "none";
+}
+
+function sectionBucket(item: AnalysisItem, quizIsEnglish: boolean): {
+  key: string;
+  section: SectionBreakdownRow["section"];
+  label: string;
+} {
+  if (quizIsEnglish || isIeltsSkillContext({ subject: item.subject })) {
+    const label = ieltsSkillFallback({ subject: item.subject });
+    return { key: label, section: "other", label };
+  }
+  const section = classifySection(item);
+  return { key: section, section, label: sectionLabel(section) };
+}
+
+export function buildSectionBreakdown(
+  items: AnalysisItem[],
+  quiz?: {
+    assignmentTitle?: string | null;
+    subject?: string | null;
+    examFamily?: string | null;
+  },
+): SectionBreakdownRow[] {
+  const quizIsEnglish = isNonSatQuiz({
+    assignmentTitle: quiz?.assignmentTitle,
+    subject: quiz?.subject,
+    examFamily: quiz?.examFamily,
+    items,
+  });
+  const buckets = new Map<string, { section: SectionBreakdownRow["section"]; label: string; correct: number; total: number }>();
   for (const item of items) {
-    const section = classifySection(item);
-    const current = buckets.get(section) ?? { correct: 0, total: 0 };
+    const bucket = sectionBucket(item, quizIsEnglish);
+    const current = buckets.get(bucket.key) ?? {
+      section: bucket.section,
+      label: bucket.label,
+      correct: 0,
+      total: 0,
+    };
     current.total += 1;
     if (item.correct) current.correct += 1;
-    buckets.set(section, current);
+    buckets.set(bucket.key, current);
   }
-  return (["rw", "math", "other"] as const)
-    .filter((section) => (buckets.get(section)?.total ?? 0) > 0)
-    .map((section) => {
-      const value = buckets.get(section)!;
-      return {
-        section,
-        label: sectionLabel(section),
-        accuracy: value.total === 0 ? 0 : (value.correct / value.total) * 100,
-        correct: value.correct,
-        total: value.total,
-        missCount: value.total - value.correct,
-      };
-    });
+  return [...buckets.values()].map((value) => ({
+    section: value.section,
+    label: value.label,
+    accuracy: value.total === 0 ? 0 : (value.correct / value.total) * 100,
+    correct: value.correct,
+    total: value.total,
+    missCount: value.total - value.correct,
+  }));
 }
 
 export function buildMissClusters(items: AnalysisItem[], limit = 4): MissCluster[] {
@@ -291,7 +348,12 @@ function usableGuidanceTheme(label: string | null | undefined): string | null {
     return null;
   }
   const stripped = stripSkillMeta(label);
-  if (!stripped || hasExtractPlaceholder(stripped) || isCoarseSectionLabel(stripped)) {
+  if (
+    !stripped ||
+    hasExtractPlaceholder(stripped) ||
+    isCoarseSectionLabel(stripped) ||
+    isGuidanceFiller(stripped)
+  ) {
     return null;
   }
   if (stripped.length > 48 || /^(practice |review |keep the next )/i.test(stripped)) {
@@ -544,13 +606,15 @@ export function buildAttemptAnalysis(
     homeworkKind?: "diagnostic" | "routine" | null;
   } = {},
 ): AttemptAnalysis {
-  const sectionBreakdown = buildSectionBreakdown(items);
+  const sectionBreakdown = buildSectionBreakdown(items, {
+    assignmentTitle: options.assignmentTitle,
+  });
   const missClusters = buildMissClusters(items);
   const usefulBreakdown = breakdown.filter((row) => !isCoarseSectionLabel(row.skill));
   const strengths = usefulBreakdown
     .filter((skill) => skill.accuracy >= 80)
-    .sort((a, b) => b.accuracy - a.accuracy)
-    .slice(0, 3)
+    .sort((a, b) => b.accuracy - a.accuracy || b.total - a.total)
+    .slice(0, 8)
     .map((skill) => `${skill.skill} (${Math.round(skill.accuracy)}% · ${skill.correct}/${skill.total})`);
   const clusterWeaknesses = missClusters
     .filter((cluster) => cluster.kind !== "section" || missClusters.every((item) => item.kind === "section"))
@@ -586,16 +650,18 @@ export function buildAttemptAnalysis(
             : ""
         }. Do not start a new timed set until those explanations are solid.`;
 
-  const skipRehash = strengths.slice(0, 3);
+  const skipRehash = topCluster == null ? strengths : strengths.slice(0, 3);
   const sectionLine = formatSectionLine(sectionBreakdown);
 
+  const nonSat = isNonSatQuiz({ assignmentTitle: options.assignmentTitle, items });
   const isDiagnostic =
-    options.homeworkKind === "diagnostic" ||
-    (options.homeworkKind !== "routine" &&
-      /diagnostic|full sat|practice test/i.test(options.assignmentTitle ?? ""));
-  const estimated = estimateSatScoreFromScoringGuide(items);
+    !nonSat &&
+    (options.homeworkKind === "diagnostic" ||
+      (options.homeworkKind !== "routine" &&
+        /diagnostic|full sat|practice test/i.test(options.assignmentTitle ?? "")));
+  const estimated = nonSat ? null : estimateSatScoreFromScoringGuide(items);
   const projectionLine =
-    isDiagnostic && estimated.total != null
+    isDiagnostic && estimated?.total != null
       ? ` Estimated SAT score range: ${formatEstimatedSatRange(estimated)}. ${SAT_SCORING_METHODOLOGY}`
       : "";
 
@@ -614,7 +680,11 @@ export function buildAttemptAnalysis(
 
   const built = {
     source: "deterministic" as const,
-    label: isDiagnostic ? SAT_ESTIMATED_SCORE_LABEL : "Adaptive skill analysis",
+    label: isDiagnostic
+      ? SAT_ESTIMATED_SCORE_LABEL
+      : nonSat
+        ? "Accuracy summary"
+        : "Adaptive skill analysis",
     provider: null,
     strengths:
       strengths.length > 0

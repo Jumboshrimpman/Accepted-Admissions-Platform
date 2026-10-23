@@ -13,6 +13,28 @@ const homeworkState = {
   deadline: null as string | null,
   deliveryPhase: "before_session" as const,
 };
+const sessionPageState = {
+  cleanIelts: false,
+};
+
+const assignmentQueries: Record<
+  string,
+  {
+    isLoading?: boolean;
+    data?: {
+      id: string;
+      title: string;
+      questions: Array<{ id: string; prompt: string; questionType: string }>;
+    } | null;
+  }
+> = {};
+
+const adaptiveLists = {
+  mistakes: [{ skill: "Transitions" }] as Array<{ skill: string; prompt?: string }>,
+  recommendations: [] as Array<{ id: string; status: string; skill: string; reason: string }>,
+  hardQuestions: [] as Array<{ id: string; skill: string; prompt: string }>,
+};
+
 const adaptiveState: {
   sessionPrep: null | {
     mode: string;
@@ -41,8 +63,6 @@ vi.mock("@workspace/api-client-react", () => ({
     data: {
       id: "session-1",
       courseId: "course-1",
-      title: "Taito SAT with Eunice",
-      subject: "SAT",
       status: "published",
       dateTime: sessionState.dateTime,
       timezone: "America/New_York",
@@ -51,16 +71,81 @@ vi.mock("@workspace/api-client-react", () => ({
       calendarEventUrl: null,
       student: { id: "student-1", name: "Taito Goto" },
       tutor: { id: "tutor-eunice", name: "Eunice Chon", specialty: "Assigned tutor", avatarUrl: null },
-      tutorNotes: null,
-      assignments: [
-        {
-          id: "quiz-1",
-          deliveryPhase: "before_session",
-          title: "October pre-session mini-section",
-        },
-      ],
+      tutorNotes: sessionPageState.cleanIelts
+        ? "Vocab notebook: five words from diagnostic misses. Ask which of the four diagnostic passages hurt most."
+        : null,
+      subject: sessionPageState.cleanIelts ? "IELTS" : "SAT",
+      title: sessionPageState.cleanIelts
+        ? "Taito’s English Session with Nika"
+        : "Taito SAT with Eunice",
+      assignments: sessionPageState.cleanIelts
+        ? [
+            {
+              id: "quiz-ielts",
+              deliveryPhase: "before_session",
+              title: "IELTS-style diagnostic reading",
+              questionCount: 24,
+            },
+            {
+              id: "during-1",
+              deliveryPhase: "during_session",
+              title: "In-session practice",
+              questionCount: 18,
+            },
+          ]
+        : [
+            {
+              id: "quiz-1",
+              deliveryPhase: "before_session",
+              title: "October pre-session mini-section",
+            },
+          ],
       blocks: [],
-      homework: [
+      homework: sessionPageState.cleanIelts
+        ? [
+            {
+              assignmentId: "quiz-ielts",
+              title: "IELTS-style diagnostic reading — Taito’s English Session with Nika",
+              status: "published",
+              deadline: null,
+              attemptStatus: "submitted",
+              score: 100,
+              mistakeCount: 0,
+              attemptId: "attempt-ielts",
+              analysis: {
+                label: "Accuracy summary",
+                feedback: "You handled this set cleanly.",
+                sessionOpener:
+                  "Homework is clean. Skip miss review and use leftover time on harder bank items.",
+                strengths: ["Detail (100% · 11/11)"],
+                weaknesses: [
+                  "No repeated missed skill yet. Keep building from the published session plan.",
+                ],
+                nextFocus: [
+                  "Practice No major weakness identified in this set. next — those misses are the fastest way to raise this set.",
+                ],
+                skipRehash: [
+                  "Detail (100% · 11/11)",
+                  "Main idea (100% · 4/4)",
+                  "Inference (100% · 4/4)",
+                  "Writer's views (100% · 3/3)",
+                  "Vocabulary in context (100% · 2/2)",
+                ],
+                sectionBreakdown: [
+                  {
+                    section: "other",
+                    label: "IELTS Reading",
+                    accuracy: 100,
+                    correct: 24,
+                    total: 24,
+                    missCount: 0,
+                  },
+                ],
+                missClusters: [],
+              },
+            },
+          ]
+        : [
         {
           assignmentId: "quiz-archived-1",
           title: "Full-length SAT diagnostic — Taito’s SAT Session with Eunice",
@@ -116,13 +201,13 @@ vi.mock("@workspace/api-client-react", () => ({
     error: null,
   }),
   useListSessionArtifacts: () => ({ data: [] }),
-  useGetAssignment: () => ({ data: null }),
+  useGetAssignment: (id: string) => assignmentQueries[id] ?? { data: null },
   useGetAdaptiveCurriculum: () => ({
     data: {
       homework: homeworkState,
-      mistakes: [{ skill: "Transitions" }],
-      recommendations: [],
-      hardQuestions: [],
+      mistakes: adaptiveLists.mistakes,
+      recommendations: adaptiveLists.recommendations,
+      hardQuestions: adaptiveLists.hardQuestions,
       publishedBlocks: [],
       sessionPrep: adaptiveState.sessionPrep,
     },
@@ -137,7 +222,18 @@ vi.mock("@workspace/api-client-react", () => ({
   useRemoveQuestionFromAssignment: () => ({ mutate: vi.fn(), isPending: false }),
   getGetSessionLessonQueryKey: (id: string) => ["/api/sessions", id, "lesson"],
   useGetSessionLesson: () => ({
-    data: {
+    data: sessionPageState.cleanIelts
+      ? {
+          sessionId: "session-1",
+          attemptId: "attempt-ielts",
+          scoreReporting: "none",
+          scoreHonesty:
+            "This English set reports accuracy only. It is not an official IELTS band or an SAT score.",
+          weaknessGroups: [],
+          misses: [],
+          retries: [],
+        }
+      : {
       sessionId: "session-1",
       scoreReporting: "none",
       scoreHonesty: "This 30–50 question pre-work reports accuracy only. It is not an official SAT score.",
@@ -202,6 +298,11 @@ afterEach(() => {
   homeworkState.latestAttemptStatus = "submitted";
   homeworkState.latestAttemptId = "attempt-1";
   homeworkState.deadline = null;
+  sessionPageState.cleanIelts = false;
+  adaptiveLists.mistakes = [{ skill: "Transitions" }];
+  adaptiveLists.recommendations = [];
+  adaptiveLists.hardQuestions = [];
+  for (const key of Object.keys(assignmentQueries)) delete assignmentQueries[key];
 });
 
 describe("tutor session review page", () => {
@@ -285,6 +386,67 @@ describe("tutor session review page", () => {
     expect(screen.getByTestId("tutor-prework-deadline").textContent).toMatch(/October 23, 2026/);
     expect(screen.getByTestId("prepared-live-plan").textContent).not.toMatch(/Homework was not finished/i);
     expect(screen.getByTestId("prepared-live-plan").textContent).toMatch(/Waiting on the before-session assignment/i);
+  });
+
+  test("a submitted all-correct IELTS diagnostic fills the session without SAT copy", () => {
+    sessionPageState.cleanIelts = true;
+    sessionState.dateTime = "2026-10-23T12:00:00.000Z";
+    homeworkState.title = "IELTS-style diagnostic reading — Taito’s English Session with Nika";
+    homeworkState.questionCount = 24;
+    homeworkState.latestAttemptStatus = "submitted";
+    homeworkState.latestAttemptId = "attempt-ielts";
+    adaptiveLists.mistakes = [];
+    adaptiveLists.hardQuestions = [
+      { id: "hard-1", skill: "Inference", prompt: "Which inference is supported?" },
+    ];
+    adaptiveState.sessionPrep = {
+      mode: "hard_bank",
+      summary: "18 in-session questions ready",
+      duringAssignmentId: "during-1",
+      attachedQuestionCount: 18,
+    };
+    assignmentQueries["quiz-ielts"] = {
+      isLoading: false,
+      data: {
+        id: "quiz-ielts",
+        title: "IELTS-style diagnostic reading",
+        questions: Array.from({ length: 24 }, (_, index) => ({
+          id: `q-${index + 1}`,
+          prompt: `Diagnostic item ${index + 1}`,
+          questionType: "multiple_choice",
+        })),
+      },
+    };
+    assignmentQueries["during-1"] = { isLoading: true, data: null };
+
+    render(<TutorSession />);
+
+    expect(screen.getByTestId("tutor-completion-badge-quiz-ielts").textContent).toMatch(/Submitted · 100%/);
+    expect(screen.getByTestId("during-session-question-count").textContent).toBe("18 questions");
+    expect(screen.getAllByTestId("tutor-session-question-count").some((node) => node.textContent === "24 questions")).toBe(true);
+    expect(screen.getAllByTestId("tutor-session-question-count").some((node) => node.textContent === "…")).toBe(true);
+    expect(screen.getByText("Loading questions…")).toBeTruthy();
+    expect(screen.getByTestId("recommended-practice-empty").textContent).toMatch(/harder practice is the live plan/i);
+    expect(screen.getByTestId("recommended-hard-practice").textContent).toMatch(/Which inference is supported/);
+    expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/No misses on the submitted pre-work/i);
+    expect(screen.getByTestId("missed-on-prework").textContent).toMatch(/no incorrect items/i);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).toMatch(/IELTS Reading/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).toMatch(/Skills:/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).toMatch(/Writer's views/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).toMatch(/Vocabulary in context/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).not.toMatch(/Estimated SAT/i);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).not.toMatch(/Reading and Writing/);
+    expect(screen.getByTestId("tutor-analysis-brief").textContent).not.toMatch(/those misses are/i);
+    expect(screen.getByText(/five words from the diagnostic passages/i)).toBeTruthy();
+    expect(screen.queryByText(/diagnostic misses/i)).toBeNull();
+    expect(screen.getByTestId("in-session-practice-link").querySelector("a")?.getAttribute("href")).toBe(
+      "/portal/assignments/during-1",
+    );
+    expect(screen.queryByText("Loading session lesson…")).toBeNull();
+    expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(
+      /not an official IELTS band or an SAT score/i,
+    );
+    expect(screen.getByTestId("session-lesson-dashboard").textContent).toMatch(/No grouped misses/i);
   });
 
   test("hides PDF downloads for a tutor who is not assigned to the session", () => {

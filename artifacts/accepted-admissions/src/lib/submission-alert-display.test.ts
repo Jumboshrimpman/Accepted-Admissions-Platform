@@ -15,6 +15,15 @@ test("drops coarse section labels from the focus line", () => {
   );
 });
 
+test("drops a garbled no-miss focus sentence", () => {
+  assert.deepEqual(
+    usefulFocusLabels([
+      "Practice No major weakness identified in this set. next — those misses are the fastest way to raise this set.",
+    ]),
+    [],
+  );
+});
+
 test("hides filler analysis and review-queue skill dumps", () => {
   assert.equal(
     isFillerAnalysis(

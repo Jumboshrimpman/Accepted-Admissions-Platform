@@ -329,6 +329,57 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/estimated SAT range/i)).toBeNull();
   });
 
+  test("an IELTS result does not show an SAT score range", () => {
+    mocks.attempt.status = "submitted";
+    mocks.result = {
+      attemptId: "attempt-1",
+      assignmentId: "asg-1",
+      assignmentTitle: "IELTS-style diagnostic reading — Taito’s English Session",
+      studentUserId: "stu",
+      studentName: "Taito",
+      sessionId: "session-1",
+      sessionDateTime: null,
+      status: "submitted",
+      score: 100,
+      correctCount: 24,
+      totalCount: 24,
+      activeSeconds: 1800,
+      pausedSeconds: 0,
+      breakdown: [],
+      items: [],
+      analysis: {
+        source: "deterministic",
+        label: "Accuracy summary",
+        provider: null,
+        strengths: ["Detail (100% · 11/11)"],
+        weaknesses: ["No repeated missed skill yet. Keep building from the published session plan."],
+        mistakePatterns: [],
+        nextFocus: ["Continue with the published session plan, then stretch into harder variants."],
+        feedback: "You handled this set cleanly.",
+      },
+      studentFeedback: "You handled this set cleanly.",
+      homeworkKind: "diagnostic",
+      scoreReporting: "estimated_diagnostic",
+      estimatedSatScore: {
+        total: 1600,
+        rangeLow: 1560,
+        rangeHigh: 1600,
+        readingWriting: 800,
+        math: 800,
+        label: "Estimated SAT score range (College Board scoring guide, linear practice)",
+        methodology: "Estimated from College Board scoring-guide methodology.",
+      },
+    };
+    render(<PortalAssignment />);
+    expect(screen.getByRole("heading", { name: "English result" })).toBeTruthy();
+    expect(screen.getByText("100%")).toBeTruthy();
+    expect(screen.queryByText("1560–1600")).toBeNull();
+    expect(screen.queryByText(/estimated SAT range/i)).toBeNull();
+    expect(screen.queryByText(/Estimated SAT score range/i)).toBeNull();
+    expect(screen.queryByText("Your SAT result")).toBeNull();
+    expect(screen.queryByText("Diagnostic result")).toBeNull();
+  });
+
   test("missed homework becomes an in-session test of at most 15 questions and allows partial submit", () => {
     mocks.deliveryPhase = "during_session";
     mocks.title = "In-session homework completion";

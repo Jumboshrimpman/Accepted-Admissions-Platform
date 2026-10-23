@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { groupMissesByWeakness, weaknessGroupsNeedRebuild } from "./sat-bank-weakness.ts";
+import {
+  groupMissesByWeakness,
+  shouldPersistSessionWeaknessGroups,
+  weaknessGroupsNeedRebuild,
+} from "./sat-bank-weakness.ts";
 
 test("groups misses by skill and ranks the heaviest weakness first", () => {
   const groups = groupMissesByWeakness([
@@ -77,4 +81,25 @@ test("rebuilds persisted groups that still store the extract placeholder", () =>
   assert.equal(weaknessGroupsNeedRebuild([{ skill: "SAT Math" }]), false);
   assert.equal(weaknessGroupsNeedRebuild([{ skill: "Transitions" }]), false);
   assert.equal(weaknessGroupsNeedRebuild([]), false);
+});
+
+test("a perfect submitted result does not rebuild weakness groups on read", () => {
+  assert.equal(
+    shouldPersistSessionWeaknessGroups({
+      hasSubmittedItems: true,
+      missCount: 0,
+      storedGroupCount: 0,
+      needsRebuild: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPersistSessionWeaknessGroups({
+      hasSubmittedItems: true,
+      missCount: 3,
+      storedGroupCount: 0,
+      needsRebuild: false,
+    }),
+    true,
+  );
 });

@@ -74,6 +74,23 @@ export function groupMissesByWeakness(items: readonly WeaknessMiss[]): WeaknessG
  * Persisted groups created before skill remapping stored the extract
  * placeholder. Rebuild those rows; empty groups are handled separately.
  */
+/**
+ * Lesson reads must not insert weakness rows for a perfect result.
+ * That write-on-read is what left "Loading session lesson…" unresolved.
+ */
+export function shouldPersistSessionWeaknessGroups(input: {
+  hasSubmittedItems: boolean;
+  missCount: number;
+  storedGroupCount: number;
+  needsRebuild: boolean;
+}): boolean {
+  return (
+    input.hasSubmittedItems &&
+    input.missCount > 0 &&
+    (input.storedGroupCount === 0 || input.needsRebuild)
+  );
+}
+
 export function weaknessGroupsNeedRebuild(
   groups: ReadonlyArray<{ skill?: string | null }>,
 ): boolean {

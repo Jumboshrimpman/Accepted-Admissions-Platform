@@ -29,12 +29,18 @@ export function isCoarseSectionLabel(label: string | null | undefined): boolean 
 }
 
 /** Distinct useful focus — never Math + SAT Math + Reading and Writing. */
+export function isGuidanceFiller(label: string | null | undefined): boolean {
+  return /no major weakness|no repeated missed|no incorrect|those misses are/i.test(
+    label ?? "",
+  );
+}
+
 export function usefulFocusLabels(labels: readonly string[], limit = 3): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of labels) {
     const label = raw.replace(/\s*\(\d+% accuracy\)\s*$/i, "").trim();
-    if (!label || isCoarseSectionLabel(label)) continue;
+    if (!label || isCoarseSectionLabel(label) || isGuidanceFiller(label)) continue;
     const key = normalizeFocusKey(label);
     if (seen.has(key)) continue;
     seen.add(key);

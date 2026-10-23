@@ -5,6 +5,7 @@ import {
   adminBankSkillLabel,
   attemptResultHasPlaceholderSkill,
   isCoarseSectionLabel,
+  isIeltsSkillContext,
   isMissingExtractSkill,
   quizSubject,
   sectionSkillLabel,
@@ -117,5 +118,51 @@ test("prefers a real domain when the stored skill is only a section name", () =>
   assert.deepEqual(
     usefulFocusLabels(["SAT Math", "Math", "Reading and Writing", "Algebra", "Algebra"]),
     ["Algebra"],
+  );
+});
+
+test("Standard English Conventions is not an IELTS context", () => {
+  assert.equal(
+    isIeltsSkillContext({
+      subject: "SAT Reading & Writing",
+      domain: "Standard English Conventions",
+      examFamily: "sat",
+      assignmentTitle: "Full-length SAT diagnostic",
+    }),
+    false,
+  );
+  assert.equal(
+    isIeltsSkillContext({ domain: "Standard English Conventions" }),
+    false,
+  );
+  assert.equal(
+    skillLabelForBank({
+      skill: "",
+      subject: "SAT Reading & Writing",
+      domain: "Standard English Conventions",
+      section: "rw",
+    }),
+    "Standard English Conventions",
+  );
+});
+
+test("IELTS items do not fall back to the SAT section label", () => {
+  assert.equal(
+    skillLabelForBank({ skill: "", subject: "IELTS Reading", domain: "IELTS Reading" }),
+    "IELTS Reading",
+  );
+  assert.equal(
+    skillLabelForBank({ skill: null, section: "writing", subject: "IELTS Writing" }),
+    "IELTS Writing",
+  );
+  assert.equal(
+    skillLabelForBank({ skill: "", section: "rw", subject: "SAT Reading & Writing" }),
+    "Reading and Writing",
+  );
+  assert.deepEqual(
+    usefulFocusLabels([
+      "Practice No major weakness identified in this set. next — those misses are the fastest way to raise this set.",
+    ]),
+    [],
   );
 });
