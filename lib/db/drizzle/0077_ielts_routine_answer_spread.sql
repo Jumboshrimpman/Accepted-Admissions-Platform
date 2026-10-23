@@ -6,6 +6,22 @@
 -- session, is left alone. A stored key is rewritten only when that letter's
 -- choice text is the new key's choice text.
 -- Sessions, invites, calendar events, tutors, and the question bank are not updated.
+-- A session timezone is used only when it is a real IANA name in pg_timezone_names.
+-- Anything else (blank, "ET", other abbreviations) falls back to Asia/Tokyo, which
+-- is the zone this migration already uses for Taito, and the UTC check still applies.
+-- jsonb_array_elements is only called on JSON arrays. Null, scalar, and object
+-- values are skipped so a paused attempt cannot abort the migration.
+
+CREATE OR REPLACE FUNCTION pg_temp.ielts_jsonb_array(value jsonb)
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $ielts_jsonb_array$
+  SELECT CASE
+    WHEN jsonb_typeof(value) = 'array' THEN value
+    ELSE '[]'::jsonb
+  END;
+$ielts_jsonb_array$;
 
 DO $spread$
 DECLARE
@@ -52,7 +68,15 @@ BEGIN
   FROM sessions AS s
   LEFT JOIN users AS client ON client.id = s.client_user_id
   WHERE (
-      (s.date_time AT TIME ZONE COALESCE(NULLIF(s.timezone, ''), 'Asia/Tokyo'))::date
+      (s.date_time AT TIME ZONE COALESCE(
+        (
+          SELECT tz.name
+          FROM pg_timezone_names AS tz
+          WHERE lower(tz.name) = lower(NULLIF(btrim(s.timezone), ''))
+          LIMIT 1
+        ),
+        'Asia/Tokyo'
+      ))::date
         IN (DATE '2026-11-13', DATE '2026-12-04')
       OR (s.date_time AT TIME ZONE 'Asia/Tokyo')::date
         IN (DATE '2026-11-13', DATE '2026-12-04')
@@ -95,18 +119,18 @@ BEGIN
     WHERE q.choices IS DISTINCT FROM target.new_choices
       AND (
         SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
-        FROM jsonb_array_elements(q.choices) AS elem
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
       ) = (
         SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
-        FROM jsonb_array_elements(target.new_choices) AS elem
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(target.new_choices)) AS elem
       )
       AND (
         SELECT elem->>'text'
-        FROM jsonb_array_elements(q.choices) AS elem
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
         WHERE elem->>'id' = lower(trim(q.correct_answer))
       ) = (
         SELECT elem->>'text'
-        FROM jsonb_array_elements(target.new_choices) AS elem
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(target.new_choices)) AS elem
         WHERE elem->>'id' = target.new_correct
       )
     ORDER BY q.id
@@ -114,8 +138,8 @@ BEGIN
     UPDATE responses AS response
     SET final_answer = COALESCE((
           SELECT next_choice.elem->>'id'
-          FROM jsonb_array_elements(question_row.old_choices) AS old_choice(elem)
-          JOIN jsonb_array_elements(question_row.new_choices) AS next_choice(elem)
+          FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.old_choices)) AS old_choice(elem)
+          JOIN jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.new_choices)) AS next_choice(elem)
             ON next_choice.elem->>'text' = old_choice.elem->>'text'
           WHERE lower(trim(response.final_answer)) = lower(old_choice.elem->>'id')
           LIMIT 1
@@ -124,8 +148,8 @@ BEGIN
           WHEN response.prediction IS NULL THEN NULL
           ELSE COALESCE((
             SELECT next_choice.elem->>'id'
-            FROM jsonb_array_elements(question_row.old_choices) AS old_choice(elem)
-            JOIN jsonb_array_elements(question_row.new_choices) AS next_choice(elem)
+            FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.old_choices)) AS old_choice(elem)
+            JOIN jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.new_choices)) AS next_choice(elem)
               ON next_choice.elem->>'text' = old_choice.elem->>'text'
             WHERE lower(trim(response.prediction)) = lower(old_choice.elem->>'id')
             LIMIT 1
@@ -150,10 +174,10 @@ BEGIN
             WHEN item->>'questionId' <> question_row.id::text THEN item
             WHEN (
               SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
-              FROM jsonb_array_elements(COALESCE(item->'choices', question_row.old_choices)) AS elem
+              FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(COALESCE(item->'choices', question_row.old_choices))) AS elem
             ) IS DISTINCT FROM (
               SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
-              FROM jsonb_array_elements(question_row.new_choices) AS elem
+              FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.new_choices)) AS elem
             ) THEN item
             ELSE item
               || jsonb_build_object(
@@ -161,8 +185,8 @@ BEGIN
                 'correctAnswer', question_row.new_correct,
                 'finalAnswer', COALESCE((
                   SELECT next_choice.elem->>'id'
-                  FROM jsonb_array_elements(COALESCE(item->'choices', question_row.old_choices)) AS old_choice(elem)
-                  JOIN jsonb_array_elements(question_row.new_choices) AS next_choice(elem)
+                  FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(COALESCE(item->'choices', question_row.old_choices))) AS old_choice(elem)
+                  JOIN jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.new_choices)) AS next_choice(elem)
                     ON next_choice.elem->>'text' = old_choice.elem->>'text'
                   WHERE lower(trim(item->>'finalAnswer')) = lower(old_choice.elem->>'id')
                   LIMIT 1
@@ -170,8 +194,8 @@ BEGIN
                 'prediction', COALESCE(
                   (
                     SELECT to_jsonb(next_choice.elem->>'id')
-                    FROM jsonb_array_elements(COALESCE(item->'choices', question_row.old_choices)) AS old_choice(elem)
-                    JOIN jsonb_array_elements(question_row.new_choices) AS next_choice(elem)
+                    FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(COALESCE(item->'choices', question_row.old_choices))) AS old_choice(elem)
+                    JOIN jsonb_array_elements(pg_temp.ielts_jsonb_array(question_row.new_choices)) AS next_choice(elem)
                       ON next_choice.elem->>'text' = old_choice.elem->>'text'
                     WHERE item ? 'prediction'
                       AND item->>'prediction' IS NOT NULL
@@ -184,10 +208,11 @@ BEGIN
           END
           ORDER BY ordinality
         ), '[]'::jsonb)
-        FROM jsonb_array_elements(attempt.result->'items') WITH ORDINALITY AS src(item, ordinality)
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(attempt.result->'items')) WITH ORDINALITY AS src(item, ordinality)
       )
     )
     WHERE attempt.result ? 'items'
+      AND jsonb_typeof(attempt.result->'items') = 'array'
       AND EXISTS (
         SELECT 1
         FROM assignments AS assignment
@@ -196,7 +221,7 @@ BEGIN
       )
       AND EXISTS (
         SELECT 1
-        FROM jsonb_array_elements(attempt.result->'items') AS item
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(attempt.result->'items')) AS item
         WHERE item->>'questionId' = question_row.id::text
       );
 
