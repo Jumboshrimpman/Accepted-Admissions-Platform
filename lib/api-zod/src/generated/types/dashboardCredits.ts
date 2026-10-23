@@ -15,6 +15,8 @@ export interface DashboardCredits {
   selfServeSatBooking: boolean;
   selfServeCollegeConsulting?: boolean;
   collegeConsultingTutors?: DashboardCreditsCollegeConsultingTutorsItem[];
+  /** Collapsed header for Neel, Michelle, and Sophia. Names each remaining credit pool. Omitted for every other client. */
+  creditsRemainingLabel?: string;
   /** True only for Taito Goto’s client context (including his viewer). Gates Fall 12-session “one plan / twelve focused meetings” copy. */
   twelveSessionPlan: boolean;
 }

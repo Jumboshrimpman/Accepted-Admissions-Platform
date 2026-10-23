@@ -727,7 +727,12 @@ describe("administrator client preview", () => {
     expect(screen.getByText("Available times with Xavier Morales")).toBeTruthy();
     expect(screen.getByText("Calendar connected")).toBeTruthy();
     expect(screen.queryByText("Eunice Chon")).toBeNull();
-    expectPaymentReceiptsLast();
+    const dashboard = screen.getByTestId("client-dashboard");
+    const text = dashboard.textContent ?? "";
+    expect(text).toContain("0 credits remaining");
+    expect(text.indexOf("Welcome back, Michelle.")).toBeLessThan(text.indexOf("0 credits remaining"));
+    expect(text.indexOf("SAT session payment and receipts")).toBeLessThan(text.indexOf("Billing history"));
+    expect(dashboard.lastElementChild).toBe(screen.getByTestId("billing-history"));
   });
 
   test("self-serve clients still see calendar-disconnect copy when no sessions exist", () => {
@@ -994,14 +999,16 @@ describe("administrator client preview", () => {
 
     const consultingDashboard = screen.getByTestId("consulting-preview-dashboard");
     const sectionText = consultingDashboard.textContent ?? "";
-    expect(consultingDashboard.firstElementChild).toBe(screen.getByTestId("consulting-preview-sessions"));
-    expect(sectionText.indexOf("Upcoming sessions")).toBeLessThan(sectionText.indexOf("Welcome back, Neel."));
-    expect(sectionText.indexOf("Welcome back, Neel.")).toBeLessThan(sectionText.indexOf("College Consulting credits"));
-    expect(sectionText.indexOf("College Consulting credits")).toBeLessThan(sectionText.indexOf("Billing history"));
-    expect(sectionText.indexOf("Billing history")).toBeLessThan(sectionText.indexOf("Tutors"));
+    expect(consultingDashboard.firstElementChild).toBe(screen.getByTestId("consulting-preview-welcome"));
+    expect(sectionText.indexOf("Welcome back, Neel.")).toBeLessThan(sectionText.indexOf("Upcoming sessions"));
+    expect(sectionText.indexOf("Upcoming sessions")).toBeLessThan(sectionText.indexOf("1 Nika hour credits remaining"));
+    expect(sectionText.indexOf("1 Nika hour credits remaining")).toBeLessThan(sectionText.indexOf("Read-only College Consulting preview"));
+    expect(sectionText.indexOf("Read-only College Consulting preview")).toBeLessThan(sectionText.indexOf("Tutors"));
+    expect(sectionText.indexOf("Tutors")).toBeLessThan(sectionText.indexOf("Billing history"));
+    expect(consultingDashboard.lastElementChild).toBe(screen.getByTestId("billing-history"));
     const credits = screen.getByTestId("consulting-preview-credits") as HTMLDetailsElement;
     expect(credits.open).toBe(false);
-    expect(credits.textContent).toContain("College Consulting credits · 1 prepaid hour total");
+    expect(credits.textContent).toContain("1 Nika hour credits remaining");
     const billing = screen.getByTestId("billing-history") as HTMLDetailsElement;
     expect(billing.open).toBe(false);
     expect(billing.textContent).toContain("Billing history (0 payments)");

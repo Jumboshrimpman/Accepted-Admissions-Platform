@@ -1415,7 +1415,10 @@ describe("authenticated role dashboard flows", () => {
     const sophia = render(<FallWelcomeDashboard />);
     const sophiaCredits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
     expect(sophiaCredits.open).toBe(false);
-    expect(sophiaCredits.textContent).toContain("SAT session credits · 0 prepaid hours total");
+    expect(sophiaCredits.textContent).toContain("0 credits remaining");
+    const sophiaText = screen.getByTestId("client-dashboard").textContent ?? "";
+    expect(sophiaText.indexOf("Welcome back, Sophia.")).toBeLessThan(sophiaText.indexOf("0 credits remaining"));
+    expect(screen.getByTestId("client-dashboard").lastElementChild).toBe(screen.getByTestId("billing-history"));
     for (const phrase of phrases) expect(screen.queryByText(phrase)).toBeNull();
     sophia.unmount();
 
@@ -1441,7 +1444,7 @@ describe("authenticated role dashboard flows", () => {
     render(<FallWelcomeDashboard />);
     const neelCredits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
     expect(neelCredits.open).toBe(false);
-    expect(neelCredits.textContent).toContain("College Consulting credits · 1 prepaid hour total");
+    expect(neelCredits.textContent).toContain("1 hour credits remaining");
     expect(screen.getByRole("button", { name: "Book a College Consulting session" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Buy College Consulting hours" }).getAttribute("href")).toBe(
       "/portal/sat",
@@ -1578,13 +1581,93 @@ describe("authenticated role dashboard flows", () => {
 
     const credits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
     expect(credits.open).toBe(false);
-    expect(credits.textContent).toContain("SAT session credits · 1 prepaid hour total");
+    expect(credits.textContent).toContain("1 hour credits remaining");
+    const michelleText = screen.getByTestId("client-dashboard").textContent ?? "";
+    expect(michelleText.indexOf("Welcome back, Michelle.")).toBeLessThan(
+      michelleText.indexOf("Your sessions will appear here when they are scheduled."),
+    );
+    expect(michelleText.indexOf("Your sessions will appear here when they are scheduled.")).toBeLessThan(
+      michelleText.indexOf("1 hour credits remaining"),
+    );
+    expect(michelleText.indexOf("1 hour credits remaining")).toBeLessThan(michelleText.indexOf("Billing history"));
+    expect(screen.getByTestId("client-dashboard").lastElementChild).toBe(screen.getByTestId("billing-history"));
     expect(screen.getByText("Currently reserved or completed")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Book a SAT session" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Buy more SAT credits/i }).getAttribute("href")).toBe(
       "/portal/sat",
     );
     expect(screen.queryByRole("link", { name: /Purchase session credits/i })).toBeNull();
+  });
+
+  test("other self-serve students keep the purchased-hours summary and the previous module order", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "other-student",
+        displayName: "Alex Student",
+        email: "alex.student@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 4,
+        usedHours: 1,
+        remainingHours: 3,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    const text = screen.getByTestId("client-dashboard").textContent ?? "";
+    expect(text).toContain("SAT session credits · 4 prepaid hours total");
+    expect(text.indexOf("SAT session credits · 4 prepaid hours total")).toBeLessThan(text.indexOf("Billing history"));
+    expect(text.indexOf("Billing history")).toBeLessThan(
+      text.indexOf("Your sessions will appear here when they are scheduled."),
+    );
+    expect(screen.queryByText("3 hours credits remaining")).toBeNull();
+    expect(screen.queryByTestId("billing-history")).toBeTruthy();
+  });
+
+  test("Neel names the tutors who still have hours", () => {
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+        displayName: "Neel Dharni",
+        email: "neel.dharni@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 3,
+        usedHours: 0,
+        remainingHours: 3,
+        readOnly: false,
+        selfServeCollegeConsulting: true,
+        selfServeSatBooking: false,
+        twelveSessionPlan: false,
+        creditsRemainingLabel: "1 Victoria hour and 2 Xavier hours credits remaining",
+        collegeConsultingTutors: [
+          { tutorKey: "nika", name: "Nika", hourlyRateCents: 10000, prepaidHours: 0, productSlug: "college-consulting-nika-hour", calendarConnected: true },
+          { tutorKey: "victoria", name: "Victoria", hourlyRateCents: 13000, prepaidHours: 1, productSlug: "college-consulting-victoria-hour", calendarConnected: false },
+          { tutorKey: "xavier", name: "Xavier", hourlyRateCents: 20000, prepaidHours: 2, productSlug: "college-consulting-xavier-hour", calendarConnected: true },
+        ],
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+    const text = screen.getByTestId("client-dashboard").textContent ?? "";
+    expect(text.indexOf("Welcome back, Neel.")).toBeLessThan(
+      text.indexOf("Your sessions will appear here when they are scheduled."),
+    );
+    expect(text.indexOf("Your sessions will appear here when they are scheduled.")).toBeLessThan(
+      text.indexOf("1 Victoria hour and 2 Xavier hours credits remaining"),
+    );
+    expect(screen.getByTestId("client-dashboard").lastElementChild).toBe(screen.getByTestId("billing-history"));
   });
 
   test("client session roadmap hides cancelled meetings", () => {

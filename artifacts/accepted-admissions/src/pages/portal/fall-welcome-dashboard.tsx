@@ -44,6 +44,7 @@ import { FinancialCard } from "@/pages/portal/financial-card";
 import { PreworkDeadlineNote } from "@/components/prework-deadline-note";
 import { SessionJoinActions } from "@/components/session-join-actions";
 import { clientAdaptiveGuidance, displaySessionFocus } from "@/lib/client-adaptive-guidance";
+import { collapsedCreditsHeader, isPriorityCreditsDashboard } from "@/lib/credits-remaining-label";
 import { studentFacingCopy } from "@/lib/quiz-content";
 import {
   PORTAL_BEGIN_RESCHEDULE_EVENT,
@@ -264,105 +265,90 @@ export function ClientDashboardView({
   const analysis = nextSession?.latestResult?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
   const completed = sessions.filter(isSessionWorkComplete).length;
-  return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
-      <section
-        className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
-        data-testid="portal-curriculum-section"
-      >
-        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
-              {twelveSessionPlan ? "Fall 2026 curriculum" : "Your curriculum"}
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              {twelveSessionPlan
-                ? "One plan. Twelve focused meetings."
-                : `Welcome back, ${firstName}.`}
-            </h1>
-            <p className="mt-3 text-white/75">
-              {twelveSessionPlan
-                ? "SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop."
-                : "Open a meeting to review preparation, join Google Meet, or continue SAT practice."}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-white/65">Progress</p>
-              <p className="mt-1 text-lg font-semibold">
-                {completed} of {twelveSessionPlan ? sessions.length || 12 : sessions.length}
-              </p>
+  const priorityDashboard = isPriorityCreditsDashboard({
+    userId: mirroredStudent?.id ?? dashboard.user.id,
+    email: mirroredStudent?.email ?? dashboard.user.email,
+    viewingAs: mirroredStudent,
+  });
+  const creditsSummary = collapsedCreditsHeader({
+    priority: priorityDashboard,
+    collegeConsulting,
+    purchasedHours: dashboard.credits.purchasedHours,
+    remainingHours: dashboard.credits.remainingHours,
+    creditsRemainingLabel: dashboard.credits.creditsRemainingLabel,
+    tutors: dashboard.credits.collegeConsultingTutors,
+  });
+  const upcomingMeeting = nextSession ? (
+        <Card className="border-primary/25 shadow-sm" data-testid="client-upcoming-meeting">
+          <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_1fr_auto] lg:items-center">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge>{sessionSubjectLabel(nextSession.subject)}</Badge>
+                <span className="text-sm text-muted-foreground">Next meeting · {formatSessionDate(withDisplayTimezone(nextSession, clientTimezone))}</span>
+              </div>
+              <h2 className="mt-3 text-2xl font-semibold">{displaySessionTitle(nextSession.title, nextSession.subject)}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{formatSessionTimeRange(withDisplayTimezone(nextSession, clientTimezone))}</p>
             </div>
-            {twelveSessionPlan ? (
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-                <p className="text-white/65">English dates</p>
-                <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-                <p className="text-white/65">Upcoming</p>
-                <p className="mt-1 text-lg font-semibold">
-                  {sessions.filter((session) => session.readiness !== "complete").length} meeting
-                  {sessions.filter((session) => session.readiness !== "complete").length === 1 ? "" : "s"}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+            <div className="rounded-xl bg-muted/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
+              <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="featured-prework-summary">
+                {nextSession.preparation
+                  ? [
+                      studentFacingCopy(nextSession.preparation.title),
+                      (nextSession.preparation.questionCount ?? 0) > 0
+                        ? `${nextSession.preparation.questionCount} questions`
+                        : null,
+                      featuredQuizSettled ? "Complete" : readinessLabel(nextSession),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "No required preparation."}
+              </p>
+              <PreworkDeadlineNote
+                label={
+                  nextSession.preparation
+                    ? studentPreworkDeadlineCopy({
+                        assignment: nextSession.preparation,
+                        session: nextSession,
+                        pastSessionDay: featuredQuizSettled,
+                        clientTimezone,
+                      })
+                    : null
+                }
+                testId="featured-prework-deadline"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              {adminPreview ? <Button disabled size="lg">Read only</Button> : <>
+                <Button asChild size="lg" className="w-full lg:w-auto">
+                  <Link href={featuredQuizSettled ? sessionPlanHref(nextSession) : primaryHref(nextSession)}>
+                    {featuredQuizSettled
+                      ? "Open session plan"
+                      : viewer && nextSession.preparation && !nextSession.latestResult
+                        ? "Review preparation"
+                        : nextSession.nextAction}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <SessionJoinActions
+                  meetingUrl={nextSession.meetingUrl}
+                  calendarEventUrl={nextSession.calendarEventUrl}
+                />
+              </>}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card data-testid="client-upcoming-meeting"><CardContent className="p-8 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "The Fall curriculum will appear here when it is available." : "Your sessions will appear here when they are scheduled."}</CardContent></Card>
+      );
 
-      {viewer && (
-        <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <Eye className="mt-0.5 h-5 w-5 shrink-0" />
-          <div>
-            <p className="font-semibold">
-              {adminPreview
-                ? "Read-only client preview"
-                : mirroredStudent
-                  ? `Viewing as ${mirroredStudent.displayName}`
-                  : "Parent view"}
-            </p>
-            <p className="mt-1 text-amber-800">
-              {adminPreview
-                ? "Open quizzes and session materials to review them. Booking, meetings, and student actions stay disabled."
-                : "Parent view is read-only. You can review the plan, preparation, and published results. Only the student can complete work."}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {showPaymentSuccess && studentSatCommerce && showSelfServeBooking && (
-        <div
-          role="status"
-          data-testid="payment-success-banner"
-          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
-        >
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-          <div>
-            <p className="font-semibold">Payment received — credits are ready</p>
-            <p className="mt-1 text-emerald-800">
-              You have {dashboard.credits.remainingHours} prepaid hour
-              {dashboard.credits.remainingHours === 1 ? "" : "s"} available. Choose a tutor and time on the schedule below.
-            </p>
-            <Button
-              className="mt-3 rounded-full"
-              size="sm"
-              onClick={() =>
-                document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-            >
-              View booking schedule
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {showPurchaseCard ? (
+  const creditsSection = showPurchaseCard ? (
         <details className="rounded-2xl border bg-card" data-testid="client-credit-balance">
           <summary className="cursor-pointer px-5 py-4 text-lg font-semibold">
             <span className="inline-flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
-              {collegeConsulting ? "College Consulting credits" : "SAT session credits"} · {dashboard.credits.purchasedHours} prepaid hour{dashboard.credits.purchasedHours === 1 ? "" : "s"} total
+              {creditsSummary}
             </span>
           </summary>
           <div className="space-y-3 border-t px-5 py-4">
@@ -469,11 +455,111 @@ export function ClientDashboardView({
             )}
           </div>
         </details>
-      ) : null}
+      ) : null;
 
-      {!offPlatformBilling && dashboard.user.role !== "viewer" ? (
+  const billingSection = !offPlatformBilling && dashboard.user.role !== "viewer" ? (
         <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
-      ) : null}
+      ) : null;
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
+      <section
+        className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
+        data-testid="portal-curriculum-section"
+      >
+        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
+              {twelveSessionPlan ? "Fall 2026 curriculum" : "Your curriculum"}
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              {twelveSessionPlan
+                ? "One plan. Twelve focused meetings."
+                : `Welcome back, ${firstName}.`}
+            </h1>
+            <p className="mt-3 text-white/75">
+              {twelveSessionPlan
+                ? "SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop."
+                : "Open a meeting to review preparation, join Google Meet, or continue SAT practice."}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+              <p className="text-white/65">Progress</p>
+              <p className="mt-1 text-lg font-semibold">
+                {completed} of {twelveSessionPlan ? sessions.length || 12 : sessions.length}
+              </p>
+            </div>
+            {twelveSessionPlan ? (
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-white/65">English dates</p>
+                <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-white/65">Upcoming</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {sessions.filter((session) => session.readiness !== "complete").length} meeting
+                  {sessions.filter((session) => session.readiness !== "complete").length === 1 ? "" : "s"}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {priorityDashboard ? upcomingMeeting : null}
+      {priorityDashboard ? creditsSection : null}
+
+      {viewer && (
+        <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <Eye className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {adminPreview
+                ? "Read-only client preview"
+                : mirroredStudent
+                  ? `Viewing as ${mirroredStudent.displayName}`
+                  : "Parent view"}
+            </p>
+            <p className="mt-1 text-amber-800">
+              {adminPreview
+                ? "Open quizzes and session materials to review them. Booking, meetings, and student actions stay disabled."
+                : "Parent view is read-only. You can review the plan, preparation, and published results. Only the student can complete work."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showPaymentSuccess && studentSatCommerce && showSelfServeBooking && (
+        <div
+          role="status"
+          data-testid="payment-success-banner"
+          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+        >
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-semibold">Payment received — credits are ready</p>
+            <p className="mt-1 text-emerald-800">
+              You have {dashboard.credits.remainingHours} prepaid hour
+              {dashboard.credits.remainingHours === 1 ? "" : "s"} available. Choose a tutor and time on the schedule below.
+            </p>
+            <Button
+              className="mt-3 rounded-full"
+              size="sm"
+              onClick={() =>
+                document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              View booking schedule
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {priorityDashboard ? null : creditsSection}
+
+      {priorityDashboard ? null : billingSection}
 
       {studentSatCommerce && showSelfServeBooking ? (
         <BookingCard
@@ -510,70 +596,7 @@ export function ClientDashboardView({
         />
       ) : null}
 
-      {nextSession ? (
-        <Card className="border-primary/25 shadow-sm">
-          <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_1fr_auto] lg:items-center">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>{sessionSubjectLabel(nextSession.subject)}</Badge>
-                <span className="text-sm text-muted-foreground">Next meeting · {formatSessionDate(withDisplayTimezone(nextSession, clientTimezone))}</span>
-              </div>
-              <h2 className="mt-3 text-2xl font-semibold">{displaySessionTitle(nextSession.title, nextSession.subject)}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{formatSessionTimeRange(withDisplayTimezone(nextSession, clientTimezone))}</p>
-            </div>
-            <div className="rounded-xl bg-muted/40 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current focus</p>
-              <p className="mt-2 text-sm font-medium">{displaySessionFocus(nextSession.currentFocus, analysis, "Open the session to review the focus.")}</p>
-              <p className="mt-2 text-xs text-muted-foreground" data-testid="featured-prework-summary">
-                {nextSession.preparation
-                  ? [
-                      studentFacingCopy(nextSession.preparation.title),
-                      (nextSession.preparation.questionCount ?? 0) > 0
-                        ? `${nextSession.preparation.questionCount} questions`
-                        : null,
-                      featuredQuizSettled ? "Complete" : readinessLabel(nextSession),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                  : "No required preparation."}
-              </p>
-              <PreworkDeadlineNote
-                label={
-                  nextSession.preparation
-                    ? studentPreworkDeadlineCopy({
-                        assignment: nextSession.preparation,
-                        session: nextSession,
-                        pastSessionDay: featuredQuizSettled,
-                        clientTimezone,
-                      })
-                    : null
-                }
-                testId="featured-prework-deadline"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              {adminPreview ? <Button disabled size="lg">Read only</Button> : <>
-                <Button asChild size="lg" className="w-full lg:w-auto">
-                  <Link href={featuredQuizSettled ? sessionPlanHref(nextSession) : primaryHref(nextSession)}>
-                    {featuredQuizSettled
-                      ? "Open session plan"
-                      : viewer && nextSession.preparation && !nextSession.latestResult
-                        ? "Review preparation"
-                        : nextSession.nextAction}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-                <SessionJoinActions
-                  meetingUrl={nextSession.meetingUrl}
-                  calendarEventUrl={nextSession.calendarEventUrl}
-                />
-              </>}
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "The Fall curriculum will appear here when it is available." : "Your sessions will appear here when they are scheduled."}</CardContent></Card>
-      )}
+      {priorityDashboard ? null : upcomingMeeting}
 
       {nextSession?.latestResult && analysis && (
         <Card className="border-accent/20 bg-accent/[0.03]">
@@ -814,6 +837,8 @@ export function ClientDashboardView({
           />
         </div>
       ) : null}
+
+      {priorityDashboard ? billingSection : null}
     </div>
   );
 }
