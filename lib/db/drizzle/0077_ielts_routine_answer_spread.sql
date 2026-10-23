@@ -11,6 +11,12 @@
 -- is the zone this migration already uses for Taito, and the UTC check still applies.
 -- jsonb_array_elements is only called on JSON arrays. Null, scalar, and object
 -- values are skipped so a paused attempt cannot abort the migration.
+-- A question is rewritten only when its choice ids are unique and its stored
+-- key matches exactly one choice whose text is the new key's text. Duplicate
+-- ids, or a key that matches zero or several choices, are left untouched.
+-- Scalar subqueries use an aggregate or LIMIT 1 so a duplicate row cannot abort
+-- the statement. Snapshot items that are not objects, or have no questionId,
+-- are copied through unchanged.
 
 CREATE OR REPLACE FUNCTION pg_temp.ielts_jsonb_array(value jsonb)
 RETURNS jsonb
@@ -116,7 +122,29 @@ BEGIN
     FROM questions q
     JOIN ielts_routine_session_questions AS scoped ON scoped.id = q.id
     JOIN ielts_routine_letter_spread AS target ON q.prompt = target.prompt
-    WHERE q.choices IS DISTINCT FROM target.new_choices
+    WHERE jsonb_typeof(q.choices) = 'array'
+      AND q.choices IS DISTINCT FROM target.new_choices
+      AND (
+        SELECT count(*)
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
+      ) = (
+        SELECT count(DISTINCT elem->>'id')
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
+        WHERE jsonb_typeof(elem) = 'object'
+          AND NULLIF(btrim(elem->>'id'), '') IS NOT NULL
+      )
+      AND (
+        SELECT count(*)
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
+        WHERE jsonb_typeof(elem) = 'object'
+          AND elem->>'id' = lower(trim(q.correct_answer))
+      ) = 1
+      AND (
+        SELECT count(*)
+        FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(target.new_choices)) AS elem
+        WHERE jsonb_typeof(elem) = 'object'
+          AND elem->>'id' = target.new_correct
+      ) = 1
       AND (
         SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
         FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
@@ -125,13 +153,15 @@ BEGIN
         FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(target.new_choices)) AS elem
       )
       AND (
-        SELECT elem->>'text'
+        SELECT min(elem->>'text')
         FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(q.choices)) AS elem
-        WHERE elem->>'id' = lower(trim(q.correct_answer))
+        WHERE jsonb_typeof(elem) = 'object'
+          AND elem->>'id' = lower(trim(q.correct_answer))
       ) = (
-        SELECT elem->>'text'
+        SELECT min(elem->>'text')
         FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(target.new_choices)) AS elem
-        WHERE elem->>'id' = target.new_correct
+        WHERE jsonb_typeof(elem) = 'object'
+          AND elem->>'id' = target.new_correct
       )
     ORDER BY q.id
   LOOP
@@ -171,6 +201,8 @@ BEGIN
       (
         SELECT COALESCE(jsonb_agg(
           CASE
+            WHEN jsonb_typeof(item) IS DISTINCT FROM 'object' THEN item
+            WHEN NULLIF(btrim(item->>'questionId'), '') IS NULL THEN item
             WHEN item->>'questionId' <> question_row.id::text THEN item
             WHEN (
               SELECT array_agg(elem->>'text' ORDER BY elem->>'text')
@@ -211,7 +243,8 @@ BEGIN
         FROM jsonb_array_elements(pg_temp.ielts_jsonb_array(attempt.result->'items')) WITH ORDINALITY AS src(item, ordinality)
       )
     )
-    WHERE attempt.result ? 'items'
+    WHERE jsonb_typeof(attempt.result) = 'object'
+      AND attempt.result ? 'items'
       AND jsonb_typeof(attempt.result->'items') = 'array'
       AND EXISTS (
         SELECT 1
