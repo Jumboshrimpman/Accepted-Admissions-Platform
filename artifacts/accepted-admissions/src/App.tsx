@@ -51,6 +51,7 @@ import AdminDashboard from '@/pages/admin/dashboard';
 import AdminConnections from '@/pages/admin/connections';
 import AdminCurriculum from '@/pages/admin/curriculum';
 import AdminClientPreview from '@/pages/admin/client-preview';
+import AdminTutorPreview from '@/pages/admin/tutor-preview';
 import { PublicContentPanel } from '@/pages/admin/public-content-panel';
 import SatOfferings from '@/pages/public/sat-offerings';
 import PortalSat from '@/pages/portal/sat';
@@ -339,6 +340,19 @@ export function Router() {
           </SignedOut>
         </Route>
 
+        <Route path="/admin/tutors/:tutorId/preview">
+          <SignedIn>
+            <RoleBoundary roles={["administrator"]}>
+              <Shell>
+                <AdminTutorPreview />
+              </Shell>
+            </RoleBoundary>
+          </SignedIn>
+          <SignedOut>
+            <Redirect to="/login" />
+          </SignedOut>
+        </Route>
+
         <Route path="/admin/curriculum">
           <SignedIn>
             <RoleBoundary roles={["administrator"]}>
@@ -384,6 +398,7 @@ export function Router() {
               <Shell>
               <Switch>
                 <Route path="/admin/clients/:clientId/preview" component={AdminClientPreview} />
+                <Route path="/admin/tutors/:tutorId/preview" component={AdminTutorPreview} />
                 <Route path="/admin/curriculum" component={AdminCurriculum} />
                 <Route path="/admin/financials">
                   <Redirect to="/admin" />

@@ -239,6 +239,7 @@ import {
   selfServeDateHoursView,
   tutorMayEditOwnDateHours,
 } from "../lib/self-serve-availability";
+import { tutorPreviewWriteRejected } from "../lib/tutor-preview";
 import {
   SHARED_FALL_MEETING_URL,
   TAITO_FALL_2026_SESSIONS,
@@ -755,6 +756,22 @@ type AuthedRequest = Request & {
 };
 
 const router: IRouter = Router();
+
+router.use((req, res, next) => {
+  const previewQuery = req.query?.preview;
+  if (
+    tutorPreviewWriteRejected({
+      method: req.method,
+      path: req.originalUrl || req.url,
+      header: req.get("x-tutor-preview"),
+      query: previewQuery,
+    })
+  ) {
+    res.status(403).json({ error: "Tutor preview is read-only." });
+    return;
+  }
+  next();
+});
 const XAVIER_NAME = "Xavier Morales";
 const EUNICE_NAME = "Eunice Chon";
 /** Shared SAT calendars. Nika is added only for Sophia and Michelle. */
@@ -5019,6 +5036,35 @@ async function calendarAccess(tutorProfileId: string) {
 
 type TutorCalendarAccess = NonNullable<Awaited<ReturnType<typeof calendarAccess>>>;
 
+/**
+ * Read a still-valid stored access token. Does not refresh, disconnect,
+ * or otherwise write the calendar connection.
+ */
+async function calendarAccessReadOnly(
+  tutorProfileId: string,
+): Promise<TutorCalendarAccess | null> {
+  const [connection] = await db
+    .select()
+    .from(calendarConnectionsTable)
+    .where(
+      and(
+        eq(calendarConnectionsTable.tutorProfileId, tutorProfileId),
+        eq(calendarConnectionsTable.provider, "google"),
+      ),
+    )
+    .limit(1);
+  if (!connection?.encryptedAccessToken || connection.status !== "connected") return null;
+  const expiresAt = connection.accessTokenExpiresAt;
+  if (!(expiresAt instanceof Date) || expiresAt.getTime() <= Date.now() + 60_000) return null;
+  try {
+    const accessToken = decryptCalendarToken(connection.encryptedAccessToken);
+    if (!accessToken) return null;
+    return { connection, accessToken, refreshToken: null };
+  } catch {
+    return null;
+  }
+}
+
 async function runTutorCalendarCall<T>(
   access: TutorCalendarAccess,
   call: (accessToken: string) => Promise<T>,
@@ -5492,6 +5538,7 @@ async function loadTutorSlotContext(
   allowExistingSessionTutor = false,
   bookerUserId?: string,
   ignoreHoldPaymentId?: string,
+  readOnly = false,
 ): Promise<TutorSlotContext> {
   if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60 * 1000) {
     throw new BookingError(400, "INVALID_RANGE", "Availability requests must cover a positive range of 31 days or less.");
@@ -5503,7 +5550,9 @@ async function loadTutorSlotContext(
   );
   let calendar: Awaited<ReturnType<typeof calendarAccess>> = null;
   try {
-    calendar = await calendarAccess(tutorProfileId);
+    calendar = readOnly
+      ? await calendarAccessReadOnly(tutorProfileId)
+      : await calendarAccess(tutorProfileId);
   } catch (error) {
     if (!(error instanceof BookingError)) throw error;
     calendar = null;
@@ -5521,26 +5570,40 @@ async function loadTutorSlotContext(
   let access = fixedWindowFallback ? null : calendar;
   let busyWindows: BusyWindow[] = [];
   if (calendar && !fixedWindowFallback) {
-    try {
-      const listed = await readTutorBusyWindows({
-        tutorProfileId,
-        connection: calendar.connection,
-        listBusy: () =>
-          runTutorCalendarCall(calendar, (token) =>
-            listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(calendar.connection), from, to),
-          ),
-        record: recordCalendarFreeBusyCheck,
-        warn: (fields, message) => logger.warn(fields, message),
-      });
-      if (listed.disconnected) {
+    if (readOnly) {
+      try {
+        busyWindows = await listGoogleBusyWindows(
+          calendar.accessToken,
+          tutorFreeBusyCalendarIds(calendar.connection),
+          from,
+          to,
+        );
+      } catch {
         access = null;
-      } else {
-        busyWindows = listed.busyWindows;
+        busyWindows = [];
       }
-    } catch (error) {
-      if (!(error instanceof BookingError)) throw error;
-      access = null;
-      busyWindows = [];
+    } else {
+      try {
+        const listed = await readTutorBusyWindows({
+          tutorProfileId,
+          connection: calendar.connection,
+          listBusy: () =>
+            runTutorCalendarCall(calendar, (token) =>
+              listGoogleBusyWindows(token, tutorFreeBusyCalendarIds(calendar.connection), from, to),
+            ),
+          record: recordCalendarFreeBusyCheck,
+          warn: (fields, message) => logger.warn(fields, message),
+        });
+        if (listed.disconnected) {
+          access = null;
+        } else {
+          busyWindows = listed.busyWindows;
+        }
+      } catch (error) {
+        if (!(error instanceof BookingError)) throw error;
+        access = null;
+        busyWindows = [];
+      }
     }
   }
   const bookedSessions = await db
@@ -5562,7 +5625,9 @@ async function loadTutorSlotContext(
         excludeSessionId ? sql`${sessionsTable.id} <> ${excludeSessionId}` : sql`true`,
       ),
     );
-  await releaseExpiredSlotHolds(db, tutorProfileId);
+  if (!readOnly) {
+    await releaseExpiredSlotHolds(db, tutorProfileId);
+  }
   const [heldSlots, roomWindows] = await Promise.all([
     activeSlotHoldsOverlapping(db, {
       tutorProfileId,
@@ -6533,6 +6598,130 @@ router.get(
 
 const TUTOR_OFFERED_AVAILABILITY_HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
 
+type OfferedAvailabilityBody = {
+  from: string;
+  to: string;
+  timezone: string;
+  providerStatus: "connected" | "disconnected" | "reconnect";
+  offeredToClients: boolean;
+  availabilityDependsOnClient: boolean;
+  usesAdminCalendarFallback: boolean;
+  lengths: { durationMinutes: number; slots: string[] }[];
+};
+
+async function offeredAvailabilityForProfile(
+  profile: {
+    id: string;
+    name: string;
+    email: string;
+    userId: string | null;
+    active: boolean;
+    bookingEligible: boolean;
+    calendarStatus?: string | null;
+  },
+  readOnly = false,
+): Promise<{ body: OfferedAvailabilityBody; googleBusyTimesOmitted: boolean }> {
+  const from = new Date();
+  const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
+  const onSharedRoster = sharedSatBookingTutorNames().includes(profile.name);
+  // The client gates who may book this tutor. Slot math does not change.
+  // Nika and consulting-only tutors are limited to approved clients.
+  const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
+  const availabilityDependsOnClient = profile.name === NIKA_NAME || consultingOnly;
+  const offeredToClients = tutorOfferedToClients(profile);
+  if (!offeredToClients) {
+    const [rule] = await db
+      .select({ timezone: availabilityRulesTable.timezone })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+      .limit(1);
+    return {
+      googleBusyTimesOmitted: false,
+      body: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        timezone: rule?.timezone ?? "UTC",
+        providerStatus: "disconnected",
+        offeredToClients: false,
+        availabilityDependsOnClient,
+        usesAdminCalendarFallback: false,
+        lengths: BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) => ({
+          durationMinutes,
+          slots: [],
+        })),
+      },
+    };
+  }
+  // allowExistingSessionTutor keeps the slot math for this tutor's own
+  // portal. offeredToClients above is the active and roster gate.
+  // One free/busy read is reused for 60, 90, and 120 minute lengths.
+  // Preview passes readOnly so expired holds, token refresh, and health
+  // rows are left untouched.
+  const context = await loadTutorSlotContext(
+    profile.id,
+    from,
+    to,
+    undefined,
+    true,
+    undefined,
+    undefined,
+    readOnly,
+  );
+  const results = BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) =>
+    projectTutorSlots(context, from, to, durationMinutes),
+  );
+  const first = results[0];
+  // A live grant with a blank app calendar lists slots to students, then
+  // booking returns 409. Hide those unbookable times and ask for reconnect.
+  // A fully disconnected grant keeps the fixed-window slots students can book.
+  const needsReconnect = results.some(
+    (result) => result.access && !result.access.connection.appCalendarId?.trim(),
+  );
+  const connected = results.every((result) => result.access);
+  let providerStatus: OfferedAvailabilityBody["providerStatus"] = needsReconnect
+    ? "reconnect"
+    : connected
+      ? "connected"
+      : "disconnected";
+  let lengths = results.map((result, index) => ({
+    durationMinutes: BOOKABLE_PORTAL_DURATIONS[index]!,
+    slots: needsReconnect ? [] : result.slots,
+  }));
+  let googleBusyTimesOmitted = false;
+  if (readOnly && !connected && !needsReconnect && profile.calendarStatus === "connected") {
+    googleBusyTimesOmitted = true;
+    const [stored] = await db
+      .select({ appCalendarId: calendarConnectionsTable.appCalendarId })
+      .from(calendarConnectionsTable)
+      .where(
+        and(
+          eq(calendarConnectionsTable.tutorProfileId, profile.id),
+          eq(calendarConnectionsTable.provider, "google"),
+        ),
+      )
+      .limit(1);
+    if (!stored?.appCalendarId?.trim()) {
+      providerStatus = "reconnect";
+      lengths = lengths.map((length) => ({ ...length, slots: [] }));
+    } else {
+      providerStatus = "connected";
+    }
+  }
+  return {
+    googleBusyTimesOmitted,
+    body: {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      timezone: first?.rule.timezone ?? "UTC",
+      providerStatus,
+      offeredToClients: true,
+      availabilityDependsOnClient,
+      usesAdminCalendarFallback: context.usesAdminCalendarFallback,
+      lengths,
+    },
+  };
+}
+
 router.get(
   "/tutor/offered-availability",
   requireAppUser,
@@ -6544,68 +6733,9 @@ router.get(
       res.status(404).json({ error: "Tutor profile not found" });
       return;
     }
-    const from = new Date();
-    const to = new Date(from.getTime() + TUTOR_OFFERED_AVAILABILITY_HORIZON_MS);
     try {
-      const onSharedRoster = sharedSatBookingTutorNames().includes(profile.name);
-      // The client gates who may book this tutor. Slot math does not change.
-      // Nika and consulting-only tutors are limited to approved clients.
-      const consultingOnly = !onSharedRoster && consultingTutorAllowed(profile);
-      const availabilityDependsOnClient = profile.name === NIKA_NAME || consultingOnly;
-      const offeredToClients = tutorOfferedToClients(profile);
-      if (!offeredToClients) {
-        const [rule] = await db
-          .select({ timezone: availabilityRulesTable.timezone })
-          .from(availabilityRulesTable)
-          .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
-          .limit(1);
-        res.json({
-          from: from.toISOString(),
-          to: to.toISOString(),
-          timezone: rule?.timezone ?? "UTC",
-          providerStatus: "disconnected",
-          offeredToClients: false,
-          availabilityDependsOnClient,
-          usesAdminCalendarFallback: false,
-          lengths: BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) => ({
-            durationMinutes,
-            slots: [],
-          })),
-        });
-        return;
-      }
-      // allowExistingSessionTutor keeps the slot math for this tutor's own
-      // portal. offeredToClients above is the active and roster gate.
-      // One free/busy read is reused for 60, 90, and 120 minute lengths.
-      const context = await loadTutorSlotContext(profile.id, from, to, undefined, true);
-      const results = BOOKABLE_PORTAL_DURATIONS.map((durationMinutes) =>
-        projectTutorSlots(context, from, to, durationMinutes),
-      );
-      const first = results[0];
-      // A live grant with a blank app calendar lists slots to students, then
-      // booking returns 409. Hide those unbookable times and ask for reconnect.
-      // A fully disconnected grant keeps the fixed-window slots students can book.
-      const needsReconnect = results.some(
-        (result) => result.access && !result.access.connection.appCalendarId?.trim(),
-      );
-      const connected = results.every((result) => result.access);
-      res.json({
-        from: from.toISOString(),
-        to: to.toISOString(),
-        timezone: first?.rule.timezone ?? "UTC",
-        providerStatus: needsReconnect
-          ? "reconnect"
-          : connected
-            ? "connected"
-            : "disconnected",
-        offeredToClients: true,
-        availabilityDependsOnClient,
-        usesAdminCalendarFallback: context.usesAdminCalendarFallback,
-        lengths: results.map((result, index) => ({
-          durationMinutes: BOOKABLE_PORTAL_DURATIONS[index],
-          slots: needsReconnect ? [] : result.slots,
-        })),
-      });
+      const offered = await offeredAvailabilityForProfile(profile, false);
+      res.json(offered.body);
     } catch (error) {
       sendBookingError(error, res);
     }
@@ -6765,6 +6895,97 @@ router.put(
       .where(eq(availabilityRulesTable.tutorProfileId, tutorId))
       .limit(1);
     res.json(readBack ?? saved);
+  },
+);
+
+router.get(
+  "/admin/tutors/:tutorId/preview",
+  requireAppUser,
+  ensureRole(["administrator"]),
+  async (req: AuthedRequest, res): Promise<void> => {
+    const tutorId = typeof req.params.tutorId === "string" ? req.params.tutorId : "";
+    const [profile] = await db
+      .select()
+      .from(tutorProfilesTable)
+      .where(eq(tutorProfilesTable.id, tutorId))
+      .limit(1);
+    if (!profile?.userId) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const [linked] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, profile.userId))
+      .limit(1);
+    if (!linked) {
+      res.status(404).json({ error: "Tutor profile not found" });
+      return;
+    }
+    const tutorUser: AppUser = { ...linked, role: "tutor" };
+    const [rule] = await db
+      .select({
+        timezone: availabilityRulesTable.timezone,
+        dateHours: availabilityRulesTable.dateHours,
+      })
+      .from(availabilityRulesTable)
+      .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+      .limit(1);
+    const mayEditDates = tutorMayEditOwnDateHours(profile.id);
+    const [connection] = await db
+      .select({ status: calendarConnectionsTable.status })
+      .from(calendarConnectionsTable)
+      .where(
+        and(
+          eq(calendarConnectionsTable.tutorProfileId, profile.id),
+          eq(calendarConnectionsTable.provider, "google"),
+        ),
+      )
+      .limit(1);
+    let offeredAvailability: OfferedAvailabilityBody | null = null;
+    let offeredAvailabilityError = false;
+    let googleBusyTimesOmitted = false;
+    try {
+      const offered = await offeredAvailabilityForProfile(
+        {
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          userId: profile.userId,
+          active: profile.active,
+          bookingEligible: profile.bookingEligible,
+          calendarStatus: profile.calendarStatus,
+        },
+        true,
+      );
+      offeredAvailability = offered.body;
+      googleBusyTimesOmitted = offered.googleBusyTimesOmitted;
+    } catch {
+      offeredAvailabilityError = true;
+    }
+    const dashboard = await dashboardDataForUser(tutorUser);
+    const reviewQueue = await listReviewQueueForUser(tutorUser);
+    res.json({
+      tutorProfileId: profile.id,
+      readOnly: true as const,
+      dashboard,
+      reviewQueue,
+      dateHours:
+        mayEditDates && rule
+          ? selfServeDateHoursView({
+              tutorProfileId: profile.id,
+              timezone: rule.timezone,
+              dateHours: storedDateHours(rule.dateHours),
+            })
+          : null,
+      dateHoursUnavailable: mayEditDates && !rule,
+      offeredAvailability,
+      offeredAvailabilityError,
+      googleBusyTimesOmitted,
+      calendar: {
+        status: connection?.status === "connected" ? "connected" : "disconnected",
+      },
+    });
   },
 );
 
@@ -16856,66 +17077,68 @@ router.put(
   },
 );
 
+async function listReviewQueueForUser(user: AppUser) {
+  const courseIds = await visibleCourseIds(user);
+  const rows =
+    courseIds.length === 0
+      ? []
+      : await db
+          .select({
+            item: reviewQueueTable,
+            student: usersTable,
+            assignment: assignmentsTable,
+            response: responsesTable,
+          })
+          .from(reviewQueueTable)
+          .innerJoin(usersTable, eq(usersTable.id, reviewQueueTable.studentUserId))
+          .innerJoin(attemptsTable, eq(attemptsTable.id, reviewQueueTable.attemptId))
+          .innerJoin(
+            assignmentsTable,
+            eq(assignmentsTable.id, attemptsTable.assignmentId),
+          )
+          .leftJoin(
+            responsesTable,
+            and(
+              eq(responsesTable.attemptId, reviewQueueTable.attemptId),
+              eq(responsesTable.questionId, reviewQueueTable.questionId),
+            ),
+          )
+          .where(inArray(assignmentsTable.courseId, courseIds))
+          .orderBy(desc(reviewQueueTable.createdAt));
+  const visibleRows = (
+    await Promise.all(
+      rows.map(async (row) =>
+        (await canReviewStudentAssignment(
+          user,
+          row.assignment,
+          row.item.studentUserId,
+        ))
+          ? row
+          : null,
+      ),
+    )
+  ).filter((row): row is (typeof rows)[number] => Boolean(row));
+  return ListReviewQueueResponse.parse(
+    visibleRows.map(({ item, student, response }) => ({
+      id: item.id,
+      attemptId: item.attemptId,
+      questionId: item.questionId,
+      studentName: studentNameForRole(user.role, student.displayName),
+      skill: item.skill,
+      reason: item.reason,
+      prediction: response?.prediction ?? null,
+      finalAnswer: response?.finalAnswer ?? null,
+      status: item.status,
+      tutorNote: item.tutorNote,
+    })),
+  );
+}
+
 router.get(
   "/review-queue",
   ensureRole(["administrator", "tutor"]),
   async (req: AuthedRequest, res): Promise<void> => {
-    const courseIds = await visibleCourseIds(req.appUser!);
-    const rows =
-      courseIds.length === 0
-        ? []
-        : await db
-      .select({
-        item: reviewQueueTable,
-        student: usersTable,
-        assignment: assignmentsTable,
-        response: responsesTable,
-      })
-      .from(reviewQueueTable)
-      .innerJoin(usersTable, eq(usersTable.id, reviewQueueTable.studentUserId))
-      .innerJoin(attemptsTable, eq(attemptsTable.id, reviewQueueTable.attemptId))
-      .innerJoin(
-        assignmentsTable,
-        eq(assignmentsTable.id, attemptsTable.assignmentId),
-      )
-      .leftJoin(
-        responsesTable,
-        and(
-          eq(responsesTable.attemptId, reviewQueueTable.attemptId),
-          eq(responsesTable.questionId, reviewQueueTable.questionId),
-        ),
-      )
-      .where(inArray(assignmentsTable.courseId, courseIds))
-      .orderBy(desc(reviewQueueTable.createdAt));
-    const visibleRows = (
-      await Promise.all(
-        rows.map(async (row) =>
-          (await canReviewStudentAssignment(
-            req.appUser!,
-            row.assignment,
-            row.item.studentUserId,
-          ))
-            ? row
-            : null,
-        ),
-      )
-    ).filter((row): row is (typeof rows)[number] => Boolean(row));
-    res.json(
-      ListReviewQueueResponse.parse(
-        visibleRows.map(({ item, student, response }) => ({
-          id: item.id,
-          attemptId: item.attemptId,
-          questionId: item.questionId,
-          studentName: studentNameForRole(req.appUser!.role, student.displayName),
-          skill: item.skill,
-          reason: item.reason,
-          prediction: response?.prediction ?? null,
-          finalAnswer: response?.finalAnswer ?? null,
-          status: item.status,
-          tutorNote: item.tutorNote,
-        })),
-      ),
-    );
+    res.json(await listReviewQueueForUser(req.appUser!));
   },
 );
 

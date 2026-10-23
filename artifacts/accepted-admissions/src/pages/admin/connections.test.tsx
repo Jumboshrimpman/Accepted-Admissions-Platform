@@ -430,4 +430,27 @@ describe("Admin connections", () => {
     expect(screen.queryByTestId("add-admin-attendees")).toBeNull();
     expect(document.body.textContent).not.toMatch(/mailto:/i);
   });
+
+  test("links each tutor to a read-only dashboard preview", async () => {
+    const nikaId = "46d7cfee-d0c0-4bad-93e7-d79907301684";
+    customFetch.mockResolvedValue({
+      connections: [xavier, { ...eunice, tutorProfileId: nikaId, name: "Nika Raiffe" }],
+      adminCalendarInvites: {
+        healthy: true,
+        accountEmail: "admin@acceptedadmissions.org",
+        hasRefreshToken: true,
+        hasWriteScope: true,
+        hasAppCalendar: true,
+      },
+    });
+
+    render(<AdminConnections />);
+
+    expect(
+      (await screen.findByTestId("link-preview-tutor-xavier-profile")).getAttribute("href"),
+    ).toBe("/admin/tutors/xavier-profile/preview");
+    expect(screen.getByTestId(`link-preview-tutor-${nikaId}`).getAttribute("href")).toBe(
+      `/admin/tutors/${nikaId}/preview`,
+    );
+  });
 });

@@ -4,6 +4,7 @@ import {
   useGetDashboard,
   useListReviewQueue,
   useUpdateReviewQueueItem,
+  type Dashboard,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -28,8 +29,8 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CalendarConnectionCard } from "@/pages/portal/calendar-connection-card";
-import { TutorDateHoursEditor } from "@/pages/tutor/date-hours-editor";
-import { TutorOfferedAvailability } from "@/pages/tutor/offered-availability";
+import { TutorDateHoursEditor, type DateHoursState } from "@/pages/tutor/date-hours-editor";
+import { TutorOfferedAvailability, type OfferedAvailability } from "@/pages/tutor/offered-availability";
 import {
   SessionQuestionDownloads,
   sessionOffersQuestionPdfs,
@@ -53,32 +54,41 @@ import {
   type AlertSectionBreakdown,
 } from "@/lib/submission-alert-display";
 
-export default function TutorDashboard() {
+type TutorQueueItem = {
+  id: string;
+  attemptId: string;
+  status: string;
+  reason: string;
+  skill: string;
+};
+
+export function TutorDashboardView({
+  dashboard,
+  queue,
+  readOnly = false,
+  dateHours,
+  dateHoursUnavailable = false,
+  offeredAvailability,
+  offeredAvailabilityError = false,
+  googleBusyTimesOmitted = false,
+  calendarStatus = "disconnected",
+  clearing = false,
+  onClearFlags,
+}: {
+  dashboard: Dashboard;
+  queue?: TutorQueueItem[];
+  readOnly?: boolean;
+  dateHours?: DateHoursState | null;
+  dateHoursUnavailable?: boolean;
+  offeredAvailability?: OfferedAvailability | null;
+  offeredAvailabilityError?: boolean;
+  googleBusyTimesOmitted?: boolean;
+  calendarStatus?: "connected" | "disconnected";
+  clearing?: boolean;
+  onClearFlags?: (items: TutorQueueItem[]) => void;
+}) {
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllAlerts, setShowAllAlerts] = useState(false);
-  const queryClient = useQueryClient();
-  const { data: dashboard, isLoading: loadingDashboard, error } = useGetDashboard();
-  const { data: queue, isLoading: loadingQueue } = useListReviewQueue();
-  const updateReview = useUpdateReviewQueueItem();
-
-  if (loadingDashboard || loadingQueue) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <Skeleton className="h-28 rounded-3xl" />
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-48 rounded-2xl" />
-      </div>
-    );
-  }
-
-  if (error || !dashboard) {
-    return (
-      <div className="mx-auto max-w-xl rounded-2xl border border-destructive/20 bg-destructive/10 p-8 text-center text-destructive">
-        <h2 className="text-xl font-semibold">Could not load your tutor dashboard</h2>
-        <p className="mt-2 text-sm">Please try again in a moment.</p>
-      </div>
-    );
-  }
 
   const openQueue = queue?.filter((item) => item.status === "open") ?? [];
   const scopedUpcoming = upcomingSessionsForDashboard(
@@ -168,25 +178,8 @@ export default function TutorDashboard() {
     return rightTime - leftTime;
   });
   const alertList = collapsedItems(attentionItems, showAllAlerts);
-  const markQueueItemsReviewed = (items: typeof openQueue) => {
-    items.forEach((item) => {
-      updateReview.mutate(
-        {
-          itemId: item.id,
-          data: { status: "reviewed", tutorNote: "Reviewed and approved." },
-        },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({
-              queryKey: getListReviewQueueQueryKey(),
-            });
-            queryClient.invalidateQueries({
-              queryKey: getGetDashboardQueryKey(),
-            });
-          },
-        },
-      );
-    });
+  const markQueueItemsReviewed = (items: TutorQueueItem[]) => {
+    onClearFlags?.(items);
   };
 
   return (
@@ -203,9 +196,39 @@ export default function TutorDashboard() {
         </p>
       </section>
 
-      <TutorDateHoursEditor />
+      {readOnly ? (
+        dateHoursUnavailable ? (
+          <Card data-testid="tutor-date-hours-editor" className="border-primary/20 shadow-sm">
+            <CardHeader className="px-6 py-5 sm:px-7">
+              <CardTitle className="text-xl">Set your bookable hours</CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 pb-6 sm:px-7">
+              <p className="text-sm text-destructive" role="alert">
+                Booking hours are not set up yet.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <TutorDateHoursEditor preview={dateHours ?? null} />
+        )
+      ) : (
+        <TutorDateHoursEditor />
+      )}
 
-      <TutorOfferedAvailability />
+      {readOnly ? (
+        offeredAvailabilityError ? (
+          <p className="text-sm text-destructive" role="alert" data-testid="tutor-offered-availability">
+            Offered availability could not be loaded.
+          </p>
+        ) : (
+          <TutorOfferedAvailability
+            preview={offeredAvailability ?? null}
+            googleBusyTimesOmitted={googleBusyTimesOmitted}
+          />
+        )
+      ) : (
+        <TutorOfferedAvailability />
+      )}
 
       <Card className="overflow-hidden border-primary/20 shadow-sm">
         <CardHeader className="border-b px-6 py-5 sm:px-7">
@@ -245,17 +268,26 @@ export default function TutorDashboard() {
                   </div>
                   <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
                     <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-                      <Button asChild className="flex-1 sm:flex-none">
-                        <Link href={`/tutor/sessions/${session.id}`}>
+                      {readOnly ? (
+                        <Button type="button" disabled className="flex-1 sm:flex-none">
                           Open workspace
                           <ArrowRight className="ml-2 h-4 w-4" />
-                        </Link>
-                      </Button>
+                        </Button>
+                      ) : (
+                        <Button asChild className="flex-1 sm:flex-none">
+                          <Link href={`/tutor/sessions/${session.id}`}>
+                            Open workspace
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </Link>
+                        </Button>
+                      )}
+                      {readOnly ? null : (
                       <SessionJoinActions
                         meetingUrl={session.meetingUrl}
                         calendarEventUrl={session.calendarEventUrl}
                         className="flex flex-wrap gap-2 sm:w-auto"
                       />
+                      )}
                     </div>
                     {viewerMayDownloadSessionPdfs({
                       role: dashboard.user.role,
@@ -348,29 +380,42 @@ export default function TutorDashboard() {
                     />
                   </div>
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:items-stretch">
-                    <Button asChild className="flex-1 sm:flex-none">
-                      <Link href={`/tutor/attempts/${item.attemptId}`}>
+                    {readOnly ? (
+                      <Button type="button" disabled className="flex-1 sm:flex-none">
                         Review submission
                         <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
+                      </Button>
+                    ) : (
+                      <Button asChild className="flex-1 sm:flex-none">
+                        <Link href={`/tutor/attempts/${item.attemptId}`}>
+                          Review submission
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
                     {item.sessionId && (
+                      readOnly ? (
+                        <Button type="button" size="sm" variant="outline" disabled className="flex-1 sm:flex-none">
+                          Open meeting plan
+                        </Button>
+                      ) : (
                       <Button asChild size="sm" variant="outline" className="flex-1 sm:flex-none">
                         <Link href={`/tutor/sessions/${item.sessionId}`}>
                           Open meeting plan
                         </Link>
                       </Button>
+                      )
                     )}
-                    {item.queueItems.length > 0 && (
+                    {!readOnly && item.queueItems.length > 0 && onClearFlags ? (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => markQueueItemsReviewed(item.queueItems)}
-                        disabled={updateReview.isPending}
+                        disabled={clearing}
                       >
-                        {updateReview.isPending ? "Saving…" : "Clear flags"}
+                        {clearing ? "Saving…" : "Clear flags"}
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -403,23 +448,94 @@ export default function TutorDashboard() {
               </div>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <Button asChild className="w-full sm:w-auto">
-                <Link href="/tutor/curriculum" data-testid="tutor-open-curriculum">
+              {readOnly ? (
+                <Button type="button" disabled className="w-full sm:w-auto" data-testid="tutor-open-curriculum">
                   Create session & assign work
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href={`/tutor/courses/${fallCourse.id}`}>
+                </Button>
+              ) : (
+                <Button asChild className="w-full sm:w-auto">
+                  <Link href="/tutor/curriculum" data-testid="tutor-open-curriculum">
+                    Create session & assign work
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
+              {readOnly ? (
+                <Button type="button" variant="outline" disabled className="w-full sm:w-auto">
                   Open course sessions
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href={`/tutor/courses/${fallCourse.id}`}>
+                    Open course sessions
+                  </Link>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
       ) : null}
 
-      <CalendarConnectionCard location="tutor_dashboard" />
+      {readOnly ? (
+        <CalendarConnectionCard location="tutor_dashboard" preview={{ status: calendarStatus }} />
+      ) : (
+        <CalendarConnectionCard location="tutor_dashboard" />
+      )}
     </div>
+  );
+}
+
+export default function TutorDashboard() {
+  const queryClient = useQueryClient();
+  const { data: dashboard, isLoading: loadingDashboard, error } = useGetDashboard();
+  const { data: queue, isLoading: loadingQueue } = useListReviewQueue();
+  const updateReview = useUpdateReviewQueueItem();
+
+  if (loadingDashboard || loadingQueue) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-6">
+        <Skeleton className="h-28 rounded-3xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-48 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (error || !dashboard) {
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border border-destructive/20 bg-destructive/10 p-8 text-center text-destructive">
+        <h2 className="text-xl font-semibold">Could not load your tutor dashboard</h2>
+        <p className="mt-2 text-sm">Please try again in a moment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <TutorDashboardView
+      dashboard={dashboard}
+      queue={queue}
+      clearing={updateReview.isPending}
+      onClearFlags={(items) => {
+        items.forEach((item) => {
+          updateReview.mutate(
+            {
+              itemId: item.id,
+              data: { status: "reviewed", tutorNote: "Reviewed and approved." },
+            },
+            {
+              onSuccess: () => {
+                queryClient.invalidateQueries({
+                  queryKey: getListReviewQueueQueryKey(),
+                });
+                queryClient.invalidateQueries({
+                  queryKey: getGetDashboardQueryKey(),
+                });
+              },
+            },
+          );
+        });
+      }}
+    />
   );
 }
