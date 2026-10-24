@@ -158,19 +158,30 @@ async function assignmentQuestionCount(assignmentId: string): Promise<number> {
   return Number(count ?? 0);
 }
 
-/** Archive a live pre-work row that has no attempts. Attempt rows are not rewritten. */
+/**
+ * Archive a live pre-work row that has no attempts. Attempt rows are not rewritten.
+ * The assignment row is locked for the count and the status change together, so a
+ * start that references this assignment cannot land between the check and the archive.
+ */
 async function archiveUnattemptedAssignment(sessionId: string, assignmentId: string): Promise<void> {
-  if ((await attemptCount(assignmentId)) > 0) return;
-  await db
-    .update(assignmentsTable)
-    .set({ status: "archived" })
-    .where(
-      and(
-        eq(assignmentsTable.id, assignmentId),
-        eq(assignmentsTable.sessionId, sessionId),
-        ne(assignmentsTable.status, "archived"),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select id from assignments where id = ${assignmentId} for update`);
+    const [{ count }] = await tx
+      .select({ count: sql<number>`count(*)` })
+      .from(attemptsTable)
+      .where(eq(attemptsTable.assignmentId, assignmentId));
+    if (Number(count) > 0) return;
+    await tx
+      .update(assignmentsTable)
+      .set({ status: "archived" })
+      .where(
+        and(
+          eq(assignmentsTable.id, assignmentId),
+          eq(assignmentsTable.sessionId, sessionId),
+          ne(assignmentsTable.status, "archived"),
+        ),
+      );
+  });
 }
 
 async function sourceKeysForAssignment(assignmentId: string): Promise<string[]> {

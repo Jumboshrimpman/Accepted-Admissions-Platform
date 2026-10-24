@@ -25,13 +25,26 @@ import {
   type HardSatCandidate,
 } from "./sat-set-difficulty.ts";
 
-const REQUIRED_SKILLS = [
-  "Words in Context",
-  "Cross-Text Connections",
-  "Inferences",
-  "Rhetorical Synthesis",
-  "Boundaries",
-] as const;
+const SKILL_COUNTS: Record<string, number> = {
+  "Words in Context": 3,
+  "Text Structure and Purpose": 2,
+  "Cross-Text Connections": 2,
+  "Central Ideas and Details": 2,
+  "Command of Evidence": 4,
+  Inferences: 3,
+  "Rhetorical Synthesis": 2,
+  Transitions: 1,
+  Boundaries: 2,
+  "Form, Structure, and Sense": 1,
+};
+
+function wordsOnly(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 test("Oct 30 reading items are hard, keyed, and render without figures", () => {
   const items = oct30HardRwItems();
@@ -40,13 +53,21 @@ test("Oct 30 reading items are hard, keyed, and render without figures", () => {
   assert.equal(records.length, OCT30_HARD_RW_COUNT);
   assert.equal(new Set(items.map((item) => item.sourceKey)).size, OCT30_HARD_RW_COUNT);
   assert.ok(!(ORIGINAL_HARD_SAT_DATES as readonly string[]).includes("2026-10-30"));
-  const skills = new Set(items.map((item) => item.skill));
-  for (const skill of REQUIRED_SKILLS) assert.ok(skills.has(skill), skill);
-  assert.equal(items.filter((item) => item.skill === "Words in Context").length, 5);
-  assert.equal(items.filter((item) => item.skill === "Cross-Text Connections").length, 4);
-  assert.equal(items.filter((item) => item.skill === "Inferences").length, 4);
-  assert.equal(items.filter((item) => item.skill === "Rhetorical Synthesis").length, 4);
-  assert.equal(items.filter((item) => item.skill === "Boundaries").length, 5);
+  const counted = new Map<string, number>();
+  for (const item of items) counted.set(item.skill, (counted.get(item.skill) ?? 0) + 1);
+  assert.deepEqual(Object.fromEntries(counted), SKILL_COUNTS);
+  assert.equal(
+    items.filter((item) => item.skill === "Command of Evidence" && /data from the table/i.test(item.prompt))
+      .length,
+    1,
+  );
+  assert.equal(
+    items.filter((item) => item.skill === "Command of Evidence" && /gauge readings/i.test(item.prompt)).length,
+    1,
+  );
+  assert.ok(items.some((item) => item.correctText === "inimical to"));
+  const templateChoice =
+    /timing in the first account is too (?:early|late)|pattern holds in a further case|stated rule fails under a condition/i;
 
   for (const item of items) {
     assert.equal(item.stimulus.split("___").length - 1 <= 1, true, item.sourceKey);
@@ -96,9 +117,17 @@ test("Oct 30 reading items are hard, keyed, and render without figures", () => {
       false,
       item.sourceKey,
     );
+    assert.equal(templateChoice.test(item.stimulus), false, item.sourceKey);
+    for (const choice of item.choices) {
+      assert.equal(templateChoice.test(choice.text), false, `${item.sourceKey} ${choice.text}`);
+    }
     if (item.skill === "Cross-Text Connections") {
       const words = item.stimulus.trim().split(/\s+/).filter(Boolean);
       assert.ok(words.length >= 100 && words.length <= 150, `${item.sourceKey} ${words.length} words`);
+    }
+    if (item.skill === "Boundaries") {
+      const norms = item.choices.map((choice) => wordsOnly(choice.text));
+      assert.equal(new Set(norms).size, 1, `${item.sourceKey} ${norms.join(" | ")}`);
     }
   }
   assert.equal(routinePreworkTimeLimitMinutes(OCT30_HARD_PREWORK_COUNT), 50);
@@ -232,4 +261,19 @@ test("Oct 30 startup swaps only an unattempted reading half and logs the plan", 
   assert.match(ensure, /oct30HardRwPreworkAction/);
   assert.match(ensure, /readingLeftInPlace/);
   assert.doesNotMatch(ensure, /ORIGINAL_HARD_SAT_DATES/);
+  const archive = hardSets.slice(
+    hardSets.indexOf("async function archiveUnattemptedAssignment"),
+    hardSets.indexOf("async function sourceKeysForAssignment"),
+  );
+  assert.match(archive, /db\.transaction/);
+  assert.match(archive, /for update/);
+  assert.match(archive, /if \(Number\(count\) > 0\) return/);
+  const service = readFileSync(new URL("./sat-bank-service.ts", import.meta.url), "utf8");
+  const serviceArchive = service.slice(
+    service.indexOf("async function archiveAssignmentIfUnattempted"),
+    service.indexOf("async function archiveSessionPrework"),
+  );
+  assert.match(serviceArchive, /db\.transaction/);
+  assert.match(serviceArchive, /for update/);
+  assert.match(serviceArchive, /if \(Number\(count\) > 0\) return/);
 });
