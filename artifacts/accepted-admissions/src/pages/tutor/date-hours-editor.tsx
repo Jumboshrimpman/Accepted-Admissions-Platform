@@ -5,17 +5,35 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type DateWindow = { start: string; end: string };
+type RecurringHours = {
+  startDate: string | null;
+  endDate: string | null;
+  days: Record<string, DateWindow[]>;
+};
 
 export type DateHoursState = {
   tutorProfileId: string;
   timezone: string;
   dateHours: Record<string, DateWindow[]>;
+  recurringHours?: RecurringHours;
   today: string;
   latestDate: string;
   editorDates: string[];
 };
 
-const TIME_OPTIONS = buildTimeOptions("06:00", "22:00");
+const START_OPTIONS = buildTimeOptions("06:00", "23:45");
+const END_OPTIONS = buildTimeOptions("06:15", "24:00");
+const WEEKDAYS = [
+  ["1", "Monday"],
+  ["2", "Tuesday"],
+  ["3", "Wednesday"],
+  ["4", "Thursday"],
+  ["5", "Friday"],
+  ["6", "Saturday"],
+  ["0", "Sunday"],
+] as const;
+
+const EMPTY_RECURRING: RecurringHours = { startDate: null, endDate: null, days: {} };
 
 function buildTimeOptions(start: string, end: string): string[] {
   const options: string[] = [];
@@ -33,11 +51,28 @@ function buildTimeOptions(start: string, end: string): string[] {
 }
 
 function formatClock(value: string): string {
+  if (value === "24:00") return "12:00 AM";
   const [hourText, minuteText] = value.split(":");
   const hour = Number(hourText);
   const suffix = hour >= 12 ? "PM" : "AM";
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
   return `${hour12}:${minuteText} ${suffix}`;
+}
+
+function clockMinutes(value: string): number {
+  const [hour, minute] = value.split(":").map(Number);
+  return (hour ?? 0) * 60 + (minute ?? 0);
+}
+
+function windowsOverlap(windows: DateWindow[]): boolean {
+  const spans = windows
+    .map((window) => ({ start: clockMinutes(window.start), end: clockMinutes(window.end) }))
+    .sort((left, right) => left.start - right.start);
+  return spans.some((span, index) => index > 0 && span.start < spans[index - 1]!.end);
+}
+
+function recurringOf(state: DateHoursState | null): RecurringHours {
+  return state?.recurringHours ?? EMPTY_RECURRING;
 }
 
 function formatCivilDate(key: string): string {
@@ -87,6 +122,13 @@ export function TutorDateHoursEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
+  const [weeklyDay, setWeeklyDay] = useState("1");
+  const [weeklyWindows, setWeeklyWindows] = useState<DateWindow[]>([]);
+  const [weeklyStart, setWeeklyStart] = useState(recurringOf(initialPreview).startDate ?? "");
+  const [weeklyEnd, setWeeklyEnd] = useState(recurringOf(initialPreview).endDate ?? "");
+  const [weeklySaving, setWeeklySaving] = useState(false);
+  const [weeklyError, setWeeklyError] = useState("");
+  const [weeklyNote, setWeeklyNote] = useState("");
 
   useEffect(() => {
     if (!readOnly) return;
@@ -99,6 +141,8 @@ export function TutorDateHoursEditor({
     setState(preview);
     setSelectedDate(date);
     setWindows(windowsFor(preview, date));
+    setWeeklyStart(recurringOf(preview).startDate ?? "");
+    setWeeklyEnd(recurringOf(preview).endDate ?? "");
     setHidden(false);
     setLoaded(true);
   }, [preview, readOnly]);
@@ -114,6 +158,8 @@ export function TutorDateHoursEditor({
         setState(next);
         setSelectedDate(date);
         setWindows(windowsFor(next, date));
+        setWeeklyStart(recurringOf(next).startDate ?? "");
+        setWeeklyEnd(recurringOf(next).endDate ?? "");
       } catch (loadFailure) {
         const status = (loadFailure as { status?: number } | null)?.status;
         if (status === 403) {
@@ -157,6 +203,38 @@ export function TutorDateHoursEditor({
     }
   }
 
+  async function saveWeekly(next: RecurringHours) {
+    setWeeklySaving(true);
+    setWeeklyError("");
+    setWeeklyNote("");
+    try {
+      const saved = await customFetch<DateHoursState>("/api/tutor/date-hours", {
+        method: "PUT",
+        body: JSON.stringify({ recurringHours: next }),
+      });
+      setState(saved);
+      const recurring = recurringOf(saved);
+      setWeeklyStart(recurring.startDate ?? "");
+      setWeeklyEnd(recurring.endDate ?? "");
+      setWeeklyNote("Weekly hours saved.");
+    } catch (saveFailure) {
+      setWeeklyError(errorMessage(saveFailure, "Could not save weekly hours."));
+    } finally {
+      setWeeklySaving(false);
+    }
+  }
+
+  function weeklyPayload(day: string, dayWindows: DateWindow[]): RecurringHours {
+    const days = { ...recurringOf(state).days };
+    if (dayWindows.length === 0) delete days[day];
+    else days[day] = dayWindows.map((window) => ({ ...window }));
+    return {
+      startDate: weeklyStart.trim() === "" ? null : weeklyStart,
+      endDate: weeklyEnd.trim() === "" ? null : weeklyEnd,
+      days,
+    };
+  }
+
   function chooseDate(date: string) {
     setSelectedDate(date);
     setWindows(state ? windowsFor(state, date) : []);
@@ -183,7 +261,15 @@ export function TutorDateHoursEditor({
   const otherOpenDates = state.editorDates.filter(
     (date) => date !== selectedDate && (state.dateHours[date]?.length ?? 0) > 0,
   );
+  const recurring = recurringOf(state);
+  const weeklyRows = WEEKDAYS.filter(([id]) => (recurring.days[id]?.length ?? 0) > 0);
   const invalidWindow = windows.some((window) => window.start >= window.end);
+  const invalidWeekly = weeklyWindows.some((window) => window.start >= window.end);
+  const weeklyOverlap = windowsOverlap(weeklyWindows);
+  const weeklyRange =
+    recurring.startDate || recurring.endDate
+      ? ` Applies ${recurring.startDate ? `from ${formatCivilDate(recurring.startDate)}` : "with no start date"}${recurring.endDate ? ` through ${formatCivilDate(recurring.endDate)}` : " and no end date"}.`
+      : " No start or end date, so it applies on dates you have not set.";
 
   return (
     <Card data-testid="tutor-date-hours-editor" className="border-primary/20 shadow-sm">
@@ -195,7 +281,7 @@ export function TutorDateHoursEditor({
         <CardDescription className="mt-1 max-w-2xl">
           {readOnly
             ? `Saved hours for the next 8 weeks. This preview cannot change them. Times are ${timezoneCaption(state.timezone)}.`
-            : `Pick a date in the next 8 weeks. Add the hours clients can book, or mark the date closed. Save this date before you pick another one. Saving one date leaves every other date as it is. Times are ${timezoneCaption(state.timezone)}. Sessions already on the calendar stay booked.`}
+            : `Pick one date, or set a weekly schedule. A date you save replaces that weekday for that day only, and a closed date stays closed. Times run through midnight ${timezoneCaption(state.timezone)}. Hours you set yourself are offered even when Google Calendar is busy. Bookings, holds, and the shared Meet room still block the time.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 px-6 pb-6 sm:px-7">
@@ -248,7 +334,7 @@ export function TutorDateHoursEditor({
                     );
                   }}
                 >
-                  {timeChoices(window.start).map((time) => (
+                  {timeChoices(window.start, START_OPTIONS).map((time) => (
                     <option key={time} value={time}>
                       {formatClock(time)}
                     </option>
@@ -268,7 +354,7 @@ export function TutorDateHoursEditor({
                     );
                   }}
                 >
-                  {timeChoices(window.end).map((time) => (
+                  {timeChoices(window.end, END_OPTIONS).map((time) => (
                     <option key={time} value={time}>
                       {formatClock(time)}
                     </option>
@@ -294,6 +380,11 @@ export function TutorDateHoursEditor({
             Each window has to end after it starts.
           </p>
         ) : null}
+        {windowsOverlap(windows) ? (
+          <p className="text-sm text-destructive" role="alert" data-testid="tutor-date-hours-overlap">
+            These windows overlap. Adjust them before saving.
+          </p>
+        ) : null}
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
@@ -312,7 +403,7 @@ export function TutorDateHoursEditor({
           <Button
             type="button"
             onClick={() => save(selectedDate, windows)}
-            disabled={saving || invalidWindow}
+            disabled={saving || invalidWindow || windowsOverlap(windows)}
           >
             Save this date
           </Button>
@@ -331,19 +422,225 @@ export function TutorDateHoursEditor({
         </>
         )}
 
+        <div data-testid="tutor-weekly-hours" className="space-y-3 border-t pt-5">
+          <div>
+            <p className="text-sm font-medium">Weekly schedule</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Saved weekdays open on dates you have not already set. A closed date stays closed.
+              {weeklyRange}
+            </p>
+          </div>
+          {weeklyRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No weekly schedule saved.</p>
+          ) : (
+            <ul className="space-y-2 text-sm text-muted-foreground" data-testid="tutor-weekly-hours-saved">
+              {weeklyRows.map(([id, label]) => (
+                <li key={id} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {label}
+                    {": "}
+                    {(recurring.days[id] ?? [])
+                      .map((window) => `${formatClock(window.start)}–${formatClock(window.end)}`)
+                      .join(", ")}
+                  </span>
+                  {readOnly ? null : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setWeeklyDay(id);
+                          setWeeklyWindows((recurring.days[id] ?? []).map((window) => ({ ...window })));
+                          setWeeklyStart(recurring.startDate ?? "");
+                          setWeeklyEnd(recurring.endDate ?? "");
+                          setWeeklyError("");
+                          setWeeklyNote("");
+                        }}
+                      >
+                        Edit {label}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const days = { ...recurring.days };
+                          delete days[id];
+                          void saveWeekly({
+                            startDate: recurring.startDate,
+                            endDate: recurring.endDate,
+                            days,
+                          });
+                        }}
+                        disabled={weeklySaving}
+                      >
+                        Delete {label}
+                      </Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {readOnly ? null : (
+            <div className="space-y-3" data-testid="tutor-weekly-hours-form">
+              <label className="block text-sm font-medium" htmlFor="tutor-weekly-day">
+                Weekday
+                <select
+                  id="tutor-weekly-day"
+                  className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={weeklyDay}
+                  onChange={(event) => setWeeklyDay(event.target.value)}
+                >
+                  {WEEKDAYS.map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-3">
+                <label className="text-sm font-medium" htmlFor="tutor-weekly-start">
+                  Optional start date
+                  <input
+                    id="tutor-weekly-start"
+                    type="date"
+                    className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
+                    value={weeklyStart}
+                    onChange={(event) => setWeeklyStart(event.target.value)}
+                  />
+                </label>
+                <label className="text-sm font-medium" htmlFor="tutor-weekly-end">
+                  Optional end date
+                  <input
+                    id="tutor-weekly-end"
+                    type="date"
+                    className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
+                    value={weeklyEnd}
+                    onChange={(event) => setWeeklyEnd(event.target.value)}
+                  />
+                </label>
+              </div>
+              {weeklyWindows.map((window, index) => (
+                <div key={`weekly-${index}`} className="flex flex-wrap items-end gap-2">
+                  <label className="text-sm font-medium">
+                    Start
+                    <select
+                      aria-label={`Weekly start time ${index + 1}`}
+                      className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
+                      value={window.start}
+                      onChange={(event) => {
+                        const start = event.target.value;
+                        setWeeklyWindows((current) =>
+                          current.map((item, itemIndex) => (itemIndex === index ? { ...item, start } : item)),
+                        );
+                      }}
+                    >
+                      {timeChoices(window.start, START_OPTIONS).map((time) => (
+                        <option key={time} value={time}>
+                          {formatClock(time)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm font-medium">
+                    End
+                    <select
+                      aria-label={`Weekly end time ${index + 1}`}
+                      className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
+                      value={window.end}
+                      onChange={(event) => {
+                        const end = event.target.value;
+                        setWeeklyWindows((current) =>
+                          current.map((item, itemIndex) => (itemIndex === index ? { ...item, end } : item)),
+                        );
+                      }}
+                    >
+                      {timeChoices(window.end, END_OPTIONS).map((time) => (
+                        <option key={time} value={time}>
+                          {formatClock(time)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setWeeklyWindows((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                    }
+                  >
+                    Remove weekly window {index + 1}
+                  </Button>
+                </div>
+              ))}
+              {invalidWeekly ? (
+                <p className="text-sm text-destructive" role="alert">
+                  Each weekly window has to end after it starts.
+                </p>
+              ) : null}
+              {weeklyOverlap ? (
+                <p className="text-sm text-destructive" role="alert" data-testid="tutor-weekly-hours-overlap">
+                  These windows overlap. Adjust them before saving.
+                </p>
+              ) : null}
+              {weeklyError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {weeklyError}
+                </p>
+              ) : null}
+              {weeklyNote ? <p className="text-sm text-muted-foreground">{weeklyNote}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setWeeklyWindows((current) => [...current, { start: "21:00", end: "22:00" }])
+                  }
+                >
+                  Add a weekly window
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => saveWeekly(weeklyPayload(weeklyDay, weeklyWindows))}
+                  disabled={weeklySaving || weeklyWindows.length === 0 || invalidWeekly || weeklyOverlap}
+                >
+                  Save weekly hours
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div data-testid="tutor-date-hours-other-dates">
           <p className="text-sm font-medium">Other open dates</p>
           {otherOpenDates.length === 0 ? (
             <p className="mt-1 text-sm text-muted-foreground">No other open dates in the next 8 weeks.</p>
           ) : (
-            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
               {otherOpenDates.map((date) => (
-                <li key={date}>
-                  {formatCivilDate(date)}
-                  {": "}
-                  {(state.dateHours[date] ?? [])
-                    .map((window) => `${formatClock(window.start)}–${formatClock(window.end)}`)
-                    .join(", ")}
+                <li key={date} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {formatCivilDate(date)}
+                    {": "}
+                    {(state.dateHours[date] ?? [])
+                      .map((window) => `${formatClock(window.start)}–${formatClock(window.end)}`)
+                      .join(", ")}
+                  </span>
+                  {readOnly ? null : (
+                    <>
+                      <Button type="button" variant="outline" onClick={() => chooseDate(date)}>
+                        Edit {formatCivilDate(date)}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => save(date, [])}
+                        disabled={saving}
+                      >
+                        Delete {formatCivilDate(date)}
+                      </Button>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
@@ -354,7 +651,7 @@ export function TutorDateHoursEditor({
   );
 }
 
-function timeChoices(current: string): string[] {
-  if (TIME_OPTIONS.includes(current)) return TIME_OPTIONS;
-  return [...TIME_OPTIONS, current].sort();
+function timeChoices(current: string, options: string[]): string[] {
+  if (options.includes(current)) return options;
+  return [...options, current].sort();
 }

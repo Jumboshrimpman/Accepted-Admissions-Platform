@@ -90,6 +90,99 @@ describe("tutor date hours editor", () => {
     expect(screen.queryByRole("button", { name: "Save this date" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Add a window" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Mark this date closed" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save weekly hours" })).toBeNull();
     expect(mocks.customFetch).not.toHaveBeenCalled();
+  });
+
+  test("warns on overlapping windows and offers an end at midnight", async () => {
+    mocks.customFetch.mockResolvedValueOnce(saved);
+    render(<TutorDateHoursEditor />);
+    expect(await screen.findByText(/Google Calendar is busy/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a window" }));
+    const end = screen.getByLabelText("End time 1") as HTMLSelectElement;
+    expect(Array.from(end.options).some((option) => option.value === "24:00" && option.textContent === "12:00 AM")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a window" }));
+    expect(screen.getByTestId("tutor-date-hours-overlap").textContent).toContain("These windows overlap");
+    expect((screen.getByRole("button", { name: "Save this date" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("saves a weekly schedule and can delete one weekday", async () => {
+    const withMonday = {
+      ...saved,
+      recurringHours: {
+        startDate: "2026-10-26",
+        endDate: "2026-12-31",
+        days: {
+          "1": [{ start: "21:00", end: "22:00" }],
+          "2": [{ start: "21:00", end: "23:00" }],
+        },
+      },
+    };
+    mocks.customFetch.mockResolvedValueOnce(saved);
+    render(<TutorDateHoursEditor />);
+    expect(await screen.findByText("No weekly schedule saved.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Optional start date"), { target: { value: "2026-10-26" } });
+    fireEvent.change(screen.getByLabelText("Optional end date"), { target: { value: "2026-12-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add a weekly window" }));
+    fireEvent.change(screen.getByLabelText("Weekly end time 1"), { target: { value: "24:00" } });
+    mocks.customFetch.mockResolvedValueOnce(withMonday);
+    fireEvent.click(screen.getByRole("button", { name: "Save weekly hours" }));
+
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenLastCalledWith("/api/tutor/date-hours", {
+        method: "PUT",
+        body: JSON.stringify({
+          recurringHours: {
+            startDate: "2026-10-26",
+            endDate: "2026-12-31",
+            days: { "1": [{ start: "21:00", end: "24:00" }] },
+          },
+        }),
+      });
+    });
+
+    mocks.customFetch.mockResolvedValueOnce({
+      ...withMonday,
+      recurringHours: {
+        startDate: "2026-10-26",
+        endDate: "2026-12-31",
+        days: { "2": [{ start: "21:00", end: "23:00" }] },
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Delete Monday" }));
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenLastCalledWith("/api/tutor/date-hours", {
+        method: "PUT",
+        body: JSON.stringify({
+          recurringHours: {
+            startDate: "2026-10-26",
+            endDate: "2026-12-31",
+            days: { "2": [{ start: "21:00", end: "23:00" }] },
+          },
+        }),
+      });
+    });
+  });
+
+  test("preview lists a weekly schedule without edit controls", () => {
+    render(
+      <TutorDateHoursEditor
+        preview={{
+          ...saved,
+          recurringHours: {
+            startDate: "2026-10-26",
+            endDate: null,
+            days: { "1": [{ start: "21:00", end: "22:00" }] },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("tutor-weekly-hours-saved").textContent).toContain("Monday");
+    expect(screen.getByTestId("tutor-weekly-hours-saved").textContent).toContain("9:00 PM");
+    expect(screen.queryByRole("button", { name: "Edit Monday" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete Monday" })).toBeNull();
   });
 });
