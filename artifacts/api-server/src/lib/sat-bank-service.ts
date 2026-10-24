@@ -38,6 +38,7 @@ import {
 } from "./sat-bank-import.ts";
 import { choiceTextsMatch, remapStoredChoiceLetter } from "./choice-letter-remap.ts";
 import { originalHardSatBankRecords } from "./original-hard-sat.ts";
+import { oct30HardRwBankRecords } from "./oct30-hard-rw.ts";
 import {
   auditQuizItems,
   auditStudentQuizItem,
@@ -636,7 +637,7 @@ export async function runCollegeBoardReimport(input: {
 }): Promise<CollegeBoardReimportReport> {
   const rootDir = resolveCollegeBoardRoot(input.rootDir ?? SAT_BANK_IMPORT_ROOT);
   const loaded = await loadOfficialExtractRecords(rootDir);
-  const plannedRecords = [...loaded.records, ...originalHardSatBankRecords()];
+  const plannedRecords = [...loaded.records, ...originalHardSatBankRecords(), ...oct30HardRwBankRecords()];
   const existingRows = await db.select().from(bankQuestionsTable);
   const plan = planBankReimportDiff({
     records: plannedRecords,

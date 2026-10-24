@@ -12,7 +12,15 @@ import {
   tutorProfilesTable,
   usersTable,
 } from "@workspace/db";
-import { assignPreworkFromBank, materializeHardSatQuestion } from "./sat-bank-service.ts";
+import { assignPreworkFromBank, materializeHardSatQuestion, upsertBankRecords } from "./sat-bank-service.ts";
+import { logger } from "./logger.ts";
+import {
+  composeOct30HardPrework,
+  oct30HardRwBankRecords,
+  oct30HardRwPreworkAction,
+  oct30HardRwPreworkIsCurrent,
+  planOct30HardRwBankWrite,
+} from "./oct30-hard-rw.ts";
 import { listLiveBeforeSessionHomework } from "./session-prework-live.ts";
 import { inferSessionPreworkKind } from "./session-prework-dedupe.ts";
 import {
@@ -435,18 +443,120 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   return { summary, duringAssignmentId, questionCount, preworkCount, needsQuestions };
 }
 
+const OCT30_READING_LEFT_TITLE = "Oct 30 reading set left in place";
+
+async function sessionIsTaitoOct30Eunice(session: {
+  subject: string;
+  dateTime: Date;
+  timezone?: string | null;
+  clientUserId?: string | null;
+  tutorUserId?: string | null;
+}): Promise<boolean> {
+  if (!session.clientUserId || !session.tutorUserId) return false;
+  const [student] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, session.clientUserId))
+    .limit(1);
+  const [tutor] = await db
+    .select({ email: tutorProfilesTable.email })
+    .from(tutorProfilesTable)
+    .where(eq(tutorProfilesTable.userId, session.tutorUserId))
+    .limit(1);
+  return isTaitoOct30EuniceSession({
+    subject: session.subject,
+    dateTime: session.dateTime,
+    timezone: session.timezone,
+    studentEmail: student?.email,
+    tutorEmail: tutor?.email,
+    clientUserId: session.clientUserId,
+  });
+}
+
+/**
+ * Idempotent bank upsert for the 22 Oct 30 reading items.
+ * The plan is logged before any write. Unchanged rows are not rewritten.
+ */
+export async function ensureOct30HardRwBank(): Promise<{
+  insert: number;
+  update: number;
+  unchanged: number;
+}> {
+  const records = oct30HardRwBankRecords();
+  const keys = records.map((record) => record.sourceKey);
+  const existing = await db
+    .select({
+      sourceKey: bankQuestionsTable.sourceKey,
+      prompt: bankQuestionsTable.prompt,
+      stimulus: bankQuestionsTable.stimulus,
+      correctAnswer: bankQuestionsTable.correctAnswer,
+      choices: bankQuestionsTable.choices,
+      officialExplanation: bankQuestionsTable.officialExplanation,
+      skill: bankQuestionsTable.skill,
+      domain: bankQuestionsTable.domain,
+    })
+    .from(bankQuestionsTable)
+    .where(inArray(bankQuestionsTable.sourceKey, keys));
+  const plan = planOct30HardRwBankWrite(existing, records);
+  logger.info(
+    { insert: plan.insert, update: plan.update, unchanged: plan.unchanged, dryRun: true },
+    "Oct 30 hard reading bank plan",
+  );
+  if (plan.writeKeys.length === 0) return { insert: 0, update: 0, unchanged: plan.unchanged };
+  const writing = new Set(plan.writeKeys);
+  await upsertBankRecords(records.filter((record) => writing.has(record.sourceKey)));
+  logger.info(
+    { insert: plan.insert, update: plan.update, unchanged: plan.unchanged, dryRun: false },
+    "Oct 30 hard reading bank applied",
+  );
+  return { insert: plan.insert, update: plan.update, unchanged: plan.unchanged };
+}
+
+/** In-app flag only. Does not email, and does not mark the session as missing questions. */
+async function notifyOct30ReadingLeftInPlace(session: SessionRow): Promise<void> {
+  const already = await db
+    .select({ id: adminNotificationsTable.id })
+    .from(adminNotificationsTable)
+    .where(
+      and(
+        eq(adminNotificationsTable.sessionId, session.id),
+        eq(adminNotificationsTable.kind, "hard_sat_shortfall"),
+        eq(adminNotificationsTable.title, OCT30_READING_LEFT_TITLE),
+      ),
+    )
+    .limit(1);
+  if (already.length > 0) return;
+  const administrators = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.role, "administrator"));
+  if (administrators.length === 0) return;
+  await db.insert(adminNotificationsTable).values(
+    administrators.map((admin) => ({
+      recipientUserId: admin.id,
+      kind: "hard_sat_shortfall",
+      sessionId: session.id,
+      title: OCT30_READING_LEFT_TITLE,
+      message:
+        "The Oct 30 SAT pre-work already has attempts, so its reading-and-writing items were left in place.",
+      status: "unread" as const,
+    })),
+  );
+}
+
 /**
  * Fill hard pre-work from the same renderable pool used for planning.
  * A live unattempted routine set stays only when every question's source key
  * is in that pool. Anything else with no attempts is archived and refilled,
  * or flagged as a shortfall when the pool cannot fill a full set.
+ * Taito's Oct 30 set keeps the official math half and uses original hard reading.
  */
 export async function ensureHardSatPrework(
   session: SessionRow,
   actorUserId?: string | null,
 ): Promise<
   | { action: "not-hard" }
-  | { action: "blocked-by-attempts"; assignmentId: string | null }
+  | { action: "blocked-by-attempts"; assignmentId: string | null; readingLeftInPlace?: boolean }
   | { action: "unchanged"; assignmentId: string | null }
   | { action: "unavailable"; assignmentId: string | null }
   | { action: "shortfall"; assignmentId: string | null }
@@ -458,6 +568,8 @@ export async function ensureHardSatPrework(
   if ((await satDifficultyForSession(session)) !== "hard") {
     return { action: "not-hard" };
   }
+  const oct30 = await sessionIsTaitoOct30Eunice(session);
+  if (oct30) await ensureOct30HardRwBank();
   const target = await inSessionTargetForSession(session);
   const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(session.id);
@@ -487,7 +599,12 @@ export async function ensureHardSatPrework(
       if (item.attempts > 0 || item.questionCount === 0 || item.everyKeyIsHard) continue;
       await archiveUnattemptedAssignment(session.id, item.row.id);
     }
-    return { action: "blocked-by-attempts", assignmentId: attempted[0]!.row.id };
+    let readingLeftInPlace = false;
+    if (oct30 && !classified.some((item) => oct30HardRwPreworkIsCurrent(item.keys))) {
+      readingLeftInPlace = true;
+      await notifyOct30ReadingLeftInPlace(session);
+    }
+    return { action: "blocked-by-attempts", assignmentId: attempted[0]!.row.id, readingLeftInPlace };
   }
   for (const item of classified) {
     if (item.questionCount > 0 && !item.everyKeyIsHard) {
@@ -497,7 +614,16 @@ export async function ensureHardSatPrework(
   const fullHard = classified.find(
     (item) => item.everyKeyIsHard && item.keys.length === HARD_SAT_PREWORK_QUESTIONS,
   );
-  if (fullHard) {
+  if (oct30) {
+    const action = oct30HardRwPreworkAction({
+      attemptCount: 0,
+      assignmentKeyLists: classified.map((item) => item.keys),
+    });
+    if (action === "unchanged") {
+      const current = classified.find((item) => oct30HardRwPreworkIsCurrent(item.keys));
+      return { action: "unchanged", assignmentId: current?.row.id ?? null };
+    }
+  } else if (fullHard) {
     return { action: "unchanged", assignmentId: fullHard.row.id };
   }
   const shortHard = classified.find(
@@ -524,8 +650,16 @@ export async function ensureHardSatPrework(
       const info = await classifyBankAssignment(row.id, hardKeys);
       if (info.everyKeyIsHard && info.keys.length === target) duringIsFullHard = true;
     }
+    const composed = oct30
+      ? composeOct30HardPrework({
+          pool,
+          existingSourceKeys: classified.flatMap((item) => item.keys),
+          excludeSourceKeys: seen.sourceKeys,
+        })
+      : null;
+    const preworkItems = oct30 ? (composed?.complete ? composed.prework : []) : planned.prework;
     const inSessionReady = duringIsFullHard || planned.inSession.length === target;
-    if (planned.prework.length !== HARD_SAT_PREWORK_QUESTIONS || !inSessionReady) {
+    if (preworkItems.length !== HARD_SAT_PREWORK_QUESTIONS || !inSessionReady) {
       if (shortHard) {
         await raiseHardSatShortfallAlert(
           session,
@@ -535,7 +669,7 @@ export async function ensureHardSatPrework(
       }
       await raiseHardSatShortfallAlert(
         session,
-        `The renderable hard pool has ${planned.prework.length} pre-work and ${planned.inSession.length} in-session items available. A full set is ${HARD_SAT_PREWORK_QUESTIONS} and ${target}. No partial set was assigned.`,
+        `The renderable hard pool has ${preworkItems.length} pre-work and ${planned.inSession.length} in-session items available. A full set is ${HARD_SAT_PREWORK_QUESTIONS} and ${target}. No partial set was assigned.`,
       );
       return { action: "shortfall", assignmentId: null };
     }
@@ -546,7 +680,7 @@ export async function ensureHardSatPrework(
       difficulty: "hard",
       mcqOnly: true,
       skipArchiveExisting: false,
-      bankQuestionIds: planned.prework.map((item) => item.bankId),
+      bankQuestionIds: preworkItems.map((item) => item.bankId),
       archiveAssignmentIds: replaceableIds,
     });
     if (result.questionCount !== HARD_SAT_PREWORK_QUESTIONS) {
@@ -875,24 +1009,26 @@ export function isTaitoOct30EuniceSession(input: {
 }
 
 /**
- * Point Taito's Oct 30 pre-work at the existing hard module 2 set when that
- * copy has no attempts. Other sessions, including Michelle's Oct 25 set, stay.
+ * Point Taito's Oct 30 pre-work at hard reading plus the official math half
+ * when that copy has no attempts. A started set is left in place and flagged.
+ * Other sessions, including Michelle's Oct 25 set, stay.
  */
 export async function ensureTaitoOct30HardPrework(): Promise<{
   action: "missing" | "unchanged" | "assigned" | "blocked" | "shortfall";
+  readingLeftInPlace: boolean;
 }> {
   const [student] = await db
     .select({ id: usersTable.id, email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.email, TAITO_STUDENT_EMAIL))
     .limit(1);
-  if (!student) return { action: "missing" };
+  if (!student) return { action: "missing", readingLeftInPlace: false };
   const [tutor] = await db
     .select({ userId: tutorProfilesTable.userId, email: tutorProfilesTable.email })
     .from(tutorProfilesTable)
     .where(eq(tutorProfilesTable.email, EUNICE_TUTOR_EMAIL))
     .limit(1);
-  if (!tutor?.userId) return { action: "missing" };
+  if (!tutor?.userId) return { action: "missing", readingLeftInPlace: false };
   const sessions = await db
     .select()
     .from(sessionsTable)
@@ -913,10 +1049,12 @@ export async function ensureTaitoOct30HardPrework(): Promise<{
       clientUserId: row.clientUserId,
     }),
   );
-  if (!session) return { action: "missing" };
+  if (!session) return { action: "missing", readingLeftInPlace: false };
   const result = await ensureHardSatPrework(session);
-  if (result.action === "assigned") return { action: "assigned" };
-  if (result.action === "blocked-by-attempts") return { action: "blocked" };
-  if (result.action === "shortfall") return { action: "shortfall" };
-  return { action: "unchanged" };
+  const readingLeftInPlace =
+    result.action === "blocked-by-attempts" && result.readingLeftInPlace === true;
+  if (result.action === "assigned") return { action: "assigned", readingLeftInPlace };
+  if (result.action === "blocked-by-attempts") return { action: "blocked", readingLeftInPlace };
+  if (result.action === "shortfall") return { action: "shortfall", readingLeftInPlace: false };
+  return { action: "unchanged", readingLeftInPlace: false };
 }

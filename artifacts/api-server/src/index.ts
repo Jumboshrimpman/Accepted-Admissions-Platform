@@ -45,7 +45,12 @@ void ensureRyoTaitoParentMirror()
         .then((result) => logger.info(result, "SAT/PSAT official extracts ready"))
         .catch((err) => logger.warn({ err }, "SAT/PSAT official extract import skipped"))
         .then(() => ensureTaitoOct30HardPrework())
-        .then((result) => logger.info({ action: result.action }, "Taito Oct 30 hard pre-work check"))
+        .then((result) =>
+          logger.info(
+            { action: result.action, readingLeftInPlace: result.readingLeftInPlace },
+            "Taito Oct 30 hard pre-work check",
+          ),
+        )
         .catch(() => logger.warn("Taito Oct 30 hard pre-work check skipped"))
         .then(() =>
           retireDuplicateXavierIdentities().catch((err) =>
