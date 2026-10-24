@@ -72,3 +72,43 @@ test("never surfaces sat-bank-figures HTML comments and can hide garbled OCR", (
   );
   assert.deepEqual(parts, [{ type: "image", alt: "Graph", src }]);
 });
+
+test("renders algebraic and frequency tables in place", () => {
+  const line = splitQuizRichText("x\ty\n30\tp\n18\tp − 6");
+  const xy = line.find((part) => part.type === "table");
+  assert.ok(xy && xy.type === "table");
+  if (xy?.type === "table") {
+    assert.deepEqual(xy.headers, ["x", "y"]);
+    assert.deepEqual(xy.rows, [
+      ["30", "p"],
+      ["18", "p − 6"],
+    ]);
+  }
+  const slope = splitQuizRichText("x\ty\n4\tk\n10\tk + 9\n16\t2k");
+  const three = slope.find((part) => part.type === "table");
+  assert.ok(three && three.type === "table");
+  if (three?.type === "table") {
+    assert.deepEqual(three.rows[1], ["10", "k + 9"]);
+    assert.deepEqual(three.rows[2], ["16", "2k"]);
+  }
+  const frequency = splitQuizRichText(
+    [
+      "A teacher asked each of 60 students how many pets they have. The frequency table below shows the results.",
+      "",
+      "Number of pets\tNumber of students",
+      "0\t8",
+      "1\t14",
+      "2\t10",
+    ].join("\n"),
+  );
+  assert.equal(frequency[0]?.type, "text");
+  assert.match(
+    frequency[0] && frequency[0].type === "text" ? frequency[0].value : "",
+    /frequency table below/,
+  );
+  assert.equal(frequency[1]?.type, "table");
+  if (frequency[1]?.type === "table") {
+    assert.deepEqual(frequency[1].headers, ["Number of pets", "Number of students"]);
+    assert.deepEqual(frequency[1].rows[0], ["0", "8"]);
+  }
+});

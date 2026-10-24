@@ -17,11 +17,15 @@ export const SAT_MATH_FOLLOW_UP_TITLE = "SAT Math Problems";
 /** Xavier factoring practice assigned after Michelle's latest session. */
 export const FACTORING_QUIZ_FOLLOW_UP_TITLE = "Factoring Quiz";
 
+/** Oct 18 session review. Stays open after the linked session day. */
+export const OCT18_SESSION_REVIEW_TITLE = "Oct 18 Session Review Quiz";
+
 const POST_SESSION_FOLLOW_UP_TITLES = new Set<string>([
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
   SAT_MATH_FOLLOW_UP_TITLE,
   FACTORING_QUIZ_FOLLOW_UP_TITLE,
+  OCT18_SESSION_REVIEW_TITLE,
 ]);
 
 export function isPostSessionFollowUpQuiz(assignment: {

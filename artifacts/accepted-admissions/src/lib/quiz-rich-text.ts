@@ -1,4 +1,8 @@
-import { looksGarbledQuizText, stripSatBankFigureComments } from "./quiz-figure-primary.ts";
+import {
+  embeddedQuizTable,
+  looksGarbledQuizText,
+  stripSatBankFigureComments,
+} from "./quiz-figure-primary.ts";
 
 export type QuizRichPart =
   | { type: "text"; value: string; preformatted?: boolean }
@@ -32,74 +36,22 @@ export function normalizeQuizProse(value: string): string {
     .trim();
 }
 
-function tokenizeTableLine(line: string): string[] {
-  if (/\t/.test(line) || / {2,}/.test(line)) {
-    return line.split(/\s{2,}|\t/).map((cell) => cell.trim()).filter(Boolean);
-  }
-  return line.trim().split(/\s+/).filter(Boolean);
-}
-
-function looksTableCell(token: string): boolean {
-  if (token.length > 36) return false;
-  if (/[.?!]$/.test(token) && token.length > 12) return false;
-  return /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(token);
-}
-
-function isPlausibleDataTable(headers: string[], rows: string[][]): boolean {
-  if (headers.length < 2 || rows.length < 2) return false;
-  const cells = [...headers, ...rows.flat()];
-  const numeric = cells.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length;
-  const mathHeader = headers.some((header) =>
-    /^(?:x|y|f\(x\)|g\(x\)|h\(x\)|n|%|year|age|state|number|percent)$/i.test(header),
-  );
-  if (numeric === 0 && !mathHeader) return false;
-  if (headers.some((header) => /^(?:which|what|how|the|for|this|that|best|most|complete)$/i.test(header))) {
-    return false;
-  }
-  if (headers.some((header) => /^-?\d+\.\d+$/.test(header))) return false;
-  const hasYesNo = headers.some((header) => /^(?:yes|no)$/i.test(header));
-  const hasNumericHeader = headers.some((header) => /^-?\d+(?:\.\d+)?$/.test(header));
-  if (hasYesNo && hasNumericHeader) return false;
-  return true;
-}
-
 export function extractPlainTextTable(text: string | null | undefined): {
   table: { headers: string[]; rows: string[][] } | null;
   remainder: string;
+  before: string;
+  after: string;
 } {
-  const lines = (text ?? "").split("\n");
-  let best: { start: number; end: number } | null = null;
-  let index = 0;
-  while (index < lines.length) {
-    const cells = tokenizeTableLine(lines[index] ?? "");
-    if (cells.length < 2 || !cells.every(looksTableCell)) {
-      index += 1;
-      continue;
-    }
-    const columns = cells.length;
-    let end = index + 1;
-    while (end < lines.length) {
-      const next = tokenizeTableLine(lines[end] ?? "");
-      if (next.length !== columns || !next.every(looksTableCell)) break;
-      end += 1;
-    }
-    if (end - index >= 3 && (!best || end - index > best.end - best.start)) {
-      best = { start: index, end };
-    }
-    index = Math.max(end, index + 1);
-  }
-  if (!best) return { table: null, remainder: (text ?? "").trim() };
-  const block = lines.slice(best.start, best.end).map((line) => tokenizeTableLine(line));
-  const headers = block[0] ?? [];
-  const rows = block.slice(1);
-  if (!isPlausibleDataTable(headers, rows)) {
-    return { table: null, remainder: (text ?? "").trim() };
-  }
-  const remainder = [...lines.slice(0, best.start), ...lines.slice(best.end)]
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return { table: { headers, rows }, remainder };
+  const trimmed = (text ?? "").trim();
+  const embedded = embeddedQuizTable(text);
+  if (!embedded) return { table: null, remainder: trimmed, before: trimmed, after: "" };
+  const remainder = [embedded.before, embedded.after].filter(Boolean).join("\n\n");
+  return {
+    table: { headers: embedded.headers, rows: embedded.rows },
+    remainder,
+    before: embedded.before,
+    after: embedded.after,
+  };
 }
 
 function studentTextPart(value: string): QuizRichPart | null {
@@ -112,17 +64,23 @@ function studentTextPart(value: string): QuizRichPart | null {
   return normalized ? { type: "text", value: normalized } : null;
 }
 
+function pushProse(parts: QuizRichPart[], value: string, hideGarbledText?: boolean) {
+  if (!value.trim()) return;
+  const part = studentTextPart(value);
+  if (part && !(hideGarbledText && looksGarbledQuizText(part.type === "text" ? part.value : ""))) {
+    parts.push(part);
+  }
+}
+
 function pushTextAndTables(parts: QuizRichPart[], value: string, hideGarbledText?: boolean) {
   const extracted = extractPlainTextTable(value);
-  if (extracted.remainder) {
-    const part = studentTextPart(extracted.remainder);
-    if (part && !(hideGarbledText && looksGarbledQuizText(part.type === "text" ? part.value : ""))) {
-      parts.push(part);
-    }
+  if (!extracted.table || extracted.table.rows.length < 2) {
+    pushProse(parts, value, hideGarbledText);
+    return;
   }
-  if (extracted.table && extracted.table.rows.length >= 2) {
-    parts.push({ type: "table", ...extracted.table });
-  }
+  pushProse(parts, extracted.before, hideGarbledText);
+  parts.push({ type: "table", ...extracted.table });
+  pushProse(parts, extracted.after, hideGarbledText);
 }
 
 /** Split quiz stimulus/prompt into text and markdown images. Unsafe URLs stay as text. */

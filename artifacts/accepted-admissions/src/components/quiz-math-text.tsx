@@ -101,8 +101,16 @@ function renderExpr(expr: MathExpr): ReactNode {
   }
 }
 
-export function QuizMathText({ text, className }: { text: string; className?: string }) {
-  const segments = segmentQuizMath(text);
+export function QuizMathText({
+  text,
+  className,
+  cell = false,
+}: {
+  text: string;
+  className?: string;
+  cell?: boolean;
+}) {
+  const segments = segmentQuizMath(text, cell ? { cell: true } : undefined);
   return (
     <span data-testid="quiz-math-text" className={className}>
       {segments.map((segment, index) =>

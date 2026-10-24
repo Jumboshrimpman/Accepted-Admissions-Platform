@@ -133,7 +133,7 @@ function QuizRichText({
                 <tr>
                   {part.headers.map((header) => (
                     <th key={header} className="border border-border bg-muted/50 px-3 py-2 text-left font-medium">
-                      {header}
+                      {formatMath ? <QuizMathText text={header} cell /> : header}
                     </th>
                   ))}
                 </tr>
@@ -143,7 +143,7 @@ function QuizRichText({
                   <tr key={`row-${rowIndex}`}>
                     {row.map((cell, cellIndex) => (
                       <td key={`${rowIndex}-${cellIndex}`} className="border border-border px-3 py-2">
-                        {cell}
+                        {formatMath ? <QuizMathText text={cell} cell /> : cell}
                       </td>
                     ))}
                   </tr>

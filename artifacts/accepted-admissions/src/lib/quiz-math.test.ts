@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { quizMathPlain, quizShowsFormattedMath } from "./quiz-math.ts";
+import { quizMathPlain, quizShowsFormattedMath, quizTableCellPlain } from "./quiz-math.ts";
 
 test("formatted math is limited to the authored follow-up quizzes", () => {
   assert.equal(quizShowsFormattedMath("Factoring Quiz"), true);
   assert.equal(quizShowsFormattedMath("SAT Math Problems"), true);
+  assert.equal(quizShowsFormattedMath("Oct 18 Session Review Quiz"), true);
   assert.equal(
     quizShowsFormattedMath("SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier"),
     true,
@@ -78,6 +79,11 @@ test("fractions, absolute value, and exponents on the right factor", () => {
   assert.equal(quizMathPlain("(px - r)(x - s)"), "(px − r)(x − s)");
   assert.equal(quizMathPlain("b/p"), "\\frac{b}{p}");
   assert.equal(quizMathPlain("sqrt(x^2 + 1)"), "√(x^{2} + 1)");
+  assert.equal(quizTableCellPlain("p − 6"), "p − 6");
+  assert.equal(quizTableCellPlain("p - 6"), "p − 6");
+  assert.equal(quizTableCellPlain("k + 9"), "k + 9");
+  assert.equal(quizTableCellPlain("2k"), "2k");
+  assert.equal(quizTableCellPlain("Number of pets"), "Number of pets");
   assert.equal(
     quizMathPlain("x^4 - 20x^2 + 64 = 0"),
     "x^{4} − 20x^{2} + 64 = 0",
