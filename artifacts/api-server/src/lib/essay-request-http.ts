@@ -13,6 +13,7 @@ import express, { type Request, type Response, type Router } from "express";
 import { isNeelDharniUser, isSamaPostgradTestStudent } from "./college-consulting.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import {
+  essayAliasReadBlocked,
   essayCheckoutHold,
   essayPdfFilename,
   nikaEssayProductBySlug,
@@ -41,6 +42,11 @@ import {
 } from "./booking-slot-hold.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { createCheckoutSession, stripeErrorMessage } from "./payment-service.ts";
+
+type EssayAuthedRequest = Request & {
+  appUser?: AppUser;
+  temporaryTutorAlias?: string;
+};
 
 type SlotIntent = {
   tutorProfileId: string;
@@ -107,6 +113,19 @@ function mayBuyNikaEssay(user: AppUser): boolean {
   return isNeelDharniUser(user.id) || isSamaPostgradTestStudent(user);
 }
 
+function denyAliasEssayRead(req: EssayAuthedRequest, res: Response): boolean {
+  if (
+    !essayAliasReadBlocked({
+      temporaryTutorAlias: req.temporaryTutorAlias,
+      role: req.appUser?.role,
+    })
+  ) {
+    return false;
+  }
+  res.status(403).json({ error: "You cannot view this essay." });
+  return true;
+}
+
 export async function receiveEssayUpload(
   req: Request & { appUser?: AppUser },
   res: Response,
@@ -167,7 +186,7 @@ export async function receiveEssayUpload(
 }
 
 export async function listEssayRequests(
-  req: Request & { appUser?: AppUser },
+  req: EssayAuthedRequest,
   res: Response,
 ): Promise<void> {
   const user = req.appUser;
@@ -175,11 +194,12 @@ export async function listEssayRequests(
     res.status(401).json({ error: "Authentication required" });
     return;
   }
+  if (denyAliasEssayRead(req, res)) return;
   res.json(await listEssayRequestsForActor(actorOf(user)));
 }
 
 export async function downloadEssayFile(
-  req: Request & { appUser?: AppUser },
+  req: EssayAuthedRequest,
   res: Response,
 ): Promise<void> {
   const user = req.appUser;
@@ -187,6 +207,7 @@ export async function downloadEssayFile(
     res.status(401).json({ error: "Authentication required" });
     return;
   }
+  if (denyAliasEssayRead(req, res)) return;
   const requestId = typeof req.params.id === "string" ? req.params.id : "";
   const which = queryString(req, "which") === "edited" ? "edited" : "original";
   const file = await readEssayFile({

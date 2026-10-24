@@ -197,6 +197,19 @@ export type EssayActor = {
   role: string;
 };
 
+/**
+ * The xsfam6 temporary view signs in as Nika's user, and a parent view-as
+ * session is a viewer. Neither may read essay lists or PDFs.
+ * Nika's own login, the owning client, and administrators stay allowed.
+ */
+export function essayAliasReadBlocked(input: {
+  temporaryTutorAlias?: string | null;
+  role?: string | null;
+}): boolean {
+  if (input.role === "viewer") return true;
+  return Boolean(input.temporaryTutorAlias?.trim());
+}
+
 export function essayFileDecision(args: {
   actor: EssayActor;
   clientUserId: string;

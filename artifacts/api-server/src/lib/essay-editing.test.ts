@@ -24,6 +24,7 @@ import {
   essayFileDecision,
   essayPurchaseCreditPlan,
   essayRefundHours,
+  essayAliasReadBlocked,
   essayRequestView,
   followUpBookingDecision,
   followUpCallIsFarEnough,
@@ -207,6 +208,32 @@ test("essay files are limited to the client, Nika, and administrators", () => {
   assert.equal(view?.clientFirstName, "Neel");
   assert.equal(view?.clientEmail, undefined);
   assert.equal(view?.clientName, undefined);
+});
+
+test("temporary Nika view and parent view-as cannot read essay files", () => {
+  assert.equal(
+    essayAliasReadBlocked({ temporaryTutorAlias: "xsfam6@gmail.com", role: "tutor" }),
+    true,
+  );
+  assert.equal(essayAliasReadBlocked({ temporaryTutorAlias: "  xsfam6@gmail.com  ", role: "tutor" }), true);
+  assert.equal(essayAliasReadBlocked({ role: "viewer" }), true);
+  assert.equal(essayAliasReadBlocked({ temporaryTutorAlias: "", role: "tutor" }), false);
+  assert.equal(essayAliasReadBlocked({ role: "tutor" }), false);
+  assert.equal(essayAliasReadBlocked({ role: "student" }), false);
+  assert.equal(essayAliasReadBlocked({ role: "administrator" }), false);
+  const http = readFileSync(new URL("./essay-request-http.ts", import.meta.url), "utf8");
+  const listFn = http.slice(
+    http.indexOf("export async function listEssayRequests"),
+    http.indexOf("export async function downloadEssayFile"),
+  );
+  const fileFn = http.slice(
+    http.indexOf("export async function downloadEssayFile"),
+    http.indexOf("export async function uploadEditedEssay"),
+  );
+  assert.ok(listFn.indexOf("denyAliasEssayRead") >= 0);
+  assert.ok(listFn.indexOf("denyAliasEssayRead") < listFn.indexOf("listEssayRequestsForActor"));
+  assert.ok(fileFn.indexOf("denyAliasEssayRead") >= 0);
+  assert.ok(fileFn.indexOf("denyAliasEssayRead") < fileFn.indexOf("readEssayFile"));
 });
 
 test("essay products stay scoped to Nika and off the meeting-hour pool", () => {
