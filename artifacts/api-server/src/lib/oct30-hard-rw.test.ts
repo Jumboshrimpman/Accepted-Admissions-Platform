@@ -66,6 +66,21 @@ test("Oct 30 reading items are hard, keyed, and render without figures", () => {
     1,
   );
   assert.ok(items.some((item) => item.correctText === "inimical to"));
+  const harbor = items.find((item) => item.questionNumber === 16);
+  assert.ok(harbor);
+  assert.equal(harbor.correctText, "inimical to");
+  assert.ok(harbor.choices.some((choice) => choice.text === "brusque toward"));
+  assert.ok(harbor.choices.some((choice) => choice.text === "curt toward"));
+  assert.equal(harbor.choices.some((choice) => /hostile|antithetical/i.test(choice.text)), false);
+  const folios = items.find((item) => item.questionNumber === 33);
+  assert.ok(folios);
+  assert.equal(folios.correctText, "is");
+  assert.ok(folios.choices.some((choice) => choice.text === "have been"));
+  assert.equal(folios.choices.some((choice) => choice.text === "was"), false);
+  const praise = items.find((item) => item.questionNumber === 21);
+  assert.ok(praise);
+  assert.match(praise.stimulus, /ambassador's public praise/);
+  assert.equal(/plotted/i.test(items.map((item) => item.stimulus).join("\n")), false);
   const templateChoice =
     /timing in the first account is too (?:early|late)|pattern holds in a further case|stated rule fails under a condition/i;
 
@@ -128,6 +143,12 @@ test("Oct 30 reading items are hard, keyed, and render without figures", () => {
     if (item.skill === "Boundaries") {
       const norms = item.choices.map((choice) => wordsOnly(choice.text));
       assert.equal(new Set(norms).size, 1, `${item.sourceKey} ${norms.join(" | ")}`);
+      assert.match(item.choices.map((choice) => choice.text).join("\n"), /—/);
+    }
+    if (item.skill === "Rhetorical Synthesis") {
+      const notes = item.stimulus.split("\n").filter((line) => line.startsWith("- "));
+      assert.ok(notes.length >= 5 && notes.length <= 6, `${item.sourceKey} ${notes.length} notes`);
+      assert.equal(/\bonly\b/i.test(item.prompt), false, item.prompt);
     }
   }
   assert.equal(routinePreworkTimeLimitMinutes(OCT30_HARD_PREWORK_COUNT), 50);

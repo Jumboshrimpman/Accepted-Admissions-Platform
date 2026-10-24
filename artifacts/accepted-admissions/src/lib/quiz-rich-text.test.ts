@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { formatStudentStemText } from "./quiz-figure-primary.ts";
 import { extractPlainTextTable, isSafeQuizImageSrc, normalizeQuizProse, splitQuizRichText } from "./quiz-rich-text.ts";
 
 const src =
@@ -63,6 +64,30 @@ test("can omit mismatched figure images while keeping the stem", () => {
   );
   assert.equal(parts.some((part) => part.type === "image"), false);
   assert.ok(parts.some((part) => part.type === "text" && /4 centimeters/.test(part.value)));
+});
+
+test("renders the Oct 30 marsh counts as a quiz table", () => {
+  const stimulus = [
+    "Researchers recorded bird counts at three marsh sites.",
+    "",
+    "Year\tCoast\tInland\tDelta",
+    "2011\t36\t44\t21",
+    "2015\t48\t33\t21",
+    "2018\t29\t47\t22",
+    "",
+    "From 2015 to 2018, the Coast count and the Inland count ___.",
+  ].join("\n");
+  const parts = splitQuizRichText(formatStudentStemText(stimulus));
+  const table = parts.find((part) => part.type === "table");
+  assert.ok(table && table.type === "table");
+  if (table?.type !== "table") return;
+  assert.deepEqual(table.headers, ["Year", "Coast", "Inland", "Delta"]);
+  assert.deepEqual(table.rows, [
+    ["2011", "36", "44", "21"],
+    ["2015", "48", "33", "21"],
+    ["2018", "29", "47", "22"],
+  ]);
+  assert.ok(parts.some((part) => part.type === "text" && part.value.includes("Coast count")));
 });
 
 test("never surfaces sat-bank-figures HTML comments and can hide garbled OCR", () => {
