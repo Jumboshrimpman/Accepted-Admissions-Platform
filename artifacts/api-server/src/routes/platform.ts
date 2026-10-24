@@ -619,6 +619,7 @@ import {
   questionGenerationStatus,
 } from "../lib/question-generation";
 import satBankRouter from "./sat-bank";
+import clientIntakeRouter from "./client-intake";
 import {
   assignPreworkFromBank,
   homeworkKindForAssignment,
@@ -7344,6 +7345,7 @@ router.use((req: AuthedRequest, res: Response, next: () => void) => {
   }
   next();
 });
+router.use(clientIntakeRouter);
 router.use(satBankRouter);
 
 router.get(

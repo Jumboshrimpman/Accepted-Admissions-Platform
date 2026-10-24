@@ -56,6 +56,7 @@ vi.mock("wouter", () => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
+  customFetch: vi.fn(async () => ({ assigned: false, completed: false })),
   getGetCurrentUserQueryKey: () => ["/api/me"],
   getGetDashboardQueryKey: () => ["/api/dashboard"],
   getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
