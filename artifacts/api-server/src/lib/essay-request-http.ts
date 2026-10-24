@@ -36,7 +36,6 @@ import {
 import {
   checkoutHoldExpiresAt,
   checkoutHoldExpiresAtUnix,
-  claimBookingSlotHold,
   releaseSlotHoldForPayment,
   SlotHoldConflict,
 } from "./booking-slot-hold.ts";
@@ -354,7 +353,6 @@ export async function handleEssayCheckoutRequest(
     if (aligned) Object.assign(product, aligned);
   }
   const chargeCents = catalog.totalPriceCents;
-  const bookingIntent = null;
   const holdExpiresAt = null;
   void assertSlotOpen;
   let invoice: typeof invoicesTable.$inferSelect;
@@ -420,7 +418,6 @@ export async function handleEssayCheckoutRequest(
             essayRequestId: request.id,
             creditsGrantedOnPaidWebhook: hold.hold.meetingHours,
             catalogPriceCents: chargeCents,
-            ...(bookingIntent ? { bookingIntent } : {}),
           },
         })
         .returning();
@@ -428,17 +425,6 @@ export async function handleEssayCheckoutRequest(
         .update(essayRequestsTable)
         .set({ paymentId: createdPayment!.id, productId: product.id, updatedAt: new Date() })
         .where(eq(essayRequestsTable.id, request.id));
-      if (bookingIntent && holdExpiresAt) {
-        await claimBookingSlotHold(tx, {
-          tutorProfileId: bookingIntent.tutorProfileId,
-          tutorUserId: owned.tutorUserId,
-          clientUserId: user.id,
-          paymentId: createdPayment!.id,
-          start: new Date(bookingIntent.startTime),
-          durationMinutes: bookingIntent.durationMinutes,
-          expiresAt: holdExpiresAt,
-        });
-      }
       return [createdInvoice!, createdPayment!] as const;
     });
   } catch (error) {
@@ -458,9 +444,7 @@ export async function handleEssayCheckoutRequest(
   }
   try {
     const origin = publicAppOrigin();
-    const successUrl = bookingIntent
-      ? `${origin}/portal?payment=success&bookPayment=${payment.id}`
-      : `${origin}/portal/sat?payment=success`;
+    const successUrl = `${origin}/portal/sat?payment=success`;
     const cancelUrl = `${origin}/portal/sat?payment=canceled`;
     const checkout = await createCheckoutSession({
       user,
