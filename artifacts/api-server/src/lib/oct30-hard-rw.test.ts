@@ -70,8 +70,21 @@ test("Oct 30 reading items are hard, keyed, and render without figures", () => {
   assert.ok(harbor);
   assert.equal(harbor.correctText, "inimical to");
   assert.ok(harbor.choices.some((choice) => choice.text === "brusque toward"));
-  assert.ok(harbor.choices.some((choice) => choice.text === "curt toward"));
+  assert.ok(harbor.choices.some((choice) => choice.text === "solicitous of"));
+  assert.equal(harbor.choices.some((choice) => choice.text === "curt toward"), false);
   assert.equal(harbor.choices.some((choice) => /hostile|antithetical/i.test(choice.text)), false);
+  const ledger = items.find((item) => item.questionNumber === 35);
+  assert.ok(ledger);
+  assert.equal(ledger.correctText, "; a different clerk filed the June tally.");
+  assert.ok(ledger.choices.some((choice) => choice.text === "a different clerk filed the June tally."));
+  assert.equal(ledger.choices.some((choice) => choice.text.includes("—")), false);
+  const logFile = items.find((item) => item.questionNumber === 29);
+  assert.ok(logFile);
+  assert.equal(
+    logFile.correctText,
+    "falls short of the circular's condition for entry, because the witness left before signing and the circular places the log entry after that signature",
+  );
+  assert.equal(/unentered/i.test(logFile.correctText), false);
   const folios = items.find((item) => item.questionNumber === 33);
   assert.ok(folios);
   assert.equal(folios.correctText, "is");
@@ -143,7 +156,9 @@ test("Oct 30 reading items are hard, keyed, and render without figures", () => {
     if (item.skill === "Boundaries") {
       const norms = item.choices.map((choice) => wordsOnly(choice.text));
       assert.equal(new Set(norms).size, 1, `${item.sourceKey} ${norms.join(" | ")}`);
-      assert.match(item.choices.map((choice) => choice.text).join("\n"), /—/);
+      if (item.questionNumber === 34) {
+        assert.match(item.choices.map((choice) => choice.text).join("\n"), /—/);
+      }
     }
     if (item.skill === "Rhetorical Synthesis") {
       const notes = item.stimulus.split("\n").filter((line) => line.startsWith("- "));
