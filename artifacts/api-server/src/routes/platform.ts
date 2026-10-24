@@ -179,8 +179,8 @@ import {
   temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
-import { isNikaEssaySlug, NIKA_ESSAY_SLUGS } from "../lib/essay-editing";
-import { linkEssayRequestToSession } from "../lib/essay-request-store";
+import { followUpBookingDecision, isNikaEssaySlug, NIKA_ESSAY_SLUGS, tutorIsNika } from "../lib/essay-editing";
+import { attachFollowUpSession, linkEssayRequestToSession, openFollowUpForBooking } from "../lib/essay-request-store";
 import {
   handleEssayCheckoutRequest,
   mountEssayRequestRoutes,
@@ -8367,6 +8367,38 @@ async function respondWithPrepaidBooking(
       .limit(1);
     if (!bookedTutor) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     await assertPrepaidHoursForTutor(req.appUser!, bookedTutor, durationMinutes, consulting);
+    let followUpRequestId: string | null = null;
+    if (consulting && tutorIsNika(bookedTutor)) {
+      const openFollowUp = await openFollowUpForBooking(req.appUser!.id, bookedTutor.id);
+      if (openFollowUp) {
+        const creditEntries = await db
+          .select({
+            entryType: creditLedgerTable.entryType,
+            hours: creditLedgerTable.hours,
+            productId: creditLedgerTable.productId,
+          })
+          .from(creditLedgerTable)
+          .where(eq(creditLedgerTable.clientUserId, req.appUser!.id));
+        const remaining = remainingCreditHoursForProducts(
+          creditEntries,
+          await consultingCreditProductIds(bookedTutor),
+        );
+        const decision = followUpBookingDecision({
+          start,
+          dueAt: openFollowUp.dueAt,
+          durationHours: durationMinutes / 60,
+          nikaHoursRemaining: remaining,
+        });
+        if (decision === "too-soon") {
+          throw new BookingError(
+            409,
+            "ESSAY_FOLLOWUP_TOO_SOON",
+            "Book the follow-up call at least 24 hours after the essay due time.",
+          );
+        }
+        if (decision === "link") followUpRequestId = openFollowUp.id;
+      }
+    }
     const slotTakenMessage =
       (req as AuthedRequest & { bookingSlotTakenMessage?: string }).bookingSlotTakenMessage ??
       "That time is no longer available. Choose another slot.";
@@ -8502,6 +8534,7 @@ async function respondWithPrepaidBooking(
         ...(satDebits ? { debits: satDebits } : {}),
       });
       if (holdPaymentId) await claimPaymentBooking(tx, holdPaymentId, session.id);
+      if (followUpRequestId) await attachFollowUpSession(tx, followUpRequestId, session.id, start);
       return session;
     });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {

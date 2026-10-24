@@ -14,7 +14,6 @@ import {
 // @ts-expect-error Native Node test execution requires the source extension.
 import {
   ESSAY_FOLLOWUP_CREDIT_SLUG,
-  ESSAY_FOLLOWUP_DURATION_MINUTES,
   ESSAY_PDF_MAX_BYTES,
   NIKA_ESSAY_ASYNC_SLUG,
   NIKA_ESSAY_FOLLOWUP_SLUG,
@@ -26,8 +25,8 @@ import {
   essayPurchaseCreditPlan,
   essayRefundHours,
   essayRequestView,
+  followUpBookingDecision,
   followUpCallIsFarEnough,
-  followUpDueAt,
   tutorIsNika,
   validateEssayPdf,
 } from "./essay-editing.ts";
@@ -45,39 +44,62 @@ test("essay due time and follow-up call allow exactly 24 hours", () => {
   const early = new Date(exact.getTime() - 1);
   assert.equal(dueAtIsFarEnough(uploaded, exact), true);
   assert.equal(dueAtIsFarEnough(uploaded, early), false);
-  assert.equal(followUpCallIsFarEnough(uploaded, exact), true);
-  assert.equal(followUpCallIsFarEnough(uploaded, early), false);
-  assert.equal(followUpDueAt(exact).toISOString(), exact.toISOString());
+  const callEarliest = new Date(exact.getTime() + DAY);
+  assert.equal(followUpCallIsFarEnough(exact, callEarliest), true);
+  assert.equal(followUpCallIsFarEnough(exact, new Date(callEarliest.getTime() - 1)), false);
   const asyncHold = essayCheckoutHold({
     kind: "async",
     uploadedAt: uploaded,
     dueAt: exact,
-    callStart: null,
   });
   assert.equal(asyncHold.ok, true);
-  if (asyncHold.ok) assert.equal(asyncHold.hold.hold, false);
+  if (asyncHold.ok) {
+    assert.equal(asyncHold.hold.hold, false);
+    assert.equal(asyncHold.hold.meetingHours, 0);
+  }
   const follow = essayCheckoutHold({
     kind: "followup",
     uploadedAt: uploaded,
-    dueAt: null,
-    callStart: exact,
+    dueAt: exact,
   });
   assert.equal(follow.ok, true);
-  if (follow.ok && follow.hold.hold) {
-    assert.equal(follow.hold.durationMinutes, ESSAY_FOLLOWUP_DURATION_MINUTES);
-    assert.equal(follow.hold.durationMinutes, 60);
+  if (follow.ok) {
+    assert.equal(follow.hold.hold, false);
     assert.equal(follow.hold.meetingHours, 1);
-    assert.equal(follow.hold.dueAt.toISOString(), exact.toISOString());
-  } else {
-    assert.fail("follow-up hold missing");
   }
   const tooSoon = essayCheckoutHold({
     kind: "followup",
     uploadedAt: uploaded,
-    dueAt: null,
-    callStart: early,
+    dueAt: early,
   });
   assert.equal(tooSoon.ok, false);
+  assert.equal(
+    followUpBookingDecision({
+      start: callEarliest,
+      dueAt: exact,
+      durationHours: 1,
+      nikaHoursRemaining: 1,
+    }),
+    "link",
+  );
+  assert.equal(
+    followUpBookingDecision({
+      start: exact,
+      dueAt: exact,
+      durationHours: 1,
+      nikaHoursRemaining: 1,
+    }),
+    "too-soon",
+  );
+  assert.equal(
+    followUpBookingDecision({
+      start: exact,
+      dueAt: exact,
+      durationHours: 1,
+      nikaHoursRemaining: 2,
+    }),
+    "other-hours",
+  );
 });
 
 test("essay PDFs must be a real PDF within 10 MB", () => {
@@ -201,6 +223,17 @@ test("essay products stay scoped to Nika and off the meeting-hour pool", () => {
   assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, NIKA_ESSAY_ASYNC_SLUG), "consulting");
   assert.equal(checkoutAudienceForSlug(NEEL_DHARNI_USER_ID, NIKA_ESSAY_FOLLOWUP_SLUG), "consulting");
   assert.equal(checkoutAudienceForSlug("someone-else", NIKA_ESSAY_FOLLOWUP_SLUG), "forbidden");
+  assert.equal(
+    checkoutAudienceForSlug("bf530aa6-faaa-43df-b3cf-140026f3313e", NIKA_ESSAY_ASYNC_SLUG),
+    "forbidden",
+  );
+  assert.equal(
+    checkoutAudienceForSlug("sama-user", NIKA_ESSAY_FOLLOWUP_SLUG, {
+      email: "samapostgrad@gmail.com",
+      clerkUserId: "user_3IxQY4GUjQGp9wT1WXzbyCVH67G",
+    }),
+    "consulting",
+  );
   assert.equal(clientMayBuyConsultingProduct(NEEL_DHARNI_USER_ID, NIKA_ESSAY_ASYNC_SLUG), true);
   assert.equal(clientMayBuyConsultingProduct("someone-else", NIKA_ESSAY_ASYNC_SLUG), false);
   assert.deepEqual(essayPurchaseCreditPlan(NIKA_ESSAY_ASYNC_SLUG), {
@@ -222,17 +255,18 @@ test("essay products stay scoped to Nika and off the meeting-hour pool", () => {
   );
 });
 
-test("webhook booking uses the essay fulfillment path and the 60-minute hold", () => {
+test("paid essay checkout grants the follow-up hour and books the call later", () => {
   const payment = readFileSync(new URL("./payment-service.ts", import.meta.url), "utf8");
   const platform = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
   const http = readFileSync(new URL("./essay-request-http.ts", import.meta.url), "utf8");
   assert.match(payment, /fulfillEssayPaymentInTx/);
   assert.match(payment, /bookHeldCheckoutIfActive\(paidPaymentId\)/);
-  assert.match(platform, /linkEssayRequestToSession\(paymentId, sessionId\)/);
+  assert.match(platform, /followUpBookingDecision/);
+  assert.match(platform, /attachFollowUpSession/);
   assert.match(platform, /handleEssayCheckoutRequest/);
-  assert.match(http, /claimBookingSlotHold/);
-  assert.match(http, /durationMinutes: bookingIntent\.durationMinutes/);
+  assert.match(http, /mayBuyNikaEssay/);
   assert.match(http, /creditsGrantedOnPaidWebhook: hold\.hold\.meetingHours/);
+  assert.doesNotMatch(http, /params\.set\("startTime"/);
 });
 
 type DatabaseModule = typeof import("@workspace/db");
@@ -371,11 +405,6 @@ test("paid essay webhook submits the request and does not grant meeting hours on
       auditMetadata: {
         essayRequestId: followRequestId,
         offer: NIKA_ESSAY_FOLLOWUP_SLUG,
-        bookingIntent: {
-          tutorProfileId,
-          startTime: callStart.toISOString(),
-          durationMinutes: 60,
-        },
       },
     },
   ]);
@@ -402,21 +431,12 @@ test("paid essay webhook submits the request and does not grant meeting hours on
       kind: "followup",
       status: "pending_payment",
       dueAt: callStart,
-      callStart,
+      callStart: null,
       originalFilename: "essay.pdf",
       originalPdf: pdf,
       originalBytes: pdf.length,
     },
   ]);
-  await db.db.insert(db.bookingSlotHoldsTable).values({
-    tutorProfileId,
-    clientUserId: userId,
-    paymentId: followPaymentId,
-    startTime: callStart,
-    durationMinutes: 60,
-    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-  });
-
   try {
     await processStripeWebhook({
       id: `evt_${asyncPaymentId}`,
@@ -474,19 +494,9 @@ test("paid essay webhook submits the request and does not grant meeting hours on
     assert.equal(essayHours, 0);
     assert.equal(followHours, 1);
     assert.equal(entries.filter((entry) => entry.productId === hourProduct.id).length, 1);
-    const [followPayment] = await db.db
-      .select()
-      .from(db.paymentsTable)
-      .where(eq(db.paymentsTable.id, followPaymentId));
-    const intent = (followPayment?.auditMetadata as { bookingIntent?: { durationMinutes?: number } })
-      .bookingIntent;
-    assert.equal(intent?.durationMinutes, 60);
-    const [hold] = await db.db
-      .select()
-      .from(db.bookingSlotHoldsTable)
-      .where(eq(db.bookingSlotHoldsTable.paymentId, followPaymentId));
-    assert.equal(Number(hold?.durationMinutes), 60);
-    assert.equal(hold?.releasedAt ?? null, null);
+    const followRequest = requests.find((row) => row.id === followRequestId);
+    assert.equal(followRequest?.callStart ?? null, null);
+    assert.equal(followRequest?.sessionId ?? null, null);
     const mismatches = await listPaidUncreditedPayments(200);
     assert.equal(mismatches.some((row) => row.paymentId === asyncPaymentId), false);
     assert.equal(mismatches.some((row) => row.paymentId === followPaymentId), false);

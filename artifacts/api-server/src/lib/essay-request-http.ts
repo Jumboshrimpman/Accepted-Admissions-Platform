@@ -10,7 +10,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import express, { type Request, type Response, type Router } from "express";
 // @ts-expect-error Native Node test execution requires the source extension.
-import { isNeelDharniUser } from "./college-consulting.ts";
+import { isNeelDharniUser, isSamaPostgradTestStudent } from "./college-consulting.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import {
   essayCheckoutHold,
@@ -103,13 +103,17 @@ function contentDisposition(filename: string): string {
   return `attachment; filename="${cleaned}"`;
 }
 
+function mayBuyNikaEssay(user: AppUser): boolean {
+  return isNeelDharniUser(user.id) || isSamaPostgradTestStudent(user);
+}
+
 export async function receiveEssayUpload(
   req: Request & { appUser?: AppUser },
   res: Response,
   assertSlotOpen: (userId: string, intent: SlotIntent) => Promise<void>,
 ): Promise<void> {
   const user = req.appUser;
-  if (!user || !isNeelDharniUser(user.id)) {
+  if (!user || !mayBuyNikaEssay(user)) {
     res.status(403).json({ error: "Essay editing is offered with Nika only." });
     return;
   }
@@ -126,13 +130,11 @@ export async function receiveEssayUpload(
     return;
   }
   const uploadedAt = new Date();
-  const dueAt = kind === "async" ? new Date(queryString(req, "dueAt")) : null;
-  const callStart = kind === "followup" ? new Date(queryString(req, "startTime")) : null;
+  const dueAt = new Date(queryString(req, "dueAt"));
   const hold = essayCheckoutHold({
     kind,
     uploadedAt,
     dueAt,
-    callStart,
   });
   if (!hold.ok) {
     res.status(400).json({ error: hold.error });
@@ -143,32 +145,15 @@ export async function receiveEssayUpload(
     res.status(404).json({ error: "Nika is not available for essay editing." });
     return;
   }
-  if (hold.hold.hold) {
-    try {
-      await assertSlotOpen(user.id, {
-        tutorProfileId: tutor.id,
-        startTime: hold.hold.startTime,
-        durationMinutes: hold.hold.durationMinutes,
-      });
-    } catch (error) {
-      const booking = bookingFailure(error);
-      if (booking) {
-        res.status(booking.status).json({ code: booking.code, error: booking.error });
-        return;
-      }
-      throw error;
-    }
-  }
   const slug = essaySlugForKind(kind);
   const product = slug ? await essayProductBySlug(db, slug) : null;
-  const due = hold.hold.hold ? hold.hold.dueAt : dueAt!;
   const created = await createEssayRequest({
     clientUserId: user.id,
     tutorProfileId: tutor.id,
     productId: product?.id ?? null,
     kind,
-    dueAt: due,
-    callStart: hold.hold.hold ? new Date(hold.hold.startTime) : null,
+    dueAt,
+    callStart: null,
     filename: pdf.filename,
     bytes,
   });
@@ -276,7 +261,7 @@ export async function handleEssayCheckoutRequest(
   assertSlotOpen: (userId: string, intent: SlotIntent) => Promise<void>,
 ): Promise<void> {
   const user = req.appUser;
-  if (!user || !isNeelDharniUser(user.id)) {
+  if (!user || !mayBuyNikaEssay(user)) {
     res.status(403).json({ error: "Essay editing is offered with Nika only." });
     return;
   }
@@ -310,7 +295,6 @@ export async function handleEssayCheckoutRequest(
     // created_at is a moment after the upload clock, so an exact 24-hour choice still passes.
     uploadedAt: new Date(request.createdAt.getTime() - 60_000),
     dueAt: request.dueAt,
-    callStart: request.callStart,
   });
   if (!hold.ok) {
     res.status(400).json({ error: hold.error });
@@ -349,26 +333,9 @@ export async function handleEssayCheckoutRequest(
     if (aligned) Object.assign(product, aligned);
   }
   const chargeCents = catalog.totalPriceCents;
-  const bookingIntent = hold.hold.hold
-    ? {
-        tutorProfileId: request.tutorProfileId,
-        startTime: hold.hold.startTime,
-        durationMinutes: hold.hold.durationMinutes,
-      }
-    : null;
-  if (bookingIntent) {
-    try {
-      await assertSlotOpen(user.id, bookingIntent);
-    } catch (error) {
-      const booking = bookingFailure(error);
-      if (booking) {
-        res.status(booking.status).json({ code: booking.code, error: booking.error });
-        return;
-      }
-      throw error;
-    }
-  }
-  const holdExpiresAt = bookingIntent ? checkoutHoldExpiresAt() : null;
+  const bookingIntent = null;
+  const holdExpiresAt = null;
+  void assertSlotOpen;
   let invoice: typeof invoicesTable.$inferSelect;
   let payment: typeof paymentsTable.$inferSelect;
   try {

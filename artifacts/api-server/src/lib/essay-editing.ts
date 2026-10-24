@@ -45,7 +45,7 @@ export const NIKA_ESSAY_PRODUCTS: ReadonlyArray<{
     kind: "followup",
     name: "Essay editing + 1 hr follow-up call, 2 hrs",
     description:
-      "One hour of asynchronous essay editing with Nika plus a one-hour follow-up call at least 24 hours after the upload. Editing is due when the call starts.",
+      "One hour of asynchronous essay editing with Nika, plus a one-hour follow-up call. Upload one PDF and choose a due time at least 24 hours later. Book the call with Nika at least 24 hours after that due time.",
     durationHours: 2,
     totalPriceCents: 20_000,
     effectiveHourlyRateCents: 10_000,
@@ -108,56 +108,40 @@ export function dueAtIsFarEnough(submittedAt: Date, dueAt: Date): boolean {
   return leadIsAtLeast(submittedAt, dueAt);
 }
 
-export function followUpCallIsFarEnough(uploadedAt: Date, callStart: Date): boolean {
-  return leadIsAtLeast(uploadedAt, callStart);
+/** The follow-up call has to start at least 24 hours after the essay due time. */
+export function followUpCallIsFarEnough(dueAt: Date, callStart: Date): boolean {
+  return leadIsAtLeast(dueAt, callStart);
 }
 
-/** Editing is due by the time the follow-up call begins. */
-export function followUpDueAt(callStart: Date): Date {
-  return new Date(callStart.getTime());
+/**
+ * An open follow-up reserves one Nika hour. A call at least 24 hours after the
+ * due time uses that hour. An earlier call can use other prepaid Nika hours.
+ */
+export function followUpBookingDecision(args: {
+  start: Date;
+  dueAt: Date;
+  durationHours: number;
+  nikaHoursRemaining: number;
+}): "link" | "other-hours" | "too-soon" {
+  if (followUpCallIsFarEnough(args.dueAt, args.start)) return "link";
+  const otherHours = args.nikaHoursRemaining - 1;
+  if (otherHours + 0.001 < args.durationHours) return "too-soon";
+  return "other-hours";
 }
 
-export type EssayCheckoutHold =
-  | { hold: false; meetingHours: 0 }
-  | {
-      hold: true;
-      durationMinutes: typeof ESSAY_FOLLOWUP_DURATION_MINUTES;
-      meetingHours: 1;
-      dueAt: Date;
-      startTime: string;
-    };
+export type EssayCheckoutHold = { hold: false; meetingHours: 0 | 1 };
 
 export function essayCheckoutHold(args: {
   kind: EssayKind;
   uploadedAt: Date;
   dueAt: Date | null;
-  callStart: Date | null;
+  callStart?: Date | null;
 }): { ok: true; hold: EssayCheckoutHold } | { ok: false; error: string } {
-  if (args.kind === "async") {
-    if (!args.dueAt || Number.isNaN(args.dueAt.getTime())) {
-      return { ok: false, error: "Choose a due time at least 24 hours from now." };
-    }
-    if (!dueAtIsFarEnough(args.uploadedAt, args.dueAt)) {
-      return { ok: false, error: "Choose a due time at least 24 hours from now." };
-    }
-    return { ok: true, hold: { hold: false, meetingHours: 0 } };
+  if (!args.dueAt || Number.isNaN(args.dueAt.getTime()) || !dueAtIsFarEnough(args.uploadedAt, args.dueAt)) {
+    return { ok: false, error: "Choose a due time at least 24 hours from now." };
   }
-  if (!args.callStart || Number.isNaN(args.callStart.getTime())) {
-    return { ok: false, error: "Choose a follow-up call at least 24 hours from now." };
-  }
-  if (!followUpCallIsFarEnough(args.uploadedAt, args.callStart)) {
-    return { ok: false, error: "Choose a follow-up call at least 24 hours from now." };
-  }
-  return {
-    ok: true,
-    hold: {
-      hold: true,
-      durationMinutes: ESSAY_FOLLOWUP_DURATION_MINUTES,
-      meetingHours: 1,
-      dueAt: followUpDueAt(args.callStart),
-      startTime: args.callStart.toISOString(),
-    },
-  };
+  if (args.kind === "async") return { ok: true, hold: { hold: false, meetingHours: 0 } };
+  return { ok: true, hold: { hold: false, meetingHours: 1 } };
 }
 
 export function essayRequestIdFromMetadata(metadata: unknown): string | null {

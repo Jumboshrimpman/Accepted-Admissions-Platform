@@ -78,66 +78,31 @@ export function EssayEditingOffer({ products }: { products: EssayProduct[] }) {
   const asyncProduct = products.find((product) => product.slug === ASYNC_SLUG);
   const followupProduct = products.find((product) => product.slug === FOLLOWUP_SLUG);
   const [dueAt, setDueAt] = useState("");
+  const [followDueAt, setFollowDueAt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [followFile, setFollowFile] = useState<File | null>(null);
-  const [slots, setSlots] = useState<string[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    if (!followupProduct) return;
-    let cancelled = false;
-    const from = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const to = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString();
-    fetch(apiPath("/api/booking/tutors"))
-      .then((response) => (response.ok ? response.json() : []))
-      .then(async (tutors: Array<{ id: string; name: string }>) => {
-        const nika = tutors.find((tutor) => tutor.name.trim().toLowerCase() === "nika");
-        if (!nika) return [];
-        const params = new URLSearchParams({
-          tutorProfileId: nika.id,
-          from,
-          to,
-          durationMinutes: "60",
-        });
-        const response = await fetch(apiPath(`/api/booking/availability?${params.toString()}`));
-        if (!response.ok) return [];
-        const body = (await response.json()) as { slots?: string[] };
-        const earliest = Date.now() + 24 * 60 * 60 * 1000;
-        return (body.slots ?? []).filter((slot) => Date.parse(slot) >= earliest);
-      })
-      .then((next) => {
-        if (!cancelled) setSlots(next);
-      })
-      .catch(() => {
-        if (!cancelled) setSlots([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [followupProduct]);
 
   const buy = async (kind: "async" | "followup") => {
     setMessage("");
     const chosen = kind === "async" ? file : followFile;
+    const due = kind === "async" ? dueAt : followDueAt;
     if (!chosen) {
       setMessage("Upload one PDF.");
       return;
     }
-    if (kind === "async" && !dueAt) {
+    if (!due) {
       setMessage("Choose a due time at least 24 hours from now.");
-      return;
-    }
-    if (kind === "followup" && !selectedSlot) {
-      setMessage("Choose a follow-up call at least 24 hours from now.");
       return;
     }
     setBusy(kind);
     try {
-      const params = new URLSearchParams({ kind, filename: chosen.name });
-      if (kind === "async") params.set("dueAt", new Date(dueAt).toISOString());
-      if (kind === "followup") params.set("startTime", selectedSlot);
+      const params = new URLSearchParams({
+        kind,
+        filename: chosen.name,
+        dueAt: new Date(due).toISOString(),
+      });
       const uploaded = await fetch(apiPath(`/api/essay-requests?${params.toString()}`), {
         method: "POST",
         headers: { "Content-Type": "application/pdf" },
@@ -177,7 +142,7 @@ export function EssayEditingOffer({ products }: { products: EssayProduct[] }) {
       <CardHeader>
         <CardTitle>Essay editing with Nika</CardTitle>
         <CardDescription>
-          Upload one PDF. The due time has to be at least 24 hours later. A follow-up call is one hour with Nika, also at least 24 hours after the upload, and the edit is due when that call starts.
+          Upload one PDF and choose a due time at least 24 hours later. The follow-up option includes a one-hour call with Nika. Book that call from College Consulting at least 24 hours after the due time.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
@@ -235,27 +200,21 @@ export function EssayEditingOffer({ products }: { products: EssayProduct[] }) {
               data-testid="input-essay-followup-file"
               onChange={(event) => setFollowFile(event.target.files?.[0] ?? null)}
             />
-            <p className="mt-3 text-sm font-medium">Follow-up call</p>
-            {slots.length === 0 ? (
-              <p className="mt-1 text-sm text-muted-foreground">
-                No follow-up times are open at least 24 hours from now.
-              </p>
-            ) : (
-              <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-auto">
-                {slots.slice(0, 24).map((slot) => (
-                  <Button
-                    key={slot}
-                    type="button"
-                    size="sm"
-                    variant={selectedSlot === slot ? "default" : "outline"}
-                    data-testid={`button-essay-slot-${slot}`}
-                    onClick={() => setSelectedSlot(slot)}
-                  >
-                    {when(slot)}
-                  </Button>
-                ))}
-              </div>
-            )}
+            <label className="mt-3 block text-sm font-medium" htmlFor="essay-followup-due">
+              Due
+            </label>
+            <input
+              id="essay-followup-due"
+              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+              type="datetime-local"
+              min={minimumDueLocal()}
+              value={followDueAt}
+              data-testid="input-essay-followup-due"
+              onChange={(event) => setFollowDueAt(event.target.value)}
+            />
+            <p className="mt-2 text-sm text-muted-foreground">
+              After checkout, book the included hour with Nika at least 24 hours after this due time.
+            </p>
             <Button
               className="mt-4 w-full"
               disabled={busy !== ""}
@@ -360,6 +319,9 @@ export function EssayRequestsPanel({ mode }: { mode: "client" | "tutor" | "admin
                   <p className="mt-1 text-muted-foreground">
                     {request.kind === "followup" ? "Editing plus follow-up call" : "Async editing"} · Due {when(request.dueAt)}
                     {request.callStart ? ` · Call ${when(request.callStart)}` : ""}
+                    {request.kind === "followup" && !request.callStart && request.status === "submitted"
+                      ? " · Book the call at least 24 hours after the due time."
+                      : ""}
                   </p>
                   <p className="mt-1">{STATUS_LABEL[request.status] ?? request.status}</p>
                 </div>

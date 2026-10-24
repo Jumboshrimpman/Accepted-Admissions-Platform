@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import {
   adminNotificationsTable,
   creditLedgerTable,
@@ -174,6 +174,36 @@ export async function linkEssayRequestToSession(
     .update(essayRequestsTable)
     .set({ sessionId, updatedAt: new Date() })
     .where(eq(essayRequestsTable.paymentId, paymentId));
+}
+
+export async function openFollowUpForBooking(clientUserId: string, tutorProfileId: string) {
+  const [row] = await db
+    .select({ id: essayRequestsTable.id, dueAt: essayRequestsTable.dueAt })
+    .from(essayRequestsTable)
+    .where(
+      and(
+        eq(essayRequestsTable.clientUserId, clientUserId),
+        eq(essayRequestsTable.tutorProfileId, tutorProfileId),
+        eq(essayRequestsTable.kind, "followup"),
+        eq(essayRequestsTable.status, "submitted"),
+        isNull(essayRequestsTable.sessionId),
+      ),
+    )
+    .orderBy(asc(essayRequestsTable.dueAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function attachFollowUpSession(
+  tx: Tx,
+  requestId: string,
+  sessionId: string,
+  callStart: Date,
+): Promise<void> {
+  await tx
+    .update(essayRequestsTable)
+    .set({ sessionId, callStart, updatedAt: new Date() })
+    .where(and(eq(essayRequestsTable.id, requestId), isNull(essayRequestsTable.sessionId)));
 }
 
 type EssayListRow = {

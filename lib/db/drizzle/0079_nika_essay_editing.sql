@@ -90,7 +90,7 @@ VALUES
   (
     'college-consulting-nika-essay-followup',
     'Essay editing + 1 hr follow-up call, 2 hrs',
-    'One hour of asynchronous essay editing with Nika plus a one-hour follow-up call at least 24 hours after the upload. Editing is due when the call starts.',
+    'One hour of asynchronous essay editing with Nika, plus a one-hour follow-up call. Upload one PDF and choose a due time at least 24 hours later. Book the call with Nika at least 24 hours after that due time.',
     2,
     20000,
     10000,
