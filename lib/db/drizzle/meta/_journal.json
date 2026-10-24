@@ -512,6 +512,13 @@
       "when": 1792830000000,
       "tag": "0079_nika_essay_editing",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1792840000000,
+      "tag": "0080_client_intake",
+      "breakpoints": true
     }
   ]
 }
