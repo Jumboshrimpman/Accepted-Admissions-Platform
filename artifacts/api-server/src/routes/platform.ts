@@ -179,6 +179,12 @@ import {
   temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
+import { followUpBookingDecision, isNikaEssaySlug, NIKA_ESSAY_SLUGS, tutorIsNika } from "../lib/essay-editing";
+import { attachFollowUpSession, linkEssayRequestToSession, openFollowUpForBooking } from "../lib/essay-request-store";
+import {
+  handleEssayCheckoutRequest,
+  mountEssayRequestRoutes,
+} from "../lib/essay-request-http";
 import {
   BOOKING_CHECKOUT_PAYMENT_PENDING,
   BOOKING_CHECKOUT_SLOT_TAKEN,
@@ -6289,7 +6295,7 @@ router.get("/public/products", requireAppUser, async (req: AuthedRequest, res): 
         .where(
           and(
             eq(satProductsTable.active, true),
-            inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS]),
+            inArray(satProductsTable.slug, [...COLLEGE_CONSULTING_SLUGS, ...NIKA_ESSAY_SLUGS]),
           ),
         )
         .orderBy(asc(satProductsTable.effectiveHourlyRateCents), asc(satProductsTable.name))
@@ -8361,6 +8367,38 @@ async function respondWithPrepaidBooking(
       .limit(1);
     if (!bookedTutor) throw new BookingError(400, "INVALID_TUTOR", "A tutor is required.");
     await assertPrepaidHoursForTutor(req.appUser!, bookedTutor, durationMinutes, consulting);
+    let followUpRequestId: string | null = null;
+    if (consulting && tutorIsNika(bookedTutor)) {
+      const openFollowUp = await openFollowUpForBooking(req.appUser!.id, bookedTutor.id);
+      if (openFollowUp) {
+        const creditEntries = await db
+          .select({
+            entryType: creditLedgerTable.entryType,
+            hours: creditLedgerTable.hours,
+            productId: creditLedgerTable.productId,
+          })
+          .from(creditLedgerTable)
+          .where(eq(creditLedgerTable.clientUserId, req.appUser!.id));
+        const remaining = remainingCreditHoursForProducts(
+          creditEntries,
+          await consultingCreditProductIds(bookedTutor),
+        );
+        const decision = followUpBookingDecision({
+          start,
+          dueAt: openFollowUp.dueAt,
+          durationHours: durationMinutes / 60,
+          nikaHoursRemaining: remaining,
+        });
+        if (decision === "too-soon") {
+          throw new BookingError(
+            409,
+            "ESSAY_FOLLOWUP_TOO_SOON",
+            "Book the follow-up call at least 24 hours after the essay due time.",
+          );
+        }
+        if (decision === "link") followUpRequestId = openFollowUp.id;
+      }
+    }
     const slotTakenMessage =
       (req as AuthedRequest & { bookingSlotTakenMessage?: string }).bookingSlotTakenMessage ??
       "That time is no longer available. Choose another slot.";
@@ -8496,6 +8534,7 @@ async function respondWithPrepaidBooking(
         ...(satDebits ? { debits: satDebits } : {}),
       });
       if (holdPaymentId) await claimPaymentBooking(tx, holdPaymentId, session.id);
+      if (followUpRequestId) await attachFollowUpSession(tx, followUpRequestId, session.id, start);
       return session;
     });
     const confirmBookedSession = async (session: typeof created, calendarInviteSent: boolean) => {
@@ -8847,6 +8886,7 @@ router.post("/booking/sessions/from-payment", async (req: AuthedRequest, res): P
       bookingRequest.bookingHoldPaymentId = paymentId;
       bookingRequest.onPrepaidBooked = async (sessionId: string) => {
         await rememberBookedPayment(paymentId, sessionId);
+        await linkEssayRequestToSession(paymentId, sessionId);
       };
       const refusal = await respondWithPrepaidBooking(bookingRequest, res);
       if (refusal && PAID_BOOKING_REFUSAL_CODES.has(refusal.code)) {
@@ -8905,6 +8945,7 @@ async function bookActiveHoldForPayment(paymentId: string): Promise<void> {
       bookingHoldPaymentId: paymentId,
       onPrepaidBooked: async (sessionId: string) => {
         await rememberBookedPayment(paymentId, sessionId);
+        await linkEssayRequestToSession(paymentId, sessionId);
       },
     } as AuthedRequest & {
       bookingSlotTakenMessage?: string;
@@ -9362,6 +9403,10 @@ router.post(
   ensureRole(["student", "administrator"]),
   async (req: AuthedRequest, res): Promise<void> => {
     const body = (req.body ?? {}) as Record<string, unknown>;
+    if (stringField(body, "essayRequestId")) {
+      await handleEssayCheckoutRequest(req, res, assertDirectCheckoutSlotOpen);
+      return;
+    }
     const requestedProductId = stringField(body, "productId");
     const intentResult = bookingIntentFromBody(body);
     if (intentResult.present && "error" in intentResult) {
@@ -9417,6 +9462,12 @@ router.post(
     }
     if (!product) {
       res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    if (isNikaEssaySlug(product.slug)) {
+      res.status(400).json({
+        error: "Upload the essay and choose a due time before checkout.",
+      });
       return;
     }
     if (victoriaBookingRefused({ slug: product.slug })) {
@@ -17287,6 +17338,13 @@ router.patch(
       }),
     );
   },
+);
+
+mountEssayRequestRoutes(
+  router,
+  ensureRole(["student", "administrator"]),
+  ensureRole(["tutor", "administrator"]),
+  assertDirectCheckoutSlotOpen,
 );
 
 export default router;

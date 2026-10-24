@@ -19,6 +19,10 @@ import { tutorShareForRefund } from "./payment-allocation.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { grantPaidPurchaseCredits } from "./payment-fulfillment.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
+import { fulfillEssayPaymentInTx } from "./essay-request-store.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
+import { essayRefundHours, isNikaEssaySlug } from "./essay-editing.ts";
+// @ts-expect-error Native Node test execution requires the source extension.
 import { paymentRequiresCatalogProduct, isStripePaidSuccessEvent, stripeCheckoutObjectIsPaid } from "./payment-fulfillment-rules.ts";
 // @ts-expect-error Native Node test execution requires the source extension.
 import { stripeCatalogProductIdempotencyKey } from "./college-consulting.ts";
@@ -733,7 +737,14 @@ async function fulfillPaidPaymentInTx(
   }
   let hours = 0;
   let inserted = false;
-  if (paymentRequiresCatalogProduct(payment)) {
+  if (isNikaEssaySlug(args.product?.slug)) {
+    const credit = await fulfillEssayPaymentInTx(tx, {
+      payment,
+      product: args.product!,
+    });
+    hours = credit.hours;
+    inserted = credit.inserted;
+  } else if (paymentRequiresCatalogProduct(payment)) {
     const credit = await grantPaidPurchaseCredits(tx, {
       payment,
       product: args.product,
@@ -957,20 +968,41 @@ export async function processStripeWebhook(event: {
           .where(eq(invoicesTable.id, invoiceId));
       }
       if (delta > 0) {
-        const referenceId = `${payment.id}:${refundedTotal}`;
-        await tx
-          .insert(creditLedgerTable)
-          .values({
-            clientUserId: payment.clientUserId,
-            productId: product.id,
-            entryType: "refund",
-            hours: (product.durationHours * delta) / payment.amountCents,
-            referenceType: "refund",
-            referenceId,
-            fulfillmentKey: `refund:${referenceId}`,
-            note: "Credit removed after Stripe refund",
-          })
-          .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
+        const essayRefund = essayRefundHours({
+          slug: product.slug,
+          deltaCents: delta,
+          amountCents: payment.amountCents,
+        });
+        if (!essayRefund || essayRefund.hours > 0) {
+          let refundProductId = product.id;
+          let refundHours = (product.durationHours * delta) / payment.amountCents;
+          if (essayRefund && essayRefund.creditSlug) {
+            const [creditProduct] = await tx
+              .select({ id: satProductsTable.id })
+              .from(satProductsTable)
+              .where(eq(satProductsTable.slug, essayRefund.creditSlug))
+              .limit(1);
+            if (!creditProduct) {
+              throw new Error(`Essay refund cannot find ${essayRefund.creditSlug}.`);
+            }
+            refundProductId = creditProduct.id;
+            refundHours = essayRefund.hours;
+          }
+          const referenceId = `${payment.id}:${refundedTotal}`;
+          await tx
+            .insert(creditLedgerTable)
+            .values({
+              clientUserId: payment.clientUserId,
+              productId: refundProductId,
+              entryType: "refund",
+              hours: refundHours,
+              referenceType: "refund",
+              referenceId,
+              fulfillmentKey: `refund:${referenceId}`,
+              note: "Credit removed after Stripe refund",
+            })
+            .onConflictDoNothing({ target: creditLedgerTable.fulfillmentKey });
+        }
       }
       if (["paid", "refunded", "partially_refunded"].includes(payment.status)) {
         const refundedPayment = {

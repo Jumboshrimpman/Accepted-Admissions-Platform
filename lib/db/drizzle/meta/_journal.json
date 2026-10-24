@@ -505,6 +505,13 @@
       "when": 1792820000000,
       "tag": "0078_nika_recurring_hours",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792830000000,
+      "tag": "0079_nika_essay_editing",
+      "breakpoints": true
     }
   ]
 }

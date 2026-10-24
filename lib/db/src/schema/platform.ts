@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
+  integer,
   jsonb,
   numeric,
   pgEnum,
@@ -11,6 +13,18 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+  toDriver(value: Buffer): Buffer {
+    return value;
+  },
+  fromDriver(value: Buffer): Buffer {
+    return Buffer.isBuffer(value) ? value : Buffer.from(value);
+  },
+});
 import { createInsertSchema } from "drizzle-zod";
 
 export const roleEnum = pgEnum("app_role", [
@@ -582,6 +596,44 @@ export const bookingSlotHoldsTable = pgTable(
       .on(table.tutorProfileId, table.startTime, table.durationMinutes)
       .where(sql`${table.releasedAt} is null`),
     index("booking_slot_holds_tutor_expires_idx").on(table.tutorProfileId, table.expiresAt),
+  ],
+);
+
+/**
+ * Private essay PDFs. Bytes stay in Postgres and leave only through an
+ * authenticated download. There is no shared document bucket in this app.
+ */
+export const essayRequestsTable = pgTable(
+  "essay_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    tutorProfileId: uuid("tutor_profile_id")
+      .notNull()
+      .references(() => tutorProfilesTable.id),
+    productId: uuid("product_id").references(() => satProductsTable.id),
+    paymentId: uuid("payment_id").references(() => paymentsTable.id),
+    sessionId: uuid("session_id").references(() => sessionsTable.id),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("pending_payment"),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    callStart: timestamp("call_start", { withTimezone: true }),
+    originalFilename: text("original_filename").notNull(),
+    originalPdf: bytea("original_pdf").notNull(),
+    originalBytes: integer("original_bytes").notNull(),
+    editedFilename: text("edited_filename"),
+    editedPdf: bytea("edited_pdf"),
+    editedBytes: integer("edited_bytes"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("essay_requests_client_created_idx").on(table.clientUserId, table.createdAt),
+    index("essay_requests_tutor_status_idx").on(table.tutorProfileId, table.status),
+    uniqueIndex("essay_requests_payment_idx").on(table.paymentId),
   ],
 );
 
