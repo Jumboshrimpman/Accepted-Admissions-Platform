@@ -1006,6 +1006,37 @@ describe("student attempt UI", () => {
     expect(screen.queryByText(/Multiple-choice options unavailable/i)).toBeNull();
   });
 
+  test("Oct 18 review renders x/y tables as math and a numeric answer box", () => {
+    mocks.title = "Oct 18 Session Review Quiz";
+    mocks.questions = [
+      {
+        id: "oct18-q1",
+        position: 0,
+        subject: "SAT Math",
+        questionType: "spr",
+        presentation: "text",
+        prompt:
+          "The coordinates of two points on a line in the xy-plane are given in the table. If the x-intercept of the line is (a, p + 5), where a and p are integers, what is the value of a?",
+        stimulus: "x\ty\n30\tp\n18\tp − 6",
+        choices: [],
+        skill: "Linear intercepts",
+        difficulty: "medium" as const,
+        predictionFirst: false,
+      },
+    ];
+    render(<PortalAssignment />);
+    const table = screen.getByTestId("quiz-data-table");
+    expect(table.querySelectorAll("th")).toHaveLength(2);
+    expect(table.querySelectorAll("td")).toHaveLength(4);
+    expect(table.textContent).toMatch(/30/);
+    expect(table.textContent).toMatch(/p − 6|p - 6/);
+    expect(table.querySelector("[data-testid='quiz-math-expr']")).toBeTruthy();
+    expect(screen.getByTestId("grid-in-answer")).toBeTruthy();
+    expect(screen.getByTestId("quiz-question-stem").textContent).toMatch(/value of a/);
+    expect(screen.queryByText(/Oct 18 packet/i)).toBeNull();
+    expect(screen.queryByText(/answer-choices/)).toBeNull();
+  });
+
   test("smashed x f(x) lines render as a data table, not one smashed prose line", () => {
     mocks.questions[0]!.prompt =
       "x f(x)\n0 29\n1 32\n2 35\nFor the linear function f, the table shows three values of x. Which equation defines f(x)?";

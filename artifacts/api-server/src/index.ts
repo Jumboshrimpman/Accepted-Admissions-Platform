@@ -10,6 +10,7 @@ import { resetSamaXavierSatCapabilityAttempts } from "./lib/reset-sama-xavier-ca
 import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-up";
 import { ensureGeometryAreaVolumeFollowUp } from "./lib/geometry-area-volume-follow-up";
 import { ensureMichelleXavierSessionFollowUps } from "./lib/michelle-xavier-session-follow-up";
+import { ensureMichelleOct18ReviewQuiz } from "./lib/michelle-oct18-review-quiz";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 import { ensureCollegeConsultingProvision } from "./lib/college-consulting-provision";
 
@@ -76,6 +77,11 @@ void ensureRyoTaitoParentMirror()
         .then((result) => logger.info(result, "Geometry area and volume follow-up ready"))
         .then(() => ensureMichelleXavierSessionFollowUps())
         .then((result) => logger.info(result, "Michelle Xavier session follow-up ready"))
+        .then(() =>
+          ensureMichelleOct18ReviewQuiz()
+            .then((result) => logger.info(result, "Michelle Oct 18 review quiz ready"))
+            .catch((err) => logger.warn({ err }, "Michelle Oct 18 review quiz skipped")),
+        )
         .then(() => xavierCalendarIdentityAlignment())
         .then((alignment) =>
           logger.info(

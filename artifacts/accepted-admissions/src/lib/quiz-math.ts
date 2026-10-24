@@ -6,7 +6,11 @@
 
 export const FREE_RESPONSE_FORMAT_HINT = "Type exponents as x^2.";
 
-const FORMATTED_QUIZ_TITLES = new Set(["Factoring Quiz", "SAT Math Problems"]);
+const FORMATTED_QUIZ_TITLES = new Set([
+  "Factoring Quiz",
+  "SAT Math Problems",
+  "Oct 18 Session Review Quiz",
+]);
 
 export function quizShowsFormattedMath(title?: string | null): boolean {
   const trimmed = (title ?? "").trim();
@@ -344,7 +348,23 @@ function canStart(src: string, index: number): boolean {
   return index === 0 || !isLetter(src[index - 1]);
 }
 
-export function segmentQuizMath(input: string): MathSegment[] {
+export function segmentQuizMath(input: string, options?: { cell?: boolean }): MathSegment[] {
+  if (options?.cell) {
+    const trimmed = input.trim();
+    if (trimmed && !/[A-Za-z]{3,}/.test(trimmed)) {
+      const parser = new Parser(trimmed, 0);
+      const expr = parser.parseEquation();
+      if (expr && parser.pos === trimmed.length) {
+        const start = input.indexOf(trimmed);
+        const segments: MathSegment[] = [];
+        if (start > 0) segments.push({ type: "text", text: input.slice(0, start) });
+        segments.push({ type: "math", expr });
+        const end = start + trimmed.length;
+        if (end < input.length) segments.push({ type: "text", text: input.slice(end) });
+        return segments;
+      }
+    }
+  }
   const segments: MathSegment[] = [];
   let textStart = 0;
   let index = 0;
@@ -431,9 +451,18 @@ function exprPlain(expr: MathExpr): string {
   }
 }
 
-/** Stable text form used by rendering tests. Fractions use \\frac, exponents use ^{ }. */
-export function quizMathPlain(input: string): string {
-  return segmentQuizMath(input)
+function plainSegments(input: string, cell = false): string {
+  return segmentQuizMath(input, cell ? { cell: true } : undefined)
     .map((segment) => (segment.type === "text" ? segment.text : exprPlain(segment.expr)))
     .join("");
+}
+
+/** Stable text form used by rendering tests. Fractions use \\frac, exponents use ^{ }. */
+export function quizMathPlain(input: string): string {
+  return plainSegments(input);
+}
+
+/** A whole table cell. Single variables and `2k` format; multi-word labels stay prose. */
+export function quizTableCellPlain(input: string): string {
+  return plainSegments(input, true);
 }

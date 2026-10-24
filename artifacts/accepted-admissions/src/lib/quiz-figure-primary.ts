@@ -699,21 +699,107 @@ export function hasQuizFigure(
   return QUIZ_IMAGE.test(`${question.stimulus ?? ""}\n${question.prompt ?? ""}`);
 }
 
-/** Recovered `x / f(x)` (or similar) data table in the stem — counts as the visual. */
-export function hasRecoveredQuizTable(text: string | null | undefined): boolean {
+const QUIZ_TABLE_STRICT_CELL =
+  /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i;
+const QUIZ_TABLE_WORD_LABEL =
+  /^[A-Za-z][A-Za-z0-9()/%]*(?:\s+[A-Za-z][A-Za-z0-9()/%]*){1,5}$/;
+const QUIZ_TABLE_MATH_CELL =
+  /^(?:\d+[A-Za-z]|[A-Za-z](?:\s*[+\-−–—]\s*\d+(?:\.\d+)?)?)$/;
+
+export type EmbeddedQuizTable = {
+  headers: string[];
+  rows: string[][];
+  before: string;
+  after: string;
+  /** Tab- or wide-space alignment, so algebraic and multi-word cells stay intact. */
+  aligned: boolean;
+};
+
+function quizTableTokens(line: string): { cells: string[]; rich: boolean } {
+  if (line.includes("\t") || / {2,}/.test(line)) {
+    return {
+      cells: line.split(/\t|\s{2,}/).map((cell) => cell.trim()).filter(Boolean),
+      rich: true,
+    };
+  }
+  return { cells: line.trim().split(/\s+/).filter(Boolean), rich: false };
+}
+
+function quizTableCellOk(cell: string, rich: boolean): boolean {
+  if (!cell || cell.length > 48) return false;
+  if (/[.?!]$/.test(cell) && cell.length > 12) return false;
+  if (QUIZ_TABLE_STRICT_CELL.test(cell)) return true;
+  if (!rich) return false;
+  if (QUIZ_TABLE_MATH_CELL.test(cell)) return true;
+  return QUIZ_TABLE_WORD_LABEL.test(cell);
+}
+
+function plausibleQuizDataTable(headers: string[], rows: string[][]): boolean {
+  if (headers.length < 2 || rows.length < 2) return false;
+  const cells = [...headers, ...rows.flat()];
+  const numeric = cells.filter((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)).length;
+  const mathHeader = headers.some((header) =>
+    /^(?:x|y|f\(x\)|g\(x\)|h\(x\)|n|%|year|age|state|number|percent)$/i.test(header),
+  );
+  if (numeric === 0 && !mathHeader) return false;
+  if (headers.some((header) => /^(?:which|what|how|the|for|this|that|best|most|complete)$/i.test(header))) {
+    return false;
+  }
+  if (headers.some((header) => /^-?\d+\.\d+$/.test(header))) return false;
+  const hasYesNo = headers.some((header) => /^(?:yes|no)$/i.test(header));
+  const hasNumericHeader = headers.some((header) => /^-?\d+(?:\.\d+)?$/.test(header));
+  if (hasYesNo && hasNumericHeader) return false;
+  return true;
+}
+
+/**
+ * Longest aligned or space-separated data table inside a stem.
+ * Space-separated cells stay strict (`x`, `f(x)`, numbers). Tab-aligned
+ * cells may be expressions such as `p − 6` or labels such as `Number of pets`.
+ */
+export function embeddedQuizTable(text: string | null | undefined): EmbeddedQuizTable | null {
   const lines = (text ?? "").split("\n");
-  let header = false;
-  let numericRows = 0;
-  for (const line of lines) {
-    const cells = line.trim().split(/\s+/).filter(Boolean);
-    if (cells.length < 2 || cells.length > 6) continue;
-    if (!cells.every((cell) => /^(?:[A-Za-z][A-Za-z0-9()/%]*|\d+(?:\.\d+)?|f\(x\)|x|y)$/i.test(cell))) {
+  let best: { start: number; end: number; rich: boolean } | null = null;
+  let index = 0;
+  while (index < lines.length) {
+    const first = quizTableTokens(lines[index] ?? "");
+    if (
+      first.cells.length < 2 ||
+      first.cells.length > 6 ||
+      !first.cells.every((cell) => quizTableCellOk(cell, first.rich))
+    ) {
+      index += 1;
       continue;
     }
-    if (cells.some((cell) => /^(?:x|y|f\(x\)|g\(x\)|h\(x\))$/i.test(cell))) header = true;
-    if (cells.some((cell) => /^-?\d+(?:\.\d+)?$/.test(cell))) numericRows += 1;
+    let end = index + 1;
+    while (end < lines.length) {
+      const next = quizTableTokens(lines[end] ?? "");
+      if (next.rich !== first.rich || next.cells.length !== first.cells.length) break;
+      if (!next.cells.every((cell) => quizTableCellOk(cell, next.rich))) break;
+      end += 1;
+    }
+    if (end - index >= 3 && (!best || end - index > best.end - best.start)) {
+      best = { start: index, end, rich: first.rich };
+    }
+    index = Math.max(end, index + 1);
   }
-  return header && numericRows >= 2;
+  if (!best) return null;
+  const block = lines.slice(best.start, best.end).map((line) => quizTableTokens(line).cells);
+  const headers = block[0] ?? [];
+  const rows = block.slice(1);
+  if (!plausibleQuizDataTable(headers, rows)) return null;
+  const before = lines.slice(0, best.start).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const after = lines.slice(best.end).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { headers, rows, before, after, aligned: best.rich };
+}
+
+/** Recovered `x / f(x)` (or similar) data table in the stem — counts as the visual. */
+export function hasRecoveredQuizTable(text: string | null | undefined): boolean {
+  const table = embeddedQuizTable(text);
+  if (!table) return false;
+  const mathHeader = table.headers.some((header) => /^(?:x|y|f\(x\)|g\(x\)|h\(x\))$/i.test(header));
+  const numeric = table.rows.some((row) => row.some((cell) => /^-?\d+(?:\.\d+)?$/.test(cell)));
+  return numeric && (mathHeader || table.aligned);
 }
 
 function hasInlineNamedTableValues(text: string | null | undefined): boolean {
