@@ -219,11 +219,13 @@ import {
   googleAccountOrganizesAsTutor,
   tutorAttendeeForOrganizer,
   dateHoursIncludeOpenWindow,
-  fixedDateHoursOpen,
+  selfSetHoursOpen,
   generateAvailableSlots,
   missingCalendarInviteMessage,
   MISSING_CALENDAR_INVITE_TITLE,
   parseDateHours,
+  parseRecurringHours,
+  normalizeRecurringHours,
   overlapsBusyWindow,
   SAT_BOOKING_TIMEZONE,
   isBookablePortalDuration,
@@ -237,6 +239,7 @@ import {
   mergeDateHours,
   selfServeDateHoursError,
   selfServeDateHoursView,
+  selfServeRecurringError,
   tutorMayEditOwnDateHours,
 } from "../lib/self-serve-availability";
 import { tutorPreviewWriteRejected } from "../lib/tutor-preview";
@@ -5468,9 +5471,12 @@ async function assertDirectCheckoutSlotOpen(
   );
   const fixedWindow =
     slots.includes(start.toISOString()) &&
-    fixedDateHoursOpen(
-      (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
-      rule.timezone,
+    selfSetHoursOpen(
+      {
+        timezone: rule.timezone,
+        dateHours: (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+        recurringHours: normalizeRecurringHours(rule.recurringHours),
+      },
       start,
     );
   if (!slots.includes(start.toISOString())) {
@@ -5656,6 +5662,7 @@ async function loadTutorSlotContext(
     timezone: rule.timezone,
     weeklyHours: (rule.weeklyHours ?? {}) as Record<string, { start: string; end: string }[]>,
     dateHours: (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+    recurringHours: normalizeRecurringHours(rule.recurringHours),
     bookingNoticeMinutes: rule.bookingNoticeMinutes,
     bufferMinutes: rule.bufferMinutes,
     blackoutDates: rule.blackoutDates,
@@ -5690,9 +5697,7 @@ function projectTutorSlots(
   );
   const slots = context.access
     ? generated
-    : generated.filter((slot) =>
-        fixedDateHoursOpen(context.availabilityRule.dateHours, context.availabilityRule.timezone, new Date(slot)),
-      );
+    : generated.filter((slot) => selfSetHoursOpen(context.availabilityRule, new Date(slot)));
   return {
     tutor: context.tutor,
     rule: context.rule,
@@ -6927,6 +6932,7 @@ router.get(
       .select({
         timezone: availabilityRulesTable.timezone,
         dateHours: availabilityRulesTable.dateHours,
+        recurringHours: availabilityRulesTable.recurringHours,
       })
       .from(availabilityRulesTable)
       .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
@@ -6976,6 +6982,7 @@ router.get(
               tutorProfileId: profile.id,
               timezone: rule.timezone,
               dateHours: storedDateHours(rule.dateHours),
+              recurringHours: normalizeRecurringHours(rule.recurringHours),
             })
           : null,
       dateHoursUnavailable: mayEditDates && !rule,
@@ -7015,6 +7022,7 @@ router.get(
       .select({
         timezone: availabilityRulesTable.timezone,
         dateHours: availabilityRulesTable.dateHours,
+        recurringHours: availabilityRulesTable.recurringHours,
       })
       .from(availabilityRulesTable)
       .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
@@ -7028,6 +7036,7 @@ router.get(
         tutorProfileId: profile.id,
         timezone: rule.timezone,
         dateHours: storedDateHours(rule.dateHours),
+        recurringHours: normalizeRecurringHours(rule.recurringHours),
       }),
     );
   },
@@ -7044,6 +7053,52 @@ router.put(
       return;
     }
     const body = (req.body ?? {}) as Record<string, unknown>;
+    if (body.recurringHours !== undefined) {
+      const parsedWeekly = parseRecurringHours(body.recurringHours);
+      if (!parsedWeekly.ok) {
+        res.status(400).json({ error: parsedWeekly.error });
+        return;
+      }
+      const weeklyError = selfServeRecurringError(parsedWeekly.recurringHours);
+      if (weeklyError) {
+        res.status(400).json({ error: weeklyError });
+        return;
+      }
+      const [weeklyRule] = await db
+        .select({ id: availabilityRulesTable.id })
+        .from(availabilityRulesTable)
+        .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+        .limit(1);
+      if (!weeklyRule) {
+        res.status(404).json({ error: "This tutor has no availability rule." });
+        return;
+      }
+      const [savedWeekly] = await db
+        .update(availabilityRulesTable)
+        .set({ recurringHours: parsedWeekly.recurringHours, updatedAt: new Date() })
+        .where(eq(availabilityRulesTable.tutorProfileId, profile.id))
+        .returning({
+          timezone: availabilityRulesTable.timezone,
+          dateHours: availabilityRulesTable.dateHours,
+          recurringHours: availabilityRulesTable.recurringHours,
+        });
+      await db.insert(auditLogsTable).values({
+        actorUserId: req.appUser!.id,
+        action: "availability.recurring_hours_updated",
+        entityType: "tutor_profile",
+        entityId: profile.id,
+        metadata: { weekdays: Object.keys(parsedWeekly.recurringHours.days) },
+      });
+      res.json(
+        selfServeDateHoursView({
+          tutorProfileId: profile.id,
+          timezone: savedWeekly!.timezone,
+          dateHours: storedDateHours(savedWeekly!.dateHours),
+          recurringHours: normalizeRecurringHours(savedWeekly!.recurringHours),
+        }),
+      );
+      return;
+    }
     const parsed = parseDateHours(body.dateHours);
     if (!parsed.ok) {
       res.status(400).json({ error: parsed.error });
@@ -7079,6 +7134,7 @@ router.put(
         .returning({
           timezone: availabilityRulesTable.timezone,
           dateHours: availabilityRulesTable.dateHours,
+          recurringHours: availabilityRulesTable.recurringHours,
         });
       if (!updated) return null;
       await tx.insert(auditLogsTable).values({
@@ -7099,6 +7155,7 @@ router.put(
         tutorProfileId: profile.id,
         timezone: saved.timezone,
         dateHours: storedDateHours(saved.dateHours),
+        recurringHours: normalizeRecurringHours(saved.recurringHours),
       }),
     );
   },
@@ -8321,9 +8378,12 @@ async function respondWithPrepaidBooking(
     );
     const fixedWindow =
       slots.includes(start.toISOString()) &&
-      fixedDateHoursOpen(
-        (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
-        rule.timezone,
+      selfSetHoursOpen(
+        {
+          timezone: rule.timezone,
+          dateHours: (rule.dateHours ?? {}) as Record<string, { start: string; end: string }[]>,
+          recurringHours: normalizeRecurringHours(rule.recurringHours),
+        },
         start,
       );
     if (!slots.includes(start.toISOString())) {

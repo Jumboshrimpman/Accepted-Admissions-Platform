@@ -841,6 +841,15 @@ export const availabilityRulesTable = pgTable("availability_rules", {
     .$type<Record<string, { start: string; end: string }[]>>()
     .notNull()
     .default({}),
+  /** Weekday windows the tutor set. Empty means no weekly schedule. Does not rewrite date_hours. */
+  recurringHours: jsonb("recurring_hours")
+    .$type<{
+      startDate?: string | null;
+      endDate?: string | null;
+      days?: Record<string, { start: string; end: string }[]>;
+    }>()
+    .notNull()
+    .default({}),
   bookingNoticeMinutes: numeric("booking_notice_minutes", { mode: "number" }).notNull().default(240),
   bufferMinutes: numeric("buffer_minutes", { mode: "number" }).notNull().default(15),
   blackoutDates: jsonb("blackout_dates").$type<string[]>().notNull().default([]),

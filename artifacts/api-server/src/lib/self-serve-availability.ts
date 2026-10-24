@@ -1,5 +1,5 @@
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { civilDateKey, type AvailabilityWindow } from "./booking.ts";
+import { civilDateKey, type AvailabilityWindow, type RecurringHours } from "./booking.ts";
 
 /**
  * Tutors who may edit their own bookable date windows.
@@ -36,6 +36,7 @@ export function selfServeDateHoursView(input: {
   tutorProfileId: string;
   timezone: string;
   dateHours: Record<string, AvailabilityWindow[]>;
+  recurringHours?: RecurringHours | null;
   now?: Date;
 }) {
   const today = civilDateKey(input.now ?? new Date(), input.timezone || "America/New_York");
@@ -43,6 +44,7 @@ export function selfServeDateHoursView(input: {
     tutorProfileId: input.tutorProfileId,
     timezone: input.timezone,
     dateHours: input.dateHours,
+    recurringHours: input.recurringHours ?? { startDate: null, endDate: null, days: {} },
     today,
     latestDate: shiftCivilDate(today, SELF_SERVE_AVAILABILITY_MAX_DAYS),
     editorDates: editorDatesFromToday(today),
@@ -80,6 +82,17 @@ export function selfServeDateHoursError(
     for (const window of windows) {
       if (clockMinutes(window.start) % 15 !== 0 || clockMinutes(window.end) % 15 !== 0) {
         return `Windows on ${key} must start and end on a 15-minute mark.`;
+      }
+    }
+  }
+  return null;
+}
+
+export function selfServeRecurringError(recurring: RecurringHours): string | null {
+  for (const windows of Object.values(recurring.days)) {
+    for (const window of windows) {
+      if (clockMinutes(window.start) % 15 !== 0 || clockMinutes(window.end) % 15 !== 0) {
+        return "Weekly windows must start and end on a 15-minute mark.";
       }
     }
   }

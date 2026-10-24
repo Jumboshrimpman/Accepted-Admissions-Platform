@@ -24,16 +24,30 @@ export function isBookablePortalDuration(minutes: number): boolean {
 }
 
 export type AvailabilityWindow = { start: string; end: string };
+
+/** Sunday is "0". Optional dates bound the schedule. Empty days mean no weekly schedule. */
+export type RecurringHours = {
+  startDate: string | null;
+  endDate: string | null;
+  days: Record<string, AvailabilityWindow[]>;
+};
 export type AvailabilityRule = {
   timezone: string;
   weeklyHours: Record<string, AvailabilityWindow[]>;
   /**
    * Civil dates in the tutor's timezone. A present key replaces weekly hours
    * for that date. An empty list means the tutor is not bookable that day.
-   * Inside the earliest-to-latest listed dates, a missing key is closed too.
-   * Dates outside that span keep the weekly hours.
+   * Inside the earliest-to-latest listed dates, a missing key is closed too,
+   * unless recurringHours opens that weekday. Dates outside that span keep
+   * the weekly hours.
    */
   dateHours?: Record<string, AvailabilityWindow[]>;
+  /**
+   * Weekday windows the tutor saved herself. Used only on dates with no
+   * dateHours key. An explicit date, including an empty closure, still wins.
+   * These windows ignore Google busy, the same way a date she opened does.
+   */
+  recurringHours?: RecurringHours | null;
   bookingNoticeMinutes: number;
   bufferMinutes: number;
   blackoutDates: string[];
@@ -116,13 +130,109 @@ export function zonedDateTimeToUtc(dateKeyValue: string, time: string, timeZone:
   return new Date(guess.getTime() - (observedAsUtc - requestedAsUtc));
 }
 
-function minutes(value: string): number {
-  const [hour, minute] = value.split(":").map(Number);
-  return hour * 60 + minute;
-}
-
 const CIVIL_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const CIVIL_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function isStartTime(value: string): boolean {
+  return CIVIL_TIME.test(value);
+}
+
+/** 24:00 is midnight at the end of the civil date. It is only valid as an end. */
+function isEndTime(value: string): boolean {
+  return value === "24:00" || CIVIL_TIME.test(value);
+}
+
+export function windowMinutes(value: string): number {
+  const [hour, minute] = value.split(":").map(Number);
+  return (hour ?? 0) * 60 + (minute ?? 0);
+}
+
+export function windowsOverlap(windows: readonly AvailabilityWindow[]): boolean {
+  const spans = windows
+    .map((window) => ({ start: windowMinutes(window.start), end: windowMinutes(window.end) }))
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  for (let index = 1; index < spans.length; index += 1) {
+    if (spans[index]!.start < spans[index - 1]!.end) return true;
+  }
+  return false;
+}
+
+function parseWindowList(
+  windows: unknown,
+  label: string,
+): { ok: true; windows: AvailabilityWindow[] } | { ok: false; error: string } {
+  if (!Array.isArray(windows)) return { ok: false, error: `Hours for ${label} must be a list.` };
+  if (windows.length > 12) return { ok: false, error: `Too many windows on ${label}.` };
+  const parsed: AvailabilityWindow[] = [];
+  for (const window of windows) {
+    if (!window || typeof window !== "object") {
+      return { ok: false, error: `Invalid window on ${label}.` };
+    }
+    const start = (window as { start?: unknown }).start;
+    const end = (window as { end?: unknown }).end;
+    if (typeof start !== "string" || !isStartTime(start) || typeof end !== "string" || !isEndTime(end)) {
+      return { ok: false, error: `Windows on ${label} use 24-hour HH:MM.` };
+    }
+    if (windowMinutes(start) >= windowMinutes(end)) {
+      return { ok: false, error: `Window on ${label} must end after it starts.` };
+    }
+    parsed.push({ start, end });
+  }
+  if (windowsOverlap(parsed)) return { ok: false, error: `Windows on ${label} overlap.` };
+  return { ok: true, windows: parsed };
+}
+
+function validCivilDate(key: string): boolean {
+  const match = CIVIL_DATE.exec(key);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+}
+
+export function parseRecurringHours(
+  value: unknown,
+): { ok: true; recurringHours: RecurringHours } | { ok: false; error: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, error: "Weekly hours must be an object." };
+  }
+  const raw = value as { startDate?: unknown; endDate?: unknown; days?: unknown };
+  const startDate = raw.startDate == null || raw.startDate === "" ? null : raw.startDate;
+  const endDate = raw.endDate == null || raw.endDate === "" ? null : raw.endDate;
+  if (startDate !== null && (typeof startDate !== "string" || !validCivilDate(startDate))) {
+    return { ok: false, error: "Weekly start date is invalid." };
+  }
+  if (endDate !== null && (typeof endDate !== "string" || !validCivilDate(endDate))) {
+    return { ok: false, error: "Weekly end date is invalid." };
+  }
+  if (startDate && endDate && startDate > endDate) {
+    return { ok: false, error: "Weekly end date must be on or after the start date." };
+  }
+  if (!raw.days || typeof raw.days !== "object" || Array.isArray(raw.days)) {
+    return { ok: false, error: "Weekly days must be an object." };
+  }
+  const days: Record<string, AvailabilityWindow[]> = {};
+  for (const [day, windows] of Object.entries(raw.days as Record<string, unknown>)) {
+    if (!/^[0-6]$/.test(day)) {
+      return { ok: false, error: "Weekly days use 0 for Sunday through 6 for Saturday." };
+    }
+    const parsed = parseWindowList(windows, `weekday ${day}`);
+    if (!parsed.ok) return parsed;
+    if (parsed.windows.length > 0) days[day] = parsed.windows;
+  }
+  return { ok: true, recurringHours: { startDate, endDate, days } };
+}
+
+export function normalizeRecurringHours(value: unknown): RecurringHours {
+  const empty = { startDate: null, endDate: null, days: {} };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return empty;
+  const raw = value as { days?: unknown };
+  if (!raw.days || typeof raw.days !== "object" || Array.isArray(raw.days)) return empty;
+  const parsed = parseRecurringHours(value);
+  return parsed.ok ? parsed.recurringHours : empty;
+}
 
 /** Admin date overrides. Keys are YYYY-MM-DD. Windows are HH:MM, start before end. */
 export function parseDateHours(
@@ -148,29 +258,9 @@ export function parseDateHours(
     ) {
       return { ok: false, error: `Invalid date ${key}.` };
     }
-    if (!Array.isArray(windows)) return { ok: false, error: `Hours for ${key} must be a list.` };
-    if (windows.length > 12) return { ok: false, error: `Too many windows on ${key}.` };
-    const parsed: AvailabilityWindow[] = [];
-    for (const window of windows) {
-      if (!window || typeof window !== "object") {
-        return { ok: false, error: `Invalid window on ${key}.` };
-      }
-      const start = (window as { start?: unknown }).start;
-      const end = (window as { end?: unknown }).end;
-      if (
-        typeof start !== "string" ||
-        !CIVIL_TIME.test(start) ||
-        typeof end !== "string" ||
-        !CIVIL_TIME.test(end)
-      ) {
-        return { ok: false, error: `Windows on ${key} use 24-hour HH:MM.` };
-      }
-      if (minutes(start) >= minutes(end)) {
-        return { ok: false, error: `Window on ${key} must end after it starts.` };
-      }
-      parsed.push({ start, end });
-    }
-    dateHours[key] = parsed;
+    const parsed = parseWindowList(windows, key);
+    if (!parsed.ok) return parsed;
+    dateHours[key] = parsed.windows;
   }
   return { ok: true, dateHours };
 }
@@ -186,13 +276,71 @@ function listedDateHoursSpan(
   return { start, end };
 }
 
-function windowsForDate(rule: AvailabilityRule, key: string, weekday: string): AvailabilityWindow[] {
+/**
+ * A date she opened herself: an explicit date window, or a weekly window on a
+ * date she has not set. An explicit closure stays closed. Legacy weekly hours
+ * are not included.
+ */
+export function selfSetHoursOpen(
+  rule: {
+    timezone: string;
+    dateHours?: Record<string, AvailabilityWindow[]> | null;
+    recurringHours?: RecurringHours | null;
+  },
+  date: Date,
+): boolean {
+  const key = civilDateKey(date, rule.timezone);
   if (rule.dateHours && Object.prototype.hasOwnProperty.call(rule.dateHours, key)) {
-    return rule.dateHours[key] ?? [];
+    return (rule.dateHours[key] ?? []).length > 0;
   }
+  const weekday = String(new Date(`${key}T00:00:00.000Z`).getUTCDay());
+  const recurring = recurringWindowsForDate(
+    {
+      timezone: rule.timezone,
+      weeklyHours: {},
+      dateHours: rule.dateHours ?? undefined,
+      recurringHours: normalizeRecurringHours(rule.recurringHours),
+      bookingNoticeMinutes: 0,
+      bufferMinutes: 0,
+      blackoutDates: [],
+    },
+    key,
+    weekday,
+  );
+  return Boolean(recurring && recurring.length > 0);
+}
+
+function recurringWindowsForDate(
+  rule: AvailabilityRule,
+  key: string,
+  weekday: string,
+): AvailabilityWindow[] | null {
+  const recurring = rule.recurringHours;
+  if (!recurring) return null;
+  if (recurring.startDate && key < recurring.startDate) return null;
+  if (recurring.endDate && key > recurring.endDate) return null;
+  const windows = recurring.days[weekday];
+  if (!windows || windows.length === 0) return null;
+  return windows;
+}
+
+/**
+ * Explicit date keys win, including an empty closure. A weekly schedule the
+ * tutor saved fills dates she has not set. Both of those ignore Google busy.
+ */
+function windowsForDate(
+  rule: AvailabilityRule,
+  key: string,
+  weekday: string,
+): { windows: AvailabilityWindow[]; ignoresGoogleBusy: boolean } {
+  if (rule.dateHours && Object.prototype.hasOwnProperty.call(rule.dateHours, key)) {
+    return { windows: rule.dateHours[key] ?? [], ignoresGoogleBusy: true };
+  }
+  const recurring = recurringWindowsForDate(rule, key, weekday);
+  if (recurring) return { windows: recurring, ignoresGoogleBusy: true };
   const span = listedDateHoursSpan(rule.dateHours);
-  if (span && key >= span.start && key <= span.end) return [];
-  return rule.weeklyHours[weekday] ?? [];
+  if (span && key >= span.start && key <= span.end) return { windows: [], ignoresGoogleBusy: false };
+  return { windows: rule.weeklyHours[weekday] ?? [], ignoresGoogleBusy: false };
 }
 
 export function civilDateKey(date: Date, timeZone: string): string {
@@ -255,20 +403,22 @@ export function generateAvailableSlots(
   ) {
     const key = cursor.toISOString().slice(0, 10);
     if (rule.blackoutDates.includes(key)) continue;
-    const windows = windowsForDate(rule, key, String(cursor.getUTCDay()));
-    for (const window of windows) {
-      for (let startMinutes = minutes(window.start); startMinutes + durationMinutes <= minutes(window.end); startMinutes += durationMinutes) {
+    const offered = windowsForDate(rule, key, String(cursor.getUTCDay()));
+    for (const window of offered.windows) {
+      for (
+        let startMinutes = windowMinutes(window.start);
+        startMinutes + durationMinutes <= windowMinutes(window.end);
+        startMinutes += durationMinutes
+      ) {
         const start = zonedDateTimeToUtc(key, `${String(Math.floor(startMinutes / 60)).padStart(2, "0")}:${String(startMinutes % 60).padStart(2, "0")}`, rule.timezone);
         const end = new Date(start.getTime() + durationMinutes * 60_000);
         if (start < from || end > to || start < minimumStart) continue;
-        const fixedDate = Boolean(
-          rule.dateHours && Object.prototype.hasOwnProperty.call(rule.dateHours, key),
-        );
-        const blocking = fixedDate ? bookedWindows : allBusy;
+        const blocking = offered.ignoresGoogleBusy ? bookedWindows : allBusy;
         if (overlapsBusyWindow(start, end, blocking, rule.bufferMinutes)) continue;
         // The shared room has no buffer: the next session may start when the previous one ends.
         if (overlapsBusyWindow(start, end, roomWindows, 0)) continue;
-        slots.push(start.toISOString());
+        const iso = start.toISOString();
+        if (!slots.includes(iso)) slots.push(iso);
       }
     }
   }
