@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Dashboard } from "@workspace/api-client-react";
 
@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     isPending: false,
     mutate: vi.fn(),
   },
+  customFetch: vi.fn(async () => ({ assignmentId: "quiz", studentResolvedAt: null })),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -83,7 +84,7 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
-  customFetch: () => new Promise(() => {}),
+  customFetch: (...args: unknown[]) => mocks.customFetch(...args),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -699,14 +700,22 @@ describe("authenticated role dashboard flows", () => {
       /Due before your session: .+ GST/,
     );
     expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
+    expect(within(quizzes).queryByTestId("client-quiz-past-prework")).toBeNull();
+    const collapsedIds = [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
+      node.getAttribute("data-testid"),
+    );
+    expect(collapsedIds).toEqual([
+      "client-quiz-today-quiz",
+      "client-quiz-future-quiz",
+      "client-quiz-past-live",
+    ]);
+    expect(within(quizzes).getByTestId("client-quiz-past-live").textContent).toContain("Complete");
+    expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
+
+    fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
     expect(within(quizzes).getByTestId("prework-deadline-future-quiz").textContent).toMatch(
       /Due before your session/,
     );
-    expect(within(quizzes).queryByText("Yesterday pre-work")).toBeNull();
-    expect(within(quizzes).queryByText("Yesterday in-session work")).toBeNull();
-    expect(screen.queryByText("Yesterday pre-work")).toBeNull();
-
-    fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
     const pastPrework = within(quizzes).getByTestId("client-quiz-past-prework");
     const pastLive = within(quizzes).getByTestId("client-quiz-past-live");
     expect(pastPrework.textContent).toContain("Yesterday pre-work");
@@ -717,6 +726,12 @@ describe("authenticated role dashboard flows", () => {
     expect(pastPrework.textContent).not.toContain("Start pre-work");
     expect(pastPrework.textContent).not.toContain("Due before");
     expect(pastLive.textContent).not.toContain("Due before");
+    expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
+    fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
+    expect(within(quizzes).queryByTestId("client-quiz-past-prework")).toBeNull();
+    expect(within(quizzes).getByTestId("client-quiz-future-quiz")).toBeTruthy();
+    expect(within(quizzes).getByTestId("client-quiz-today-quiz")).toBeTruthy();
+    expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
   });
 
   test("Geometry Area and Volume is a standalone to-do and not the session prep", () => {
@@ -867,15 +882,25 @@ describe("authenticated role dashboard flows", () => {
     render(<FallWelcomeDashboard />);
 
     const quizzes = screen.getByTestId("client-quizzes");
+    expect(
+      [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
+        node.getAttribute("data-testid"),
+      ),
+    ).toEqual(["client-quiz-factoring", "client-quiz-geometry-area", "client-quiz-geometry-sat"]);
     expect(within(quizzes).getByTestId("client-quiz-factoring").textContent).toContain("Not started");
-    expect(within(quizzes).getByTestId("client-quiz-sat-math").textContent).toContain("Not started");
-    expect(within(quizzes).getByTestId("client-quiz-geometry-area").textContent).toContain("Not started");
-    expect(within(quizzes).getByTestId("client-quiz-geometry-sat").textContent).toContain("Not started");
+    expect(within(quizzes).queryByTestId("client-quiz-sat-math")).toBeNull();
+    expect(within(quizzes).queryByTestId("client-quiz-biology")).toBeNull();
+    expect(within(quizzes).queryByTestId("client-quiz-chemistry")).toBeNull();
     expect(within(quizzes).queryByText("Algebra pre-work")).toBeNull();
     expect(within(quizzes).getByTestId("client-quiz-factoring").querySelector("a")?.getAttribute("href")).toBe(
       "/portal/assignments/factoring",
     );
+    fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
+    expect(within(quizzes).getByTestId("client-quiz-sat-math").textContent).toContain("Not started");
+    expect(within(quizzes).getByTestId("client-quiz-geometry-area").textContent).toContain("Not started");
+    expect(within(quizzes).getByTestId("client-quiz-geometry-sat").textContent).toContain("Not started");
     expect(within(quizzes).getByTestId("client-quiz-sat-math").textContent).toContain("Start quiz");
+    expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
 
     const notes = screen.getByTestId("client-material-factoring-notes");
     expect(notes.textContent).toContain("Factoring Notes");
@@ -946,10 +971,172 @@ describe("authenticated role dashboard flows", () => {
       "/admin/curriculum?section=curriculum&tab=quizzes&quiz=sat-math",
     ]);
     expect(within(quizzes).queryByRole("link", { name: /Start quiz/i })).toBeNull();
+    expect(within(quizzes).queryByTestId("assignment-notifications-show-more")).toBeNull();
     expect(screen.getByTestId("client-material-download-factoring-notes").getAttribute("href")).toBe(
       "/media/factoring/xavier-factoring-notes.pdf",
     );
     expect(screen.getAllByRole("button", { name: "Read only" }).length).toBeGreaterThan(0);
+  });
+
+  test("student and admin preview collapse quizzes after three and leave the roadmap alone", () => {
+    const titles = ["Alpha quiz", "Beta quiz", "Gamma quiz", "Zeta quiz"];
+    const assignments = titles.map((title, index) => ({
+      id: `quiz-${index}`,
+      title,
+      subject: "SAT",
+      status: "published" as const,
+      deadline: null,
+      questionCount: 4,
+      timeLimitMinutes: 20,
+      attemptCount: 0,
+      maxAttempts: 1,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+    }));
+    const base = dashboardForRole("student");
+    const dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: true },
+      assignments,
+    } as Dashboard;
+    const expectWindow = (preview: boolean) => {
+      const quizzes = screen.getByTestId("client-quizzes");
+      const ids = () =>
+        [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
+          node.getAttribute("data-testid"),
+        );
+      expect(ids()).toEqual(["client-quiz-quiz-0", "client-quiz-quiz-1", "client-quiz-quiz-2"]);
+      expect(quizzes.textContent).not.toContain("Zeta quiz");
+      const toggle = within(quizzes).getByTestId("assignment-notifications-show-more");
+      expect(toggle.textContent).toContain("Show more");
+      if (preview) {
+        expect(within(quizzes).getAllByRole("link", { name: /Review quiz/i }).length).toBe(3);
+      } else {
+        expect(within(quizzes).getAllByRole("link", { name: /Resume|Start|Review/i }).length).toBe(3);
+      }
+      expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(ids()).toEqual([
+        "client-quiz-quiz-0",
+        "client-quiz-quiz-1",
+        "client-quiz-quiz-2",
+        "client-quiz-quiz-3",
+      ]);
+      expect(toggle.textContent).toContain("Show less");
+      expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(ids()).toEqual(["client-quiz-quiz-0", "client-quiz-quiz-1", "client-quiz-quiz-2"]);
+      expect(toggle.textContent).toContain("Show more");
+    };
+
+    mocks.dashboard = dashboard;
+    render(<FallWelcomeDashboard />);
+    expectWindow(false);
+    cleanup();
+
+    render(<ClientDashboardView dashboard={dashboard} adminPreview />);
+    expectWindow(true);
+    cleanup();
+
+    const three = { ...dashboard, assignments: assignments.slice(0, 3) } as Dashboard;
+    mocks.dashboard = three;
+    render(<FallWelcomeDashboard />);
+    expect(screen.getByTestId("client-quizzes").textContent).toContain("Gamma quiz");
+    expect(screen.queryByTestId("assignment-notifications-show-more")).toBeNull();
+    expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
+  });
+
+  test("the student can resolve a quiz and the admin preview cannot", async () => {
+    const titles = ["Soon quiz", "Next quiz", "Third quiz", "Fourth quiz", "Fifth quiz"];
+    const assignments = titles.map((title, index) => ({
+      id: `quiz-${index}`,
+      title,
+      subject: "SAT",
+      status: "published" as const,
+      deadline: `2026-10-2${index + 1}T12:00:00.000Z`,
+      questionCount: 4,
+      timeLimitMinutes: 20,
+      attemptCount: 0,
+      maxAttempts: 1,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+      studentResolvedAt: index === 0 ? "2026-10-20T12:00:00.000Z" : null,
+    }));
+    const dashboard = {
+      ...dashboardForRole("student"),
+      assignments,
+    } as Dashboard;
+    mocks.dashboard = dashboard;
+    render(<FallWelcomeDashboard />);
+    const quizzes = screen.getByTestId("client-quizzes");
+    const activeIds = () =>
+      [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
+        node.getAttribute("data-testid"),
+      );
+    expect(activeIds()).toEqual([
+      "client-quiz-quiz-1",
+      "client-quiz-quiz-2",
+      "client-quiz-quiz-3",
+    ]);
+    expect(quizzes.textContent).not.toContain("Soon quiz");
+    expect(screen.getByTestId("quiz-resolve-quiz-1")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-resolve-quiz-0")).toBeNull();
+    fireEvent.click(screen.getByTestId("quiz-resolve-quiz-1"));
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenCalledWith(
+        "/api/assignments/quiz-1/resolution",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    expect(mocks.queryClient.invalidateQueries).toHaveBeenCalled();
+
+    const studentResolvedToggle = screen.getByTestId("client-resolved-quizzes-toggle");
+    expect(studentResolvedToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(studentResolvedToggle);
+    expect(studentResolvedToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("client-quiz-quiz-0").textContent).toContain("Soon quiz");
+    expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain("Resolved");
+    fireEvent.click(screen.getByTestId("quiz-unresolve-quiz-0"));
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenCalledWith(
+        "/api/assignments/quiz-0/resolution",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+    cleanup();
+
+    render(<ClientDashboardView dashboard={dashboard} adminPreview />);
+    const preview = screen.getByTestId("client-quizzes");
+    expect(preview.textContent).not.toContain("Soon quiz");
+    expect(screen.queryByRole("button", { name: /^Resolve$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo$/ })).toBeNull();
+    const previewResolvedToggle = screen.getByTestId("client-resolved-quizzes-toggle");
+    expect(previewResolvedToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(previewResolvedToggle);
+    expect(previewResolvedToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain(
+      "Resolved by the student",
+    );
+    expect(screen.queryByTestId("quiz-unresolve-quiz-0")).toBeNull();
+    expect(screen.queryByTestId("quiz-resolve-quiz-1")).toBeNull();
+    cleanup();
+
+    const viewer = {
+      ...dashboardForRole("viewer"),
+      assignments,
+    } as Dashboard;
+    render(<ClientDashboardView dashboard={viewer} />);
+    expect(screen.queryByRole("button", { name: /^Resolve$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo$/ })).toBeNull();
+    const viewerResolvedToggle = screen.getByTestId("client-resolved-quizzes-toggle");
+    expect(viewerResolvedToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(viewerResolvedToggle);
+    expect(viewerResolvedToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain(
+      "Resolved by the student",
+    );
   });
 
   test("Taito’s client dashboard does not show clean-question wording", () => {

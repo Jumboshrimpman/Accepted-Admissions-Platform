@@ -1181,6 +1181,8 @@ export interface AdminAssignment {
   latestAttemptId?: string | null;
   /** @nullable */
   latestAttemptStatus?: AdminAssignmentLatestAttemptStatus;
+  /** When the session student hid this quiz from their active list. @nullable */
+  studentResolvedAt?: string | null;
 }
 
 export type AdminAssignmentInputDeliveryPhase = typeof AdminAssignmentInputDeliveryPhase[keyof typeof AdminAssignmentInputDeliveryPhase];
@@ -1643,6 +1645,8 @@ export interface AssignmentSummary {
   latestAttemptId?: string | null;
   /** @nullable */
   latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
+  /** When this student hid the quiz from their active list. @nullable */
+  studentResolvedAt?: string | null;
 }
 
 export type CurriculumSessionLatestResultStatus = typeof CurriculumSessionLatestResultStatus[keyof typeof CurriculumSessionLatestResultStatus];
@@ -2124,6 +2128,8 @@ export interface SessionHomework {
   attemptId: string | null;
   /** @nullable */
   attemptStatus: SessionHomeworkAttemptStatus;
+  /** When the session student hid this quiz from their active list. @nullable */
+  studentResolvedAt?: string | null;
   /** @nullable */
   score: number | null;
   /** @nullable */

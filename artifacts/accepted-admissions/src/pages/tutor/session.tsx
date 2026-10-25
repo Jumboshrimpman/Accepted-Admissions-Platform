@@ -409,6 +409,14 @@ export default function TutorSession() {
                           {isPostSessionFollowUpQuiz(homework) ? (
                             <p className="mt-1 text-xs font-medium text-primary">Follow-up after this session</p>
                           ) : null}
+                          {homework.studentResolvedAt ? (
+                            <p
+                              className="mt-1 text-xs font-medium text-muted-foreground"
+                              data-testid={`tutor-homework-resolved-${homework.assignmentId}`}
+                            >
+                              Resolved by the student
+                            </p>
+                          ) : null}
                           {deadlineLabel ? (
                             <p
                               className="mt-1 text-xs text-muted-foreground"

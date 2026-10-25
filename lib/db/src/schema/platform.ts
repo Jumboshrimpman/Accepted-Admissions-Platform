@@ -203,6 +203,30 @@ export const assignmentsTable = pgTable("assignments", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * A student hid a quiz from their own active list.
+ * Does not change the assignment, attempts, scores, or completion.
+ */
+export const studentQuizResolutionsTable = pgTable(
+  "student_quiz_resolutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentUserId: uuid("student_user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    assignmentId: uuid("assignment_id")
+      .notNull()
+      .references(() => assignmentsTable.id, { onDelete: "cascade" }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_quiz_resolutions_student_assignment_idx").on(
+      table.studentUserId,
+      table.assignmentId,
+    ),
+  ],
+);
+
 export const questionsTable = pgTable("questions", {
   id: uuid("id").primaryKey().defaultRandom(),
   subject: text("subject").notNull(),

@@ -32,4 +32,6 @@ export interface AdminAssignment {
   latestAttemptId?: string | null;
   /** @nullable */
   latestAttemptStatus?: AdminAssignmentLatestAttemptStatus;
+  /** When the session student hid this quiz from their active list. @nullable */
+  studentResolvedAt?: Date | null;
 }

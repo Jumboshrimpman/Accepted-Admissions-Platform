@@ -56,6 +56,7 @@ type QuizAttempt = {
   latestAttemptStatus?: string | null;
   latestScore?: number | null;
   deadline?: string | Date | null;
+  studentResolvedAt?: string | Date | null;
 };
 
 export type QuizSessionRef = {
@@ -189,6 +190,72 @@ function preferQuestionedUpcomingPrework<T extends QuizAttempt>(
   });
 }
 
+function quizInstant(value: string | Date | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+/**
+ * Stored deadline when the quiz has one. Otherwise the linked session start.
+ * Follow-up homework with no deadline uses that attached session, so Taito's
+ * Oct 23 remaining-questions set is dated by his Oct 23 session.
+ * Quizzes with neither are undated.
+ */
+export function studentQuizIsResolved(
+  assignment: { studentResolvedAt?: string | Date | null },
+): boolean {
+  return quizInstant(assignment.studentResolvedAt) != null;
+}
+
+export function studentQuizListDueAt<T extends QuizAttempt>(
+  assignment: T,
+  sessions: readonly QuizSessionRef[],
+): number | null {
+  const deadline = quizInstant(assignment.deadline);
+  if (deadline != null) return deadline;
+  return quizInstant(sessionForStudentQuiz(assignment, sessions)?.dateTime);
+}
+
+/** Submitted work, or a past-session quiz the list already marks complete. */
+function quizListItemIsCompleted<T extends QuizAttempt>(
+  item: ClassifiedStudentQuiz<T>,
+): boolean {
+  if (item.pastSessionDay) return true;
+  const attempt = item.assignment.latestAttemptStatus;
+  if (attempt === "submitted" || attempt === "expired") return true;
+  return item.status === "Complete" || item.status.endsWith("%");
+}
+
+/**
+ * Open quizzes first, soonest due first. Overdue open work is the soonest.
+ * Undated open quizzes follow dated open ones and still come before completed
+ * quizzes. Completed quizzes are newest first. Equal times keep the previous order.
+ */
+function sortQuizzesForStudentList<T extends QuizAttempt>(
+  items: readonly ClassifiedStudentQuiz<T>[],
+  sessions: readonly QuizSessionRef[],
+): ClassifiedStudentQuiz<T>[] {
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      due: studentQuizListDueAt(item.assignment, sessions),
+      completed: quizListItemIsCompleted(item),
+    }))
+    .sort((left, right) => {
+      if (left.completed !== right.completed) return left.completed ? 1 : -1;
+      if (left.due == null && right.due == null) return left.index - right.index;
+      if (left.due == null) return 1;
+      if (right.due == null) return -1;
+      if (left.due !== right.due) {
+        return left.completed ? right.due - left.due : left.due - right.due;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.item);
+}
+
 function isUpcomingSessionPrework<T extends QuizAttempt>(
   item: ClassifiedStudentQuiz<T>,
   sessions: readonly QuizSessionRef[],
@@ -222,22 +289,21 @@ export function collapsedStudentQuizzes<T extends QuizAttempt>(
     });
   const upcomingIds = new Set(upcoming.map((item) => item.assignment.id));
   const restOpen = open.filter((item) => !upcomingIds.has(item.assignment.id));
-  const ordered = [...upcoming, ...restOpen, ...classified.archived];
+  const ordered = sortQuizzesForStudentList(
+    [...upcoming, ...restOpen, ...classified.archived],
+    sessions,
+  );
+  const active = ordered.filter((item) => !studentQuizIsResolved(item.assignment));
+  const resolved = ordered.filter((item) => studentQuizIsResolved(item.assignment));
+  // Open work fills the top of the list. Resolved quizzes leave it so the next open quiz moves up.
   const initialCount = options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT;
-  let otherOpenShown = 0;
-  const collapsedVisible: ClassifiedStudentQuiz<T>[] = [...upcoming];
-  for (const item of restOpen) {
-    const followUp = isPostSessionFollowUpQuiz(item.assignment);
-    if (!followUp && otherOpenShown >= initialCount) continue;
-    collapsedVisible.push(item);
-    if (!followUp) otherOpenShown += 1;
-  }
-  const hiddenCount = ordered.length - collapsedVisible.length;
+  const hiddenCount = Math.max(0, active.length - initialCount);
   return {
     ...classified,
     open,
-    ordered,
-    visible: options.expanded ? ordered : collapsedVisible,
+    ordered: active,
+    resolved,
+    visible: options.expanded ? active : active.slice(0, initialCount),
     hiddenCount,
     canToggle: hiddenCount > 0,
   };

@@ -29,4 +29,6 @@ export interface AssignmentSummary {
   latestAttemptId?: string | null;
   /** @nullable */
   latestAttemptStatus?: AssignmentSummaryLatestAttemptStatus;
+  /** When this student hid the quiz from their active list. @nullable */
+  studentResolvedAt?: Date | null;
 }

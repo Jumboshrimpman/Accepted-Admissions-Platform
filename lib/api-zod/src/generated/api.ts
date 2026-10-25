@@ -318,7 +318,8 @@ export const GetAdminCurriculumResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })),
   "blocks": zod.array(zod.object({
   "id": zod.string(),
@@ -683,7 +684,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 }).nullable(),
   "latestResult": zod.union([zod.object({
   "status": zod.enum(['submitted', 'expired']),
@@ -731,7 +733,8 @@ export const GetAdminClientDashboardResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })),
   "materials": zod.array(zod.object({
   "id": zod.string(),
@@ -1034,7 +1037,8 @@ export const CreateAdminAssignmentResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })
 
 
@@ -1088,7 +1092,8 @@ export const UpdateAdminAssignmentResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })
 
 
@@ -1122,7 +1127,8 @@ export const CloneAdminAssignmentToSessionResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })
 
 
@@ -1425,7 +1431,8 @@ export const GetTutorCurriculumResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })),
   "libraryAssets": zod.array(zod.object({
   "id": zod.string(),
@@ -1548,7 +1555,8 @@ export const CreateTutorReusableQuizResponse = zod.object({
   "questionCount": zod.number(),
   "submissionCount": zod.number(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })
 
 
@@ -2448,7 +2456,8 @@ export const GetDashboardResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 }).nullable(),
   "latestResult": zod.union([zod.object({
   "status": zod.enum(['submitted', 'expired']),
@@ -2496,7 +2505,8 @@ export const GetDashboardResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })),
   "materials": zod.array(zod.object({
   "id": zod.string(),
@@ -2902,7 +2912,8 @@ export const GetSessionResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })),
   "studentNotes": zod.string().nullish(),
   "tutorNotes": zod.string().nullish(),
@@ -2914,6 +2925,7 @@ export const GetSessionResponse = zod.object({
   "deadline": zod.coerce.date().nullable(),
   "attemptId": zod.string().nullable(),
   "attemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullable(),
+  "studentResolvedAt": zod.coerce.date().nullish(),
   "score": zod.number().nullable(),
   "submittedAt": zod.coerce.date().nullish(),
   "mistakeCount": zod.number(),
@@ -3046,7 +3058,8 @@ export const GetAdaptiveCurriculumResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 }).nullable(),
   "mistakes": zod.array(zod.object({
   "questionId": zod.string(),
@@ -3158,7 +3171,8 @@ export const RefreshAdaptiveCurriculumResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 }).nullable(),
   "mistakes": zod.array(zod.object({
   "questionId": zod.string(),
@@ -3353,7 +3367,8 @@ export const ListAssignmentsResponseItem = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 })
 export const ListAssignmentsResponse = zod.array(ListAssignmentsResponseItem)
 
@@ -3379,7 +3394,8 @@ export const GetAssignmentResponse = zod.object({
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
   "latestAttemptId": zod.string().nullish(),
-  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish()
+  "latestAttemptStatus": zod.union([zod.literal('active'),zod.literal('paused'),zod.literal('submitted'),zod.literal('expired'),zod.literal(null)]).nullish(),
+  "studentResolvedAt": zod.coerce.date().nullish()
 }).and(zod.object({
   "instructions": zod.string(),
   "questions": zod.array(zod.object({
