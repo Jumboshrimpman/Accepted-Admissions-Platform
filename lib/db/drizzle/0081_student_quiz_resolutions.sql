@@ -7,13 +7,17 @@ CREATE TABLE IF NOT EXISTS "student_quiz_resolutions" (
 	"resolved_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "student_quiz_resolutions" DROP CONSTRAINT IF EXISTS "student_quiz_resolutions_student_user_id_users_id_fk";
+--> statement-breakpoint
+ALTER TABLE "student_quiz_resolutions" DROP CONSTRAINT IF EXISTS "student_quiz_resolutions_assignment_id_assignments_id_fk";
+--> statement-breakpoint
 DO $$ BEGIN
-  ALTER TABLE "student_quiz_resolutions" ADD CONSTRAINT "student_quiz_resolutions_student_user_id_users_id_fk" FOREIGN KEY ("student_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+  ALTER TABLE "student_quiz_resolutions" ADD CONSTRAINT "student_quiz_resolutions_student_user_id_users_id_fk" FOREIGN KEY ("student_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
-  ALTER TABLE "student_quiz_resolutions" ADD CONSTRAINT "student_quiz_resolutions_assignment_id_assignments_id_fk" FOREIGN KEY ("assignment_id") REFERENCES "public"."assignments"("id") ON DELETE no action ON UPDATE no action;
+  ALTER TABLE "student_quiz_resolutions" ADD CONSTRAINT "student_quiz_resolutions_assignment_id_assignments_id_fk" FOREIGN KEY ("assignment_id") REFERENCES "public"."assignments"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --> statement-breakpoint

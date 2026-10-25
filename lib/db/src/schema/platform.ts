@@ -213,10 +213,10 @@ export const studentQuizResolutionsTable = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     studentUserId: uuid("student_user_id")
       .notNull()
-      .references(() => usersTable.id),
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     assignmentId: uuid("assignment_id")
       .notNull()
-      .references(() => assignmentsTable.id),
+      .references(() => assignmentsTable.id, { onDelete: "cascade" }),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

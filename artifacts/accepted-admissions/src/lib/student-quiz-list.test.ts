@@ -161,7 +161,7 @@ test("past-session quizzes are marked complete and the list sorts by due date", 
   });
   assert.deepEqual(
     collapsed.visible.map((item) => item.assignment.id),
-    ["unlinked", "past-live", "past-prework"],
+    ["unlinked", "today-quiz", "future-quiz"],
   );
   assert.equal(collapsed.canToggle, true);
 
@@ -172,7 +172,7 @@ test("past-session quizzes are marked complete and the list sorts by due date", 
   });
   assert.deepEqual(
     expanded.visible.map((item) => item.assignment.id),
-    ["unlinked", "past-live", "past-prework", "today-quiz", "future-quiz"],
+    ["unlinked", "today-quiz", "future-quiz", "past-live", "past-prework"],
   );
 });
 
@@ -526,9 +526,9 @@ test("open follow-up quizzes stay in order and collapse after the first three", 
       GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
       GEOMETRY_SAT_FOLLOW_UP_TITLE,
       SAT_MATH_FOLLOW_UP_TITLE,
-      "Algebra pre-work",
       "Biology pre-work",
       "Chemistry pre-work",
+      "Algebra pre-work",
     ],
   );
   assert.equal(
@@ -616,4 +616,67 @@ test("Oct 23 remaining English homework stays open after that session day", () =
   assert.equal(collapsed.archived.length, 0);
   assert.equal(collapsed.visible[0]?.status, "Not started");
   assert.equal(studentQuizActionLabel(collapsed.visible[0]!, false), "Start quiz");
+  assert.equal(
+    studentQuizListDueAt(collapsed.visible[0]!.assignment, [
+      session({ id: "english-oct-23", dateTime: "2026-10-23T12:00:00.000Z" }),
+    ]),
+    new Date("2026-10-23T12:00:00.000Z").getTime(),
+  );
+});
+
+test("open quizzes lead the top three ahead of completed past sessions", () => {
+  const now = new Date("2026-10-25T14:00:00.000Z");
+  const sessions = [
+    session({ id: "oct-2", dateTime: "2026-10-02T12:00:00.000Z", preparation: { id: "done-oct-2" } }),
+    session({ id: "oct-9", dateTime: "2026-10-09T12:00:00.000Z", preparation: { id: "done-oct-9" } }),
+    session({ id: "oct-16", dateTime: "2026-10-16T12:00:00.000Z", preparation: { id: "done-oct-16" } }),
+    session({ id: "oct-23", dateTime: "2026-10-23T12:00:00.000Z", preparation: null }),
+    session({ id: "oct-30", dateTime: "2026-10-30T12:00:00.000Z", preparation: { id: "oct-30-prework" } }),
+  ];
+  const assignments = [
+    quiz({ id: "done-oct-2", title: "Oct 2 pre-work", sessionId: "oct-2" }),
+    quiz({ id: "done-oct-9", title: "Oct 9 pre-work", sessionId: "oct-9" }),
+    quiz({ id: "done-oct-16", title: "Oct 16 pre-work", sessionId: "oct-16" }),
+    quiz({
+      id: "oct-23-remaining",
+      title: OCT23_REMAINING_HOMEWORK_TITLE,
+      sessionId: "oct-23",
+      subject: "IELTS",
+      deadline: null,
+      questionCount: 12,
+    }),
+    quiz({
+      id: "oct-30-prework",
+      title: "Oct 30 pre-work",
+      sessionId: "oct-30",
+      deadline: null,
+      questionCount: 40,
+    }),
+  ];
+  assert.equal(
+    studentQuizListDueAt(assignments[3]!, sessions),
+    new Date("2026-10-23T12:00:00.000Z").getTime(),
+  );
+  const collapsed = collapsedStudentQuizzes(assignments, sessions, {
+    expanded: false,
+    now,
+    clientTimezone: "Asia/Tokyo",
+  });
+  assert.equal(collapsed.visible[0]?.pastSessionDay, false);
+  assert.equal(collapsed.visible[1]?.pastSessionDay, false);
+  assert.deepEqual(
+    collapsed.visible.map((item) => item.assignment.id),
+    ["oct-23-remaining", "oct-30-prework", "done-oct-16"],
+  );
+  assert.deepEqual(
+    collapsed.ordered.map((item) => item.assignment.id),
+    ["oct-23-remaining", "oct-30-prework", "done-oct-16", "done-oct-9", "done-oct-2"],
+  );
+  for (const id of ["done-oct-2", "done-oct-9", "done-oct-16"]) {
+    assert.equal(collapsed.ordered.find((item) => item.assignment.id === id)?.status, "Complete");
+  }
+  assert.equal(
+    collapsed.ordered.find((item) => item.assignment.id === "oct-23-remaining")?.status,
+    "Not started",
+  );
 });

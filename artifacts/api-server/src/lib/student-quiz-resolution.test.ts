@@ -64,7 +64,8 @@ test("migration is additive and resolution does not touch grading records", () =
   );
   assert.match(sql, /CREATE TABLE IF NOT EXISTS "student_quiz_resolutions"/);
   assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS "student_quiz_resolutions_student_assignment_idx"/);
-  assert.equal(/DROP\s+/i.test(sql), false);
+  assert.match(sql, /ON DELETE cascade/i);
+  assert.equal(/DROP\s+TABLE/i.test(sql), false);
   assert.equal(/INSERT\s+INTO/i.test(sql), false);
   assert.equal(/ALTER\s+TABLE\s+"assignments"/i.test(sql), false);
   assert.equal(/ALTER\s+TABLE\s+"attempts"/i.test(sql), false);

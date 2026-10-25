@@ -699,21 +699,20 @@ describe("authenticated role dashboard flows", () => {
     expect(within(quizzes).getByTestId("prework-deadline-today-quiz").textContent).toMatch(
       /Due before your session: .+ GST/,
     );
-    expect(within(quizzes).queryByTestId("client-quiz-future-quiz")).toBeNull();
+    expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
+    expect(within(quizzes).queryByTestId("client-quiz-past-prework")).toBeNull();
     const collapsedIds = [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
       node.getAttribute("data-testid"),
     );
     expect(collapsedIds).toEqual([
-      "client-quiz-past-live",
-      "client-quiz-past-prework",
       "client-quiz-today-quiz",
+      "client-quiz-future-quiz",
+      "client-quiz-past-live",
     ]);
     expect(within(quizzes).getByTestId("client-quiz-past-live").textContent).toContain("Complete");
-    expect(within(quizzes).getByTestId("client-quiz-past-prework").textContent).toContain("Complete");
     expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
 
     fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
-    expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
     expect(within(quizzes).getByTestId("prework-deadline-future-quiz").textContent).toMatch(
       /Due before your session/,
     );
@@ -729,8 +728,8 @@ describe("authenticated role dashboard flows", () => {
     expect(pastLive.textContent).not.toContain("Due before");
     expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
     fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
-    expect(within(quizzes).queryByTestId("client-quiz-future-quiz")).toBeNull();
-    expect(within(quizzes).getByTestId("client-quiz-past-prework")).toBeTruthy();
+    expect(within(quizzes).queryByTestId("client-quiz-past-prework")).toBeNull();
+    expect(within(quizzes).getByTestId("client-quiz-future-quiz")).toBeTruthy();
     expect(within(quizzes).getByTestId("client-quiz-today-quiz")).toBeTruthy();
     expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
   });
@@ -1093,7 +1092,10 @@ describe("authenticated role dashboard flows", () => {
     });
     expect(mocks.queryClient.invalidateQueries).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTestId("client-resolved-quizzes-toggle"));
+    const studentResolvedToggle = screen.getByTestId("client-resolved-quizzes-toggle");
+    expect(studentResolvedToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(studentResolvedToggle);
+    expect(studentResolvedToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("client-quiz-quiz-0").textContent).toContain("Soon quiz");
     expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain("Resolved");
     fireEvent.click(screen.getByTestId("quiz-unresolve-quiz-0"));
@@ -1110,7 +1112,10 @@ describe("authenticated role dashboard flows", () => {
     expect(preview.textContent).not.toContain("Soon quiz");
     expect(screen.queryByRole("button", { name: /^Resolve$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Undo$/ })).toBeNull();
-    fireEvent.click(screen.getByTestId("client-resolved-quizzes-toggle"));
+    const previewResolvedToggle = screen.getByTestId("client-resolved-quizzes-toggle");
+    expect(previewResolvedToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(previewResolvedToggle);
+    expect(previewResolvedToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain(
       "Resolved by the student",
     );
@@ -1125,7 +1130,10 @@ describe("authenticated role dashboard flows", () => {
     render(<ClientDashboardView dashboard={viewer} />);
     expect(screen.queryByRole("button", { name: /^Resolve$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Undo$/ })).toBeNull();
-    fireEvent.click(screen.getByTestId("client-resolved-quizzes-toggle"));
+    const viewerResolvedToggle = screen.getByTestId("client-resolved-quizzes-toggle");
+    expect(viewerResolvedToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(viewerResolvedToggle);
+    expect(viewerResolvedToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain(
       "Resolved by the student",
     );

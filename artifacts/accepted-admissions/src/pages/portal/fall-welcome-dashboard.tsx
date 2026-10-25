@@ -64,6 +64,55 @@ import { studentAssignmentHref } from "@/lib/student-attempt-ui";
 import { adminCurriculumHref } from "@/lib/admin-curriculum-location";
 import { ClientIntakeAction } from "@/components/client-intake-modal";
 
+function StudentQuizResolutionButton({
+  assignmentId,
+  action,
+}: {
+  assignmentId: string;
+  action: "resolve" | "undo";
+}) {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-testid={
+          action === "resolve" ? `quiz-resolve-${assignmentId}` : `quiz-unresolve-${assignmentId}`
+        }
+        disabled={pending}
+        onClick={() => {
+          void (async () => {
+            setPending(true);
+            setError(null);
+            try {
+              await customFetch(`/api/assignments/${assignmentId}/resolution`, {
+                method: action === "resolve" ? "POST" : "DELETE",
+                responseType: "json",
+              });
+              await queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+            } catch {
+              setError("Could not update that quiz. Try again.");
+            } finally {
+              setPending(false);
+            }
+          })();
+        }}
+      >
+        {action === "resolve" ? "Resolve" : "Undo"}
+      </Button>
+      {error ? (
+        <p className="text-sm text-destructive" data-testid="quiz-resolve-error">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 const FALL_DATES = [
   "2026-10-02", "2026-10-09", "2026-10-16", "2026-10-23",
   "2026-10-30", "2026-11-06", "2026-11-13", "2026-11-20",
@@ -206,9 +255,6 @@ export function ClientDashboardView({
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showResolvedQuizzes, setShowResolvedQuizzes] = useState(false);
-  const [pendingQuizId, setPendingQuizId] = useState<string | null>(null);
-  const [resolveError, setResolveError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
   const canResolveQuiz = dashboard.user.role === "student" && !adminPreview;
   const datedSessions: QuizSessionRef[] = [
     ...(dashboard.curriculumSessions?.length
@@ -221,21 +267,6 @@ export function ClientDashboardView({
     now,
     clientTimezone,
   });
-  async function setQuizResolved(assignmentId: string, resolved: boolean) {
-    setPendingQuizId(assignmentId);
-    setResolveError(null);
-    try {
-      await customFetch(`/api/assignments/${assignmentId}/resolution`, {
-        method: resolved ? "POST" : "DELETE",
-        responseType: "json",
-      });
-      await queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
-    } catch {
-      setResolveError("Could not update that quiz. Try again.");
-    } finally {
-      setPendingQuizId(null);
-    }
-  }
   const scopedSessions = sessionsForDashboardRole(
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
@@ -647,7 +678,7 @@ export function ClientDashboardView({
             Quizzes
           </CardTitle>
           <CardDescription>
-            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Open follow-up quizzes stay in this list until they are submitted. The three soonest due dates stay visible; a quiz without its own deadline uses the session start. Show more reveals the rest. Resolve hides a quiz from this active list without deleting it. Past-session quizzes are marked complete.
+            Assigned practice and diagnostics for this account. Open quizzes come first, soonest due date first, including overdue work. A quiz without its own deadline uses the session start, including follow-up homework. Completed quizzes follow, newest first. Show more reveals the rest. Resolve hides a quiz from this active list without deleting it.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -689,16 +720,7 @@ export function ClientDashboardView({
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {canResolveQuiz ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        data-testid={`quiz-resolve-${quiz.assignment.id}`}
-                        disabled={pendingQuizId === quiz.assignment.id}
-                        onClick={() => void setQuizResolved(quiz.assignment.id, true)}
-                      >
-                        Resolve
-                      </Button>
+                      <StudentQuizResolutionButton assignmentId={quiz.assignment.id} action="resolve" />
                     ) : null}
                     {adminPreview ? (
                       <Button asChild variant="ghost" size="sm">
@@ -740,6 +762,7 @@ export function ClientDashboardView({
                     type="button"
                     variant="ghost"
                     size="sm"
+                    aria-expanded={showResolvedQuizzes}
                     data-testid="client-resolved-quizzes-toggle"
                     onClick={() => setShowResolvedQuizzes((value) => !value)}
                   >
@@ -764,27 +787,16 @@ export function ClientDashboardView({
                               <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>
                             </div>
                             {canResolveQuiz ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                data-testid={`quiz-unresolve-${quiz.assignment.id}`}
-                                disabled={pendingQuizId === quiz.assignment.id}
-                                onClick={() => void setQuizResolved(quiz.assignment.id, false)}
-                              >
-                                Undo
-                              </Button>
+                              <StudentQuizResolutionButton
+                                assignmentId={quiz.assignment.id}
+                                action="undo"
+                              />
                             ) : null}
                           </div>
                         );
                       })
                     : null}
                 </div>
-              ) : null}
-              {resolveError ? (
-                <p className="text-sm text-destructive" data-testid="quiz-resolve-error">
-                  {resolveError}
-                </p>
               ) : null}
             </>
           ) : (
