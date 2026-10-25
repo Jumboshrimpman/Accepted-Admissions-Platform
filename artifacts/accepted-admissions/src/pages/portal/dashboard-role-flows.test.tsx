@@ -698,24 +698,24 @@ describe("authenticated role dashboard flows", () => {
     expect(within(quizzes).getByTestId("prework-deadline-today-quiz").textContent).toMatch(
       /Due before your session: .+ GST/,
     );
-    expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
-    expect(within(quizzes).getByTestId("prework-deadline-future-quiz").textContent).toMatch(
-      /Due before your session/,
-    );
+    expect(within(quizzes).queryByTestId("client-quiz-future-quiz")).toBeNull();
     const collapsedIds = [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
       node.getAttribute("data-testid"),
     );
     expect(collapsedIds).toEqual([
-      "client-quiz-today-quiz",
-      "client-quiz-future-quiz",
       "client-quiz-past-live",
+      "client-quiz-past-prework",
+      "client-quiz-today-quiz",
     ]);
     expect(within(quizzes).getByTestId("client-quiz-past-live").textContent).toContain("Complete");
-    expect(within(quizzes).queryByText("Yesterday pre-work")).toBeNull();
-    expect(screen.queryByText("Yesterday pre-work")).toBeNull();
+    expect(within(quizzes).getByTestId("client-quiz-past-prework").textContent).toContain("Complete");
     expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
 
     fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
+    expect(within(quizzes).getByTestId("client-quiz-future-quiz").textContent).toContain("In progress");
+    expect(within(quizzes).getByTestId("prework-deadline-future-quiz").textContent).toMatch(
+      /Due before your session/,
+    );
     const pastPrework = within(quizzes).getByTestId("client-quiz-past-prework");
     const pastLive = within(quizzes).getByTestId("client-quiz-past-live");
     expect(pastPrework.textContent).toContain("Yesterday pre-work");
@@ -728,7 +728,8 @@ describe("authenticated role dashboard flows", () => {
     expect(pastLive.textContent).not.toContain("Due before");
     expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show less");
     fireEvent.click(within(quizzes).getByTestId("assignment-notifications-show-more"));
-    expect(within(quizzes).queryByText("Yesterday pre-work")).toBeNull();
+    expect(within(quizzes).queryByTestId("client-quiz-future-quiz")).toBeNull();
+    expect(within(quizzes).getByTestId("client-quiz-past-prework")).toBeTruthy();
     expect(within(quizzes).getByTestId("client-quiz-today-quiz")).toBeTruthy();
     expect(within(quizzes).getByTestId("assignment-notifications-show-more").textContent).toContain("Show more");
   });
@@ -885,11 +886,11 @@ describe("authenticated role dashboard flows", () => {
       [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
         node.getAttribute("data-testid"),
       ),
-    ).toEqual(["client-quiz-biology", "client-quiz-chemistry", "client-quiz-factoring"]);
+    ).toEqual(["client-quiz-factoring", "client-quiz-geometry-area", "client-quiz-geometry-sat"]);
     expect(within(quizzes).getByTestId("client-quiz-factoring").textContent).toContain("Not started");
     expect(within(quizzes).queryByTestId("client-quiz-sat-math")).toBeNull();
-    expect(within(quizzes).queryByTestId("client-quiz-geometry-area")).toBeNull();
-    expect(within(quizzes).queryByTestId("client-quiz-geometry-sat")).toBeNull();
+    expect(within(quizzes).queryByTestId("client-quiz-biology")).toBeNull();
+    expect(within(quizzes).queryByTestId("client-quiz-chemistry")).toBeNull();
     expect(within(quizzes).queryByText("Algebra pre-work")).toBeNull();
     expect(within(quizzes).getByTestId("client-quiz-factoring").querySelector("a")?.getAttribute("href")).toBe(
       "/portal/assignments/factoring",

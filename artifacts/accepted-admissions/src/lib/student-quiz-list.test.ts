@@ -11,6 +11,7 @@ import {
   classifyStudentQuizzes,
   collapsedStudentQuizzes,
   isPostSessionFollowUpQuiz,
+  studentQuizListDueAt,
   isStandaloneStudentTodo,
   sessionCalendarDayIsPast,
   studentQuizActionLabel,
@@ -79,7 +80,7 @@ test("a session that already ended stays open until that local calendar day ends
   assert.equal(sessionCalendarDayIsPast(meeting, now, "Asia/Dubai"), false);
 });
 
-test("past-session quizzes are completed and collapsed; today and future stay prominent", () => {
+test("past-session quizzes are marked complete and the list sorts by due date", () => {
   const now = new Date("2026-09-24T14:00:00.000Z");
   const assignments = [
     quiz({
@@ -159,7 +160,7 @@ test("past-session quizzes are completed and collapsed; today and future stay pr
   });
   assert.deepEqual(
     collapsed.visible.map((item) => item.assignment.id),
-    ["today-quiz", "future-quiz", "unlinked"],
+    ["unlinked", "past-live", "past-prework"],
   );
   assert.equal(collapsed.canToggle, true);
 
@@ -170,8 +171,84 @@ test("past-session quizzes are completed and collapsed; today and future stay pr
   });
   assert.deepEqual(
     expanded.visible.map((item) => item.assignment.id),
-    ["today-quiz", "future-quiz", "unlinked", "past-live", "past-prework"],
+    ["unlinked", "past-live", "past-prework", "today-quiz", "future-quiz"],
   );
+});
+
+test("quiz list orders by due date, then session start, then the previous order", () => {
+  const now = new Date("2026-10-20T14:00:00.000Z");
+  const sessions = [
+    session({
+      id: "sooner",
+      dateTime: "2026-10-22T12:00:00.000Z",
+    }),
+    session({
+      id: "later",
+      dateTime: "2026-10-30T12:00:00.000Z",
+    }),
+  ];
+  const sameDue = "2026-10-25T12:00:00.000Z";
+  const assignments = [
+    quiz({ id: "undated-b", title: "Bravo drill", sessionId: null, deadline: null }),
+    quiz({ id: "undated-a", title: "Alpha drill", sessionId: null, deadline: null }),
+    quiz({
+      id: "session-later",
+      title: "Later session pre-work",
+      sessionId: "later",
+      deadline: null,
+    }),
+    quiz({
+      id: "explicit-sooner",
+      title: "Explicit sooner",
+      sessionId: "later",
+      deadline: "2026-10-21T12:00:00.000Z",
+    }),
+    quiz({
+      id: "tie-z",
+      title: "Zulu tie",
+      sessionId: null,
+      deadline: sameDue,
+    }),
+    quiz({
+      id: "tie-a",
+      title: "Alpha tie",
+      sessionId: null,
+      deadline: sameDue,
+    }),
+    quiz({
+      id: "session-sooner",
+      title: "Sooner session pre-work",
+      sessionId: "sooner",
+      deadline: null,
+    }),
+  ];
+  assert.equal(
+    studentQuizListDueAt(assignments[2]!, sessions),
+    new Date("2026-10-30T12:00:00.000Z").getTime(),
+  );
+  assert.equal(studentQuizListDueAt(assignments[0]!, sessions), null);
+  const collapsed = collapsedStudentQuizzes(assignments, sessions, {
+    expanded: false,
+    now,
+    clientTimezone: "Asia/Tokyo",
+  });
+  assert.deepEqual(
+    collapsed.ordered.map((item) => item.assignment.id),
+    [
+      "explicit-sooner",
+      "session-sooner",
+      "tie-a",
+      "tie-z",
+      "session-later",
+      "undated-a",
+      "undated-b",
+    ],
+  );
+  assert.deepEqual(
+    collapsed.visible.map((item) => item.assignment.id),
+    ["explicit-sooner", "session-sooner", "tie-a"],
+  );
+  assert.equal(collapsed.hiddenCount, 4);
 });
 
 test("upcoming session pre-work stays at the top with its real question count", () => {
@@ -380,18 +457,22 @@ test("open follow-up quizzes stay in order and collapse after the first three", 
   );
   assert.deepEqual(
     collapsed.visible.map((item) => item.assignment.title),
-    ["Biology pre-work", "Chemistry pre-work", FACTORING_QUIZ_FOLLOW_UP_TITLE],
+    [
+      FACTORING_QUIZ_FOLLOW_UP_TITLE,
+      GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
+      GEOMETRY_SAT_FOLLOW_UP_TITLE,
+    ],
   );
   assert.deepEqual(
     collapsed.ordered.map((item) => item.assignment.title),
     [
-      "Biology pre-work",
-      "Chemistry pre-work",
       FACTORING_QUIZ_FOLLOW_UP_TITLE,
       GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
       GEOMETRY_SAT_FOLLOW_UP_TITLE,
       SAT_MATH_FOLLOW_UP_TITLE,
       "Algebra pre-work",
+      "Biology pre-work",
+      "Chemistry pre-work",
     ],
   );
   assert.equal(

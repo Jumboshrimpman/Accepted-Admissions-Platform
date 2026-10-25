@@ -189,6 +189,45 @@ function preferQuestionedUpcomingPrework<T extends QuizAttempt>(
   });
 }
 
+function quizInstant(value: string | Date | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+/**
+ * Stored deadline when the quiz has one. Otherwise the linked session start.
+ * Quizzes with neither sort after every dated quiz.
+ */
+export function studentQuizListDueAt<T extends QuizAttempt>(
+  assignment: T,
+  sessions: readonly QuizSessionRef[],
+): number | null {
+  const deadline = quizInstant(assignment.deadline);
+  if (deadline != null) return deadline;
+  return quizInstant(sessionForStudentQuiz(assignment, sessions)?.dateTime);
+}
+
+function sortQuizzesByDueDate<T extends QuizAttempt>(
+  items: readonly ClassifiedStudentQuiz<T>[],
+  sessions: readonly QuizSessionRef[],
+): ClassifiedStudentQuiz<T>[] {
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      due: studentQuizListDueAt(item.assignment, sessions),
+    }))
+    .sort((left, right) => {
+      if (left.due == null && right.due == null) return left.index - right.index;
+      if (left.due == null) return 1;
+      if (right.due == null) return -1;
+      if (left.due !== right.due) return left.due - right.due;
+      return left.index - right.index;
+    })
+    .map((entry) => entry.item);
+}
+
 function isUpcomingSessionPrework<T extends QuizAttempt>(
   item: ClassifiedStudentQuiz<T>,
   sessions: readonly QuizSessionRef[],
@@ -222,8 +261,11 @@ export function collapsedStudentQuizzes<T extends QuizAttempt>(
     });
   const upcomingIds = new Set(upcoming.map((item) => item.assignment.id));
   const restOpen = open.filter((item) => !upcomingIds.has(item.assignment.id));
-  const ordered = [...upcoming, ...restOpen, ...classified.archived];
-  // The first three keep this order. Show more reveals the rest; three or fewer show no toggle.
+  const ordered = sortQuizzesByDueDate(
+    [...upcoming, ...restOpen, ...classified.archived],
+    sessions,
+  );
+  // Soonest due date first. Show more reveals the rest; three or fewer show no toggle.
   const initialCount = options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT;
   const hiddenCount = Math.max(0, ordered.length - initialCount);
   return {
