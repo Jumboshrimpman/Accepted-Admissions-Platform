@@ -66,7 +66,7 @@ async function ensureDuringSessionAssignment(
       title: `During session practice — ${session.title}`,
       subject: session.subject,
       instructions:
-        "Work through this original practice sequence with your tutor during the session.",
+        "Work through this original practice sequence with your tutor during the session. This is not a timed prediction quiz.",
       status: "draft",
       timeLimitMinutes: 30,
       maxAttempts: 1,

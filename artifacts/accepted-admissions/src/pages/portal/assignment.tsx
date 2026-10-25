@@ -738,6 +738,7 @@ export default function PortalAssignment() {
     assignment?.deliveryPhase,
     assignment?.title,
   );
+  const untimedInSession = assignment?.deliveryPhase === "during_session";
   const perQuestionFeedback = allowsInSessionPerQuestionFeedback({
     deliveryPhase: assignment?.deliveryPhase,
   });
@@ -828,10 +829,10 @@ export default function PortalAssignment() {
   }, [assignment?.deliveryPhase, attempt]);
 
   useEffect(() => {
-    if (collaborative || autoPaused || attemptStatus !== "active") return;
+    if (untimedInSession || autoPaused || attemptStatus !== "active") return;
     const interval = window.setInterval(() => setRemainingSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
     return () => window.clearInterval(interval);
-  }, [attemptStatus, autoPaused, collaborative]);
+  }, [attemptStatus, autoPaused, untimedInSession]);
 
   useEffect(() => {
     leaveRef.current.status = attempt?.status;
@@ -1034,11 +1035,11 @@ export default function PortalAssignment() {
   }, [attemptId, assignmentId, localResponses, queryClient, submitAttempt, viewer]);
 
   useEffect(() => {
-    if (collaborative) return;
+    if (untimedInSession) return;
     if (attempt?.status === "active" && remainingSeconds <= 0 && shouldAutoSubmitOnExpiry(answeredCount)) {
       submit();
     }
-  }, [answeredCount, attempt?.status, collaborative, remainingSeconds, submit]);
+  }, [answeredCount, attempt?.status, remainingSeconds, submit, untimedInSession]);
 
   const applySavedFeedback = (questionId: string, saved: AttemptResponse) => {
     const revealed = isQuestionFeedbackRevealed(saved);
@@ -1224,10 +1225,12 @@ export default function PortalAssignment() {
               </Badge>
               <CardTitle className="text-3xl">{studentFacingCopy(assignment.title)}</CardTitle>
               <div className="mt-3 flex gap-4 text-sm text-muted-foreground">
-                <span>
-                  <Timer className="mr-1 inline h-4 w-4" />
-                  {assignment.timeLimitMinutes} min
-                </span>
+                {untimedInSession ? null : (
+                  <span>
+                    <Timer className="mr-1 inline h-4 w-4" />
+                    {assignment.timeLimitMinutes} min
+                  </span>
+                )}
                 <span>{assignment.questionCount} questions</span>
               </div>
               <PreworkDeadlineNote
@@ -1352,8 +1355,10 @@ export default function PortalAssignment() {
         <h2 className="text-3xl font-bold">Attempt paused</h2>
         <p className="max-w-md text-lg text-muted-foreground">
           Your answers and place in the quiz are saved. This attempt is still in progress and has
-          not been submitted. Time remaining: {formatTime(remainingSeconds)}. Resume brings you
-          back to this question.
+          not been submitted.
+          {untimedInSession
+            ? " Resume brings you back to this question."
+            : ` Time remaining: ${formatTime(remainingSeconds)}. Resume brings you back to this question.`}
         </p>
         {viewer ? (
           <p className="text-sm text-muted-foreground">Viewer mode is read only.</p>
@@ -1554,12 +1559,15 @@ export default function PortalAssignment() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <div
-            className={`rounded-md px-3 py-1 font-mono text-lg font-bold ${remainingSeconds <= 60 ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}
-          >
-            <Timer className="mr-1 inline h-4 w-4" />
-            {formatTime(remainingSeconds)}
-          </div>
+          {untimedInSession ? null : (
+            <div
+              className={`rounded-md px-3 py-1 font-mono text-lg font-bold ${remainingSeconds <= 60 ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}
+              data-testid="quiz-timer"
+            >
+              <Timer className="mr-1 inline h-4 w-4" />
+              {formatTime(remainingSeconds)}
+            </div>
+          )}
           {!viewer && (
             <>
               <Button

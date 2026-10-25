@@ -485,6 +485,23 @@ describe("student attempt UI", () => {
     expect(screen.getByTestId("empty-submit-error").textContent).toMatch(/empty attempt is not saved/i);
   });
 
+  test("in-session work hides the countdown and timed pre-work keeps it", () => {
+    mocks.deliveryPhase = "during_session";
+    mocks.title = "Hard SAT in-session";
+    const practice = render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-timer")).toBeNull();
+    expect(screen.queryByText(/min$/)).toBeNull();
+    practice.unmount();
+    mocks.title = "In-session homework completion";
+    const homework = render(<PortalAssignment />);
+    expect(screen.queryByTestId("quiz-timer")).toBeNull();
+    homework.unmount();
+    mocks.deliveryPhase = "before_session";
+    mocks.title = "Practice quiz";
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-timer")).toBeTruthy();
+  });
+
   test("timer expiry with zero answers does not auto-submit or show a finished result", () => {
     mocks.attempt.remainingSeconds = 0;
     mocks.attempt.responses = [];
