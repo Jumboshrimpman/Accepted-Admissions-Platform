@@ -12,6 +12,7 @@ import { ensureGeometryAreaVolumeFollowUp } from "./lib/geometry-area-volume-fol
 import { ensureMichelleXavierSessionFollowUps } from "./lib/michelle-xavier-session-follow-up";
 import { ensureMichelleOct18ReviewQuiz } from "./lib/michelle-oct18-review-quiz";
 import { ensureSophiaTutorLinks } from "./lib/sophia-tutor-links";
+import { ensureTaitoOct23RemainingHomework } from "./lib/taito-oct23-remaining-homework";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 import { ensureCollegeConsultingProvision } from "./lib/college-consulting-provision";
 
@@ -54,6 +55,11 @@ void ensureRyoTaitoParentMirror()
           ),
         )
         .catch(() => logger.warn("Taito Oct 30 hard pre-work check skipped"))
+        .then(() =>
+          ensureTaitoOct23RemainingHomework()
+            .then((result) => logger.info(result, "Taito Oct 23 remaining homework ready"))
+            .catch((err) => logger.warn({ err }, "Taito Oct 23 remaining homework skipped")),
+        )
         .then(() =>
           retireDuplicateXavierIdentities().catch((err) =>
             logger.warn({ err }, "Xavier identity retirement skipped"),
