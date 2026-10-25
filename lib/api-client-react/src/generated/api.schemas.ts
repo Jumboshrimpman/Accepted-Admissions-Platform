@@ -409,6 +409,7 @@ export interface BookingTutor {
   hourlyRateCents?: number | null;
   prepaidHours?: number;
   bookable?: boolean;
+  comingSoon?: boolean;
   /** @nullable */
   serviceName?: string | null;
 }

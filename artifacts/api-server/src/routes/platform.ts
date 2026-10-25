@@ -358,6 +358,11 @@ import {
   satBookingTutorChoiceMessage,
   victoriaBookingRefused,
 } from "../lib/victoria-booking";
+import {
+  sophiaMayBookVictoria,
+  sophiaVictoriaComingSoon,
+  sophiaVictoriaIdentity,
+} from "../lib/sophia-tutor-links";
 import { selectAssignedPreviewBookingTutor } from "../lib/admin-client-preview";
 import {
   isLibraryAssetKind,
@@ -802,6 +807,7 @@ function satPortalTutorNames(user: {
 } | null | undefined): string[] {
   const names: string[] = sharedSatBookingTutorNames();
   if (canBookSatTutor("nika", user)) names.push(NIKA_NAME);
+  if (user?.id === SOPHIA_SLEIMAN_SAT_USER_ID) names.push(VICTORIA_DISPLAY_NAME);
   return names;
 }
 
@@ -5402,7 +5408,7 @@ async function bookingTutor(
   if (!tutor || (!allowExistingSessionTutor && !tutor.active)) {
     throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
   }
-  if (victoriaBookingRefused(tutor)) {
+  if (victoriaBookingRefused(tutor) && !sophiaMayBookVictoria(tutor, bookerUserId)) {
     throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
   }
   if (!allowExistingSessionTutor) {
@@ -5412,6 +5418,8 @@ async function bookingTutor(
       tutor.bookingEligible &&
       tutor.name === NIKA_NAME &&
       (await bookerMayBookNika(bookerUserId));
+    const onSophiaVictoriaRoster =
+      tutor.bookingEligible && sophiaMayBookVictoria(tutor, bookerUserId);
     if (isNeelDharniUser(bookerUserId) && !consultingTutorAllowed(tutor)) {
       throw new BookingError(
         403,
@@ -5421,7 +5429,7 @@ async function bookingTutor(
     }
     const allowed = isNeelDharniUser(bookerUserId)
       ? consultingTutorAllowed(tutor)
-      : onSharedRoster || onNikaRoster;
+      : onSharedRoster || onNikaRoster || onSophiaVictoriaRoster;
     if (!allowed) {
       throw new BookingError(404, "TUTOR_NOT_FOUND", "That tutor is not available for booking.");
     }
@@ -8149,6 +8157,7 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
         ? catalog.filter((product) => satTutorKeyForSlug(product.slug) === tutorKey).map((product) => product.id)
         : [];
       const connected = tutor.calendarStatus === "connected";
+      const comingSoon = sophiaVictoriaComingSoon(tutor, req.appUser?.id);
       const subjects = tutor.subjects.some((subject) => subject.toLowerCase() === "sat")
         ? tutor.subjects
         : ["SAT", ...tutor.subjects];
@@ -8167,7 +8176,8 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
               allowLegacy: allowsLegacySatPool(tutorKey, req.appUser),
             })
           : 0,
-        bookable: connected,
+        bookable: comingSoon ? false : connected,
+        comingSoon,
         serviceName: "SAT",
       };
     }),
@@ -8291,7 +8301,7 @@ async function assertPrepaidHoursForTutor(
     remaining = remainingCreditHoursForProducts(entries, await consultingCreditProductIds(tutor));
   } else {
     const tutorKey = satTutorKeyForName(tutor.name);
-    if (!tutorKey || !canBookSatTutor(tutorKey, user)) {
+    if (!tutorKey || (!canBookSatTutor(tutorKey, user) && !sophiaVictoriaIdentity(tutor, user.id))) {
       throw new BookingError(403, "INVALID_TUTOR", satBookingTutorChoiceMessage());
     }
     const catalog = await satCreditCatalog();
@@ -8436,7 +8446,11 @@ async function respondWithPrepaidBooking(
     const adminWriter = calendarPlan.mode === "admin" ? calendarPlan.writer : null;
     const appCalendarId = access?.connection.appCalendarId?.trim() ?? "";
     const tutorKey = consulting ? null : satTutorKeyForName(tutor.name);
-    if (!consulting && (!tutorKey || !canBookSatTutor(tutorKey, req.appUser))) {
+    if (
+      !consulting &&
+      (!tutorKey ||
+        (!canBookSatTutor(tutorKey, req.appUser) && !sophiaVictoriaIdentity(tutor, req.appUser?.id)))
+    ) {
       throw new BookingError(403, "INVALID_TUTOR", satBookingTutorChoiceMessage());
     }
     const course = consulting
@@ -9353,19 +9367,24 @@ async function resolveDirectBookingProduct(
       name: tutorProfilesTable.name,
       email: tutorProfilesTable.email,
       userId: tutorProfilesTable.userId,
+      calendarStatus: tutorProfilesTable.calendarStatus,
     })
     .from(tutorProfilesTable)
     .where(eq(tutorProfilesTable.id, intent.tutorProfileId))
     .limit(1);
   if (!tutor) return { status: 404 as const, error: "A tutor is required." };
-  if (victoriaBookingRefused(tutor)) {
+  if (victoriaBookingRefused(tutor) && !sophiaMayBookVictoria(tutor, user.id)) {
     return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
   }
   const consulting = options.consulting;
   const tutorKey = consulting
     ? collegeConsultingTutorKeyForProfile(tutor)
     : satTutorKeyForName(tutor.name);
-  if (!tutorKey || (!consulting && !canBookSatTutor(tutorKey, user)) || victoriaBookingRefused({ tutorKey })) {
+  if (
+    !tutorKey ||
+    (!consulting && !canBookSatTutor(tutorKey, user) && !sophiaMayBookVictoria(tutor, user.id)) ||
+    (victoriaBookingRefused({ tutorKey }) && !sophiaMayBookVictoria(tutor, user.id))
+  ) {
     return { status: 404 as const, error: "This tutor cannot be checked out from the booking calendar." };
   }
   const products = await db
