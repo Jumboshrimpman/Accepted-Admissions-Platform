@@ -11,6 +11,7 @@ import { ensureMichelleGeometryFollowUp } from "./lib/michelle-geometry-follow-u
 import { ensureGeometryAreaVolumeFollowUp } from "./lib/geometry-area-volume-follow-up";
 import { ensureMichelleXavierSessionFollowUps } from "./lib/michelle-xavier-session-follow-up";
 import { ensureMichelleOct18ReviewQuiz } from "./lib/michelle-oct18-review-quiz";
+import { ensureSophiaTutorLinks } from "./lib/sophia-tutor-links";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 import { ensureCollegeConsultingProvision } from "./lib/college-consulting-provision";
 
@@ -86,6 +87,11 @@ void ensureRyoTaitoParentMirror()
           ensureMichelleOct18ReviewQuiz()
             .then((result) => logger.info(result, "Michelle Oct 18 review quiz ready"))
             .catch((err) => logger.warn({ err }, "Michelle Oct 18 review quiz skipped")),
+        )
+        .then(() =>
+          ensureSophiaTutorLinks()
+            .then((result) => logger.info(result, "Sophia tutor links ready"))
+            .catch((err) => logger.warn({ err }, "Sophia tutor links skipped")),
         )
         .then(() => xavierCalendarIdentityAlignment())
         .then((alignment) =>

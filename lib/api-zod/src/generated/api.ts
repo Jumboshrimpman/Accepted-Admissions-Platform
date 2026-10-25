@@ -2597,6 +2597,7 @@ export const ListBookingTutorsResponseItem = zod.object({
   "hourlyRateCents": zod.number().nullish(),
   "prepaidHours": zod.number().optional(),
   "bookable": zod.boolean().optional(),
+  "comingSoon": zod.boolean().optional(),
   "serviceName": zod.string().nullish()
 })
 export const ListBookingTutorsResponse = zod.array(ListBookingTutorsResponseItem)

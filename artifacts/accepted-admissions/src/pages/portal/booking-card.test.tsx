@@ -900,4 +900,47 @@ describe("client availability calendar", () => {
       mocks.currentUser.id = previousUserId;
     }
   });
+
+  test("Victoria coming soon shows her rate and hides slots and reserve", async () => {
+    mocks.tutorsQuery.data = [
+      {
+        id: "tutor-victoria",
+        name: "Victoria Wijerathnayapa",
+        title: "SAT Tutor",
+        photoUrl: null,
+        biography: null,
+        subjects: ["SAT"],
+        calendarStatus: "disconnected",
+        providerStatus: "disconnected",
+        hourlyRateCents: 13000,
+        bookable: false,
+        comingSoon: true,
+        serviceName: "SAT",
+      },
+      {
+        id: "tutor-xavier",
+        name: "Xavier Morales",
+        title: "SAT Tutor",
+        photoUrl: null,
+        biography: null,
+        subjects: ["SAT"],
+        calendarStatus: "connected",
+        providerStatus: "connected",
+        hourlyRateCents: 20000,
+        bookable: true,
+        comingSoon: false,
+        serviceName: "SAT",
+      },
+    ];
+    render(<BookingCard />);
+    fireEvent.click(screen.getByRole("tab", { name: "Victoria" }));
+    expect(screen.getByTestId("booking-tutor-coming-soon").textContent).toMatch(/Coming soon/);
+    expect(screen.getByTestId("booking-tutor-coming-soon").textContent).toMatch(/\$130\/hr/);
+    expect(screen.queryByText("Available times with Victoria")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reserve this session" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Xavier" }));
+    await waitFor(() => {
+      expect(screen.getByText("Available times with Xavier")).toBeTruthy();
+    });
+  });
 });

@@ -4,6 +4,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { SOPHIA_SLEIMAN_SAT_USER_ID, allowsLegacySatPool, canBookSatTutor } from "./sat-tutor-pricing.ts";
 import {
+  sophiaMayBookVictoria,
+  sophiaVictoriaComingSoon,
+  sophiaVictoriaIdentity,
+} from "./sophia-tutor-links.ts";
+import {
   VICTORIA_BOOKING_ENABLED,
   isVictoriaCheckoutSlug,
   satBookingTutorChoiceMessage,
@@ -35,6 +40,15 @@ test("Victoria is hidden from every booking client while her hour pool stays", (
   assert.equal(victoriaBookingRefused({ slug: "sat-eunice-60" }), false);
   assert.match(satBookingTutorChoiceMessage(), /Eunice or Xavier/);
   assert.doesNotMatch(satBookingTutorChoiceMessage(), /Victoria/);
+  const victoria = { name: "Victoria Wijerathnayapa", calendarStatus: "disconnected" };
+  assert.equal(sophiaVictoriaComingSoon(victoria, sophia.id), true);
+  assert.equal(sophiaMayBookVictoria(victoria, sophia.id), false);
+  assert.equal(sophiaVictoriaComingSoon({ ...victoria, calendarStatus: "connected" }, sophia.id), false);
+  assert.equal(sophiaMayBookVictoria({ ...victoria, calendarStatus: "connected" }, sophia.id), true);
+  assert.equal(sophiaVictoriaIdentity(victoria, other.id), false);
+  assert.equal(sophiaVictoriaComingSoon(victoria, other.id), false);
+  assert.equal(sophiaMayBookVictoria({ ...victoria, calendarStatus: "connected" }, other.id), false);
+  assert.equal(sophiaVictoriaComingSoon({ name: "Eunice Chon" }, sophia.id), false);
 });
 
 test("booking APIs refuse Victoria and the portal copy does not offer her", async () => {

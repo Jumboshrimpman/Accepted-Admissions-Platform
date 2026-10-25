@@ -2522,6 +2522,7 @@ components:
         hourlyRateCents: { type: ["number", "null"] }
         prepaidHours: { type: number }
         bookable: { type: boolean }
+        comingSoon: { type: boolean }
         serviceName: { type: ["string", "null"] }
     BookingAvailability:
       type: object

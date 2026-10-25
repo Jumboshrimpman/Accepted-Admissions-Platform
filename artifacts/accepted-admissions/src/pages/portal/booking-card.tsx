@@ -103,6 +103,7 @@ function BookingTutorOption({
     providerStatus?: string | null;
     hourlyRateCents?: number | null;
     bookable?: boolean | null;
+    comingSoon?: boolean | null;
     serviceName?: string | null;
   };
   selected: boolean;
@@ -172,11 +173,13 @@ function BookingTutorOption({
               typeof tutor.hourlyRateCents === "number"
                 ? `$${Math.round(tutor.hourlyRateCents / 100)}/hr · `
                 : ""}
-              {tutor.providerStatus === "connected"
-                ? "Calendar connected — times below"
-                : tutor.bookable === false
-                  ? "Not bookable until Google Calendar is connected"
-                  : "Times are listed below"}
+              {tutor.comingSoon
+                ? "Coming soon"
+                : tutor.providerStatus === "connected"
+                  ? "Calendar connected — times below"
+                  : tutor.bookable === false
+                    ? "Not bookable until Google Calendar is connected"
+                    : "Times are listed below"}
             </p>
           </div>
         </div>
@@ -351,6 +354,7 @@ export function BookingCard({
           prepaidHours: undefined,
           hourlyRateCents: null,
           bookable: true,
+          comingSoon: false,
           serviceName: null,
           tagline: null,
         }
@@ -375,7 +379,7 @@ export function BookingCard({
     },
     {
       query: {
-        enabled: Boolean(selectedTutorId),
+        enabled: Boolean(selectedTutorId) && selectedTutor?.comingSoon !== true,
         staleTime: 30_000,
         queryKey: getGetBookingAvailabilityQueryKey({
           tutorProfileId: selectedTutorId,
@@ -734,7 +738,23 @@ export function BookingCard({
               ))}
             </div>
 
-            {!reschedulingSessionId && (
+            {selectedTutor?.comingSoon ? (
+              <div
+                className="rounded-2xl border border-dashed bg-muted/40 p-4"
+                data-testid="booking-tutor-coming-soon"
+              >
+                <p className="font-semibold">Coming soon</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {portalTutorFirstName(selectedTutor.name)} is on your roster
+                  {typeof selectedTutor.hourlyRateCents === "number"
+                    ? ` at $${Math.round(selectedTutor.hourlyRateCents / 100)}/hr`
+                    : ""}
+                  . Booking stays closed until her Google Calendar is connected.
+                </p>
+              </div>
+            ) : null}
+
+            {!selectedTutor?.comingSoon && !reschedulingSessionId && (
               <div className="flex flex-wrap gap-2" role="group" aria-label="Session length">
                 {(
                   [
@@ -763,7 +783,7 @@ export function BookingCard({
               </div>
             )}
 
-            {selectedTutor && (
+            {selectedTutor && !selectedTutor.comingSoon && (
               <div className="rounded-2xl bg-muted/40 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
