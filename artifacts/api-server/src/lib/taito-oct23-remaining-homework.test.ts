@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { isPostSessionFollowUpTitle } from "./post-session-follow-up.ts";
 import {
   OCT23_REMAINING_ASSIGNMENT_PREFIX,
   OCT23_REMAINING_MAX_ATTEMPTS,
   OCT23_REMAINING_SOURCE_ATTEMPT_ID,
   OCT23_REMAINING_TIME_LIMIT_MINUTES,
   OCT23_REMAINING_TITLE,
+  pickTaitoOct23HomeworkSession,
   unansweredQuestionIds,
 } from "./taito-oct23-remaining-homework.ts";
-import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
+import { TAITO_STUDENT_EMAIL, taitoSessionDateTime } from "./session-schedule.ts";
 
 test("unanswered Oct 23 questions keep source order and ignore blanks", () => {
   const questions = Array.from({ length: 10 }, (_, position) => ({
@@ -38,11 +40,69 @@ test("unanswered Oct 23 questions keep source order and ignore blanks", () => {
   assert.equal(OCT23_REMAINING_SOURCE_ATTEMPT_ID, "e38f62db-f088-435c-aa84-4c5480707f59");
   assert.equal(OCT23_REMAINING_ASSIGNMENT_PREFIX, "84c9dea1");
   assert.equal(TAITO_STUDENT_EMAIL, "taito0525@gmail.com");
+  assert.equal(isPostSessionFollowUpTitle(OCT23_REMAINING_TITLE), true);
+  const portal = readFileSync(
+    new URL("../../../accepted-admissions/src/lib/student-quiz-list.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(portal, /Oct 23 In-Session Practice — Remaining Questions/);
   const source = readFileSync(new URL("./taito-oct23-remaining-homework.ts", import.meta.url), "utf8");
   const startup = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
   assert.match(startup, /ensureTaitoOct23RemainingHomework/);
   assert.doesNotMatch(source, /sendEmail|nodemailer|resend|clerkClient|@clerk\//i);
   assert.doesNotMatch(source, /correctAnswer/);
+});
+
+test("homework attaches to Taito's Oct 23 English session, not a later or SAT meeting", () => {
+  const studentUserId = "taito";
+  const now = new Date("2026-12-01T12:00:00.000Z");
+  const english = {
+    id: "english-oct-23",
+    clientUserId: studentUserId,
+    tutorUserId: "nika",
+    subject: "IELTS",
+    dateTime: taitoSessionDateTime("2026-10-23"),
+    timezone: "Asia/Tokyo",
+    status: "published",
+    bookingStatus: "confirmed",
+    cancelledAt: null,
+  };
+  const laterEnglish = {
+    ...english,
+    id: "english-nov-13",
+    dateTime: taitoSessionDateTime("2026-11-13"),
+  };
+  const satSameDay = {
+    ...english,
+    id: "sat-oct-23",
+    subject: "SAT",
+    tutorUserId: "eunice",
+  };
+  const otherStudent = { ...english, id: "other-english", clientUserId: "someone-else" };
+  const picked = pickTaitoOct23HomeworkSession({
+    studentUserId,
+    sourceSessionId: english.id,
+    sessions: [laterEnglish, satSameDay, otherStudent, english],
+    now,
+  });
+  assert.equal(picked?.id, english.id);
+  assert.equal(picked?.subject, "IELTS");
+  const fallback = pickTaitoOct23HomeworkSession({
+    studentUserId,
+    sourceSessionId: "missing-source",
+    sessions: [laterEnglish, satSameDay, otherStudent, english],
+    now,
+  });
+  assert.equal(fallback?.id, english.id);
+  assert.equal(
+    pickTaitoOct23HomeworkSession({
+      studentUserId,
+      sourceSessionId: satSameDay.id,
+      sessions: [satSameDay],
+      now,
+    }),
+    null,
+  );
 });
 
 const hasDatabase = Boolean(process.env.DATABASE_URL?.trim());
@@ -60,6 +120,7 @@ test(
       db,
       questionsTable,
       responsesTable,
+      sessionsTable,
       usersTable,
     } = await import("@workspace/db");
     const { ensureTaitoOct23RemainingHomework } = await import(
@@ -72,6 +133,7 @@ test(
     const createdQuestionIds: string[] = [];
     const createdAssignmentIds: string[] = [];
     const createdAttemptIds: string[] = [];
+    const createdSessionIds: string[] = [];
     const [course] = await db
       .insert(coursesTable)
       .values({
@@ -82,7 +144,7 @@ test(
       })
       .returning();
     createdCourseIds.push(course!.id);
-    const insertUser = async (email: string, role: "student") => {
+    const insertUser = async (email: string, role: "student" | "tutor") => {
       const [created] = await db
         .insert(usersTable)
         .values({
@@ -98,15 +160,32 @@ test(
     try {
       const student = await insertUser(studentEmail, "student");
       const other = await insertUser(`other-oct23-${suffix}@example.invalid`, "student");
+      const tutor = await insertUser(`nika-oct23-${suffix}@example.invalid`, "tutor");
+      const [englishSession] = await db
+        .insert(sessionsTable)
+        .values({
+          courseId: course!.id,
+          clientUserId: student.id,
+          tutorUserId: tutor.id,
+          dateTime: taitoSessionDateTime("2026-10-23"),
+          timezone: "Asia/Tokyo",
+          subject: "IELTS",
+          title: `English Oct 23 ${suffix}`,
+          status: "published",
+          bookingStatus: "confirmed",
+        })
+        .returning();
+      createdSessionIds.push(englishSession!.id);
       const sourceAssignmentId = `${OCT23_REMAINING_ASSIGNMENT_PREFIX}-0000-4000-8000-${suffix}0000`.slice(0, 36);
       const [sourceAssignment] = await db
         .insert(assignmentsTable)
         .values({
           id: sourceAssignmentId,
           courseId: course!.id,
+          sessionId: englishSession!.id,
           deliveryPhase: "during_session",
           title: `Oct 23 source ${suffix}`,
-          subject: "SAT",
+          subject: "IELTS",
           instructions: "Original in-session set",
           status: "published",
           timeLimitMinutes: 30,
@@ -221,11 +300,14 @@ test(
         );
       assert.ok(homework);
       createdAssignmentIds.push(homework!.id);
-      assert.equal(homework?.sessionId, null);
+      assert.equal(homework?.sessionId, englishSession!.id);
+      assert.equal(homework?.assignedTutorUserId, tutor.id);
+      assert.equal(homework?.subject, "IELTS");
       assert.equal(homework?.deliveryPhase, "before_session");
       assert.equal(Number(homework?.timeLimitMinutes), 60);
       assert.equal(Number(homework?.maxAttempts), 2);
       assert.equal(homework?.assignedStudentUserId, student.id);
+      assert.equal(created.sessionLinked, true);
       const links = await db
         .select({ questionId: assignmentQuestionsTable.questionId })
         .from(assignmentQuestionsTable)
@@ -252,6 +334,10 @@ test(
       assert.equal(Number(sourceAssignmentAfter?.timeLimitMinutes), 30);
       assert.equal(Number(sourceAssignmentAfter?.maxAttempts), 1);
 
+      await db
+        .update(assignmentsTable)
+        .set({ sessionId: null, assignedTutorUserId: null })
+        .where(eq(assignmentsTable.id, homework!.id));
       const again = await ensureTaitoOct23RemainingHomework({
         attemptId: sourceAttempt!.id,
         studentEmail,
@@ -259,6 +345,15 @@ test(
       assert.equal(again.action, "unchanged");
       assert.equal(again.remaining, 6);
       assert.equal(again.created, false);
+      assert.equal(again.sessionLinked, true);
+      const [reattached] = await db
+        .select()
+        .from(assignmentsTable)
+        .where(eq(assignmentsTable.id, homework!.id));
+      assert.equal(reattached?.sessionId, englishSession!.id);
+      assert.equal(reattached?.assignedTutorUserId, tutor.id);
+      assert.equal(Number(reattached?.timeLimitMinutes), 60);
+      assert.equal(Number(reattached?.maxAttempts), 2);
       const copies = await db
         .select({ id: assignmentsTable.id })
         .from(assignmentsTable)
@@ -290,6 +385,9 @@ test(
       }
       if (createdQuestionIds.length > 0) {
         await db.delete(questionsTable).where(inArray(questionsTable.id, createdQuestionIds));
+      }
+      if (createdSessionIds.length > 0) {
+        await db.delete(sessionsTable).where(inArray(sessionsTable.id, createdSessionIds));
       }
       if (createdUserIds.length > 0) {
         await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));

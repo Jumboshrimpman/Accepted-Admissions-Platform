@@ -5,16 +5,22 @@ import {
   attemptsTable,
   db,
   responsesTable,
+  sessionsTable,
   usersTable,
 } from "@workspace/db";
 import { logger } from "./logger.ts";
+import { OCT23_REMAINING_HOMEWORK_TITLE } from "./post-session-follow-up.ts";
 import { isRecordedAnswer } from "./student-attempt-guards.ts";
-import { TAITO_STUDENT_EMAIL } from "./session-schedule.ts";
+import {
+  matchesTaitoScheduledDate,
+  TAITO_FIRST_ENGLISH_DATE_KEY,
+  TAITO_STUDENT_EMAIL,
+} from "./session-schedule.ts";
 
 /** Taito's expired Oct 23 in-session attempt. Its stored result stays as history. */
 export const OCT23_REMAINING_SOURCE_ATTEMPT_ID = "e38f62db-f088-435c-aa84-4c5480707f59";
 export const OCT23_REMAINING_ASSIGNMENT_PREFIX = "84c9dea1";
-export const OCT23_REMAINING_TITLE = "Oct 23 In-Session Practice — Remaining Questions";
+export const OCT23_REMAINING_TITLE = OCT23_REMAINING_HOMEWORK_TITLE;
 export const OCT23_REMAINING_TIME_LIMIT_MINUTES = 60;
 export const OCT23_REMAINING_MAX_ATTEMPTS = 2;
 
@@ -27,7 +33,66 @@ export type TaitoOct23RemainingResult = {
   remaining: number;
   linked: number;
   created: boolean;
+  sessionLinked: boolean;
 };
+
+export type Oct23HomeworkSession = {
+  id: string;
+  clientUserId: string | null;
+  tutorUserId: string | null;
+  subject: string;
+  dateTime: Date;
+  timezone: string | null;
+  status?: string | null;
+  bookingStatus?: string | null;
+  cancelledAt?: Date | null;
+};
+
+function isEnglishSubject(subject: string | null | undefined): boolean {
+  const value = subject?.trim().toLowerCase() ?? "";
+  return value.includes("ielts") || value.includes("english");
+}
+
+function sessionIsOpen(session: Oct23HomeworkSession): boolean {
+  if (session.cancelledAt) return false;
+  const booking = session.bookingStatus?.trim().toLowerCase() ?? "";
+  if (booking === "cancelled" || booking === "canceled") return false;
+  return (session.status ?? "").trim().toLowerCase() !== "archived";
+}
+
+/**
+ * Taito's Oct 23 English session. Prefer the in-session set's own session.
+ * A later meeting, an SAT meeting, or another student's meeting does not match.
+ */
+export function pickTaitoOct23HomeworkSession(input: {
+  studentUserId: string;
+  sourceSessionId?: string | null;
+  sessions: readonly Oct23HomeworkSession[];
+  now?: Date;
+}): Oct23HomeworkSession | null {
+  const now = input.now ?? new Date();
+  const eligible = input.sessions.filter((session) => {
+    if (session.clientUserId !== input.studentUserId) return false;
+    if (!sessionIsOpen(session)) return false;
+    if (!isEnglishSubject(session.subject)) return false;
+    if (session.dateTime.getTime() > now.getTime()) return false;
+    return matchesTaitoScheduledDate(
+      {
+        dateTime: session.dateTime,
+        timezone: session.timezone,
+        clientUserId: session.clientUserId,
+        taitoUserId: input.studentUserId,
+      },
+      TAITO_FIRST_ENGLISH_DATE_KEY,
+    );
+  });
+  const source = input.sourceSessionId
+    ? eligible.find((session) => session.id === input.sourceSessionId)
+    : undefined;
+  if (source) return source;
+  eligible.sort((left, right) => right.dateTime.getTime() - left.dateTime.getTime());
+  return eligible[0] ?? null;
+}
 
 type QuestionLink = { questionId: string; position: number };
 type AttemptResponse = { questionId: string; finalAnswer: string | null };
@@ -48,7 +113,7 @@ export function unansweredQuestionIds(
 }
 
 function skipped(reason: string, remaining = 0): TaitoOct23RemainingResult {
-  return { action: "skipped", reason, remaining, linked: 0, created: false };
+  return { action: "skipped", reason, remaining, linked: 0, created: false, sessionLinked: false };
 }
 
 function normalizeEmail(email: string | null | undefined): string {
@@ -121,6 +186,7 @@ export async function ensureTaitoOct23RemainingHomework(options?: {
       id: assignmentsTable.id,
       courseId: assignmentsTable.courseId,
       subject: assignmentsTable.subject,
+      sessionId: assignmentsTable.sessionId,
     })
     .from(assignmentsTable)
     .where(eq(assignmentsTable.id, attempt.assignmentId))
@@ -159,28 +225,102 @@ export async function ensureTaitoOct23RemainingHomework(options?: {
     .where(eq(responsesTable.attemptId, attempt.id));
   const remainingIds = unansweredQuestionIds(questions, responses);
 
-  const existing = await db
-    .select({ id: assignmentsTable.id })
+  const studentSessions = await db
+    .select({
+      id: sessionsTable.id,
+      clientUserId: sessionsTable.clientUserId,
+      tutorUserId: sessionsTable.tutorUserId,
+      subject: sessionsTable.subject,
+      dateTime: sessionsTable.dateTime,
+      timezone: sessionsTable.timezone,
+      status: sessionsTable.status,
+      bookingStatus: sessionsTable.bookingStatus,
+      cancelledAt: sessionsTable.cancelledAt,
+    })
+    .from(sessionsTable)
+    .where(eq(sessionsTable.clientUserId, student.id));
+  const target = pickTaitoOct23HomeworkSession({
+    studentUserId: student.id,
+    sourceSessionId: source.sessionId,
+    sessions: studentSessions,
+  });
+
+  const titled = await db
+    .select()
     .from(assignmentsTable)
     .where(
       and(
         eq(assignmentsTable.title, OCT23_REMAINING_TITLE),
-        eq(assignmentsTable.assignedStudentUserId, student.id),
         ne(assignmentsTable.status, "archived"),
       ),
     );
-  if (existing.length > 1) {
+  const mine = titled.filter((row) => row.assignedStudentUserId === student.id);
+  const unassignedMasters = titled.filter(
+    (row) =>
+      row.assignedStudentUserId == null &&
+      row.sessionId == null &&
+      row.courseId === source.courseId,
+  );
+  const candidates = [
+    ...mine,
+    ...unassignedMasters.filter((row) => !mine.some((owned) => owned.id === row.id)),
+  ];
+  if (candidates.length > 1) {
     const result = skipped("duplicate", remainingIds.length);
     logger.info(result, "Taito Oct 23 remaining homework skipped");
     return result;
   }
 
-  const already = existing[0];
+  const already = candidates[0];
   if (already) {
+    if (already.sessionId && target && already.sessionId !== target.id) {
+      const result = skipped("session_conflict", remainingIds.length);
+      logger.info(result, "Taito Oct 23 remaining homework skipped");
+      return result;
+    }
+    if (!target) {
+      const result: TaitoOct23RemainingResult = {
+        action: "unchanged",
+        reason: "session_missing",
+        remaining: remainingIds.length,
+        linked: 0,
+        created: false,
+        sessionLinked: false,
+      };
+      logger.info(result, "Taito Oct 23 remaining homework ready");
+      return result;
+    }
     const linked = await linkedQuestionIds(already.id);
     const started = (await attemptCount(already.id)) > 0;
     if (!started && remainingIds.length > 0 && linked.join() !== remainingIds.join()) {
       await replaceLinks(already.id, remainingIds);
+    }
+    const limitsDrift =
+      !started &&
+      (Number(already.timeLimitMinutes) !== OCT23_REMAINING_TIME_LIMIT_MINUTES ||
+        Number(already.maxAttempts) !== OCT23_REMAINING_MAX_ATTEMPTS);
+    const needsAttachment =
+      already.sessionId !== target.id ||
+      already.assignedStudentUserId !== student.id ||
+      already.assignedTutorUserId !== target.tutorUserId ||
+      limitsDrift;
+    if (needsAttachment) {
+      await db
+        .update(assignmentsTable)
+        .set({
+          sessionId: target.id,
+          assignedStudentUserId: student.id,
+          assignedTutorUserId: target.tutorUserId,
+          deliveryPhase: "before_session",
+          subject: source.subject,
+          ...(limitsDrift
+            ? {
+                timeLimitMinutes: OCT23_REMAINING_TIME_LIMIT_MINUTES,
+                maxAttempts: OCT23_REMAINING_MAX_ATTEMPTS,
+              }
+            : {}),
+        })
+        .where(eq(assignmentsTable.id, already.id));
     }
     const result: TaitoOct23RemainingResult = {
       action: "unchanged",
@@ -188,8 +328,15 @@ export async function ensureTaitoOct23RemainingHomework(options?: {
       remaining: remainingIds.length,
       linked: started ? linked.length : remainingIds.length > 0 ? remainingIds.length : linked.length,
       created: false,
+      sessionLinked: true,
     };
     logger.info(result, "Taito Oct 23 remaining homework ready");
+    return result;
+  }
+
+  if (!target) {
+    const result = skipped("session_missing", remainingIds.length);
+    logger.info(result, "Taito Oct 23 remaining homework skipped");
     return result;
   }
 
@@ -203,8 +350,9 @@ export async function ensureTaitoOct23RemainingHomework(options?: {
     .insert(assignmentsTable)
     .values({
       courseId: source.courseId,
-      sessionId: null,
+      sessionId: target.id,
       assignedStudentUserId: student.id,
+      assignedTutorUserId: target.tutorUserId,
       deliveryPhase: "before_session",
       title: OCT23_REMAINING_TITLE,
       subject: source.subject,
@@ -226,6 +374,7 @@ export async function ensureTaitoOct23RemainingHomework(options?: {
     remaining: remainingIds.length,
     linked: remainingIds.length,
     created: true,
+    sessionLinked: true,
   };
   logger.info(result, "Taito Oct 23 remaining homework ready");
   return result;
