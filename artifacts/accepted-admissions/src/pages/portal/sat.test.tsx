@@ -175,6 +175,13 @@ describe("portal SAT book/pay", () => {
 
     expect(screen.getByRole("heading", { name: "SAT book and pay" })).toBeTruthy();
     expect(screen.getByText(/pay for that exact session and come back booked/i)).toBeTruthy();
+    const pageText = screen.getByTestId("portal-sat-page").textContent ?? "";
+    expect(pageText.indexOf("Upcoming SAT sessions")).toBeLessThan(pageText.indexOf("Purchase SAT hours"));
+    expect(pageText.indexOf("Purchase SAT hours")).toBeLessThan(pageText.indexOf("Book a prepaid SAT session"));
+    expect(screen.queryByText("Essay editing with Nika")).toBeNull();
+    expect(screen.queryByTestId("portal-essay-editing")).toBeNull();
+    expect(screen.queryByText("College Consulting")).toBeNull();
+    expect(screen.queryByText(/\$100/)).toBeNull();
     expect(screen.queryByText(/Purchase prepaid hours/i)).toBeNull();
     expect(screen.queryByText("Your tutors")).toBeNull();
     expect(screen.queryByText(/hourly rate/i)).toBeNull();

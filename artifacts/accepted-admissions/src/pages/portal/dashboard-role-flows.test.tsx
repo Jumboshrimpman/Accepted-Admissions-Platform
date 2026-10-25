@@ -1670,6 +1670,136 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByTestId("client-dashboard").lastElementChild).toBe(screen.getByTestId("billing-history"));
   });
 
+  test("Sophia's portal section order matches Neel's and keeps SAT data", () => {
+    const priorityOrder = ["welcome", "upcoming", "credits", "booking", "quizzes", "roadmap", "billing"];
+
+    function landmarkOrder(root: HTMLElement): string[] {
+      const roadmap =
+        Array.from(root.querySelectorAll("*")).find((node) => node.textContent?.trim() === "Session roadmap") ??
+        null;
+      const marks: Array<[string, Element | null]> = [
+        ["welcome", root.querySelector("h1")],
+        ["upcoming", root.querySelector("[data-testid='client-upcoming-meeting']")],
+        ["credits", root.querySelector("[data-testid='client-credit-balance']")],
+        ["booking", root.querySelector("#booking-schedule")],
+        ["quizzes", root.querySelector("[data-testid='client-quizzes']")],
+        ["roadmap", roadmap ?? null],
+        ["billing", root.querySelector("[data-testid='billing-history']")],
+      ];
+      return marks
+        .filter((entry): entry is [string, Element] => entry[1] != null)
+        .sort((left, right) => {
+          const position = left[1].compareDocumentPosition(right[1]);
+          if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+          return 0;
+        })
+        .map(([name]) => name);
+    }
+
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
+        displayName: "Sophia Sleiman",
+        email: "sophia.sleiman@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+        creditsRemainingLabel: "0 credits remaining",
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    const sophia = render(<FallWelcomeDashboard />);
+    const sophiaRoot = screen.getByTestId("client-dashboard");
+    const sophiaCredits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
+    expect(sophiaCredits.open).toBe(false);
+    expect(sophiaCredits.textContent).toContain("0 credits remaining");
+    expect(landmarkOrder(sophiaRoot)).toEqual(priorityOrder);
+    expect(sophiaRoot.lastElementChild).toBe(screen.getByTestId("billing-history"));
+    expect((screen.getByTestId("billing-history") as HTMLDetailsElement).open).toBe(false);
+    expect(screen.getByRole("link", { name: "Purchase session credits" }).getAttribute("href")).toBe("/portal/sat");
+    expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
+    expect(screen.queryByText("Essay editing with Nika")).toBeNull();
+    expect(screen.queryByText("College Consulting")).toBeNull();
+    expect(screen.queryByText(/\$100/)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Buy College Consulting hours/i })).toBeNull();
+    expect(screen.queryByText("Book a College Consulting session")).toBeNull();
+    sophia.unmount();
+
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "6f4c2a80-1b7e-4d3a-9c55-0e8a7b2d4f19",
+        displayName: "Neel Dharni",
+        email: "neel.dharni@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 1,
+        usedHours: 0,
+        remainingHours: 1,
+        readOnly: false,
+        selfServeCollegeConsulting: true,
+        selfServeSatBooking: false,
+        twelveSessionPlan: false,
+        creditsRemainingLabel: "1 Nika hour credits remaining",
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    const neel = render(<FallWelcomeDashboard />);
+    expect(landmarkOrder(screen.getByTestId("client-dashboard"))).toEqual(priorityOrder);
+    expect(screen.getAllByText("Book a College Consulting session").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Book a prepaid SAT session")).toBeNull();
+    expect(screen.queryByText("Essay editing with Nika")).toBeNull();
+    neel.unmount();
+
+    mocks.dashboard = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "michelle-user",
+        displayName: "Michelle Makarem",
+        email: "makaremmichelle7@gmail.com",
+        role: "student",
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 1,
+        usedHours: 0,
+        remainingHours: 1,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+        creditsRemainingLabel: "1 hour credits remaining",
+      },
+      curriculumSessions: [],
+      upcomingSessions: [],
+    } as Dashboard;
+    const michelle = render(<FallWelcomeDashboard />);
+    expect(landmarkOrder(screen.getByTestId("client-dashboard"))).toEqual(priorityOrder);
+    expect(screen.getByText("Book a prepaid SAT session")).toBeTruthy();
+    expect(screen.queryByText("College Consulting")).toBeNull();
+    michelle.unmount();
+
+    mocks.dashboard = dashboardForRole("student");
+    render(<FallWelcomeDashboard />);
+    expect(screen.getByText("One plan. Twelve focused meetings.")).toBeTruthy();
+    expect(screen.queryByTestId("client-credit-balance")).toBeNull();
+    expect(screen.queryByTestId("billing-history")).toBeNull();
+    expect(document.getElementById("booking-schedule")).toBeNull();
+    expect(screen.queryByText("Welcome back, Taito.")).toBeNull();
+  });
+
   test("client session roadmap hides cancelled meetings", () => {
     mocks.dashboard = {
       ...dashboardForRole("student"),
