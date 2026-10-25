@@ -6,7 +6,10 @@ import {
   inSessionDeliverySkipsTimeLimit,
   serverTimeLimitReached,
 } from "./in-session-time-limit.ts";
-import { hardSatShortfallBlockedByAssignedSet } from "./sat-hard-sets.ts";
+import {
+  hardSatShortfallBlockedByAssignedSet,
+  taitoOct30PreworkAllowsInSession,
+} from "./sat-hard-sets.ts";
 
 test("in-session work never reaches the server time limit", () => {
   assert.equal(inSessionDeliverySkipsTimeLimit("during_session"), true);
@@ -108,4 +111,14 @@ test("shortfall auto-resolve requires one full hard set, not a sum", () => {
   assert.match(hardSets, /everyKeyIsHard && set\.questionCount >= size/);
   assert.doesNotMatch(hardSets, /assignedHardSetQuestionCounts/);
   assert.doesNotMatch(hardSets, /assignedPrework >= input\.fullPrework/);
+  assert.equal(taitoOct30PreworkAllowsInSession("assigned"), true);
+  assert.equal(taitoOct30PreworkAllowsInSession("unchanged"), true);
+  assert.equal(taitoOct30PreworkAllowsInSession("blocked-by-attempts"), true);
+  assert.equal(taitoOct30PreworkAllowsInSession("shortfall"), false);
+  assert.equal(taitoOct30PreworkAllowsInSession("not-hard"), false);
+  assert.equal(taitoOct30PreworkAllowsInSession("unavailable"), false);
+  const oct30Startup = hardSets.slice(hardSets.indexOf("export async function ensureTaitoOct30HardPrework"));
+  assert.match(oct30Startup, /taitoOct30PreworkAllowsInSession\(result\.action\)/);
+  assert.match(oct30Startup, /ensureHardSatInSession\(session\)/);
+  assert.doesNotMatch(oct30Startup, /sendEmail|sendTransactionalEmail/);
 });
