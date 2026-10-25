@@ -11,6 +11,7 @@ import {
   classifyStudentQuizzes,
   collapsedStudentQuizzes,
   isPostSessionFollowUpQuiz,
+  studentQuizIsResolved,
   studentQuizListDueAt,
   isStandaloneStudentTodo,
   sessionCalendarDayIsPast,
@@ -249,6 +250,61 @@ test("quiz list orders by due date, then session start, then the previous order"
     ["explicit-sooner", "session-sooner", "tie-a"],
   );
   assert.equal(collapsed.hiddenCount, 4);
+});
+
+test("resolving a quiz drops it from the active top three and keeps the due-date order", () => {
+  const now = new Date("2026-10-20T14:00:00.000Z");
+  const sessions = [
+    session({ id: "session-a", dateTime: "2026-10-28T12:00:00.000Z", preparation: null }),
+  ];
+  const items = [
+    quiz({ id: "soon", title: "Soon", sessionId: null, deadline: "2026-10-21T12:00:00.000Z" }),
+    quiz({ id: "next", title: "Next", sessionId: null, deadline: "2026-10-22T12:00:00.000Z" }),
+    quiz({ id: "third", title: "Third", sessionId: null, deadline: "2026-10-23T12:00:00.000Z" }),
+    quiz({ id: "fourth", title: "Fourth", sessionId: null, deadline: "2026-10-24T12:00:00.000Z" }),
+    quiz({
+      id: "session-due",
+      title: "Session pre-work",
+      sessionId: "session-a",
+      deadline: null,
+    }),
+  ];
+  const open = collapsedStudentQuizzes(items, sessions, { expanded: false, now });
+  assert.deepEqual(
+    open.visible.map((item) => item.assignment.id),
+    ["soon", "next", "third"],
+  );
+  assert.equal(open.resolved.length, 0);
+
+  const resolved = collapsedStudentQuizzes(
+    items.map((item) =>
+      item.id === "soon" ? { ...item, studentResolvedAt: "2026-10-20T15:00:00.000Z" } : item,
+    ),
+    sessions,
+    { expanded: false, now },
+  );
+  assert.equal(studentQuizIsResolved(resolved.resolved[0]!.assignment), true);
+  assert.deepEqual(
+    resolved.visible.map((item) => item.assignment.id),
+    ["next", "third", "fourth"],
+  );
+  assert.deepEqual(
+    resolved.resolved.map((item) => item.assignment.id),
+    ["soon"],
+  );
+  assert.equal(resolved.hiddenCount, 1);
+  assert.equal(resolved.ordered.some((item) => item.assignment.id === "soon"), false);
+  const expanded = collapsedStudentQuizzes(
+    items.map((item) =>
+      item.id === "soon" ? { ...item, studentResolvedAt: "2026-10-20T15:00:00.000Z" } : item,
+    ),
+    sessions,
+    { expanded: true, now },
+  );
+  assert.deepEqual(
+    expanded.ordered.map((item) => item.assignment.id),
+    ["next", "third", "fourth", "session-due"],
+  );
 });
 
 test("upcoming session pre-work stays at the top with its real question count", () => {

@@ -1447,6 +1447,68 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /assignments/{assignmentId}/resolution:
+    post:
+      operationId: resolveStudentQuiz
+      tags: [assignments]
+      summary: Hide a quiz from the signed-in student's active list
+      description: >
+        Stores one resolution row for this student and assignment. Idempotent.
+        Does not delete the assignment, attempts, or results, and does not email.
+        Administrators, tutors, and viewers cannot resolve on the student's behalf.
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          description: Resolution stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assignmentId, studentResolvedAt]
+                properties:
+                  assignmentId: { type: string }
+                  studentResolvedAt: { type: string, format: date-time }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Only the student can resolve a quiz
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: unresolveStudentQuiz
+      tags: [assignments]
+      summary: Restore a quiz to the signed-in student's active list
+      description: >
+        Deletes only that student's resolution row. Idempotent.
+        Does not change the assignment, attempts, or results, and does not email.
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          description: Resolution cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assignmentId]
+                properties:
+                  assignmentId: { type: string }
+                  studentResolvedAt: { type: ["string", "null"], format: date-time }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Only the student can restore a quiz
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /assignments/{assignmentId}/attempts:
     post:
       operationId: startAttempt
@@ -2989,6 +3051,10 @@ components:
         latestAttemptStatus:
           type: ["string", "null"]
           enum: [active, paused, submitted, expired, null]
+        studentResolvedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: When the session student hid this quiz from their active list.
     AdminAssignmentInput:
       type: object
       required: [courseId, title, subject, instructions, deliveryPhase, timeLimitMinutes]
@@ -3394,6 +3460,10 @@ components:
         deadline: { type: ["string", "null"], format: date-time }
         attemptId: { type: ["string", "null"] }
         attemptStatus: { type: ["string", "null"], enum: [active, paused, submitted, expired, null] }
+        studentResolvedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: When the session student hid this quiz from their active list.
         score: { type: ["number", "null"] }
         submittedAt: { type: ["string", "null"], format: date-time }
         mistakeCount: { type: number }
@@ -3520,6 +3590,10 @@ components:
         latestScore: { type: ["number", "null"] }
         latestAttemptId: { type: ["string", "null"] }
         latestAttemptStatus: { type: ["string", "null"], enum: [active, paused, submitted, expired, null] }
+        studentResolvedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: When this student hid the quiz from their active list. Null when it is still active. Does not change grading.
     AssignmentQuestion:
       type: object
       required: [id, position, subject, questionType, prompt, skill, difficulty, predictionFirst]

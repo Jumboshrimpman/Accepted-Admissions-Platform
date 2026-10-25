@@ -19,6 +19,8 @@ export interface SessionHomework {
   attemptId: string | null;
   /** @nullable */
   attemptStatus: SessionHomeworkAttemptStatus;
+  /** When the session student hid this quiz from their active list. @nullable */
+  studentResolvedAt?: Date | null;
   /** @nullable */
   score: number | null;
   /** @nullable */

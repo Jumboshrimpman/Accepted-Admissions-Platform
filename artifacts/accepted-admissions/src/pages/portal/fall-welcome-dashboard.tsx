@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  customFetch,
+  getGetDashboardQueryKey,
   useGetDashboard,
   type AdminClientPreviewBooking,
   type AdminClientPreviewOffer,
@@ -202,6 +205,11 @@ export function ClientDashboardView({
     .split(/\s+/)[0] || "there";
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
+  const [showResolvedQuizzes, setShowResolvedQuizzes] = useState(false);
+  const [pendingQuizId, setPendingQuizId] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const canResolveQuiz = dashboard.user.role === "student" && !adminPreview;
   const datedSessions: QuizSessionRef[] = [
     ...(dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
@@ -213,6 +221,21 @@ export function ClientDashboardView({
     now,
     clientTimezone,
   });
+  async function setQuizResolved(assignmentId: string, resolved: boolean) {
+    setPendingQuizId(assignmentId);
+    setResolveError(null);
+    try {
+      await customFetch(`/api/assignments/${assignmentId}/resolution`, {
+        method: resolved ? "POST" : "DELETE",
+        responseType: "json",
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    } catch {
+      setResolveError("Could not update that quiz. Try again.");
+    } finally {
+      setPendingQuizId(null);
+    }
+  }
   const scopedSessions = sessionsForDashboardRole(
     dashboard.curriculumSessions?.length
       ? dashboard.curriculumSessions
@@ -624,7 +647,7 @@ export function ClientDashboardView({
             Quizzes
           </CardTitle>
           <CardDescription>
-            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Open follow-up quizzes stay in this list until they are submitted. The three soonest due dates stay visible; a quiz without its own deadline uses the session start. Show more reveals the rest. Past-session quizzes are marked complete.
+            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Open follow-up quizzes stay in this list until they are submitted. The three soonest due dates stay visible; a quiz without its own deadline uses the session start. Show more reveals the rest. Resolve hides a quiz from this active list without deleting it. Past-session quizzes are marked complete.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -664,36 +687,105 @@ export function ClientDashboardView({
                       testId={`prework-deadline-${quiz.assignment.id}`}
                     />
                   </div>
-                  {adminPreview ? (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link
-                        href={adminCurriculumHref({
-                          section: "curriculum",
-                          tab: "quizzes",
-                          quiz: quiz.assignment.id,
-                        })}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canResolveQuiz ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        data-testid={`quiz-resolve-${quiz.assignment.id}`}
+                        disabled={pendingQuizId === quiz.assignment.id}
+                        onClick={() => void setQuizResolved(quiz.assignment.id, true)}
                       >
-                        Review quiz
-                        <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={studentAssignmentHref(quiz.assignment.id, quiz.assignment.latestAttemptStatus)}>
-                        {studentQuizActionLabel(quiz, viewer)}
-                        <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                  )}
+                        Resolve
+                      </Button>
+                    ) : null}
+                    {adminPreview ? (
+                      <Button asChild variant="ghost" size="sm">
+                        <Link
+                          href={adminCurriculumHref({
+                            section: "curriculum",
+                            tab: "quizzes",
+                            quiz: quiz.assignment.id,
+                          })}
+                        >
+                          Review quiz
+                          <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={studentAssignmentHref(quiz.assignment.id, quiz.assignment.latestAttemptStatus)}>
+                          {studentQuizActionLabel(quiz, viewer)}
+                          <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 );
               })}
+              {quizList.visible.length === 0 ? (
+                <p className="py-3 text-sm text-muted-foreground">No active quizzes.</p>
+              ) : null}
               <SessionListDisclosure
                 canToggle={quizList.canToggle}
                 expanded={showAllQuizzes}
                 onToggle={() => setShowAllQuizzes((value) => !value)}
                 testId="assignment-notifications-show-more"
               />
+              {quizList.resolved.length > 0 ? (
+                <div className="border-t pt-3" data-testid="client-resolved-quizzes">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    data-testid="client-resolved-quizzes-toggle"
+                    onClick={() => setShowResolvedQuizzes((value) => !value)}
+                  >
+                    Resolved ({quizList.resolved.length})
+                  </Button>
+                  {showResolvedQuizzes
+                    ? quizList.resolved.map((quiz) => {
+                        const quizTitle = studentFacingCopy(quiz.assignment.title);
+                        return (
+                          <div
+                            key={quiz.assignment.id}
+                            className="mt-2 flex flex-col gap-2 rounded-xl border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between"
+                            data-testid={`client-quiz-${quiz.assignment.id}`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {quizTitle ? <p className="font-semibold">{quizTitle}</p> : null}
+                                <Badge variant="outline" data-testid={`quiz-resolved-mark-${quiz.assignment.id}`}>
+                                  {canResolveQuiz ? "Resolved" : "Resolved by the student"}
+                                </Badge>
+                              </div>
+                              <p className="mt-1 text-sm text-muted-foreground">{quiz.assignment.subject}</p>
+                            </div>
+                            {canResolveQuiz ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                data-testid={`quiz-unresolve-${quiz.assignment.id}`}
+                                disabled={pendingQuizId === quiz.assignment.id}
+                                onClick={() => void setQuizResolved(quiz.assignment.id, false)}
+                              >
+                                Undo
+                              </Button>
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    : null}
+                </div>
+              ) : null}
+              {resolveError ? (
+                <p className="text-sm text-destructive" data-testid="quiz-resolve-error">
+                  {resolveError}
+                </p>
+              ) : null}
             </>
           ) : (
             <p className="py-3 text-sm text-muted-foreground">No quizzes are assigned yet.</p>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Dashboard } from "@workspace/api-client-react";
 
@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     isPending: false,
     mutate: vi.fn(),
   },
+  customFetch: vi.fn(async () => ({ assignmentId: "quiz", studentResolvedAt: null })),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -83,7 +84,7 @@ vi.mock("@workspace/api-client-react", () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
-  customFetch: () => new Promise(() => {}),
+  customFetch: (...args: unknown[]) => mocks.customFetch(...args),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -1045,6 +1046,89 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByTestId("client-quizzes").textContent).toContain("Gamma quiz");
     expect(screen.queryByTestId("assignment-notifications-show-more")).toBeNull();
     expect(screen.getByText("Twelve-session roadmap")).toBeTruthy();
+  });
+
+  test("the student can resolve a quiz and the admin preview cannot", async () => {
+    const titles = ["Soon quiz", "Next quiz", "Third quiz", "Fourth quiz", "Fifth quiz"];
+    const assignments = titles.map((title, index) => ({
+      id: `quiz-${index}`,
+      title,
+      subject: "SAT",
+      status: "published" as const,
+      deadline: `2026-10-2${index + 1}T12:00:00.000Z`,
+      questionCount: 4,
+      timeLimitMinutes: 20,
+      attemptCount: 0,
+      maxAttempts: 1,
+      latestScore: null,
+      latestAttemptId: null,
+      latestAttemptStatus: null,
+      studentResolvedAt: index === 0 ? "2026-10-20T12:00:00.000Z" : null,
+    }));
+    const dashboard = {
+      ...dashboardForRole("student"),
+      assignments,
+    } as Dashboard;
+    mocks.dashboard = dashboard;
+    render(<FallWelcomeDashboard />);
+    const quizzes = screen.getByTestId("client-quizzes");
+    const activeIds = () =>
+      [...quizzes.querySelectorAll("[data-testid^='client-quiz-']")].map((node) =>
+        node.getAttribute("data-testid"),
+      );
+    expect(activeIds()).toEqual([
+      "client-quiz-quiz-1",
+      "client-quiz-quiz-2",
+      "client-quiz-quiz-3",
+    ]);
+    expect(quizzes.textContent).not.toContain("Soon quiz");
+    expect(screen.getByTestId("quiz-resolve-quiz-1")).toBeTruthy();
+    expect(screen.queryByTestId("quiz-resolve-quiz-0")).toBeNull();
+    fireEvent.click(screen.getByTestId("quiz-resolve-quiz-1"));
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenCalledWith(
+        "/api/assignments/quiz-1/resolution",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    expect(mocks.queryClient.invalidateQueries).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("client-resolved-quizzes-toggle"));
+    expect(screen.getByTestId("client-quiz-quiz-0").textContent).toContain("Soon quiz");
+    expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain("Resolved");
+    fireEvent.click(screen.getByTestId("quiz-unresolve-quiz-0"));
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenCalledWith(
+        "/api/assignments/quiz-0/resolution",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+    cleanup();
+
+    render(<ClientDashboardView dashboard={dashboard} adminPreview />);
+    const preview = screen.getByTestId("client-quizzes");
+    expect(preview.textContent).not.toContain("Soon quiz");
+    expect(screen.queryByRole("button", { name: /^Resolve$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo$/ })).toBeNull();
+    fireEvent.click(screen.getByTestId("client-resolved-quizzes-toggle"));
+    expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain(
+      "Resolved by the student",
+    );
+    expect(screen.queryByTestId("quiz-unresolve-quiz-0")).toBeNull();
+    expect(screen.queryByTestId("quiz-resolve-quiz-1")).toBeNull();
+    cleanup();
+
+    const viewer = {
+      ...dashboardForRole("viewer"),
+      assignments,
+    } as Dashboard;
+    render(<ClientDashboardView dashboard={viewer} />);
+    expect(screen.queryByRole("button", { name: /^Resolve$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo$/ })).toBeNull();
+    fireEvent.click(screen.getByTestId("client-resolved-quizzes-toggle"));
+    expect(screen.getByTestId("quiz-resolved-mark-quiz-0").textContent).toContain(
+      "Resolved by the student",
+    );
   });
 
   test("Taito’s client dashboard does not show clean-question wording", () => {

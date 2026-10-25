@@ -611,6 +611,12 @@ import {
   wrongAnswersOnly,
 } from "../lib/session-homework";
 import {
+  clearStudentQuizResolution,
+  resolutionStudentIdForListedAssignment,
+  resolveStudentQuizRecord,
+  studentMayResolveQuizzes,
+} from "../lib/student-quiz-resolution";
+import {
   attemptResponseFeedbackShape,
   checkAnswerRejectedReason,
   gradeInSessionAnswer,
@@ -758,6 +764,7 @@ import {
   sessionArtifactsTable,
   sessionPreworkPlansTable,
   sessionsTable,
+  studentQuizResolutionsTable,
   stripeTransfersTable,
   timerEventsTable,
   tutorProfilesTable,
@@ -11744,7 +11751,8 @@ async function adminSessionShape(
 }
 
 async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSelect) {
-  const [[course], [session], [questionCount], [submissionCount], attempts] = await Promise.all([
+  const [[course], [session], [questionCount], [submissionCount], attempts, resolutions] =
+    await Promise.all([
     db.select({ title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, assignment.courseId)).limit(1),
     assignment.sessionId
       ? db
@@ -11764,8 +11772,19 @@ async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSe
       })
       .from(attemptsTable)
       .where(eq(attemptsTable.assignmentId, assignment.id)),
+    db
+      .select({
+        studentUserId: studentQuizResolutionsTable.studentUserId,
+        resolvedAt: studentQuizResolutionsTable.resolvedAt,
+      })
+      .from(studentQuizResolutionsTable)
+      .where(eq(studentQuizResolutionsTable.assignmentId, assignment.id)),
   ]);
   const latestAttempt = selectLatestStudentAttempt(attempts, session?.clientUserId ?? null);
+  const resolutionStudentId = session?.clientUserId ?? assignment.assignedStudentUserId;
+  const studentResolvedAt = resolutionStudentId
+    ? (resolutions.find((row) => row.studentUserId === resolutionStudentId)?.resolvedAt ?? null)
+    : null;
   return {
     id: assignment.id,
     courseId: assignment.courseId,
@@ -11784,6 +11803,7 @@ async function adminAssignmentShape(assignment: typeof assignmentsTable.$inferSe
     submissionCount: Number(submissionCount?.count ?? 0),
     latestAttemptId: latestAttempt?.id ?? null,
     latestAttemptStatus: latestAttempt?.status ?? null,
+    studentResolvedAt,
   };
 }
 
@@ -14217,6 +14237,7 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
             : null,
         mistakeCount: resultItems.filter((item) => item.correct === false).length,
         analysis: analysis ?? null,
+        studentResolvedAt: assignment.studentResolvedAt ?? null,
       };
     }),
   );
@@ -14566,6 +14587,28 @@ async function listAssignmentsForUser(
   }
   const subjectUserId = await dataSubjectUserId(user);
   const subjectEmail = await dataSubjectEmail(user, subjectUserId);
+  const resolutionRows =
+    scopedRows.length === 0
+      ? []
+      : await db
+          .select({
+            studentUserId: studentQuizResolutionsTable.studentUserId,
+            assignmentId: studentQuizResolutionsTable.assignmentId,
+            resolvedAt: studentQuizResolutionsTable.resolvedAt,
+          })
+          .from(studentQuizResolutionsTable)
+          .where(
+            inArray(
+              studentQuizResolutionsTable.assignmentId,
+              scopedRows.map((assignment) => assignment.id),
+            ),
+          );
+  const resolvedAtByPair = new Map(
+    resolutionRows.map((row) => [
+      `${row.studentUserId}:${row.assignmentId}`,
+      row.resolvedAt,
+    ]),
+  );
   return Promise.all(
     scopedRows.map(async (assignment) => {
       if (!isAssignmentListedForRole(user.role, assignment.status)) {
@@ -14636,6 +14679,17 @@ async function listAssignmentsForUser(
         planAssignmentId: assignment.sessionId
           ? (planAssignmentBySession.get(assignment.sessionId) ?? null)
           : null,
+        studentResolvedAt: (() => {
+          const resolutionStudentId = resolutionStudentIdForListedAssignment({
+            role: user.role,
+            subjectUserId,
+            sessionScoped: Boolean(sessionId),
+            sessionClientUserId: linkedSession?.clientUserId ?? null,
+            assignedStudentUserId: assignment.assignedStudentUserId,
+          });
+          if (!resolutionStudentId) return null;
+          return resolvedAtByPair.get(`${resolutionStudentId}:${assignment.id}`) ?? null;
+        })(),
       };
     }),
   ).then((items) => {
@@ -15183,6 +15237,85 @@ router.get(
         ),
       }),
     );
+  },
+);
+
+async function assignmentVisibleToStudent(
+  user: AppUser,
+  assignmentId: string,
+): Promise<typeof assignmentsTable.$inferSelect | null> {
+  const [assignment] = await db
+    .select()
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.id, assignmentId));
+  if (!assignment) return null;
+  if (!(await canAccessCourse(user, assignment.courseId, assignment.subject))) return null;
+  if (!isAssignmentListedForRole(user.role, assignment.status)) return null;
+  if (!(await studentCanAccessListedAssignment(user, assignment))) return null;
+  if (hidesCancelledSessions(user.role) && assignment.sessionId) {
+    const [linkedSession] = await db
+      .select({ bookingStatus: sessionsTable.bookingStatus })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, assignment.sessionId))
+      .limit(1);
+    if (linkedSession && isCancelledBooking(linkedSession)) return null;
+  }
+  return assignment;
+}
+
+router.post(
+  "/assignments/:assignmentId/resolution",
+  async (req: AuthedRequest, res): Promise<void> => {
+    if (!studentMayResolveQuizzes(req.appUser!.role)) {
+      res.status(403).json({ error: "Only the student can resolve a quiz" });
+      return;
+    }
+    const params = GetAssignmentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const assignment = await assignmentVisibleToStudent(
+      req.appUser!,
+      params.data.assignmentId,
+    );
+    if (!assignment) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    const studentResolvedAt = await resolveStudentQuizRecord({
+      studentUserId: req.appUser!.id,
+      assignmentId: assignment.id,
+    });
+    res.json({ assignmentId: assignment.id, studentResolvedAt });
+  },
+);
+
+router.delete(
+  "/assignments/:assignmentId/resolution",
+  async (req: AuthedRequest, res): Promise<void> => {
+    if (!studentMayResolveQuizzes(req.appUser!.role)) {
+      res.status(403).json({ error: "Only the student can resolve a quiz" });
+      return;
+    }
+    const params = GetAssignmentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const assignment = await assignmentVisibleToStudent(
+      req.appUser!,
+      params.data.assignmentId,
+    );
+    if (!assignment) {
+      res.status(404).json({ error: "Assignment not found" });
+      return;
+    }
+    await clearStudentQuizResolution({
+      studentUserId: req.appUser!.id,
+      assignmentId: assignment.id,
+    });
+    res.json({ assignmentId: assignment.id, studentResolvedAt: null });
   },
 );
 

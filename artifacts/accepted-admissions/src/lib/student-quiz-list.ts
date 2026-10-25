@@ -56,6 +56,7 @@ type QuizAttempt = {
   latestAttemptStatus?: string | null;
   latestScore?: number | null;
   deadline?: string | Date | null;
+  studentResolvedAt?: string | Date | null;
 };
 
 export type QuizSessionRef = {
@@ -199,6 +200,12 @@ function quizInstant(value: string | Date | null | undefined): number | null {
  * Stored deadline when the quiz has one. Otherwise the linked session start.
  * Quizzes with neither sort after every dated quiz.
  */
+export function studentQuizIsResolved(
+  assignment: { studentResolvedAt?: string | Date | null },
+): boolean {
+  return quizInstant(assignment.studentResolvedAt) != null;
+}
+
 export function studentQuizListDueAt<T extends QuizAttempt>(
   assignment: T,
   sessions: readonly QuizSessionRef[],
@@ -265,14 +272,17 @@ export function collapsedStudentQuizzes<T extends QuizAttempt>(
     [...upcoming, ...restOpen, ...classified.archived],
     sessions,
   );
-  // Soonest due date first. Show more reveals the rest; three or fewer show no toggle.
+  const active = ordered.filter((item) => !studentQuizIsResolved(item.assignment));
+  const resolved = ordered.filter((item) => studentQuizIsResolved(item.assignment));
+  // Soonest due date first. Resolved quizzes leave this list so the next one fills the top three.
   const initialCount = options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT;
-  const hiddenCount = Math.max(0, ordered.length - initialCount);
+  const hiddenCount = Math.max(0, active.length - initialCount);
   return {
     ...classified,
     open,
-    ordered,
-    visible: options.expanded ? ordered : ordered.slice(0, initialCount),
+    ordered: active,
+    resolved,
+    visible: options.expanded ? active : active.slice(0, initialCount),
     hiddenCount,
     canToggle: hiddenCount > 0,
   };

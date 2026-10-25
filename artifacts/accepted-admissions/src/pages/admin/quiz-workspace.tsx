@@ -213,6 +213,11 @@ function QuizList({
                     <h3 className="font-medium">{assignment.title}</h3>
                     <Badge variant={statusVariant(assignment.status)}>{assignment.status}</Badge>
                     <Badge variant="outline">{assignment.sessionId ? "Assigned copy" : "Reusable bank quiz"}</Badge>
+                    {assignment.studentResolvedAt ? (
+                      <Badge variant="outline" data-testid={`quiz-resolved-by-student-${assignment.id}`}>
+                        Resolved by the student
+                      </Badge>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {assignment.programTitle}

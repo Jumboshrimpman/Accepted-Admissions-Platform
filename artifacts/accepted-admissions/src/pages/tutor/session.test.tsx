@@ -188,6 +188,7 @@ vi.mock("@workspace/api-client-react", () => ({
           score: 80,
           mistakeCount: 1,
           attemptId: "attempt-1",
+          studentResolvedAt: "2026-10-25T12:00:00.000Z",
           analysis: {
             label: "Ready to review",
             strengths: ["Evidence"],
@@ -317,6 +318,9 @@ describe("tutor session review page", () => {
     expect(screen.getByText("Homework status & results")).toBeTruthy();
     expect(screen.getByTestId("tutor-session-materials")).toBeTruthy();
     expect(screen.getByTestId("tutor-completion-badge-quiz-1").textContent).toMatch(/Submitted · 80%/);
+    expect(screen.getByTestId("tutor-homework-resolved-quiz-1").textContent).toMatch(
+      /Resolved by the student/,
+    );
     expect(screen.getByTestId("tutor-completion-quiz-1").textContent).toMatch(/Review attempt/);
     expect(screen.getByTestId("download-session-questions").textContent).toMatch(
       /Download questions \(PDF\)/,
