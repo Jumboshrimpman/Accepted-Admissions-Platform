@@ -4,6 +4,7 @@ import { isPastSession } from "./session-display.ts";
 import {
   FACTORING_QUIZ_FOLLOW_UP_TITLE,
   OCT18_SESSION_REVIEW_TITLE,
+  OCT23_REMAINING_HOMEWORK_TITLE,
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
   SAT_MATH_FOLLOW_UP_TITLE,
@@ -408,5 +409,31 @@ test("Oct 18 session review stays on the dashboard after the session day", () =>
   assert.equal(collapsed.visible.length, 1);
   assert.equal(collapsed.visible[0]?.assignment.title, OCT18_SESSION_REVIEW_TITLE);
   assert.equal(collapsed.visible[0]?.pastSessionDay, false);
+  assert.equal(studentQuizActionLabel(collapsed.visible[0]!, false), "Start quiz");
+});
+
+test("Oct 23 remaining English homework stays open after that session day", () => {
+  const now = new Date("2026-10-25T14:00:00.000Z");
+  assert.equal(
+    OCT23_REMAINING_HOMEWORK_TITLE,
+    "Oct 23 In-Session Practice — Remaining Questions",
+  );
+  assert.equal(isPostSessionFollowUpQuiz({ title: OCT23_REMAINING_HOMEWORK_TITLE }), true);
+  const collapsed = collapsedStudentQuizzes(
+    [
+      quiz({
+        id: "oct23-remaining",
+        title: OCT23_REMAINING_HOMEWORK_TITLE,
+        sessionId: "english-oct-23",
+        subject: "IELTS",
+        questionCount: 12,
+      }),
+    ],
+    [session({ id: "english-oct-23", dateTime: "2026-10-23T12:00:00.000Z" })],
+    { expanded: false, now, clientTimezone: "Asia/Tokyo" },
+  );
+  assert.equal(collapsed.visible.length, 1);
+  assert.equal(collapsed.archived.length, 0);
+  assert.equal(collapsed.visible[0]?.status, "Not started");
   assert.equal(studentQuizActionLabel(collapsed.visible[0]!, false), "Start quiz");
 });
