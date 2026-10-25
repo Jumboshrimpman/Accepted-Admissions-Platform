@@ -13,7 +13,6 @@ import { ensureMichelleXavierSessionFollowUps } from "./lib/michelle-xavier-sess
 import { ensureMichelleOct18ReviewQuiz } from "./lib/michelle-oct18-review-quiz";
 import { ensureSophiaTutorLinks } from "./lib/sophia-tutor-links";
 import { ensureTaitoOct23RemainingHomework } from "./lib/taito-oct23-remaining-homework";
-import { ensureInSessionAttemptsStayOpen } from "./lib/in-session-time-limit";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 import { ensureCollegeConsultingProvision } from "./lib/college-consulting-provision";
 
@@ -60,11 +59,6 @@ void ensureRyoTaitoParentMirror()
           ensureTaitoOct23RemainingHomework()
             .then((result) => logger.info(result, "Taito Oct 23 remaining homework ready"))
             .catch((err) => logger.warn({ err }, "Taito Oct 23 remaining homework skipped")),
-        )
-        .then(() =>
-          ensureInSessionAttemptsStayOpen().catch((err) =>
-            logger.warn({ err }, "In-session attempt repair skipped"),
-          ),
         )
         .then(() =>
           retireDuplicateXavierIdentities().catch((err) =>

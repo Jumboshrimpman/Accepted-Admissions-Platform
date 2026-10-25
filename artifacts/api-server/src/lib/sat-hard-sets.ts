@@ -402,34 +402,55 @@ export async function raiseHardSatShortfallAlert(session: SessionRow, detail: st
   );
 }
 
-/** A full assigned pre-work set and a full in-session set mean the empty-pool alert is stale. */
+export type HardSatAssignedSetCheck = {
+  questionCount: number;
+  everyKeyIsHard: boolean;
+};
+
+/**
+ * The empty-pool alert is stale only when one pre-work assignment and one
+ * in-session assignment are each a full hard set. Question counts from
+ * separate assignments do not add up, and a set counts only when every
+ * attached question is in the hard pool.
+ */
 export function hardSatShortfallBlockedByAssignedSet(input: {
-  assignedPrework: number;
-  assignedInSession: number;
+  preworkSets: readonly HardSatAssignedSetCheck[];
+  inSessionSets: readonly HardSatAssignedSetCheck[];
   fullPrework: number;
   fullInSession: number;
 }): boolean {
+  const oneFullHardSet = (sets: readonly HardSatAssignedSetCheck[], size: number) =>
+    size > 0 && sets.some((set) => set.everyKeyIsHard && set.questionCount >= size);
   return (
-    input.assignedPrework >= input.fullPrework &&
-    input.assignedInSession >= input.fullInSession
+    oneFullHardSet(input.preworkSets, input.fullPrework) &&
+    oneFullHardSet(input.inSessionSets, input.fullInSession)
   );
 }
 
-async function assignedHardSetQuestionCounts(sessionId: string): Promise<{
-  prework: number;
-  inSession: number;
+async function assignedHardSetChecks(sessionId: string): Promise<{
+  preworkSets: HardSatAssignedSetCheck[];
+  inSessionSets: HardSatAssignedSetCheck[];
 }> {
+  const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(sessionId);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
-  let prework = 0;
+  const preworkSets: HardSatAssignedSetCheck[] = [];
   for (const row of routine) {
-    prework += await assignmentQuestionCount(row.id);
+    const info = await classifyBankAssignment(row.id, hardKeys, row.attemptCount);
+    preworkSets.push({
+      questionCount: info.questionCount,
+      everyKeyIsHard: info.everyKeyIsHard,
+    });
   }
-  let inSession = 0;
+  const inSessionSets: HardSatAssignedSetCheck[] = [];
   for (const row of await liveDuringAssignments(sessionId)) {
-    inSession += await assignmentQuestionCount(row.id);
+    const info = await classifyBankAssignment(row.id, hardKeys);
+    inSessionSets.push({
+      questionCount: info.questionCount,
+      everyKeyIsHard: info.everyKeyIsHard,
+    });
   }
-  return { prework, inSession };
+  return { preworkSets, inSessionSets };
 }
 
 /**
@@ -483,11 +504,11 @@ export async function resolveHardSatShortfallAlert(sessionId: string): Promise<n
 }
 
 async function suppressShortfallWhenAssigned(session: SessionRow, target: number): Promise<boolean> {
-  const counts = await assignedHardSetQuestionCounts(session.id);
+  const sets = await assignedHardSetChecks(session.id);
   if (
     !hardSatShortfallBlockedByAssignedSet({
-      assignedPrework: counts.prework,
-      assignedInSession: counts.inSession,
+      preworkSets: sets.preworkSets,
+      inSessionSets: sets.inSessionSets,
       fullPrework: HARD_SAT_PREWORK_QUESTIONS,
       fullInSession: target,
     })
@@ -509,40 +530,37 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   const hardKeys = await hardPoolSourceKeys();
   const live = await listLiveBeforeSessionHomework(session.id);
   const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  const preworkSets: HardSatAssignedSetCheck[] = [];
   let preworkCount = 0;
-  let hasNonHardPrework = false;
-  let hasFullHardPrework = false;
   for (const row of routine) {
     const info = await classifyBankAssignment(row.id, hardKeys, row.attemptCount);
-    if (info.questionCount === 0) continue;
+    preworkSets.push({
+      questionCount: info.questionCount,
+      everyKeyIsHard: info.everyKeyIsHard,
+    });
     preworkCount += info.questionCount;
-    if (!info.everyKeyIsHard) hasNonHardPrework = true;
-    else if (info.keys.length === HARD_SAT_PREWORK_QUESTIONS) hasFullHardPrework = true;
   }
   const duringRows = await liveDuringAssignments(session.id);
+  const inSessionSets: HardSatAssignedSetCheck[] = [];
   let duringAssignmentId: string | null = null;
   let questionCount = 0;
-  let hasNonHardDuring = false;
-  let hasFullHardDuring = false;
   let duringAttempted = false;
   for (const row of duringRows) {
     const info = await classifyBankAssignment(row.id, hardKeys);
+    inSessionSets.push({
+      questionCount: info.questionCount,
+      everyKeyIsHard: info.everyKeyIsHard,
+    });
     if (!duringAssignmentId) duringAssignmentId = row.id;
     questionCount += info.questionCount;
     if (info.attempts > 0) duringAttempted = true;
-    if (info.questionCount === 0) continue;
-    if (!info.everyKeyIsHard) hasNonHardDuring = true;
-    else if (info.keys.length === target) hasFullHardDuring = true;
   }
-  const assignedFull = hardSatShortfallBlockedByAssignedSet({
-    assignedPrework: preworkCount,
-    assignedInSession: questionCount,
+  const needsQuestions = !hardSatShortfallBlockedByAssignedSet({
+    preworkSets,
+    inSessionSets,
     fullPrework: HARD_SAT_PREWORK_QUESTIONS,
     fullInSession: target,
   });
-  const needsQuestions =
-    !assignedFull &&
-    (hasNonHardPrework || hasNonHardDuring || !hasFullHardPrework || !hasFullHardDuring);
   if (duringAttempted && !needsQuestions) {
     return {
       summary: "In-session work already started, so the attached questions were left unchanged.",

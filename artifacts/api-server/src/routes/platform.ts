@@ -724,7 +724,6 @@ import {
 import {
   OCT23_IN_SESSION_ATTEMPT_ID,
   inSessionDeliverySkipsTimeLimit,
-  reopenExpiredInSessionAttempt,
   serverTimeLimitReached,
 } from "../lib/in-session-time-limit";
 import { estimateSatScoreFromScoringGuide } from "../lib/sat-scoring-guide";
@@ -3776,14 +3775,6 @@ async function enforceTimeLimit(attemptId: string) {
     )
     .where(eq(attemptsTable.id, attemptId));
   if (!record || record.attempt.status === "submitted") return record?.attempt;
-  if (await reopenExpiredInSessionAttempt(attemptId)) {
-    const [reopened] = await db
-      .select()
-      .from(attemptsTable)
-      .where(eq(attemptsTable.id, attemptId))
-      .limit(1);
-    return reopened ?? record.attempt;
-  }
   const timing = await timerSummary(attemptId);
   if (
     serverTimeLimitReached({
@@ -15261,17 +15252,6 @@ router.post(
         ),
       )
       .orderBy(desc(attemptsTable.startedAt));
-    if (inSessionDeliverySkipsTimeLimit(assignment.deliveryPhase)) {
-      for (const attempt of existing) {
-        if (await reopenExpiredInSessionAttempt(attempt.id)) {
-          attempt.status = "active";
-          attempt.result = null;
-          attempt.score = null;
-          attempt.submittedAt = null;
-          attempt.analysis = null;
-        }
-      }
-    }
     const resumable = existing.find((attempt) =>
       isResumableIncompleteAttempt({
         status: attempt.status,
@@ -15370,10 +15350,6 @@ router.get(
     }
     const access = await canAccessAttempt(req.appUser!, params.data.attemptId);
     if (!access) {
-      res.status(404).json({ error: "Attempt result not found" });
-      return;
-    }
-    if (await reopenExpiredInSessionAttempt(access.attempt.id)) {
       res.status(404).json({ error: "Attempt result not found" });
       return;
     }
