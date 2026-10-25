@@ -721,6 +721,12 @@ import {
   normalizeQuestionIndex,
   shouldFinalizeExpiredAttempt,
 } from "../lib/student-attempt-guards";
+import {
+  OCT23_IN_SESSION_ATTEMPT_ID,
+  inSessionDeliverySkipsTimeLimit,
+  reopenExpiredInSessionAttempt,
+  serverTimeLimitReached,
+} from "../lib/in-session-time-limit";
 import { estimateSatScoreFromScoringGuide } from "../lib/sat-scoring-guide";
 import {
   contentSourcesTable,
@@ -3679,7 +3685,9 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
     status: attempt.status,
     startedAt: attempt.startedAt,
     ...timing,
-    remainingSeconds: remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
+    remainingSeconds: inSessionDeliverySkipsTimeLimit(record.deliveryPhase)
+      ? Math.max(Number(record.timeLimitMinutes), 1) * 60
+      : remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
     currentQuestionIndex: normalizeQuestionIndex(attempt.currentQuestionIndex),
     result: await attemptResultForViewer(attempt, viewerRole),
     responses: saved.map((response) => {
@@ -3759,6 +3767,7 @@ async function enforceTimeLimit(attemptId: string) {
     .select({
       attempt: attemptsTable,
       timeLimitMinutes: assignmentsTable.timeLimitMinutes,
+      deliveryPhase: assignmentsTable.deliveryPhase,
     })
     .from(attemptsTable)
     .innerJoin(
@@ -3767,8 +3776,22 @@ async function enforceTimeLimit(attemptId: string) {
     )
     .where(eq(attemptsTable.id, attemptId));
   if (!record || record.attempt.status === "submitted") return record?.attempt;
+  if (await reopenExpiredInSessionAttempt(attemptId)) {
+    const [reopened] = await db
+      .select()
+      .from(attemptsTable)
+      .where(eq(attemptsTable.id, attemptId))
+      .limit(1);
+    return reopened ?? record.attempt;
+  }
   const timing = await timerSummary(attemptId);
-  if (timing.activeSeconds >= record.timeLimitMinutes * 60) {
+  if (
+    serverTimeLimitReached({
+      deliveryPhase: record.deliveryPhase,
+      timeLimitMinutes: Number(record.timeLimitMinutes),
+      activeSeconds: timing.activeSeconds,
+    })
+  ) {
     const [expired] = await db
       .update(attemptsTable)
       .set({ status: "expired" })
@@ -15238,6 +15261,17 @@ router.post(
         ),
       )
       .orderBy(desc(attemptsTable.startedAt));
+    if (inSessionDeliverySkipsTimeLimit(assignment.deliveryPhase)) {
+      for (const attempt of existing) {
+        if (await reopenExpiredInSessionAttempt(attempt.id)) {
+          attempt.status = "active";
+          attempt.result = null;
+          attempt.score = null;
+          attempt.submittedAt = null;
+          attempt.analysis = null;
+        }
+      }
+    }
     const resumable = existing.find((attempt) =>
       isResumableIncompleteAttempt({
         status: attempt.status,
@@ -15336,6 +15370,10 @@ router.get(
     }
     const access = await canAccessAttempt(req.appUser!, params.data.attemptId);
     if (!access) {
+      res.status(404).json({ error: "Attempt result not found" });
+      return;
+    }
+    if (await reopenExpiredInSessionAttempt(access.attempt.id)) {
       res.status(404).json({ error: "Attempt result not found" });
       return;
     }
@@ -15449,7 +15487,8 @@ router.put(
       res.status(404).json({ error: "Attempt not found" });
       return;
     }
-    if ((await enforceTimeLimit(attempt.id))?.status === "expired") {
+    const limited = await enforceTimeLimit(attempt.id);
+    if (limited?.status === "expired") {
       res.status(409).json({ error: "Time limit reached" });
       return;
     }
@@ -15472,7 +15511,7 @@ router.put(
       res.status(400).json({ error: "Question is not part of this assignment" });
       return;
     }
-    if (attempt.status !== "active") {
+    if (limited?.status !== "active") {
       res.status(409).json({ error: "Responses can only be saved while active" });
       return;
     }
@@ -15596,12 +15635,17 @@ router.post(
       res.status(404).json({ error: "Attempt not found" });
       return;
     }
-    if (attempt.status === "submitted" || attempt.status === "expired") {
+    if (attempt.status === "submitted") {
       res.status(409).json({ error: "Attempt is not active" });
       return;
     }
-    if ((await enforceTimeLimit(attempt.id))?.status === "expired") {
+    const limited = await enforceTimeLimit(attempt.id);
+    if (limited?.status === "expired") {
       res.status(409).json({ error: "Time limit reached" });
+      return;
+    }
+    if (!limited || (limited.status !== "active" && limited.status !== "paused")) {
+      res.status(409).json({ error: "Attempt is not active" });
       return;
     }
     const [openAttempt] = await db
@@ -15794,7 +15838,7 @@ router.post(
       res.status(409).json({ error: "Attempt cannot be submitted" });
       return;
     }
-    if (attempt.status === "submitted") {
+    if (attempt.status === "submitted" || (attempt.id === OCT23_IN_SESSION_ATTEMPT_ID && attempt.result)) {
       const stored = await storedAttemptResult(attempt.id);
       if (stored) {
         res.json(SubmitAttemptResponse.parse(stored));

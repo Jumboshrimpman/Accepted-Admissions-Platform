@@ -45,12 +45,13 @@ import {
 } from "./session-schedule.ts";
 
 const HARD_IN_SESSION_TITLE = "Hard SAT in-session";
+const HARD_SAT_SHORTFALL_TITLE = "Hard SAT set needs questions";
 
 function hardInSessionInstructions(target: number, original: boolean): string {
-  if (original) {
-    return `${target} hard module 2 questions written for this session. 30 minutes. Work through them with your tutor.`;
-  }
-  return `${target} hard module 2 questions from official SAT practice tests the student has not already been assigned. 30 minutes. Work through them with your tutor.`;
+  const source = original
+    ? `${target} hard module 2 questions written for this session.`
+    : `${target} hard module 2 questions from official SAT practice tests the student has not already been assigned.`;
+  return `${source} Work through them with your tutor. This is not a timed prediction quiz.`;
 }
 
 async function hardPlanOptionsForSession(session: {
@@ -394,11 +395,107 @@ export async function raiseHardSatShortfallAlert(session: SessionRow, detail: st
       recipientUserId: admin.id,
       kind: "hard_sat_shortfall",
       sessionId: session.id,
-      title: "Hard SAT set needs questions",
+      title: HARD_SAT_SHORTFALL_TITLE,
       message: `${session.title} still needs questions. ${detail}`,
       status: "unread" as const,
     })),
   );
+}
+
+/** A full assigned pre-work set and a full in-session set mean the empty-pool alert is stale. */
+export function hardSatShortfallBlockedByAssignedSet(input: {
+  assignedPrework: number;
+  assignedInSession: number;
+  fullPrework: number;
+  fullInSession: number;
+}): boolean {
+  return (
+    input.assignedPrework >= input.fullPrework &&
+    input.assignedInSession >= input.fullInSession
+  );
+}
+
+async function assignedHardSetQuestionCounts(sessionId: string): Promise<{
+  prework: number;
+  inSession: number;
+}> {
+  const live = await listLiveBeforeSessionHomework(sessionId);
+  const routine = live.filter((row) => inferSessionPreworkKind(row) === "routine");
+  let prework = 0;
+  for (const row of routine) {
+    prework += await assignmentQuestionCount(row.id);
+  }
+  let inSession = 0;
+  for (const row of await liveDuringAssignments(sessionId)) {
+    inSession += await assignmentQuestionCount(row.id);
+  }
+  return { prework, inSession };
+}
+
+/**
+ * Mark unread "Hard SAT set needs questions" rows read.
+ * Leaves "Oct 30 reading set left in place" unread. Does not email.
+ */
+export async function resolveHardSatShortfallAlert(sessionId: string): Promise<number> {
+  const updated = await db
+    .update(adminNotificationsTable)
+    .set({ status: "read", readAt: new Date() })
+    .where(
+      and(
+        eq(adminNotificationsTable.sessionId, sessionId),
+        eq(adminNotificationsTable.kind, "hard_sat_shortfall"),
+        eq(adminNotificationsTable.title, HARD_SAT_SHORTFALL_TITLE),
+        eq(adminNotificationsTable.status, "unread"),
+      ),
+    )
+    .returning({ id: adminNotificationsTable.id });
+  let clearedNeedsQuestions = false;
+  const [block] = await db
+    .select()
+    .from(curriculumBlocksTable)
+    .where(
+      and(
+        eq(curriculumBlocksTable.sessionId, sessionId),
+        eq(curriculumBlocksTable.kind, "adaptive_prep"),
+      ),
+    )
+    .limit(1);
+  if (block?.config && typeof block.config === "object" && !Array.isArray(block.config)) {
+    const config = block.config as Record<string, unknown>;
+    if (config.needsQuestions === true) {
+      await db
+        .update(curriculumBlocksTable)
+        .set({
+          config: { ...config, needsQuestions: false },
+          updatedAt: new Date(),
+        })
+        .where(eq(curriculumBlocksTable.id, block.id));
+      clearedNeedsQuestions = true;
+    }
+  }
+  if (updated.length > 0 || clearedNeedsQuestions) {
+    logger.info(
+      { resolved: updated.length, clearedNeedsQuestions },
+      "Hard SAT shortfall alert resolved",
+    );
+  }
+  return updated.length;
+}
+
+async function suppressShortfallWhenAssigned(session: SessionRow, target: number): Promise<boolean> {
+  const counts = await assignedHardSetQuestionCounts(session.id);
+  if (
+    !hardSatShortfallBlockedByAssignedSet({
+      assignedPrework: counts.prework,
+      assignedInSession: counts.inSession,
+      fullPrework: HARD_SAT_PREWORK_QUESTIONS,
+      fullInSession: target,
+    })
+  ) {
+    return false;
+  }
+  await resolveHardSatShortfallAlert(session.id);
+  return true;
 }
 
 export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
@@ -437,8 +534,15 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
     if (!info.everyKeyIsHard) hasNonHardDuring = true;
     else if (info.keys.length === target) hasFullHardDuring = true;
   }
+  const assignedFull = hardSatShortfallBlockedByAssignedSet({
+    assignedPrework: preworkCount,
+    assignedInSession: questionCount,
+    fullPrework: HARD_SAT_PREWORK_QUESTIONS,
+    fullInSession: target,
+  });
   const needsQuestions =
-    hasNonHardPrework || hasNonHardDuring || !hasFullHardPrework || !hasFullHardDuring;
+    !assignedFull &&
+    (hasNonHardPrework || hasNonHardDuring || !hasFullHardPrework || !hasFullHardDuring);
   if (duringAttempted && !needsQuestions) {
     return {
       summary: "In-session work already started, so the attached questions were left unchanged.",
@@ -450,7 +554,7 @@ export async function describeHardSatSessionPrep(session: SessionRow): Promise<{
   }
   const summary = needsQuestions
     ? `${HARD_SAT_NEEDS_QUESTIONS_SUMMARY} Assigned now: ${preworkCount} pre-work and ${questionCount} in-session; a full set is ${HARD_SAT_PREWORK_QUESTIONS} pre-work and ${target} in-session.`
-    : `Hard SAT set: ${HARD_SAT_PREWORK_QUESTIONS} pre-work questions and ${target} in-session module 2 questions. ${HARD_SAT_IN_SESSION_TIME_LIMIT_MINUTES} minutes for the in-session set.`;
+    : `Hard SAT set: ${HARD_SAT_PREWORK_QUESTIONS} pre-work questions and ${target} in-session module 2 questions. The in-session set is not timed.`;
   return { summary, duringAssignmentId, questionCount, preworkCount, needsQuestions };
 }
 
@@ -601,10 +705,14 @@ export async function ensureHardSatPrework(
       (item) => item.questionCount === 0 || item.everyKeyIsHard,
     );
     if (!hasFullHard || !everyLiveSetIsHard) {
-      await raiseHardSatShortfallAlert(
-        session,
-        `Pre-work already has attempts and is not a full hard set of ${HARD_SAT_PREWORK_QUESTIONS}. The attempted set was left in place.`,
-      );
+      if (!(await suppressShortfallWhenAssigned(session, target))) {
+        await raiseHardSatShortfallAlert(
+          session,
+          `Pre-work already has attempts and is not a full hard set of ${HARD_SAT_PREWORK_QUESTIONS}. The attempted set was left in place.`,
+        );
+      }
+    } else {
+      await suppressShortfallWhenAssigned(session, target);
     }
     for (const item of classified) {
       if (item.attempts > 0 || item.questionCount === 0 || item.everyKeyIsHard) continue;
@@ -632,9 +740,11 @@ export async function ensureHardSatPrework(
     });
     if (action === "unchanged") {
       const current = classified.find((item) => oct30HardRwPreworkIsCurrent(item.keys));
+      await suppressShortfallWhenAssigned(session, target);
       return { action: "unchanged", assignmentId: current?.row.id ?? null };
     }
   } else if (fullHard) {
+    await suppressShortfallWhenAssigned(session, target);
     return { action: "unchanged", assignmentId: fullHard.row.id };
   }
   const shortHard = classified.find(
@@ -671,6 +781,12 @@ export async function ensureHardSatPrework(
     const preworkItems = oct30 ? (composed?.complete ? composed.prework : []) : planned.prework;
     const inSessionReady = duringIsFullHard || planned.inSession.length === target;
     if (preworkItems.length !== HARD_SAT_PREWORK_QUESTIONS || !inSessionReady) {
+      if (await suppressShortfallWhenAssigned(session, target)) {
+        const keeper =
+          classified.find((item) => item.questionCount >= HARD_SAT_PREWORK_QUESTIONS) ??
+          classified[0];
+        return { action: "unchanged", assignmentId: keeper?.row.id ?? shortHard?.row.id ?? null };
+      }
       if (shortHard) {
         await raiseHardSatShortfallAlert(
           session,
@@ -701,6 +817,7 @@ export async function ensureHardSatPrework(
       );
       return { action: "shortfall", assignmentId: result.assignmentId };
     }
+    await suppressShortfallWhenAssigned(session, target);
     return { action: "assigned", result };
   } catch {
     await raiseHardSatShortfallAlert(
@@ -838,10 +955,14 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       (item) => item.questionCount === 0 || item.everyKeyIsHard,
     );
     if (!hasFullHard || !everyLiveSetIsHard) {
-      await raiseHardSatShortfallAlert(
-        session,
-        `In-session work already started and is not a full hard set of ${target}. The attempted set was left in place.`,
-      );
+      if (!(await suppressShortfallWhenAssigned(session, target))) {
+        await raiseHardSatShortfallAlert(
+          session,
+          `In-session work already started and is not a full hard set of ${target}. The attempted set was left in place.`,
+        );
+      }
+    } else {
+      await suppressShortfallWhenAssigned(session, target);
     }
     for (const item of classified) {
       if (item.attempts > 0 || item.questionCount === 0 || item.everyKeyIsHard) continue;
@@ -861,6 +982,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
   }
   const fullHard = classified.find((item) => item.everyKeyIsHard && item.keys.length === target);
   if (fullHard) {
+    await suppressShortfallWhenAssigned(session, target);
     return {
       status: "unchanged",
       questionCount: fullHard.keys.length,
@@ -876,6 +998,14 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       shortHard ? [shortHard.row.id] : [],
     );
     if (inSession.length !== target) {
+      if (await suppressShortfallWhenAssigned(session, target)) {
+        const keeper = fullHard ?? shortHard ?? classified[0];
+        return {
+          status: "unchanged",
+          questionCount: keeper?.questionCount ?? 0,
+          duringAssignmentId: keeper?.row.id ?? null,
+        };
+      }
       if (shortHard) {
         await raiseHardSatShortfallAlert(
           session,
