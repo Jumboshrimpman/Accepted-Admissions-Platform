@@ -310,7 +310,43 @@ test("SAT Math Problems and Factoring Quiz stay open after the linked session da
   assert.equal(studentQuizActionLabel(standalone.open[0]!, false), "Start quiz");
 });
 
-test("open follow-up quizzes stay visible when more than three quizzes are open", () => {
+test("the quiz list keeps its order and shows three until expanded", () => {
+  const now = new Date("2026-10-16T14:00:00.000Z");
+  const assignments = ["Delta drill", "Echo drill", "Foxtrot drill"].map((title, index) =>
+    quiz({ id: `extra-${index}`, title, sessionId: null, questionCount: 2 }),
+  );
+  const three = collapsedStudentQuizzes(assignments, [], {
+    expanded: false,
+    now,
+    clientTimezone: "Asia/Tokyo",
+  });
+  assert.equal(three.visible.length, 3);
+  assert.equal(three.canToggle, false);
+  assert.equal(three.hiddenCount, 0);
+
+  const four = collapsedStudentQuizzes(
+    [...assignments, quiz({ id: "extra-3", title: "Golf drill", sessionId: null, questionCount: 2 })],
+    [],
+    { expanded: false, now, clientTimezone: "Asia/Tokyo" },
+  );
+  assert.deepEqual(
+    four.visible.map((item) => item.assignment.title),
+    ["Delta drill", "Echo drill", "Foxtrot drill"],
+  );
+  assert.equal(four.canToggle, true);
+  assert.equal(four.hiddenCount, 1);
+  const expanded = collapsedStudentQuizzes(
+    [...assignments, quiz({ id: "extra-3", title: "Golf drill", sessionId: null, questionCount: 2 })],
+    [],
+    { expanded: true, now, clientTimezone: "Asia/Tokyo" },
+  );
+  assert.deepEqual(
+    expanded.visible.map((item) => item.assignment.id),
+    four.ordered.map((item) => item.assignment.id),
+  );
+});
+
+test("open follow-up quizzes stay in order and collapse after the first three", () => {
   const now = new Date("2026-10-07T14:00:00.000Z");
   const sessions = [session({ id: "past-session", dateTime: "2026-10-04T06:00:00.000Z" })];
   const collapsed = collapsedStudentQuizzes(
@@ -344,6 +380,10 @@ test("open follow-up quizzes stay visible when more than three quizzes are open"
   );
   assert.deepEqual(
     collapsed.visible.map((item) => item.assignment.title),
+    ["Biology pre-work", "Chemistry pre-work", FACTORING_QUIZ_FOLLOW_UP_TITLE],
+  );
+  assert.deepEqual(
+    collapsed.ordered.map((item) => item.assignment.title),
     [
       "Biology pre-work",
       "Chemistry pre-work",
@@ -351,6 +391,7 @@ test("open follow-up quizzes stay visible when more than three quizzes are open"
       GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
       GEOMETRY_SAT_FOLLOW_UP_TITLE,
       SAT_MATH_FOLLOW_UP_TITLE,
+      "Algebra pre-work",
     ],
   );
   assert.equal(
@@ -359,13 +400,14 @@ test("open follow-up quizzes stay visible when more than three quizzes are open"
   );
   assert.equal(collapsed.visible.some((item) => item.assignment.id === "algebra"), false);
   assert.equal(collapsed.canToggle, true);
+  assert.equal(collapsed.hiddenCount, 4);
   for (const title of [
     GEOMETRY_SAT_FOLLOW_UP_TITLE,
     GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
     SAT_MATH_FOLLOW_UP_TITLE,
     FACTORING_QUIZ_FOLLOW_UP_TITLE,
   ]) {
-    const item = collapsed.visible.find((quizItem) => quizItem.assignment.title === title);
+    const item = collapsed.ordered.find((quizItem) => quizItem.assignment.title === title);
     assert.equal(item?.status, "Not started");
     assert.equal(item?.pastSessionDay, false);
   }
@@ -385,9 +427,10 @@ test("a scored past-session quiz keeps its result and still archives", () => {
     [session({ dateTime: "2026-09-23T17:00:00.000Z" })],
     { expanded: false, now, clientTimezone: "Asia/Dubai" },
   );
-  assert.equal(collapsed.visible.length, 0);
+  assert.equal(collapsed.visible.length, 1);
+  assert.equal(collapsed.visible[0]?.status, "85%");
   assert.equal(collapsed.archived[0]?.status, "85%");
-  assert.equal(collapsed.canToggle, true);
+  assert.equal(collapsed.canToggle, false);
 });
 
 test("Oct 18 session review stays on the dashboard after the session day", () => {

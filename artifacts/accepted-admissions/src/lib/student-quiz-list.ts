@@ -223,21 +223,14 @@ export function collapsedStudentQuizzes<T extends QuizAttempt>(
   const upcomingIds = new Set(upcoming.map((item) => item.assignment.id));
   const restOpen = open.filter((item) => !upcomingIds.has(item.assignment.id));
   const ordered = [...upcoming, ...restOpen, ...classified.archived];
+  // The first three keep this order. Show more reveals the rest; three or fewer show no toggle.
   const initialCount = options.initialCount ?? DEFAULT_VISIBLE_UPCOMING_COUNT;
-  let otherOpenShown = 0;
-  const collapsedVisible: ClassifiedStudentQuiz<T>[] = [...upcoming];
-  for (const item of restOpen) {
-    const followUp = isPostSessionFollowUpQuiz(item.assignment);
-    if (!followUp && otherOpenShown >= initialCount) continue;
-    collapsedVisible.push(item);
-    if (!followUp) otherOpenShown += 1;
-  }
-  const hiddenCount = ordered.length - collapsedVisible.length;
+  const hiddenCount = Math.max(0, ordered.length - initialCount);
   return {
     ...classified,
     open,
     ordered,
-    visible: options.expanded ? ordered : collapsedVisible,
+    visible: options.expanded ? ordered : ordered.slice(0, initialCount),
     hiddenCount,
     canToggle: hiddenCount > 0,
   };

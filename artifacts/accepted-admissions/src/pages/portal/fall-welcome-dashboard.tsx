@@ -624,7 +624,7 @@ export function ClientDashboardView({
             Quizzes
           </CardTitle>
           <CardDescription>
-            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Open follow-up quizzes stay in this list until they are submitted. Quizzes from a past session date are marked complete and stay behind Show more.
+            Assigned practice and diagnostics for this account. Unfinished pre-work is due before the linked session. Open follow-up quizzes stay in this list until they are submitted. The first three stay visible; Show more reveals the rest. Past-session quizzes are marked complete.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
