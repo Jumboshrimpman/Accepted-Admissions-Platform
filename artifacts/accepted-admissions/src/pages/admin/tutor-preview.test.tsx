@@ -141,7 +141,10 @@ describe("administrator tutor preview", () => {
     expect(screen.getByText("Administrator tutor preview")).toBeTruthy();
     expect(screen.getByText(/Nika Raiffe's tutor dashboard/)).toBeTruthy();
     expect(screen.getByText("Set your bookable hours")).toBeTruthy();
-    expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("This date is closed.");
+    expect(screen.getByTestId("tutor-date-hours-status").textContent).toContain("Students can book you on 1 date.");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("9:00 PM");
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-10-23")).toBeNull();
+    expect(screen.getByTestId("tutor-date-hours-editor").textContent).not.toMatch(/closed/i);
     expect(screen.getByText("Availability offered to clients")).toBeTruthy();
     expect(screen.getByTestId("tutor-calendar-preview").textContent).toContain("Disconnected");
     expect(screen.getByRole("button", { name: /Review submission/i }).hasAttribute("disabled")).toBe(

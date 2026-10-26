@@ -90,8 +90,8 @@ function timezoneCaption(timezone: string): string {
   return timezone;
 }
 
-function windowsFor(state: DateHoursState, date: string): DateWindow[] {
-  return (state.dateHours[date] ?? []).map((window) => ({ ...window }));
+function copyWindows(windows: DateWindow[]): DateWindow[] {
+  return windows.map((window) => ({ ...window }));
 }
 
 function weekdayKey(date: string): string {
@@ -113,10 +113,12 @@ function formatWindowList(windows: DateWindow[]): string {
   return windows.map((window) => `${formatClock(window.start)}–${formatClock(window.end)}`).join(", ");
 }
 
-function dateOptionLabel(state: DateHoursState, date: string): string {
-  const windows = bookableWindowsFor(state, date);
-  if (windows.length === 0) return `${formatCivilDate(date)} — Closed`;
-  return `${formatCivilDate(date)} — Open, bookable · ${formatWindowList(windows)}`;
+/** Next open date, otherwise the next date in the editor. Never prefers a closed day when an open one exists. */
+function preferredDate(state: DateHoursState): string {
+  const upcoming = state.editorDates.filter((date) => date >= state.today);
+  const pool = upcoming.length > 0 ? upcoming : state.editorDates;
+  const open = pool.find((date) => bookableWindowsFor(state, date).length > 0);
+  return open ?? pool[0] ?? state.today;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -136,13 +138,10 @@ export function TutorDateHoursEditor({
   const [hidden, setHidden] = useState(readOnly && !initialPreview);
   const [loaded, setLoaded] = useState(readOnly);
   const [loadError, setLoadError] = useState("");
-  const [selectedDate, setSelectedDate] = useState(
-    initialPreview?.editorDates[0] ?? initialPreview?.today ?? "",
-  );
+  const initialDate = initialPreview ? preferredDate(initialPreview) : "";
+  const [selectedDate, setSelectedDate] = useState(initialDate);
   const [windows, setWindows] = useState<DateWindow[]>(
-    initialPreview
-      ? windowsFor(initialPreview, initialPreview.editorDates[0] ?? initialPreview.today)
-      : [],
+    initialPreview ? copyWindows(bookableWindowsFor(initialPreview, initialDate)) : [],
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -154,7 +153,6 @@ export function TutorDateHoursEditor({
   const [weeklySaving, setWeeklySaving] = useState(false);
   const [weeklyError, setWeeklyError] = useState("");
   const [weeklyNote, setWeeklyNote] = useState("");
-  const [showClosedDates, setShowClosedDates] = useState(false);
 
   useEffect(() => {
     if (!readOnly) return;
@@ -163,10 +161,10 @@ export function TutorDateHoursEditor({
       setLoaded(true);
       return;
     }
-    const date = preview.editorDates[0] ?? preview.today;
+    const date = preferredDate(preview);
     setState(preview);
     setSelectedDate(date);
-    setWindows(windowsFor(preview, date));
+    setWindows(copyWindows(bookableWindowsFor(preview, date)));
     setWeeklyStart(recurringOf(preview).startDate ?? "");
     setWeeklyEnd(recurringOf(preview).endDate ?? "");
     setHidden(false);
@@ -180,10 +178,10 @@ export function TutorDateHoursEditor({
       try {
         const next = await customFetch<DateHoursState>("/api/tutor/date-hours");
         if (cancelled) return;
-        const date = next.editorDates[0] ?? next.today;
+        const date = preferredDate(next);
         setState(next);
         setSelectedDate(date);
-        setWindows(windowsFor(next, date));
+        setWindows(copyWindows(bookableWindowsFor(next, date)));
         setWeeklyStart(recurringOf(next).startDate ?? "");
         setWeeklyEnd(recurringOf(next).endDate ?? "");
       } catch (loadFailure) {
@@ -220,8 +218,9 @@ export function TutorDateHoursEditor({
         body: JSON.stringify({ dateHours: { [date]: nextWindows } }),
       });
       setState(saved);
-      setWindows(windowsFor(saved, date));
-      setSavedNote(nextWindows.length === 0 ? "This date is now closed." : "Saved.");
+      setWindows(copyWindows(bookableWindowsFor(saved, date)));
+      setSelectedDate(date);
+      setSavedNote("Saved.");
     } catch (saveFailure) {
       setError(errorMessage(saveFailure, "Could not save this date."));
     } finally {
@@ -263,7 +262,7 @@ export function TutorDateHoursEditor({
 
   function chooseDate(date: string) {
     setSelectedDate(date);
-    setWindows(state ? windowsFor(state, date) : []);
+    setWindows(state ? copyWindows(bookableWindowsFor(state, date)) : []);
     setError("");
     setSavedNote("");
   }
@@ -283,24 +282,22 @@ export function TutorDateHoursEditor({
     );
   }
 
-  const selectedBookable = bookableWindowsFor(state, selectedDate);
-  const selectedClosed = selectedBookable.length === 0;
-  const dateRows = state.editorDates.map((date) => {
+  const openRows = state.editorDates.flatMap((date) => {
     const bookable = bookableWindowsFor(state, date);
-    return { date, bookable, closed: bookable.length === 0 };
+    if (bookable.length === 0) return [];
+    return [{ date, bookable }];
   });
-  const closedDateCount = dateRows.filter((row) => row.closed).length;
-  const visibleDateRows = showClosedDates ? dateRows : dateRows.filter((row) => !row.closed);
-  const allDatesClosed = closedDateCount === state.editorDates.length && state.editorDates.length > 0;
+  const openDateCount = openRows.length;
   const recurring = recurringOf(state);
   const weeklyRows = WEEKDAYS.filter(([id]) => (recurring.days[id]?.length ?? 0) > 0);
   const invalidWindow = windows.some((window) => window.start >= window.end);
   const invalidWeekly = weeklyWindows.some((window) => window.start >= window.end);
+  const dateOverlap = windowsOverlap(windows);
   const weeklyOverlap = windowsOverlap(weeklyWindows);
   const weeklyRange =
     recurring.startDate || recurring.endDate
-      ? ` Applies ${recurring.startDate ? `from ${formatCivilDate(recurring.startDate)}` : "with no start date"}${recurring.endDate ? ` through ${formatCivilDate(recurring.endDate)}` : " and no end date"}.`
-      : " No start or end date, so it applies on dates you have not set.";
+      ? ` ${recurring.startDate ? `From ${formatCivilDate(recurring.startDate)}` : "From any date"}${recurring.endDate ? ` through ${formatCivilDate(recurring.endDate)}` : ""}.`
+      : "";
 
   return (
     <Card data-testid="tutor-date-hours-editor" className="border-primary/20 shadow-sm">
@@ -309,184 +306,185 @@ export function TutorDateHoursEditor({
           <CalendarPlus className="h-5 w-5 text-primary" />
           Set your bookable hours
         </CardTitle>
-        <CardDescription className="mt-1 max-w-2xl">
-          {readOnly
-            ? `Saved hours for the next 8 weeks. This preview cannot change them. Times are ${timezoneCaption(state.timezone)}.`
-            : `Pick one date, or set a weekly schedule. A date you save replaces that weekday for that day only, and a closed date stays closed. Times run through midnight ${timezoneCaption(state.timezone)}. Hours you set yourself are offered even when Google Calendar is busy. Bookings, holds, and the shared Meet room still block the time.`}
+        <CardDescription className="mt-1">
+          Times are {timezoneCaption(state.timezone)}.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5 px-6 pb-6 sm:px-7">
-        {allDatesClosed ? (
-          <p
-            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
-            role="status"
-            data-testid="tutor-date-hours-all-closed"
-          >
-            All your dates are closed. Students can't book you until you add hours for a date and save it.
-          </p>
-        ) : null}
-        <label className="block text-sm font-medium" htmlFor="tutor-date-hours-date">
-          Date
-          <select
-            id="tutor-date-hours-date"
-            className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm"
-            value={selectedDate}
-            onChange={(event) => chooseDate(event.target.value)}
-          >
-            {state.editorDates.map((date) => (
-              <option key={date} value={date}>
-                {dateOptionLabel(state, date)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <CardContent className="space-y-6 px-6 pb-6 sm:px-7">
+        <p className="text-sm font-medium" role="status" data-testid="tutor-date-hours-status">
+          {openDateCount === 0
+            ? "No open hours yet. Students can't book you until you add some."
+            : `Students can book you on ${openDateCount} ${openDateCount === 1 ? "date" : "dates"}.`}
+        </p>
 
-        <div
-          data-testid="tutor-date-hours-saved"
-          className={
-            selectedClosed
-              ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2"
-              : "rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
-          }
-        >
-          <p className="text-sm font-medium">{selectedClosed ? "CLOSED" : "Open"}</p>
-          {selectedClosed ? (
-            <p className="mt-1 text-sm font-medium text-destructive">
-              This date is closed. Students can't book this date.
-            </p>
-          ) : (
-            <>
-              <p className="mt-1 text-sm font-medium">Open, bookable. Students can book this date.</p>
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {selectedBookable.map((window) => (
-                  <li key={`${window.start}-${window.end}`} className="rounded-full border px-3 py-1 text-sm">
-                    {formatClock(window.start)}–{formatClock(window.end)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+        {openDateCount > 0 ? (
+          <div data-testid="tutor-date-hours-open-dates">
+            <h2 className="text-sm font-medium">Open dates</h2>
+            <ul className="mt-2 space-y-2 text-sm">
+              {openRows.map((row) => (
+                <li
+                  key={row.date}
+                  className="flex flex-wrap items-center gap-2"
+                  data-testid={`tutor-date-hours-day-${row.date}`}
+                >
+                  <span className="font-medium">
+                    {formatCivilDate(row.date)}
+                    {" · "}
+                    {formatWindowList(row.bookable)}
+                  </span>
+                  {readOnly ? null : (
+                    <>
+                      <Button type="button" variant="outline" size="sm" onClick={() => chooseDate(row.date)}>
+                        Edit {formatCivilDate(row.date)}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => save(row.date, [])}
+                        disabled={saving}
+                      >
+                        Remove {formatCivilDate(row.date)}
+                      </Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {readOnly ? null : (
-        <>
-        <div className="space-y-3" data-testid="tutor-date-hours-windows">
-          {windows.map((window, index) => (
-            <div key={`${selectedDate}-${index}`} className="flex flex-wrap items-end gap-2">
-              <label className="text-sm font-medium">
-                Start
-                <select
-                  aria-label={`Start time ${index + 1}`}
-                  className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
-                  value={window.start}
-                  onChange={(event) => {
-                    const start = event.target.value;
-                    setWindows((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? { ...item, start } : item)),
-                    );
-                  }}
-                >
-                  {timeChoices(window.start, START_OPTIONS).map((time) => (
-                    <option key={time} value={time}>
-                      {formatClock(time)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                End
-                <select
-                  aria-label={`End time ${index + 1}`}
-                  className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
-                  value={window.end}
-                  onChange={(event) => {
-                    const end = event.target.value;
-                    setWindows((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? { ...item, end } : item)),
-                    );
-                  }}
-                >
-                  {timeChoices(window.end, END_OPTIONS).map((time) => (
-                    <option key={time} value={time}>
-                      {formatClock(time)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+          <div className="space-y-3" data-testid="tutor-date-hours-add">
+            <h2 className="text-sm font-medium">Add hours</h2>
+            <label className="block text-sm font-medium" htmlFor="tutor-date-hours-date">
+              Date
+              <select
+                id="tutor-date-hours-date"
+                className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={selectedDate}
+                onChange={(event) => chooseDate(event.target.value)}
+              >
+                {state.editorDates.map((date) => (
+                  <option key={date} value={date}>
+                    {formatCivilDate(date)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="space-y-3" data-testid="tutor-date-hours-windows">
+              {windows.map((window, index) => (
+                <div key={`${selectedDate}-${index}`} className="flex flex-wrap items-end gap-2">
+                  <label className="text-sm font-medium">
+                    Start
+                    <select
+                      aria-label={`Start time ${index + 1}`}
+                      className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
+                      value={window.start}
+                      onChange={(event) => {
+                        const start = event.target.value;
+                        setWindows((current) =>
+                          current.map((item, itemIndex) => (itemIndex === index ? { ...item, start } : item)),
+                        );
+                      }}
+                    >
+                      {timeChoices(window.start, START_OPTIONS).map((time) => (
+                        <option key={time} value={time}>
+                          {formatClock(time)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm font-medium">
+                    End
+                    <select
+                      aria-label={`End time ${index + 1}`}
+                      className="mt-1 h-10 rounded-md border bg-background px-3 text-sm"
+                      value={window.end}
+                      onChange={(event) => {
+                        const end = event.target.value;
+                        setWindows((current) =>
+                          current.map((item, itemIndex) => (itemIndex === index ? { ...item, end } : item)),
+                        );
+                      }}
+                    >
+                      {timeChoices(window.end, END_OPTIONS).map((time) => (
+                        <option key={time} value={time}>
+                          {formatClock(time)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setWindows((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  >
+                    Remove window {index + 1}
+                  </Button>
+                </div>
+              ))}
+              {windows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Choose a start and end, then save.</p>
+              ) : null}
+            </div>
+
+            {invalidWindow ? (
+              <p className="text-sm text-destructive" role="alert">
+                Each window has to end after it starts.
+              </p>
+            ) : null}
+            {dateOverlap ? (
+              <p className="text-sm text-destructive" role="alert" data-testid="tutor-date-hours-overlap">
+                These windows overlap. Adjust them before saving.
+              </p>
+            ) : null}
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {savedNote ? <p className="text-sm text-muted-foreground">{savedNote}</p> : null}
+
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setWindows((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                onClick={() => setWindows((current) => [...current, { start: "16:00", end: "17:00" }])}
               >
-                Remove window {index + 1}
+                Add a window
+              </Button>
+              <Button
+                type="button"
+                onClick={() => save(selectedDate, windows)}
+                disabled={saving || windows.length === 0 || invalidWindow || dateOverlap}
+              >
+                Save hours
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => save(selectedDate, [])}
+                disabled={saving}
+              >
+                Remove hours
               </Button>
             </div>
-          ))}
-          {windows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No windows yet. This date will stay closed until you add one.</p>
-          ) : null}
-        </div>
-
-        {invalidWindow ? (
-          <p className="text-sm text-destructive" role="alert">
-            Each window has to end after it starts.
-          </p>
-        ) : null}
-        {windowsOverlap(windows) ? (
-          <p className="text-sm text-destructive" role="alert" data-testid="tutor-date-hours-overlap">
-            These windows overlap. Adjust them before saving.
-          </p>
-        ) : null}
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {savedNote ? <p className="text-sm text-muted-foreground">{savedNote}</p> : null}
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setWindows((current) => [...current, { start: "16:00", end: "17:00" }])}
-          >
-            Add a window
-          </Button>
-          <Button
-            type="button"
-            onClick={() => save(selectedDate, windows)}
-            disabled={saving || invalidWindow || windowsOverlap(windows)}
-          >
-            Save this date
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setWindows([]);
-              void save(selectedDate, []);
-            }}
-            disabled={saving}
-          >
-            Mark this date closed
-          </Button>
-        </div>
-        </>
+          </div>
         )}
 
         <div data-testid="tutor-weekly-hours" className="space-y-3 border-t pt-5">
           <div>
-            <p className="text-sm font-medium">Weekly schedule</p>
+            <h2 className="text-sm font-medium">Repeat weekly</h2>
             <p className="mt-1 text-sm text-muted-foreground" data-testid="tutor-weekly-hours-status">
               {weeklyRows.length === 0
-                ? "No weekly schedule is active. Students can't book you from a weekly schedule until you add hours and save them."
-                : `Saved weekdays are bookable on dates you have not closed.${weeklyRange}`}
+                ? "No weekly schedule saved."
+                : `Repeats on dates you have not set yourself.${weeklyRange}`}
             </p>
           </div>
-          {weeklyRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No weekly schedule saved.</p>
-          ) : (
-            <ul className="space-y-2 text-sm text-muted-foreground" data-testid="tutor-weekly-hours-saved">
+          {weeklyRows.length === 0 ? null : (
+            <ul className="space-y-2 text-sm" data-testid="tutor-weekly-hours-saved">
               {weeklyRows.map(([id, label]) => (
                 <li key={id} className="flex flex-wrap items-center gap-2">
                   <span>
@@ -501,6 +499,7 @@ export function TutorDateHoursEditor({
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         onClick={() => {
                           setWeeklyDay(id);
                           setWeeklyWindows((recurring.days[id] ?? []).map((window) => ({ ...window })));
@@ -515,6 +514,7 @@ export function TutorDateHoursEditor({
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         onClick={() => {
                           const days = { ...recurring.days };
                           delete days[id];
@@ -662,55 +662,6 @@ export function TutorDateHoursEditor({
               </div>
             </div>
           )}
-        </div>
-
-        <div data-testid="tutor-date-hours-other-dates">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Next 8 weeks</p>
-            {closedDateCount > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-expanded={showClosedDates}
-                data-testid="tutor-date-hours-closed-toggle"
-                onClick={() => setShowClosedDates((current) => !current)}
-              >
-                {showClosedDates ? "Hide closed dates" : `Show closed dates (${closedDateCount})`}
-              </Button>
-            ) : null}
-          </div>
-          {visibleDateRows.length > 0 ? (
-            <ul className="mt-2 space-y-2 text-sm">
-              {visibleDateRows.map((row) => (
-                <li
-                  key={row.date}
-                  className="flex flex-wrap items-center gap-2"
-                  data-testid={`tutor-date-hours-day-${row.date}`}
-                >
-                  <span className={row.closed ? "font-medium text-destructive" : "font-medium"}>
-                    {formatCivilDate(row.date)}
-                    {row.closed ? " — Closed" : ` — Open, bookable: ${formatWindowList(row.bookable)}`}
-                  </span>
-                  {readOnly || row.closed ? null : (
-                    <>
-                      <Button type="button" variant="outline" onClick={() => chooseDate(row.date)}>
-                        Edit {formatCivilDate(row.date)}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => save(row.date, [])}
-                        disabled={saving}
-                      >
-                        Delete {formatCivilDate(row.date)}
-                      </Button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
       </CardContent>
     </Card>

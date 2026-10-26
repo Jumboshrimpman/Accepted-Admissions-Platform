@@ -53,6 +53,7 @@ export function TutorOfferedAvailability({
   googleBusyTimesOmitted?: boolean;
 } = {}) {
   const readOnly = preview !== undefined;
+  void googleBusyTimesOmitted;
   const [offer, setOffer] = useState<OfferedAvailability | null>(null);
   const [loading, setLoading] = useState(true);
   const [hidden, setHidden] = useState(false);
@@ -115,7 +116,7 @@ export function TutorOfferedAvailability({
         <CardDescription className="mt-1 max-w-2xl">
           {reconnect
             ? "Google Calendar needs to be reconnected before clients can book you."
-            : "Open times clients can book with you over the next 14 days, for 1 hour, 1.5 hour, and 2 hour sessions."}
+            : "Times students can book over the next 14 days."}
           {timezone ? ` Times are shown in ${clientTimezoneCaption(timezone)}.` : ""}
         </CardDescription>
       </CardHeader>
@@ -135,11 +136,6 @@ export function TutorOfferedAvailability({
         {clientSpecific ? (
           <p className="mb-4 text-sm text-muted-foreground" data-testid="tutor-offered-client-specific">
             Only approved clients can book you; those clients see these times.
-          </p>
-        ) : null}
-        {offer?.usesAdminCalendarFallback ? (
-          <p className="mb-4 text-sm font-medium" data-testid="tutor-offered-admin-fallback">
-            Bookings use admin calendar fallback
           </p>
         ) : null}
         {reconnect && !notOffered ? (
@@ -174,11 +170,6 @@ export function TutorOfferedAvailability({
             </a>
             )}
           </div>
-        ) : null}
-        {googleBusyTimesOmitted ? (
-          <p className="mb-4 text-sm text-muted-foreground" data-testid="tutor-offered-preview-stored">
-            Preview did not refresh Google Calendar. Open times below use saved hours and existing bookings.
-          </p>
         ) : null}
         {showSlots && offer ? (
           <div className="max-h-96 space-y-6 overflow-y-auto">
