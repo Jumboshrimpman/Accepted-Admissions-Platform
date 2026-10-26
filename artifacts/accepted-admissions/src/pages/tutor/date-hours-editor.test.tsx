@@ -187,11 +187,19 @@ describe("tutor date hours editor", () => {
     expect(screen.getByTestId("tutor-date-hours-all-closed").textContent).toBe(
       "All your dates are closed. Students can't book you until you add hours for a date and save it.",
     );
-    const editor = screen.getByTestId("tutor-date-hours-editor");
-    expect(editor.textContent).toContain("Mon, Oct 26 — Closed");
-    expect(editor.textContent).toContain("Tue, Oct 27 — Closed");
-    expect(editor.textContent).toContain("Mon, Nov 16 — Closed");
-    expect(editor.textContent).not.toContain("Open, bookable");
+    const list = screen.getByTestId("tutor-date-hours-other-dates");
+    expect(list.querySelectorAll("[data-testid^='tutor-date-hours-day-']")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Show closed dates (3)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Mon, Oct 26 — Closed" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Tue, Oct 27 — Closed" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Mon, Nov 16 — Closed" })).toBeTruthy();
+    expect(screen.getByTestId("tutor-date-hours-editor").textContent).not.toContain("Open, bookable");
+    fireEvent.click(screen.getByRole("button", { name: "Show closed dates (3)" }));
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-27").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-16").textContent).toContain("Closed");
+    fireEvent.click(screen.getByRole("button", { name: "Hide closed dates" }));
+    expect(list.querySelectorAll("[data-testid^='tutor-date-hours-day-']")).toHaveLength(0);
     expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("CLOSED");
     expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("This date is closed.");
     expect(screen.getByTestId("tutor-weekly-hours-status").textContent).toContain("No weekly schedule is active.");
@@ -213,8 +221,10 @@ describe("tutor date hours editor", () => {
     });
     expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Open, bookable");
     expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("4:00 PM");
-    expect(screen.getByTestId("tutor-date-hours-day-2026-10-27").textContent).toContain("Closed");
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-10-27")).toBeNull();
     expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("Students can book this date.");
+    fireEvent.click(screen.getByRole("button", { name: "Show closed dates (2)" }));
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-27").textContent).toContain("Closed");
   });
 
   test("a saved weekly schedule shows unset dates as open and keeps a closed date closed", () => {
@@ -238,10 +248,13 @@ describe("tutor date hours editor", () => {
     );
 
     expect(screen.queryByTestId("tutor-date-hours-all-closed")).toBeNull();
-    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Closed");
-    expect(screen.getByTestId("tutor-date-hours-day-2026-11-02").textContent).toContain("Closed");
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-10-26")).toBeNull();
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-11-02")).toBeNull();
     expect(screen.getByTestId("tutor-date-hours-day-2026-11-16").textContent).toContain("Open, bookable");
     expect(screen.getByTestId("tutor-date-hours-day-2026-11-16").textContent).toContain("9:00 PM");
+    fireEvent.click(screen.getByRole("button", { name: "Show closed dates (2)" }));
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-02").textContent).toContain("Closed");
     expect(screen.getByTestId("tutor-weekly-hours-status").textContent).toContain("bookable on dates you have not closed");
     expect(screen.queryByText("No weekly schedule is active.")).toBeNull();
   });
@@ -263,5 +276,57 @@ describe("tutor date hours editor", () => {
     expect(screen.getByTestId("tutor-weekly-hours-saved").textContent).toContain("9:00 PM");
     expect(screen.queryByRole("button", { name: "Edit Monday" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete Monday" })).toBeNull();
+  });
+
+  test("hides closed dates until asked, including on the admin preview, and still edits one from the date list", async () => {
+    const hours = {
+      ...saved,
+      today: "2026-10-26",
+      editorDates: ["2026-10-26", "2026-10-27", "2026-11-02"],
+      dateHours: {
+        "2026-10-26": [],
+        "2026-10-27": [{ start: "18:00", end: "19:00" }],
+        "2026-11-02": [],
+        "2099-12-31": [],
+      },
+      recurringHours: { startDate: null, endDate: null, days: {} },
+    };
+    const { unmount } = render(<TutorDateHoursEditor preview={hours} />);
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-27").textContent).toContain("Open, bookable");
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-10-26")).toBeNull();
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-11-02")).toBeNull();
+    expect(screen.queryByTestId("tutor-date-hours-all-closed")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show closed dates (2)" }));
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-02").textContent).toContain("Closed");
+    expect(screen.queryByRole("button", { name: "Save this date" })).toBeNull();
+    unmount();
+
+    mocks.customFetch.mockResolvedValueOnce(hours);
+    render(<TutorDateHoursEditor />);
+    expect(await screen.findByRole("button", { name: "Show closed dates (2)" })).toBeTruthy();
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-11-02")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-02" } });
+    expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("This date is closed.");
+    fireEvent.click(screen.getByRole("button", { name: "Add a window" }));
+    mocks.customFetch.mockResolvedValueOnce({
+      ...hours,
+      dateHours: {
+        ...hours.dateHours,
+        "2026-11-02": [{ start: "16:00", end: "17:00" }],
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save this date" }));
+    await waitFor(() => {
+      expect(mocks.customFetch).toHaveBeenLastCalledWith("/api/tutor/date-hours", {
+        method: "PUT",
+        body: JSON.stringify({
+          dateHours: { "2026-11-02": [{ start: "16:00", end: "17:00" }] },
+        }),
+      });
+    });
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-02").textContent).toContain("Open, bookable");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-27").textContent).toContain("6:00 PM");
+    expect(screen.queryByTestId("tutor-date-hours-day-2026-10-26")).toBeNull();
   });
 });
