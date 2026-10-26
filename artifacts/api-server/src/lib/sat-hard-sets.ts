@@ -805,6 +805,16 @@ export async function ensureHardSatPrework(
           classified[0];
         return { action: "unchanged", assignmentId: keeper?.row.id ?? shortHard?.row.id ?? null };
       }
+      if (
+        oct30 &&
+        fullHard &&
+        preworkItems.length !== HARD_SAT_PREWORK_QUESTIONS
+      ) {
+        // The Oct 30 mix needs 18 official math items. When that mix cannot be
+        // built, keep the 40-question hard pre-work already on the session.
+        // A shortfall return would skip the in-session set.
+        return { action: "unchanged", assignmentId: fullHard.row.id };
+      }
       if (shortHard) {
         await raiseHardSatShortfallAlert(
           session,
@@ -1063,6 +1073,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       target,
       (await hardPlanOptionsForSession(session)).originalDateKey != null,
     );
+    await suppressShortfallWhenAssigned(session, target);
     return {
       status: written,
       questionCount: inSession.length,
@@ -1180,6 +1191,8 @@ export function taitoOct30PreworkAllowsInSession(
 /**
  * Point Taito's Oct 30 pre-work at hard reading plus the official math half
  * when that copy has no attempts. A started set is left in place and flagged.
+ * A full hard pre-work that is already assigned stays when the Oct 30 mix
+ * cannot be filled, and the in-session set is still written.
  * When that pre-work copy is in place, also fill the unattempted hard
  * in-session set. Other sessions, including Michelle's Oct 25 set, stay.
  */
