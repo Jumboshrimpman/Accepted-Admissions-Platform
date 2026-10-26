@@ -1168,9 +1168,20 @@ export function isTaitoOct30EuniceSession(input: {
 }
 
 /**
+ * Fill the in-session set only once a pre-work copy is already on the session.
+ * A shortfall must not create a lone in-session set.
+ */
+export function taitoOct30PreworkAllowsInSession(
+  action: "not-hard" | "blocked-by-attempts" | "unchanged" | "unavailable" | "shortfall" | "assigned",
+): boolean {
+  return action === "assigned" || action === "unchanged" || action === "blocked-by-attempts";
+}
+
+/**
  * Point Taito's Oct 30 pre-work at hard reading plus the official math half
  * when that copy has no attempts. A started set is left in place and flagged.
- * Other sessions, including Michelle's Oct 25 set, stay.
+ * When that pre-work copy is in place, also fill the unattempted hard
+ * in-session set. Other sessions, including Michelle's Oct 25 set, stay.
  */
 export async function ensureTaitoOct30HardPrework(): Promise<{
   action: "missing" | "unchanged" | "assigned" | "blocked" | "shortfall";
@@ -1210,6 +1221,9 @@ export async function ensureTaitoOct30HardPrework(): Promise<{
   );
   if (!session) return { action: "missing", readingLeftInPlace: false };
   const result = await ensureHardSatPrework(session);
+  if (taitoOct30PreworkAllowsInSession(result.action)) {
+    await ensureHardSatInSession(session);
+  }
   const readingLeftInPlace =
     result.action === "blocked-by-attempts" && result.readingLeftInPlace === true;
   if (result.action === "assigned") return { action: "assigned", readingLeftInPlace };
