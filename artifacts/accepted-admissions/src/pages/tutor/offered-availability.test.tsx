@@ -163,7 +163,7 @@ describe("tutor offered availability", () => {
     expect((await screen.findByRole("region", { name: "1 hour" })).textContent).toContain("10:00 AM");
   });
 
-  test("Nika's card notes that bookings use the admin calendar fallback", async () => {
+  test("the tutor card hides the admin calendar fallback and still lists open times", async () => {
     mocks.customFetch.mockResolvedValue({
       from: "2026-10-17T14:00:00.000Z",
       to: "2026-10-31T14:00:00.000Z",
@@ -180,8 +180,9 @@ describe("tutor offered availability", () => {
     });
     render(<TutorOfferedAvailability />);
 
-    expect(await screen.findByTestId("tutor-offered-admin-fallback")).toBeTruthy();
-    expect(screen.getByText("Bookings use admin calendar fallback")).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "1 hour" })).toBeTruthy();
+    expect(screen.queryByText("Bookings use admin calendar fallback")).toBeNull();
+    expect(screen.queryByTestId("tutor-offered-admin-fallback")).toBeNull();
     expect((await screen.findByRole("region", { name: "1 hour" })).textContent).toContain("6:05 PM");
   });
 
