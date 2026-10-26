@@ -1,13 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 320" role="img">
-  <title>Circle with center O and arc ABD</title>
-  <rect width="400" height="320" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 320" role="img">
+  <title>Circle with center O, radii OA and OD, and arc ABD on the circumference</title>
+  <rect width="420" height="320" fill="#ffffff"/>
   <circle cx="200" cy="170" r="100" fill="none" stroke="#111111" stroke-width="2"/>
-  <path d="M100 170 A100 100 0 0 0 286.6 120" fill="none" stroke="#111111" stroke-width="3"/>
-  <path d="M200 170 L100 170 M200 170 L286.6 120" fill="none" stroke="#111111" stroke-width="2"/>
-  <circle cx="174.1" cy="73.4" r="3" fill="#111111"/>
+  <path id="radii" d="M200 170 L100 170 M200 170 L286.6 120" fill="none" stroke="#111111" stroke-width="2"/>
+  <path id="arc" d="M100 170 L100.06 166.51 L100.24 163.02 L100.55 159.55 L100.97 156.08 L101.52 152.64 L102.19 149.21 L102.97 145.81 L103.87 142.44 L104.89 139.1 L106.03 135.8 L107.28 132.54 L108.65 129.33 L110.12 126.16 L111.71 123.05 L113.4 120 L115.2 117.01 L117.1 114.08 L119.1 111.22 L121.2 108.43 L123.4 105.72 L125.69 103.09 L128.07 100.53 L130.53 98.07 L133.09 95.69 L135.72 93.4 L138.43 91.2 L141.22 89.1 L144.08 87.1 L147.01 85.2 L150 83.4 L153.05 81.71 L156.16 80.12 L159.33 78.65 L162.54 77.28 L165.8 76.03 L169.1 74.89 L172.44 73.87 L175.81 72.97 L179.21 72.19 L182.64 71.52 L186.08 70.97 L189.55 70.55 L193.02 70.24 L196.51 70.06 L200 70 L203.49 70.06 L206.98 70.24 L210.45 70.55 L213.92 70.97 L217.36 71.52 L220.79 72.19 L224.19 72.97 L227.56 73.87 L230.9 74.89 L234.2 76.03 L237.46 77.28 L240.67 78.65 L243.84 80.12 L246.95 81.71 L250 83.4 L252.99 85.2 L255.92 87.1 L258.78 89.1 L261.57 91.2 L264.28 93.4 L266.91 95.69 L269.47 98.07 L271.93 100.53 L274.31 103.09 L276.6 105.72 L278.8 108.43 L280.9 111.22 L282.9 114.08 L284.8 117.01 L286.6 120" fill="none" stroke="#111111" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="100" cy="170" r="3.5" fill="#ffffff" stroke="#111111" stroke-width="1.5"/>
+  <circle cx="174.12" cy="73.41" r="3.5" fill="#ffffff" stroke="#111111" stroke-width="1.5"/>
+  <circle cx="286.6" cy="120" r="3.5" fill="#ffffff" stroke="#111111" stroke-width="1.5"/>
   <circle cx="200" cy="170" r="3.5" fill="#111111"/>
-  <text x="188" y="200" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">O</text>
-  <text x="72" y="166" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">A</text>
-  <text x="156" y="62" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">B</text>
-  <text x="294" y="116" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">D</text>
+  <text x="200" y="200" text-anchor="middle" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">O</text>
+  <text x="78" y="176" text-anchor="middle" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">A</text>
+  <text x="166" y="52" text-anchor="middle" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">B</text>
+  <text x="312" y="116" text-anchor="start" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">D</text>
 </svg>

@@ -189,6 +189,64 @@ test("Oct 25 figures stay servable and grid-ins stay free response", () => {
   }), true);
 });
 
+function svgPathPoints(svg: string, id: string): Array<[number, number]> {
+  const match = svg.match(new RegExp(`id="${id}" d="([^"]+)"`));
+  assert.ok(match, id);
+  const nums = [...match[1]!.matchAll(/-?\d+(?:\.\d+)?/g)].map((item) => Number(item[0]));
+  const points: Array<[number, number]> = [];
+  for (let index = 0; index < nums.length; index += 2) {
+    points.push([nums[index]!, nums[index + 1]!]);
+  }
+  return points;
+}
+
+test("Q4 and Q5 bold arcs lie on the circumference and Q6/Q7 keep only right-angle marks", () => {
+  const q4 = readFileSync(
+    new URL("../../../accepted-admissions/public/media/geometry/michelle-oct25/q04-arc-jkl-question-block.svg", import.meta.url),
+    "utf8",
+  );
+  const q5 = readFileSync(
+    new URL("../../../accepted-admissions/public/media/geometry/michelle-oct25/q05-arc-abd-question-block.svg", import.meta.url),
+    "utf8",
+  );
+  assert.equal(/\sA\d/.test(q4), false);
+  assert.equal(/\sA\d/.test(q5), false);
+  const arc4 = svgPathPoints(q4, "arc");
+  for (const [x, y] of arc4) {
+    assert.ok(Math.abs(Math.hypot(x - 180, y - 168) - 108) < 0.05, `${x},${y}`);
+    assert.ok(y <= 74.47 + 0.01);
+  }
+  assert.ok(arc4.some(([x, y]) => Math.hypot(x - 180, y - 60) < 0.1));
+  assert.deepEqual(svgPathPoints(q4, "radii"), [
+    [180, 168],
+    [126, 74.47],
+    [180, 168],
+    [234, 74.47],
+  ]);
+
+  const arc5 = svgPathPoints(q5, "arc");
+  for (const [x, y] of arc5) {
+    assert.ok(Math.abs(Math.hypot(x - 200, y - 170) - 100) < 0.05, `${x},${y}`);
+    assert.ok(y <= 170.01);
+  }
+  assert.ok(arc5.some(([x, y]) => Math.hypot(x - 200, y - 70) < 0.1));
+  assert.ok(arc5.some(([x, y]) => Math.hypot(x - 174.12, y - 73.41) < 2));
+  assert.ok(Math.hypot(arc5[0]![0] - 100, arc5[0]![1] - 170) < 0.1);
+  assert.ok(Math.hypot(arc5.at(-1)![0] - 286.6, arc5.at(-1)![1] - 120) < 0.1);
+
+  for (const file of ["q06-similar-triangles-question-block.svg", "q07-similar-triangles-question-block.svg"]) {
+    const svg = readFileSync(
+      new URL(`../../../accepted-admissions/public/media/geometry/michelle-oct25/${file}`, import.meta.url),
+      "utf8",
+    );
+    assert.match(svg, /id="right-angle-f" d="M80 256 H94 V270"/);
+    assert.match(svg, /id="right-angle-g" d="M80 136 H94 V150"/);
+    assert.equal(svg.includes("M80 270 H98"), false);
+    assert.equal(svg.includes("M80 150 H98"), false);
+    assert.equal(/<circle\b/.test(svg), false);
+  }
+});
+
 test("only the completed Oct 25 session is eligible", () => {
   const completedNow = new Date("2026-10-26T15:00:00.000Z");
   const session = (
