@@ -442,6 +442,24 @@ describe("portal SAT book/pay", () => {
               totalPriceCents: 19500,
               effectiveHourlyRateCents: 13000,
             },
+            {
+              id: "essay-async",
+              slug: "college-consulting-nika-essay-async",
+              name: "Essay editing, 1 hr (async)",
+              description: "One hour of asynchronous essay editing with Nika. Upload one PDF. There is no meeting.",
+              durationHours: 1,
+              totalPriceCents: 10000,
+              effectiveHourlyRateCents: 10000,
+            },
+            {
+              id: "essay-followup",
+              slug: "college-consulting-nika-essay-followup",
+              name: "Essay editing + 1 hr follow-up call, 2 hrs",
+              description: "Essay editing plus a one-hour follow-up call with Nika.",
+              durationHours: 2,
+              totalPriceCents: 20000,
+              effectiveHourlyRateCents: 10000,
+            },
           ],
         };
       }),
@@ -465,6 +483,9 @@ describe("portal SAT book/pay", () => {
     expect(screen.queryByText("Michelle’s SAT Session with Xavier")).toBeNull();
     expect(await screen.findByText("College Consulting hour with Xavier")).toBeTruthy();
     expect(screen.getByText("$195")).toBeTruthy();
+    expect(screen.getByTestId("portal-essay-editing").textContent).toContain("Essay editing with Nika");
+    expect(screen.getByTestId("portal-essay-async").textContent).toContain("$100");
+    expect(screen.getByTestId("portal-essay-followup").textContent).toContain("$200");
   });
 
   test("samapostgrad sees Neel's consulting offers and can still open SAT", async () => {
@@ -530,6 +551,24 @@ describe("portal SAT book/pay", () => {
                 totalPriceCents: 20000,
                 effectiveHourlyRateCents: 20000,
               },
+              {
+                id: "essay-async",
+                slug: "college-consulting-nika-essay-async",
+                name: "Essay editing, 1 hr (async)",
+                description: "One hour of asynchronous essay editing with Nika. Upload one PDF. There is no meeting.",
+                durationHours: 1,
+                totalPriceCents: 10000,
+                effectiveHourlyRateCents: 10000,
+              },
+              {
+                id: "essay-followup",
+                slug: "college-consulting-nika-essay-followup",
+                name: "Essay editing + 1 hr follow-up call, 2 hrs",
+                description: "Essay editing plus a one-hour follow-up call with Nika.",
+                durationHours: 2,
+                totalPriceCents: 20000,
+                effectiveHourlyRateCents: 10000,
+              },
             ],
           };
         }
@@ -552,10 +591,12 @@ describe("portal SAT book/pay", () => {
     const view = render(<PortalSat />);
     expect(screen.getByRole("heading", { name: "College Consulting" })).toBeTruthy();
     expect(await screen.findByText("College Consulting hour with Nika")).toBeTruthy();
-    expect(screen.getByText("$100")).toBeTruthy();
-    expect(screen.getByText("$200")).toBeTruthy();
+    expect(screen.getAllByText("$100").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$200").length).toBeGreaterThan(0);
     expect(screen.getByText(/for Neel Dharni/)).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Continue to secure checkout" }).length).toBe(2);
+    expect(screen.getByTestId("portal-essay-async").textContent).toContain("$100");
+    expect(screen.getByTestId("portal-essay-followup").textContent).toContain("$200");
+    expect(screen.getAllByRole("button", { name: "Continue to secure checkout" }).length).toBe(4);
     const satLink = screen.getByRole("link", { name: "Open SAT booking" });
     expect(satLink.getAttribute("href")).toBe("/portal/sat?flow=sat");
     expect(urls.some((url) => url.includes("/api/public/products?service=college-consulting"))).toBe(true);

@@ -15,6 +15,7 @@ import {
 import {
   ESSAY_FOLLOWUP_CREDIT_SLUG,
   ESSAY_PDF_MAX_BYTES,
+  essayPreviewOffers,
   NIKA_ESSAY_ASYNC_SLUG,
   NIKA_ESSAY_FOLLOWUP_SLUG,
   canMarkEssayDone,
@@ -261,6 +262,16 @@ test("essay products stay scoped to Nika and off the meeting-hour pool", () => {
     }),
     "consulting",
   );
+  assert.deepEqual(
+    essayPreviewOffers().map((offer) => ({ slug: offer.slug, priceCents: offer.priceCents, durationMinutes: offer.durationMinutes })),
+    [
+      { slug: NIKA_ESSAY_ASYNC_SLUG, priceCents: 10_000, durationMinutes: 60 },
+      { slug: NIKA_ESSAY_FOLLOWUP_SLUG, priceCents: 20_000, durationMinutes: 60 },
+    ],
+  );
+  const platform = readFileSync(new URL("../routes/platform.ts", import.meta.url), "utf8");
+  assert.match(platform, /essayPreviewOffers\(\)/);
+  assert.match(platform, /\[\.\.\.COLLEGE_CONSULTING_SLUGS, \.\.\.NIKA_ESSAY_SLUGS\]/);
   assert.equal(clientMayBuyConsultingProduct(NEEL_DHARNI_USER_ID, NIKA_ESSAY_ASYNC_SLUG), true);
   assert.equal(clientMayBuyConsultingProduct("someone-else", NIKA_ESSAY_ASYNC_SLUG), false);
   assert.deepEqual(essayPurchaseCreditPlan(NIKA_ESSAY_ASYNC_SLUG), {

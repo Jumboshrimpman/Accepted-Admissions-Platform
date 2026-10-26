@@ -1908,6 +1908,22 @@ export interface AdminClientPreviewConsultingTutor {
   calendarConnected: boolean;
 }
 
+export interface AdminClientPreviewSatTutor {
+  tutorKey: 'xavier' | 'nika' | 'eunice' | 'victoria';
+  id: string;
+  name: string;
+  title: string;
+  tagline: string;
+  biography: string;
+  /** @nullable */
+  photoUrl?: string | null;
+  hourlyRateCents: number;
+  prepaidHours: number;
+  calendarConnected: boolean;
+  comingSoon: boolean;
+  bookable: boolean;
+}
+
 export type AdminClientDashboard = Dashboard & {
   adminPreview: true;
   previewOffer: AdminClientPreviewOffer;
@@ -1915,6 +1931,7 @@ export type AdminClientDashboard = Dashboard & {
   previewFinancials: FinancialSummary;
   previewBooking: AdminClientPreviewBooking;
   previewConsultingTutors?: AdminClientPreviewConsultingTutor[];
+  previewSatTutors?: AdminClientPreviewSatTutor[];
 };
 
 export type CourseDetail = Course & ({

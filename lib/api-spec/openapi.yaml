@@ -3230,6 +3230,10 @@ components:
             previewConsultingTutors:
               type: array
               items: { $ref: "#/components/schemas/AdminClientPreviewConsultingTutor" }
+            previewSatTutors:
+              type: array
+              description: Sophia Sleiman's SAT tutor cards. Victoria stays Coming soon until her calendar connects.
+              items: { $ref: "#/components/schemas/AdminClientPreviewSatTutor" }
     AdminClientPreviewOffer:
       type: object
       required: [name, description, priceCents, durationMinutes]
@@ -3254,6 +3258,23 @@ components:
         hourlyRateCents: { type: number }
         prepaidHours: { type: number }
         calendarConnected: { type: boolean }
+    AdminClientPreviewSatTutor:
+      type: object
+      required: [tutorKey, id, name, title, tagline, biography, hourlyRateCents, prepaidHours, calendarConnected, comingSoon, bookable]
+      additionalProperties: false
+      properties:
+        tutorKey: { type: string, enum: [xavier, nika, eunice, victoria] }
+        id: { type: string }
+        name: { type: string }
+        title: { type: string }
+        tagline: { type: string }
+        biography: { type: string }
+        photoUrl: { type: ["string", "null"] }
+        hourlyRateCents: { type: number }
+        prepaidHours: { type: number }
+        calendarConnected: { type: boolean }
+        comingSoon: { type: boolean }
+        bookable: { type: boolean }
     AdminClientPreviewBooking:
       type: object
       required: [calendarStatus, availability, sessions]

@@ -179,7 +179,7 @@ import {
   temporaryTutorViewAllowsMethod,
 } from "../lib/college-consulting";
 import { collegeConsultingProvisionStatus } from "../lib/college-consulting-provision";
-import { followUpBookingDecision, isNikaEssaySlug, NIKA_ESSAY_SLUGS, tutorIsNika } from "../lib/essay-editing";
+import { essayPreviewOffers, followUpBookingDecision, isNikaEssaySlug, NIKA_ESSAY_SLUGS, tutorIsNika } from "../lib/essay-editing";
 import { attachFollowUpSession, linkEssayRequestToSession, openFollowUpForBooking } from "../lib/essay-request-store";
 import {
   handleEssayCheckoutRequest,
@@ -360,6 +360,7 @@ import {
 } from "../lib/victoria-booking";
 import {
   sophiaMayBookVictoria,
+  sophiaPreviewTutors,
   sophiaVictoriaComingSoon,
   sophiaVictoriaIdentity,
 } from "../lib/sophia-tutor-links";
@@ -5445,8 +5446,7 @@ async function bookingTutor(
       tutor.bookingEligible &&
       tutor.name === NIKA_NAME &&
       (await bookerMayBookNika(bookerUserId));
-    const onSophiaVictoriaRoster =
-      tutor.bookingEligible && sophiaMayBookVictoria(tutor, bookerUserId);
+    const onSophiaVictoriaRoster = sophiaMayBookVictoria(tutor, bookerUserId);
     if (isNeelDharniUser(bookerUserId) && !consultingTutorAllowed(tutor)) {
       throw new BookingError(
         403,
@@ -8158,8 +8158,15 @@ router.get("/booking/tutors", async (req: AuthedRequest, res): Promise<void> => 
     .where(
       and(
         eq(tutorProfilesTable.active, true),
-        eq(tutorProfilesTable.bookingEligible, true),
-        inArray(tutorProfilesTable.name, satPortalTutorNames(req.appUser)),
+        or(
+          and(
+            eq(tutorProfilesTable.bookingEligible, true),
+            inArray(tutorProfilesTable.name, satPortalTutorNames(req.appUser)),
+          ),
+          req.appUser?.id === SOPHIA_SLEIMAN_SAT_USER_ID
+            ? eq(tutorProfilesTable.name, VICTORIA_DISPLAY_NAME)
+            : sql`false`,
+        ),
       ),
     )
     .orderBy(asc(tutorProfilesTable.name));
@@ -14039,6 +14046,47 @@ router.get(
           durationMinutes: 60 as const,
         }));
       }
+      const essayOffers = essayPreviewOffers();
+      previewOffers = [
+        ...previewOffers.filter((offer) => !isNikaEssaySlug(offer.slug)),
+        ...essayOffers,
+      ];
+    }
+    let previewSatTutors: ReturnType<typeof sophiaPreviewTutors> | undefined;
+    if (client.id === SOPHIA_SLEIMAN_SAT_USER_ID) {
+      const sophiaLedger = await db
+        .select({
+          entryType: creditLedgerTable.entryType,
+          hours: creditLedgerTable.hours,
+          productId: creditLedgerTable.productId,
+        })
+        .from(creditLedgerTable)
+        .where(eq(creditLedgerTable.clientUserId, client.id));
+      const prepaidHours = {
+        eunice: 0,
+        victoria: 0,
+        xavier: 0,
+        nika: 0,
+      };
+      const calendars = { eunice: false, victoria: false, xavier: false, nika: false };
+      for (const tutorKey of ["eunice", "victoria", "xavier", "nika"] as const) {
+        prepaidHours[tutorKey] = remainingCreditHoursForProducts(
+          sophiaLedger,
+          catalogProducts
+            .filter((product) => satTutorKeyForSlug(product.slug) === tutorKey)
+            .map((product) => product.id),
+        );
+      }
+      for (const profile of tutorProfiles) {
+        const tutorKey = satTutorKeyForName(profile.name);
+        if (!tutorKey || profile.calendarStatus !== "connected") continue;
+        calendars[tutorKey] = true;
+      }
+      previewSatTutors = sophiaPreviewTutors({
+        profiles: tutorProfiles,
+        prepaidHours,
+        calendars,
+      });
     }
     const previewOffer = previewOffers[0]!;
     let previewBooking: {
@@ -14155,6 +14203,7 @@ router.get(
         },
         previewBooking,
         ...(previewConsultingTutors ? { previewConsultingTutors } : {}),
+        ...(previewSatTutors ? { previewSatTutors } : {}),
         credits: {
           ...dashboard.credits,
           readOnly: true,

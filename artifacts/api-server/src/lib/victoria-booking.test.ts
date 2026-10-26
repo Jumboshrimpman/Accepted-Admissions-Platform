@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { SOPHIA_SLEIMAN_SAT_USER_ID, allowsLegacySatPool, canBookSatTutor } from "./sat-tutor-pricing.ts";
 import {
   sophiaMayBookVictoria,
+  sophiaPreviewTutors,
   sophiaVictoriaComingSoon,
   sophiaVictoriaIdentity,
 } from "./sophia-tutor-links.ts";
@@ -49,6 +50,41 @@ test("Victoria is hidden from every booking client while her hour pool stays", (
   assert.equal(sophiaVictoriaComingSoon(victoria, other.id), false);
   assert.equal(sophiaMayBookVictoria({ ...victoria, calendarStatus: "connected" }, other.id), false);
   assert.equal(sophiaVictoriaComingSoon({ name: "Eunice Chon" }, sophia.id), false);
+});
+
+test("Sophia's preview shows Victoria at $130 until her calendar connects", () => {
+  const disconnected = sophiaPreviewTutors({
+    profiles: [
+      { id: "victoria-profile", name: "Victoria Wijerathnayapa", calendarStatus: "disconnected" },
+      { id: "xavier-profile", name: "Xavier Morales", calendarStatus: "connected" },
+      { id: "nika-profile", name: "Nika Raiffe", calendarStatus: "connected" },
+      { id: "eunice-profile", name: "Eunice Chon", calendarStatus: "connected" },
+    ],
+    calendars: { xavier: true, nika: true, eunice: true, victoria: false },
+  });
+  assert.deepEqual(
+    disconnected.map((tutor) => ({
+      tutorKey: tutor.tutorKey,
+      hourlyRateCents: tutor.hourlyRateCents,
+      comingSoon: tutor.comingSoon,
+      bookable: tutor.bookable,
+    })),
+    [
+      { tutorKey: "xavier", hourlyRateCents: 20_000, comingSoon: false, bookable: true },
+      { tutorKey: "nika", hourlyRateCents: 13_000, comingSoon: false, bookable: true },
+      { tutorKey: "eunice", hourlyRateCents: 13_000, comingSoon: false, bookable: true },
+      { tutorKey: "victoria", hourlyRateCents: 13_000, comingSoon: true, bookable: false },
+    ],
+  );
+  const connected = sophiaPreviewTutors({
+    profiles: [{ id: "victoria-profile", name: "Victoria Wijerathnayapa", calendarStatus: "connected" }],
+    calendars: { victoria: true },
+  });
+  const victoria = connected.find((tutor) => tutor.tutorKey === "victoria");
+  assert.equal(victoria?.comingSoon, false);
+  assert.equal(victoria?.bookable, true);
+  assert.equal(victoria?.hourlyRateCents, 13_000);
+  assert.equal(connected.some((tutor) => tutor.hourlyRateCents === 10_000), false);
 });
 
 test("booking APIs refuse Victoria and the portal copy does not offer her", async () => {
