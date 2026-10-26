@@ -805,6 +805,16 @@ export async function ensureHardSatPrework(
           classified[0];
         return { action: "unchanged", assignmentId: keeper?.row.id ?? shortHard?.row.id ?? null };
       }
+      if (
+        oct30 &&
+        fullHard &&
+        preworkItems.length !== HARD_SAT_PREWORK_QUESTIONS
+      ) {
+        // The Oct 30 mix needs 18 official math items. When that mix cannot be
+        // built, keep the 40-question hard pre-work already on the session.
+        // A shortfall return would skip the in-session set.
+        return { action: "unchanged", assignmentId: fullHard.row.id };
+      }
       if (shortHard) {
         await raiseHardSatShortfallAlert(
           session,
@@ -1063,6 +1073,7 @@ export async function ensureHardSatInSession(session: SessionRow): Promise<{
       target,
       (await hardPlanOptionsForSession(session)).originalDateKey != null,
     );
+    await suppressShortfallWhenAssigned(session, target);
     return {
       status: written,
       questionCount: inSession.length,
@@ -1180,9 +1191,24 @@ export function taitoOct30PreworkAllowsInSession(
 /**
  * Point Taito's Oct 30 pre-work at hard reading plus the official math half
  * when that copy has no attempts. A started set is left in place and flagged.
- * When that pre-work copy is in place, also fill the unattempted hard
- * in-session set. Other sessions, including Michelle's Oct 25 set, stay.
+ * A full hard pre-work that is already assigned stays when the Oct 30 mix
+ * cannot be filled, and the in-session set is still written.
+ * The in-session write runs only when exactly one live before-session set
+ * is all hard and has at least 40 questions. A shorter all-hard set stays
+ * a shortfall and does not get a lone in-session set.
+ * Other sessions, including Michelle's Oct 25 set, stay.
  */
+async function countLiveFullHardBeforeSessionSets(sessionId: string): Promise<number> {
+  const hardKeys = await hardPoolSourceKeys();
+  const live = await listLiveBeforeSessionHomework(sessionId);
+  let count = 0;
+  for (const row of live) {
+    const info = await classifyBankAssignment(row.id, hardKeys, row.attemptCount);
+    if (info.everyKeyIsHard && info.questionCount >= HARD_SAT_PREWORK_QUESTIONS) count += 1;
+  }
+  return count;
+}
+
 export async function ensureTaitoOct30HardPrework(): Promise<{
   action: "missing" | "unchanged" | "assigned" | "blocked" | "shortfall";
   readingLeftInPlace: boolean;
@@ -1221,13 +1247,16 @@ export async function ensureTaitoOct30HardPrework(): Promise<{
   );
   if (!session) return { action: "missing", readingLeftInPlace: false };
   const result = await ensureHardSatPrework(session);
-  if (taitoOct30PreworkAllowsInSession(result.action)) {
+  const fullHardPreworkCount = await countLiveFullHardBeforeSessionSets(session.id);
+  if (taitoOct30PreworkAllowsInSession(result.action) && fullHardPreworkCount === 1) {
     await ensureHardSatInSession(session);
   }
   const readingLeftInPlace =
     result.action === "blocked-by-attempts" && result.readingLeftInPlace === true;
   if (result.action === "assigned") return { action: "assigned", readingLeftInPlace };
   if (result.action === "blocked-by-attempts") return { action: "blocked", readingLeftInPlace };
-  if (result.action === "shortfall") return { action: "shortfall", readingLeftInPlace: false };
+  if (result.action === "shortfall" || (result.action === "unchanged" && fullHardPreworkCount !== 1)) {
+    return { action: "shortfall", readingLeftInPlace: false };
+  }
   return { action: "unchanged", readingLeftInPlace: false };
 }
