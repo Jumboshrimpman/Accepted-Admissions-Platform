@@ -154,6 +154,7 @@ export function TutorDateHoursEditor({
   const [weeklySaving, setWeeklySaving] = useState(false);
   const [weeklyError, setWeeklyError] = useState("");
   const [weeklyNote, setWeeklyNote] = useState("");
+  const [showClosedDates, setShowClosedDates] = useState(false);
 
   useEffect(() => {
     if (!readOnly) return;
@@ -284,7 +285,13 @@ export function TutorDateHoursEditor({
 
   const selectedBookable = bookableWindowsFor(state, selectedDate);
   const selectedClosed = selectedBookable.length === 0;
-  const allDatesClosed = state.editorDates.every((date) => bookableWindowsFor(state, date).length === 0);
+  const dateRows = state.editorDates.map((date) => {
+    const bookable = bookableWindowsFor(state, date);
+    return { date, bookable, closed: bookable.length === 0 };
+  });
+  const closedDateCount = dateRows.filter((row) => row.closed).length;
+  const visibleDateRows = showClosedDates ? dateRows : dateRows.filter((row) => !row.closed);
+  const allDatesClosed = closedDateCount === state.editorDates.length && state.editorDates.length > 0;
   const recurring = recurringOf(state);
   const weeklyRows = WEEKDAYS.filter(([id]) => (recurring.days[id]?.length ?? 0) > 0);
   const invalidWindow = windows.some((window) => window.start >= window.end);
@@ -658,40 +665,52 @@ export function TutorDateHoursEditor({
         </div>
 
         <div data-testid="tutor-date-hours-other-dates">
-          <p className="text-sm font-medium">Next 8 weeks</p>
-          <ul className="mt-2 space-y-2 text-sm">
-            {state.editorDates.map((date) => {
-              const windows = bookableWindowsFor(state, date);
-              const closed = windows.length === 0;
-              return (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Next 8 weeks</p>
+            {closedDateCount > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={showClosedDates}
+                data-testid="tutor-date-hours-closed-toggle"
+                onClick={() => setShowClosedDates((current) => !current)}
+              >
+                {showClosedDates ? "Hide closed dates" : `Show closed dates (${closedDateCount})`}
+              </Button>
+            ) : null}
+          </div>
+          {visibleDateRows.length > 0 ? (
+            <ul className="mt-2 space-y-2 text-sm">
+              {visibleDateRows.map((row) => (
                 <li
-                  key={date}
+                  key={row.date}
                   className="flex flex-wrap items-center gap-2"
-                  data-testid={`tutor-date-hours-day-${date}`}
+                  data-testid={`tutor-date-hours-day-${row.date}`}
                 >
-                  <span className={closed ? "font-medium text-destructive" : "font-medium"}>
-                    {formatCivilDate(date)}
-                    {closed ? " — Closed" : ` — Open, bookable: ${formatWindowList(windows)}`}
+                  <span className={row.closed ? "font-medium text-destructive" : "font-medium"}>
+                    {formatCivilDate(row.date)}
+                    {row.closed ? " — Closed" : ` — Open, bookable: ${formatWindowList(row.bookable)}`}
                   </span>
-                  {readOnly || closed ? null : (
+                  {readOnly || row.closed ? null : (
                     <>
-                      <Button type="button" variant="outline" onClick={() => chooseDate(date)}>
-                        Edit {formatCivilDate(date)}
+                      <Button type="button" variant="outline" onClick={() => chooseDate(row.date)}>
+                        Edit {formatCivilDate(row.date)}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => save(date, [])}
+                        onClick={() => save(row.date, [])}
                         disabled={saving}
                       >
-                        Delete {formatCivilDate(date)}
+                        Delete {formatCivilDate(row.date)}
                       </Button>
                     </>
                   )}
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </CardContent>
     </Card>
