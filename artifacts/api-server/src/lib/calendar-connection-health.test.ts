@@ -418,6 +418,50 @@ test("Eunice uses the same health rules as Xavier and only alerts when she still
   assert.equal(paused.hasUpcomingBookableTime, false);
   assert.equal(calendarReconnectAlerts([paused]).length, 0);
   assert.equal(hasUpcomingBookableTime({ active: true, bookingEligible: true, weeklyHours: {} }), false);
+  assert.equal(
+    hasUpcomingBookableTime({
+      active: true,
+      bookingEligible: true,
+      weeklyHours: {},
+      dateHours: { "2026-11-02": [] },
+    }),
+    false,
+  );
+  assert.equal(
+    hasUpcomingBookableTime({
+      active: true,
+      bookingEligible: true,
+      weeklyHours: {},
+      dateHours: { "2026-11-02": [{ start: "16:00", end: "17:00" }] },
+    }),
+    true,
+  );
+  assert.equal(
+    hasUpcomingBookableTime({
+      active: true,
+      bookingEligible: true,
+      weeklyHours: {},
+      dateHours: {},
+      recurringHours: { days: { "1": [{ start: "16:00", end: "17:00" }] } },
+    }),
+    true,
+  );
+  const dateOnly = buildCalendarConnectionHealth({
+    tutorProfileId: "eunice-profile",
+    name: "Eunice Chon",
+    portalEmail: "eunice_chon@berkeley.edu",
+    active: true,
+    bookingEligible: true,
+    weeklyHours: {},
+    dateHours: { "2026-11-02": [{ start: "16:00", end: "17:00" }] },
+    hasRefreshToken: false,
+    connectedAt: "2026-09-01T00:00:00.000Z",
+    lastError: "Google revoked the calendar grant. Reconnect is required.",
+  });
+  assert.deepEqual(
+    calendarReconnectAlerts([dateOnly]).map((row) => row.name),
+    ["Eunice Chon"],
+  );
 });
 
 test("featured tutors sort ahead of other profiles", () => {

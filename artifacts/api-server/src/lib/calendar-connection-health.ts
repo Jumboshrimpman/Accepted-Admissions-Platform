@@ -101,14 +101,24 @@ function iso(value: Date | string | null | undefined): string | null {
   return date.toISOString();
 }
 
+function hourMapHasOpenWindow(hours: Record<string, unknown> | null | undefined): boolean {
+  if (!hours) return false;
+  return Object.values(hours).some((windows) => Array.isArray(windows) && windows.length > 0);
+}
+
 export function hasUpcomingBookableTime(input: {
   active?: boolean | null;
   bookingEligible?: boolean | null;
   weeklyHours?: Record<string, unknown> | null;
+  dateHours?: Record<string, unknown> | null;
+  recurringHours?: { days?: Record<string, unknown> | null } | null;
 }): boolean {
   if (input.active === false || input.bookingEligible !== true) return false;
-  const hours = input.weeklyHours ?? {};
-  return Object.values(hours).some((windows) => Array.isArray(windows) && windows.length > 0);
+  return (
+    hourMapHasOpenWindow(input.weeklyHours) ||
+    hourMapHasOpenWindow(input.dateHours) ||
+    hourMapHasOpenWindow(input.recurringHours?.days)
+  );
 }
 
 function freeBusySucceeded(value: Date | string | null | undefined): boolean {
@@ -380,6 +390,8 @@ export function buildCalendarConnectionHealth(input: {
   active?: boolean | null;
   bookingEligible?: boolean | null;
   weeklyHours?: Record<string, unknown> | null;
+  dateHours?: Record<string, unknown> | null;
+  recurringHours?: { days?: Record<string, unknown> | null } | null;
   connectionStatus?: string | null;
   hasRefreshToken: boolean;
   googleAccountEmail?: string | null;

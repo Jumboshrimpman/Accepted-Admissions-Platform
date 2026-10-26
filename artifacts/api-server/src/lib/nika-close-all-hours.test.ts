@@ -78,6 +78,16 @@ function ruleFrom(snapshot: {
   };
 }
 
+function nextDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00.000Z`) + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function eachDate(fromDay: string, toDay: string): string[] {
+  const dates: string[] = [];
+  for (let date = fromDay; date <= toDay; date = nextDate(date)) dates.push(date);
+  return dates;
+}
+
 function slotsBetween(hours: AvailabilityRule, fromDay: string, toDay: string) {
   return generateAvailableSlots(
     hours,
@@ -102,14 +112,15 @@ test("closing Nika leaves no bookable slot, then a saved date or weekly schedule
   const plan = planNikaCloseAll({ hasMarker: false, rule: before });
   assert.equal(plan.action, "applied");
   if (plan.action !== "applied") return;
-  for (const windows of Object.values(plan.dateHours)) assert.deepEqual(windows, []);
+  assert.deepEqual(Object.keys(plan.dateHours), [NIKA_CLOSURE_FAR_DATE]);
   assert.deepEqual(plan.dateHours[NIKA_CLOSURE_FAR_DATE], []);
   assert.deepEqual(plan.recurringHours, { startDate: null, endDate: null, days: {} });
   assert.deepEqual(plan.weeklyHours, {});
 
   const closed = ruleFrom(plan);
   assert.deepEqual(slotsBetween(closed, "2026-10-26", "2026-12-21"), []);
-  assert.deepEqual(slotsBetween(closed, "2026-11-16", "2026-11-23"), []);
+  assert.deepEqual(slotsBetween(closed, "2026-10-27", "2026-11-16"), []);
+  assert.deepEqual(slotsBetween(closed, "2026-11-16", "2026-11-24"), []);
   assert.deepEqual(slotsBetween(closed, "2027-03-01", "2027-03-08"), []);
   assert.deepEqual(slotsBetween(closed, "2100-01-03", "2100-01-10"), []);
 
@@ -121,19 +132,7 @@ test("closing Nika leaves no bookable slot, then a saved date or weekly schedule
     zonedDateTimeToUtc("2026-11-02", "16:00", "America/New_York").toISOString(),
   ]);
   assert.deepEqual(slotsBetween(openedDate, "2026-11-16", "2026-11-17"), []);
-
-  const weekly = ruleFrom({
-    ...plan,
-    recurringHours: {
-      startDate: null,
-      endDate: null,
-      days: { "1": [{ start: "16:00", end: "17:00" }] },
-    },
-  });
-  assert.deepEqual(slotsBetween(weekly, "2026-11-16", "2026-11-17"), [
-    zonedDateTimeToUtc("2026-11-16", "16:00", "America/New_York").toISOString(),
-  ]);
-  assert.deepEqual(slotsBetween(weekly, "2026-11-02", "2026-11-03"), []);
+  assert.deepEqual(slotsBetween(openedDate, "2026-10-27", "2026-11-02"), []);
 });
 
 test("a save after the cutoff is kept and the old openings still close", () => {
@@ -151,12 +150,75 @@ test("a save after the cutoff is kept and the old openings still close", () => {
   const plan = planNikaCloseAll({ hasMarker: false, rule: later });
   assert.equal(plan.action, "preserved-later-save");
   if (plan.action !== "preserved-later-save") return;
-  assert.deepEqual(plan.dateHours["2026-10-26"], []);
+  assert.equal(plan.dateHours["2026-10-26"], undefined);
+  assert.equal(plan.dateHours["2026-10-27"], undefined);
+  assert.equal(plan.dateHours["2026-11-15"], undefined);
+  assert.deepEqual(plan.dateHours[NIKA_CLOSURE_FAR_DATE], []);
   assert.deepEqual(plan.dateHours["2026-12-01"], [{ start: "10:00", end: "11:00" }]);
   assert.deepEqual(plan.recurringHours.days["2"], [{ start: "18:00", end: "19:00" }]);
+  assert.equal(plan.recurringHours.days["1"], undefined);
   assert.deepEqual(plan.weeklyHours, {});
+  const keptWeekly = ruleFrom(plan);
+  assert.deepEqual(slotsBetween(keptWeekly, "2026-10-27", "2026-10-28"), []);
+  for (const date of ["2026-11-03", "2026-11-10"]) {
+    assert.deepEqual(slotsBetween(keptWeekly, date, nextDate(date)), [
+      zonedDateTimeToUtc(date, "18:00", "America/New_York").toISOString(),
+    ]);
+  }
+  assert.deepEqual(slotsBetween(keptWeekly, "2026-11-16", "2026-11-17"), []);
+  assert.deepEqual(slotsBetween(keptWeekly, "2026-11-23", "2026-11-24"), []);
   assert.equal(planNikaCloseAll({ hasMarker: true, rule: later }).action, "already-applied");
   assert.equal(planNikaCloseAll({ hasMarker: false, rule: null }).action, "missing");
+});
+
+test("a weekly schedule saved after the cutoff opens Oct 27 through Nov 15", () => {
+  const later = storedBeforeClose();
+  later.updatedAt = new Date(NIKA_CLOSE_ALL_CUTOFF.getTime() + 60_000);
+  later.recurringHours = {
+    startDate: null,
+    endDate: null,
+    days: Object.fromEntries(["0", "1", "2", "3", "4", "5", "6"].map((day) => [day, [{ start: "10:00", end: "11:00" }]])),
+  };
+  const plan = planNikaCloseAll({ hasMarker: false, rule: later });
+  assert.equal(plan.action, "preserved-later-save");
+  if (plan.action !== "preserved-later-save") return;
+  assert.equal(plan.dateHours["2026-10-27"], undefined);
+  assert.equal(plan.dateHours["2026-11-15"], undefined);
+  assert.deepEqual(plan.dateHours[NIKA_CLOSURE_FAR_DATE], []);
+  const hours = ruleFrom(plan);
+  for (const date of eachDate("2026-10-27", "2026-11-15")) {
+    assert.deepEqual(slotsBetween(hours, date, nextDate(date)), [
+      zonedDateTimeToUtc(date, "10:00", "America/New_York").toISOString(),
+    ]);
+  }
+  assert.deepEqual(slotsBetween(hours, "2026-11-16", "2026-11-17"), [
+    zonedDateTimeToUtc("2026-11-16", "10:00", "America/New_York").toISOString(),
+  ]);
+});
+
+test("a single-date save after the cutoff does not revive the old weekly hours", () => {
+  const later = storedBeforeClose();
+  later.updatedAt = new Date(NIKA_CLOSE_ALL_CUTOFF.getTime() + 60_000);
+  later.dateHours = {
+    ...later.dateHours,
+    "2026-11-04": [{ start: "15:00", end: "16:00" }],
+  };
+  const plan = planNikaCloseAll({ hasMarker: false, rule: later });
+  assert.equal(plan.action, "preserved-later-save");
+  if (plan.action !== "preserved-later-save") return;
+  assert.deepEqual(plan.recurringHours, { startDate: null, endDate: null, days: {} });
+  assert.deepEqual(plan.weeklyHours, {});
+  assert.deepEqual(plan.dateHours["2026-11-04"], [{ start: "15:00", end: "16:00" }]);
+  assert.equal(plan.dateHours["2026-10-27"], undefined);
+  assert.equal(plan.dateHours["2026-11-15"], undefined);
+  assert.deepEqual(plan.dateHours[NIKA_CLOSURE_FAR_DATE], []);
+  const hours = ruleFrom(plan);
+  assert.deepEqual(slotsBetween(hours, "2026-11-04", "2026-11-05"), [
+    zonedDateTimeToUtc("2026-11-04", "15:00", "America/New_York").toISOString(),
+  ]);
+  assert.deepEqual(slotsBetween(hours, "2026-10-27", "2026-11-04"), []);
+  assert.deepEqual(slotsBetween(hours, "2026-11-05", "2026-11-16"), []);
+  assert.deepEqual(slotsBetween(hours, "2026-11-16", "2026-11-24"), []);
 });
 
 test("startup closes Nika once and does not rewrite sessions or send mail", async () => {
@@ -220,8 +282,11 @@ test("startup closure is idempotent, keeps a later save, and leaves the booked s
       [profileId],
     );
     const dateHours = closed.rows[0]?.date_hours ?? {};
-    assert.deepEqual(dateHours["2026-10-26"], []);
+    assert.equal(dateHours["2026-10-26"], undefined);
+    assert.equal(dateHours["2026-10-27"], undefined);
+    assert.equal(dateHours["2026-11-15"], undefined);
     assert.deepEqual(dateHours[NIKA_CLOSURE_FAR_DATE], []);
+    assert.deepEqual(Object.keys(dateHours), [NIKA_CLOSURE_FAR_DATE]);
     assert.deepEqual(closed.rows[0]?.weekly_hours, {});
     assert.deepEqual(closed.rows[0]?.recurring_hours.days ?? {}, {});
     assert.deepEqual(
