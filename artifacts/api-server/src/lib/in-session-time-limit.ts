@@ -10,12 +10,14 @@ export function inSessionDeliverySkipsTimeLimit(
   return deliveryPhase === "during_session";
 }
 
-/** Server expiry applies to timed pre-work, homework, and review quizzes only. */
+/** Server expiry applies to hard-timed pre-work, homework, and review quizzes only. */
 export function serverTimeLimitReached(input: {
   deliveryPhase: string | null | undefined;
   timeLimitMinutes: number;
   activeSeconds: number;
+  softTimeLimit?: boolean | null;
 }): boolean {
   if (inSessionDeliverySkipsTimeLimit(input.deliveryPhase)) return false;
+  if (input.softTimeLimit) return false;
   return input.activeSeconds >= input.timeLimitMinutes * 60;
 }

@@ -20,6 +20,9 @@ export const FACTORING_QUIZ_FOLLOW_UP_TITLE = "Factoring Quiz";
 /** Oct 18 session review. Stays open after the linked session day. */
 export const OCT18_SESSION_REVIEW_TITLE = "Oct 18 Session Review Quiz";
 
+/** Oct 25 session review. Stays open after the linked session day. */
+export const OCT25_SESSION_REVIEW_TITLE = "Oct 25 Session Review Quiz";
+
 /** Unanswered Oct 23 English questions. Stays open after that session day. */
 export const OCT23_REMAINING_HOMEWORK_TITLE = "Oct 23 In-Session Practice — Remaining Questions";
 
@@ -29,6 +32,7 @@ const POST_SESSION_FOLLOW_UP_TITLES = new Set<string>([
   SAT_MATH_FOLLOW_UP_TITLE,
   FACTORING_QUIZ_FOLLOW_UP_TITLE,
   OCT18_SESSION_REVIEW_TITLE,
+  OCT25_SESSION_REVIEW_TITLE,
   OCT23_REMAINING_HOMEWORK_TITLE,
 ]);
 

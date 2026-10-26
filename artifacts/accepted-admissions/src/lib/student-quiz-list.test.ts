@@ -4,6 +4,7 @@ import { isPastSession } from "./session-display.ts";
 import {
   FACTORING_QUIZ_FOLLOW_UP_TITLE,
   OCT18_SESSION_REVIEW_TITLE,
+  OCT25_SESSION_REVIEW_TITLE,
   OCT23_REMAINING_HOMEWORK_TITLE,
   GEOMETRY_AREA_VOLUME_FOLLOW_UP_TITLE,
   GEOMETRY_SAT_FOLLOW_UP_TITLE,
@@ -589,6 +590,28 @@ test("Oct 18 session review stays on the dashboard after the session day", () =>
   assert.equal(collapsed.visible.length, 1);
   assert.equal(collapsed.visible[0]?.assignment.title, OCT18_SESSION_REVIEW_TITLE);
   assert.equal(collapsed.visible[0]?.pastSessionDay, false);
+  assert.equal(studentQuizActionLabel(collapsed.visible[0]!, false), "Start quiz");
+});
+
+test("Oct 25 session review stays open after that session day", () => {
+  const now = new Date("2026-10-26T15:00:00.000Z");
+  assert.equal(OCT25_SESSION_REVIEW_TITLE, "Oct 25 Session Review Quiz");
+  assert.equal(isPostSessionFollowUpQuiz({ title: OCT25_SESSION_REVIEW_TITLE }), true);
+  const collapsed = collapsedStudentQuizzes(
+    [
+      quiz({
+        id: "oct25",
+        title: OCT25_SESSION_REVIEW_TITLE,
+        sessionId: "past-session",
+        questionCount: 10,
+      }),
+    ],
+    [session({ id: "past-session", dateTime: "2026-10-25T16:00:00.000Z" })],
+    { expanded: false, now, clientTimezone: "America/New_York" },
+  );
+  assert.equal(collapsed.visible.length, 1);
+  assert.equal(collapsed.visible[0]?.pastSessionDay, false);
+  assert.equal(collapsed.visible[0]?.status, "Not started");
   assert.equal(studentQuizActionLabel(collapsed.visible[0]!, false), "Start quiz");
 });
 

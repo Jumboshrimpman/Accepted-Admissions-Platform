@@ -30,6 +30,24 @@ test("in-session work never reaches the server time limit", () => {
   assert.equal(
     serverTimeLimitReached({
       deliveryPhase: "before_session",
+      timeLimitMinutes: 30,
+      activeSeconds: 45 * 60,
+      softTimeLimit: true,
+    }),
+    false,
+  );
+  assert.equal(
+    serverTimeLimitReached({
+      deliveryPhase: "before_session",
+      timeLimitMinutes: 30,
+      activeSeconds: 45 * 60,
+      softTimeLimit: false,
+    }),
+    true,
+  );
+  assert.equal(
+    serverTimeLimitReached({
+      deliveryPhase: "before_session",
       timeLimitMinutes: 60,
       activeSeconds: 59 * 60,
     }),

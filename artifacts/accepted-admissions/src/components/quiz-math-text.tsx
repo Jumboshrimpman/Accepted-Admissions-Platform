@@ -101,6 +101,25 @@ function renderExpr(expr: MathExpr): ReactNode {
   }
 }
 
+function MathChunk({ text, cell }: { text: string; cell: boolean }) {
+  const segments = segmentQuizMath(text, cell ? { cell: true } : undefined);
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.type === "text" ? (
+          <span key={index}>{segment.text}</span>
+        ) : (
+          <span key={index} data-testid="quiz-math-expr">
+            {renderExpr(segment.expr)}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
+const OVERLINE_TOKEN = /overline\(([A-Za-z]+)\)/g;
+
 export function QuizMathText({
   text,
   className,
@@ -110,16 +129,20 @@ export function QuizMathText({
   className?: string;
   cell?: boolean;
 }) {
-  const segments = segmentQuizMath(text, cell ? { cell: true } : undefined);
+  const parts = text.split(OVERLINE_TOKEN);
   return (
     <span data-testid="quiz-math-text" className={className}>
-      {segments.map((segment, index) =>
-        segment.type === "text" ? (
-          <span key={index}>{segment.text}</span>
-        ) : (
-          <span key={index} data-testid="quiz-math-expr">
-            {renderExpr(segment.expr)}
+      {parts.map((part, index) =>
+        index % 2 === 1 ? (
+          <span
+            key={index}
+            data-testid="quiz-overline"
+            className="mx-0.5 inline-block border-t border-current px-0.5 leading-tight"
+          >
+            {part}
           </span>
+        ) : (
+          <MathChunk key={index} text={part} cell={cell} />
         ),
       )}
     </span>

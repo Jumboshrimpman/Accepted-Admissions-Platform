@@ -29,6 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizContent } from "@/components/quiz-content";
 import { QuizMathText } from "@/components/quiz-math-text";
+import { formatQuizClock, SOFT_TIMER_NOTE, tickQuizSeconds } from "@/lib/quiz-soft-timer";
 import {
   BookmarkPlus,
   Brain,
@@ -393,7 +394,7 @@ function ResultView({ result }: { result: AttemptResult }) {
                         )}
                       </div>
                     </div>
-                    <QuestionWrittenNote item={item} />
+                    <QuestionWrittenNote item={item} formatMath={formatMath} />
                   </CardContent>
                 </Card>
               ))}
@@ -411,7 +412,9 @@ function ResultView({ result }: { result: AttemptResult }) {
 
 function QuestionWrittenNote({
   item,
+  formatMath = false,
 }: {
+  formatMath?: boolean;
   item: {
     correct: boolean;
     skill?: string | null;
@@ -427,7 +430,11 @@ function QuestionWrittenNote({
     <div className="text-sm leading-relaxed text-foreground" data-testid="written-item-note">
       <span className="font-medium">{note.source === "explanation" ? "Why:" : "Note:"}</span>{" "}
       {note.source === "explanation" ? (
-        <QuizContent text={note.text} className="mt-1 inline-block" />
+        formatMath ? (
+          <QuizMathText text={note.text} className="mt-1 inline-block" />
+        ) : (
+          <QuizContent text={note.text} className="mt-1 inline-block" />
+        )
       ) : (
         note.text
       )}
@@ -508,7 +515,7 @@ function InSessionQuestionFeedback({
         data-testid="written-item-note"
       >
         <span className={ink ? "font-medium text-white" : "font-medium"}>{note.source === "explanation" ? "Why:" : "Note:"}</span>{" "}
-        {note.text}
+        {note.source === "explanation" && formatMath ? <QuizMathText text={note.text} /> : note.text}
       </p>
     </div>
   );
@@ -739,6 +746,7 @@ export default function PortalAssignment() {
     assignment?.title,
   );
   const untimedInSession = assignment?.deliveryPhase === "during_session";
+  const softTimeLimit = !untimedInSession && (assignment?.softTimeLimit === true || attempt?.softTimeLimit === true);
   const perQuestionFeedback = allowsInSessionPerQuestionFeedback({
     deliveryPhase: assignment?.deliveryPhase,
   });
@@ -830,9 +838,12 @@ export default function PortalAssignment() {
 
   useEffect(() => {
     if (untimedInSession || autoPaused || attemptStatus !== "active") return;
-    const interval = window.setInterval(() => setRemainingSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    const interval = window.setInterval(
+      () => setRemainingSeconds((seconds) => tickQuizSeconds(seconds, softTimeLimit)),
+      1000,
+    );
     return () => window.clearInterval(interval);
-  }, [attemptStatus, autoPaused, untimedInSession]);
+  }, [attemptStatus, autoPaused, softTimeLimit, untimedInSession]);
 
   useEffect(() => {
     leaveRef.current.status = attempt?.status;
@@ -1035,11 +1046,11 @@ export default function PortalAssignment() {
   }, [attemptId, assignmentId, localResponses, queryClient, submitAttempt, viewer]);
 
   useEffect(() => {
-    if (untimedInSession) return;
+    if (untimedInSession || softTimeLimit) return;
     if (attempt?.status === "active" && remainingSeconds <= 0 && shouldAutoSubmitOnExpiry(answeredCount)) {
       submit();
     }
-  }, [answeredCount, attempt?.status, remainingSeconds, submit, untimedInSession]);
+  }, [answeredCount, attempt?.status, remainingSeconds, softTimeLimit, submit, untimedInSession]);
 
   const applySavedFeedback = (questionId: string, saved: AttemptResponse) => {
     const revealed = isQuestionFeedbackRevealed(saved);
@@ -1560,12 +1571,25 @@ export default function PortalAssignment() {
         </div>
         <div className="flex items-center gap-3">
           {untimedInSession ? null : (
-            <div
-              className={`rounded-md px-3 py-1 font-mono text-lg font-bold ${remainingSeconds <= 60 ? "bg-destructive text-destructive-foreground" : "bg-muted"}`}
-              data-testid="quiz-timer"
-            >
-              <Timer className="mr-1 inline h-4 w-4" />
-              {formatTime(remainingSeconds)}
+            <div className="flex flex-col items-end gap-1">
+              <div
+                className={`rounded-md px-3 py-1 font-mono text-lg font-bold ${
+                  formatQuizClock(remainingSeconds).overtime
+                    ? "bg-amber-100 text-amber-950"
+                    : remainingSeconds <= 60
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-muted"
+                }`}
+                data-testid="quiz-timer"
+              >
+                <Timer className="mr-1 inline h-4 w-4" />
+                {formatQuizClock(remainingSeconds).text}
+              </div>
+              {softTimeLimit ? (
+                <p className="max-w-xs text-right text-xs text-muted-foreground" data-testid="quiz-soft-time-note">
+                  {SOFT_TIMER_NOTE}
+                </p>
+              ) : null}
             </div>
           )}
           {!viewer && (

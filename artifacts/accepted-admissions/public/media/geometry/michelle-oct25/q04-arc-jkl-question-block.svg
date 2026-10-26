@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 320" role="img">
+  <title>Circle with center O and minor arc JKL</title>
+  <rect width="360" height="320" fill="#ffffff"/>
+  <circle cx="180" cy="168" r="108" fill="none" stroke="#111111" stroke-width="2"/>
+  <path d="M126 74.4 A108 108 0 0 0 234 74.4" fill="none" stroke="#111111" stroke-width="3"/>
+  <path d="M180 168 L126 74.4 M180 168 L234 74.4" fill="none" stroke="#111111" stroke-width="2"/>
+  <circle cx="126" cy="74.4" r="3" fill="#111111"/>
+  <circle cx="180" cy="60" r="3" fill="#111111"/>
+  <circle cx="234" cy="74.4" r="3" fill="#111111"/>
+  <circle cx="180" cy="168" r="3.5" fill="#111111"/>
+  <text x="168" y="198" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">O</text>
+  <text x="96" y="66" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">J</text>
+  <text x="168" y="42" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">K</text>
+  <text x="240" y="66" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">L</text>
+</svg>

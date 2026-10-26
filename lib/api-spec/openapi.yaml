@@ -3585,6 +3585,9 @@ components:
         deadline: { type: ["string", "null"], format: date-time }
         questionCount: { type: number }
         timeLimitMinutes: { type: number }
+        softTimeLimit:
+          type: boolean
+          description: When true, the time limit is a guide. The attempt never expires or auto-submits.
         attemptCount: { type: number }
         maxAttempts: { type: number }
         latestScore: { type: ["number", "null"] }
@@ -3720,6 +3723,9 @@ components:
         pausedSeconds: { type: number }
         pauseCount: { type: number }
         remainingSeconds: { type: number }
+        softTimeLimit:
+          type: boolean
+          description: When true, remainingSeconds may be negative and the attempt stays open.
         currentQuestionIndex: { type: number, minimum: 0 }
         responses:
           type: array

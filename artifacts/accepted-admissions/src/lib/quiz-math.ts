@@ -10,6 +10,7 @@ const FORMATTED_QUIZ_TITLES = new Set([
   "Factoring Quiz",
   "SAT Math Problems",
   "Oct 18 Session Review Quiz",
+  "Oct 25 Session Review Quiz",
 ]);
 
 export function quizShowsFormattedMath(title?: string | null): boolean {
@@ -459,7 +460,14 @@ function plainSegments(input: string, cell = false): string {
 
 /** Stable text form used by rendering tests. Fractions use \\frac, exponents use ^{ }. */
 export function quizMathPlain(input: string): string {
-  return plainSegments(input);
+  return plainSegments(expandOverlineMarkup(input));
+}
+
+/** Segment names written as overline(FH) become combining overlines in plain text. */
+export function expandOverlineMarkup(input: string): string {
+  return input.replace(/overline\(([A-Za-z]+)\)/g, (_match, name: string) =>
+    [...name].map((char) => `${char}\u0305`).join(""),
+  );
 }
 
 /** A whole table cell. Single variables and `2k` format; multi-word labels stay prose. */

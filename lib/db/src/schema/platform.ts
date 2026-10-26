@@ -199,6 +199,8 @@ export const assignmentsTable = pgTable("assignments", {
   status: contentStatusEnum("status").notNull().default("draft"),
   deadline: timestamp("deadline", { withTimezone: true }),
   timeLimitMinutes: numeric("time_limit_minutes", { mode: "number" }).notNull(),
+  /** When true, the limit is a guide. The attempt never expires or auto-submits. */
+  softTimeLimit: boolean("soft_time_limit").notNull().default(false),
   maxAttempts: numeric("max_attempts", { mode: "number" }).notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

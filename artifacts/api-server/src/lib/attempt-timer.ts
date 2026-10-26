@@ -47,3 +47,8 @@ export function summarizeAttemptTimer(
 export function remainingAttemptSeconds(timeLimitMinutes: number, activeSeconds: number): number {
   return Math.max(0, timeLimitMinutes * 60 - activeSeconds);
 }
+
+/** Signed remainder. Negative means the student is past a soft limit and may keep working. */
+export function softRemainingAttemptSeconds(timeLimitMinutes: number, activeSeconds: number): number {
+  return timeLimitMinutes * 60 - activeSeconds;
+}

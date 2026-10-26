@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 320" role="img">
+  <title>Circle with center O and arc ABD</title>
+  <rect width="400" height="320" fill="#ffffff"/>
+  <circle cx="200" cy="170" r="100" fill="none" stroke="#111111" stroke-width="2"/>
+  <path d="M100 170 A100 100 0 0 0 286.6 120" fill="none" stroke="#111111" stroke-width="3"/>
+  <path d="M200 170 L100 170 M200 170 L286.6 120" fill="none" stroke="#111111" stroke-width="2"/>
+  <circle cx="174.1" cy="73.4" r="3" fill="#111111"/>
+  <circle cx="200" cy="170" r="3.5" fill="#111111"/>
+  <text x="188" y="200" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">O</text>
+  <text x="72" y="166" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">A</text>
+  <text x="156" y="62" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">B</text>
+  <text x="294" y="116" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">D</text>
+</svg>

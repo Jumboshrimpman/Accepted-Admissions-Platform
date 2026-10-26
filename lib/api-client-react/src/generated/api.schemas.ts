@@ -1637,6 +1637,8 @@ export interface AssignmentSummary {
   deadline?: string | null;
   questionCount: number;
   timeLimitMinutes: number;
+  /** When true, the time limit never expires or auto-submits. */
+  softTimeLimit?: boolean;
   attemptCount: number;
   maxAttempts: number;
   /** @nullable */
@@ -2526,6 +2528,8 @@ export interface Attempt {
   pausedSeconds: number;
   pauseCount: number;
   remainingSeconds: number;
+  /** When true, remainingSeconds may be negative and the attempt stays open. */
+  softTimeLimit?: boolean;
   /** @minimum 0 */
   currentQuestionIndex: number;
   responses: AttemptResponse[];

@@ -11,6 +11,7 @@ const setLocation = vi.fn();
 const mocks = vi.hoisted(() => ({
   deliveryPhase: "before_session" as "before_session" | "during_session",
   title: "Practice quiz",
+  softTimeLimit: false,
   questions: [
     {
       id: "q1",
@@ -54,6 +55,7 @@ const mocks = vi.hoisted(() => ({
     assignmentId: "asg-1",
     status: "active" as const,
     remainingSeconds: 1200,
+    softTimeLimit: false,
     currentQuestionIndex: 0,
     responses: [] as Array<{
       questionId: string;
@@ -116,6 +118,7 @@ vi.mock("@workspace/api-client-react", () => ({
           latestAttemptStatus: mocks.latestAttemptStatus,
           questionCount: mocks.questions.length,
           timeLimitMinutes: 60,
+          softTimeLimit: mocks.softTimeLimit,
           latestAttemptId: mocks.latestAttemptId,
           questions: mocks.questions,
         },
@@ -177,9 +180,11 @@ afterEach(() => {
   mocks.search = "";
   mocks.deliveryPhase = "before_session";
   mocks.title = "Practice quiz";
+  mocks.softTimeLimit = false;
   mocks.questions = structuredClone(defaultQuestions);
   mocks.attempt.status = "active";
   mocks.attempt.remainingSeconds = 1200;
+  mocks.attempt.softTimeLimit = false;
   mocks.attempt.currentQuestionIndex = 0;
   mocks.attempt.responses = [];
   mocks.result = null;
@@ -500,6 +505,27 @@ describe("student attempt UI", () => {
     mocks.title = "Practice quiz";
     render(<PortalAssignment />);
     expect(screen.getByTestId("quiz-timer")).toBeTruthy();
+  });
+
+  test("a soft time limit keeps counting and does not auto-submit", () => {
+    mocks.softTimeLimit = true;
+    mocks.attempt.softTimeLimit = true;
+    mocks.title = "Oct 25 Session Review Quiz";
+    mocks.attempt.remainingSeconds = -5;
+    mocks.attempt.responses = [
+      {
+        questionId: "q1",
+        prediction: null,
+        predictionLocked: false,
+        finalAnswer: "a",
+        flagged: false,
+      },
+    ];
+    render(<PortalAssignment />);
+    expect(screen.getByTestId("quiz-timer").textContent).toContain("Over 0:05");
+    expect(screen.getByTestId("quiz-soft-time-note").textContent).toMatch(/keep working/i);
+    expect(submitMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId("answer-choices")).toBeTruthy();
   });
 
   test("timer expiry with zero answers does not auto-submit or show a finished result", () => {

@@ -17,6 +17,9 @@ export const FACTORING_QUIZ_FOLLOW_UP_TITLE = "Factoring Quiz";
 /** 12 questions from Michelle's Oct 18 session, 25 minutes. */
 export const OCT18_SESSION_REVIEW_TITLE = "Oct 18 Session Review Quiz";
 
+/** 10 questions from Michelle's Oct 25 session, 30-minute soft limit. */
+export const OCT25_SESSION_REVIEW_TITLE = "Oct 25 Session Review Quiz";
+
 /** Unanswered questions from Taito's Oct 23 English in-session set. 60 minutes, 2 attempts. */
 export const OCT23_REMAINING_HOMEWORK_TITLE = "Oct 23 In-Session Practice — Remaining Questions";
 
@@ -26,6 +29,7 @@ const POST_SESSION_FOLLOW_UP_TITLES = new Set<string>([
   SAT_MATH_FOLLOW_UP_TITLE,
   FACTORING_QUIZ_FOLLOW_UP_TITLE,
   OCT18_SESSION_REVIEW_TITLE,
+  OCT25_SESSION_REVIEW_TITLE,
   OCT23_REMAINING_HOMEWORK_TITLE,
 ]);
 
