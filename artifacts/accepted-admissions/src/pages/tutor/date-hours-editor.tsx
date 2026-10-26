@@ -94,6 +94,31 @@ function windowsFor(state: DateHoursState, date: string): DateWindow[] {
   return (state.dateHours[date] ?? []).map((window) => ({ ...window }));
 }
 
+function weekdayKey(date: string): string {
+  return String(new Date(`${date}T00:00:00.000Z`).getUTCDay());
+}
+
+/** An explicit date, including an empty closure, wins. Otherwise the weekly schedule can open it. */
+function bookableWindowsFor(state: DateHoursState, date: string): DateWindow[] {
+  if (Object.prototype.hasOwnProperty.call(state.dateHours, date)) {
+    return (state.dateHours[date] ?? []).map((window) => ({ ...window }));
+  }
+  const recurring = recurringOf(state);
+  if (recurring.startDate && date < recurring.startDate) return [];
+  if (recurring.endDate && date > recurring.endDate) return [];
+  return (recurring.days[weekdayKey(date)] ?? []).map((window) => ({ ...window }));
+}
+
+function formatWindowList(windows: DateWindow[]): string {
+  return windows.map((window) => `${formatClock(window.start)}–${formatClock(window.end)}`).join(", ");
+}
+
+function dateOptionLabel(state: DateHoursState, date: string): string {
+  const windows = bookableWindowsFor(state, date);
+  if (windows.length === 0) return `${formatCivilDate(date)} — Closed`;
+  return `${formatCivilDate(date)} — Open, bookable · ${formatWindowList(windows)}`;
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   const detail = (error as { data?: { error?: string } } | null)?.data?.error;
   return detail || fallback;
@@ -257,10 +282,9 @@ export function TutorDateHoursEditor({
     );
   }
 
-  const savedWindows = state.dateHours[selectedDate] ?? [];
-  const otherOpenDates = state.editorDates.filter(
-    (date) => date !== selectedDate && (state.dateHours[date]?.length ?? 0) > 0,
-  );
+  const selectedBookable = bookableWindowsFor(state, selectedDate);
+  const selectedClosed = selectedBookable.length === 0;
+  const allDatesClosed = state.editorDates.every((date) => bookableWindowsFor(state, date).length === 0);
   const recurring = recurringOf(state);
   const weeklyRows = WEEKDAYS.filter(([id]) => (recurring.days[id]?.length ?? 0) > 0);
   const invalidWindow = windows.some((window) => window.start >= window.end);
@@ -285,6 +309,15 @@ export function TutorDateHoursEditor({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 px-6 pb-6 sm:px-7">
+        {allDatesClosed ? (
+          <p
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+            role="status"
+            data-testid="tutor-date-hours-all-closed"
+          >
+            All your dates are closed. Students can't book you until you add hours for a date and save it.
+          </p>
+        ) : null}
         <label className="block text-sm font-medium" htmlFor="tutor-date-hours-date">
           Date
           <select
@@ -295,24 +328,36 @@ export function TutorDateHoursEditor({
           >
             {state.editorDates.map((date) => (
               <option key={date} value={date}>
-                {formatCivilDate(date)}
+                {dateOptionLabel(state, date)}
               </option>
             ))}
           </select>
         </label>
 
-        <div data-testid="tutor-date-hours-saved">
-          <p className="text-sm font-medium">Currently saved</p>
-          {savedWindows.length === 0 ? (
-            <p className="mt-1 text-sm text-muted-foreground">This date is closed.</p>
+        <div
+          data-testid="tutor-date-hours-saved"
+          className={
+            selectedClosed
+              ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2"
+              : "rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+          }
+        >
+          <p className="text-sm font-medium">{selectedClosed ? "CLOSED" : "Open"}</p>
+          {selectedClosed ? (
+            <p className="mt-1 text-sm font-medium text-destructive">
+              This date is closed. Students can't book this date.
+            </p>
           ) : (
-            <ul className="mt-1 flex flex-wrap gap-2">
-              {savedWindows.map((window) => (
-                <li key={`${window.start}-${window.end}`} className="rounded-full border px-3 py-1 text-sm">
-                  {formatClock(window.start)}–{formatClock(window.end)}
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="mt-1 text-sm font-medium">Open, bookable. Students can book this date.</p>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {selectedBookable.map((window) => (
+                  <li key={`${window.start}-${window.end}`} className="rounded-full border px-3 py-1 text-sm">
+                    {formatClock(window.start)}–{formatClock(window.end)}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
 
@@ -425,9 +470,10 @@ export function TutorDateHoursEditor({
         <div data-testid="tutor-weekly-hours" className="space-y-3 border-t pt-5">
           <div>
             <p className="text-sm font-medium">Weekly schedule</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Saved weekdays open on dates you have not already set. A closed date stays closed.
-              {weeklyRange}
+            <p className="mt-1 text-sm text-muted-foreground" data-testid="tutor-weekly-hours-status">
+              {weeklyRows.length === 0
+                ? "No weekly schedule is active. Students can't book you from a weekly schedule until you add hours and save them."
+                : `Saved weekdays are bookable on dates you have not closed.${weeklyRange}`}
             </p>
           </div>
           {weeklyRows.length === 0 ? (
@@ -612,21 +658,22 @@ export function TutorDateHoursEditor({
         </div>
 
         <div data-testid="tutor-date-hours-other-dates">
-          <p className="text-sm font-medium">Other open dates</p>
-          {otherOpenDates.length === 0 ? (
-            <p className="mt-1 text-sm text-muted-foreground">No other open dates in the next 8 weeks.</p>
-          ) : (
-            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-              {otherOpenDates.map((date) => (
-                <li key={date} className="flex flex-wrap items-center gap-2">
-                  <span>
+          <p className="text-sm font-medium">Next 8 weeks</p>
+          <ul className="mt-2 space-y-2 text-sm">
+            {state.editorDates.map((date) => {
+              const windows = bookableWindowsFor(state, date);
+              const closed = windows.length === 0;
+              return (
+                <li
+                  key={date}
+                  className="flex flex-wrap items-center gap-2"
+                  data-testid={`tutor-date-hours-day-${date}`}
+                >
+                  <span className={closed ? "font-medium text-destructive" : "font-medium"}>
                     {formatCivilDate(date)}
-                    {": "}
-                    {(state.dateHours[date] ?? [])
-                      .map((window) => `${formatClock(window.start)}–${formatClock(window.end)}`)
-                      .join(", ")}
+                    {closed ? " — Closed" : ` — Open, bookable: ${formatWindowList(windows)}`}
                   </span>
-                  {readOnly ? null : (
+                  {readOnly || closed ? null : (
                     <>
                       <Button type="button" variant="outline" onClick={() => chooseDate(date)}>
                         Edit {formatCivilDate(date)}
@@ -642,9 +689,9 @@ export function TutorDateHoursEditor({
                     </>
                   )}
                 </li>
-              ))}
-            </ul>
-          )}
+              );
+            })}
+          </ul>
         </div>
       </CardContent>
     </Card>

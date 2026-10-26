@@ -16,6 +16,7 @@ import { ensureSophiaTutorLinks } from "./lib/sophia-tutor-links";
 import { ensureTaitoOct23RemainingHomework } from "./lib/taito-oct23-remaining-homework";
 import { ensureRyoTaitoParentMirror } from "./lib/parent-mirror";
 import { ensureCollegeConsultingProvision } from "./lib/college-consulting-provision";
+import { ensureNikaAllHoursClosed } from "./lib/nika-close-all-hours";
 
 const rawPort = process.env["PORT"];
 
@@ -37,6 +38,9 @@ void ensureRyoTaitoParentMirror()
   .then(() => ensureCollegeConsultingProvision())
   .then((result) => logger.info(result, "College Consulting provisioning ready"))
   .catch((err) => logger.warn({ err }, "College Consulting provisioning skipped"))
+  .then(() => ensureNikaAllHoursClosed())
+  .then((result) => logger.info({ action: result.action }, "Nika bookable hours closure"))
+  .catch((err) => logger.warn({ err }, "Nika bookable hours closure skipped"))
   .then(() => {
     app.listen(port, (err) => {
       if (err) {
