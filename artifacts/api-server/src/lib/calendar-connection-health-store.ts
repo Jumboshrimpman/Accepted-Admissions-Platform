@@ -18,19 +18,53 @@ import {
   type CalendarConnectionHealth,
 } from "./calendar-connection-health.ts";
 
-type WeeklyHours = Record<string, unknown>;
+type HourMap = Record<string, unknown>;
 
-function weeklyHoursForProfile(
-  rules: ReadonlyArray<{ tutorProfileId: string; weeklyHours: WeeklyHours }>,
+function hourMapHasOpenWindow(hours: HourMap | null | undefined): boolean {
+  if (!hours) return false;
+  return Object.values(hours).some((windows) => Array.isArray(windows) && windows.length > 0);
+}
+
+function asHourMap(value: unknown): HourMap {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as HourMap;
+}
+
+function asRecurringHours(value: unknown): { days?: HourMap | null } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const days = (value as { days?: unknown }).days;
+  if (!days || typeof days !== "object" || Array.isArray(days)) return { days: null };
+  return { days: days as HourMap };
+}
+
+function availabilityForProfile(
+  rules: ReadonlyArray<{
+    tutorProfileId: string;
+    weeklyHours: unknown;
+    dateHours: unknown;
+    recurringHours: unknown;
+  }>,
   tutorProfileId: string,
-): WeeklyHours {
+): {
+  weeklyHours: HourMap;
+  dateHours: HourMap;
+  recurringHours: { days?: HourMap | null } | null;
+} {
   const matches = rules.filter((rule) => rule.tutorProfileId === tutorProfileId);
-  const withWindows = matches.find((rule) =>
-    Object.values(rule.weeklyHours ?? {}).some(
-      (windows) => Array.isArray(windows) && windows.length > 0,
-    ),
-  );
-  return withWindows?.weeklyHours ?? matches[0]?.weeklyHours ?? {};
+  const withWindows = matches.find((rule) => {
+    const recurring = asRecurringHours(rule.recurringHours);
+    return (
+      hourMapHasOpenWindow(asHourMap(rule.weeklyHours)) ||
+      hourMapHasOpenWindow(asHourMap(rule.dateHours)) ||
+      hourMapHasOpenWindow(recurring?.days)
+    );
+  });
+  const rule = withWindows ?? matches[0];
+  return {
+    weeklyHours: asHourMap(rule?.weeklyHours),
+    dateHours: asHourMap(rule?.dateHours),
+    recurringHours: rule ? asRecurringHours(rule.recurringHours) : null,
+  };
 }
 
 export async function listPublicCalendarConnectionHealth(): Promise<CalendarConnectionHealth[]> {
@@ -66,6 +100,8 @@ export async function listPublicCalendarConnectionHealth(): Promise<CalendarConn
       .select({
         tutorProfileId: availabilityRulesTable.tutorProfileId,
         weeklyHours: availabilityRulesTable.weeklyHours,
+        dateHours: availabilityRulesTable.dateHours,
+        recurringHours: availabilityRulesTable.recurringHours,
       })
       .from(availabilityRulesTable),
   ]);
@@ -84,7 +120,7 @@ export async function listPublicCalendarConnectionHealth(): Promise<CalendarConn
         portalEmail: profile.email,
         active: profile.active,
         bookingEligible: profile.bookingEligible,
-        weeklyHours: weeklyHoursForProfile(rules, profile.id),
+        ...availabilityForProfile(rules, profile.id),
         connectionStatus: connection?.status,
         hasRefreshToken: connection ? connectionHasRefreshToken(connection) : false,
         googleAccountEmail: connection?.googleAccountEmail,

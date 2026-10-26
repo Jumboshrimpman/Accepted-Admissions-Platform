@@ -167,6 +167,85 @@ describe("tutor date hours editor", () => {
     });
   });
 
+  test("shows every date closed until she saves hours", async () => {
+    const closed = {
+      ...saved,
+      today: "2026-10-26",
+      editorDates: ["2026-10-26", "2026-10-27", "2026-11-16"],
+      dateHours: {
+        "2026-10-26": [],
+        "2026-10-27": [],
+        "2026-11-02": [],
+        "2099-12-31": [],
+      },
+      recurringHours: { startDate: null, endDate: null, days: {} },
+    };
+    mocks.customFetch.mockResolvedValueOnce(closed);
+    render(<TutorDateHoursEditor />);
+
+    expect(await screen.findByTestId("tutor-date-hours-all-closed")).toBeTruthy();
+    expect(screen.getByTestId("tutor-date-hours-all-closed").textContent).toBe(
+      "All your dates are closed. Students can't book you until you add hours for a date and save it.",
+    );
+    const editor = screen.getByTestId("tutor-date-hours-editor");
+    expect(editor.textContent).toContain("Mon, Oct 26 — Closed");
+    expect(editor.textContent).toContain("Tue, Oct 27 — Closed");
+    expect(editor.textContent).toContain("Mon, Nov 16 — Closed");
+    expect(editor.textContent).not.toContain("Open, bookable");
+    expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("CLOSED");
+    expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("This date is closed.");
+    expect(screen.getByTestId("tutor-weekly-hours-status").textContent).toContain("No weekly schedule is active.");
+    expect(screen.getByTestId("tutor-weekly-hours-status").textContent).not.toMatch(/applies on dates/i);
+    expect(screen.getByRole("option", { name: "Mon, Oct 26 — Closed" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a window" }));
+    mocks.customFetch.mockResolvedValueOnce({
+      ...closed,
+      dateHours: {
+        ...closed.dateHours,
+        "2026-10-26": [{ start: "16:00", end: "17:00" }],
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save this date" }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("tutor-date-hours-all-closed")).toBeNull();
+    });
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Open, bookable");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("4:00 PM");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-27").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-saved").textContent).toContain("Students can book this date.");
+  });
+
+  test("a saved weekly schedule shows unset dates as open and keeps a closed date closed", () => {
+    render(
+      <TutorDateHoursEditor
+        preview={{
+          ...saved,
+          today: "2026-10-26",
+          editorDates: ["2026-10-26", "2026-11-02", "2026-11-16"],
+          dateHours: {
+            "2026-10-26": [],
+            "2026-11-02": [],
+          },
+          recurringHours: {
+            startDate: null,
+            endDate: null,
+            days: { "1": [{ start: "21:00", end: "22:00" }] },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId("tutor-date-hours-all-closed")).toBeNull();
+    expect(screen.getByTestId("tutor-date-hours-day-2026-10-26").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-02").textContent).toContain("Closed");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-16").textContent).toContain("Open, bookable");
+    expect(screen.getByTestId("tutor-date-hours-day-2026-11-16").textContent).toContain("9:00 PM");
+    expect(screen.getByTestId("tutor-weekly-hours-status").textContent).toContain("bookable on dates you have not closed");
+    expect(screen.queryByText("No weekly schedule is active.")).toBeNull();
+  });
+
   test("preview lists a weekly schedule without edit controls", () => {
     render(
       <TutorDateHoursEditor
