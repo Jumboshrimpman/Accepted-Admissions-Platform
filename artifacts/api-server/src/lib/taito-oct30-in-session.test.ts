@@ -30,8 +30,13 @@ test("startup keeps a full hard Oct 30 pre-work and still clears the shortfall o
     /await publishHardInSession\([\s\S]*?\);\s*await suppressShortfallWhenAssigned\(session, target\);/,
   );
   const startup = hardSets.slice(hardSets.indexOf("export async function ensureTaitoOct30HardPrework"));
-  assert.match(startup, /taitoOct30PreworkAllowsInSession\(result\.action\)/);
-  assert.match(startup, /if \(taitoOct30PreworkAllowsInSession\(result\.action\)\)/);
+  assert.match(startup, /taitoOct30PreworkAllowsInSession\(result\.action\) && fullHardPreworkCount === 1/);
+  assert.match(startup, /countLiveFullHardBeforeSessionSets/);
+  assert.doesNotMatch(startup, /live\.find\(/);
+  assert.match(
+    startup,
+    /result\.action === "unchanged" && fullHardPreworkCount !== 1/,
+  );
 });
 
 const hasDatabase = Boolean(process.env.DATABASE_URL?.trim());
@@ -74,24 +79,58 @@ test(
     } = await import("./sat-set-difficulty.ts");
     const { EUNICE_TUTOR_EMAIL, TAITO_STUDENT_EMAIL } = await import("./session-schedule.ts");
 
-    const [student] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(eq(usersTable.email, TAITO_STUDENT_EMAIL))
-      .limit(1);
-    const [tutorUser] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(eq(usersTable.email, EUNICE_TUTOR_EMAIL))
-      .limit(1);
-    const [tutorProfile] = await db
+    const createdUserIds: string[] = [];
+    const seedUser = async (
+      email: string,
+      role: "student" | "tutor" | "administrator",
+      displayName: string,
+    ) => {
+      const [existing] = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, email))
+        .limit(1);
+      if (existing) return existing.id;
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          clerkUserId: `fixture_oct30_${role}_${crypto.randomUUID()}`,
+          email,
+          displayName,
+          role,
+        })
+        .returning({ id: usersTable.id });
+      createdUserIds.push(created!.id);
+      return created!.id;
+    };
+    const studentId = await seedUser(TAITO_STUDENT_EMAIL, "student", "Taito");
+    const tutorUserId = await seedUser(EUNICE_TUTOR_EMAIL, "tutor", "Eunice Chon");
+    const adminId = await seedUser(
+      `oct30-shortfall-admin-${crypto.randomUUID()}@example.invalid`,
+      "administrator",
+      "Oct 30 fixture admin",
+    );
+    const [existingTutorProfile] = await db
       .select({ id: tutorProfilesTable.id, userId: tutorProfilesTable.userId })
       .from(tutorProfilesTable)
       .where(eq(tutorProfilesTable.email, EUNICE_TUTOR_EMAIL))
       .limit(1);
-    assert.ok(student && tutorUser && tutorProfile, "Taito and Eunice must exist locally");
-
-    const previousTutorUserId = tutorProfile.userId;
+    let tutorProfileId = existingTutorProfile?.id ?? null;
+    let createdTutorProfileId: string | null = null;
+    const previousTutorUserId = existingTutorProfile?.userId ?? null;
+    const fillerQuestionIds: string[] = [];
+    if (!tutorProfileId) {
+      const [createdProfile] = await db
+        .insert(tutorProfilesTable)
+        .values({
+          email: EUNICE_TUTOR_EMAIL,
+          name: "Eunice Chon",
+          userId: tutorUserId,
+        })
+        .returning({ id: tutorProfilesTable.id });
+      tutorProfileId = createdProfile!.id;
+      createdTutorProfileId = createdProfile!.id;
+    }
     const createdQuestionIds = new Set<string>();
     const hiddenBankIds: string[] = [];
     let courseId: string | null = null;
@@ -146,10 +185,12 @@ test(
         .update(bankQuestionsTable)
         .set({ module: 2 })
         .where(eq(bankQuestionsTable.module, HIDDEN_MODULE));
-      await db
-        .update(tutorProfilesTable)
-        .set({ userId: tutorUser.id })
-        .where(eq(tutorProfilesTable.id, tutorProfile.id));
+      if (!createdTutorProfileId) {
+        await db
+          .update(tutorProfilesTable)
+          .set({ userId: tutorUserId })
+          .where(eq(tutorProfilesTable.id, tutorProfileId!));
+      }
 
       const bankRows = await db.select().from(bankQuestionsTable);
       const renderable = bankRows
@@ -192,13 +233,28 @@ test(
         .returning({ id: bankQuestionsTable.id });
       hiddenBankIds.push(...hidden.map((row) => row.id));
 
-      const occupiedQuestionIds = new Set(preworkQuestionIds);
-      const filler = (
-        await db.select({ id: questionsTable.id }).from(questionsTable).limit(30)
-      )
-        .map((row) => row.id)
-        .filter((id) => !occupiedQuestionIds.has(id));
-      assert.ok(filler.length >= 3, "need existing questions for the started set and placeholder");
+      const fillerRows = await db
+        .insert(questionsTable)
+        .values(
+          [0, 1, 2].map((index) => ({
+            subject: "SAT",
+            domain: "SAT",
+            skill: "Fixture",
+            questionType: "multiple_choice",
+            difficulty: "medium",
+            prompt: `Oct 30 fixture filler ${index}`,
+            choices: [
+              { id: "a", label: "A", text: "one" },
+              { id: "b", label: "B", text: "two" },
+            ],
+            correctAnswer: "a",
+            explanation: "Fixture explanation",
+            reviewStatus: "reviewed",
+          })),
+        )
+        .returning({ id: questionsTable.id });
+      const filler = fillerRows.map((row) => row.id);
+      fillerQuestionIds.push(...filler);
 
       const [course] = await db
         .insert(coursesTable)
@@ -214,8 +270,8 @@ test(
         .insert(sessionsTable)
         .values({
           courseId: course!.id,
-          clientUserId: student.id,
-          tutorUserId: tutorUser.id,
+          clientUserId: studentId,
+          tutorUserId: tutorUserId,
           dateTime: taitoSessionDateTime("2026-10-30"),
           timezone: "Asia/Tokyo",
           subject: "SAT",
@@ -246,7 +302,7 @@ test(
       });
       await db.insert(attemptsTable).values({
         assignmentId: started!.id,
-        userId: student.id,
+        userId: studentId,
         status: "submitted",
       });
 
@@ -273,7 +329,19 @@ test(
       assert.ok(shortfallNotes.length > 0);
       assert.ok(shortfallNotes.every((row) => row.status === "unread"));
       assert.match(shortfallNotes[0]!.message, /0 pre-work and 20 in-session/);
+      const [adminNote] = await db
+        .select({ id: adminNotificationsTable.id })
+        .from(adminNotificationsTable)
+        .where(
+          and(
+            eq(adminNotificationsTable.sessionId, session!.id),
+            eq(adminNotificationsTable.recipientUserId, adminId),
+          ),
+        )
+        .limit(1);
+      assert.ok(adminNote, "the seeded administrator receives the shortfall alert");
 
+      const shortPreworkIds = preworkQuestionIds.slice(0, 30);
       const [prework] = await db
         .insert(assignmentsTable)
         .values({
@@ -288,10 +356,43 @@ test(
         })
         .returning();
       await db.insert(assignmentQuestionsTable).values(
-        preworkQuestionIds.map((questionId, position) => ({
+        shortPreworkIds.map((questionId, position) => ({
           assignmentId: prework!.id,
           questionId,
           position,
+        })),
+      );
+      const shortPrework = await ensureTaitoOct30HardPrework();
+      assert.equal(shortPrework.action, "shortfall");
+      assert.equal(shortPrework.readingLeftInPlace, false);
+      const duringAfterShortPrework = await db
+        .select({ id: assignmentsTable.id })
+        .from(assignmentsTable)
+        .where(
+          and(
+            eq(assignmentsTable.sessionId, session!.id),
+            eq(assignmentsTable.deliveryPhase, "during_session"),
+          ),
+        );
+      assert.equal(duringAfterShortPrework.length, 0);
+      const [shortPreworkAfter] = await db
+        .select({ status: assignmentsTable.status })
+        .from(assignmentsTable)
+        .where(eq(assignmentsTable.id, prework!.id))
+        .limit(1);
+      assert.equal(shortPreworkAfter?.status, "published");
+      assert.deepEqual(await questionIdsFor(prework!.id), shortPreworkIds);
+      const shortNotes = await db
+        .select({ status: adminNotificationsTable.status })
+        .from(adminNotificationsTable)
+        .where(eq(adminNotificationsTable.sessionId, session!.id));
+      assert.ok(shortNotes.length > 0);
+      assert.ok(shortNotes.every((row) => row.status === "unread"));
+      await db.insert(assignmentQuestionsTable).values(
+        preworkQuestionIds.slice(30).map((questionId, index) => ({
+          assignmentId: prework!.id,
+          questionId,
+          position: shortPreworkIds.length + index,
         })),
       );
       const [placeholder] = await db
@@ -428,10 +529,11 @@ test(
         }
       };
       await step(async () => {
+        if (createdTutorProfileId || !tutorProfileId) return;
         await db
           .update(tutorProfilesTable)
           .set({ userId: previousTutorUserId })
-          .where(eq(tutorProfilesTable.id, tutorProfile.id));
+          .where(eq(tutorProfilesTable.id, tutorProfileId));
       });
       if (sessionId) {
         await step(async () => {
@@ -488,8 +590,9 @@ test(
         }
       });
       await step(async () => {
-        if (createdQuestionIds.size === 0) return;
-        await db.delete(questionsTable).where(inArray(questionsTable.id, [...createdQuestionIds]));
+        const questionIds = [...new Set([...createdQuestionIds, ...fillerQuestionIds])];
+        if (questionIds.length === 0) return;
+        await db.delete(questionsTable).where(inArray(questionsTable.id, questionIds));
       });
       await step(async () => {
         const inserted = (
@@ -536,6 +639,14 @@ test(
           .update(bankQuestionsTable)
           .set({ module: 2 })
           .where(inArray(bankQuestionsTable.id, hiddenBankIds));
+      });
+      await step(async () => {
+        if (!createdTutorProfileId) return;
+        await db.delete(tutorProfilesTable).where(eq(tutorProfilesTable.id, createdTutorProfileId));
+      });
+      await step(async () => {
+        if (createdUserIds.length === 0) return;
+        await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
       });
       if (cleanupErrors.length > 0) {
         throw new Error(
