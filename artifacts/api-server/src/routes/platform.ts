@@ -16,7 +16,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger";
 import { invalidAttemptIdGate, isUuidAttemptId } from "../lib/attempt-id";
-import { remainingAttemptSeconds, summarizeAttemptTimer } from "../lib/attempt-timer";
+import { remainingAttemptSeconds, softRemainingAttemptSeconds, summarizeAttemptTimer } from "../lib/attempt-timer";
 import {
   connectionHasRefreshToken,
   describeStoredGoogleCalendarConnection,
@@ -3650,6 +3650,7 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
     .select({
       attempt: attemptsTable,
       timeLimitMinutes: assignmentsTable.timeLimitMinutes,
+      softTimeLimit: assignmentsTable.softTimeLimit,
       deliveryPhase: assignmentsTable.deliveryPhase,
       assignmentTitle: assignmentsTable.title,
       sessionId: assignmentsTable.sessionId,
@@ -3693,7 +3694,10 @@ async function attemptShape(attemptId: string, viewerRole?: string) {
     ...timing,
     remainingSeconds: inSessionDeliverySkipsTimeLimit(record.deliveryPhase)
       ? Math.max(Number(record.timeLimitMinutes), 1) * 60
-      : remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
+      : record.softTimeLimit
+        ? softRemainingAttemptSeconds(Number(record.timeLimitMinutes), timing.activeSeconds)
+        : remainingAttemptSeconds(record.timeLimitMinutes, timing.activeSeconds),
+    softTimeLimit: record.softTimeLimit === true,
     currentQuestionIndex: normalizeQuestionIndex(attempt.currentQuestionIndex),
     result: await attemptResultForViewer(attempt, viewerRole),
     responses: saved.map((response) => {
@@ -3773,6 +3777,7 @@ async function enforceTimeLimit(attemptId: string) {
     .select({
       attempt: attemptsTable,
       timeLimitMinutes: assignmentsTable.timeLimitMinutes,
+      softTimeLimit: assignmentsTable.softTimeLimit,
       deliveryPhase: assignmentsTable.deliveryPhase,
     })
     .from(attemptsTable)
@@ -3788,6 +3793,7 @@ async function enforceTimeLimit(attemptId: string) {
       deliveryPhase: record.deliveryPhase,
       timeLimitMinutes: Number(record.timeLimitMinutes),
       activeSeconds: timing.activeSeconds,
+      softTimeLimit: record.softTimeLimit === true,
     })
   ) {
     const [expired] = await db
@@ -12895,6 +12901,7 @@ router.post(
           status: existing.status,
           deadline: existing.deadline,
           timeLimitMinutes: existing.timeLimitMinutes,
+          softTimeLimit: existing.softTimeLimit,
           maxAttempts: existing.maxAttempts,
         })
         .returning();
@@ -15225,6 +15232,7 @@ router.get(
     res.json(
       GetAssignmentResponse.parse({
         ...summary,
+        softTimeLimit: assignment.softTimeLimit === true,
         instructions: studentFacing
           ? studentSafeAssignmentInstructions(assignment.instructions)
           : assignment.instructions,

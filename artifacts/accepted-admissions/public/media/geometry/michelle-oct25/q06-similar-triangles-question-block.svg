@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 340" role="img">
+  <title>Right triangle HFJ with GI parallel to FJ, lengths 10 and 6</title>
+  <rect width="420" height="340" fill="#ffffff"/>
+  <path d="M80 40 L80 270 L320 270 Z" fill="none" stroke="#111111" stroke-width="2" stroke-linejoin="miter"/>
+  <path d="M80 150 H194.8" fill="none" stroke="#111111" stroke-width="2"/>
+  <path id="right-angle-f" d="M80 256 H94 V270" fill="none" stroke="#111111" stroke-width="1.6"/>
+  <path id="right-angle-g" d="M80 136 H94 V150" fill="none" stroke="#111111" stroke-width="1.6"/>
+  <text x="52" y="36" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">H</text>
+  <text x="48" y="292" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">F</text>
+  <text x="326" y="292" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">J</text>
+  <text x="46" y="146" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">G</text>
+  <text x="202" y="146" fill="#111111" font-family="Times New Roman, Times, serif" font-size="24">I</text>
+  <text x="112" y="140" fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">6</text>
+  <text x="148" y="86" fill="#111111" font-family="Times New Roman, Times, serif" font-size="22">10</text>
+</svg>

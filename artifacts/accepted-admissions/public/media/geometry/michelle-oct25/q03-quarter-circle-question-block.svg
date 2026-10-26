@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" role="img">
+  <title>Quarter circle inside a square, centered at vertex O</title>
+  <rect width="360" height="360" fill="#ffffff"/>
+  <path d="M60 60 H260 V260 H60 Z" fill="none" stroke="#111111" stroke-width="2"/>
+  <path d="M60 60 A200 200 0 0 1 260 260" fill="none" stroke="#111111" stroke-width="2.5"/>
+  <circle cx="60" cy="260" r="3.5" fill="#111111"/>
+  <text x="28" y="286" fill="#111111" font-family="Times New Roman, Times, serif" font-size="28">O</text>
+</svg>

@@ -6,6 +6,7 @@ test("formatted math is limited to the authored follow-up quizzes", () => {
   assert.equal(quizShowsFormattedMath("Factoring Quiz"), true);
   assert.equal(quizShowsFormattedMath("SAT Math Problems"), true);
   assert.equal(quizShowsFormattedMath("Oct 18 Session Review Quiz"), true);
+  assert.equal(quizShowsFormattedMath("Oct 25 Session Review Quiz"), true);
   assert.equal(
     quizShowsFormattedMath("SAT pre-work (30–50 questions) — Michelle’s SAT Session with Xavier"),
     true,
@@ -55,6 +56,8 @@ test("prose stays prose and math islands format inside a sentence", () => {
 });
 
 test("fractions, absolute value, and exponents on the right factor", () => {
+  assert.equal(quizMathPlain("overline(FH)"), "F\u0305H\u0305");
+  assert.equal(quizMathPlain("π·3^2 = 9π"), "π·3^{2} = 9π");
   assert.equal(quizMathPlain("7π/4"), "\\frac{7π}{4}");
   assert.equal(quizMathPlain("5π/6"), "\\frac{5π}{6}");
   assert.equal(

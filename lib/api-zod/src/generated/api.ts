@@ -3390,6 +3390,7 @@ export const GetAssignmentResponse = zod.object({
   "deadline": zod.coerce.date().nullish(),
   "questionCount": zod.number(),
   "timeLimitMinutes": zod.number(),
+  "softTimeLimit": zod.boolean().optional(),
   "attemptCount": zod.number(),
   "maxAttempts": zod.number(),
   "latestScore": zod.number().nullish(),
@@ -3563,6 +3564,7 @@ export const GetAttemptResponse = zod.object({
   "pausedSeconds": zod.number(),
   "pauseCount": zod.number(),
   "remainingSeconds": zod.number(),
+  "softTimeLimit": zod.boolean().optional(),
   "currentQuestionIndex": zod.number().min(getAttemptResponseCurrentQuestionIndexMin),
   "responses": zod.array(zod.object({
   "questionId": zod.string(),

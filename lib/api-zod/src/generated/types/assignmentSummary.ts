@@ -21,6 +21,8 @@ export interface AssignmentSummary {
   deadline?: Date | null;
   questionCount: number;
   timeLimitMinutes: number;
+  /** When true, the time limit never expires or auto-submits. */
+  softTimeLimit?: boolean;
   attemptCount: number;
   maxAttempts: number;
   /** @nullable */
