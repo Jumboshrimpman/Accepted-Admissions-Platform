@@ -941,6 +941,20 @@ export const GetAdminClientDashboardResponse = zod.object({
   "hourlyRateCents": zod.number(),
   "prepaidHours": zod.number(),
   "calendarConnected": zod.boolean()
+})).optional(),
+  "previewSatTutors": zod.array(zod.object({
+  "tutorKey": zod.enum(['xavier', 'nika', 'eunice', 'victoria']),
+  "id": zod.string(),
+  "name": zod.string(),
+  "title": zod.string(),
+  "tagline": zod.string(),
+  "biography": zod.string(),
+  "photoUrl": zod.string().nullish(),
+  "hourlyRateCents": zod.number(),
+  "prepaidHours": zod.number(),
+  "calendarConnected": zod.boolean(),
+  "comingSoon": zod.boolean(),
+  "bookable": zod.boolean()
 })).optional()
 }))
 

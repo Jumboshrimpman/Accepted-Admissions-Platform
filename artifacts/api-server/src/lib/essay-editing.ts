@@ -62,6 +62,27 @@ export function nikaEssayProductBySlug(slug: string | null | undefined) {
   return NIKA_ESSAY_PRODUCTS.find((product) => product.slug === slug) ?? null;
 }
 
+export type EssayPreviewOffer = {
+  slug: (typeof NIKA_ESSAY_SLUGS)[number];
+  name: string;
+  description: string;
+  priceCents: number;
+  durationHours: number;
+  durationMinutes: 60;
+};
+
+/** Read-only cards for Neel's portal and admin preview. Does not write or email. */
+export function essayPreviewOffers(): EssayPreviewOffer[] {
+  return NIKA_ESSAY_PRODUCTS.map((product) => ({
+    slug: product.slug,
+    name: product.name,
+    description: product.description,
+    priceCents: product.totalPriceCents,
+    durationHours: product.durationHours,
+    durationMinutes: 60 as const,
+  }));
+}
+
 export function essayKindForSlug(slug: string | null | undefined): EssayKind | null {
   return nikaEssayProductBySlug(slug)?.kind ?? null;
 }

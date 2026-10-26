@@ -292,12 +292,12 @@ export function previewOffersFromSatTutorProducts(
   return products
     .filter((product) => {
       const tutorKey = satTutorKeyForSlug(product.slug);
-      return Boolean(
-        tutorKey &&
-          canBookSatTutor(tutorKey, user) &&
-          isStandardSatTutorProduct(product) &&
-          Number(product.durationHours) === 1,
-      );
+      if (!tutorKey || !isStandardSatTutorProduct(product) || Number(product.durationHours) !== 1) {
+        return false;
+      }
+      // Victoria stays off every other client's preview. Sophia still sees her $130 hour.
+      if (tutorKey === "victoria") return user?.id === SOPHIA_SLEIMAN_SAT_USER_ID;
+      return canBookSatTutor(tutorKey, user);
     })
     .slice()
     .sort((left, right) => satTutorProductSortKey(left.slug) - satTutorProductSortKey(right.slug))

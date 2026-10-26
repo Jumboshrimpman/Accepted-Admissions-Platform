@@ -55,6 +55,7 @@ import {
   canPurchaseOrBookSatCredits,
   isOffPlatformProgramClient,
   shouldShowSatPaymentReceipts,
+  SOPHIA_SLEIMAN_SAT_USER_ID,
   isSamaPostgradTestEmail,
   showsSelfServeCollegeConsulting,
 } from "@/lib/portal-sat";
@@ -320,8 +321,10 @@ export function ClientDashboardView({
   const analysis = nextSession?.latestResult?.analysis;
   const guidance = analysis ? clientAdaptiveGuidance(analysis) : null;
   const completed = sessions.filter(isSessionWorkComplete).length;
+  const portalUserId = mirroredStudent?.id ?? dashboard.user.id;
+  const sophiaPortal = portalUserId === SOPHIA_SLEIMAN_SAT_USER_ID;
   const priorityDashboard = isPriorityCreditsDashboard({
-    userId: mirroredStudent?.id ?? dashboard.user.id,
+    userId: portalUserId,
     email: mirroredStudent?.email ?? dashboard.user.email,
     viewingAs: mirroredStudent,
   });
@@ -516,161 +519,7 @@ export function ClientDashboardView({
         <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
       ) : null;
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
-      {!adminPreview && dashboard.user.role === "student" ? <ClientIntakeAction /> : null}
-      <section
-        className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
-        data-testid="portal-curriculum-section"
-      >
-        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
-              {twelveSessionPlan ? "Fall 2026 curriculum" : "Your curriculum"}
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              {twelveSessionPlan
-                ? "One plan. Twelve focused meetings."
-                : `Welcome back, ${firstName}.`}
-            </h1>
-            <p className="mt-3 text-white/75">
-              {twelveSessionPlan
-                ? "SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop."
-                : "Open a meeting to review preparation, join Google Meet, or continue SAT practice."}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-white/65">Progress</p>
-              <p className="mt-1 text-lg font-semibold">
-                {completed} of {twelveSessionPlan ? sessions.length || 12 : sessions.length}
-              </p>
-            </div>
-            {twelveSessionPlan ? (
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-                <p className="text-white/65">English dates</p>
-                <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-                <p className="text-white/65">Upcoming</p>
-                <p className="mt-1 text-lg font-semibold">
-                  {sessions.filter((session) => session.readiness !== "complete").length} meeting
-                  {sessions.filter((session) => session.readiness !== "complete").length === 1 ? "" : "s"}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {priorityDashboard ? upcomingMeeting : null}
-      {priorityDashboard ? creditsSection : null}
-
-      {viewer && (
-        <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <Eye className="mt-0.5 h-5 w-5 shrink-0" />
-          <div>
-            <p className="font-semibold">
-              {adminPreview
-                ? "Read-only client preview"
-                : mirroredStudent
-                  ? `Viewing as ${mirroredStudent.displayName}`
-                  : "Parent view"}
-            </p>
-            <p className="mt-1 text-amber-800">
-              {adminPreview
-                ? "Open quizzes and session materials to review them. Booking, meetings, and student actions stay disabled."
-                : "Parent view is read-only. You can review the plan, preparation, and published results. Only the student can complete work."}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {showPaymentSuccess && studentSatCommerce && showSelfServeBooking && (
-        <div
-          role="status"
-          data-testid="payment-success-banner"
-          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
-        >
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-          <div>
-            <p className="font-semibold">Payment received — credits are ready</p>
-            <p className="mt-1 text-emerald-800">
-              You have {dashboard.credits.remainingHours} prepaid hour
-              {dashboard.credits.remainingHours === 1 ? "" : "s"} available. Choose a tutor and time on the schedule below.
-            </p>
-            <Button
-              className="mt-3 rounded-full"
-              size="sm"
-              onClick={() =>
-                document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-            >
-              View booking schedule
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {priorityDashboard ? null : creditsSection}
-
-      {priorityDashboard ? null : billingSection}
-
-      {studentSatCommerce && showSelfServeBooking ? (
-        <BookingCard
-          collegeConsulting={collegeConsulting}
-          consultingCatalog={
-            collegeConsulting && isSamaPostgradTestEmail(dashboard.user.email)
-          }
-          initialRemainingHours={dashboard.credits.remainingHours}
-          initialPurchasedHours={dashboard.credits.purchasedHours}
-          fallbackSessions={[
-            ...(dashboard.upcomingSessions ?? []),
-            ...sessions,
-          ]}
-        />
-      ) : null}
-      {adminPreview && showSelfServeBooking && previewBooking ? (
-        <ClientPreviewBookingCard
-          previewBooking={previewBooking}
-          clientTimezone={clientTimezone}
-          remainingHours={previewFinancials?.remainingHours ?? dashboard.credits.remainingHours}
-          hasVerifiedPayment={
-            previewFinancials?.payments.some(
-              (payment) =>
-                Boolean(payment.verifiedAt) ||
-                payment.status === "paid" ||
-                payment.status === "partially_paid",
-            ) ?? false
-          }
-          offPlatformBilling={offPlatformBilling}
-          hasAssignedProgramSessions={
-            (dashboard.curriculumSessions?.length ?? 0) > 0 ||
-            (dashboard.upcomingSessions?.length ?? 0) > 0
-          }
-        />
-      ) : null}
-
-      {priorityDashboard ? null : upcomingMeeting}
-
-      {nextSession?.latestResult && analysis && (
-        <Card className="border-accent/20 bg-accent/[0.03]">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-accent" />Adaptive guidance</CardTitle>
-              <Badge variant="outline">{analysis.label} · shared with your tutor</Badge>
-            </div>
-            <CardDescription>Based only on the latest finalized {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.strength) || "Keep building your baseline."}</p></div>
-            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-missed-skill"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.missedSkill) || "No repeated missed skill yet."}</p></div>
-            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-next-practice"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.nextPractice) || "Continue with the published session plan."}</p></div>
-          </CardContent>
-        </Card>
-      )}
-
+  const quizzesSection = (
       <Card data-testid="client-quizzes">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -804,6 +653,166 @@ export function ClientDashboardView({
           )}
         </CardContent>
       </Card>
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-5 pb-14" data-testid="client-dashboard">
+      {!adminPreview && dashboard.user.role === "student" ? <ClientIntakeAction /> : null}
+      <section
+        className="overflow-hidden rounded-3xl bg-brand-ink px-6 py-8 text-white shadow-xl shadow-primary/10 sm:px-9"
+        data-testid="portal-curriculum-section"
+      >
+        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/65">
+              {twelveSessionPlan ? "Fall 2026 curriculum" : "Your curriculum"}
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              {twelveSessionPlan
+                ? "One plan. Twelve focused meetings."
+                : `Welcome back, ${firstName}.`}
+            </h1>
+            <p className="mt-3 text-white/75">
+              {twelveSessionPlan
+                ? "SAT and English preparation stay separate, while every meeting follows the same clear before, during, and after loop."
+                : "Open a meeting to review preparation, join Google Meet, or continue SAT practice."}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+              <p className="text-white/65">Progress</p>
+              <p className="mt-1 text-lg font-semibold">
+                {completed} of {twelveSessionPlan ? sessions.length || 12 : sessions.length}
+              </p>
+            </div>
+            {twelveSessionPlan ? (
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-white/65">English dates</p>
+                <p className="mt-1 text-lg font-semibold">Oct 23 · Nov 13 · Dec 4</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+                <p className="text-white/65">Upcoming</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {sessions.filter((session) => session.readiness !== "complete").length} meeting
+                  {sessions.filter((session) => session.readiness !== "complete").length === 1 ? "" : "s"}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {priorityDashboard ? upcomingMeeting : null}
+      {priorityDashboard ? creditsSection : null}
+      {sophiaPortal ? quizzesSection : null}
+
+      {viewer && (
+        <div role="status" className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <Eye className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {adminPreview
+                ? "Read-only client preview"
+                : mirroredStudent
+                  ? `Viewing as ${mirroredStudent.displayName}`
+                  : "Parent view"}
+            </p>
+            <p className="mt-1 text-amber-800">
+              {adminPreview
+                ? "Open quizzes and session materials to review them. Booking, meetings, and student actions stay disabled."
+                : "Parent view is read-only. You can review the plan, preparation, and published results. Only the student can complete work."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showPaymentSuccess && studentSatCommerce && showSelfServeBooking && (
+        <div
+          role="status"
+          data-testid="payment-success-banner"
+          className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+        >
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="font-semibold">Payment received — credits are ready</p>
+            <p className="mt-1 text-emerald-800">
+              You have {dashboard.credits.remainingHours} prepaid hour
+              {dashboard.credits.remainingHours === 1 ? "" : "s"} available. Choose a tutor and time on the schedule below.
+            </p>
+            <Button
+              className="mt-3 rounded-full"
+              size="sm"
+              onClick={() =>
+                document.getElementById("booking-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              View booking schedule
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {priorityDashboard ? null : creditsSection}
+
+      {priorityDashboard ? null : billingSection}
+
+      {studentSatCommerce && showSelfServeBooking ? (
+        <BookingCard
+          collegeConsulting={collegeConsulting}
+          consultingCatalog={
+            collegeConsulting && isSamaPostgradTestEmail(dashboard.user.email)
+          }
+          initialRemainingHours={dashboard.credits.remainingHours}
+          initialPurchasedHours={dashboard.credits.purchasedHours}
+          fallbackSessions={[
+            ...(dashboard.upcomingSessions ?? []),
+            ...sessions,
+          ]}
+        />
+      ) : null}
+      {adminPreview && showSelfServeBooking && previewBooking ? (
+        <ClientPreviewBookingCard
+          previewBooking={previewBooking}
+          clientTimezone={clientTimezone}
+          remainingHours={previewFinancials?.remainingHours ?? dashboard.credits.remainingHours}
+          hasVerifiedPayment={
+            previewFinancials?.payments.some(
+              (payment) =>
+                Boolean(payment.verifiedAt) ||
+                payment.status === "paid" ||
+                payment.status === "partially_paid",
+            ) ?? false
+          }
+          offPlatformBilling={offPlatformBilling}
+          hasAssignedProgramSessions={
+            (dashboard.curriculumSessions?.length ?? 0) > 0 ||
+            (dashboard.upcomingSessions?.length ?? 0) > 0
+          }
+        />
+      ) : null}
+
+      {priorityDashboard ? null : upcomingMeeting}
+
+      {nextSession?.latestResult && analysis && (
+        <Card className="border-accent/20 bg-accent/[0.03]">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-accent" />Adaptive guidance</CardTitle>
+              <Badge variant="outline">{analysis.label} · shared with your tutor</Badge>
+            </div>
+            <CardDescription>Based only on the latest finalized {sessionSubjectLabel(nextSession.subject)} result.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border bg-background p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Strength</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.strength) || "Keep building your baseline."}</p></div>
+            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-missed-skill"><p className="text-xs font-semibold uppercase text-muted-foreground">Missed skill</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.missedSkill) || "No repeated missed skill yet."}</p></div>
+            <div className="rounded-xl border bg-background p-4" data-testid="adaptive-next-practice"><p className="text-xs font-semibold uppercase text-muted-foreground">Next practice</p><p className="mt-2 text-sm">{studentFacingCopy(guidance?.nextPractice) || "Continue with the published session plan."}</p></div>
+          </CardContent>
+        </Card>
+      )}
+
+      {sophiaPortal ? null : quizzesSection}
+
 
       {(dashboard.materials?.length ?? 0) > 0 ? (
         <Card data-testid="client-materials">

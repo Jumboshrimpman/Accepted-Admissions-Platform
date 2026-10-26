@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AdminClientDashboard } from "@workspace/api-client-react";
 import { CalendarClock, Eye } from "lucide-react";
+import { isEssayProductSlug } from "@/components/essay-editing-panel";
 import { BillingHistorySection } from "@/pages/portal/billing-history";
 import {
   CONSULTING_TUTOR_PHOTO_CLASS,
@@ -21,6 +22,36 @@ type ConsultingPreviewSession = {
 
 function dollars(cents: number): string {
   return `$${Math.round(cents / 100)}`;
+}
+
+const ESSAY_PREVIEW_FALLBACK = [
+  {
+    slug: "college-consulting-nika-essay-async",
+    name: "Essay editing, 1 hr (async)",
+    description:
+      "One hour of asynchronous essay editing with Nika. Upload one PDF and choose a due time at least 24 hours later. There is no meeting.",
+    priceCents: 10_000,
+  },
+  {
+    slug: "college-consulting-nika-essay-followup",
+    name: "Essay editing + 1 hr follow-up call, 2 hrs",
+    description:
+      "One hour of asynchronous essay editing with Nika, plus a one-hour follow-up call. Upload one PDF and choose a due time at least 24 hours later. Book the call with Nika at least 24 hours after that due time.",
+    priceCents: 20_000,
+  },
+] as const;
+
+function essayCards(dashboard: AdminClientDashboard) {
+  const fromOffers = (dashboard.previewOffers ?? []).filter((offer) => isEssayProductSlug(offer.slug ?? ""));
+  if (fromOffers.length > 0) {
+    return fromOffers.map((offer) => ({
+      slug: offer.slug ?? offer.name,
+      name: offer.name,
+      description: offer.description,
+      priceCents: offer.priceCents,
+    }));
+  }
+  return [...ESSAY_PREVIEW_FALLBACK];
 }
 
 function TutorPreviewCard({ tutor }: { tutor: ConsultingPreviewTutorCard }) {
@@ -182,6 +213,24 @@ export function ConsultingClientPreview({ dashboard }: { dashboard: AdminClientD
           ) : (
             tutors.map((tutor: ConsultingPreviewTutorCard) => <TutorPreviewCard key={tutor.tutorKey} tutor={tutor} />)
           )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="consulting-preview-essays">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Essay editing with Nika</CardTitle>
+          <CardDescription>
+            $100 for editing only (async PDF). $200 adds a one-hour follow-up call. Nothing is sent from this preview.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {essayCards(dashboard).map((offer) => (
+            <div key={offer.slug} className="rounded-xl border p-4" data-testid={`consulting-preview-essay-${offer.slug}`}>
+              <p className="font-semibold">{offer.name}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{offer.description}</p>
+              <p className="mt-3 text-2xl font-semibold">{dollars(offer.priceCents)}</p>
+            </div>
+          ))}
         </CardContent>
       </Card>
 

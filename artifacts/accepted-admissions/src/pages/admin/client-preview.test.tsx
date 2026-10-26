@@ -1004,7 +1004,13 @@ describe("administrator client preview", () => {
     expect(sectionText.indexOf("Upcoming sessions")).toBeLessThan(sectionText.indexOf("1 Nika hour credits remaining"));
     expect(sectionText.indexOf("1 Nika hour credits remaining")).toBeLessThan(sectionText.indexOf("Read-only College Consulting preview"));
     expect(sectionText.indexOf("Read-only College Consulting preview")).toBeLessThan(sectionText.indexOf("Tutors"));
-    expect(sectionText.indexOf("Tutors")).toBeLessThan(sectionText.indexOf("Billing history"));
+    expect(sectionText.indexOf("Tutors")).toBeLessThan(sectionText.indexOf("Essay editing with Nika"));
+    expect(sectionText.indexOf("Essay editing with Nika")).toBeLessThan(sectionText.indexOf("Billing history"));
+    expect(screen.getByTestId("consulting-preview-essay-college-consulting-nika-essay-async").textContent).toContain("$100");
+    expect(screen.getByTestId("consulting-preview-essay-college-consulting-nika-essay-async").textContent).toMatch(/async/i);
+    expect(screen.getByTestId("consulting-preview-essay-college-consulting-nika-essay-followup").textContent).toContain("$200");
+    expect(screen.getByTestId("consulting-preview-essay-college-consulting-nika-essay-followup").textContent).toMatch(/follow-up/i);
+    expect(screen.getByTestId("consulting-preview-essays").textContent).toContain("Nothing is sent");
     expect(consultingDashboard.lastElementChild).toBe(screen.getByTestId("billing-history"));
     const credits = screen.getByTestId("consulting-preview-credits") as HTMLDetailsElement;
     expect(credits.open).toBe(false);
@@ -1047,5 +1053,152 @@ describe("administrator client preview", () => {
     expect(screen.queryByRole("link", { name: /Purchase|Checkout|Buy /i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reserve|Book a/i })).toBeNull();
     expect(screen.getByTestId("consulting-preview-readonly").textContent).toContain("Booking, checkout, and email stay off");
+  });
+
+  test("previews Sophia's SAT tutors with Victoria coming soon and her own rates", () => {
+    mocks.preview = {
+      user: {
+        id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
+        displayName: "Sophia Sleiman",
+        email: "sophia.sleiman@example.invalid",
+        role: "student",
+        avatarUrl: null,
+      },
+      courses: [],
+      upcomingSessions: [],
+      curriculumSessions: [],
+      assignments: [
+        {
+          id: "quiz-1",
+          title: "SAT practice",
+          subject: "SAT",
+          status: "assigned",
+          questionCount: 4,
+          timeLimitMinutes: 20,
+          attemptCount: 0,
+          maxAttempts: 1,
+        },
+      ],
+      recentScores: [],
+      reviewSkills: [],
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: true,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+        creditsRemainingLabel: "0 credits remaining",
+      },
+      progress: {
+        totalSessions: 0,
+        completedSessions: 0,
+        averageScore: null,
+        strengths: [],
+        weaknesses: [],
+      },
+      assignedStudents: [],
+      newSubmissions: [],
+      openReviewCount: 0,
+      adminPreview: true,
+      previewOffer: {
+        name: "SAT 1 hour with Eunice",
+        description: "One hour.",
+        priceCents: 13000,
+        durationMinutes: 60,
+      },
+      previewOffers: [],
+      previewFinancials: {
+        readOnly: true,
+        providerStatus: "connected",
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        invoices: [],
+        payments: [],
+        credits: [],
+      },
+      previewBooking: { calendarStatus: "unavailable", availability: null, sessions: [] },
+      previewSatTutors: [
+        {
+          tutorKey: "xavier",
+          id: "preview-xavier",
+          name: "Xavier",
+          title: "SAT Tutor",
+          tagline: "Harvard Math",
+          biography: "Xavier biography.",
+          photoUrl: "/media/team/xavier-morales.jpg",
+          hourlyRateCents: 20000,
+          prepaidHours: 0,
+          calendarConnected: true,
+          comingSoon: false,
+          bookable: true,
+        },
+        {
+          tutorKey: "nika",
+          id: "preview-nika",
+          name: "Nika",
+          title: "SAT Tutor",
+          tagline: "Columbia",
+          biography: "Nika biography.",
+          photoUrl: "/media/team/nika-raiffe.png",
+          hourlyRateCents: 13000,
+          prepaidHours: 0,
+          calendarConnected: true,
+          comingSoon: false,
+          bookable: true,
+        },
+        {
+          tutorKey: "eunice",
+          id: "preview-eunice",
+          name: "Eunice",
+          title: "SAT Tutor",
+          tagline: "Harvard",
+          biography: "Eunice biography.",
+          photoUrl: "/media/team/eunice-chon.jpg",
+          hourlyRateCents: 13000,
+          prepaidHours: 0,
+          calendarConnected: true,
+          comingSoon: false,
+          bookable: true,
+        },
+        {
+          tutorKey: "victoria",
+          id: "preview-victoria",
+          name: "Victoria",
+          title: "SAT Tutor",
+          tagline: "Harvard Neuroscience",
+          biography: "Victoria biography.",
+          photoUrl: "/media/team/victoria.jpg",
+          hourlyRateCents: 13000,
+          prepaidHours: 0,
+          calendarConnected: false,
+          comingSoon: true,
+          bookable: false,
+        },
+      ],
+    };
+
+    render(<AdminClientPreview />);
+    const root = screen.getByTestId("sophia-preview-dashboard");
+    const text = root.textContent ?? "";
+    expect(text.indexOf("Welcome back, Sophia.")).toBeLessThan(text.indexOf("Upcoming meetings"));
+    expect(text.indexOf("Upcoming meetings")).toBeLessThan(text.indexOf("0 credits remaining"));
+    expect(text.indexOf("0 credits remaining")).toBeLessThan(text.indexOf("Quizzes"));
+    expect(text.indexOf("Quizzes")).toBeLessThan(text.indexOf("Billing history"));
+    expect((screen.getByTestId("sophia-preview-credits") as HTMLDetailsElement).open).toBe(false);
+    expect((screen.getByTestId("billing-history") as HTMLDetailsElement).open).toBe(false);
+    expect(root.lastElementChild).toBe(screen.getByTestId("billing-history"));
+    expect(screen.getByTestId("sophia-preview-tutor-xavier").textContent).toContain("$200/hr");
+    expect(screen.getByTestId("sophia-preview-tutor-nika").textContent).toContain("$130/hr");
+    expect(screen.getByTestId("sophia-preview-tutor-eunice").textContent).toContain("$130/hr");
+    expect(screen.getByTestId("sophia-preview-tutor-victoria").textContent).toContain("$130/hr");
+    expect(screen.getByTestId("sophia-preview-victoria-coming-soon").textContent).toMatch(/Coming soon/);
+    expect(screen.getByTestId("sophia-preview-status-victoria").textContent).toContain("Coming soon");
+    expect(screen.getByText("SAT practice")).toBeTruthy();
+    expect(screen.queryByText("Essay editing with Nika")).toBeNull();
+    expect(screen.queryByText("College Consulting")).toBeNull();
+    expect(screen.queryByText("$100/hr")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reserve|Checkout|Book a/i })).toBeNull();
   });
 });

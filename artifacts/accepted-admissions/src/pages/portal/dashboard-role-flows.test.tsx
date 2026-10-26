@@ -1859,6 +1859,7 @@ describe("authenticated role dashboard flows", () => {
 
   test("Sophia's portal section order matches Neel's and keeps SAT data", () => {
     const priorityOrder = ["welcome", "upcoming", "credits", "booking", "quizzes", "roadmap", "billing"];
+    const sophiaOrder = ["welcome", "upcoming", "credits", "quizzes", "booking", "roadmap", "billing"];
 
     function landmarkOrder(root: HTMLElement): string[] {
       const roadmap =
@@ -1910,7 +1911,7 @@ describe("authenticated role dashboard flows", () => {
     const sophiaCredits = screen.getByTestId("client-credit-balance") as HTMLDetailsElement;
     expect(sophiaCredits.open).toBe(false);
     expect(sophiaCredits.textContent).toContain("0 credits remaining");
-    expect(landmarkOrder(sophiaRoot)).toEqual(priorityOrder);
+    expect(landmarkOrder(sophiaRoot)).toEqual(sophiaOrder);
     expect(sophiaRoot.lastElementChild).toBe(screen.getByTestId("billing-history"));
     expect((screen.getByTestId("billing-history") as HTMLDetailsElement).open).toBe(false);
     expect(screen.getByRole("link", { name: "Purchase session credits" }).getAttribute("href")).toBe("/portal/sat");

@@ -347,16 +347,18 @@ test("admin preview lists one-hour tutor rates for the viewed client", () => {
     offers.map((offer) => ({ slug: offer.slug, priceCents: offer.priceCents, durationMinutes: offer.durationMinutes })),
     [
       { slug: "sat-eunice-60", priceCents: 13_000, durationMinutes: 60 },
+      { slug: "sat-victoria-60", priceCents: 13_000, durationMinutes: 60 },
       { slug: "sat-xavier-60", priceCents: 20_000, durationMinutes: 60 },
       { slug: "sat-nika-60", priceCents: 13_000, durationMinutes: 60 },
     ],
   );
-  assert.equal(offers.some((offer) => offer.slug.startsWith("sat-victoria")), false);
+  assert.equal(offers.some((offer) => offer.slug.startsWith("sat-victoria")), true);
   const strangerOffers = previewOffersFromSatTutorProducts(
     SAT_TUTOR_PRODUCTS.map((item) => ({ ...item, active: true })),
     otherSatClient,
   );
   assert.equal(strangerOffers.some((offer) => offer.slug.startsWith("sat-nika")), false);
+  assert.equal(strangerOffers.some((offer) => offer.slug.startsWith("sat-victoria")), false);
   const michelleOffers = previewOffersFromSatTutorProducts(
     SAT_TUTOR_PRODUCTS.map((item) => ({ ...item, active: true })),
     michelle,
@@ -365,6 +367,7 @@ test("admin preview lists one-hour tutor rates for the viewed client", () => {
   assert.match(michelleOffers.find((offer) => offer.slug === "sat-xavier-60")?.description ?? "", /\$130\/hour/);
   assert.equal(michelleOffers.find((offer) => offer.slug === "sat-nika-60")?.priceCents, 13_000);
   assert.equal(michelleOffers.find((offer) => offer.slug === "sat-nika-60")?.name, "SAT 1 hour with Nika");
+  assert.equal(michelleOffers.some((offer) => offer.slug.startsWith("sat-victoria")), false);
 });
 
 test("a client price override uses Checkout price_data and leaves the catalog price id alone", () => {

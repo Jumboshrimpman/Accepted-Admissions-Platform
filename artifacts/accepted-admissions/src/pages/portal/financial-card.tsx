@@ -2,6 +2,7 @@ import { format, parseISO } from "date-fns";
 import { ExternalLink, ReceiptText, WalletCards } from "lucide-react";
 import { Link } from "wouter";
 import { getGetFinancialsQueryKey, useGetFinancials, type AdminClientPreviewOffer, type FinancialSummary } from "@workspace/api-client-react";
+import { isEssayProductSlug } from "@/components/essay-editing-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,7 +133,11 @@ export function FinancialCard({
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{offer.description}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {credits} prepaid hour{credits === "1" ? "" : "s"}
+                      {isEssayProductSlug(offer.slug ?? "")
+                        ? offer.slug?.includes("followup")
+                          ? "Includes a one-hour follow-up call"
+                          : "Async PDF. No meeting."
+                        : `${credits} prepaid hour${credits === "1" ? "" : "s"}`}
                     </p>
                   </div>
                 );

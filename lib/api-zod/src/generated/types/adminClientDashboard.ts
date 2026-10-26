@@ -7,6 +7,7 @@
  */
 import type { AdminClientPreviewBooking } from './adminClientPreviewBooking';
 import type { AdminClientPreviewConsultingTutor } from './adminClientPreviewConsultingTutor';
+import type { AdminClientPreviewSatTutor } from './adminClientPreviewSatTutor';
 import type { AdminClientPreviewOffer } from './adminClientPreviewOffer';
 import type { Dashboard } from './dashboard';
 import type { FinancialSummary } from './financialSummary';
@@ -18,4 +19,5 @@ export type AdminClientDashboard = Dashboard & {
   previewFinancials: FinancialSummary;
   previewBooking: AdminClientPreviewBooking;
   previewConsultingTutors?: AdminClientPreviewConsultingTutor[];
+  previewSatTutors?: AdminClientPreviewSatTutor[];
 };

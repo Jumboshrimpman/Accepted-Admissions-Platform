@@ -7,10 +7,14 @@ import {
   usersTable,
 } from "@workspace/db";
 import { logger } from "./logger.ts";
-import { VICTORIA_USER_ID } from "./college-consulting.ts";
+import {
+  VICTORIA_USER_ID,
+  consultingPreviewTutors,
+  type CollegeConsultingTutorKey,
+} from "./college-consulting.ts";
 import { CANONICAL_XAVIER_EMAIL } from "./xavier-identity.ts";
 import { EUNICE_TUTOR_EMAIL, NIKA_TUTOR_EMAIL } from "./session-schedule.ts";
-import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
+import { displayedSatHourlyCents, SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 import { isVictoriaBookingProfile } from "./victoria-booking.ts";
 
 /** Same course title as FALL_SAT_COURSE_TITLE. Inlined so this seed does not load the SAT bank. */
@@ -193,4 +197,70 @@ export async function ensureSophiaTutorLinks(options?: {
   };
   logger.info(result, "Sophia tutor links ready");
   return result;
+}
+
+/** Xavier, Nika, Eunice, then Victoria. SAT rates, not Neel's consulting prices. */
+export const SOPHIA_PREVIEW_TUTOR_ORDER = ["xavier", "nika", "eunice", "victoria"] as const;
+
+export type SophiaPreviewTutorCard = {
+  tutorKey: (typeof SOPHIA_PREVIEW_TUTOR_ORDER)[number];
+  id: string;
+  name: string;
+  title: string;
+  tagline: string;
+  biography: string;
+  photoUrl: string | null;
+  hourlyRateCents: number;
+  prepaidHours: number;
+  calendarConnected: boolean;
+  comingSoon: boolean;
+  bookable: boolean;
+};
+
+/**
+ * Sophia's admin-preview roster. Victoria is visible at $130 and stays
+ * non-bookable until her Google Calendar is connected. No emails or writes.
+ */
+export function sophiaPreviewTutors(input: {
+  profiles: Array<{
+    id: string;
+    userId?: string | null;
+    email?: string | null;
+    name?: string | null;
+    title?: string | null;
+    tagline?: string | null;
+    biography?: string | null;
+    photoUrl?: string | null;
+    active?: boolean | null;
+    bookingEligible?: boolean | null;
+    calendarStatus?: string | null;
+  }>;
+  prepaidHours?: Partial<Record<CollegeConsultingTutorKey, number>>;
+  calendars?: Partial<Record<CollegeConsultingTutorKey, boolean>>;
+}): SophiaPreviewTutorCard[] {
+  const byKey = new Map(
+    consultingPreviewTutors(input).map((tutor) => [tutor.tutorKey, tutor]),
+  );
+  return SOPHIA_PREVIEW_TUTOR_ORDER.map((tutorKey) => {
+    const card = byKey.get(tutorKey);
+    if (!card) {
+      throw new Error(`Missing Sophia preview tutor ${tutorKey}`);
+    }
+    const calendarConnected = card.calendarConnected === true;
+    const comingSoon = tutorKey === "victoria" && !calendarConnected;
+    return {
+      tutorKey,
+      id: card.id,
+      name: card.name,
+      title: card.title,
+      tagline: card.tagline,
+      biography: card.biography,
+      photoUrl: card.photoUrl,
+      hourlyRateCents: displayedSatHourlyCents(tutorKey, null),
+      prepaidHours: card.prepaidHours,
+      calendarConnected,
+      comingSoon,
+      bookable: calendarConnected && !comingSoon,
+    };
+  });
 }
