@@ -31,11 +31,6 @@ export const NIKA_PRE_CLOSE_OPENINGS: Record<string, AvailabilityWindow[]> = {
   "2026-10-26": [{ start: "21:00", end: "22:00" }],
 };
 
-/** Legacy fallback stored before the close. A later edit that still matches this is not hers. */
-export const NIKA_PRE_CLOSE_WEEKLY: Record<string, AvailabilityWindow[]> = Object.fromEntries(
-  ["0", "1", "2", "3", "4", "5", "6"].map((day) => [day, [{ start: "07:00", end: "21:00" }]]),
-);
-
 /** Monday 9:00–10:00 PM ET weekly hours stored before the close. */
 export const NIKA_PRE_CLOSE_RECURRING: RecurringHours = {
   startDate: "2026-10-26",
@@ -109,8 +104,9 @@ function hasOpenWindows(hours: Record<string, AvailabilityWindow[]>): boolean {
 /**
  * Close every opening that was already stored. Empty date keys from that
  * closure are removed, leaving only the far-date marker, so a weekly schedule
- * she saves opens those dates. A weekly schedule is kept only when this save
- * is after the cutoff and it no longer matches the pre-close hours.
+ * she saves opens those dates. A weekly schedule she saves is kept only when
+ * this save is after the cutoff and it no longer matches the pre-close Monday
+ * hours. The 07:00–21:00 weeklyHours fallback is always cleared.
  */
 export function planNikaCloseAll(input: {
   hasMarker: boolean;
@@ -138,14 +134,11 @@ export function planNikaCloseAll(input: {
     preserveLaterSave &&
     hasOpenWindows(recurring.days) &&
     !sameDayMap(recurring.days, NIKA_PRE_CLOSE_RECURRING.days);
-  const weekly = asWeeklyHours(input.rule.weeklyHours);
-  const keepWeekly =
-    preserveLaterSave && hasOpenWindows(weekly) && !sameDayMap(weekly, NIKA_PRE_CLOSE_WEEKLY);
   return {
     action: preserveLaterSave ? "preserved-later-save" : "applied",
     dateHours,
     recurringHours: keepRecurring ? recurring : EMPTY_RECURRING,
-    weeklyHours: keepWeekly ? weekly : {},
+    weeklyHours: {},
   };
 }
 

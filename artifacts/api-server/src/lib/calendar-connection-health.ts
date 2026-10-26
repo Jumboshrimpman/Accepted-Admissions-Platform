@@ -106,17 +106,47 @@ function hourMapHasOpenWindow(hours: Record<string, unknown> | null | undefined)
   return Object.values(hours).some((windows) => Array.isArray(windows) && windows.length > 0);
 }
 
+const CIVIL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function civilToday(now: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+}
+
+/** Open windows on today or a later civil date. A date that has already passed does not count. */
+function dateHoursHaveUpcomingWindow(
+  dateHours: Record<string, unknown> | null | undefined,
+  today: string,
+): boolean {
+  if (!dateHours) return false;
+  return Object.entries(dateHours).some(([key, windows]) => {
+    if (!CIVIL_DATE.test(key) || key < today) return false;
+    return Array.isArray(windows) && windows.length > 0;
+  });
+}
+
 export function hasUpcomingBookableTime(input: {
   active?: boolean | null;
   bookingEligible?: boolean | null;
   weeklyHours?: Record<string, unknown> | null;
   dateHours?: Record<string, unknown> | null;
   recurringHours?: { days?: Record<string, unknown> | null } | null;
+  now?: Date;
+  timeZone?: string | null;
 }): boolean {
   if (input.active === false || input.bookingEligible !== true) return false;
+  const today = civilToday(input.now ?? new Date(), input.timeZone?.trim() || "America/New_York");
   return (
     hourMapHasOpenWindow(input.weeklyHours) ||
-    hourMapHasOpenWindow(input.dateHours) ||
+    dateHoursHaveUpcomingWindow(input.dateHours, today) ||
     hourMapHasOpenWindow(input.recurringHours?.days)
   );
 }
@@ -423,7 +453,7 @@ export function buildCalendarConnectionHealth(input: {
     lastError: safeCalendarErrorMessage(input.lastError),
     lastErrorAt: iso(input.lastErrorAt),
     bookable,
-    hasUpcomingBookableTime: hasUpcomingBookableTime(input),
+    hasUpcomingBookableTime: hasUpcomingBookableTime({ ...input, now }),
     estimatedTokenAgeDays: estimatedTokenAgeDays(input.connectedAt, now),
     testingModeExpiryWarning: testingModeExpiryWarning({
       connectedAt: input.connectedAt,

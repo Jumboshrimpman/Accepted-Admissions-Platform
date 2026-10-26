@@ -221,6 +221,31 @@ test("a single-date save after the cutoff does not revive the old weekly hours",
   assert.deepEqual(slotsBetween(hours, "2026-11-16", "2026-11-24"), []);
 });
 
+test("a post-cutoff single-date save leaves no fallback slots", () => {
+  const later = storedBeforeClose();
+  later.updatedAt = new Date(NIKA_CLOSE_ALL_CUTOFF.getTime() + 60_000);
+  later.weeklyHours = Object.fromEntries(
+    ["0", "1", "2", "3", "4", "5", "6"].map((day) => [day, [{ start: "09:00", end: "17:00" }]]),
+  );
+  later.dateHours = {
+    ...later.dateHours,
+    "2026-11-04": [{ start: "15:00", end: "16:00" }],
+  };
+  const plan = planNikaCloseAll({ hasMarker: false, rule: later });
+  assert.equal(plan.action, "preserved-later-save");
+  if (plan.action !== "preserved-later-save") return;
+  assert.deepEqual(plan.weeklyHours, {});
+  assert.deepEqual(plan.recurringHours, { startDate: null, endDate: null, days: {} });
+  assert.deepEqual(plan.dateHours["2026-11-04"], [{ start: "15:00", end: "16:00" }]);
+  const hours = ruleFrom(plan);
+  assert.deepEqual(slotsBetween(hours, "2026-10-26", "2026-11-04"), []);
+  assert.deepEqual(slotsBetween(hours, "2026-11-04", "2026-11-05"), [
+    zonedDateTimeToUtc("2026-11-04", "15:00", "America/New_York").toISOString(),
+  ]);
+  assert.deepEqual(slotsBetween(hours, "2026-11-05", "2026-12-21"), []);
+  assert.deepEqual(slotsBetween(hours, "2100-01-03", "2100-01-10"), []);
+});
+
 test("startup closes Nika once and does not rewrite sessions or send mail", async () => {
   const source = await readFile(fileURLToPath(new URL("./nika-close-all-hours.ts", import.meta.url)), "utf8");
   const startup = await readFile(fileURLToPath(new URL("../index.ts", import.meta.url)), "utf8");
