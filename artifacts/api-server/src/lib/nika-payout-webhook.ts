@@ -41,27 +41,45 @@ export function isNikaNeelPayoutPair(
   return clientUserId === NEEL_DHARNI_USER_ID && tutorProfileId === NIKA_TUTOR_PROFILE_ID;
 }
 
-function activeBooking(bookingStatus: string | null | undefined): boolean {
-  return bookingStatus !== "cancelled";
+/**
+ * Live for payout: not archived, and booking_status is confirmed or rescheduled.
+ * Archived, pending, and any other booking status are not booked.
+ */
+export function isNikaPayoutBookedSession(session: {
+  status: string | null | undefined;
+  bookingStatus: string | null | undefined;
+}): boolean {
+  return (
+    session.status !== "archived" &&
+    (session.bookingStatus === "confirmed" || session.bookingStatus === "rescheduled")
+  );
 }
 
 /** One event for an admin update of a session that may already exist. */
 export function nikaPayoutEventForChange(args: {
   beforeClientUserId: string | null;
   beforeTutorProfileId: string | null;
+  beforeStatus: string;
   beforeBookingStatus: string;
   beforeStartsAt: Date;
   beforeDurationMinutes: number;
   afterClientUserId: string | null;
   afterTutorProfileId: string | null;
+  afterStatus: string;
   afterBookingStatus: string;
   afterStartsAt: Date;
   afterDurationMinutes: number;
 }): NikaPayoutEvent | null {
   const before = isNikaNeelPayoutPair(args.beforeClientUserId, args.beforeTutorProfileId) &&
-    activeBooking(args.beforeBookingStatus);
+    isNikaPayoutBookedSession({
+      status: args.beforeStatus,
+      bookingStatus: args.beforeBookingStatus,
+    });
   const after = isNikaNeelPayoutPair(args.afterClientUserId, args.afterTutorProfileId) &&
-    activeBooking(args.afterBookingStatus);
+    isNikaPayoutBookedSession({
+      status: args.afterStatus,
+      bookingStatus: args.afterBookingStatus,
+    });
   if (before && !after) return "cancelled";
   if (!before && after) return "booked";
   if (
@@ -173,7 +191,16 @@ async function postOnce(
     body,
     signal: AbortSignal.timeout(timeoutMs),
   });
+  await discardResponseBody(response);
   return response.status;
+}
+
+async function discardResponseBody(response: Response): Promise<void> {
+  try {
+    await response.arrayBuffer();
+  } catch {
+    // A body that cannot be read must not hide the HTTP status.
+  }
 }
 
 async function postWithOneRetry(
@@ -249,8 +276,8 @@ export function scheduleNikaPayoutWebhook(args: Parameters<typeof deliverNikaPay
 }
 
 export async function deliverNikaPayoutChange(args: DeliverOptions & {
-  before: NikaPayoutSession & { bookingStatus: string };
-  after: NikaPayoutSession & { bookingStatus: string };
+  before: NikaPayoutSession & { status: string; bookingStatus: string };
+  after: NikaPayoutSession & { status: string; bookingStatus: string };
   beforeTutorProfileId: string | null;
   afterTutorProfileId: string | null;
 }): Promise<void> {
@@ -261,11 +288,13 @@ export async function deliverNikaPayoutChange(args: DeliverOptions & {
     event = nikaPayoutEventForChange({
       beforeClientUserId: args.before.clientUserId,
       beforeTutorProfileId: args.beforeTutorProfileId,
+      beforeStatus: args.before.status,
       beforeBookingStatus: args.before.bookingStatus,
       beforeStartsAt: args.before.dateTime,
       beforeDurationMinutes: args.before.durationMinutes,
       afterClientUserId: args.after.clientUserId,
       afterTutorProfileId: args.afterTutorProfileId,
+      afterStatus: args.after.status,
       afterBookingStatus: args.after.bookingStatus,
       afterStartsAt: args.after.dateTime,
       afterDurationMinutes: args.after.durationMinutes,
@@ -282,8 +311,8 @@ export async function deliverNikaPayoutChange(args: DeliverOptions & {
 }
 
 export function scheduleNikaPayoutChange(args: {
-  before: NikaPayoutSession & { bookingStatus: string };
-  after: NikaPayoutSession & { bookingStatus: string };
+  before: NikaPayoutSession & { status: string; bookingStatus: string };
+  after: NikaPayoutSession & { status: string; bookingStatus: string };
   resolveTutorProfileId: (tutorUserId: string) => Promise<string | null>;
 }): void {
   void (async () => {

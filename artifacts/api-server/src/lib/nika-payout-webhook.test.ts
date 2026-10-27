@@ -3,7 +3,7 @@ import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { NEEL_DHARNI_USER_ID } from "./college-consulting.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { deliverNikaPayoutChange, deliverNikaPayoutWebhook, isNikaNeelPayoutPair, nikaPayoutEventForChange, scheduleNikaPayoutWebhook, type NikaPayoutLog, type NikaPayoutSession } from "./nika-payout-webhook.ts";
+import { deliverNikaPayoutChange, deliverNikaPayoutWebhook, isNikaNeelPayoutPair, isNikaPayoutBookedSession, nikaPayoutEventForChange, scheduleNikaPayoutWebhook, type NikaPayoutLog, type NikaPayoutSession } from "./nika-payout-webhook.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import { NIKA_TUTOR_PROFILE_ID } from "./self-serve-availability.ts";
 
@@ -33,56 +33,75 @@ function env(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   };
 }
 
+const START = new Date("2026-10-27T01:00:00.000Z");
+
+function change(overrides: {
+  beforeClientUserId?: string | null;
+  beforeTutorProfileId?: string | null;
+  beforeStatus?: string;
+  beforeBookingStatus?: string;
+  beforeStartsAt?: Date;
+  beforeDurationMinutes?: number;
+  afterClientUserId?: string | null;
+  afterTutorProfileId?: string | null;
+  afterStatus?: string;
+  afterBookingStatus?: string;
+  afterStartsAt?: Date;
+  afterDurationMinutes?: number;
+}) {
+  return nikaPayoutEventForChange({
+    beforeClientUserId: NEEL_DHARNI_USER_ID,
+    beforeTutorProfileId: NIKA_TUTOR_PROFILE_ID,
+    beforeStatus: "published",
+    beforeBookingStatus: "confirmed",
+    beforeStartsAt: START,
+    beforeDurationMinutes: 60,
+    afterClientUserId: NEEL_DHARNI_USER_ID,
+    afterTutorProfileId: NIKA_TUTOR_PROFILE_ID,
+    afterStatus: "published",
+    afterBookingStatus: "confirmed",
+    afterStartsAt: START,
+    afterDurationMinutes: 60,
+    ...overrides,
+  });
+}
+
 test("only a Nika profile and Neel's user id match", () => {
   assert.equal(isNikaNeelPayoutPair(NEEL_DHARNI_USER_ID, NIKA_TUTOR_PROFILE_ID), true);
   assert.equal(isNikaNeelPayoutPair(OTHER_STUDENT, NIKA_TUTOR_PROFILE_ID), false);
   assert.equal(isNikaNeelPayoutPair(NEEL_DHARNI_USER_ID, OTHER_TUTOR), false);
   assert.equal(isNikaNeelPayoutPair("Neel Dharni", NIKA_TUTOR_PROFILE_ID), false);
   assert.equal(
-    nikaPayoutEventForChange({
-      beforeClientUserId: NEEL_DHARNI_USER_ID,
-      beforeTutorProfileId: NIKA_TUTOR_PROFILE_ID,
-      beforeBookingStatus: "confirmed",
-      beforeStartsAt: new Date("2026-10-27T01:00:00.000Z"),
-      beforeDurationMinutes: 60,
-      afterClientUserId: NEEL_DHARNI_USER_ID,
-      afterTutorProfileId: NIKA_TUTOR_PROFILE_ID,
+    change({
       afterBookingStatus: "rescheduled",
       afterStartsAt: new Date("2026-10-28T01:00:00.000Z"),
-      afterDurationMinutes: 60,
     }),
     "rescheduled",
   );
+  assert.equal(change({ afterBookingStatus: "cancelled" }), "cancelled");
   assert.equal(
-    nikaPayoutEventForChange({
-      beforeClientUserId: NEEL_DHARNI_USER_ID,
-      beforeTutorProfileId: NIKA_TUTOR_PROFILE_ID,
-      beforeBookingStatus: "confirmed",
-      beforeStartsAt: new Date("2026-10-27T01:00:00.000Z"),
-      beforeDurationMinutes: 60,
-      afterClientUserId: NEEL_DHARNI_USER_ID,
-      afterTutorProfileId: NIKA_TUTOR_PROFILE_ID,
-      afterBookingStatus: "cancelled",
-      afterStartsAt: new Date("2026-10-27T01:00:00.000Z"),
-      afterDurationMinutes: 60,
-    }),
-    "cancelled",
-  );
-  assert.equal(
-    nikaPayoutEventForChange({
+    change({
       beforeClientUserId: OTHER_STUDENT,
-      beforeTutorProfileId: NIKA_TUTOR_PROFILE_ID,
-      beforeBookingStatus: "confirmed",
-      beforeStartsAt: new Date("2026-10-27T01:00:00.000Z"),
-      beforeDurationMinutes: 60,
       afterClientUserId: OTHER_STUDENT,
-      afterTutorProfileId: NIKA_TUTOR_PROFILE_ID,
       afterBookingStatus: "cancelled",
-      afterStartsAt: new Date("2026-10-27T01:00:00.000Z"),
-      afterDurationMinutes: 60,
     }),
     null,
   );
+});
+
+test("archive cancels, un-archive books, and archived or pending creates send nothing", () => {
+  assert.equal(change({ afterStatus: "archived" }), "cancelled");
+  assert.equal(
+    change({ beforeStatus: "archived", afterStatus: "published" }),
+    "booked",
+  );
+  assert.equal(change({ beforeStatus: "archived", afterStatus: "archived" }), null);
+  assert.equal(change({ beforeBookingStatus: "pending", afterBookingStatus: "pending" }), null);
+  assert.equal(isNikaPayoutBookedSession({ status: "archived", bookingStatus: "confirmed" }), false);
+  assert.equal(isNikaPayoutBookedSession({ status: "published", bookingStatus: "pending" }), false);
+  assert.equal(isNikaPayoutBookedSession({ status: "draft", bookingStatus: "pending" }), false);
+  assert.equal(isNikaPayoutBookedSession({ status: "published", bookingStatus: "confirmed" }), true);
+  assert.equal(isNikaPayoutBookedSession({ status: "completed", bookingStatus: "rescheduled" }), true);
 });
 
 test("payload uses an offset timestamp and the nika and neel labels", async () => {
@@ -172,9 +191,10 @@ test("other students and tutors do not post", async () => {
     fetchImpl,
   });
   await deliverNikaPayoutChange({
-    before: { ...session({ clientUserId: OTHER_STUDENT }), bookingStatus: "confirmed" },
+    before: { ...session({ clientUserId: OTHER_STUDENT }), status: "published", bookingStatus: "confirmed" },
     after: {
       ...session({ clientUserId: OTHER_STUDENT, dateTime: new Date("2026-11-01T01:00:00.000Z") }),
+      status: "published",
       bookingStatus: "rescheduled",
     },
     beforeTutorProfileId: NIKA_TUTOR_PROFILE_ID,
