@@ -44,6 +44,13 @@ export type SatContent = {
   };
 };
 
+/** Published copy this site used to show. The marketing page replaces it on read. */
+export const RETIRED_HOME_HERO_LEAD =
+  "Harvard students and recent graduates provide focused one-on-one SAT tutoring, with thoughtful guidance for families whose needs go beyond a single session.";
+
+export const CURRENT_HOME_HERO_LEAD =
+  "Harvard students and recent graduates provide focused one-on-one tutoring, with thoughtful guidance for families whose needs go beyond a single session.";
+
 export const DEFAULT_HOME_CONTENT: HomeContent = {
   title: "A clear next step for your college goals.",
   seoTitle: "Accepted Admissions | Your next step, made clear",
@@ -52,8 +59,7 @@ export const DEFAULT_HOME_CONTENT: HomeContent = {
   body: {
     heroEyebrow: "For students and families planning what comes next",
     heroTitle: "A clear next step for your college goals.",
-    heroLead:
-      "Harvard students and recent graduates provide focused one-on-one SAT tutoring, with thoughtful guidance for families whose needs go beyond a single session.",
+    heroLead: CURRENT_HOME_HERO_LEAD,
     satPathTitle: "Need SAT tutoring now?",
     satPathBlurb:
       "Sign in to your client portal to view SAT tutoring pricing and book sessions with our SAT tutors.",
@@ -87,6 +93,13 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+/** Frontend-only correction so a stored SAT-only hero still shows the current tagline. */
+export function publishedHomeHeroLead(value: unknown): string | undefined {
+  const text = optionalString(value);
+  if (!text || text === RETIRED_HOME_HERO_LEAD) return CURRENT_HOME_HERO_LEAD;
+  return text;
+}
+
 function recordBody(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -107,7 +120,7 @@ export function normalizeHomeContent(value: unknown): HomeContent {
     body: {
       heroEyebrow: optionalString(body.heroEyebrow) ?? DEFAULT_HOME_CONTENT.body.heroEyebrow,
       heroTitle: optionalString(body.heroTitle) ?? title,
-      heroLead: optionalString(body.heroLead) ?? DEFAULT_HOME_CONTENT.body.heroLead,
+      heroLead: publishedHomeHeroLead(body.heroLead) ?? DEFAULT_HOME_CONTENT.body.heroLead,
       satPathTitle: optionalString(body.satPathTitle) ?? DEFAULT_HOME_CONTENT.body.satPathTitle,
       satPathBlurb: optionalString(body.satPathBlurb) ?? DEFAULT_HOME_CONTENT.body.satPathBlurb,
       guidancePathTitle: optionalString(body.guidancePathTitle) ?? DEFAULT_HOME_CONTENT.body.guidancePathTitle,
