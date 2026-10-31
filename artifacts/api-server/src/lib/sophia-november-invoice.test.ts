@@ -56,6 +56,33 @@ test("a recorded payment removes the pay action and keeps a receipt link", () =>
   assert.equal(JSON.stringify(view.history).includes(SOPHIA_NOVEMBER_2026_PAY_URL), false);
 });
 
+test("a description-matched row with the old Stripe URL still pays through Wise", () => {
+  const view = presentSophiaNovemberInvoice({
+    requester: sophia,
+    clientUserId: sophia.id,
+    stored: {
+      id: "inv-stale-stripe",
+      status: "sent",
+      totalCents: 228000,
+      dueAt: new Date("2026-11-01T15:00:00.000Z"),
+      hostedInvoiceUrl: RETIRED_STRIPE_PAY_URL,
+      receiptUrl: null,
+      description: SOPHIA_NOVEMBER_2026_INVOICE_KEY,
+    },
+  });
+  assert.equal(
+    isSophiaNovemberInvoice({
+      hostedInvoiceUrl: RETIRED_STRIPE_PAY_URL,
+      description: SOPHIA_NOVEMBER_2026_INVOICE_KEY,
+    }),
+    true,
+  );
+  assert.equal(view.kind, "unpaid");
+  if (view.kind !== "unpaid") return;
+  assert.equal(view.invoice.payUrl, "https://wise.com/pay/r/rS6_TjwRk0ff8ho");
+  assert.equal(view.invoice.payUrl.includes(RETIRED_STRIPE_PAY_URL), false);
+});
+
 test("the Wise URL identifies the invoice, and the description key still does", () => {
   assert.equal(
     isSophiaNovemberInvoice({ hostedInvoiceUrl: SOPHIA_NOVEMBER_2026_PAY_URL, description: null }),

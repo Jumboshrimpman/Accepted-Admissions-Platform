@@ -136,7 +136,7 @@ export function presentSophiaNovemberInvoice(input: {
   ) {
     return { kind: "hidden" };
   }
-  const payUrl = stored?.hostedInvoiceUrl?.trim() || SOPHIA_NOVEMBER_2026_PAY_URL;
+  const payUrl = SOPHIA_NOVEMBER_2026_PAY_URL;
   const unpaidStatus = (UNPAID_PORTAL_INVOICE_STATUSES as readonly string[]).includes(status)
     ? (status as PortalOpenInvoice["status"])
     : "sent";
