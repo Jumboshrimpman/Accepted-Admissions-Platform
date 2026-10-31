@@ -1796,7 +1796,7 @@ async function ensureUpgradeSeedData(): Promise<void> {
         photoAltText: "Eunice Chon, Scholarship Tutor",
         biography: EUNICE_PUBLIC_BIOGRAPHY,
         subjects: ["SAT", "Scholarships", "College admissions"],
-        linkedinUrl: "https://linkedin.com/in/eunicechon",
+        // Left null: the previously published LinkedIn URL no longer resolves (0085).
         publicApproved: true,
         calendarStatus: "disconnected",
         bookingEligible: true,
