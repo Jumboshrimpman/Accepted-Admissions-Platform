@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/components/portal-auth";
 import { getGetCurrentUserQueryKey, getGetDashboardQueryKey, useGetCurrentUser, useGetDashboard } from "@workspace/api-client-react";
-import { ArrowRight, CalendarClock } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -136,10 +136,6 @@ export default function SatOfferings() {
                     <div><p className="font-semibold">{title}</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p></div>
                   </div>
                 ))}
-                <div className="flex items-start gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
-                  <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                  <span>Scheduling is a post-purchase portal step. Availability is checked again when a time is booked.</span>
-                </div>
               </CardContent>
             </Card>
           </div>
