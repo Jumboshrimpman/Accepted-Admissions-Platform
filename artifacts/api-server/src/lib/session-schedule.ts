@@ -168,6 +168,25 @@ export function sessionTitle(
   return `${client}’s ${normalizedSessionSubject(subject)} Session with ${tutor}`;
 }
 
+/**
+ * Name used in a session title when the reader is the client themself.
+ * A student (or the parent viewing them) reads only their own sessions, so the
+ * title says their name. Tutors and administrators already pass the student in
+ * and must keep the generic fallback, so they get null here.
+ */
+export function viewerSessionClientName(input: {
+  role: string;
+  selfName: string | null | undefined;
+  subjectUserId: string | null | undefined;
+  sessionClientUserId: string | null | undefined;
+}): string | null {
+  if (input.role !== "student" && input.role !== "viewer") return null;
+  if (!input.selfName || !input.selfName.trim()) return null;
+  if (!input.subjectUserId) return null;
+  if (input.sessionClientUserId !== input.subjectUserId) return null;
+  return input.selfName;
+}
+
 /** Taito pays outside the platform; Michelle and other SAT clients use Stripe + credits. */
 export function selfServeSatBookingForEmail(
   email: string | null | undefined,

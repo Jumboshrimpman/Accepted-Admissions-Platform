@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
-import { NEEL_NIKA_MEET_URL, SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, satCommerceEmailForAccount, selfServeSatBookingForAccount, selfServeSatBookingForEmail, personFirstName, sessionTitle, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
+import { NEEL_NIKA_MEET_URL, SHARED_FALL_MEETING_URL, TAITO_ENGLISH_DATE_KEYS, TAITO_FALL_2026_SESSIONS, TAITO_FIRST_ENGLISH_DATE_KEY, TAITO_FIRST_SAT_DATE_KEY, TAITO_SESSION_TIMEZONE, TAITO_STUDENT_EMAIL, calendarEventUrlForSession, isEnglishSessionSubject, isFall2026Term, isGoogleCalendarEventUrl, isTaitoFirstEnglishSession, isTaitoFirstSatSession, isTaitoFallSession, meetingUrlForTerm, normalizedSessionSubject, satCommerceEmailForAccount, selfServeSatBookingForAccount, selfServeSatBookingForEmail, personFirstName, sessionTitle, viewerSessionClientName, taitoEnglishSessionIndex, taitoSessionDateTime, twelveSessionPlanForEmail } from "./session-schedule.ts";
 
 function easternParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -310,4 +310,36 @@ test("Eastern display changes from 8 AM EDT to 7 AM EST after daylight saving ti
     time: "07:00",
     zone: "EST",
   });
+});
+test("names a client's own sessions with their own name, never the generic Student", () => {
+  const michelle = {
+    role: "student",
+    selfName: "Michelle Makarem",
+    subjectUserId: "student-1",
+    sessionClientUserId: "student-1",
+  };
+  assert.equal(viewerSessionClientName(michelle), "Michelle Makarem");
+
+  // A parent viewing their student's sessions is named for the student.
+  assert.equal(viewerSessionClientName({ ...michelle, role: "viewer" }), "Michelle Makarem");
+
+  // Tutors and administrators already carry the student through the shape.
+  assert.equal(viewerSessionClientName({ ...michelle, role: "tutor" }), null);
+  assert.equal(viewerSessionClientName({ ...michelle, role: "administrator" }), null);
+
+  // Someone else's session never borrows the reader's name.
+  assert.equal(
+    viewerSessionClientName({ ...michelle, sessionClientUserId: "student-2" }),
+    null,
+  );
+
+  // No usable name keeps the existing fallback rather than an empty title.
+  assert.equal(viewerSessionClientName({ ...michelle, selfName: null }), null);
+  assert.equal(viewerSessionClientName({ ...michelle, selfName: "   " }), null);
+
+  // The title it produces reads the way the portal should show it.
+  assert.equal(
+    sessionTitle(viewerSessionClientName(michelle), "SAT", "Xavier Morales"),
+    "Michelle’s SAT Session with Xavier",
+  );
 });
