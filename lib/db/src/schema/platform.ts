@@ -129,6 +129,8 @@ export const sessionsTable = pgTable("sessions", {
   bookingStatus: text("booking_status").notNull().default("confirmed"),
   providerEventId: text("provider_event_id"),
   providerEventUrl: text("provider_event_url"),
+  /** Admin override. A meet.google.com URL for this session only. */
+  meetUrl: text("meet_url"),
   /** Google calendar that owns providerEventId. Null means a legacy primary-calendar event. */
   providerCalendarId: text("provider_calendar_id"),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

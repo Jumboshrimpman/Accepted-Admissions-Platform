@@ -287,6 +287,7 @@ export const GetAdminCurriculumResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "meetUrl": zod.string().nullish(),
   "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
@@ -1238,7 +1239,8 @@ export const CreateAdminSessionBody = zod.object({
   "subject": zod.string().min(1).max(createAdminSessionBodySubjectMax),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(createAdminSessionBodyDurationMinutesMin).max(createAdminSessionBodyDurationMinutesMax),
-  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()
+  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional(),
+  "meetUrl": zod.string().nullish()
 })
 
 export const CreateAdminSessionResponse = zod.object({
@@ -1253,6 +1255,7 @@ export const CreateAdminSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "meetUrl": zod.string().nullish(),
   "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
@@ -1298,7 +1301,8 @@ export const UpdateAdminSessionBody = zod.object({
   "title": zod.string().min(updateAdminSessionBodyTitleMin).max(updateAdminSessionBodyTitleMax).optional(),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(updateAdminSessionBodyDurationMinutesMin).max(updateAdminSessionBodyDurationMinutesMax).optional(),
-  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()
+  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional(),
+  "meetUrl": zod.string().nullish()
 })
 
 export const UpdateAdminSessionResponse = zod.object({
@@ -1313,6 +1317,7 @@ export const UpdateAdminSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "meetUrl": zod.string().nullish(),
   "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
@@ -1414,6 +1419,7 @@ export const GetTutorCurriculumResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "meetUrl": zod.string().nullish(),
   "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
@@ -1501,7 +1507,8 @@ export const CreateTutorSessionBody = zod.object({
   "subject": zod.string().min(1).max(createTutorSessionBodySubjectMax),
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(createTutorSessionBodyDurationMinutesMin).max(createTutorSessionBodyDurationMinutesMax),
-  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional()
+  "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional(),
+  "meetUrl": zod.string().nullish()
 })
 
 export const CreateTutorSessionResponse = zod.object({
@@ -1516,6 +1523,7 @@ export const CreateTutorSessionResponse = zod.object({
   "durationMinutes": zod.number(),
   "bookingStatus": zod.string(),
   "meetingUrl": zod.string().nullable(),
+  "meetUrl": zod.string().nullish(),
   "calendarEventUrl": zod.string().nullish(),
   "student": zod.object({
   "id": zod.string().optional(),
@@ -1910,7 +1918,8 @@ export const GetBillingHistoryResponse = zod.object({
   "sessionTitle": zod.string().nullish(),
   "sessionStart": zod.string().nullish(),
   "amountCents": zod.number().nullish(),
-  "status": zod.string()
+  "status": zod.string(),
+  "documentUrl": zod.string().nullish()
 }))
 })
 
@@ -2601,7 +2610,16 @@ export const GetDashboardResponse = zod.object({
   "examples": zod.array(zod.string()).optional()
 })).optional()
 })),
-  "openReviewCount": zod.number()
+  "openReviewCount": zod.number(),
+  "openInvoice": zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "coverage": zod.array(zod.string()),
+  "totalCents": zod.number(),
+  "dueOn": zod.string(),
+  "status": zod.enum(['pending', 'sent', 'overdue']),
+  "payUrl": zod.string()
+}).optional()
 })
 
 

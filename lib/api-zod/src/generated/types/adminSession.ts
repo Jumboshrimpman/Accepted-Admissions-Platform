@@ -22,6 +22,8 @@ export interface AdminSession {
   bookingStatus: string;
   /** @nullable */
   meetingUrl: string | null;
+  /** Stored per-session Meet override. Null when the join link is resolved from the calendar or course. */
+  meetUrl?: string | null;
   /** @nullable */
   calendarEventUrl?: string | null;
   /** @nullable */

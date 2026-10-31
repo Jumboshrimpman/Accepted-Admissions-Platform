@@ -1,6 +1,10 @@
 import type { IncomingHttpHeaders } from "http";
 import type { RequestHandler } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
+import {
+  applyClerkProxyResponse,
+  clerkProxyPublicUrl,
+} from "../lib/clerk-proxy-cookies";
 import { resolvePublicRequestHost } from "../lib/public-origin";
 
 const CLERK_FAPI = "https://frontend-api.clerk.dev";
@@ -34,11 +38,14 @@ export function clerkProxyMiddleware(): RequestHandler {
       path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
     on: {
       proxyReq: (proxyReq, req) => {
-        const protocol = req.headers["x-forwarded-proto"] || "https";
         const host = getClerkProxyHost(req) || "";
         proxyReq.setHeader(
           "Clerk-Proxy-Url",
-          `${protocol}://${host}${CLERK_PROXY_PATH}`,
+          clerkProxyPublicUrl({
+            forwardedProto: req.headers["x-forwarded-proto"],
+            host,
+            proxyPath: CLERK_PROXY_PATH,
+          }),
         );
         proxyReq.setHeader("Clerk-Secret-Key", secretKey);
         const xff = req.headers["x-forwarded-for"];
@@ -49,19 +56,23 @@ export function clerkProxyMiddleware(): RequestHandler {
         if (clientIp) proxyReq.setHeader("X-Forwarded-For", clientIp);
       },
       proxyRes: (proxyRes, req, res) => {
-        const headers = { ...proxyRes.headers };
-        delete headers["transfer-encoding"];
-        delete headers.connection;
-        delete headers["keep-alive"];
         const status = proxyRes.statusCode ?? 502;
+        const headers = { ...proxyRes.headers };
         if (status < 200 || status === 204) delete headers["content-length"];
         const bodyless =
           req.method === "HEAD" ||
           status < 200 ||
           status === 204 ||
           status === 304;
+        const write = (extra?: { "content-length"?: string }) => {
+          applyClerkProxyResponse(res, {
+            statusCode: status,
+            headers: extra ? { ...headers, ...extra } : headers,
+            rawHeaders: proxyRes.rawHeaders,
+          });
+        };
         if (headers["content-length"] !== undefined || bodyless) {
-          res.writeHead(status, headers);
+          write();
           proxyRes.on("error", () => res.destroy());
           proxyRes.pipe(res);
           return;
@@ -70,8 +81,7 @@ export function clerkProxyMiddleware(): RequestHandler {
         proxyRes.on("data", (chunk: Buffer) => chunks.push(chunk));
         proxyRes.on("end", () => {
           const body = Buffer.concat(chunks);
-          headers["content-length"] = String(body.length);
-          res.writeHead(status, headers);
+          write({ "content-length": String(body.length) });
           res.end(body);
         });
         proxyRes.on("error", () => {

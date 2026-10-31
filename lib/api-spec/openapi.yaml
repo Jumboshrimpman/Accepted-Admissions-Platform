@@ -2424,6 +2424,9 @@ components:
         sessionStart: { type: ["string", "null"] }
         amountCents: { type: ["number", "null"] }
         status: { type: string }
+        documentUrl:
+          type: ["string", "null"]
+          description: Receipt link for a settled invoice. Never a live pay link.
     CheckoutInput:
       type: object
       required: [productId]
@@ -2983,6 +2986,9 @@ components:
         durationMinutes: { type: number }
         bookingStatus: { type: string }
         meetingUrl: { type: ["string", "null"] }
+        meetUrl:
+          type: ["string", "null"]
+          description: Per-session Google Meet override. Null when the join link is resolved from the calendar event or the course.
         calendarEventUrl: { type: ["string", "null"] }
         student:
           type: ["object", "null"]
@@ -3015,6 +3021,9 @@ components:
         status: { type: string, enum: [draft, published, completed, archived] }
         durationMinutes: { type: number, minimum: 15, maximum: 480 }
         bookingStatus: { type: string, enum: [confirmed, pending, cancelled, rescheduled] }
+        meetUrl:
+          type: ["string", "null"]
+          description: "https://meet.google.com URL for this session, or null to clear the override."
     AdminSessionUpdate:
       type: object
       properties:
@@ -3028,6 +3037,9 @@ components:
         status: { type: string, enum: [draft, published, completed, archived] }
         durationMinutes: { type: number, minimum: 15, maximum: 480 }
         bookingStatus: { type: string, enum: [confirmed, pending, cancelled, rescheduled] }
+        meetUrl:
+          type: ["string", "null"]
+          description: "https://meet.google.com URL for this session, or null to clear the override."
     AdminAssignment:
       type: object
       required: [id, courseId, sessionId, programTitle, sessionTitle, deliveryPhase, title, subject, instructions, status, deadline, timeLimitMinutes, maxAttempts, questionCount, submissionCount]
@@ -4195,6 +4207,20 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ReviewSubmission" }
         openReviewCount: { type: number }
+        openInvoice:
+          description: Unpaid invoice shown only on that student's own dashboard. Omitted once paid and for every other account.
+          type: object
+          required: [id, title, coverage, totalCents, dueOn, status, payUrl]
+          properties:
+            id: { type: string }
+            title: { type: string }
+            coverage:
+              type: array
+              items: { type: string }
+            totalCents: { type: number }
+            dueOn: { type: string }
+            status: { type: string, enum: [pending, sent, overdue] }
+            payUrl: { type: string }
     SatBankImportInput:
       type: object
       properties:

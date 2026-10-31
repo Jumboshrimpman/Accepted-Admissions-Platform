@@ -14,6 +14,7 @@ import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, ClipboardList, E
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { BillingHistorySection } from "@/pages/portal/billing-history";
+import { PortalInvoiceCard } from "@/pages/portal/portal-invoice-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -515,6 +516,11 @@ export function ClientDashboardView({
         </details>
       ) : null;
 
+  const invoiceCard =
+    !adminPreview && dashboard.user.role === "student" && dashboard.openInvoice ? (
+      <PortalInvoiceCard invoice={dashboard.openInvoice} />
+    ) : null;
+
   const billingSection = !offPlatformBilling && dashboard.user.role !== "viewer" ? (
         <BillingHistorySection clientId={adminPreview ? dashboard.user.id : undefined} />
       ) : null;
@@ -755,6 +761,7 @@ export function ClientDashboardView({
 
       {priorityDashboard ? null : creditsSection}
 
+      {priorityDashboard ? null : invoiceCard}
       {priorityDashboard ? null : billingSection}
 
       {studentSatCommerce && showSelfServeBooking ? (
@@ -953,6 +960,7 @@ export function ClientDashboardView({
         </div>
       ) : null}
 
+      {priorityDashboard ? invoiceCard : null}
       {priorityDashboard ? billingSection : null}
     </div>
   );

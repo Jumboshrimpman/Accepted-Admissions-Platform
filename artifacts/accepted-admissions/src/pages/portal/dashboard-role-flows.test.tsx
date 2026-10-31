@@ -23,6 +23,19 @@ const mocks = vi.hoisted(() => ({
     isPending: false,
     mutate: vi.fn(),
   },
+  billingPayments: [] as Array<{
+    id: string;
+    purchasedAt: string;
+    label: string;
+    service: string;
+    tutorName: string | null;
+    hours: number | null;
+    sessionTitle: string | null;
+    sessionStart: string | null;
+    amountCents: number | null;
+    status: string;
+    documentUrl?: string | null;
+  }>,
   customFetch: vi.fn(async () => ({ assignmentId: "quiz", studentResolvedAt: null })),
 }));
 
@@ -31,7 +44,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetFinancialsQueryKey: () => ["financials"],
   getGetBillingHistoryQueryKey: () => ["billing-history"],
   useGetBillingHistory: () => ({
-    data: { readOnly: false, payments: [] },
+    data: { readOnly: false, payments: mocks.billingPayments },
     isLoading: false,
     error: null,
   }),
@@ -317,6 +330,7 @@ function tutorSubmission(attemptId: string, assignmentTitle: string, submittedAt
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.billingPayments = [];
   mocks.queue = [
     {
       id: "queue-1",
@@ -2123,5 +2137,108 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByText("Live SAT Session with Eunice")).toBeTruthy();
     expect(screen.getByText("1 scheduled")).toBeTruthy();
     expect(screen.queryByText("Cancelled SAT Session with Xavier")).toBeNull();
+  });
+
+  test("Sophia's unpaid November invoice shows a pay button and a paid one does not", () => {
+    const payUrl = "https://buy.stripe.com/dRmeVd35Q0Goajg4GH5gc00";
+    const sophia = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "bf530aa6-faaa-43df-b3cf-140026f3313e",
+        displayName: "Sophia Sleiman",
+        email: "sophia.sleiman@example.invalid",
+        role: "student" as const,
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+      openInvoice: {
+        id: "sophia-november",
+        title: "November 2026 invoice",
+        coverage: [
+          "5 SAT Math sessions with Xavier on Nov 1, 8, 15, 22, and 29",
+          "4 SAT English sessions with Eunice on Nov 4, 11, 18, and 25",
+          "Each session is 90 minutes, 10:00–11:30 AM ET",
+        ],
+        totalCents: 228000,
+        dueOn: "2026-11-01",
+        status: "sent" as const,
+        payUrl,
+      },
+    } as Dashboard;
+    mocks.dashboard = sophia;
+    const unpaid = render(<ClientDashboardView dashboard={sophia} />);
+    const card = screen.getByTestId("portal-invoice-card");
+    expect(card.textContent).toContain("November 2026 invoice");
+    expect(card.textContent).toContain("Xavier");
+    expect(card.textContent).toContain("Eunice");
+    expect(card.textContent).toContain("$2,280.00");
+    expect(card.textContent).toContain("November 1, 2026");
+    const pay = screen.getByTestId("portal-invoice-pay");
+    expect(pay.getAttribute("href")).toBe(payUrl);
+    expect(pay.getAttribute("target")).toBe("_blank");
+    unpaid.unmount();
+
+    const { openInvoice: _paidAway, ...paidDashboard } = sophia;
+    mocks.billingPayments = [
+      {
+        id: "inv-paid",
+        purchasedAt: "2026-11-01T16:00:00.000Z",
+        label: "November 2026 invoice",
+        service: "SAT",
+        tutorName: null,
+        hours: null,
+        sessionTitle: null,
+        sessionStart: null,
+        amountCents: 228000,
+        status: "paid",
+        documentUrl: "https://pay.stripe.com/receipts/sophia-november",
+      },
+    ];
+    render(<ClientDashboardView dashboard={paidDashboard} />);
+    expect(screen.queryByTestId("portal-invoice-pay")).toBeNull();
+    expect(screen.queryByTestId("portal-invoice-card")).toBeNull();
+    const billing = screen.getByTestId("billing-history") as HTMLDetailsElement;
+    expect(billing.open).toBe(false);
+    expect(billing.textContent).not.toContain(payUrl);
+    fireEvent.click(billing.querySelector("summary")!);
+    const row = screen.getByTestId("billing-history-inv-paid");
+    expect(row.textContent).toContain("November 2026 invoice");
+    expect(row.textContent).toContain("paid");
+    expect(row.textContent).toContain("$2,280.00");
+    const receipt = screen.getByTestId("billing-history-document-inv-paid");
+    expect(receipt.getAttribute("href")).toBe("https://pay.stripe.com/receipts/sophia-november");
+    expect(receipt.getAttribute("target")).toBe("_blank");
+    expect(screen.queryByRole("link", { name: /^Pay$/ })).toBeNull();
+  });
+
+  test("another student never sees Sophia's November invoice", () => {
+    const michelle = {
+      ...dashboardForRole("student"),
+      user: {
+        id: "michelle-user",
+        displayName: "Michelle Makarem",
+        email: "michaelmakarem@gmail.com",
+        role: "student" as const,
+        avatarUrl: null,
+      },
+      credits: {
+        purchasedHours: 0,
+        usedHours: 0,
+        remainingHours: 0,
+        readOnly: false,
+        selfServeSatBooking: true,
+        twelveSessionPlan: false,
+      },
+    } as Dashboard;
+    render(<ClientDashboardView dashboard={michelle} />);
+    expect(screen.queryByTestId("portal-invoice-card")).toBeNull();
+    expect(screen.queryByTestId("portal-invoice-pay")).toBeNull();
   });
 });

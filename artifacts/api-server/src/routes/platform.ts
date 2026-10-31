@@ -167,7 +167,6 @@ import {
   collegeConsultingServiceRequested,
   isNeelDharniUser,
   ledgerEntriesForConsultingDashboard,
-  neelNikaMeetUrl,
   isNikaTemporaryViewEmail,
   isSamaPostgradTestStudent,
   samaCollegeConsultingBooking,
@@ -275,6 +274,14 @@ import {
   taitoSessionDateTime,
   twelveSessionPlanForEmail,
 } from "../lib/session-schedule";
+import { loadMeetingContext } from "../lib/session-meeting-context";
+import {
+  meetingUrlFromContext,
+  normalizeAdminMeetUrl,
+  studentFacingMeetingUrl,
+} from "../lib/session-meeting-url";
+import { presentSophiaNovemberInvoice } from "../lib/sophia-november-invoice";
+import { loadSophiaNovemberInvoice } from "../lib/sophia-november-invoice-store";
 import {
   buildAttemptAnalysis,
   clientCurrentFocusLine,
@@ -5838,6 +5845,7 @@ async function bookingSessionShape(
         .where(eq(tutorProfilesTable.userId, session.tutorUserId))
         .limit(1)
     : [];
+  const meetingContext = await loadMeetingContext([session]);
   return {
     id: session.id,
     courseId: session.courseId,
@@ -5849,12 +5857,10 @@ async function bookingSessionShape(
     title: session.title,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl:
-      neelNikaMeetUrl({
-        clientUserId: session.clientUserId,
-        tutorName: tutorProfile?.name,
-        tutorEmail: tutorProfile?.email,
-      }) ?? SHARED_FALL_MEETING_URL,
+    meetingUrl: meetingUrlFromContext(session, meetingContext, {
+      name: tutorProfile?.name,
+      email: tutorProfile?.email,
+    }),
     calendarEventUrl: calendarEventUrlForSession(session),
     cancellationReason: session.cancellationReason,
     ...(extras.creditRestored !== undefined
@@ -7570,6 +7576,11 @@ router.post(
       adminMutationError(res, "Invalid session details.");
       return;
     }
+    const meetUrlInput = normalizeAdminMeetUrl(body.data.meetUrl);
+    if (!meetUrlInput.ok) {
+      adminMutationError(res, "Meeting link must be an https://meet.google.com URL.");
+      return;
+    }
     const user = req.appUser!;
     const tutorUserId =
       user.role === "tutor" ? user.id : (body.data.tutorUserId ?? user.id);
@@ -7686,6 +7697,7 @@ router.post(
             status: body.data.status ?? (user.role === "tutor" ? "published" : "draft"),
             durationMinutes: body.data.durationMinutes,
             bookingStatus: body.data.bookingStatus ?? "confirmed",
+            meetUrl: meetUrlInput.meetUrl ?? null,
           })
           .returning();
         if (!row) throw new BookingError(500, "SESSION_CREATE_FAILED", "The session could not be created.");
@@ -8322,14 +8334,22 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       status: sessionsTable.status,
       bookingStatus: sessionsTable.bookingStatus,
       providerEventUrl: sessionsTable.providerEventUrl,
+      meetUrl: sessionsTable.meetUrl,
       cancellationReason: sessionsTable.cancellationReason,
     })
     .from(sessionsTable)
     .leftJoin(tutorProfilesTable, eq(tutorProfilesTable.userId, sessionsTable.tutorUserId))
     .where(eq(sessionsTable.clientUserId, subjectUserId))
     .orderBy(asc(sessionsTable.dateTime));
+  const visibleSessions = liveClientBookingSessions(sessions);
+  const meetingContext = await loadMeetingContext(
+    visibleSessions.map((session) => ({
+      courseId: session.courseId,
+      clientUserId: subjectUserId,
+    })),
+  );
   res.json(
-    liveClientBookingSessions(sessions).map((session) => ({
+    visibleSessions.map((session) => ({
       id: session.id,
       courseId: session.courseId,
       tutorProfileId: session.tutorProfileId,
@@ -8340,12 +8360,11 @@ router.get("/booking/sessions", async (req: AuthedRequest, res): Promise<void> =
       title: session.title,
       durationMinutes: session.durationMinutes,
       bookingStatus: session.bookingStatus,
-      meetingUrl:
-        neelNikaMeetUrl({
-          clientUserId: subjectUserId,
-          tutorName: session.tutorName,
-          tutorEmail: session.tutorEmail,
-        }) ?? SHARED_FALL_MEETING_URL,
+      meetingUrl: meetingUrlFromContext(
+        { ...session, clientUserId: subjectUserId },
+        meetingContext,
+        { name: session.tutorName, email: session.tutorEmail },
+      ),
       calendarEventUrl: calendarEventUrlForSession(session),
       cancellationReason: session.cancellationReason,
     })),
@@ -9428,10 +9447,18 @@ router.get("/billing-history", async (req: AuthedRequest, res): Promise<void> =>
     return;
   }
   const payments = await loadBillingHistory(access.clientId);
+  const portalInvoice = presentSophiaNovemberInvoice({
+    requester: req.appUser!,
+    clientUserId: access.clientId,
+    stored: await loadSophiaNovemberInvoice(access.clientId),
+  });
   res.json(
     GetBillingHistoryResponse.parse({
       readOnly: access.readOnly,
-      payments,
+      payments:
+        portalInvoice.kind === "paid"
+          ? [portalInvoice.history, ...payments]
+          : payments,
     }),
   );
 });
@@ -11756,7 +11783,7 @@ async function adminSessionShape(
       .where(eq(coursesTable.id, session.courseId))
       .limit(1),
     db
-      .select({ id: usersTable.id, name: usersTable.displayName })
+      .select({ id: usersTable.id, name: usersTable.displayName, email: usersTable.email })
       .from(usersTable)
       .where(
         inArray(
@@ -11768,6 +11795,7 @@ async function adminSessionShape(
       ),
   ]);
   const personById = new Map(people.map((person) => [person.id, person.name]));
+  const emailById = new Map(people.map((person) => [person.id, person.email]));
   const canonicalTitle = sessionTitle(
     session.clientUserId ? personById.get(session.clientUserId) : null,
     session.subject,
@@ -11784,7 +11812,20 @@ async function adminSessionShape(
     status: session.status,
     durationMinutes: session.durationMinutes,
     bookingStatus: session.bookingStatus,
-    meetingUrl: SHARED_FALL_MEETING_URL,
+    meetUrl: session.meetUrl ?? null,
+    meetingUrl: studentFacingMeetingUrl({
+      meetUrl: session.meetUrl,
+      providerEventUrl: session.providerEventUrl,
+      courseMeetUrl: course?.meetUrl,
+      term: course?.term,
+      clientUserId: session.clientUserId,
+      clientEmail: session.clientUserId ? emailById.get(session.clientUserId) : null,
+      dateTime: session.dateTime,
+      subject: session.subject,
+      timezone: session.timezone,
+      tutorName: session.tutorUserId ? personById.get(session.tutorUserId) : null,
+      tutorEmail: session.tutorUserId ? emailById.get(session.tutorUserId) : null,
+    }),
     calendarEventUrl: calendarEventUrlForSession(session),
     student: personById.has(session.clientUserId ?? "")
       ? {
@@ -13024,6 +13065,11 @@ router.post(
       adminMutationError(res, "Invalid session details.");
       return;
     }
+    const meetUrlInput = normalizeAdminMeetUrl(body.data.meetUrl);
+    if (!meetUrlInput.ok) {
+      adminMutationError(res, "Meeting link must be an https://meet.google.com URL.");
+      return;
+    }
     const [course] = await db.select({ id: coursesTable.id }).from(coursesTable).where(eq(coursesTable.id, body.data.courseId)).limit(1);
     if (!course || !(await validateAdminSessionPeople(body.data.clientUserId, body.data.tutorUserId))) {
       res.status(404).json({ error: "Program or assigned person not found" });
@@ -13097,6 +13143,7 @@ router.post(
           status: body.data.status ?? "draft",
           durationMinutes: body.data.durationMinutes,
           bookingStatus: body.data.bookingStatus ?? "confirmed",
+          meetUrl: meetUrlInput.meetUrl ?? null,
         }).returning();
         if (!row) throw new BookingError(500, "SESSION_CREATE_FAILED", "The session could not be created.");
         await tx.insert(auditLogsTable).values({
@@ -13132,6 +13179,11 @@ router.patch(
     const body = UpdateAdminSessionBody.safeParse(req.body);
     if (!params.success || !body.success) {
       adminMutationError(res, "Invalid session update.");
+      return;
+    }
+    const meetUrlInput = normalizeAdminMeetUrl(body.data.meetUrl);
+    if (!meetUrlInput.ok) {
+      adminMutationError(res, "Meeting link must be an https://meet.google.com URL.");
       return;
     }
     const [existing] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, params.data.sessionId)).limit(1);
@@ -13240,7 +13292,12 @@ router.patch(
         }
         const [saved] = await tx
           .update(sessionsTable)
-          .set({ ...next, ...calendarFields, updatedAt: new Date() })
+          .set({
+            ...next,
+            ...calendarFields,
+            ...(meetUrlInput.meetUrl !== undefined ? { meetUrl: meetUrlInput.meetUrl } : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(sessionsTable.id, existing.id))
           .returning();
         if (!saved) {
@@ -13437,6 +13494,7 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
     )
   ).filter((session): session is (typeof courseSessions)[number] => Boolean(session))
     .filter((session) => !hideCancelled || isStudentCurriculumSession(session));
+  const meetingContext = await loadMeetingContext(resolvedSessions);
   res.json(
     GetCourseResponse.parse({
       ...base,
@@ -13456,7 +13514,9 @@ router.get("/courses/:courseId", async (req: AuthedRequest, res): Promise<void> 
               ),
             ),
             tutor,
-            meetingUrl: SHARED_FALL_MEETING_URL,
+            meetingUrl: meetingUrlFromContext(session, meetingContext, {
+              name: tutor?.name,
+            }),
             calendarEventUrl: calendarEventUrlForSession(session),
           };
         }),
@@ -13535,7 +13595,10 @@ async function reviewSubmissionsForUser(user: AppUser) {
     });
 }
 
-async function dashboardDataForUser(user: AppUser) {
+async function dashboardDataForUser(
+  user: AppUser,
+  options: { portalInvoice?: boolean } = {},
+) {
   await ensureSeedData();
   const ids = await visibleCourseIds(user);
   const subjectUserId = await dataSubjectUserId(user);
@@ -13543,6 +13606,7 @@ async function dashboardDataForUser(user: AppUser) {
     await Promise.all(ids.map((id) => courseShape(id, user)))
   ).filter(Boolean);
   const scopedSessions = await dashboardSessionsForUser(user);
+  const meetingContext = await loadMeetingContext(scopedSessions);
   const studentShapeCache = new Map<string, Promise<{ id: string; name: string } | null>>();
   const tutorShapeCache = new Map<
     string,
@@ -13647,7 +13711,7 @@ async function dashboardDataForUser(user: AppUser) {
         ...dashboardSessionShape(
           session,
           tutor,
-          SHARED_FALL_MEETING_URL,
+          meetingUrlFromContext(session, meetingContext, { name: tutor?.name }),
           user.role === "tutor" || user.role === "administrator"
             ? session.clientUserId
               ? await studentShapeCached(session.clientUserId)
@@ -13893,6 +13957,14 @@ async function dashboardDataForUser(user: AppUser) {
     studentFacing: user.role === "student" || user.role === "viewer",
     sessionOrder: visibleSessionIds,
   });
+  const portalInvoice =
+    options.portalInvoice === true
+      ? presentSophiaNovemberInvoice({
+          requester: user,
+          clientUserId: subjectUserId,
+          stored: await loadSophiaNovemberInvoice(subjectUserId),
+        })
+      : { kind: "hidden" as const };
   return GetDashboardResponse.parse({
       user: {
         id: user.id,
@@ -13920,7 +13992,7 @@ async function dashboardDataForUser(user: AppUser) {
             return dashboardSessionShape(
               session,
               tutor,
-              SHARED_FALL_MEETING_URL,
+              meetingUrlFromContext(session, meetingContext, { name: tutor?.name }),
               user.role === "tutor" || user.role === "administrator"
                 ? student
                 : undefined,
@@ -13972,6 +14044,7 @@ async function dashboardDataForUser(user: AppUser) {
         (submission) => submission.reviewStatus !== "reviewed",
       ),
       openReviewCount: openReviewItems.length,
+      ...(portalInvoice.kind === "unpaid" ? { openInvoice: portalInvoice.invoice } : {}),
     });
 }
 
@@ -14267,7 +14340,11 @@ router.get(
 );
 
 router.get("/dashboard", async (req: AuthedRequest, res): Promise<void> => {
-  res.json(await dashboardDataForUser(req.appUser!));
+  res.json(
+    await dashboardDataForUser(req.appUser!, {
+      portalInvoice: req.appUser!.role === "student",
+    }),
+  );
 });
 
 router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void> => {
@@ -14382,7 +14459,11 @@ router.get("/sessions/:sessionId", async (req: AuthedRequest, res): Promise<void
           : session.title,
       ),
       tutor: sessionTutor,
-      meetingUrl: SHARED_FALL_MEETING_URL,
+      meetingUrl: meetingUrlFromContext(
+        session,
+        await loadMeetingContext([session]),
+        { name: sessionTutor?.name },
+      ),
       calendarEventUrl: calendarEventUrlForSession(session),
       student:
         req.appUser!.role === "tutor" || req.appUser!.role === "administrator"

@@ -33,4 +33,14 @@ export interface Dashboard {
   assignedStudents: DashboardStudent[];
   newSubmissions: ReviewSubmission[];
   openReviewCount: number;
+  /** Unpaid invoice for the signed-in student. Omitted for every other account and after payment. */
+  openInvoice?: {
+    id: string;
+    title: string;
+    coverage: string[];
+    totalCents: number;
+    dueOn: string;
+    status: "pending" | "sent" | "overdue";
+    payUrl: string;
+  };
 }

@@ -75,6 +75,17 @@ export function BillingHistoryDisclosure({ payments }: { payments: BillingHistor
                       <p className="font-semibold">{money(payment.amountCents)}</p>
                     ) : null}
                     <p className="text-sm capitalize text-muted-foreground">{payment.status}</p>
+                    {payment.documentUrl ? (
+                      <a
+                        href={payment.documentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block text-sm font-medium text-primary underline"
+                        data-testid={`billing-history-document-${payment.id}`}
+                      >
+                        View receipt
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               </li>

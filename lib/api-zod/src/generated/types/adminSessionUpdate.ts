@@ -37,4 +37,6 @@ export interface AdminSessionUpdate {
      */
   durationMinutes?: number;
   bookingStatus?: AdminSessionUpdateBookingStatus;
+  /** @nullable */
+  meetUrl?: string | null;
 }
