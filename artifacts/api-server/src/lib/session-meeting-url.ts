@@ -75,20 +75,21 @@ function taitoKeepsSharedRoom(input: SessionMeetingInput): boolean {
 
 /**
  * Join link for one session.
- * session.meetUrl, then a meet.google.com providerEventUrl, then the course
- * Meet link. The shared Fall room is only Taito's last resort.
+ * session.meetUrl, then a meet.google.com providerEventUrl, then a course Meet
+ * link that is not the shared Fall room. The shared room is the final fallback
+ * for every course that uses it, and for Taito's Fall sessions. Sophia's own
+ * room is applied before that fallback.
  */
 export function resolveSessionMeetingUrl(input: SessionMeetingInput): string | null {
   if (taitoKeepsSharedRoom(input)) return SHARED_FALL_MEETING_URL;
   const override = googleMeetUrl(input.meetUrl);
   if (override) return override;
   const provider = googleMeetUrl(input.providerEventUrl);
-  if (provider && provider !== SHARED_FALL_MEETING_URL) return provider;
-  if (provider && input.clientUserId !== SOPHIA_SLEIMAN_SAT_USER_ID) return provider;
+  if (provider) return provider;
   const course = googleMeetUrl(input.courseMeetUrl);
   if (course && course !== SHARED_FALL_MEETING_URL) return course;
   if (input.clientUserId === SOPHIA_SLEIMAN_SAT_USER_ID) return SOPHIA_SLEIMAN_MEET_URL;
-  if (course === SHARED_FALL_MEETING_URL) return null;
+  if (course === SHARED_FALL_MEETING_URL) return SHARED_FALL_MEETING_URL;
   return null;
 }
 
