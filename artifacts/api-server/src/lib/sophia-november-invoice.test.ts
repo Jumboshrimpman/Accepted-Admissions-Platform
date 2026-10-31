@@ -15,9 +15,10 @@ import {
 const sophia = { id: SOPHIA_SLEIMAN_SAT_USER_ID, role: "student" };
 
 const RETIRED_STRIPE_PAY_URL = "https://buy.stripe.com/dRmeVd35Q0Goajg4GH5gc00";
+const PREVIOUS_WISE_PAY_URL = "https://wise.com/pay/r/rS6_TjwRk0ff8ho";
 
 test("Sophia's unpaid November invoice exposes the Wise pay link", () => {
-  assert.equal(SOPHIA_NOVEMBER_2026_PAY_URL, "https://wise.com/pay/r/rS6_TjwRk0ff8ho");
+  assert.equal(SOPHIA_NOVEMBER_2026_PAY_URL, "https://wise.com/pay/r/6_JAy6RP712BnEM");
   const view = presentSophiaNovemberInvoice({
     requester: sophia,
     clientUserId: sophia.id,
@@ -79,7 +80,7 @@ test("a description-matched row with the old Stripe URL still pays through Wise"
   );
   assert.equal(view.kind, "unpaid");
   if (view.kind !== "unpaid") return;
-  assert.equal(view.invoice.payUrl, "https://wise.com/pay/r/rS6_TjwRk0ff8ho");
+  assert.equal(view.invoice.payUrl, SOPHIA_NOVEMBER_2026_PAY_URL);
   assert.equal(view.invoice.payUrl.includes(RETIRED_STRIPE_PAY_URL), false);
 });
 
@@ -130,4 +131,47 @@ test("another student, a tutor, a viewer, and an admin never receive the invoice
       "hidden",
     );
   }
+});
+
+test("a row that still carries the previous Wise link pays through the new one", () => {
+  const view = presentSophiaNovemberInvoice({
+    requester: sophia,
+    clientUserId: sophia.id,
+    stored: {
+      id: "inv-previous-wise",
+      status: "sent",
+      totalCents: 228000,
+      dueAt: new Date("2026-11-01T15:00:00.000Z"),
+      hostedInvoiceUrl: PREVIOUS_WISE_PAY_URL,
+      receiptUrl: null,
+      description: SOPHIA_NOVEMBER_2026_INVOICE_KEY,
+    },
+  });
+  assert.equal(
+    isSophiaNovemberInvoice({ hostedInvoiceUrl: PREVIOUS_WISE_PAY_URL, description: null }),
+    true,
+  );
+  assert.equal(view.kind, "unpaid");
+  if (view.kind !== "unpaid") return;
+  assert.equal(view.invoice.payUrl, "https://wise.com/pay/r/6_JAy6RP712BnEM");
+});
+
+test("a paid row never links a pay URL as its receipt, even an older one", () => {
+  const view = presentSophiaNovemberInvoice({
+    requester: sophia,
+    clientUserId: sophia.id,
+    stored: {
+      id: "inv-paid-previous-wise",
+      status: "paid",
+      totalCents: 228000,
+      dueAt: new Date("2026-11-01T15:00:00.000Z"),
+      paidAt: new Date("2026-11-01T16:00:00.000Z"),
+      hostedInvoiceUrl: PREVIOUS_WISE_PAY_URL,
+      receiptUrl: PREVIOUS_WISE_PAY_URL,
+      description: SOPHIA_NOVEMBER_2026_INVOICE_KEY,
+    },
+  });
+  assert.equal(view.kind, "paid");
+  if (view.kind !== "paid") return;
+  assert.equal(view.history.documentUrl, null);
 });

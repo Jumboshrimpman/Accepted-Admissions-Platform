@@ -3,7 +3,12 @@ import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 
 export const SOPHIA_NOVEMBER_2026_INVOICE_KEY = "sophia-sleiman-november-2026-sat";
 export const SOPHIA_NOVEMBER_2026_PAY_URL =
-  "https://wise.com/pay/r/rS6_TjwRk0ff8ho";
+  "https://wise.com/pay/r/6_JAy6RP712BnEM";
+
+/** Pay links this invoice used before; a stored row may still carry one. */
+export const SOPHIA_NOVEMBER_2026_LEGACY_PAY_URLS = [
+  "https://wise.com/pay/r/rS6_TjwRk0ff8ho",
+] as const;
 export const SOPHIA_NOVEMBER_2026_TOTAL_CENTS = 228_000;
 export const SOPHIA_NOVEMBER_2026_DUE_ON = "2026-11-01";
 
@@ -76,11 +81,20 @@ function coverageFrom(stored: StoredPortalInvoice | null): string[] {
   return lines.length > 0 ? lines : [...SOPHIA_NOVEMBER_2026_COVERAGE];
 }
 
+function isKnownPayUrl(value: string | null | undefined): boolean {
+  const url = value?.trim();
+  if (!url) return false;
+  return (
+    url === SOPHIA_NOVEMBER_2026_PAY_URL ||
+    (SOPHIA_NOVEMBER_2026_LEGACY_PAY_URLS as readonly string[]).includes(url)
+  );
+}
+
 export function isSophiaNovemberInvoice(row: {
   hostedInvoiceUrl?: string | null;
   description?: string | null;
 }): boolean {
-  if (row.hostedInvoiceUrl?.trim() === SOPHIA_NOVEMBER_2026_PAY_URL) return true;
+  if (isKnownPayUrl(row.hostedInvoiceUrl)) return true;
   return (row.description ?? "").includes(SOPHIA_NOVEMBER_2026_INVOICE_KEY);
 }
 
@@ -105,8 +119,7 @@ export function presentSophiaNovemberInvoice(input: {
   const status = (stored?.status ?? "sent").trim().toLowerCase();
   if ((SETTLED_PORTAL_INVOICE_STATUSES as readonly string[]).includes(status)) {
     const receipt = stored?.receiptUrl?.trim() || null;
-    const documentUrl =
-      receipt && receipt !== SOPHIA_NOVEMBER_2026_PAY_URL ? receipt : null;
+    const documentUrl = receipt && !isKnownPayUrl(receipt) ? receipt : null;
     const paidAt = stored?.paidAt
       ? new Date(stored.paidAt)
       : new Date(`${SOPHIA_NOVEMBER_2026_DUE_ON}T15:00:00.000Z`);
