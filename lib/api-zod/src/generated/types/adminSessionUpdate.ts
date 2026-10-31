@@ -37,4 +37,8 @@ export interface AdminSessionUpdate {
      */
   durationMinutes?: number;
   bookingStatus?: AdminSessionUpdateBookingStatus;
+  /** @nullable */
+  meetUrl?: string | null;
+  /** When true, ignore only the tutor's Google free/busy conflict. Defaults to false. */
+  overrideProviderConflict?: boolean;
 }

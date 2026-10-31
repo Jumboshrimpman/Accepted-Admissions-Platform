@@ -22,4 +22,6 @@ export interface BillingHistoryPayment {
   /** @nullable */
   amountCents?: number | null;
   status: string;
+  /** Receipt link. Never a live pay link. */
+  documentUrl?: string | null;
 }

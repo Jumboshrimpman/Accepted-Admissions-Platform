@@ -533,6 +533,13 @@
       "when": 1792860000000,
       "tag": "0082_assignment_soft_time_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1792870000000,
+      "tag": "0083_session_meet_url",
+      "breakpoints": true
     }
   ]
 }

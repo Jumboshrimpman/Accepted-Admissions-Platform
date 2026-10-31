@@ -156,6 +156,8 @@ export interface BillingHistoryPayment {
   /** @nullable */
   amountCents?: number | null;
   status: string;
+  /** Receipt link. Never a live pay link. */
+  documentUrl?: string | null;
 }
 
 export interface BillingHistory {
@@ -1018,6 +1020,8 @@ export interface AdminSession {
   bookingStatus: string;
   /** @nullable */
   meetingUrl: string | null;
+  /** Stored per-session Meet override. Null when the join link is resolved from the calendar or course. */
+  meetUrl?: string | null;
   /** @nullable */
   calendarEventUrl?: string | null;
   /** @nullable */
@@ -1074,6 +1078,10 @@ export interface AdminSessionInput {
      */
   durationMinutes: number;
   bookingStatus?: AdminSessionInputBookingStatus;
+  /** @nullable */
+  meetUrl?: string | null;
+  /** When true, ignore only the tutor's Google free/busy conflict. Defaults to false. */
+  overrideProviderConflict?: boolean;
 }
 
 export type AdminSessionUpdateStatus = typeof AdminSessionUpdateStatus[keyof typeof AdminSessionUpdateStatus];
@@ -1125,6 +1133,10 @@ export interface AdminSessionUpdate {
      */
   durationMinutes?: number;
   bookingStatus?: AdminSessionUpdateBookingStatus;
+  /** @nullable */
+  meetUrl?: string | null;
+  /** When true, ignore only the tutor's Google free/busy conflict. Defaults to false. */
+  overrideProviderConflict?: boolean;
 }
 
 export type AdminAssignmentDeliveryPhase = typeof AdminAssignmentDeliveryPhase[keyof typeof AdminAssignmentDeliveryPhase];
@@ -1851,6 +1863,16 @@ export interface Dashboard {
   assignedStudents: DashboardStudent[];
   newSubmissions: ReviewSubmission[];
   openReviewCount: number;
+  /** Unpaid invoice for the signed-in student. Omitted for every other account and after payment. */
+  openInvoice?: {
+    id: string;
+    title: string;
+    coverage: string[];
+    totalCents: number;
+    dueOn: string;
+    status: "pending" | "sent" | "overdue";
+    payUrl: string;
+  };
 }
 
 export type AdminClientPreviewOfferDurationMinutes = typeof AdminClientPreviewOfferDurationMinutes[keyof typeof AdminClientPreviewOfferDurationMinutes];
