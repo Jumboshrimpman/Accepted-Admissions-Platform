@@ -740,6 +740,14 @@ import {
 } from "../lib/question-reports";
 import { sendGuidanceRequestAdminEmail } from "../lib/guidance-request-email";
 import {
+  QUIZ_SUBMISSION_NOTIFICATION_KIND,
+  quizSubmissionAlertEmail,
+  quizSubmissionAlertRecipient,
+  quizSubmissionNotificationMessage,
+  quizSubmissionNotificationTitle,
+} from "../lib/submission-alerts";
+import { sendTransactionalEmail, verifiedFromAddress } from "../lib/transactional-email";
+import {
   canFinalizeAttemptResult,
   countRecordedAnswers,
   countsTowardAttemptLimit,
@@ -4264,6 +4272,123 @@ async function finalizeAttemptResult(
     }
   }
   return result;
+}
+
+/**
+ * Emails the assigned tutor and files an in-app notification for that tutor and
+ * every administrator when a student submits a quiz. The caller wraps this in a
+ * try/catch: a Resend outage or a database hiccup must never change the submit
+ * response.
+ */
+async function alertOnQuizSubmission(result: AttemptResultPayload): Promise<void> {
+  const [context] = await db
+    .select({
+      assignmentTitle: assignmentsTable.title,
+      assignmentSubject: assignmentsTable.subject,
+      assignmentSessionId: assignmentsTable.sessionId,
+      assignedTutorUserId: assignmentsTable.assignedTutorUserId,
+      sessionId: sessionsTable.id,
+      sessionTutorUserId: sessionsTable.tutorUserId,
+      sessionDateTime: sessionsTable.dateTime,
+      sessionTimezone: sessionsTable.timezone,
+      studentName: usersTable.displayName,
+      studentEmail: usersTable.email,
+    })
+    .from(assignmentsTable)
+    .leftJoin(sessionsTable, eq(sessionsTable.id, assignmentsTable.sessionId))
+    .innerJoin(usersTable, eq(usersTable.id, result.studentUserId))
+    .where(eq(assignmentsTable.id, result.assignmentId))
+    .limit(1);
+  if (!context) return;
+
+  const sessionId = context.assignmentSessionId ?? context.sessionId ?? null;
+  const sessionDateTime = context.sessionDateTime ?? result.sessionDateTime ?? null;
+  const scorePercent = Number.isFinite(result.score) ? result.score : null;
+  const correctCount = Number.isFinite(result.correctCount) ? result.correctCount : null;
+  const totalCount = Number.isFinite(result.totalCount) ? result.totalCount : null;
+  const title = quizSubmissionNotificationTitle({
+    studentName: context.studentName,
+    assignmentTitle: context.assignmentTitle,
+  });
+  const message = quizSubmissionNotificationMessage({
+    studentName: context.studentName,
+    assignmentTitle: context.assignmentTitle,
+    scorePercent,
+  });
+
+  const tutorUserId = context.assignedTutorUserId ?? context.sessionTutorUserId ?? null;
+  // Only administrators can read admin_notifications. Tutors see new submissions
+  // in their own dashboard's "New submission alerts" card, so they get the email
+  // and no row here.
+  const administrators: { id: string }[] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.role, "administrator"));
+  const recipientIds: string[] = [...new Set(administrators.map((admin: { id: string }) => admin.id))];
+  if (recipientIds.length > 0) {
+    const existing = await db
+      .select({ recipientUserId: adminNotificationsTable.recipientUserId })
+      .from(adminNotificationsTable)
+      .where(
+        and(
+          eq(adminNotificationsTable.kind, QUIZ_SUBMISSION_NOTIFICATION_KIND),
+          eq(adminNotificationsTable.title, title),
+          sessionId
+            ? eq(adminNotificationsTable.sessionId, sessionId)
+            : isNull(adminNotificationsTable.sessionId),
+        ),
+      );
+    const alreadyNotified = new Set(
+      existing.map((row: { recipientUserId: string }) => row.recipientUserId),
+    );
+    const fresh = recipientIds.filter((id) => !alreadyNotified.has(id));
+    if (fresh.length > 0) {
+      await db.insert(adminNotificationsTable).values(
+        fresh.map((recipientUserId) => ({
+          recipientUserId,
+          kind: QUIZ_SUBMISSION_NOTIFICATION_KIND,
+          guidanceRequestId: null,
+          sessionId,
+          title,
+          message,
+          status: "unread",
+        })),
+      );
+    }
+  }
+
+  if (!tutorUserId) return;
+  const [tutor] = await db
+    .select({ email: usersTable.email, role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, tutorUserId))
+    .limit(1);
+  const recipient = quizSubmissionAlertRecipient({
+    role: tutor?.role ?? null,
+    email: tutor?.email ?? null,
+  });
+  if (!recipient) return;
+
+  const email = quizSubmissionAlertEmail({
+    studentName: context.studentName,
+    studentEmail: context.studentEmail,
+    assignmentTitle: context.assignmentTitle,
+    subject: context.assignmentSubject,
+    questionCount: result.items.length,
+    scorePercent,
+    correctCount,
+    totalCount,
+    sessionDateTime,
+    sessionTimezone: context.sessionTimezone ?? null,
+    attemptId: result.attemptId,
+    assignmentId: result.assignmentId,
+  });
+  await sendTransactionalEmail({
+    to: recipient,
+    from: verifiedFromAddress(),
+    subject: email.subject,
+    text: email.text,
+  });
 }
 
 type AdaptiveResultItem = {
@@ -16222,11 +16347,21 @@ router.post(
       res.status(409).json({ error: emptyError });
       return;
     }
+    // An expired or retried attempt can reach here with a result already saved.
+    // Alert only on the first successful finalize so the tutor gets one email.
+    const hadResult = Boolean(attempt.result);
     const resultStatus = currentAttempt.status === "expired" ? "expired" : "submitted";
     const result = await finalizeAttemptResult(attempt.id, resultStatus, { prepareCurriculum: true });
     if (!result) {
       res.status(409).json({ error: "Attempt result could not be created" });
       return;
+    }
+    if (!hadResult) {
+      try {
+        await alertOnQuizSubmission(result);
+      } catch (error) {
+        req.log?.error({ err: error, attemptId: result.attemptId }, "quiz submission alert failed");
+      }
     }
     res.json(SubmitAttemptResponse.parse(result));
   },
