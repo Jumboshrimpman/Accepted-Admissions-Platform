@@ -3024,6 +3024,10 @@ components:
         meetUrl:
           type: ["string", "null"]
           description: "https://meet.google.com URL for this session, or null to clear the override."
+        overrideProviderConflict:
+          type: boolean
+          default: false
+          description: When true, ignore only the tutor Google free/busy conflict. Tutor, client, and shared-Meet collisions still block.
     AdminSessionUpdate:
       type: object
       properties:
@@ -3040,6 +3044,10 @@ components:
         meetUrl:
           type: ["string", "null"]
           description: "https://meet.google.com URL for this session, or null to clear the override."
+        overrideProviderConflict:
+          type: boolean
+          default: false
+          description: When true, ignore only the tutor Google free/busy conflict. Tutor, client, and shared-Meet collisions still block.
     AdminAssignment:
       type: object
       required: [id, courseId, sessionId, programTitle, sessionTitle, deliveryPhase, title, subject, instructions, status, deadline, timeLimitMinutes, maxAttempts, questionCount, submissionCount]

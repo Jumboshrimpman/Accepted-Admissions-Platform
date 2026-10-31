@@ -15,6 +15,10 @@ import {
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { logger } from "../lib/logger";
+import {
+  providerConflictOverrideLog,
+  sessionConflictsAfterProviderOverride,
+} from "../lib/admin-provider-conflict";
 import { invalidAttemptIdGate, isUuidAttemptId } from "../lib/attempt-id";
 import { remainingAttemptSeconds, softRemainingAttemptSeconds, summarizeAttemptTimer } from "../lib/attempt-timer";
 import {
@@ -13076,8 +13080,9 @@ router.post(
       return;
     }
     let conflictWith: string[];
+    let overriddenProviderConflicts: string[] = [];
     try {
-      conflictWith = await adminSessionConflicts({
+      const found = await adminSessionConflicts({
         tutorUserId: body.data.tutorUserId,
         clientUserId: body.data.clientUserId,
         dateTime: body.data.dateTime,
@@ -13085,6 +13090,12 @@ router.post(
         courseId: body.data.courseId,
         subject: body.data.subject,
       }, undefined, { checkProvider: true, strictProvider: false });
+      const split = sessionConflictsAfterProviderOverride(
+        found,
+        body.data.overrideProviderConflict,
+      );
+      conflictWith = split.blocking;
+      overriddenProviderConflicts = split.overridden;
     } catch (error) {
       if (error instanceof BookingError) {
         sendBookingError(error, res);
@@ -13167,6 +13178,17 @@ router.post(
       throw error;
     }
     if (isNikaPayoutBookedSession(created)) scheduleNikaNeelPayout("booked", created);
+    if (overriddenProviderConflicts.length > 0) {
+      logger.warn(
+        providerConflictOverrideLog({
+          sessionId: created.id,
+          tutorUserId: created.tutorUserId,
+          dateTime: created.dateTime,
+          conflicts: overriddenProviderConflicts,
+        }),
+        "Admin overrode a tutor calendar busy conflict",
+      );
+    }
     res.status(201).json(CreateAdminSessionResponse.parse(await adminSessionShape(created)));
   },
 );
@@ -13232,18 +13254,25 @@ router.patch(
       return;
     }
     let conflictWith: string[];
+    let overriddenProviderConflicts: string[] = [];
     try {
       const unchangedCalendarMeeting =
         Boolean(existing.providerEventId) &&
         existing.tutorUserId === next.tutorUserId &&
         existing.dateTime.getTime() === next.dateTime.getTime() &&
         existing.durationMinutes === next.durationMinutes;
-      conflictWith = next.status === "archived" || next.bookingStatus === "cancelled"
+      const found = next.status === "archived" || next.bookingStatus === "cancelled"
         ? []
         : await adminSessionConflicts(next, existing.id, {
             checkProvider: !unchangedCalendarMeeting,
             strictProvider: false,
           });
+      const split = sessionConflictsAfterProviderOverride(
+        found,
+        body.data.overrideProviderConflict,
+      );
+      conflictWith = split.blocking;
+      overriddenProviderConflicts = split.overridden;
     } catch (error) {
       if (error instanceof BookingError) {
         sendBookingError(error, res);
@@ -13317,6 +13346,17 @@ router.patch(
         after: updated,
         resolveTutorProfileId: nikaPayoutTutorProfileId,
       });
+      if (overriddenProviderConflicts.length > 0) {
+        logger.warn(
+          providerConflictOverrideLog({
+            sessionId: updated.id,
+            tutorUserId: updated.tutorUserId,
+            dateTime: updated.dateTime,
+            conflicts: overriddenProviderConflicts,
+          }),
+          "Admin overrode a tutor calendar busy conflict",
+        );
+      }
       res.json(UpdateAdminSessionResponse.parse(await adminSessionShape(updated)));
     } catch (error) {
       if (calendarMoved && calendarFields.providerEventId) {

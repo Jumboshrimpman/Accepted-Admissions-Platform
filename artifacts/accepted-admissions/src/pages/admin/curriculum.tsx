@@ -79,7 +79,9 @@ import {
   sessionSubjectLabel,
   utcIsoFromSessionLocalValue,
 } from "@/lib/session-display";
+import { ProviderConflictOverridePanel } from "@/components/provider-conflict-override";
 import { SessionJoinActions } from "@/components/session-join-actions";
+import { canOfferProviderConflictOverride } from "@/lib/provider-conflict-override";
 import { ClearHomeworkButton } from "@/components/clear-homework-button";
 import {
   adminCurriculumHref,
@@ -761,6 +763,7 @@ function SessionsSection({
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState<"upcoming" | "conflicts" | "all">("upcoming");
   const [message, setMessage] = useState("");
+  const [calendarOverride, setCalendarOverride] = useState<string[] | null>(null);
   const [draft, setDraft] = useState<AdminSessionInput>(() => blankAdminSessionDraft(data));
   const term = search.trim().toLowerCase();
   const now = Date.now();
@@ -790,10 +793,14 @@ function SessionsSection({
   const reconnectMailto = selectedTutor && "email" in selectedTutor && selectedTutor.email
     ? `mailto:${selectedTutor.email}?subject=${encodeURIComponent("Reconnect Google Calendar (optional)")}&body=${encodeURIComponent("You can reconnect Google Calendar from the tutor dashboard. Scheduling assign does not require calendar or full portal provisioning.")}`
     : "";
-  const reset = () => setDraft(blankAdminSessionDraft(data));
+  const reset = () => {
+    setDraft(blankAdminSessionDraft(data));
+    setCalendarOverride(null);
+  };
   const editingSession = editing ? data.sessions.find((item) => item.id === editing) : undefined;
   const scheduleLocked = Boolean(editingSession && !canCancelOrRescheduleSession(editingSession));
-  const save = () => {
+  const save = (overrideProviderConflict = false) => {
+    if (!overrideProviderConflict) setCalendarOverride(null);
     if (editingSession && scheduleLocked) {
       const timeChanged = new Date(draft.dateTime).getTime() !== new Date(editingSession.dateTime).getTime();
       if (timeChanged) {
@@ -810,11 +817,41 @@ function SessionsSection({
       dateTime: new Date(draft.dateTime).toISOString(),
       timezone: draft.timezone.trim(),
       durationMinutes: Number(draft.durationMinutes),
+      ...(overrideProviderConflict ? { overrideProviderConflict: true as const } : {}),
     };
-    if (editing) update.mutate({ sessionId: editing, data: payload as AdminSessionUpdate }, { onSuccess: () => { setEditing(null); setMessage("Session saved."); onChanged(); }, onError: (error) => setMessage(errorText(error)) });
-    else create.mutate({ data: payload }, { onSuccess: () => { setShowCreate(false); reset(); setMessage("Session created."); onChanged(); }, onError: (error) => setMessage(errorText(error) + " Check the conflict card before trying again.") });
+    const onScheduleError = (error: unknown, suffix = "") => {
+      setMessage(errorText(error) + suffix);
+      setCalendarOverride(canOfferProviderConflictOverride(error));
+    };
+    if (editing) {
+      update.mutate(
+        { sessionId: editing, data: payload as AdminSessionUpdate },
+        {
+          onSuccess: () => {
+            setEditing(null);
+            setCalendarOverride(null);
+            setMessage("Session saved.");
+            onChanged();
+          },
+          onError: (error) => onScheduleError(error),
+        },
+      );
+      return;
+    }
+    create.mutate(
+      { data: payload },
+      {
+        onSuccess: () => {
+          setShowCreate(false);
+          reset();
+          setMessage("Session created.");
+          onChanged();
+        },
+        onError: (error) => onScheduleError(error, " Check the conflict card before trying again."),
+      },
+    );
   };
-  const form = <Card className="border-primary/30"><CardContent className="grid gap-4 p-5"><div className="grid gap-3 md:grid-cols-3"><Field label="Program"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.courseId} onChange={(event) => setDraft({ ...draft, courseId: event.target.value })}>{data.programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}</select></Field><PersonSelect label="Student" ariaLabel="Session student" value={draft.clientUserId} people={students} onChange={(id) => { const student = students.find((person) => person.id === id); setDraft(applyTaitoStudentSchedule({ ...draft, clientUserId: id }, student, editing ? "edit" : "create")); }} /><PersonSelect label="Tutor" ariaLabel="Session tutor" value={draft.tutorUserId} people={tutors.map((tutor) => ({ ...tutor, name: `${tutor.name} — Calendar ${tutor.calendarStatus}` }))} onChange={(id) => setDraft({ ...draft, tutorUserId: id })} /></div>{selectedTutor && <div className={`rounded-xl border p-3 text-sm ${calendarDisconnected ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-300 bg-emerald-50 text-emerald-950"}`} role="status"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Google Calendar: {selectedTutor.calendarStatus}</p><p className="mt-1">{calendarDisconnected ? "Calendar is not connected. You can still assign this student and tutor for scheduling. This does not grant curriculum-bank admin or portal access." : "The tutor calendar is connected. Scheduling assign still does not grant curriculum-bank admin."}</p></div>{calendarDisconnected && reconnectMailto ? <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-400 bg-white"><a href={reconnectMailto}><Mail className="mr-2 h-4 w-4" />Email tutor to reconnect</a></Button> : null}</div></div>}<div className="grid gap-3 md:grid-cols-3"><Field label="Subject"><Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></Field><SessionStartTimeField dateTime={draft.dateTime} timezone={draft.timezone} durationMinutes={draft.durationMinutes} disabled={scheduleLocked} onChange={(dateTime) => setDraft({ ...draft, dateTime })} /><Field label="Duration (minutes)"><Input type="number" min="15" max="480" aria-label="Session duration" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: Number(event.target.value) })} /></Field></div><div className="grid gap-3 md:grid-cols-3"><Field label="Timezone"><Input aria-label="Session timezone" value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /></Field><Field label="Session state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.status ?? "draft"} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminSessionInput["status"] })}><option value="draft">Draft</option><option value="published">Published</option><option value="completed">Completed</option><option value="archived">Archived</option></select></Field><Field label="Booking state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.bookingStatus ?? "confirmed"} onChange={(event) => { const next = event.target.value as AdminSessionInput["bookingStatus"]; if (scheduleLocked && next === "cancelled" && editingSession?.bookingStatus !== "cancelled") { setMessage(sessionScheduleChangeMessage("cancel", editingSession) ?? "A past session cannot be cancelled."); return; } setDraft({ ...draft, bookingStatus: next }); }}><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="rescheduled">Rescheduled</option><option value="cancelled" disabled={scheduleLocked && editingSession?.bookingStatus !== "cancelled"}>Cancelled</option></select></Field></div>{scheduleLocked && editingSession ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">{sessionScheduleChangeMessage("cancel", editingSession) ?? "Cancel and reschedule are disabled."} Other session details can still be saved.</p> : null}<p className="text-sm text-muted-foreground">The appointment name is generated from the assigned student, subject, and tutor. Scheduling assign is allowed even if the person is not fully provisioned for the portal.</p><div className="flex gap-2"><Button onClick={save} disabled={create.isPending || update.isPending}>{editing ? "Save session" : "Create session"}</Button><Button variant="ghost" onClick={() => { setEditing(null); setShowCreate(false); }}>Cancel</Button></div></CardContent></Card>;
+  const form = <Card className="border-primary/30"><CardContent className="grid gap-4 p-5"><div className="grid gap-3 md:grid-cols-3"><Field label="Program"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.courseId} onChange={(event) => setDraft({ ...draft, courseId: event.target.value })}>{data.programs.map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}</select></Field><PersonSelect label="Student" ariaLabel="Session student" value={draft.clientUserId} people={students} onChange={(id) => { const student = students.find((person) => person.id === id); setDraft(applyTaitoStudentSchedule({ ...draft, clientUserId: id }, student, editing ? "edit" : "create")); }} /><PersonSelect label="Tutor" ariaLabel="Session tutor" value={draft.tutorUserId} people={tutors.map((tutor) => ({ ...tutor, name: `${tutor.name} — Calendar ${tutor.calendarStatus}` }))} onChange={(id) => setDraft({ ...draft, tutorUserId: id })} /></div>{selectedTutor && <div className={`rounded-xl border p-3 text-sm ${calendarDisconnected ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-300 bg-emerald-50 text-emerald-950"}`} role="status"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Google Calendar: {selectedTutor.calendarStatus}</p><p className="mt-1">{calendarDisconnected ? "Calendar is not connected. You can still assign this student and tutor for scheduling. This does not grant curriculum-bank admin or portal access." : "The tutor calendar is connected. Scheduling assign still does not grant curriculum-bank admin."}</p></div>{calendarDisconnected && reconnectMailto ? <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-400 bg-white"><a href={reconnectMailto}><Mail className="mr-2 h-4 w-4" />Email tutor to reconnect</a></Button> : null}</div></div>}<div className="grid gap-3 md:grid-cols-3"><Field label="Subject"><Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></Field><SessionStartTimeField dateTime={draft.dateTime} timezone={draft.timezone} durationMinutes={draft.durationMinutes} disabled={scheduleLocked} onChange={(dateTime) => setDraft({ ...draft, dateTime })} /><Field label="Duration (minutes)"><Input type="number" min="15" max="480" aria-label="Session duration" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: Number(event.target.value) })} /></Field></div><div className="grid gap-3 md:grid-cols-3"><Field label="Timezone"><Input aria-label="Session timezone" value={draft.timezone} onChange={(event) => setDraft({ ...draft, timezone: event.target.value })} /></Field><Field label="Session state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.status ?? "draft"} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminSessionInput["status"] })}><option value="draft">Draft</option><option value="published">Published</option><option value="completed">Completed</option><option value="archived">Archived</option></select></Field><Field label="Booking state"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={draft.bookingStatus ?? "confirmed"} onChange={(event) => { const next = event.target.value as AdminSessionInput["bookingStatus"]; if (scheduleLocked && next === "cancelled" && editingSession?.bookingStatus !== "cancelled") { setMessage(sessionScheduleChangeMessage("cancel", editingSession) ?? "A past session cannot be cancelled."); return; } setDraft({ ...draft, bookingStatus: next }); }}><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="rescheduled">Rescheduled</option><option value="cancelled" disabled={scheduleLocked && editingSession?.bookingStatus !== "cancelled"}>Cancelled</option></select></Field></div>{scheduleLocked && editingSession ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">{sessionScheduleChangeMessage("cancel", editingSession) ?? "Cancel and reschedule are disabled."} Other session details can still be saved.</p> : null}<p className="text-sm text-muted-foreground">The appointment name is generated from the assigned student, subject, and tutor. Scheduling assign is allowed even if the person is not fully provisioned for the portal.</p>{calendarOverride ? <ProviderConflictOverridePanel conflicts={calendarOverride} editing={Boolean(editing)} pending={create.isPending || update.isPending} onOverride={() => save(true)} /> : null}<div className="flex gap-2"><Button onClick={() => save(false)} disabled={create.isPending || update.isPending}>{editing ? "Save session" : "Create session"}</Button><Button variant="ghost" onClick={() => { setEditing(null); setShowCreate(false); setCalendarOverride(null); }}>Cancel</Button></div></CardContent></Card>;
   return (
     <div className="space-y-4">
       {message && <p role="status" className="rounded-xl bg-primary/5 p-3 text-sm">{message}</p>}
@@ -823,7 +860,7 @@ function SessionsSection({
           <h2 className="text-xl font-semibold">Sessions & meetings</h2>
           <p className="text-sm text-muted-foreground">Assign an existing bank quiz as pre-session homework. Session pages stay light — review the attempt, don’t build quizzes here.</p>
         </div>
-        <Button onClick={() => { reset(); setEditing(null); setShowCreate(true); }}><Plus className="mr-2 h-4 w-4" /> New session</Button>
+        <Button onClick={() => { reset(); setEditing(null); setCalendarOverride(null); setShowCreate(true); }}><Plus className="mr-2 h-4 w-4" /> New session</Button>
       </div>
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Session filters">
         {([
@@ -851,6 +888,7 @@ function SessionsSection({
             onEdit={() => {
               setEditing(session.id);
               setShowCreate(false);
+              setCalendarOverride(null);
               const student =
                 students.find((person) => person.id === session.student?.id) ?? session.student;
               setDraft(

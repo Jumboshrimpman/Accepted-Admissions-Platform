@@ -1240,7 +1240,8 @@ export const CreateAdminSessionBody = zod.object({
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(createAdminSessionBodyDurationMinutesMin).max(createAdminSessionBodyDurationMinutesMax),
   "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional(),
-  "meetUrl": zod.string().nullish()
+  "meetUrl": zod.string().nullish(),
+  "overrideProviderConflict": zod.boolean().default(false)
 })
 
 export const CreateAdminSessionResponse = zod.object({
@@ -1302,7 +1303,8 @@ export const UpdateAdminSessionBody = zod.object({
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(updateAdminSessionBodyDurationMinutesMin).max(updateAdminSessionBodyDurationMinutesMax).optional(),
   "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional(),
-  "meetUrl": zod.string().nullish()
+  "meetUrl": zod.string().nullish(),
+  "overrideProviderConflict": zod.boolean().default(false)
 })
 
 export const UpdateAdminSessionResponse = zod.object({
@@ -1508,7 +1510,8 @@ export const CreateTutorSessionBody = zod.object({
   "status": zod.enum(['draft', 'published', 'completed', 'archived']).optional(),
   "durationMinutes": zod.number().min(createTutorSessionBodyDurationMinutesMin).max(createTutorSessionBodyDurationMinutesMax),
   "bookingStatus": zod.enum(['confirmed', 'pending', 'cancelled', 'rescheduled']).optional(),
-  "meetUrl": zod.string().nullish()
+  "meetUrl": zod.string().nullish(),
+  "overrideProviderConflict": zod.boolean().default(false)
 })
 
 export const CreateTutorSessionResponse = zod.object({
