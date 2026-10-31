@@ -4317,17 +4317,14 @@ async function alertOnQuizSubmission(result: AttemptResultPayload): Promise<void
   });
 
   const tutorUserId = context.assignedTutorUserId ?? context.sessionTutorUserId ?? null;
-  const administrators = await db
+  // Only administrators can read admin_notifications. Tutors see new submissions
+  // in their own dashboard's "New submission alerts" card, so they get the email
+  // and no row here.
+  const administrators: { id: string }[] = await db
     .select({ id: usersTable.id })
     .from(usersTable)
     .where(eq(usersTable.role, "administrator"));
-
-  const recipientIds = [
-    ...new Set([
-      ...(tutorUserId ? [tutorUserId] : []),
-      ...administrators.map((admin) => admin.id),
-    ]),
-  ];
+  const recipientIds: string[] = [...new Set(administrators.map((admin: { id: string }) => admin.id))];
   if (recipientIds.length > 0) {
     const existing = await db
       .select({ recipientUserId: adminNotificationsTable.recipientUserId })
@@ -4341,7 +4338,9 @@ async function alertOnQuizSubmission(result: AttemptResultPayload): Promise<void
             : isNull(adminNotificationsTable.sessionId),
         ),
       );
-    const alreadyNotified = new Set(existing.map((row) => row.recipientUserId));
+    const alreadyNotified = new Set(
+      existing.map((row: { recipientUserId: string }) => row.recipientUserId),
+    );
     const fresh = recipientIds.filter((id) => !alreadyNotified.has(id));
     if (fresh.length > 0) {
       await db.insert(adminNotificationsTable).values(
@@ -16348,16 +16347,21 @@ router.post(
       res.status(409).json({ error: emptyError });
       return;
     }
+    // An expired or retried attempt can reach here with a result already saved.
+    // Alert only on the first successful finalize so the tutor gets one email.
+    const hadResult = Boolean(attempt.result);
     const resultStatus = currentAttempt.status === "expired" ? "expired" : "submitted";
     const result = await finalizeAttemptResult(attempt.id, resultStatus, { prepareCurriculum: true });
     if (!result) {
       res.status(409).json({ error: "Attempt result could not be created" });
       return;
     }
-    try {
-      await alertOnQuizSubmission(result);
-    } catch (error) {
-      req.log?.error({ err: error, attemptId: result.attemptId }, "quiz submission alert failed");
+    if (!hadResult) {
+      try {
+        await alertOnQuizSubmission(result);
+      } catch (error) {
+        req.log?.error({ err: error, attemptId: result.attemptId }, "quiz submission alert failed");
+      }
     }
     res.json(SubmitAttemptResponse.parse(result));
   },
