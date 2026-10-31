@@ -749,7 +749,7 @@ export function BookingCard({
                   {typeof selectedTutor.hourlyRateCents === "number"
                     ? ` at $${Math.round(selectedTutor.hourlyRateCents / 100)}/hr`
                     : ""}
-                  . Booking stays closed until her Google Calendar is connected.
+                  .
                 </p>
               </div>
             ) : null}

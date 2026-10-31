@@ -5,11 +5,17 @@ export function SessionListDisclosure({
   expanded,
   onToggle,
   testId = "session-list-show-more",
+  collapsedLabel = "Show more",
+  expandedLabel = "Show less",
+  controlsId,
 }: {
   canToggle: boolean;
   expanded: boolean;
   onToggle: () => void;
   testId?: string;
+  collapsedLabel?: string;
+  expandedLabel?: string;
+  controlsId?: string;
 }) {
   if (!canToggle) return null;
   return (
@@ -19,9 +25,10 @@ export function SessionListDisclosure({
       className="rounded-full"
       onClick={onToggle}
       aria-expanded={expanded}
+      aria-controls={controlsId}
       data-testid={testId}
     >
-      {expanded ? "Show less" : "Show more"}
+      {expanded ? expandedLabel : collapsedLabel}
     </Button>
   );
 }

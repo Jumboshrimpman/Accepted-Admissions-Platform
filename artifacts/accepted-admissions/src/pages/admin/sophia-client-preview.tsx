@@ -56,11 +56,6 @@ function TutorPreviewCard({ tutor }: { tutor: SophiaPreviewTutorCard }) {
                 ? " · Calendar connected"
                 : " · Calendar not connected"}
           </p>
-          {tutor.comingSoon ? (
-            <p className="mt-2 text-sm text-muted-foreground" data-testid="sophia-preview-victoria-coming-soon">
-              Coming soon. Booking stays closed until her Google Calendar is connected.
-            </p>
-          ) : null}
         </div>
       </div>
       {tutor.biography ? (

@@ -1193,8 +1193,11 @@ describe("administrator client preview", () => {
     expect(screen.getByTestId("sophia-preview-tutor-nika").textContent).toContain("$130/hr");
     expect(screen.getByTestId("sophia-preview-tutor-eunice").textContent).toContain("$130/hr");
     expect(screen.getByTestId("sophia-preview-tutor-victoria").textContent).toContain("$130/hr");
-    expect(screen.getByTestId("sophia-preview-victoria-coming-soon").textContent).toMatch(/Coming soon/);
+    expect(screen.queryByTestId("sophia-preview-victoria-coming-soon")).toBeNull();
     expect(screen.getByTestId("sophia-preview-status-victoria").textContent).toContain("Coming soon");
+    expect(screen.getByTestId("sophia-preview-tutor-victoria").textContent).not.toMatch(
+      /Google Calendar/,
+    );
     expect(screen.getByText("SAT practice")).toBeTruthy();
     expect(screen.queryByText("Essay editing with Nika")).toBeNull();
     expect(screen.queryByText("College Consulting")).toBeNull();

@@ -1260,6 +1260,123 @@ describe("authenticated role dashboard flows", () => {
     expect(screen.getByTestId("session-list-show-more").textContent).toContain("Show more");
   });
 
+  test("the session roadmap shows the next three upcoming meetings until See more", () => {
+    const base = dashboardForRole("student");
+    const at = (daysFromNow: number) =>
+      new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000).toISOString();
+    const meeting = (id: string, title: string, daysFromNow: number) => ({
+      id,
+      courseId: "course-fall",
+      dateTime: at(daysFromNow),
+      timezone: "America/New_York",
+      durationMinutes: 60,
+      subject: "SAT" as const,
+      title,
+      status: "published" as const,
+      meetingUrl: "https://meet.google.com/sophia-room",
+      calendarEventUrl: null,
+      tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+      student: { id: "student-user", name: "Sophia Sleiman" },
+      readiness: "ready" as const,
+      nextAction: "Open session plan",
+      currentFocus: "SAT reasoning.",
+      preparation: null,
+      latestResult: null,
+    });
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false, selfServeSatBooking: false },
+      upcomingSessions: [],
+      curriculumSessions: [
+        meeting("past", "Past SAT meeting", -5),
+        meeting("one", "First upcoming SAT", 1),
+        meeting("two", "Second upcoming SAT", 2),
+        meeting("three", "Third upcoming SAT", 3),
+        meeting("four", "Fourth upcoming SAT", 4),
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    const list = document.getElementById("portal-session-roadmap");
+    expect(list).toBeTruthy();
+    const openLink = (id: string) =>
+      list!.querySelector(`a[href="/portal/courses/course-fall/sessions/${id}"]`);
+    expect(screen.getByText("First upcoming SAT")).toBeTruthy();
+    expect(openLink("one")).toBeTruthy();
+    expect(openLink("two")).toBeTruthy();
+    expect(openLink("three")).toBeTruthy();
+    expect(openLink("four")).toBeNull();
+    expect(openLink("past")).toBeNull();
+    expect(list!.querySelectorAll("li")).toHaveLength(3);
+    const toggle = screen.getByTestId("session-list-show-more");
+    expect(toggle.tagName).toBe("BUTTON");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBe("portal-session-roadmap");
+    expect(toggle.textContent).toContain("See more (2)");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.textContent).toContain("Show less");
+    expect(openLink("four")).toBeTruthy();
+    expect(openLink("past")).toBeTruthy();
+    expect(list!.querySelectorAll("li")).toHaveLength(5);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(openLink("four")).toBeNull();
+    expect(openLink("past")).toBeNull();
+    expect(list!.querySelectorAll("li")).toHaveLength(3);
+  });
+
+  test("three or fewer upcoming meetings show no See more control", () => {
+    const base = dashboardForRole("student");
+    const at = (daysFromNow: number) =>
+      new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000).toISOString();
+    const meeting = (id: string, title: string, daysFromNow: number) => ({
+      id,
+      courseId: "course-fall",
+      dateTime: at(daysFromNow),
+      timezone: "America/New_York",
+      durationMinutes: 60,
+      subject: "SAT" as const,
+      title,
+      status: "published" as const,
+      meetingUrl: "https://meet.google.com/sophia-room",
+      calendarEventUrl: null,
+      tutor: { id: "xavier", name: "Xavier Morales", specialty: "SAT Tutor", avatarUrl: null },
+      student: { id: "student-user", name: "Sophia Sleiman" },
+      readiness: "ready" as const,
+      nextAction: "Open session plan",
+      currentFocus: "SAT reasoning.",
+      preparation: null,
+      latestResult: null,
+    });
+    mocks.dashboard = {
+      ...base,
+      credits: { ...base.credits, twelveSessionPlan: false, selfServeSatBooking: false },
+      upcomingSessions: [],
+      curriculumSessions: [
+        meeting("past", "Past SAT meeting", -5),
+        meeting("one", "First upcoming SAT", 1),
+        meeting("two", "Second upcoming SAT", 2),
+        meeting("three", "Third upcoming SAT", 3),
+      ],
+    } as Dashboard;
+    render(<FallWelcomeDashboard />);
+
+    const list = document.getElementById("portal-session-roadmap");
+    expect(list).toBeTruthy();
+    const openLink = (id: string) =>
+      list!.querySelector(`a[href="/portal/courses/course-fall/sessions/${id}"]`);
+    expect(openLink("one")).toBeTruthy();
+    expect(openLink("two")).toBeTruthy();
+    expect(openLink("three")).toBeTruthy();
+    expect(openLink("past")).toBeTruthy();
+    expect(list!.querySelectorAll("li")).toHaveLength(4);
+    expect(screen.queryByTestId("session-list-show-more")).toBeNull();
+    expect(screen.queryByRole("button", { name: /See more/i })).toBeNull();
+  });
+
   test("client portals do not list approved tutor relationships", () => {
     const base = dashboardForRole("student");
     mocks.dashboard = {
