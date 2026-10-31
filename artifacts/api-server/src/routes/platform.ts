@@ -275,6 +275,7 @@ import {
   selfServeSatBookingForAccount,
   personFirstName,
   sessionTitle,
+  viewerSessionClientName as viewerSessionClientNameForReader,
   taitoSessionDateTime,
   twelveSessionPlanForEmail,
 } from "../lib/session-schedule";
@@ -13663,6 +13664,22 @@ async function dashboardDataForUser(
     studentShapeCache.set(studentUserId, pending);
     return pending;
   };
+  // A student (or the parent watching them) reads their own sessions, so the
+  // dashboard says their name instead of the generic "Student" fallback.
+  // Tutors and administrators already pass the student in and are untouched.
+  const selfClientName =
+    user.role === "student"
+      ? user.displayName
+      : user.role === "viewer"
+        ? ((await studentShape(subjectUserId))?.name ?? null)
+        : null;
+  const viewerSessionClientName = (session: { clientUserId: string | null }) =>
+    viewerSessionClientNameForReader({
+      role: user.role,
+      selfName: selfClientName,
+      subjectUserId,
+      sessionClientUserId: session.clientUserId,
+    });
   const sessionTutorShapeCached = (session: {
     tutorUserId: string | null;
     dateTime: Date;
@@ -13757,6 +13774,9 @@ async function dashboardDataForUser(
               ? await studentShapeCached(session.clientUserId)
               : null
             : undefined,
+          // A student or parent viewer reads their own sessions, so name them in
+          // the title instead of falling back to the generic "Student".
+          viewerSessionClientName(session),
         ),
         readiness,
         nextAction,
@@ -14036,7 +14056,7 @@ async function dashboardDataForUser(
               user.role === "tutor" || user.role === "administrator"
                 ? student
                 : undefined,
-              student?.name ?? null,
+              student?.name ?? viewerSessionClientName(session),
             );
           }),
       ),
