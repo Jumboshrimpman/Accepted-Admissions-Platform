@@ -935,7 +935,12 @@ describe("client availability calendar", () => {
     render(<BookingCard />);
     fireEvent.click(screen.getByRole("tab", { name: "Victoria" }));
     expect(screen.getByTestId("booking-tutor-coming-soon").textContent).toMatch(/Coming soon/);
-    expect(screen.getByTestId("booking-tutor-coming-soon").textContent).toMatch(/\$130\/hr/);
+    expect(screen.getByTestId("booking-tutor-coming-soon").textContent).toMatch(
+      /Victoria is on your roster at \$130\/hr\./,
+    );
+    expect(screen.getByTestId("booking-tutor-coming-soon").textContent).not.toMatch(
+      /Google Calendar/,
+    );
     expect(screen.queryByText("Available times with Victoria")).toBeNull();
     expect(screen.queryByRole("button", { name: "Reserve this session" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Xavier" }));
