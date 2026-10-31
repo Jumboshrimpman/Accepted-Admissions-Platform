@@ -3,7 +3,7 @@ import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 
 export const SOPHIA_NOVEMBER_2026_INVOICE_KEY = "sophia-sleiman-november-2026-sat";
 export const SOPHIA_NOVEMBER_2026_PAY_URL =
-  "https://buy.stripe.com/dRmeVd35Q0Goajg4GH5gc00";
+  "https://wise.com/pay/r/rS6_TjwRk0ff8ho";
 export const SOPHIA_NOVEMBER_2026_TOTAL_CENTS = 228_000;
 export const SOPHIA_NOVEMBER_2026_DUE_ON = "2026-11-01";
 
@@ -136,7 +136,7 @@ export function presentSophiaNovemberInvoice(input: {
   ) {
     return { kind: "hidden" };
   }
-  const payUrl = stored?.hostedInvoiceUrl?.trim() || SOPHIA_NOVEMBER_2026_PAY_URL;
+  const payUrl = SOPHIA_NOVEMBER_2026_PAY_URL;
   const unpaidStatus = (UNPAID_PORTAL_INVOICE_STATUSES as readonly string[]).includes(status)
     ? (status as PortalOpenInvoice["status"])
     : "sent";

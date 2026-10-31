@@ -4,15 +4,20 @@ import test from "node:test";
 import { SOPHIA_SLEIMAN_SAT_USER_ID } from "./sat-tutor-pricing.ts";
 // @ts-expect-error Node's strip-types test runner resolves the source extension directly.
 import {
+  isSophiaNovemberInvoice,
   presentSophiaNovemberInvoice,
   SOPHIA_NOVEMBER_2026_COVERAGE,
+  SOPHIA_NOVEMBER_2026_INVOICE_KEY,
   SOPHIA_NOVEMBER_2026_PAY_URL,
   SOPHIA_NOVEMBER_2026_TOTAL_CENTS,
 } from "./sophia-november-invoice.ts";
 
 const sophia = { id: SOPHIA_SLEIMAN_SAT_USER_ID, role: "student" };
 
-test("Sophia's unpaid November invoice exposes the pay link", () => {
+const RETIRED_STRIPE_PAY_URL = "https://buy.stripe.com/dRmeVd35Q0Goajg4GH5gc00";
+
+test("Sophia's unpaid November invoice exposes the Wise pay link", () => {
+  assert.equal(SOPHIA_NOVEMBER_2026_PAY_URL, "https://wise.com/pay/r/rS6_TjwRk0ff8ho");
   const view = presentSophiaNovemberInvoice({
     requester: sophia,
     clientUserId: sophia.id,
@@ -49,6 +54,54 @@ test("a recorded payment removes the pay action and keeps a receipt link", () =>
   assert.equal(view.history.status, "paid");
   assert.equal(view.history.documentUrl, "https://pay.stripe.com/receipts/sophia-november");
   assert.equal(JSON.stringify(view.history).includes(SOPHIA_NOVEMBER_2026_PAY_URL), false);
+});
+
+test("a description-matched row with the old Stripe URL still pays through Wise", () => {
+  const view = presentSophiaNovemberInvoice({
+    requester: sophia,
+    clientUserId: sophia.id,
+    stored: {
+      id: "inv-stale-stripe",
+      status: "sent",
+      totalCents: 228000,
+      dueAt: new Date("2026-11-01T15:00:00.000Z"),
+      hostedInvoiceUrl: RETIRED_STRIPE_PAY_URL,
+      receiptUrl: null,
+      description: SOPHIA_NOVEMBER_2026_INVOICE_KEY,
+    },
+  });
+  assert.equal(
+    isSophiaNovemberInvoice({
+      hostedInvoiceUrl: RETIRED_STRIPE_PAY_URL,
+      description: SOPHIA_NOVEMBER_2026_INVOICE_KEY,
+    }),
+    true,
+  );
+  assert.equal(view.kind, "unpaid");
+  if (view.kind !== "unpaid") return;
+  assert.equal(view.invoice.payUrl, "https://wise.com/pay/r/rS6_TjwRk0ff8ho");
+  assert.equal(view.invoice.payUrl.includes(RETIRED_STRIPE_PAY_URL), false);
+});
+
+test("the Wise URL identifies the invoice, and the description key still does", () => {
+  assert.equal(
+    isSophiaNovemberInvoice({ hostedInvoiceUrl: SOPHIA_NOVEMBER_2026_PAY_URL, description: null }),
+    true,
+  );
+  assert.equal(
+    isSophiaNovemberInvoice({
+      hostedInvoiceUrl: RETIRED_STRIPE_PAY_URL,
+      description: `November SAT ${SOPHIA_NOVEMBER_2026_INVOICE_KEY}`,
+    }),
+    true,
+  );
+  assert.equal(
+    isSophiaNovemberInvoice({
+      hostedInvoiceUrl: RETIRED_STRIPE_PAY_URL,
+      description: "November 2026 SAT",
+    }),
+    false,
+  );
 });
 
 test("another student, a tutor, a viewer, and an admin never receive the invoice", () => {

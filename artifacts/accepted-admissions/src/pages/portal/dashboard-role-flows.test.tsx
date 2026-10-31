@@ -2140,7 +2140,7 @@ describe("authenticated role dashboard flows", () => {
   });
 
   test("Sophia's unpaid November invoice shows a pay button and a paid one does not", () => {
-    const payUrl = "https://buy.stripe.com/dRmeVd35Q0Goajg4GH5gc00";
+    const payUrl = "https://wise.com/pay/r/rS6_TjwRk0ff8ho";
     const sophia = {
       ...dashboardForRole("student"),
       user: {
