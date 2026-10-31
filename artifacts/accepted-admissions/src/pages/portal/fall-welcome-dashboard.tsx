@@ -291,7 +291,15 @@ export function ClientDashboardView({
         : new Date(left.dateTime).getTime() - new Date(right.dateTime).getTime(),
     ),
   );
-  const sessionList = collapsedListedSessions(sessions, showAllSessions);
+  const sessionList = collapsedListedSessions(sessions, false);
+  const roadmapCanToggle = sessionList.upcoming.length > 3;
+  const roadmapHiddenCount = roadmapCanToggle
+    ? sessionList.upcoming.length - 3 + sessionList.past.length
+    : 0;
+  const roadmapSessions =
+    roadmapCanToggle && !showAllSessions
+      ? sessionList.upcoming.slice(0, 3)
+      : [...sessionList.upcoming, ...sessionList.past];
   const hasUpcomingReservedSession = [
     ...sessionList.upcoming,
     ...(dashboard.upcomingSessions ?? []),
@@ -873,8 +881,8 @@ export function ClientDashboardView({
         </CardHeader>
         <CardContent className="p-0">
           {sessions.length > 0 ? (
-            <ol className="divide-y">
-              {sessionList.visible.map((session) => {
+            <ol id="portal-session-roadmap" className="divide-y">
+              {roadmapSessions.map((session) => {
                 const index = sessions.findIndex((candidate) => candidate.id === session.id);
                 return (
                 <li key={session.id} className={session.id === nextSession?.id ? "bg-primary/[0.035]" : ""}>
@@ -935,12 +943,14 @@ export function ClientDashboardView({
           ) : (
             <p className="px-6 py-10 text-center text-sm text-muted-foreground">{twelveSessionPlan ? "No Fall sessions are visible for this account." : "No sessions are visible for this account."}</p>
           )}
-          {sessionList.canToggle ? (
+          {roadmapCanToggle ? (
             <div className="border-t px-5 py-4 sm:px-6">
               <SessionListDisclosure
-                canToggle={sessionList.canToggle}
+                canToggle={roadmapCanToggle}
                 expanded={showAllSessions}
                 onToggle={() => setShowAllSessions((value) => !value)}
+                collapsedLabel={`See more (${roadmapHiddenCount})`}
+                controlsId="portal-session-roadmap"
               />
             </div>
           ) : null}
