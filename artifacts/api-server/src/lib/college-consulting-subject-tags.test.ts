@@ -44,6 +44,7 @@ test("0084 is the journal entry after the Meet URL migration", () => {
     tag: "0084_college_consulting_subject_tags",
     breakpoints: true,
   });
-  assert.equal(journal.entries.at(-1)?.tag, "0084_college_consulting_subject_tags");
+  assert.equal(journal.entries.at(-2)?.tag, "0084_college_consulting_subject_tags");
+  assert.equal(journal.entries.at(-1)?.tag, "0085_clear_eunice_linkedin_url");
   assert.ok((entry?.when ?? 0) > (previous?.when ?? 0));
 });
