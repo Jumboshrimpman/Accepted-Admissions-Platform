@@ -15151,7 +15151,7 @@ async function ensureDuringSessionAssignment(
   return created!;
 }
 
-async function adaptiveCurriculumForSession(
+export async function adaptiveCurriculumForSession(
   session: typeof sessionsTable.$inferSelect,
   user: AppUser,
 ) {
@@ -15236,8 +15236,8 @@ async function adaptiveCurriculumForSession(
       needsQuestions: storedConfig.needsQuestions === true || described.needsQuestions,
     };
   } else if (isStaff || (sessionStudent && (completed || homeworkHasResults))) {
-    const [during] = await db
-      .select({ id: assignmentsTable.id })
+    const duringRows = await db
+      .select()
       .from(assignmentsTable)
       .where(
         and(
@@ -15246,8 +15246,8 @@ async function adaptiveCurriculumForSession(
           ne(assignmentsTable.status, "archived"),
         ),
       )
-      .orderBy(asc(assignmentsTable.createdAt))
-      .limit(1);
+      .orderBy(asc(assignmentsTable.createdAt));
+    const during = resolveDuringSessionAssignment(duringRows);
     const [{ count }] = during
       ? await db
           .select({ count: sql<number>`count(*)` })
