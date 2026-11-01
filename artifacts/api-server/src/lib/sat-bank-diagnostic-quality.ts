@@ -760,6 +760,7 @@ export function isOfficialSatExtract(row: {
  */
 export function canAssignCleanStudentQuizSet(
   selected: readonly DiagnosticQualityInput[],
+  options?: { allowSingleSection?: boolean },
 ): boolean {
   if (selected.length === 0) return false;
   if (auditQuizItems(selected).residualJunk > 0) return false;
@@ -772,7 +773,8 @@ export function canAssignCleanStudentQuizSet(
     if (isMathQuizItem(item)) mathCount += 1;
     else rwCount += 1;
   }
-  return rwCount > 0 && mathCount > 0;
+  const allowSingleSection = options?.allowSingleSection === true;
+  return (rwCount > 0 && mathCount > 0) || (allowSingleSection && (rwCount > 0 || mathCount > 0));
 }
 
 /**
