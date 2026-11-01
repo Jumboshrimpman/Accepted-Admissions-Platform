@@ -13,7 +13,7 @@ import {
   type AdminOverviewUsersItem,
 } from "@workspace/api-client-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { ArrowRight, AlertTriangle, Bell, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, LogIn, MessageSquareText, Save, Users, type LucideIcon } from "lucide-react";
+import { ArrowRight, AlertTriangle, Bell, CalendarDays, ChevronDown, ClipboardList, Eye, FileText, Inbox, LogIn, MessageSquareText, Save, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,8 +31,8 @@ import {
   sessionOffersQuestionPdfs,
 } from "@/components/session-tutor-materials";
 import { SessionListDisclosure } from "@/components/session-list-disclosure";
-import { QuestionReportsQueue } from "./question-reports-queue";
-import { ClientIntakeAdmin } from "@/components/client-intake-admin";
+import { QuestionReportsQueue, questionReportSummary, useQuestionReports } from "./question-reports-queue";
+import { ClientIntakeAdmin, clientIntakeSummary, submittedIntakeCount, useClientIntakes } from "@/components/client-intake-admin";
 import { previewableStudents } from "@/lib/previewable-students";
 import { isLiveListedSession } from "@/lib/quiz-content";
 import {
@@ -186,6 +186,8 @@ function CollapsedAdminSection({
 }
 
 export default function AdminDashboard() {
+  const questionReports = useQuestionReports();
+  const clientIntakes = useClientIntakes();
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const { data: overview, isLoading: overviewLoading } = useGetAdminOverview();
@@ -255,6 +257,8 @@ export default function AdminDashboard() {
   const loginSummary = latestLogin
     ? `Latest: ${latestLogin.userName} · ${new Date(latestLogin.signedInAt).toLocaleString()}`
     : "No successful sign-ins have been recorded since tracking began.";
+  const openReportCount = questionReports.reports.filter((report) => report.status === "open").length;
+  const intakeSummary = clientIntakeSummary(clientIntakes.rows.length, submittedIntakeCount(clientIntakes.rows));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-in fade-in">
@@ -290,13 +294,6 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       )}
-
-      <QuestionReportsQueue />
-      <ClientIntakeAdmin
-        students={(overview?.users ?? [])
-          .filter((user) => user.role === "student")
-          .map((user) => ({ id: user.id, displayName: user.displayName }))}
-      />
 
       <div>
         <p className="mb-2 text-sm font-medium text-primary">Accepted Admissions · administrator</p>
@@ -347,6 +344,51 @@ export default function AdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <CollapsedAdminSection
+        testId="card-question-reports"
+        icon={FileText}
+        title="Reported questions"
+        summary={questionReportSummary(openReportCount)}
+        count={openReportCount}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Students can report a broken or incorrect item and keep going. Open reports also email admin@acceptedadmissions.org.
+          </p>
+          <QuestionReportsQueue
+            contentOnly
+            reports={questionReports.reports}
+            error={questionReports.error}
+            pendingId={questionReports.pendingId}
+            onUpdateStatus={(reportId, status) => {
+              void questionReports.updateStatus(reportId, status);
+            }}
+          />
+        </div>
+      </CollapsedAdminSection>
+
+      <CollapsedAdminSection
+        testId="card-client-intake"
+        icon={Inbox}
+        title="Client intake"
+        summary={intakeSummary}
+        count={clientIntakes.rows.length}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Assign the intake to any client. Neel and Sophia already see it in their portals. Answers stay on this dashboard.
+          </p>
+          <ClientIntakeAdmin
+            contentOnly
+            students={(overview?.users ?? [])
+              .filter((user) => user.role === "student")
+              .map((user) => ({ id: user.id, displayName: user.displayName }))}
+            rows={clientIntakes.rows}
+            onAssign={clientIntakes.assign}
+          />
+        </div>
+      </CollapsedAdminSection>
 
       <CollapsedAdminSection
         testId="card-operations"
@@ -401,58 +443,6 @@ export default function AdminDashboard() {
           <p className="rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="hint-michelle-provision">
             Michelle Makarem (<span className="font-medium">michaelmakarem@gmail.com</span>) must be provisioned via People & access before preview or login. There is no Clerkless demo.
           </p>
-        </div>
-      </CollapsedAdminSection>
-
-      <CollapsedAdminSection
-        testId="card-guidance-requests"
-        id="guidance-requests"
-        icon={MessageSquareText}
-        title="Guidance requests"
-        summary={guidanceSummary}
-        count={guidanceRequests.length}
-      >
-        <div className="space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable. Resolve a submission to clear its alert. Resolved submissions stay in history.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" data-testid="count-guidance-requests">{guidanceRequests.length} total</Badge>
-              <Badge variant={newRequestCount > 0 ? "default" : "outline"} data-testid="count-new-guidance-requests">
-                {newRequestCount} new
-              </Badge>
-            </div>
-          </div>
-          {guidanceRequests.length === 0 ? (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-guidance-requests">
-              No guidance requests have been submitted yet.
-            </p>
-          ) : (
-            <>
-              {unresolvedRequests.map((request) => (
-                <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
-              ))}
-              {unresolvedRequests.length === 0 && (
-                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-unresolved-form-submissions">
-                  No unresolved form submissions.
-                </p>
-              )}
-              {resolvedRequests.length > 0 && (
-                <details id="resolved-form-submissions" className="rounded-xl border" data-testid="resolved-form-submissions">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    Resolved history ({resolvedRequests.length})
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  </summary>
-                  <div className="space-y-3 border-t p-4">
-                    {resolvedRequests.map((request) => (
-                      <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
-                    ))}
-                  </div>
-                </details>
-              )}
-            </>
-          )}
         </div>
       </CollapsedAdminSection>
 
@@ -517,6 +507,58 @@ export default function AdminDashboard() {
       )}
 
       <ConsultingProvisionNotice provision={overview?.consultingProvision} />
+
+      <CollapsedAdminSection
+        testId="card-guidance-requests"
+        id="guidance-requests"
+        icon={MessageSquareText}
+        title="Guidance requests"
+        summary={guidanceSummary}
+        count={guidanceRequests.length}
+      >
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Every public Get guidance / client-request submission is saved here for follow-up, including when email is unavailable. Resolve a submission to clear its alert. Resolved submissions stay in history.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" data-testid="count-guidance-requests">{guidanceRequests.length} total</Badge>
+              <Badge variant={newRequestCount > 0 ? "default" : "outline"} data-testid="count-new-guidance-requests">
+                {newRequestCount} new
+              </Badge>
+            </div>
+          </div>
+          {guidanceRequests.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-guidance-requests">
+              No guidance requests have been submitted yet.
+            </p>
+          ) : (
+            <>
+              {unresolvedRequests.map((request) => (
+                <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
+              ))}
+              {unresolvedRequests.length === 0 && (
+                <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="empty-unresolved-form-submissions">
+                  No unresolved form submissions.
+                </p>
+              )}
+              {resolvedRequests.length > 0 && (
+                <details id="resolved-form-submissions" className="rounded-xl border" data-testid="resolved-form-submissions">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    Resolved history ({resolvedRequests.length})
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </summary>
+                  <div className="space-y-3 border-t p-4">
+                    {resolvedRequests.map((request) => (
+                      <GuidanceRequestItem key={request.id} request={request} administrators={administrators} />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      </CollapsedAdminSection>
 
       <CollapsedAdminSection
         testId="card-login-activity"

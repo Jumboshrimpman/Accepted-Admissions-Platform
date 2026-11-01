@@ -166,7 +166,30 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  customFetch: async () => ({ reports: [] }),
+  questionReports: [] as Array<{
+    id: string;
+    assignmentTitle: string;
+    questionIndex: number;
+    studentName: string;
+    studentEmail: string;
+    reason: string;
+    note: string | null;
+    stemSnippet: string;
+    status: string;
+    createdAt: string;
+  }>,
+  intakeAssignments: [] as Array<{
+    id: string;
+    clientUserId: string;
+    clientDisplayName: string;
+    status: string;
+    completedAt: string | null;
+    response: null;
+  }>,
+  customFetch: vi.fn(async (path: string) => {
+    if (String(path).includes("client-intakes")) return { assignments: mocks.intakeAssignments };
+    return { reports: mocks.questionReports };
+  }),
   getGetAdminOverviewQueryKey: () => ["/api/admin/overview"],
   getGetAdminCurriculumQueryKey: () => ["/api/admin/curriculum"],
   getListAdminAccessGrantsQueryKey: () => ["/api/admin/access-grants"],
@@ -271,6 +294,8 @@ afterEach(() => {
   mocks.overview.guidanceRequests = [];
   mocks.overview.consultingProvision = undefined;
   mocks.overview.calendarReconnectAlerts = [];
+  mocks.questionReports = [];
+  mocks.intakeAssignments = [];
   mocks.curriculum.clients = [];
   mocks.curriculum.tutors = [];
   mocks.curriculum.programs = [];
@@ -704,9 +729,61 @@ describe("administrator overview", () => {
 
   test("shows the reported questions queue on admin home", async () => {
     render(<AdminDashboard />);
-    expect(await screen.findByTestId("card-question-reports")).toBeTruthy();
+    const section = await screen.findByTestId("card-question-reports");
+    expect((section as HTMLDetailsElement).open).toBe(false);
+    openAdminSection("card-question-reports");
     expect(screen.getByText(/No open question reports/i)).toBeTruthy();
     expect(screen.getByText(/admin@acceptedadmissions.org/i)).toBeTruthy();
+  });
+
+  test("shows the open question-report count in the closed header", async () => {
+    mocks.questionReports = [{
+      id: "report-1",
+      assignmentTitle: "SAT Math",
+      questionIndex: 2,
+      studentName: "Sophia Sleiman",
+      studentEmail: "sophia@example.invalid",
+      reason: "incorrect",
+      note: null,
+      stemSnippet: "If x = 2",
+      status: "open",
+      createdAt: "2026-10-02T15:00:00.000Z",
+    }];
+
+    render(<AdminDashboard />);
+
+    const section = await screen.findByTestId("card-question-reports") as HTMLDetailsElement;
+    expect(await screen.findByText("1 open report")).toBeTruthy();
+    expect(section.open).toBe(false);
+    expect(section.querySelector("summary")?.textContent).toContain("1 open report");
+  });
+
+  test("shows assigned and submitted intake counts in the closed header", async () => {
+    mocks.intakeAssignments = [
+      {
+        id: "intake-1",
+        clientUserId: "student-1",
+        clientDisplayName: "Sophia Sleiman",
+        status: "completed",
+        completedAt: "2026-10-01T12:00:00.000Z",
+        response: null,
+      },
+      {
+        id: "intake-2",
+        clientUserId: "student-2",
+        clientDisplayName: "Neel Dharni",
+        status: "assigned",
+        completedAt: null,
+        response: null,
+      },
+    ];
+
+    render(<AdminDashboard />);
+
+    const section = await screen.findByTestId("card-client-intake") as HTMLDetailsElement;
+    expect(await screen.findByText("2 clients · 1 submitted")).toBeTruthy();
+    expect(section.open).toBe(false);
+    expect(section.querySelector("summary")?.textContent).toContain("2 clients · 1 submitted");
   });
 
   test("shows an empty guidance request state and new total", () => {
@@ -1167,18 +1244,22 @@ describe("administrator overview", () => {
     expect(upcoming.textContent).toContain("Next scheduled appointments.");
     expect(screen.queryByTestId("essay-requests-admin")).toBeNull();
 
+    let previous: HTMLElement = upcoming;
     for (const testId of [
+      "card-question-reports",
+      "card-client-intake",
       "card-operations",
       "card-student-portals",
-      "card-guidance-requests",
       "card-admin-notifications",
       "details-consulting-provision",
+      "card-guidance-requests",
       "card-login-activity",
     ]) {
       const details = screen.getByTestId(testId) as HTMLDetailsElement;
       expect(details.tagName).toBe("DETAILS");
       expect(details.open).toBe(false);
-      expect(upcoming.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(previous.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      previous = details;
     }
   });
 
