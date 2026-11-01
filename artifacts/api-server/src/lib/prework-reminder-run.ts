@@ -103,6 +103,7 @@ export async function runPreworkReminders(input: {
       and(
         inArray(assignmentsTable.sessionId, sessionIds),
         eq(assignmentsTable.deliveryPhase, "before_session"),
+        eq(assignmentsTable.status, "published"),
       ),
     );
   const assignmentIds = assignments.map((assignment) => assignment.id);
@@ -255,6 +256,7 @@ export async function runPreworkReminders(input: {
       from: verifiedFromAddress(),
       subject: email.subject,
       text: email.text,
+      html: email.html,
     });
     if (delivery.status === "sent") {
       result.sent += 1;

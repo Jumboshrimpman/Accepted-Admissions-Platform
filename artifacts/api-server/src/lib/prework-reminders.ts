@@ -39,6 +39,7 @@ export type PreworkReminderEmailInput = {
 export type PreworkReminderEmail = {
   subject: string;
   text: string;
+  html: string;
 };
 
 function asDate(value: string | Date | null | undefined): Date | null {
@@ -131,6 +132,174 @@ function truncateTitle(title: string | null | undefined, max = 70): string {
   return `${text.slice(0, max).trimEnd()}…`;
 }
 
+function stripSessionTail(title: string): string {
+  return title.replace(/\s+[—–-]\s+.*$/u, "").trim();
+}
+
+function hasQuestionCount(label: string): boolean {
+  return /\(?\b\d+\s+questions?\b\)?/i.test(label);
+}
+
+function identifiesQuiz(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return false;
+  return !/^(your\s+)?(pre-work|quiz|homework)$/.test(normalized);
+}
+
+/** Expand a leading "SAT" to "SAT Math" when that is the subject tag. */
+function withSubjectTag(name: string, subjectTag: string): string {
+  const tag = cleanText(subjectTag);
+  if (!tag) return name;
+  if (name.toLowerCase().includes(tag.toLowerCase())) return name;
+  const nameWords = name.split(/\s+/);
+  const tagWords = tag.split(/\s+/);
+  let shared = 0;
+  while (
+    shared < tagWords.length &&
+    shared < nameWords.length &&
+    nameWords[shared]!.toLowerCase() === tagWords[shared]!.toLowerCase()
+  ) {
+    shared += 1;
+  }
+  if (shared > 0 && shared < tagWords.length) {
+    return [...tagWords, ...nameWords.slice(shared)].join(" ");
+  }
+  return `${tag} ${name}`;
+}
+
+/**
+ * Inbox quiz name. Drops the staff session tail and a repeated question count,
+ * and keeps the subject tag so the message still says which session it is.
+ * If stripping leaves nothing identifying, the full stored title is used.
+ */
+function quizName(assignmentTitle: string | null | undefined, subjectTag?: string | null): string {
+  const full = cleanText(assignmentTitle);
+  const stripped = stripSessionTail(full)
+    .replace(/\s*\(\s*\d+\s+questions?\s*\)\s*$/i, "")
+    .replace(/\s+[—–-]\s+\d+\s+questions?\s*$/i, "")
+    .trim();
+  if (!identifiesQuiz(stripped)) return full || "your pre-work";
+  return withSubjectTag(stripped, subjectTag ?? "");
+}
+
+/**
+ * Student-facing quiz label. Strips ` — Michelle's SAT Session with Xavier`
+ * and does not add a second question count when the title already has one.
+ */
+export function preworkReminderQuizLabel(
+  assignmentTitle: string | null | undefined,
+  questionCount: number | null,
+): string {
+  const stripped = stripSessionTail(cleanText(assignmentTitle));
+  if (!stripped) return "your pre-work";
+  if (hasQuestionCount(stripped)) return stripped;
+  if (questionCount != null && Number.isFinite(questionCount) && questionCount > 0) {
+    const noun = questionCount === 1 ? "question" : "questions";
+    return `${stripped} — ${questionCount} ${noun}`;
+  }
+  return stripped;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function preworkReminderHtml(input: {
+  studentName: string;
+  quizTitle: string;
+  subject: string;
+  sessionLabel: string;
+  dueLabel: string;
+  questions: number | null;
+  openUrl: string;
+}): string {
+  const first = escapeHtml(input.studentName.trim().split(/\s+/)[0] || "there");
+  const quiz = escapeHtml(input.quizTitle);
+  const count =
+    input.questions && input.questions > 0
+      ? `${input.questions} question${input.questions === 1 ? "" : "s"}`
+      : "";
+  const metaLine = [escapeHtml(input.subject), count].filter(Boolean).join(" &middot; ");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Your pre-work before your session</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f2ed;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your session is ${escapeHtml(input.sessionLabel)}. Here is the pre-work to look at beforehand.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f2ed;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+
+            <tr>
+              <td style="background:#1e3448;padding:24px 32px;">
+                <div style="font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:#cfd8e0;font-weight:600;">Accepted Admissions</div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:32px 32px 8px 32px;">
+                <p style="margin:0 0 18px 0;font-size:17px;line-height:1.6;color:#1e3448;">Hi ${first},</p>
+                <p style="margin:0 0 18px 0;font-size:17px;line-height:1.6;color:#33414f;">
+                  Your session is <strong style="color:#1e3448;">${escapeHtml(input.sessionLabel)}</strong>. There is a short set of recommended pre-work to look at beforehand. No pressure if you cannot get to all of it &mdash; a first pass is still useful.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f5f0;border-radius:12px;">
+                  <tr>
+                    <td style="padding:20px 22px;">
+                      <div style="font-size:16px;line-height:1.45;color:#1e3448;font-weight:600;">${quiz}</div>
+                      ${metaLine ? `<div style="margin-top:6px;font-size:14px;color:#6b7784;">${metaLine}</div>` : ""}
+                      <div style="margin-top:12px;font-size:14px;line-height:1.5;color:#33414f;">${escapeHtml(input.dueLabel)}</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:26px 32px 8px 32px;">
+                <a href="${escapeHtml(input.openUrl)}" style="display:inline-block;background:#1e3448;color:#f6f2e9;text-decoration:none;font-size:16px;font-weight:600;padding:14px 26px;border-radius:8px;">Open your pre-work</a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 32px 32px 32px;">
+                <p style="margin:0;font-size:15px;line-height:1.6;color:#33414f;">
+                  Once you open it, it will show up in your portal under Today, so you can pick it back up whenever you have a few minutes.
+                </p>
+                <p style="margin:20px 0 0 0;font-size:15px;line-height:1.6;color:#33414f;">&mdash; Accepted Admissions</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="border-top:1px solid #eae6de;padding:20px 32px 28px 32px;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#8b949e;">
+                  You are receiving this because you have an upcoming session with Accepted Admissions.
+                  Questions? Just reply to this email.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 /** The student address, or null for anyone else and for a blank email. */
 export function preworkReminderRecipient(input: {
   role?: string | null;
@@ -143,39 +312,50 @@ export function preworkReminderRecipient(input: {
 
 export function preworkReminderEmail(input: PreworkReminderEmailInput): PreworkReminderEmail {
   const zone = preworkReminderTimezone(input.clientTimezone, input.sessionTimezone);
-  const quiz = cleanText(input.assignmentTitle) || "your pre-work";
-  const subjectLine = truncateTitle(input.subject) || "your session";
+  const name = quizName(input.assignmentTitle, input.subject);
+  const label =
+    hasQuestionCount(name) ||
+    input.questionCount == null ||
+    !Number.isFinite(input.questionCount) ||
+    input.questionCount <= 0
+      ? name
+      : `${name} — ${input.questionCount} ${input.questionCount === 1 ? "question" : "questions"}`;
+  const subjectName = truncateTitle(input.subject) || "your session";
   const sessionWhen = input.sessionDateTime
     ? formatPreworkInstant(input.sessionDateTime, zone)
     : null;
   const dueWhen = input.dueAt ? formatPreworkInstant(input.dueAt, zone) : null;
   const dueSentence =
     dueWhen == null
-      ? null
+      ? "It is waiting in your portal."
       : input.dueSource === "assignment_deadline"
         ? `It is due before ${dueWhen}.`
         : `It is due before your session: ${dueWhen}.`;
-  const questions =
-    input.questionCount != null && input.questionCount > 0
-      ? ` (${input.questionCount} question${input.questionCount === 1 ? "" : "s"})`
-      : "";
   const link = `${PREWORK_REMINDER_PORTAL_BASE_URL}/portal/assignments/${input.assignmentId}`;
   const lines = [
     `Hi ${firstName(input.studentName)},`,
     "",
     sessionWhen
-      ? `Your ${subjectLine} session is ${sessionWhen}. You still have a bit of recommended pre-work you have not started.`
-      : `You still have a bit of recommended pre-work you have not started before your ${subjectLine} session.`,
+      ? `Your ${subjectName} session is ${sessionWhen}. You still have a bit of recommended pre-work you have not started.`
+      : `You still have a bit of recommended pre-work you have not started before your ${subjectName} session.`,
     "",
-    `${quiz}${questions}.`,
+    `${label}.`,
     dueSentence,
     "",
-    "Whenever you have a few minutes, you can open it here:",
-    link,
-  ].filter((line): line is string => line != null);
+    `Open your pre-work: ${link}`,
+  ];
   return {
-    subject: `Before your session: ${truncateTitle(quiz)}`,
+    subject: `Before your session: ${truncateTitle(name)}`,
     text: lines.join("\n"),
+    html: preworkReminderHtml({
+      studentName: input.studentName,
+      quizTitle: name,
+      subject: subjectName,
+      sessionLabel: sessionWhen ?? "coming up",
+      dueLabel: dueSentence,
+      questions: input.questionCount,
+      openUrl: link,
+    }),
   };
 }
 
