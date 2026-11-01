@@ -132,29 +132,13 @@ function truncateTitle(title: string | null | undefined, max = 70): string {
   return `${text.slice(0, max).trimEnd()}…`;
 }
 
-function splitDash(title: string): { head: string; tail: string } | null {
-  const match = title.match(/^(.*\S)\s+[—–-]\s+(\S.*)$/u);
-  if (!match?.[1] || !match[2]) return null;
-  return { head: match[1].trim(), tail: match[2].trim() };
-}
-
-/** A dash segment is a staff session title, not a hand-typed topic. */
-function isStaffSessionTail(head: string, tail: string): boolean {
-  if (/\bSession\b/i.test(tail)) return true;
-  if (/\bwith\s+[A-Z][\p{L}'’.-]*/u.test(tail)) return true;
-  if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}$/.test(tail)) return true;
-  return /capability test/i.test(head) && /^[A-Z][a-z]+\b/.test(tail);
-}
-
+/** Everything after a spaced dash is a staff tail. A looser match leaks hand-typed names. */
 function stripSessionTail(title: string): string {
-  const parts = splitDash(title);
-  if (!parts || !isStaffSessionTail(parts.head, parts.tail)) return title.trim();
-  return parts.head;
+  return title.replace(/\s+[—–-]\s+.*$/u, "").trim();
 }
 
-function hasStaffSessionTail(title: string): boolean {
-  const parts = splitDash(title);
-  return Boolean(parts && isStaffSessionTail(parts.head, parts.tail));
+function hasSessionTail(title: string): boolean {
+  return /\s+[—–-]\s+/.test(title);
 }
 
 function hasQuestionCount(label: string): boolean {
@@ -186,10 +170,6 @@ function withSubjectTag(name: string, subjectTag: string): string {
     return [...tagWords, ...nameWords.slice(shared)].join(" ");
   }
   return `${tag} ${name}`;
-}
-
-function hasSessionTail(title: string): boolean {
-  return hasStaffSessionTail(title);
 }
 
 function genericNoun(remainder: string): string {

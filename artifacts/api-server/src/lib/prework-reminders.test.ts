@@ -168,26 +168,60 @@ test("a generic title with a session tail never leaks the client or tutor", () =
   assert.equal(taito.subject.includes("SAT"), false);
 });
 
-test("a hand-typed topic after a dash is kept", () => {
-  const { subject, text, html } = preworkReminderEmail({
-    studentName: "Michelle Makarem",
-    assignmentTitle: "Quiz — WWI causes",
-    subject: "SAT Math",
+test("hand-typed tails without the word Session still cannot leak names", () => {
+  const cases = [
+    {
+      title: "SAT diagnostic — Michelle Xavier review",
+      forbidden: "Michelle Xavier review",
+    },
+    {
+      title: "pre-work — Michelle and Xavier",
+      forbidden: "Michelle and Xavier",
+    },
+    {
+      title: "SAT diagnostic — Xavier make-up",
+      forbidden: "Xavier make-up",
+    },
+  ];
+  for (const { title, forbidden } of cases) {
+    const { subject, text, html } = preworkReminderEmail({
+      studentName: "Alex Student",
+      assignmentTitle: title,
+      subject: "English",
+      sessionDateTime: new Date("2026-11-01T13:00:00.000Z"),
+      sessionTimezone: "America/New_York",
+      clientTimezone: "America/New_York",
+      dueAt: new Date("2026-11-01T13:00:00.000Z"),
+      dueSource: "session_start",
+      assignmentId: "assignment-hand-typed",
+      questionCount: 12,
+    });
+    assert.equal(subject.includes(forbidden), false, subject);
+    assert.equal(text.includes(forbidden), false, text);
+    assert.equal(html.includes(forbidden), false, title);
+    assert.equal(subject.includes("Michelle"), false, subject);
+    assert.equal(text.includes("Michelle"), false, text);
+    assert.equal(html.includes("Michelle"), false, title);
+    assert.equal(subject.includes("Xavier"), false, subject);
+    assert.equal(text.includes("Xavier"), false, text);
+    assert.equal(html.includes("Xavier"), false, title);
+    assert.match(subject, /^Before your session: /);
+  }
+  const generic = preworkReminderEmail({
+    studentName: "Alex Student",
+    assignmentTitle: "pre-work — Michelle and Xavier",
+    subject: "English",
     sessionDateTime: new Date("2026-11-01T13:00:00.000Z"),
     sessionTimezone: "America/New_York",
     clientTimezone: "America/New_York",
     dueAt: new Date("2026-11-01T13:00:00.000Z"),
     dueSource: "session_start",
-    assignmentId: "assignment-wwi",
-    questionCount: null,
+    assignmentId: "assignment-english",
+    questionCount: 12,
   });
-  assert.match(subject, /WWI causes/);
-  assert.match(text, /WWI causes/);
-  assert.match(html, /WWI causes/);
-  assert.equal(
-    preworkReminderQuizLabel("Quiz - WWI causes", null),
-    "Quiz - WWI causes",
-  );
+  assert.equal(generic.subject, "Before your session: English pre-work");
+  assert.equal(generic.subject.includes("SAT"), false);
+  assert.equal(generic.text.includes("SAT"), false);
 });
 
 test("generated session titles do not leak a client or tutor name", () => {
